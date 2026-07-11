@@ -9,7 +9,8 @@ import { git } from './git.js'
 //     WRITE-SEMANTICS declaration (write-through to the main tree), and spec writes go back through the
 //     branch/merge ritual, not through a side channel.
 //   - RENDERS (contract blocks, shims, skills) are DERIVED — transported by re-render, not by link or copy:
-//     sessions.ts materializes into the worktree at creation, and the dispatch gate re-renders on change.
+//     sessions.ts materializes into the worktree at creation, and the git-native anchors (pre-commit /
+//     post-checkout / post-merge — [[commit-surgery]]) re-render on change.
 //   - HOST state (`spexcode.local.json`, machine-local and never tracked) is COPIED — a snapshot: the worker
 //     reads the same launchers/policy the host had at dispatch, but its writes land on its own copy and die
 //     with the worktree, never on the host's real config (a worker once wrote "its" test config through the

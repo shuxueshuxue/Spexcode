@@ -302,7 +302,9 @@ node + the default `.config` plugins), plants a starter `spexcode.json`, install
 **materializes** the harness artifacts — the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
 (this guide's prose FOLLOWED BY the `surface: system` config bodies, which the harness auto-discovers) and
 the `.claude`/`.codex` shims (the `settings.json` hooks). Those materialized artifacts are **generated and
-gitignored** — regenerated per clone, kept fresh by the `dispatch.sh` gate on every `.config` edit — so a
+never tracked** (hidden via the per-clone `.git/info/exclude`) — regenerated per clone, kept fresh by the
+git-native anchors (an unconditional materialize in pre-commit, plus post-checkout/post-merge refreshes;
+no harness event ever triggers a render) — so a
 fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
 render that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
 adoption (launchers, dashboard icon, lint budgets) all live in those two `spexcode.json` /

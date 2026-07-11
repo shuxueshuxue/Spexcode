@@ -785,7 +785,7 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
 
 // the shim for one harness: every event → `SPEX='…' bash <dispatch> <harnessId> <Event>`. The harness id is
 // baked in so dispatch.sh can export SPEXCODE_HARNESS (the detector for the shell side). SPEX is inherited by
-// the cli-needing handlers + the gate's `spex materialize`.
+// the cli-needing handlers.
 function buildShim(id: HarnessId, events: readonly string[], dispatch: string, spex: string): { json: string; cmd: (e: string) => string } {
   const cmd = (e: string) => `SPEX='${spex}' bash ${dispatch} ${id} ${e}`
   const hooks: Record<string, unknown> = {}

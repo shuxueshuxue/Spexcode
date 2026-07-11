@@ -14,7 +14,7 @@ related:
 
 A project does not always want SpexCode delivered into every harness. `harness-select` is the ONE declarative
 knob for that choice: the `harnesses` field in `spexcode.json`. It is PERSISTENT config, never a one-shot flag,
-because [[harness-delivery]]'s `materialize` is driven by a content-hash gate (re-run on every `.config` edit) —
+because [[harness-delivery]]'s `materialize` re-runs at every git-native anchor ([[commit-surgery]]) —
 the intent must live where every re-materialize re-reads it, not in a command a human has to remember.
 
 The vocabulary is small. Each member is either a NATIVE harness id (`claude`, `codex` — the ids the
@@ -37,9 +37,11 @@ plugin target only validates (and, being exclusive, leaves every native harness 
 
 **The chain contract — every render leg honors the persisted selection.** materialize is reached by four
 distinct legs, and ALL of them read the same `spexcode.json` set (via `readConfig(mainCheckout)`), never a
-default full set: `spex init`'s adoption render, a manual `spex materialize`, the dispatch gate's automatic
-re-render, and the worktree render at session creation (`bootstrapMaterialize`). Concretely: a codex-only
-repo (`"harnesses": ["codex"]`) never grows a `.claude/` or a CLAUDE.md block through ANY leg. Proven
+default full set: `spex init`'s adoption render, a manual `spex materialize`, the pre-commit anchor's
+unconditional materialize ([[commit-surgery]]), and the worktree render at session creation
+(`bootstrapMaterialize`). Concretely: a codex-only
+repo (`"harnesses": ["codex"]`) never grows a `.claude/` or a CLAUDE.md block through ANY leg — and a
+harness event through dispatch.sh renders nothing at all. Proven
 end-to-end (through the real CLI + dispatch.sh) in `materialize.test.ts`.
 
 Selection has a back-edge, and it is part of policy P under the forgetting law ([[harness-delivery]]).

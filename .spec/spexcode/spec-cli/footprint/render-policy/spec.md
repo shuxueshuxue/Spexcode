@@ -2,7 +2,7 @@
 title: render-policy
 status: active
 hue: 200
-desc: ONE share axis governs SpexCode's footprint in a host repo — spec data always tracked, machine facts never, run residue out-of-tree, and the machine-independent RENDERS carry the single vote — committed | ignored | hidden.
+desc: The vote-less footprint — renders carry no facts so they are NEVER tracked; spec data always tracked, machine facts never, run residue out-of-tree; a contract file's residence is a LIVE content fact (tracked → filter, wholly-ours → exclude, user-prose → un-hidden + clean armed).
 code:
   - spec-cli/src/worktree-sources.ts
 related:
@@ -16,130 +16,66 @@ related:
 
 SpexCode claims software engineering's HEAD — the recording of intent — and its TAIL — the storage of
 measurement — and deliberately leaves the MIDDLE, construction, to the harness/agent/test framework;
-freshness stitches the two ends into a closed loop. The footprint model follows from that position: the
-head and tail (`.spec`, `spexcode.json`, the readings) are the ASSET and live in git like any other
-source; everything else SpexCode puts in a repo is either WIRING derived from that asset or a MACHINE
-fact, and only the machine-independent wiring is worth a vote. So there is ONE axis — "who sees this
-artifact in the shared repo?" — answered once per KIND of artifact, never per usage mode. TRACKING is a
-kind-fact; whether tracked data is shared beyond the clone belongs to the push/remote layer, which is not
-materialize's business.
-
-## the stories (A–G acceptance walk)
-
-Each story names the mechanism that satisfies it, or the deferred design that will (DEFERRED).
-
-**A — guest postures.**
-1. *Total guest invisibility — even the spec DATA hidden in a repo I don't own.* DEFERRED — the lane: the
-   spec tree on a same-repo ORPHAN ref, pre-commit/pre-push guards keeping it off shared branches. Shape
-   recorded; not built. Untracking the data is NOT the answer (retirement note below).
-2. *Full adoption — the team wants everything visible.* `render: committed` + the always-tracked data.
-3. *Spec shared, harness private — the team tracks .spec, a machine keeps renders invisible.* Data tracked
-   (no knob exists); `render: hidden` in that machine's `spexcode.local.json`.
-
-**B — pollution complaints.**
-4. *"You polluted our CLAUDE.md"* — a host-TRACKED contract file: hidden covers it with the clean/smudge
-   [[content-filter]], so the index keeps the pristine prose while the working tree carries the block.
-5. *"Your generated files dirty `git status`"* — the default `ignored`: the managed .gitignore block.
-6. *"Even your ignore rules are noise in our .gitignore"* — `hidden`: the SAME block lives in the per-clone
-   `.git/info/exclude`. The ignore block is itself a render artifact, so its HOME follows the same vote —
-   the model is recursively self-consistent, no second mechanism.
-7. *"A worker's `git add -A` committed your files into our PR"* — data is tracked (so add -A is correct
-   there); renders are ignored/hidden per the vote; the seeded host snapshot is exclude-hidden at seed time.
-
-**C — track ≠ push.**
-8. *"Version the spec locally but keep it off the shared remote."* Deliberately outside this vocabulary:
-   tracking is a kind-fact ("untrack .spec" is unsayable in the schema — the guardrail is the vocabulary,
-   not a WARN); where commits GO is the remote/branch layer — a private remote, branch discipline, or
-   story 1's deferred lane. The per-node variant has a named successor: [[spec-local]], a private
-   overlay root that is its own git home — the data stays in git, just never in the shared one.
-9. *"Does adopting SpexCode touch our remote?"* Never — materialize writes files and per-clone git config
-   only; commits and pushes happen through the user's own ritual.
-
-**D — sub-granularity.**
-10. *"Readings bloat the tracked tree."* DEFERRED — evidence already lives in `.git/spexcode` blobs; moving
-    the reading LOG toward the global store is a named successor, not this change.
-11. *".config should be votable separately from .spec."* DEFERRED — naming it a separate class later costs
-    no new mechanism; today it rides inside always-tracked spec data.
-12. *"Commit one render, hide another."* Refused by design: the vote is per-CLASS, never per-file.
-
-**E — migration and reversibility.**
-13. *Switch policies in any order, repeatedly.* The forgetting law ([[harness-delivery]]):
-    materialize(P₂) ∘ materialize(P₁) = materialize(P₂); idempotence is the special case P₂ = P₁.
-14. *Back out entirely.* `spex uninstall` = materialize(∅) + the global store ([[spex-uninstall]]).
-15. *A fresh clone is self-sufficient.* Data arrives by clone; renders regenerate (init/materialize/gate);
-    nothing is fetched from another machine.
-16. *A fresh session worktree is self-sufficient.* Three transports by kind — checkout, re-render, copy —
-    see the seeding section below.
-17. *A legacy untrack-private deployment survives the upgrade.* `private: true` reads as `render: hidden`
-    plus a loud, non-fatal notice carrying the one-time migration recipe (retirement note below).
-
-**F — mixed team.**
-18. *A colleague who never installed SpexCode still gets the contract.* `committed` — the harness's NATIVE
-    discovery reads the committed CLAUDE.md/AGENTS.md; nothing to install on their machine.
-19. *A colleague without our hooks must not be broken by our artifacts.* Free, by git physics: hooks are
-    per-clone plants (never committed) and renders are inert text — nothing executes for a non-adopter.
-    Hook granularity is a plant-side fact, not a render concern.
-20. *CI without spex.* As 18/19: committed renders are plain files; `spex lint` in CI is opt-in.
-
-**G — ergonomics.**
-21. *"How do I choose and migrate?"* `spex guide footprint` is the model manual; `spex guide config`
-    documents the `render` field; the adoption-time vote hint (expanded spec below) surfaces the decision
-    exactly when a tracked host contract file first turns dirty, and `spex init --render <word>` makes the
-    choice one step.
-22. *"Show me my current footprint / set it up for me."* DEFERRED — a policy-aware footprint inspect +
-    scaffold wizard ([[doctor]] audits the artifacts today).
+freshness stitches the two ends into a closed loop. The footprint model follows: the head and tail
+(`.spec`, `spexcode.json`, the readings) are the ASSET and live in git like any other source; everything
+else SpexCode puts in a repo is either WIRING derived from that asset or a MACHINE fact. A render is a
+pure export of `spex materialize` — it carries no facts — so it is **never tracked**: the old three-word
+vote (`committed | ignored | hidden`) is RETIRED and there is exactly ONE residence behavior. An
+environment without the generator (a teammate's clone, CI, a cloud agent's fresh checkout) runs
+`spex materialize` in its setup step; there is no committed-render delivery mode — no generator means not
+using SpexCode.
 
 ## expanded spec
 
-The four kinds, each with a FIXED track/transport fact:
+The four kinds, each with a FIXED track/transport fact (no votes anywhere):
 
-- **Spec data** — `.spec/` (including `.config/`, story 11) + `spexcode.json`: ALWAYS tracked. Git is the
-  database; no configuration can untrack them.
+- **Spec data** — `.spec/` (including `.config/`) + `spexcode.json`: ALWAYS tracked. Git is the database;
+  no configuration can untrack them ("untrack the spec" is unsayable in the schema).
 - **Machine facts** — `spexcode.local.json`, the hook shims (`.claude/settings.json`, `.codex/hooks.json`),
-  plugin bundles (they bake this install's paths): NEVER tracked, no vote; always in the ignore rules,
-  whatever those rules' home.
-- **Machine-independent renders** — the contract blocks in CLAUDE.md/AGENTS.md and the rendered
-  skills/agents: the ONE voted class. `render` ∈ `committed` | `ignored` (default) | `hidden`, read through
-  the committed-config + local-overlay seam ([[portable-layout]]): `committed` is a project fact →
-  `spexcode.json`; `hidden` is a host/person fact → `spexcode.local.json`. An unknown word fails loud.
+  plugin bundles (they bake this install's paths): NEVER tracked; always in the per-clone exclude.
+- **Renders** — the contract blocks in CLAUDE.md/AGENTS.md and the rendered skills/agents: NEVER tracked;
+  hidden via the per-clone `.git/info/exclude`. The host's tracked `.gitignore` is **never touched** — a
+  legacy managed block found there is erased by the next render (the forgetting law), an honest one-time
+  migration diff.
 - **Run residue** — `.worktrees/`, the global store, `.git/spexcode` blobs: never tracked; out of tree, or
-  ignore-ruled where in-tree (`.worktrees/`).
+  exclude-ruled where in-tree.
 
-Concretely: `committed` writes the renders as ordinary committable files and REMOVES their entries from the
-ignore block (machine facts stay ignored); `ignored` keeps renders generated with the managed block in the
-tracked `.gitignore`; `hidden` moves the whole block to `.git/info/exclude` and covers a host-TRACKED
-contract file with [[content-filter]]. A host-tracked contract file under `ignored` stays honestly dirty in
-status — the visible prompt to choose `committed` or `hidden`, never silently swallowed. And the prompt is
-EXPLAINED at first sight, not left as a mystery `M`: while the vote is open (no explicit `render` set) and a
-SELECTED harness's contract file is host-tracked, the HUMAN surfaces — `spex init` and the manual `spex
-materialize` verb, never the silent gate/bootstrap renders — print a one-time decision hint naming the three
-words, their consequences, where each vote lives, and `spex guide footprint`; any explicit vote (any word,
-including `ignored` made explicit) retires it. Adoption can skip the open-vote state entirely: `spex init
---render <word>` casts the vote in one step ([[spex-init]]), landing `committed`/`ignored` in `spexcode.json`
-and `hidden` in `spexcode.local.json`, with an unknown word failing loud. Plain stdout throughout — init is
-routinely run by agents, so there is no interactive prompt to hang on. A policy edit also needs no manual
-follow-up: the dispatch gate's key covers the persisted policy files ([[harness-delivery]]), so the next
-harness event re-renders under the new vote.
+**A contract file's residence is a live CONTENT fact, re-judged at every render** (never an install-time
+choice, never a question to the user):
+
+- *host-tracked* → the clean/smudge [[content-filter]]: index keeps the pristine host prose, the working
+  tree carries prose + block, status stays clean;
+- *untracked and wholly ours* (nothing left after stripping our sentinel block) → one exclude entry;
+- *untracked with USER prose in it* → the exclude entry is WITHDRAWN — exclude may only hide what is 100%
+  ours; hiding user content is data-loss shaped (their prose would be invisible to status, add -A, and
+  every backup path) — and the clean filter is pre-armed. The file surfaces as honestly untracked (`??`);
+  IF the user chooses to `git add` it, clean strips the block automatically. SpexCode never stages,
+  tracks, or commits anything for the user — tracking is always their own act, and this transition makes
+  that act safe by construction.
+
+**The exclude is a citizenship declaration, not a history guard.** History is guarded by the pre-commit
+surgery ([[commit-surgery]]); the ignored-bit is what every OTHER git door consults — checkout may
+silently overwrite an ignored file (an unignored untracked one hard-fails a branch switch), `git clean
+-fd` spares it (an unexcluded `spexcode.local.json` was once wiped by routine cleanup, 401-ing every later
+dispatch), and status/`add -A`/stash/IDE panes stay silent. The two mechanisms cover git's two disjoint
+domains: filters exist only on the tracked-content pipeline; the untracked namespace's only masking
+primitive is the ignore family. Neither can replace the other.
 
 **Worktree seeding — no links.** A fresh session worktree is fed by three transports, and the KIND decides
 the transport: tracked data arrives by GIT CHECKOUT; renders are DERIVED and travel by RE-RENDER
-(creation-time materialize + the dispatch gate); the machine snapshot (`spexcode.local.json`) is COPIED.
-The rule this encodes: symlink vs copy is a WRITE-SEMANTICS declaration — write-through vs snapshot — and a
-render is a third thing, a derivative, neither linked nor copied. The copy is a snapshot on purpose: a
-worker's config writes die with its worktree (a worker once wiped the host's launchers through the old
-link, 401ing every later dispatch). What seeding makes git-visible it hides in the shared
-`.git/info/exclude` — idempotent, self-healing, no force-add bait.
+(creation-time materialize + the git-native anchors); the machine snapshot (`spexcode.local.json`) is
+COPIED. Symlink vs copy is a WRITE-SEMANTICS declaration — write-through vs snapshot — and a render is a
+third thing, a derivative, neither linked nor copied. The copy is a snapshot on purpose: a worker's config
+writes die with its worktree (a worker once wiped the host's launchers through the old link). What seeding
+makes git-visible it hides in the shared `.git/info/exclude` — idempotent, self-healing, no force-add bait.
 
-**untrack-private, retired (historical note).** The old private mode untracked `.spec` + `spexcode.json`
-(exclude entries + a printed `git rm --cached` recipe), and worktrees received the spec tree by SYMLINK — a
-spec write from a worktree landed directly on the main tree, bypassing the branch/merge ritual. All of it
-is gone: data is always tracked, spec changes travel through branches and review again (closing that
-governance back door is a dividend, not a cost), and materialize never prints an untrack recipe. The
-reverse migration is one move — `git add .spec spexcode.json`, commit — with the honest WARN that tracking
-is not retroactive secrecy: history already pushed cannot be recalled.
-
-**Boundaries + deferred ledger.** Remote history cannot be forgotten by any local mechanism. Double
-delivery (a worktree CLAUDE.md and the main checkout's both discovered → the block twice) is [[doctor]]'s
-audit, not a render mode. Deferred: the lane (story 1), the readings store (story 10), JSON mixed content
-([[content-filter]]'s designed successor), the inspect/scaffold wizard (story 22), the private overlay
-root ([[spec-local]], story 8's per-node successor).
+**Retirement ledger (historical).** The `render` vote and its whole apparatus — `spex init --render`, the
+open-vote decision hint, the per-mode migration matrix, the `.gitignore` managed block, `private: true` as
+a hidden-alias — are gone; a lingering `render`/`private` field is ignored with a loud non-fatal notice
+naming the removal recipe. The older untrack-private mode (untracked `.spec`, worktree symlinks) died
+earlier for governance reasons. What the vote's `committed` word used to buy — delivery to clones without
+the generator — is deliberately dropped as a requirement: those environments run `spex materialize` in
+setup. Deferred lanes that survive unchanged: the readings store move (evidence blobs already live in
+`.git/spexcode`), the same-repo orphan-ref guest lane, and the private per-node successor now designed as
+[[spec-local]] — a private overlay root that is its OWN git home, so the data stays in git, just never in
+the shared one (track ≠ push holds; "untrack the spec" stays unsayable).

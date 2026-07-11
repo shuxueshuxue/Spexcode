@@ -382,10 +382,12 @@ so bind wide only on a network you trust (for the internet, use \`spex serve --p
   // ── plumbing ──────────────────────────────────────────────────────────────
   internal: {
     line: '',   // deliberately not on the map
-    body: `Usage: spex internal <trunk | codex-launch | codex-turn>
+    body: `Usage: spex internal <trunk | commit-surgery | refresh-footprint | codex-launch | codex-turn>
 
 Machine plumbing — called by generated hooks and launch scripts, never typed by a human or agent:
-  trunk         print the resolved source-of-truth branch (the pre-commit main-guard captures it)
+  trunk             print the resolved source-of-truth branch (the pre-commit main-guard captures it)
+  commit-surgery    pre-commit footprint anchor: unconditional materialize + staged-index repair
+  refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
   codex-launch  <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn    <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
 

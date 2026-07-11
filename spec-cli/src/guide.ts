@@ -326,21 +326,16 @@ Example — govern your own source dir and loosen the altitude budget:
               { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
               git-transactional: the edit takes effect at the next git-native materialize anchor (the commit
               that carries it, a checkout/merge that receives it, or a manual \`spex materialize\`) — a
-              deselected harness's artifacts are pruned by that pass.
-  render      RETIRED (the old three-word footprint vote) — ignored with a loud notice. Materialized
-              artifacts are never tracked; there is exactly one residence behavior. Remove the field.
-              \`spex guide footprint\`.
-  private     RETIRED (old private-overlay toggle) — ignored with a loud notice, same as \`render\`; its
-              data-untrack semantics are gone. See \`spex guide footprint\` MIGRATIONS.`
+              deselected harness's artifacts are pruned by that pass.`
 
-const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and who sees it (no vote — one behavior)
+const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and who sees it (one fixed behavior per kind)
 
 SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (the storage of
 measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
 stitches the two ends into a closed loop. The footprint follows: the head+tail (.spec, spexcode.json,
 readings) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
-Materialized artifacts carry no facts, so they are NEVER tracked — the old render vote is retired; there
-is exactly one residence behavior, decided per KIND (and, for a contract file, by its live CONTENT).
+Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
+behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
 ── THE FOUR KINDS (all fixed) ──
   spec data       .spec/ (incl .config/) + spexcode.json — ALWAYS tracked. Git is the database; there is
@@ -377,7 +372,7 @@ TRACK ≠ PUSH: none of this ever touches remotes; where commits GO is branch/re
 ── GUARANTEES (the forgetting law) ──
 materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every materialize first ERASES all landing points by
 SpexCode's own identity stamps, then re-asserts — legacy states (a .gitignore managed block, a committed
-artifact, the retired vote's homes) are forgotten by the same pass. \`spex uninstall\` is the empty
+artifact) are forgotten by the same pass. \`spex uninstall\` is the empty
 materialize plus the global store: a total backout that never touches your .spec/.config or prose. Fresh
 clones and session worktrees are self-sufficient: data by checkout, materialized artifacts by
 re-materialize, the machine snapshot (spexcode.local.json) by copy.
@@ -390,11 +385,6 @@ identity (never a git fatal). Your own edits to the prose still show as real mod
 block is invisible to git.
 
 ── MIGRATIONS ──
-  render: "..." (retired)   remove the field from spexcode.json / spexcode.local.json — it is ignored
-                            with a loud notice. A previously COMMITTED artifact heals at your next commit
-                            touching it (pre-commit strips the block from the staged blob); or run
-                            \`spex materialize\` + commit the block's removal once.
-  private: true (retired)   same — remove it; its data-untrack semantics are long gone.
   legacy untracked spec     track the sources once:  git add .spec spexcode.json  (commit on your branch)
                             WARNING: tracking is not retroactive secrecy — history already pushed
                             elsewhere cannot be recalled.

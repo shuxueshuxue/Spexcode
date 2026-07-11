@@ -4,7 +4,7 @@
 # much and points at the split — so the contract is in view AT THE MOMENT OF THE EDIT, not just later at
 # commit (lint/drift). NON-BLOCKING (additionalContext only — never a verdict) and dedup'd PER FILE via a
 # ledger, so a 50-edit refactor annotates each file ONCE. Uses MAIN's tsx+cli ($SPEX) for the file→spec
-# resolve (`spex owner`); cwd = the session worktree.
+# resolve (`spex spec owner`); cwd = the session worktree.
 # @@@ harness-agnostic - WHICH tool/path counts as a code MUTATION is the [[harness-adapter]]'s call, read via
 # hp_code_path … mutate (Claude Edit/Write/NotebookEdit + file_path; Codex tool_name:Bash + an apply_patch /
 # write-shape command). So this annotates edits on Claude AND Codex.
@@ -49,7 +49,7 @@ path=$(hp_actionable_repo_path "$path") || exit 0
 led="$sdir/spec-of-file-seen"
 [ -f "$led" ] && grep -qxF -- "$path" "$led" && exit 0
 mkdir -p "$sdir"; echo "$path" >> "$led"
-msg=$(cd "$repo" && $S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
+msg=$(cd "$repo" && $S spec owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
 [ -n "$msg" ] || exit 0
 esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"

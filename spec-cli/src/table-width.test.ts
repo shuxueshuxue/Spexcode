@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { displayWidth, truncWidth, padWidth, formatTable } from './sessions.js'
 import type { Session } from './sessions.js'
 
-// Pins the display-width contract of `spex ls` ([[ls-cjk-width]]): the table aligns by terminal CELLS,
+// Pins the display-width contract of `spex session ls` ([[ls-cjk-width]]): the table aligns by terminal CELLS,
 // not code units. CJK glyphs are two cells wide, so unit-counting slice/padEnd sheared labels mid-glyph
 // and misaligned every column after a CJK NODE or PROMPT.
 

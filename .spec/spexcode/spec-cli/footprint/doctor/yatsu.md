@@ -3,14 +3,14 @@ scenarios:
   - name: detects-double-delivery
     tags: [cli]
     description: >-
-      Drive `spex doctor conflicts` through the real CLI in a SpexCode-adopted checkout. First run it
+      Drive `spex doctor --conflicts` through the real CLI in a SpexCode-adopted checkout. First run it
       with no plugin bundle present and capture the exit code. Then plant a `spexcode` plugin bundle
       under `.claude/plugins/spexcode/` carrying `.claude-plugin/plugin.json` (`"name":"spexcode"`),
       a `hooks/hooks.json` whose command references `dispatch.sh`, and a `skills/<name>/SKILL.md`
       for one of the materialized skill names — i.e. a second discovery channel alongside the loose
-      native delivery. Run `spex doctor conflicts` again, capture exit code + output, then remove the
+      native delivery. Run `spex doctor --conflicts` again, capture exit code + output, then remove the
       bundle and run once more. File the transcript with
-      `spex yatsu eval self --scenario detects-double-delivery --result <txt> --pass`.
+      `spex eval add doctor --scenario detects-double-delivery --result <txt> --pass`.
     expected: >-
       The first (single-channel) run exits 0 and reports "No double-delivery". With the bundle
       planted the run exits NON-ZERO (1) and flags `claude` as DOUBLE-DELIVERY CONFLICT on every
@@ -23,7 +23,7 @@ scenarios:
 ---
 # yatsu.md — self
 
-`doctor`'s double-delivery check is measured through the real `spex doctor conflicts` CLI (YATU): the agent
+`doctor`'s double-delivery check is measured through the real `spex doctor --conflicts` CLI (YATU): the agent
 plants a genuine second discovery channel — a `spexcode` plugin bundle beside the loose native delivery —
 and confirms the command catches it by IDENTITY STAMP and exits non-zero, then that removing the bundle
 clears it. The loss being watched is the SILENT double-delivery: a marketplace-installed or leftover

@@ -247,7 +247,7 @@ async function doctor(): Promise<number> {
     const present = h.contractFiles(base).every((f) => /<!--\s*spexcode:start\s*-->/.test(read(f)))
     line(`in ${h.id}`, present ? `block present (${h.contractFiles(base).map((f) => f.replace(base + '/', '')).join(', ')})` : 'NOT landed — run `spex doctor contract` / materialize')
   }
-  line('view', 'spex doctor contract')
+  line('view', 'spex doctor --contract')
 
   // --- hooks: the shim → dispatch, the manifest, and EVERY handler readable in the worktree ---
   L.push('\nLayer 3 — hooks (shim → dispatch · manifest · handler-existence)')
@@ -293,7 +293,7 @@ async function doctor(): Promise<number> {
   line('layer 2', body.length === 0 ? 'ABSENT (no contract)' : 'see per-harness above')
   line('layer 3', manifestText ? 'see handler-existence above' : 'ABSENT (no manifest — agent ungoverned)')
   line('layer 4', up ? 'present' : managed ? 'EXPECTED but backend down' : 'absent (normal for bring-your-own-agent)')
-  line('layer 5', dd.conflict ? 'CONFLICT (double-delivery — see Layer 5; `spex doctor conflicts`)' : 'clean (single channel)')
+  line('layer 5', dd.conflict ? 'CONFLICT (double-delivery — see Layer 5; `spex doctor --conflicts`)' : 'clean (single channel)')
 
   // --- footprint: every artifact Spex wrote here, + any slot held by something not ours ---
   L.push('\nFootprint (what Spex wrote into this environment)')
@@ -328,7 +328,7 @@ async function conflicts(): Promise<number> {
   const cwd = process.cwd()
   const base = repoRoot(cwd) ?? cwd
   const { lines, conflict } = await doubleDeliveryReport(base)
-  console.log(['spex doctor conflicts — does SpexCode reach this agent through more than one discovery channel?\n', ...lines].join('\n'))
+  console.log(['spex doctor --conflicts — does SpexCode reach this agent through more than one discovery channel?\n', ...lines].join('\n'))
   return conflict ? 1 : 0
 }
 
@@ -338,26 +338,31 @@ async function conflicts(): Promise<number> {
 function noteStaged(verb: string): number {
   console.error(`spex doctor ${verb} is not available yet — it is staged behind the hook-degradation prerequisite
 (the live hooks must detect a missing managed session and degrade before they can be safely wired into your
-own agent's config). Meanwhile: \`spex doctor\` reports your coverage, and \`spex doctor contract\` prints
+own agent's config). Meanwhile: \`spex doctor\` reports your coverage, and \`spex doctor --contract\` prints
 the workflow text you can hand any agent.`)
   return 2
 }
 
 function usage(): number {
   console.error(`spex doctor — diagnose how the SpexCode workflow reaches your agent
-  (bare)       per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
-  contract     print the surface:system contract text (hand it to any agent)
-  conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
-  install      [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
-  uninstall    [staged] reverse exactly what install wrote`)
+  (bare)         per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
+  --contract     print the surface:system contract text (hand it to any agent)
+  --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
+  install        [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
+  uninstall      [staged] reverse exactly what install wrote`)
   return 0
 }
 
 export async function runDoctor(args: string[]): Promise<number> {
+  // contract/conflicts are FLAGS, not subcommands ([[cli-surface]] §4: another representation of the same
+  // diagnosis read, not a distinct action). The old positional spellings signpost — report, never run.
+  if (args.includes('--contract')) return contract()
+  if (args.includes('--conflicts')) return await conflicts()
   switch (args[0]) {
     case undefined: return await doctor()
-    case 'contract': return contract()
-    case 'conflicts': return await conflicts()
+    case 'contract': case 'conflicts':
+      console.error(`spex: \`spex doctor ${args[0]}\` was removed in v0.3.0 — use: spex doctor --${args[0]}`)
+      return 2
     case 'install': return noteStaged('install')
     case 'uninstall': return noteStaged('uninstall')
     case 'help': case '--help': case '-h': return usage()

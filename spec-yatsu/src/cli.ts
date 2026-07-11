@@ -99,7 +99,7 @@ async function scan(args: string[] = []): Promise<number> {
   const scidx = await scenarioIndex(root, yatsuNodes(root).map((n) => n.yatsuPath))
   const specs = await loadSpecs()
   // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
-  // whole model, so `spex yatsu scan` shows a remark-stale scenario with no server running.
+  // whole model, so `spex eval lint` shows a remark-stale scenario with no server running.
   const remarkTracks = loadEvalRemarkTracks()
   // a file may be governed by several nodes — ordinary composition, not a hub to skip (see governed-related).
   // A change to a shared governed file legitimately triggers EVERY governing node's yatsu, mirroring how
@@ -134,12 +134,12 @@ async function scan(args: string[] = []): Promise<number> {
         const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
         // carry the scenario's tags on the finding line — its SURFACE (e.g. frontend-e2e = browser-measured)
         // is what routes a drift/missing gap to the right measuring hand, so the proactive nudge and a human
-        // reading `spex yatsu scan` both see whether this stale score needs a real e2e/browser pass to refresh.
+        // reading `spex eval lint` both see whether this stale score needs a real e2e/browser pass to refresh.
         const tagStr = sc.tags?.length ? ` [${sc.tags.join(',')}]` : ''
         const r = latest.get(sc.name)
         if (!r) {
           missingScores++
-          findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
+          findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no reading yet — measure with \`spex eval add ${s.id}\``)
           continue
         }
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
@@ -147,26 +147,26 @@ async function scan(args: string[] = []): Promise<number> {
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes
-          // by a re-measure. Both read the same word: "re-measure with spex yatsu eval". The anchor axis is
+          // by a re-measure. Both read the same word: "re-measure with spex eval add". The anchor axis is
           // a LOSS, not a change — the reading's commit object no longer exists, so content can't testify.
           const others = axes.filter((a) => a !== 'anchor')
           const why = [
             ...(axes.includes('anchor') ? [`anchor commit ${r.codeSha.slice(0, 7)} is gone — history rewritten and pruned`] : []),
             ...(others.length ? [`${others.join(', ')} changed since ${r.codeSha.slice(0, 7)}`] : []),
           ].join('; ')
-          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${why}) — re-measure with \`spex yatsu eval ${s.id}\``)
+          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${why}) — re-measure with \`spex eval add ${s.id}\``)
         }
       }
       // DANGLING remark tracks (directive 5): a (node, scenario) remark track whose scenario is gone from
       // yatsu.md AND has no reading (renamed/deleted) — its remarks would surface nowhere on the loss signal.
       // One note per node so the orphan is visible; the remarks stay resolvable/retractable via their refs
-      // (`spex resolve`/`spex retract`), and they age nothing (there is no reading to stale).
+      // (`spex remark resolve`/`spex remark retract`), and they age nothing (there is no reading to stale).
       const declared = new Set(y.scenarios.map((sc) => sc.name))
       const orphans = [...remarkTracks.values()].filter((tr) => tr.node === s.id && tr.remarks.length && !declared.has(tr.scenario) && !latest.has(tr.scenario))
       if (orphans.length) {
         danglingTracks += orphans.length
         const names = orphans.map((o) => `'${o.scenario}' (${o.threadId}, ${o.remarks.length} remark${o.remarks.length > 1 ? 's' : ''})`).join(', ')
-        findings.push(`  • yatsu-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex resolve <ref>\` / \`spex retract <ref>\` or restore the scenario name`)
+        findings.push(`  • yatsu-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex remark resolve <ref>\` / \`spex remark retract <ref>\` or restore the scenario name`)
       }
     } else if (s.code.some((p) => srcRe.test(p))) {
       uncovered++
@@ -192,7 +192,7 @@ async function scan(args: string[] = []): Promise<number> {
   const scope = changedOnly ? ' --changed' : ''
   const ownersNote = overOwned ? `, ${overOwned} over-owned` : ''
   const danglingNote = danglingTracks ? `, ${danglingTracks} dangling` : ''
-  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered${danglingNote}${ownersNote})`)
+  console.error(`spex eval lint${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered${danglingNote}${ownersNote})`)
   return 0
 }
 
@@ -225,19 +225,19 @@ async function evalCmd(args: string[]): Promise<number> {
   const root = repoRoot()
   const bad = rejectUnknownEvalFlag(args)
   if (bad) {
-    console.error(`spex yatsu eval: unknown flag '${bad}' — accepts --scenario --pass --fail --note --image --result --video --timeline`)
+    console.error(`spex eval add: unknown flag '${bad}' — accepts --scenario --pass --fail --note --image --result --video --timeline`)
     return 2
   }
   const sel = positional(args)
   const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
-  if (!ref) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  if (!ref) { console.error('spex eval add .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // resolve LOUD ([[yatsu-core]]): exact canonical id, else a unique bare leaf; an ambiguous leaf lists its
   // candidate canonical ids instead of filing against an arbitrary node.
   const res = resolveYatsuNode(await gatherNodes(root), ref)
-  if (!res.ok) { console.error(`spex yatsu eval: ${res.error}`); return 1 }
+  if (!res.ok) { console.error(`spex eval add: ${res.error}`); return 1 }
   const node = res.node
   const id = node.id
-  if (!node.scenarios.length) { console.error(`spex yatsu eval: '${id}' declares no scenarios in its yatsu.md`); return 1 }
+  if (!node.scenarios.length) { console.error(`spex eval add: '${id}' declares no scenarios in its yatsu.md`); return 1 }
 
   // which scenario this measurement is OF: --scenario, or the sole scenario when there is exactly one.
   const names = node.scenarios.map((s) => s.name)
@@ -245,13 +245,13 @@ async function evalCmd(args: string[]): Promise<number> {
   let scenario = scName ? node.scenarios.find((s) => s.name === scName) : node.scenarios.length === 1 ? node.scenarios[0] : undefined
   if (!scenario) {
     const why = scName ? `has no scenario '${scName}'` : `declares ${node.scenarios.length} scenarios — name one with --scenario <name>`
-    console.error(`spex yatsu eval: '${id}' ${why} — declared: ${names.join(', ')}`)
+    console.error(`spex eval add: '${id}' ${why} — declared: ${names.join(', ')}`)
     return 1
   }
 
   // the verdict the agent reached (required — a measurement without one is the legacy shape, not a filing).
   const verdict = parseVerdict(args)
-  if (!verdict) { console.error('spex yatsu eval: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
+  if (!verdict) { console.error('spex eval add: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
 
   // the evidence the agent captured (optional; a LIST now — REPEATABLE --image plus an optional --result
   // and/or --video, in any combination). The bytes go to the content-addressed cache exactly the same
@@ -278,12 +278,12 @@ async function evalCmd(args: string[]): Promise<number> {
   const timeline = flag(args, 'timeline')
   let timelineBlob: string | undefined
   if (timeline !== undefined) {
-    if (!evidence.length) { console.error('spex yatsu eval: --timeline needs axis-bearing evidence — attach the --video/--image/--result whose axis its steps anchor to'); return 2 }
+    if (!evidence.length) { console.error('spex eval add: --timeline needs axis-bearing evidence — attach the --video/--image/--result whose axis its steps anchor to'); return 2 }
     let parsed: unknown
-    try { parsed = JSON.parse(readFileSync(timeline, 'utf8')) } catch { console.error(`spex yatsu eval: --timeline ${timeline} is not readable JSON`); return 2 }
+    try { parsed = JSON.parse(readFileSync(timeline, 'utf8')) } catch { console.error(`spex eval add: --timeline ${timeline} is not readable JSON`); return 2 }
     const terrs = validateTimeline(parsed)
     if (terrs.length) {
-      console.error('spex yatsu eval: invalid step-timeline:')
+      console.error('spex eval add: invalid step-timeline:')
       for (const e of terrs) console.error(`    ${e}`)
       return 2
     }
@@ -291,7 +291,7 @@ async function evalCmd(args: string[]): Promise<number> {
     const present = new Set(evidence.map((e) => AXIS_FOR_KIND[e.kind]))
     if (!present.has(axis)) {
       const have = evidence.map((e) => `${e.kind}→${AXIS_FOR_KIND[e.kind]}`).join(', ')
-      console.error(`spex yatsu eval: --timeline axis '${axis}' matches none of this reading's evidence (${have}) — a step-map's axis must be the axis of an attached evidence entry`)
+      console.error(`spex eval add: --timeline axis '${axis}' matches none of this reading's evidence (${have}) — a step-map's axis must be the axis of an attached evidence entry`)
       return 2
     }
     timelineBlob = putBlob(Buffer.from(JSON.stringify(parsed)))
@@ -312,7 +312,7 @@ async function evalCmd(args: string[]): Promise<number> {
     ? evidence.map((e) => `${e.kind} ${e.hash.slice(0, 12)}…`).join(', ') + (timelineBlob ? ' +timeline' : '')
     : 'no evidence'
   console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} (${ev})`)
-  console.log(`spex yatsu eval: 1 measurement filed`)
+  console.log(`spex eval add: 1 measurement filed`)
 
   // @@@mis-anchor guard - a codeSha names a COMMIT, never a working tree: filed over uncommitted governed
   // edits, this reading claims a verdict at HEAD while HEAD lacks the code actually measured — wrong from
@@ -355,7 +355,7 @@ function parseVerdict(args: string[]): Verdict | null {
 const RETRACT_VALUE_FLAGS = new Set(['scenario', 'ts', 'note'])
 const RETRACT_BOOL_FLAGS = new Set(['last'])
 
-// `spex yatsu retract` — the sanctioned inverse of eval: undo a botched filing through the SAME surface
+// `spex eval retract` — the sanctioned inverse of eval: undo a botched filing through the SAME surface
 // that wrote it. It appends a RETRACTION event to the sidecar (append-only stays true; the target line
 // stays as history; git carries who/when/why) — never a deleted line. The effective scoreboard then drops
 // the retracted reading everywhere at once: the previous reading becomes the latest again, or the scenario
@@ -370,15 +370,15 @@ async function retractCmd(args: string[]): Promise<number> {
     const name = a.slice(2)
     if (RETRACT_VALUE_FLAGS.has(name)) { i++; continue }
     if (RETRACT_BOOL_FLAGS.has(name)) continue
-    console.error(`spex yatsu retract: unknown flag '${a}' — accepts --scenario --last --ts --note`)
+    console.error(`spex eval retract: unknown flag '${a}' — accepts --scenario --last --ts --note`)
     return 2
   }
   const sel = positional(args)
   const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
-  if (!ref) { console.error('spex yatsu retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  if (!ref) { console.error('spex eval retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // node resolution mirrors eval's: exact canonical id, else a unique bare leaf, ambiguous fails loud.
   const res = resolveYatsuNode(yatsuNodes(root), ref)
-  if (!res.ok) { console.error(`spex yatsu retract: ${res.error}`); return 1 }
+  if (!res.ok) { console.error(`spex eval retract: ${res.error}`); return 1 }
   const node = res.node
   const id = node.id
 
@@ -389,22 +389,22 @@ async function retractCmd(args: string[]): Promise<number> {
   const declared = node.scenarios.map((s) => s.name)
   const scenario = scName ?? (declared.length === 1 ? declared[0] : undefined)
   if (!scenario) {
-    console.error(`spex yatsu retract: '${id}' declares ${declared.length} scenarios — name one with --scenario <name> (declared: ${declared.join(', ')})`)
+    console.error(`spex eval retract: '${id}' declares ${declared.length} scenarios — name one with --scenario <name> (declared: ${declared.join(', ')})`)
     return 1
   }
 
   const ts = flag(args, 'ts')
-  if (ts !== undefined && has(args, 'last')) { console.error('spex yatsu retract: --ts and --last conflict — pin one reading or take the latest, not both'); return 2 }
+  if (ts !== undefined && has(args, 'last')) { console.error('spex eval retract: --ts and --last conflict — pin one reading or take the latest, not both'); return 2 }
   const effective = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
   if (!effective.length) {
     const { readings } = readSidecar(node.sidecarPath)
     const had = readings.some((r) => r.scenario === scenario)
-    console.error(`spex yatsu retract: '${id}' scenario '${scenario}' has no ${had ? 'un-retracted ' : ''}reading${had ? ' left' : ''} — nothing to retract`)
+    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no ${had ? 'un-retracted ' : ''}reading${had ? ' left' : ''} — nothing to retract`)
     return 1
   }
   const target = ts !== undefined ? effective.find((r) => r.ts === ts) : effective[effective.length - 1]
   if (!target) {
-    console.error(`spex yatsu retract: '${id}' scenario '${scenario}' has no un-retracted reading @ ${ts} — readings: ${effective.map((r) => r.ts).join(', ')}`)
+    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no un-retracted reading @ ${ts} — readings: ${effective.map((r) => r.ts).join(', ')}`)
     return 1
   }
 
@@ -422,7 +422,7 @@ async function retractCmd(args: string[]): Promise<number> {
     ? `latest is now ${left[left.length - 1].ts} (${verdictText(left[left.length - 1].verdict)})`
     : 'the scenario is unmeasured again (yatsu-missing)'
   console.log(`  ⟲ '${id}' scenario '${scenario}' reading @ ${target.ts} (${verdictText(target.verdict)}) retracted — ${now}`)
-  console.log('spex yatsu retract: 1 reading retracted (an appended event — commit the sidecar so the retraction is attributed)')
+  console.log('spex eval retract: 1 reading retracted (an appended event — commit the sidecar so the retraction is attributed)')
   return 0
 }
 
@@ -444,7 +444,7 @@ async function clean(args: string[]): Promise<number> {
   const before = listBlobs().length
   const removed = gc(referenced)
   const mode = all ? 'all' : keepLatest ? 'keep-latest' : 'unreferenced'
-  console.log(`spex yatsu clean: removed ${removed.length} blob(s), kept ${before - removed.length} (${mode})`)
+  console.log(`spex eval clean: removed ${removed.length} blob(s), kept ${before - removed.length} (${mode})`)
   return 0
 }
 
@@ -479,12 +479,12 @@ async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
   const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
-  if (!ref) { console.error('spex yatsu show .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  if (!ref) { console.error('spex eval ls .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // resolve LOUD before the timeline: an ambiguous bare leaf must list its candidate canonical ids, never
   // fall through to a false "declares no scenarios". A ref matching NO yatsu node still renders the honest
   // hasYatsu:false line — a spec node without a yatsu.md is not an error to look at.
   const res = resolveYatsuNode(yatsuNodes(root), ref)
-  if (!res.ok && res.ambiguous) { console.error(`spex yatsu show: ${res.error}`); return 1 }
+  if (!res.ok && res.ambiguous) { console.error(`spex eval ls: ${res.error}`); return 1 }
   const tl = await evalTimeline(res.ok ? res.node.id : ref)   // no ctx → evalTimeline derives specs + driftIndex itself for this one id
   if (has(args, 'json')) { console.log(JSON.stringify(tl, null, 2)); return 0 }
   console.log(formatTimeline(tl))
@@ -501,12 +501,12 @@ function verdictText(v: Verdict | undefined): string {
 }
 
 export function formatTimeline(tl: EvalTimeline): string {
-  if (!tl.hasYatsu) return `spex yatsu show: '${tl.node}' declares no scenarios (no yatsu.md)`
+  if (!tl.hasYatsu) return `spex eval ls: '${tl.node}' declares no scenarios (no yatsu.md)`
   // the retraction trace, newest first — the undo stays visible through the same surface that shows readings.
   const retractLines = (tl.retractions ?? []).map((x) =>
     `  ⟲ retracted: scenario '${x.scenario}' reading @ ${x.retracts}${x.note ? ` — ${x.note}` : ''}${x.by ? `  by ${x.by}` : ''}  ${x.ts}`)
   if (!tl.readings.length) {
-    const head = `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
+    const head = `spex eval ls: '${tl.node}' has scenarios but no reading yet — run \`spex eval add ${tl.node}\``
     return retractLines.length ? [head, '', ...retractLines].join('\n') : head
   }
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
@@ -522,30 +522,35 @@ export function formatTimeline(tl: EvalTimeline): string {
     const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
-  return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines, ...retractLines].join('\n')
+  return [`spex eval ls: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines, ...retractLines].join('\n')
 }
 
-export async function runYatsu(args: string[]): Promise<number> {
+// the `spex eval` drawer's node-scoped verbs ([[cli-surface]]): add (file a measurement) · ls (a node's
+// reading timeline) · lint (the measurement-layer lint — advisory, always exit 0) · retract · clean.
+// The session-scoped read (`spex eval ls --session <SEL>`) is intercepted in cli.ts before this runs;
+// `check-staged` is hook plumbing, exported separately for `spex internal check-staged`.
+export async function runEval(args: string[]): Promise<number> {
   const sub = args[0]
-  if (sub === 'scan') return scan(args.slice(1))
-  if (sub === 'eval') return evalCmd(args.slice(1))
+  if (sub === 'lint') return scan(args.slice(1))
+  if (sub === 'add') return evalCmd(args.slice(1))
   if (sub === 'retract') return retractCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
-  if (sub === 'show') return show(args.slice(1))
-  if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  if (sub === 'ls') return show(args.slice(1))
+  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | lint [--changed] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
   return 2
 }
 
-// `spex blob put <file|->` / `spex blob get <hash> [-o <file>]` ([[blob-put]], [[blob-get]]) — the bare
+export { checkStaged }
+
+// `spex evidence put <file|->` / `spex evidence get <hash> [-o <file>]` ([[blob-put]], [[blob-get]]) — the bare
 // evidence-transport pair: put stashes bytes in the shared content-addressed cache and prints the hash,
-// WITHOUT filing a reading (`yatsu eval --video` couples the two); get is its symmetric read — hash in,
+// WITHOUT filing a reading (`eval add --video` couples the two); get is its symmetric read — hash in,
 // bytes out. putBlob is idempotent by content, so re-putting re-seeds a checkout whose cache lacks a blob
 // some thread already references by hash (the clone-evidence-404 repair).
-export async function runBlob(args: string[]): Promise<number> {
+export async function runEvidence(args: string[]): Promise<number> {
   if (args[0] === 'put' && args[1] !== undefined) return blobPut(args[1])
   if (args[0] === 'get') return blobGet(args.slice(1))
-  console.error('spex blob: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
+  console.error('spex evidence: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
   console.error('           get <hash> [-o <file>] — read a blob back: local cache first, backend fallback')
   return 2
 }
@@ -553,10 +558,10 @@ export async function runBlob(args: string[]): Promise<number> {
 function blobPut(file: string): number {
   let bytes: Buffer
   try { bytes = readFileSync(file === '-' ? 0 : file) } catch (e) {
-    console.error(`spex blob put: cannot read ${file}: ${(e as Error).message}`)
+    console.error(`spex evidence put: cannot read ${file}: ${(e as Error).message}`)
     return 2
   }
-  if (bytes.length === 0) { console.error('spex blob put: refusing an empty blob'); return 2 }
+  if (bytes.length === 0) { console.error('spex evidence put: refusing an empty blob'); return 2 }
   console.log(putBlob(bytes))
   return 0
 }
@@ -568,12 +573,12 @@ function blobPut(file: string): number {
 async function blobGet(args: string[]): Promise<number> {
   const oIdx = args.indexOf('-o')
   const out = oIdx >= 0 ? args[oIdx + 1] : undefined
-  if (oIdx >= 0 && (out === undefined || out.startsWith('-'))) { console.error('spex blob get: -o needs a <file>'); return 2 }
+  if (oIdx >= 0 && (out === undefined || out.startsWith('-'))) { console.error('spex evidence get: -o needs a <file>'); return 2 }
   const hash = args.find((a, i) => (oIdx < 0 || (i !== oIdx && i !== oIdx + 1)) && !a.startsWith('-'))
-  if (!hash) { console.error('spex blob get: usage: spex blob get <hash> [-o <file>]'); return 2 }
+  if (!hash) { console.error('spex evidence get: usage: spex evidence get <hash> [-o <file>]'); return 2 }
   const local = readBlobByHash(hash)   // validates 64-hex before touching the fs, then reads the shared cache
   if (local.ok) return emitBlob(local.bytes, out)
-  if (local.reason === 'invalid') { console.error(`spex blob get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
+  if (local.reason === 'invalid') { console.error(`spex evidence get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
   const { apiBase } = await import('../../spec-cli/src/sessions.js')
   const url = `${await apiBase()}/api/yatsu/blob/${hash}`
   let backendMiss: string
@@ -584,7 +589,7 @@ async function blobGet(args: string[]): Promise<number> {
   } catch (e) {
     backendMiss = `unreachable (${(e as Error).message})`
   }
-  console.error(`spex blob get: ${hash} — not found on either path:`)
+  console.error(`spex evidence get: ${hash} — not found on either path:`)
   console.error(`  local cache: ${blobPath(hash)} — no such blob (pruned, or put on another machine)`)
   console.error(`  backend:     ${url} — ${backendMiss}`)
   return 1
@@ -595,12 +600,12 @@ async function blobGet(args: string[]): Promise<number> {
 function emitBlob(bytes: Buffer, out?: string): number {
   if (out !== undefined) {
     try { writeFileSync(out, bytes) } catch (e) {
-      console.error(`spex blob get: cannot write ${out}: ${(e as Error).message}`)
+      console.error(`spex evidence get: cannot write ${out}: ${(e as Error).message}`)
       return 2
     }
     return 0
   }
-  if (process.stdout.isTTY) console.error(`spex blob get: writing ${bytes.length} raw bytes to a tty — pipe it or use -o <file>`)
+  if (process.stdout.isTTY) console.error(`spex evidence get: writing ${bytes.length} raw bytes to a tty — pipe it or use -o <file>`)
   process.stdout.write(bytes)
   return 0
 }

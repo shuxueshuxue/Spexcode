@@ -168,12 +168,12 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   console.log(`
 Next steps:
   1. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  2. lint.governedRoots in spexcode.json (currently ${rootsNow}) names what \`spex lint\` governs —
+  2. lint.governedRoots in spexcode.json (currently ${rootsNow}) names what \`spex spec lint\` governs —
      ["."] governs the whole git-tracked tree (tests excluded); narrow it to explicit source roots
      when you want a curated graph.
   3. Start the backend and open the board:
        spex serve                       # http://localhost:8787
-  4. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
+  4. \`spex spec lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
      spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.
   (On a fresh CLONE, re-run \`spex init\` — git never clones .git/hooks/, and the harness shims are
    gitignored machine-local files that regenerate per-machine.)`)

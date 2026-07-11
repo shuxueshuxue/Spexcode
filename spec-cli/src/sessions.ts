@@ -114,7 +114,7 @@ export type Session = {
   id: string; node: string | null; branch: string | null; path: string
   label: string; headline: string   // the DERIVED display strings ([[session-label]]) — the only names surfaces read
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
-  parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex new` ran inside another session, else null; the frontend folds a child under it at read time
+  parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
@@ -487,7 +487,7 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
 // show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
 // liveness (offline/starting/unknown), else the active-only idle/working inference (the mark-active hook flips
 // idle → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
-// terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
+// terminal-mount and the relaunch panel on; this label is for badges and `spex session ls`.
 function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
@@ -581,7 +581,7 @@ export async function listSessions(): Promise<Session[]> {
   const liveIds = new Set(ids)
   for (const k of [...lastKnownSession.keys()]) if (!liveIds.has(k)) lastKnownSession.delete(k)
   // @@@ creation order - order by birth (oldest first): each session keeps its slot for life and a new one
-  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`).
+  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex session ls`).
   // `created` is the record's stored createdAt (set once at launch). A manual drag ([[session-reorder]])
   // overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ?? created`; id breaks ties so
   // same-instant births (or sort-keys) stay deterministic.
@@ -597,10 +597,10 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
-// running `spex watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
-// persisted subscription. When a `spex watch` process starts it registers here and heartbeats; the edge
+// running `spex session watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
+// persisted subscription. When a `spex session watch` process starts it registers here and heartbeats; the edge
 // exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
-// this in-memory map in the SERVER process — the watch process (a separate `spex watch`) talks to it over
+// this in-memory map in the SERVER process — the watch process (a separate `spex session watch`) talks to it over
 // HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
 // empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
 // an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
@@ -631,7 +631,7 @@ function readComms(id: string): string[] {
       .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
   } catch { return [] }
 }
-// keyed by an opaque per-watch token (one per `spex watch` process), so a single agent may run several
+// keyed by an opaque per-watch token (one per `spex session watch` process), so a single agent may run several
 // monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
 // read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
 type WatchReg = { watcher: string; selectors: string[]; expires: number }
@@ -644,7 +644,7 @@ export function registerWatch(token: string, watcher: string, selectors: string[
   watches.set(token, { watcher, selectors: selectors.filter(Boolean), expires: Date.now() + Math.max(1000, ttlMs) })
   return true
 }
-// deregister a watch (its `spex watch` exited); false if the token wasn't registered.
+// deregister a watch (its `spex session watch` exited); false if the token wasn't registered.
 export function deregisterWatch(token: string): boolean { return watches.delete(token) }
 // the still-live registrations, pruning any whose heartbeat lapsed — the backstop for a watch that died
 // without a clean unwatch (SIGKILL, a dropped connection, a backend that was down at exit time).
@@ -765,13 +765,13 @@ let apiBaseMemo: Promise<ApiBaseInfo> | null = null
 export const apiBaseInfo = (): Promise<ApiBaseInfo> => (apiBaseMemo ??= resolveApiBase())
 export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
 
-// @@@ watch registration (CLIENT side) - a `spex watch` process is separate from the server, so it
+// @@@ watch registration (CLIENT side) - a `spex session watch` process is separate from the server, so it
 // REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 // the agent's OWN session id from the HARNESS env var — the public name used across cli.ts/sessions.ts.
 // Single adapter-routed impl lives in layout.ts (`envSessionId`, iterating each adapter's sessionEnvVar);
-// re-exported here so callers keep one name. Used by `spex watch` + the agent-typed `spex session …`
+// re-exported here so callers keep one name. Used by `spex session watch` + the agent-typed `spex session …`
 // declarations; the hooks instead pass `--session <id>` from the payload, so they never depend on this.
 export const ownSessionId = envSessionId
 
@@ -810,7 +810,7 @@ export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.na
 // @@@ isBackendUnreachable - the TRANSIENT subset of isBackendDown: the fetch itself failed (nothing
 // listening — ECONNREFUSED / "fetch failed"), which client.ts throws as a BackendError with NO HTTP
 // `status`. An HTTP BackendError (the backend answered non-2xx) DOES carry a status and is a real error, not
-// a momentary blip. The distinction matters to `spex wait`: a supervisor's backgrounded wait must survive
+// a momentary blip. The distinction matters to `spex session wait`: a supervisor's backgrounded wait must survive
 // the ~1s window where the supervisor reboots its hot-reloaded child behind the stable port, retrying until
 // the backend answers again or the deadline hits — never dying on the in-flight fetch that a sibling merge's
 // restart happens to interrupt. Read via a structural cast (no client.ts import — that would be a cycle).
@@ -1003,7 +1003,7 @@ export function superviseQueue(intervalMs = 3000): void {
 // the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
 // another repo's backend) silently lands the write in the WRONG repo. Read/control-READS deliberately
 // point anywhere (viewer-points-anywhere, see remote-client); every MUTATING verb (new/merge/send/close/
-// rename/rawkey/reopen/exit) is bound to the caller's project. So before writing, compare the caller's
+// rename/keys/reopen/exit) is bound to the caller's project. So before writing, compare the caller's
 // repo root to the backend's served root and FAIL LOUD on a provable, same-host mismatch — never a silent
 // misroute. An explicit `--api`/`--port` flag SKIPS the guard: the flag is the one provably-deliberate
 // cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
@@ -1032,19 +1032,19 @@ export async function assertProjectMatch(verb: string): Promise<void> {
   }
 }
 
-// @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
+// @@@ createSession (dispatch via backend) - `spex session new` must launch the worker in the
 // BACKEND's process, not the caller's, because the backend is the single owner of the concurrency cap and the
-// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex new` (e.g. a supervisor) would
+// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex session new` (e.g. a supervisor) would
 // bypass that queue and the maxActive gate. (The launch COMMAND is not a process-env concern anymore — it
 // comes from the session's pinned launcher, resolved from project config [[launcher-select]], identical in
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
-  await assertProjectMatch('spex new')
+  await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
-  // backend, whose process env carries no acting session id. An agent that runs `spex new` stamps its own id;
+  // backend, whose process env carries no acting session id. An agent that runs `spex session new` stamps its own id;
   // a human in a plain shell has none → null → the new session is top-level (no phantom nesting).
   const parent = ownSessionId()
   let res: Response
@@ -1483,7 +1483,7 @@ export async function closeSession(id: string): Promise<boolean> {
 }
 
 // @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
-// `GET /api/sessions/:id/capture` that `spex capture` (a backend client) reads. A monitoring read MUST
+// `GET /api/sessions/:id/capture` that `spex session capture` (a backend client) reads. A monitoring read MUST
 // distinguish "I failed to read" from "the pane is genuinely empty" — the old captureSession collapsed
 // unknown-id, offline, and capture-error all to `''`, indistinguishable from an empty pane (a blank screen
 // that exits 0 is worse than useless to a manager). So the result is DISCRIMINATED: an empty pane is a
@@ -1507,8 +1507,8 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 // transition — review / done / close-pending (agent proposals), offline (process died), error — and the
 // removal. Per Monitor's "silence is not success" rule a vanished session pings too. Net feed:
 // launched → [actionable transitions] → closed. Each line names the suggested next action(s). Drop into Monitor:
-//   Monitor({ command: 'spex watch', persistent: true, description: 'spex session state changes' })
-// @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
+//   Monitor({ command: 'spex session watch', persistent: true, description: 'session state changes' })
+// @@@ presentation + selection - shared by `spex session ls` (pretty), `spex session watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
   'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc', unknown: '\u2047',
@@ -1600,7 +1600,7 @@ export const NOTE_BOARD_LIMIT = 50
 const SHORT: Partial<Record<DisplayStatus, string>> = { 'close-pending': 'close' }
 
 // @@@ statusLegend - one-line glyph\u2192meaning key, BUILT from STATUS_GLYPH so it can never drift from
-// the glyphs the table actually prints. Shown under `spex ls` so the symbols are self-explanatory.
+// the glyphs the table actually prints. Shown under `spex session ls` so the symbols are self-explanatory.
 export function statusLegend(color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   const parts = (Object.keys(STATUS_GLYPH) as DisplayStatus[]).map(
@@ -1646,18 +1646,18 @@ export function sessionEvent(s: Session): string {
 }
 // @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
 // without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
-// status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
+// status, so `spex session watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
   return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
 // @@@ source - the session board the poll reads. The CLI passes the BACKEND CLIENT (client.ts
-// clientListSessions), so `spex watch` streams whatever backend SPEXCODE_API_URL points at — including a
+// clientListSessions), so `spex session watch` streams whatever backend SPEXCODE_API_URL points at — including a
 // REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
 // silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
 export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number } }
-// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex wait` runs on); a
+// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
 // plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
 // "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
 // EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
@@ -1704,7 +1704,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.delete(id)
         emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
       }
-      // BOUNDED mode (`until`, what `spex wait` runs): return the moment a watched target is actionable; an empty selected set
+      // BOUNDED mode (`until`, what `spex session wait` runs): return the moment a watched target is actionable; an empty selected set
       // means the target is gone (absent from the board), which it can never come back from. Both sit inside
       // the try, after the emit pass, so the caller still saw every transition before we hand control back.
       if (until) {
@@ -1720,7 +1720,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       //  • UNREACHABLE (no status — ECONNREFUSED / fetch failed) — nothing is listening, e.g. the supervisor
       //    is rebooting its hot-reloaded child behind the stable port on a sibling merge. This is TRANSIENT:
       //    record it, warn ONCE, and keep polling — the deadline (below) is the only hard wall, so a
-      //    backgrounded `spex wait` survives the ~1s restart instead of dying on the interrupted fetch.
+      //    backgrounded `spex session wait` survives the ~1s restart instead of dying on the interrupted fetch.
       if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message, kind: 'http' }
       if (isBackendDown(e)) {
         downMsg = (e as Error).message
@@ -1728,7 +1728,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       }
     }
     // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep: this
-    // guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
+    // guarantees `spex session wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
     // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
     // not a false "no actionable status" timeout, so the manager sees the honest cause.
     if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true }

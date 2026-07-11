@@ -25,7 +25,7 @@ const guarded = (verb: string) => assertProjectMatch(`spex ${verb}`)
 const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const seg = (id: string) => encodeURIComponent(id)
 
-// GET /api/sessions — the board, used by `spex ls`, and by `spex watch`/`wait` as their poll source.
+// GET /api/sessions — the board, used by `spex session ls`, and by `spex session watch`/`wait` as their poll source.
 export async function clientListSessions(): Promise<Session[]> {
   const r = await apiFetch('/api/sessions')
   if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)

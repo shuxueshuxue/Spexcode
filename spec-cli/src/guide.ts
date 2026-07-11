@@ -10,7 +10,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    the \`spexcode\` package itself, never the internal @spexcode/spec-cli. Both paths own the same
    \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`; a legacy link of the
    inner package uninstalls as \`@spexcode/spec-cli\`). A source link ships no
-   prebuilt dashboard dist — \`spex dashboard\` needs a manual dashboard build, or use the dev server.)
+   prebuilt dashboard dist — \`spex serve ui\` needs a manual dashboard build, or use the dev server.)
 
 2. Adopt a repo
      cd <your-repo> && spex init                 # seeds .spec/ + git hooks (additive, never overwrites)
@@ -22,7 +22,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
 
 4. Open the dashboard — the SAME board for every project, pointed per project
-     spex dashboard                              # serves the bundled board on :5173, proxying /api
+     spex serve ui                              # serves the bundled board on :5173, proxying /api
    Point it at another backend with --api-port (pairs with \`spex serve --port\`); one dashboard per
    project. The board is a viewer — which backend it proxies is the only "which project" knob.
    Loopback-only by default: viewing from another machine needs \`--host 0.0.0.0\` (or a specific
@@ -33,7 +33,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
 5. Govern your layout (optional)
      spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.
-     \`spex lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
+     \`spex spec lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
 
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
@@ -47,7 +47,7 @@ const SPEC = `spex guide spec — the spec.md file format
 
 A spec node is a DIRECTORY under .spec/<project>/…/<id>/ holding a spec.md. The node's id is its leaf dir
 name when that is globally unique, else the shortest parent-qualified path-suffix that disambiguates (so ids
-are unique by construction) — the same id \`spex board\`, \`ack\`, and a node/<id> branch use. A spec states a node's PRESENT
+are unique by construction) — the same id \`spex graph\`, \`spec ack\`, and a node/<id> branch use. A spec states a node's PRESENT
 intent at CONTRACT altitude — what it guarantees and why — and is rewritten in place as intent changes;
 version history is git's job, never a changelog in the body.
 
@@ -78,19 +78,19 @@ code does it. Two optional level-2 headings split ground truth from detail:
 Bodies without those headings are read whole. Link sibling nodes with [[node-id]] (a dangling link is
 fine — it marks a node worth writing).
 
-WHAT lint CHECKS (spex lint; the pre-commit hook gates on errors):
+WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
   integrity (error)  every code: path exists.
   living    (error)  no "## vN" changelog headings — the body is current-state.
   altitude  (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
                      code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
   coverage  (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift     (warn)   a governed file has commits newer than the node's spec version — it may be stale.
-                     Remedy: edit the spec to the new intent (re-versions the node), OR \`spex ack <node>
+                     Remedy: edit the spec to the new intent (re-versions the node), OR \`spex spec ack <node>
                      --reason "…"\` when only mechanics changed and the contract still holds.
   owners    (warn)   a file governed by > maxOwners nodes (default 3) does too much — SPLIT it so each
                      governor owns its own module (or merge the nodes, or give it one foundation owner).
 
-LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex lint\` must reach 0 errors
+LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
 before merge. \`spex init\` seeds the first tree; \`spex guide yatsu\` covers the sibling loss-signal file.`
 
 const YATSU = `spex guide yatsu — the yatsu.md file format
@@ -98,7 +98,7 @@ const YATSU = `spex guide yatsu — the yatsu.md file format
 A yatsu.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
 behaviour and the spec. It is optional, but a node that governs SOURCE code (its code: includes a file whose extension is in
 \`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no yatsu.md is
-a blind spot: \`spex yatsu scan\` flags it \`yatsu-uncovered\`. yatsu defines no DSL and RUNS NOTHING — the
+a blind spot: \`spex eval lint\` flags it \`yatsu-uncovered\`. yatsu defines no DSL and RUNS NOTHING — the
 agent measures; yatsu keeps score.
 
 FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each scenario:
@@ -123,15 +123,15 @@ A yatsu.md OWNS nothing — only its scenarios govern and relate (see governed-r
 
 THE SCHEMA IS ENFORCED (closed field set, four required fields, unique names, tags within the library). A
 missing required field, an unknown key (a typo like \`descripton:\`), a duplicate name, an out-of-library
-tag, or no scenarios at all is rejected LOUD: \`spex yatsu scan\` reports it as \`yatsu-schema\`, and the
-pre-commit \`yatsu check-staged\` BLOCKS the commit.
+tag, or no scenarios at all is rejected LOUD: \`spex eval lint\` reports it as \`yatsu-schema\`, and the
+pre-commit \`internal check-staged\` BLOCKS the commit.
 
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
 looks at / calls the real product surface, not an internal helper chosen to make the proof easy.
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:
-  spex yatsu eval <node> --scenario <name> (--pass | --fail) [--note <text>]
+  spex eval add <node> --scenario <name> (--pass | --fail) [--note <text>]
                  [--image <png> …repeatable] [--result <txt>|-] [--video <webm|mp4> [--timeline <json>]]
 The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an unmeasured scenario is \`missing\`,
 not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
@@ -168,7 +168,7 @@ is earned on the working tree, but the anchor can only land after the commit. Fi
 mis-anchors the reading (its sha lacks the change it measured) and it goes stale the moment you commit.
 
 A botched filing (a junk e2e/smoke run, a wrong verdict) is undone through the SAME surface:
-  spex yatsu retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]
+  spex eval retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]
 retract APPENDS a retraction event to the sidecar (never deletes a line — the trace stays, git records
 who/when/why); the scoreboard then drops the retracted reading everywhere: the previous reading becomes
 the latest again, or the scenario honestly returns to \`missing\`. Default target is the scenario's latest
@@ -177,11 +177,11 @@ reading (\`--last\` makes that explicit; repeat to peel junk back one filing at 
 THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one JSON line per measurement
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
 code file or the scenario (the yatsu.md) moves since it was filed.
-  spex yatsu scan [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
+  spex eval lint [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
                                 yatsu-missing (never measured) · yatsu-uncovered (governed source, no yatsu.md) ·
                                 yatsu-owners (a file governed by > maxOwners scenarios — split it)
-  spex yatsu show <node>        the reading timeline (verdict · freshness · evidence), newest first
-  spex yatsu clean              GC the content-addressed evidence cache`
+  spex eval ls <node>        the reading timeline (verdict · freshness · evidence), newest first
+  spex eval clean              GC the content-addressed evidence cache`
 
 const CONFIG = `spex guide config — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
 
@@ -200,7 +200,7 @@ Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A 
 icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
-\`spex new\` or the dashboard without an explicit launcher choice.
+\`spex session new\` or the dashboard without an explicit launcher choice.
 
 MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
 sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
@@ -286,13 +286,13 @@ resolves its backend per this ladder, flag first:
                              health-probes before trusting (a dead record is ignored).
   3.  the other side as fallback (human with no live record → env; worker with no env → record).
   4.  default http://127.0.0.1:$PORT||8787.
-WRITES are project-bound: every mutating verb (new/merge/send/close/rename/rawkey/reopen/exit) refuses
+WRITES are project-bound: every mutating verb (new/merge/send/close/rename/reopen/exit) refuses
 loudly when the resolved backend serves a DIFFERENT same-host project — an explicit --api/--port skips
 the guard (the flag is the proof of intent). Reads point anywhere.
 
 ── ISSUES (spexcode.json — portable policy) ──
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
-                      hides the dashboard view; the CLI toggle is \`spex issues on|off\`.
+                      hides the dashboard view; the CLI toggle is \`spex issue on|off\`.
 
 ── FORGE (spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
   forge.host          explicit forge host id ('github' | 'gitlab' | …) overriding the automatic derivation.

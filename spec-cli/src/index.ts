@@ -37,7 +37,7 @@ app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/sp
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex board`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
+// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
 // dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
 // endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
 // instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
@@ -99,7 +99,7 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
+// a node's eval timeline (read half of `spex eval`): yatsu-sidecar readings joined with a live freshness
 // flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
 // the eval seam's WRITE half over HTTP ([[spec-yatsu]] filing.ts): a programmatic caller files a manual@1
@@ -147,7 +147,7 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
 // only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
-// dropdown pre-selects the SAME launcher a bare `spex new` uses (the CLI/config default), instead of the
+// dropdown pre-selects the SAME launcher a bare `spex session new` uses (the CLI/config default), instead of the
 // alphabetically-first one. Missing defaultLauncher is returned as an actionable config error, not hidden by
 // falling through to the built-in `claude` launcher.
 app.get('/api/launchers', (c) => c.json({
@@ -310,7 +310,7 @@ app.post('/api/uploads', async (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
-// edges derived live from `spex watch` monitors (A→B = agent A is watching B), not a stored subscription;
+// edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
 // watch/unwatch register + heartbeat. A literal `graph` segment so it never collides with the `:id` routes.
 app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
 app.post('/api/sessions/graph/watch', async (c) => {
@@ -339,7 +339,7 @@ app.post('/api/sessions', async (c) => {
   } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown launcher id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
-// dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
+// dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
@@ -360,7 +360,7 @@ app.get('/api/sessions/:id/evals', async (c) => {
   const m = await buildSessionEvals(c.req.param('id'))
   return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
-// the session's live pane as text (one-shot snapshot) for a backend client (`spex capture`). Empty and fail
+// the session's live pane as text (one-shot snapshot) for a backend client (`spex session capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.
 app.get('/api/sessions/:id/capture', async (c) => {
   const r = await captureSessionResult(c.req.param('id'))

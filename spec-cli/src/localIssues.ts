@@ -3,7 +3,7 @@
 // never written into it. One thread = one PLAIN markdown file at <main>/.spec/.issues/<id>.md; there is
 // deliberately no content-kind taxonomy (a change suggestion, an annotation, a Q&A are the same mechanism —
 // the prose says what it is). Others reply/discuss like an async chatroom; a supervisor drains it via
-// `spex issues` (reading is the port's job, issues.ts — this module owns only the store + its write verbs).
+// `spex issue ls` (reading is the port's job, issues.ts — this module owns only the store + its write verbs).
 // Because a thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it —
 // invisible to lint / drift / deriveStatus / board with ZERO exemption. The store lives on the TRUNK, not
 // per-branch: reads and writes target the main checkout and commit STRAIGHT to it (--no-verify, provably
@@ -28,7 +28,7 @@ const LEGACY_STORE_REL = '.spec/.forum'
 // truth is `spexcode.json`'s `issues.enabled` (the same settings file that carries every other toggle),
 // read via readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge
 // nudge (and, in the dashboard, hides the issues view); the raw write verbs stay usable, since running one
-// is explicit consent. `spex issues on|off` flips the flag on disk — effective immediately, no commit
+// is explicit consent. `spex issue on|off` flips the flag on disk — effective immediately, no commit
 // needed, because readConfig reads the working tree. The dashboard toggle is a thin wrapper over this same
 // switch. (The key was historically `proposals.enabled`; a pre-rename value still reads, and the next
 // toggle write rewrites it under `issues` — the same self-heal-on-touch discipline as the store-dir rename.)
@@ -183,7 +183,7 @@ export function loadLocalIssues(): Issue[] {
 export function loadOne(id: string): Issue {
   ensureStoreMigrated()
   const f = join(localStoreDir(), `${id}.md`)
-  if (!existsSync(f)) throw new Error(`no local issue '${id}' (see \`spex issues --all --store local\`)`)
+  if (!existsSync(f)) throw new Error(`no local issue '${id}' (see \`spex issue ls --all --store local\`)`)
   return parse(id, readFileSync(f, 'utf8'))
 }
 
@@ -368,7 +368,7 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
 // every filer is offline/absent, the NODE's governing session, so an unresolved remark still REACHES an agent
 // who can act on it. A broken/absent worktree sidecar falls through silently — one bad worktree never fails
 // the remark write. This is notification only; it resolves nothing (R3: resolve is a deliberate
-// `spex resolve`). Non-eval threads pay nothing (no yatsu/specs/sessions import).
+// `spex remark resolve`). Non-eval threads pay nothing (no yatsu/specs/sessions import).
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
 async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
   const m = EVAL_CONCERN_RE.exec(thread.concern)
@@ -453,7 +453,7 @@ function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: str
   return loadOne(host.issue).id   // throws loudly if the issue doesn't exist
 }
 
-// author a remark on a host — the ONE write both the CLI (`spex remark`) and the server call. Stamps the
+// author a remark on a host — the ONE write both the CLI (`spex remark add`) and the server call. Stamps the
 // codeSha it was authored against (the worktree HEAD by default — R2). Returns the `<thread-id>#<rid>` ref.
 export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
@@ -471,7 +471,7 @@ export async function remarkOnHost(
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.
 function parseRemarkRef(ref: string): { id: string; rid: string } {
   const i = ref.lastIndexOf('#')
-  if (i <= 0 || i === ref.length - 1) throw new Error(`bad remark ref '${ref}' — expected <thread-id>#<rid> (the id \`spex remark\` printed)`)
+  if (i <= 0 || i === ref.length - 1) throw new Error(`bad remark ref '${ref}' — expected <thread-id>#<rid> (the id \`spex remark add\` printed)`)
   return { id: ref.slice(0, i), rid: ref.slice(i + 1) }
 }
 
@@ -525,15 +525,15 @@ export function nudge(node: string): string {
     '',
     '1. CLOSE what you finished. An issue whose work just landed is closed, not',
     '   left open — the open set is the OUTSTANDING work, so a stale open reads as a',
-    '   lie:  spex issues --store local     then   spex issues close <id>',
+    '   lie:  spex issue ls --store local     then   spex issue close <id>',
     '',
     '2. RECORD only what OUTLIVES this task — a concern you are NOT acting on now:',
     '   an off-mainline smell / awkward boundary / wish, or a trivial-but-must-not-',
     "   forget to-do that doesn't earn a spec node. NOT a bug tracker (that is the",
     '   spec graph + the forge), NOT your assigned task or a fix you are about to',
     '   make — those need no issue. Only the taste that would otherwise evaporate:',
-    '     spex issues                              # read first — reply if already raised',
-    '     spex issues open "<concern>" [--node <id>]   # else open one',
+    '     spex issue ls                            # read first — reply if already raised',
+    '     spex issue open "<concern>" [--node <id>]   # else open one',
     'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
     '───────────────────────────────────────────────────────────────────',
   ].join('\n')
@@ -553,7 +553,7 @@ export function closeoutNudge(sessionId: string | null | undefined): string {
     t.status === 'open' && !EVAL_CONCERN_RE.test(t.concern) &&
     (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
   if (!mine.length) return ''
-  return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issues close <id>\`), or reply why it should stay open past this session (\`spex issues reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
+  return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issue close <id>\`), or reply why it should stay open past this session (\`spex issue reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
 }
 
 // ───────────────────────── CLI ─────────────────────────
@@ -582,10 +582,9 @@ function readBody(args: string[]): string | undefined {
 const repeated = (args: string[], name: string): string[] =>
   args.flatMap((a, i) => (a === `--${name}` ? [args[i + 1]] : [])).filter(Boolean) as string[]
 
-// the local-issue WRITE verbs, folded into the one issues surface (`spex issues <sub>` — the read routes
-// here when its first positional is a write sub): open "<concern>" [--store local|<host>] [--node id…]
+// the local-issue WRITE verbs of the issue drawer (`spex issue <verb>`): open "<concern>" [--store local|<host>] [--node id…]
 // [--evidence hash…] [--body -|text], the id-based reply, and the feature toggle
-// on | off | status. `nudge` is internal (the post-merge hook's caller). Store is a property of the issue,
+// on | off | status. Store is a property of the issue,
 // never a second command — open and reply route by it (issues.ts createIssue/replyIssue).
 export async function runIssueWrite(args: string[]): Promise<number> {
   const sub = args[0]
@@ -599,7 +598,7 @@ export async function runIssueWrite(args: string[]): Promise<number> {
     if (sub === 'reply') {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
-      if (!id || !body) { console.error('usage: spex issues reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
+      if (!id || !body) { console.error('usage: spex issue reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
       // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
       // a local id commits to the store — the same command either way (dynamic import: no static cycle).
       const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
@@ -610,19 +609,13 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       if (s) console.log(`  ${s}`)
       return 0
     }
-    if (sub === 'nudge') {
-      // internal: the post-merge hook calls this to print the (toggle-aware) nudge for a merged node.
-      const text = nudge(bare(args.slice(1))[0] || '')
-      if (text) console.log(text)
-      return 0
-    }
     // `open`: start a new issue — STORE-ROUTED through the one creation port ([[issues]] createIssue, the
     // same routine POST /api/issues runs): default local commits to the trunk store; `--store <host>`
     // creates the real forge issue through that store's driver (no promote round-trip when the concern is
     // born forge-visible). The concern is the bare positional(s) after the sub.
     const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
     if (!concern) {
-      console.error('usage: spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|close|promote <issue-id> …  |  on|off|status')
+      console.error('usage: spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issue reply|close|promote <issue-id> …  |  on|off|status')
       return 2
     }
     const r = await (await import('./issues.js')).createIssue(concern, {
@@ -633,20 +626,21 @@ export async function runIssueWrite(args: string[]): Promise<number> {
     })
     const re = r.nodes.length ? ` (re: ${r.nodes.join(', ')})` : ''
     console.log(r.store === 'local'
-      ? `opened '${r.id}'${re} — committed to the local issue store; read it with \`spex issues\``
+      ? `opened '${r.id}'${re} — committed to the local issue store; read it with \`spex issue ls\``
       : `opened '${r.id}' on ${r.store}${re} — ${r.url}`)
     const s = summarize(r.outcomes)
     if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {
-    console.error(`spex issues: ${e instanceof Error ? e.message : e}`)
+    console.error(`spex issue: ${e instanceof Error ? e.message : e}`)
     return 1
   }
 }
 
-// the first positionals runIssueWrite handles — the issues command routes these to it, everything else is
-// the read. Exported so the router and the runner can never drift.
-export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'on', 'off', 'status', 'nudge'])
+// the first positionals runIssueWrite handles — the issue drawer routes these to it. Exported so the
+// router and the runner can never drift. (`nudge` is not here: it is machine plumbing, called only by the
+// post-merge hook as `spex internal nudge`.)
+export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'on', 'off', 'status'])
 
 // ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
 // `spex remark <host> --body -|<text> [--code-sha <sha>] [--scenario <name>] [--evidence <hash>…]`
@@ -657,40 +651,40 @@ export async function runRemark(args: string[]): Promise<number> {
     const positional = bare(args)[0]
     const body = readBody(args)
     if (!positional || !body) {
-      console.error('usage: spex remark <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
+      console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
       return 2
     }
     const host = scenario ? { node: positional, scenario } : { issue: positional }
     const r = await remarkOnHost(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
-    console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issues --all\``)
+    console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
     const s = summarize(r.outcomes, r.loopIn)
     if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {
-    console.error(`spex remark: ${e instanceof Error ? e.message : e}`)
+    console.error(`spex remark add: ${e instanceof Error ? e.message : e}`)
     return 1
   }
 }
 
-// `spex resolve <remark-ref>` — flip resolved=true (agent-only, never the author, monotonic — see resolveRemark).
+// `spex remark resolve <remark-ref>` — flip resolved=true (agent-only, never the author, monotonic — see resolveRemark).
 export async function runResolve(args: string[]): Promise<number> {
   const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex resolve <remark-ref>   (the <thread-id>#<rid> `spex remark` printed)'); return 2 }
+  if (!ref) { console.error('usage: spex remark resolve <remark-ref>   (the <thread-id>#<rid> `spex remark add` printed)'); return 2 }
   try {
     const by = currentSession()
     resolveRemark(ref, by)
     console.log(`resolved remark ${ref} — by ${by}`)
     return 0
-  } catch (e) { console.error(`spex resolve: ${e instanceof Error ? e.message : e}`); return 1 }
+  } catch (e) { console.error(`spex remark resolve: ${e instanceof Error ? e.message : e}`); return 1 }
 }
 
-// `spex retract <remark-ref>` — the author withdraws their OWN remark, removing it (author-only — see retractRemark).
+// `spex remark retract <remark-ref>` — the author withdraws their OWN remark, removing it (author-only — see retractRemark).
 export async function runRetract(args: string[]): Promise<number> {
   const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex retract <remark-ref>'); return 2 }
+  if (!ref) { console.error('usage: spex remark retract <remark-ref>'); return 2 }
   try {
     retractRemark(ref, currentSession())
     console.log(`retracted remark ${ref}`)
     return 0
-  } catch (e) { console.error(`spex retract: ${e instanceof Error ? e.message : e}`); return 1 }
+  } catch (e) { console.error(`spex remark retract: ${e instanceof Error ? e.message : e}`); return 1 }
 }

@@ -22,9 +22,9 @@ function waitFor(source: () => Promise<Session[]>): Promise<WatchOutcome> {
 }
 
 // THE regression: the backend hot-reloads (supervisor reboots the child on a sibling merge) so the first
-// probe's fetch fails with a connection error. `spex wait` must RETRY, not exit — a later probe returns an
+// probe's fetch fails with a connection error. `spex session wait` must RETRY, not exit — a later probe returns an
 // actionable status and the wait resolves to THAT status, not to the transient backend-down error.
-test('spex wait: a transient connection failure is retried, then the actionable status is returned', async () => {
+test('spex session wait: a transient connection failure is retried, then the actionable status is returned', async () => {
   let call = 0
   const source = async () => {
     call++
@@ -39,7 +39,7 @@ test('spex wait: a transient connection failure is retried, then the actionable 
 // a connection error that never recovers must eventually fail — but only after the WHOLE timeout is spent,
 // reported as backend-down of kind 'unreachable' (the honest, TRANSPORT-scoped cause — what the CLI surfaces
 // as the distinct `backend-unreachable` outcome, issue #40), never a false "no actionable status" timeout.
-test('spex wait: a backend that stays unreachable fails as backend-down/unreachable at the deadline, not a false timeout', async () => {
+test('spex session wait: a backend that stays unreachable fails as backend-down/unreachable at the deadline, not a false timeout', async () => {
   const source = async (): Promise<Session[]> => { throw new BackendError('no backend reachable at http://x — (fetch failed)') }
   const r = await waitFor(source)
   assert.ok('backendDown' in r, `expected backendDown, got ${JSON.stringify(r)}`)
@@ -49,7 +49,7 @@ test('spex wait: a backend that stays unreachable fails as backend-down/unreacha
 // a REACHABLE-but-erroring backend (HTTP non-2xx → BackendError WITH a status) is a real terminal condition:
 // a bounded wait fails loud immediately, it does not retry the whole timeout window. Its kind is 'http' —
 // still a transport-layer verdict, distinct from every session state.
-test('spex wait: an HTTP backend error fails loud immediately, without retrying', async () => {
+test('spex session wait: an HTTP backend error fails loud immediately, without retrying', async () => {
   let call = 0
   const source = async (): Promise<Session[]> => { call++; throw new BackendError('backend error 500 listing sessions', 500) }
   const r = await waitFor(source)

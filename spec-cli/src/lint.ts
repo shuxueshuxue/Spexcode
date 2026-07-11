@@ -242,13 +242,13 @@ export async function specLint(): Promise<Finding[]> {
 export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth
 broke along  raw intent → expanded spec → code: link → code structure → implementation, fix THAT layer.
 
-  Inspect:  spex lint                                                       which files, against which spec
+  Inspect:  spex spec lint                                                       which files, against which spec
             the node's spec.md                                             its raw source + expanded spec
             git diff $(git log -1 --format=%H -- <spec.md>)..HEAD -- <file>   the code delta since the spec
 
 Diagnose, then apply the one honest remedy:
   • contract changed        → rewrite the spec body to the new intent, commit it (re-versions the node)
-  • only mechanics changed  → spex ack <node>   "checked — spec still valid"   (give a real reason)
+  • only mechanics changed  → spex spec ack <node>   "checked — spec still valid"   (give a real reason)
   • implementation is WRONG → the spec is right; fix the CODE back toward it, then ack
   • wrong code: link        → the node shouldn't own this file (or owns it too broadly); fix frontmatter
   • expanded spec ≠ raw     → the spec drifted from human intent; fix the expanded spec to serve the raw

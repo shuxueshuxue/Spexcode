@@ -1088,7 +1088,7 @@ export function launcherList(root = mainCheckout()): Launcher[] {
 export const MISSING_DEFAULT_LAUNCHER_ERROR =
   'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
 
-// the configured default launcher NAME ([[launcher-select]]) — the profile `spex new`/a dropdown pick with no
+// the configured default launcher NAME ([[launcher-select]]) — the profile `spex session new`/a dropdown pick with no
 // explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to a
 // `claude` launcher (which `spex init` seeds by name, so a default can point at it explicitly).
 export function defaultLauncher(root = mainCheckout()): string {

@@ -32,13 +32,13 @@ This is intended for an interactive, single-operator setup. It also means:
 - **Only run SpexCode on repositories and prompts you trust.** An untrusted spec, prompt, or repo can
   cause the agent to run commands on your machine. Treat dispatching a worker like running a script the
   repo handed you.
-- The standalone **governance layer** (`spex lint`, `spex init`, the spec tree, the dashboard's
+- The standalone **governance layer** (`spex spec lint`, `spex init`, the spec tree, the dashboard's
   read-only views, the git-as-database reader) does **not** launch an agent and does not carry this
   risk. You can adopt and use that layer without ever enabling the session layer.
 
 ### 2. Remote exposure is opt-in and password-gated
 
-`spex serve` (the API + session backend) and `spex dashboard` bind to **localhost** by default and are
+`spex serve` (the API + session backend) and `spex serve ui` bind to **localhost** by default and are
 **unauthenticated there** — loopback is the trust boundary, on the assumption the only client is you, on
 the same host.
 

@@ -50,7 +50,8 @@ Each story names the mechanism that satisfies it, or the deferred design that wi
 8. *"Version the spec locally but keep it off the shared remote."* Deliberately outside this vocabulary:
    tracking is a kind-fact ("untrack .spec" is unsayable in the schema — the guardrail is the vocabulary,
    not a WARN); where commits GO is the remote/branch layer — a private remote, branch discipline, or
-   story 1's deferred lane.
+   story 1's deferred lane. The per-node variant has a named successor: [[spec-local]], a private
+   overlay root that is its own git home — the data stays in git, just never in the shared one.
 9. *"Does adopting SpexCode touch our remote?"* Never — materialize writes files and per-clone git config
    only; commits and pushes happen through the user's own ritual.
 
@@ -140,4 +141,5 @@ is not retroactive secrecy: history already pushed cannot be recalled.
 **Boundaries + deferred ledger.** Remote history cannot be forgotten by any local mechanism. Double
 delivery (a worktree CLAUDE.md and the main checkout's both discovered → the block twice) is [[doctor]]'s
 audit, not a render mode. Deferred: the lane (story 1), the readings store (story 10), JSON mixed content
-([[content-filter]]'s designed successor), the inspect/scaffold wizard (story 22).
+([[content-filter]]'s designed successor), the inspect/scaffold wizard (story 22), the private overlay
+root ([[spec-local]], story 8's per-node successor).

@@ -48,6 +48,12 @@ The principles, in the maintainer's own framing:
     against these existing principles.
 12. **Self-reference**: sediment this guidance into the spec / `.config` / source so it is never lost.
 13. **YATU** (You As The User): measure through the real product surface a user touches, not an internal helper.
+14. **Capabilities enter the ecosystem through the pillars we already stand on** (git / agent harness / test
+    framework) — before adopting a new protocol or dependency, check whether an existing pillar already
+    delivers it indirectly. The canonical case: LSP-grade code intelligence reaches SpexCode *through the
+    harness* (agents navigate code; the LLM judge reads semantics) and symbol-level history *through git*
+    (`log -L`, hunk-header funcname drivers) — so SpexCode never speaks the LSP protocol itself. A capability
+    worth having usually has a pillar-native form; integrating it directly is how tools bloat.
 
 ## expanded spec
 

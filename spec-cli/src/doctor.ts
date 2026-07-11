@@ -363,6 +363,9 @@ function usage(): number {
   (bare)         per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
   --contract     print the surface:system contract text (hand it to any agent)
   --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
+  --migrate      one-shot 0.2.x → 0.3.0 vocabulary migration for an adopter repo (renames + hook-asset
+                 upgrade + body rewrites; refuses on a dirty tree / undrained sessions / an already-migrated
+                 tree; stages everything, commits nothing; removed in 0.4.0)
   install        [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
   uninstall      [staged] reverse exactly what install wrote`)
   return 0
@@ -371,6 +374,10 @@ function usage(): number {
 export async function runDoctor(args: string[]): Promise<number> {
   // contract/conflicts are FLAGS, not subcommands ([[cli-surface]] §4: another representation of the same
   // diagnosis read, not a distinct action). The old positional spellings signpost — report, never run.
+  // --migrate is the one MUTATING flag: the term-limited 0.2.x→0.3.0 adopter migrator ([[migrate]],
+  // ships with 0.3.0, deleted in 0.4.0) — dispatched first so its refusal/summary is never diluted
+  // by the diagnosis report.
+  if (args.includes('--migrate')) return await (await import('./migrate.js')).runMigrate()
   if (args.includes('--contract')) return contract()
   if (args.includes('--conflicts')) return await conflicts()
   switch (args[0]) {

@@ -39,8 +39,8 @@ node owes on two axes that used to live apart: **issues** (external forge work, 
 and **scenarios** (internal loss targets, satisfied/outstanding — [[yatsu-score-badge]]). Both are *execution*
 that rides beside the git-derived node, never node state; the panel lays them out with the same weight so
 neither is the privileged one. It is **read-only**: structure and state come from the focused board node
-verbatim (`node.scenarios` + `node.evals` + `node.issues`, folded onto `/api/board`), in lock-step with the
-tile on every poll. Scenario *prose* is off the board ([[board-lean]]): the `expected` preview and
+verbatim (`node.scenarios` + `node.evals` + `node.issues`, folded onto `/api/graph`), in lock-step with the
+tile on every poll. Scenario *prose* is off the board ([[graph-lean]]): the `expected` preview and
 tracked-files line join from the shared lite corpus, fetched once on the first focus of a scenario-bearing
 node — never per poll — so a row renders name/state/tags instantly and prose fills in when the corpus lands.
 

@@ -1,31 +1,31 @@
 ---
-title: board-stream
+title: graph-stream
 status: active
 hue: 190
-desc: The board's push channel — an SSE with two modes (bare change signals, or hash-chained incremental patches) fed by every freshness source the backend can see.
+desc: The graph's push channel — an SSE with two modes (bare change signals, or hash-chained incremental patches) fed by every freshness source the backend can see.
 code:
   - spec-cli/src/boardStream.ts
 ---
 
-# board-stream
+# graph-stream
 
 ## raw source
 
-The dashboard kept its status/grouping fresh by re-fetching the whole board on a 4s timer, while the live
+The dashboard kept its status/grouping fresh by re-fetching the whole graph on a 4s timer, while the live
 terminal rode a WebSocket. So a session's status change felt laggy (up to the poll interval) even though the
-backend already knew it — two different freshness models on one screen. Give the board the terminal's model:
+backend already knew it — two different freshness models on one screen. Give the graph the terminal's model:
 the backend pushes and the dashboard follows, so status flips as fast as the characters do.
 
 ## expanded spec
 
-board-stream is the board's live-delivery channel: `GET /api/board/stream`, a server-sent-events stream a
+graph-stream is the graph's live-delivery channel: `GET /api/graph/stream`, a server-sent-events stream a
 dashboard opens once, server→client only, with a periodic keep-alive `ping` so an idle proxy never times it
 out. It speaks two protocols on one route. **Plain mode** (no query) is the legacy contract, kept verbatim
-for old clients: a bare `board-changed` signal, the client refetches `/api/board` on its ETag/304 path.
+for old clients: a bare `board-changed` signal, the client refetches `/api/graph` on its ETag/304 path.
 **Delta mode** (`?mode=delta`) inverts who fetches: the server sends a full snapshot on every (re)connect
 (`board-full {to, board}`), then per change either the hash-chained patch (`board-delta {from, to, set,
 del}`) or a fresh full when the patch wouldn't win — the algebra, and the proof that this renders exactly
-what refetching would, is [[board-delta]]'s contract.
+what refetching would, is [[graph-delta]]'s contract.
 
 **Four event sources plus one explicit nudge, one debounced pipeline.** (1) A recursive `fs.watch` on the
 per-user session store
@@ -47,9 +47,9 @@ one debounced fire that collapses a burst (a merge touches many records) into on
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify they always did, and a closed dashboard costs nothing (the polls stop
 with their last subscriber). With delta subscribers the debounced fire rebuilds ONCE, broadcasts the patch
-to every delta stream, and notifies plain streams only when the board's content tag actually moved — so a
+to every delta stream, and notifies plain streams only when the graph's content tag actually moved — so a
 signature wiggle that changes nothing no longer triggers a fleet of pointless refetches. That rebuild now
-goes through [[board-cache]]'s single-flight `getBoard()`, so the SSE rebuild and a concurrent `/api/board`
+goes through [[graph-cache]]'s single-flight `getBoard()`, so the SSE rebuild and a concurrent `/api/graph`
 poll share ONE assembly; and every change source calls `invalidateBoard()` before its debounce fires, so
 the route's cache never lags a change the stream would push. Every source and
 watch is best-effort and never throws: a source that can't start just leaves that path to the cold tick or
@@ -61,9 +61,9 @@ drops the stream; `EventSource` auto-reconnects to the fresh child — and in de
 *silently* — a half-open tunnel, a sleep-resume, a network switch — delivering no data, no FIN, no `error`
 event, indistinguishable client-side from a healthy quiet stream. The client deliberately does NOT try to
 detect that (there is no liveness window to tune): its fallback poll never stands down, riding
-`/api/board`'s ETag/304 so a quiet board costs headers only ([[dashboard-shell]]). The stream's `ping`
+`/api/graph`'s ETag/304 so a quiet graph costs headers only ([[dashboard-shell]]). The stream's `ping`
 keep-alive exists for the *proxies* on the path, not as a client-side liveness proof. So an old backend
 without this route, a proxy that strips SSE, a server that ignores `?mode=delta`, or an undetectably dead
-connection all degrade to the plain protocol or the poll — never to a frozen board. What stays deliberately
-unshrunk here is the full snapshot itself (first paint, resync): slimming that payload is [[board-lean]]'s
+connection all degrade to the plain protocol or the poll — never to a frozen view. What stays deliberately
+unshrunk here is the full snapshot itself (first paint, resync): slimming that payload is [[graph-lean]]'s
 ongoing cut (tracked as issue #26), composing with — not replaced by — the delta path.

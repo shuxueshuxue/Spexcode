@@ -5,7 +5,7 @@ scenarios:
       On a repo whose spec data is tracked (the model's invariant), create a session worktree the way
       newSession does (git worktree add + seed + materialize) and measure what a dispatched agent finds:
       does the worktree carry the spec sources (.spec, spexcode.json via checkout; spexcode.local.json via
-      copy), does `spex board`/lint from inside it see the project's nodes, and are the sources real files
+      copy), does `spex graph --json`/lint from inside it see the project's nodes, and are the sources real files
       (never symlinks)?
     expected: >
       The fresh worktree holds all three spec sources as REAL files — .spec and spexcode.json delivered by

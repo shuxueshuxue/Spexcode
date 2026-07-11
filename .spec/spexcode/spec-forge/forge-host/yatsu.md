@@ -8,7 +8,7 @@ scenarios:
       warms, real `github#N` issues appear in the merged list — unchanged pre-seam behaviour. Then make
       the resolved host gitlab (a gitlab-form remote, or `{"forge":{"host":"gitlab"}}` in
       spexcode.local.json), restart, and read the SAME surfaces: /api/issues answers 200 with local
-      threads only (no forge store, no `<host>#N` ids, no error) and /api/board answers 200. Also probe
+      threads only (no forge store, no `<host>#N` ids, no error) and /api/graph answers 200. Also probe
       the resolver directly across remote shapes: github.com URL → github, gitlab.com scp and a
       self-hosted https form (e.g. dev.aminer.cn) → gitlab, an explicit forge.host override beating the
       remote, and no origin → the default. File the transcript with --result.
@@ -23,5 +23,5 @@ scenarios:
 # yatsu.md — forge-host
 
 Measured through the real product surface (YATU): the actual `spex serve` backend answering
-`/api/issues` and `/api/board` over HTTP under each remote/config shape — never by asserting on the
+`/api/issues` and `/api/graph` over HTTP under each remote/config shape — never by asserting on the
 resolver in isolation alone (the direct probes are auxiliary evidence riding the same transcript).

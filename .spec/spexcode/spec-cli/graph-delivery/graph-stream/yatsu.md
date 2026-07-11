@@ -5,7 +5,7 @@ scenarios:
     code: spec-cli/src/boardStream.ts
     related: [spec-cli/src/index.ts]
     description: >-
-      Subscribe to `/api/board/stream` (plain mode), then POST a rename to `/api/sessions/:id/rename`
+      Subscribe to `/api/graph/stream` (plain mode), then POST a rename to `/api/sessions/:id/rename`
       through the real API, and time the arrival of the next stream event.
     expected: >-
       The event arrives on the debounce scale (sub-second), NOT the ~15s cold tick — the rename route's
@@ -20,4 +20,4 @@ scenarios:
 YATU through the real HTTP surface: a live `spex serve`, a real `curl -N` SSE subscription, a real rename
 POST — never a direct call into the module. The loss is the gap between "a rename shows up while you
 watch" and "a rename waits out a cold tick": the nudge must push sub-second even when the best-effort
-store watch never attached. (The stream's deeper delta-protocol equivalence is [[board-delta]]'s own measured contract.)
+store watch never attached. (The stream's deeper delta-protocol equivalence is [[graph-delta]]'s own measured contract.)

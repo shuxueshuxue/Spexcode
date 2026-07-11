@@ -126,7 +126,7 @@ scenarios:
     description: >-
       With a governed live session on the board, inject a liveness-PROBE failure — make the tmux window-list
       snapshot time out / error (the load-30 condition), e.g. point the probe at a wedged tmux or force the
-      bounded timeout to fire. Read the session's liveness on the board (listSessions / `spex board`). Contrast
+      bounded timeout to fire. Read the session's liveness on the board (listSessions / `spex graph --json`). Contrast
       with a genuinely-empty tmux server (no sessions), which exits cleanly non-zero.
     expected: >-
       The session STILL appears (it is enumerated from the durable store — it never vanishes) and its liveness

@@ -1,6 +1,6 @@
-# board-delta — equivalence with full refetch
+# graph-delta — equivalence with full refetch
 
-The claim: a dashboard consuming the delta stream renders, at every step, exactly what a full `/api/board`
+The claim: a dashboard consuming the delta stream renders, at every step, exactly what a full `/api/graph`
 refetch at that moment would have given it. This document is the argument; `boardDelta.test.ts` sweeps its
 lemmas with randomized property tests.
 

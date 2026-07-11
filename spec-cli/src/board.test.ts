@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert'
 import { latestPerScenario, slimScenarios } from './board.js'
 
-// Pins the board's eval-summary contract ([[board-lean]]): the fold keeps the latest reading per scenario
+// Pins the board's eval-summary contract ([[graph-lean]]): the fold keeps the latest reading per scenario
 // as the VERBATIM object — a filter, never a projection. Optional per-kind fields (the annotator's
 // timelineBlob rides only video readings) must survive byte-for-byte: dropping one is a silent downstream
 // degradation (the annotator decays to a bare player), which is exactly why this is a test and not a hope.

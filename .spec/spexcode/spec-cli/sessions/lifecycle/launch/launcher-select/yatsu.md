@@ -67,7 +67,7 @@ scenarios:
     description: >-
       Through the REAL dashboard, measure that a session's launcher is DURABLE DATA but is NOT rendered as a
       per-session board badge (the badge was removed as visual clutter). Drive a real browser at the dashboard
-      and feed the session list a session whose `/api/board` (and `/api/sessions`) payload carries a
+      and feed the session list a session whose `/api/graph` (and `/api/sessions`) payload carries a
       `launcher` (e.g. `launcher: "claude-glm"`, `harness: "claude"`) — the exact data that WOULD have drawn
       the old badge. Open the session list (the map-side SessionWindow and the console's own list) and read
       the DOM: assert NO `.sess-launcher` element renders on any row (the badge is gone from the component

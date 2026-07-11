@@ -128,7 +128,7 @@ const proxy = net.createServer((client) => {
   client.once('close', () => up.destroy())   // client abandoned → reap its upstream (THE leak that wedged :8787); nothing left to flush to a gone client
   // upstream gone → drop the client half, but ONLY force it when the close was ABNORMAL: on a normal FIN,
   // `up.pipe(client)` has already called `client.end()` (writableEnded), so let the client flush the last of a
-  // large response (e.g. /api/board) rather than truncate it with a destroy; a crash/half-open close (no prior
+  // large response (e.g. /api/graph) rather than truncate it with a destroy; a crash/half-open close (no prior
   // end) still gets reaped.
   up.once('close', () => { if (!client.writableEnded) client.destroy() })
   client.pipe(up); up.pipe(client)

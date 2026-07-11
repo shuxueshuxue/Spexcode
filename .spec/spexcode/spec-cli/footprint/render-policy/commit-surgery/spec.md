@@ -59,6 +59,13 @@ exclude entry — the kind transition heals itself; file checkouts (flag 0) are 
 re-renders after received `.spec`/`.config` changes. Both are quiet and best-effort: a missed refresh
 self-heals at the next anchor, pre-commit being the backstop.
 
+**Known self-hosting residue.** The hook resolves `spex` PATH-first, so on a branch that CHANGES
+materialize's own semantics the commit anchor still runs the OLD toolchain until the deployed
+global/hook copies update — an old render can momentarily overwrite a new one at commit frequency
+(down from the retired gate's every-event frequency; visible in git status, self-healing at the next
+current-toolchain anchor, never blocking). The remedy is operational, not mechanical: ship + update
+the global right after such a branch merges.
+
 **The friction budget this buys.** Worst full path: the user edits a wholly-ours contract file, `git add`
 hits git's own ignored-path refusal (ONE bump — git's message, git's `-f` answer), forces, commits — and
 the surgery makes that native escape hatch safe. One bump is the floor under git physics (add has no hook;

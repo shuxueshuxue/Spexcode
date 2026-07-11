@@ -11,8 +11,7 @@ scenarios:
       verbatim, hooks.json binding every event to `dispatch.sh plugin <Event>` via ${CLAUDE_PLUGIN_ROOT}, the
       inject-contract.sh + its contract-context.json), and skills/commands/agents files. The contract-context.json
       carries the guide-first surface:system contract as hookSpecificOutput.additionalContext. NO native artifacts
-      (CLAUDE.md block, .claude/settings.json) are written — the plugin is exclusive. The bundle dir is in the
-      managed .gitignore block.
+      (CLAUDE.md block, .claude/settings.json) are written — the plugin is exclusive. The bundle dir is hidden via the per-clone exclude block.
   - name: contract-injects-as-sessionstart-additionalContext
     tags: [cli]
     description: >-

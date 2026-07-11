@@ -25,7 +25,7 @@ const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy"
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
-// DOM KeyboardEvent.key → the base key name /rawkey feeds tmux send-keys (non-printables only; modifier
+// DOM KeyboardEvent.key → the base key name the keys-kind input feeds tmux send-keys (non-printables only; modifier
 // combos are encoded by typeKeyToken). Escape is intentionally absent — handled separately.
 const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
 
@@ -124,7 +124,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [launchers, setLaunchers] = useState([])
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
-  const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
+  const [sendErr, setSendErr] = useState(false)   // last text dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [typeMode, setTypeMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the type button's `.suggest` pulse
@@ -247,8 +247,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const q = rawKeyQ.current.get(id)
     if (!q || q.busy || q.keys.length === 0) return
     const keys = q.keys; q.keys = []; q.busy = true
-    fetch(`/api/sessions/${id}/rawkey`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keys }),
+    fetch(`/api/sessions/${id}/input`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'keys', keys }),
     }).catch(() => {}).finally(() => { q.busy = false; flushRawKeys(id) })
   }
   const sendRawKey = (key) => {
@@ -392,7 +392,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
       // stable prefix rank, so the board set keeps its lead within each score band.
       const board = boardCmds.map((c) => ({ name: c.name, description: t(c.descKey), board: true, color: c.color }))
-      // a board command OVERRIDES a same-named CC command (CC's own `/exit`) — one identity, one row, never a duplicate.
+      // a board command OVERRIDES a same-named CC command — one identity, one row, never a duplicate.
       const owned = new Set(board.map((c) => c.name))
       const items = matchSlash([...board, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
       if (!items.length) return null
@@ -484,11 +484,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setMsg('')
     setSendErr(false)
     try {
-      const res = await fetch(`/api/sessions/${active}/keys`, {
+      const res = await fetch(`/api/sessions/${active}/input`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, enter: true }),
+        body: JSON.stringify({ kind: 'text', text }),
       })
-      if (!res.ok) throw new Error(`keys ${res.status}`)
+      if (!res.ok) throw new Error(`input ${res.status}`)
     } catch {
       setMsg(raw)       // don't lose the message — put the ORIGINAL line back so the human can retry
       setSendErr(true)
@@ -585,7 +585,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     type: () => setTypeMode((v) => !v),
     eval: () => setRightTab('eval'),
     merge: () => act('merge'),
-    exit: () => act('exit'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
+    stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const boardCmds = boardCommandsFor(selSession?.status, runners)

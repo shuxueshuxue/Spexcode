@@ -44,7 +44,8 @@ key path can confirm dangerous dialogs.
 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
 session subs, `yatsu`/`blob`/`issues`/`forge`/`dashboard`/`tree`/`board`, top-level
-`search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, the hook verbs
+`search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, `session exit|reopen` (respelled
+`stop`/`resume`), `session capture|prompt` (folded into `show`), the hook verbs
 `session state|fail|idle|commit-gate`, positional `doctor contract|conflicts`, `review proof`) maps
 to a signpost: one stderr line naming the new spelling, exit non-zero, and the old verb NEVER
 executes — a signpost is a tombstone, not an alias. The table dies in 0.4.0. Consequence accepted:

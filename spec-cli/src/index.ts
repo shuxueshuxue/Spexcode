@@ -10,8 +10,8 @@ import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/reside
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
-import { getBoardJson } from './boardCache.js'
-import { boardStream, notifyBoardChanged } from './boardStream.js'
+import { getBoardJson } from './graphCache.js'
+import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
@@ -32,7 +32,7 @@ const app = new Hono()
 app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
+app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/settings · /api/sessions · /api/slash-commands'))
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
@@ -136,24 +136,26 @@ app.get('/api/evidence/:hash', (c) => {
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
 app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
-  if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
-  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
+  if (buf.length === 0) return c.json({ error: 'empty evidence' }, 400)
+  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'evidence too large' }, 413)
   return c.json({ hash: putBlob(buf) }, 201)
 })
-app.get('/api/layout', async (c) => c.json(await resolveLayout()))
-// the `surface: command` config-root plugins (built/active only) for the new-session `/` dropdown — each with
-// its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
-// frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
-app.get('/api/config', (c) => c.json(loadConfig()))
-// the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
-// only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
-// dropdown pre-selects the SAME launcher a bare `spex session new` uses (the CLI/config default), instead of the
-// alphabetically-first one. Missing defaultLauncher is returned as an actionable config error, not hidden by
-// falling through to the built-in `claude` launcher.
-app.get('/api/launchers', (c) => c.json({
+// the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
+// `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
+// `.layout.main`) and the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown
+// offers — `{ name, harness }` only (the `cmd` is a host secret, never shipped to the browser) — plus the
+// configured `default` NAME so the dropdown pre-selects the SAME launcher a bare `spex session new` uses
+// (the CLI/config default), instead of the alphabetically-first one. Missing defaultLauncher is returned
+// as an actionable config error, not hidden by falling through to the built-in `claude` launcher.
+app.get('/api/settings', async (c) => c.json({
+  layout: await resolveLayout(),
   launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
   ...launcherDefault(),
 }))
+// the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with
+// its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
+// frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
+app.get('/api/plugins', (c) => c.json(loadConfig()))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors

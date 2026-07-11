@@ -5,7 +5,7 @@ desc: The browser-tab favicon — a configured dashboard.icon (an emoji or an Ic
 code:
   - spec-dashboard/index.html
 related:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
   - spec-cli/src/layout.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
@@ -35,5 +35,5 @@ has *some* icon with zero config, and a one-line config swaps it for a chosen on
 
 This is the **non-invasive** path the surface is built for: an agent gives the page an identity by editing
 config, never the source — the mechanism is built once, used by naming. The `projectIcon` field is tab-icon's
-only stake in `board.ts` (produced by the shared `buildBoard`, alongside [[tab-title]]'s `project`); a change
+only stake in `graph.ts` (produced by the shared `buildBoard`, alongside [[tab-title]]'s `project`); a change
 there that leaves the icon derivation untouched is another feature's stake, not tab-icon's drift.

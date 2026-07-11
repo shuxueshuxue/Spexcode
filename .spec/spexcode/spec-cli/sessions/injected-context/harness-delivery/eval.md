@@ -51,10 +51,10 @@ scenarios:
   - name: content-key-covers-renderer
     tags: [cli]
     description: >-
-      The freshness stamp is a function of (config content, toolchain). With the .config unchanged: source
+      The freshness stamp is a function of (config content, toolchain). With the .plugins unchanged: source
       the shipped harness.sh from a package root, compute hp_config_hash,
       change the package's content (a version bump / source change), and compute it again; then also edit a
-      .config body and compute a third time.
+      .plugins body and compute a third time.
     expected: >-
       The stamp MOVES on the toolchain change alone and again on the config edit, and is byte-stable when
       neither input changed — so a stale stamp is a truthful diagnostic ("the last materialize predates this
@@ -69,7 +69,7 @@ scenarios:
     expected: >-
       The harness event materializes NOTHING — the contract file and manifest are byte-unchanged, the hook hot
       path stays pure bash with zero node boots. The git-native anchor then brings the AGENTS.md/CLAUDE.md
-      block and the manifest current: .config edits are git-transactional ([[commit-surgery]]).
+      block and the manifest current: .plugins edits are git-transactional ([[commit-surgery]]).
 ---
 # eval.md — harness-delivery
 

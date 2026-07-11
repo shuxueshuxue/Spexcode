@@ -105,8 +105,8 @@ line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body r
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
-node shows its body not nothing), `/api/layout` (the resolved
-[[portable-layout]]), and `/api/config` + `/api/slash-commands` (the
+node shows its body not nothing), `/api/settings` (the resolved
+[[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the
 `/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:

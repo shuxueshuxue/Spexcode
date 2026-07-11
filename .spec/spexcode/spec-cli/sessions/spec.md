@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Durable worktree sessions — the subsystem overview; lifecycle/comms/injected-context own the detail.
 code:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
 ---
 
 # sessions
@@ -37,7 +37,7 @@ The subsystem divides into governed concerns:
   a dispatched prompt), [[agent-reply-channel]] (reply hint), [[comms-edge]] (recorded talk + graph edge),
   [[session-edges]] (the live watch network).
 - **[[injected-context]]** — what a launched session is fed to start spec-aware: [[spec-pointer]] (the live
-  spec path, never the body) and [[spec-first]] (the read-before-write nudge).
+  spec path, never the body) and [[inject-spec-first]] (the read-before-write nudge).
 - **[[session-selectors]]** — one selector grammar (id · prefix · node · branch) so every command names the
   same sessions.
 - **[[live-view]]** — the dashboard's live terminal: one tmux client per session, viewer subscriptions that
@@ -49,7 +49,7 @@ The subsystem divides into governed concerns:
 
 ### Surface
 
-One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state — the
+One surface stays with the overview. `buildBoard` (`graph.ts`) assembles the dashboard's runtime state — the
 merged spec tree, the per-worktree overlay (a ghost/added node nests by directory ancestry, so a worktree
 introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
 backend's own project identity (the browser-tab name) — in one module, served identically at HTTP

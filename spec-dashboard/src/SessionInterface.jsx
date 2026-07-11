@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import { loadConfig, loadLaunchers } from './data.js'
+import { loadPlugins, loadSettings } from './data.js'
 import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
@@ -11,7 +11,7 @@ import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
-import { boardCommandsFor } from './sessionCommands.js'
+import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
@@ -85,7 +85,7 @@ function matchSlash(cmds, query) {
 // dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
 const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
-// the New Session `/` palette over config presets — same prefix-rank shape as matchSlash.
+// the New Session `/` palette over command presets — same prefix-rank shape as matchSlash.
 function matchConfig(presets, query) {
   const q = query.toLowerCase()
   const scored = []
@@ -103,8 +103,8 @@ function matchConfig(presets, query) {
 }
 
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see boardCommandsFor).
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
+// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see uiCommandsFor).
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]' }
 
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
@@ -115,12 +115,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
-  const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
+  const [presets, setPresets] = useState([])       // the command presets (GET /api/plugins) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole launch
-  // choice. Fetched from /api/launchers; built-in claude/codex profiles mean the list is never intentionally empty.
+  // choice. Fetched from /api/settings; built-in claude/codex profiles mean the list is never intentionally empty.
   const [launchers, setLaunchers] = useState([])
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
@@ -190,10 +190,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fetch(`/api/slash-commands?harness=${harness}`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [selSession?.harness])
 
-  // fetch the config presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
+  // fetch the command presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
   // its body into the launch prompt (see submit); listing is display-only, like the slash menu.
   useEffect(() => {
-    loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
+    loadPlugins().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
   // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
   // rides in the POST body as `launcher`). Initial selection HONORS the config default so the dashboard agrees
@@ -201,7 +201,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // valid) → configured `default` → first. Without this the dropdown silently pre-selected the alphabetically
   // first launcher, disagreeing with the config default — a user "testing claude-glm" could get another launcher.
   useEffect(() => {
-    loadLaunchers().then((d) => {
+    loadSettings().then((d) => {
       const list = d?.launchers
       if (!Array.isArray(list) || !list.length) return
       setLaunchers(list)
@@ -212,7 +212,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
     }).catch(() => {})
   }, [])
-  // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
+  // /api/plugins returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
   const commandPresets = presets
 
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
@@ -391,10 +391,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (sm) {
       // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
       // stable prefix rank, so the board set keeps its lead within each score band.
-      const board = boardCmds.map((c) => ({ name: c.name, description: t(c.descKey), board: true, color: c.color }))
+      const ui = uiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
       // a board command OVERRIDES a same-named CC command — one identity, one row, never a duplicate.
-      const owned = new Set(board.map((c) => c.name))
-      const items = matchSlash([...board, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
+      const owned = new Set(ui.map((c) => c.name))
+      const items = matchSlash([...ui, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
       if (!items.length) return null
       return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
     }
@@ -410,7 +410,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!item || !menu) return
     if (menu.kind === 'slash') {
       // a board command RUNS on pick (the typed twin of its button); CC commands only insert text.
-      if (item.board) { const c = boardCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
+      if (item.ui) { const c = uiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -419,7 +419,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // config preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
+    // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
     // active: the New prompt (resolved at launch) or a running session's ❯ inbox (resolved at send). An
     // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
     const insert = menu.kind === 'config' ? `/${item.name} `
@@ -443,8 +443,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => {
         // a board command carries its identity hue (sc-<color>); CC commands → source tag, presets → kind.
-        const tag = it.board ? 'board' : (it.source ?? it.kind)
-        const hue = it.board ? ` sc-${it.color}` : ''
+        const tag = it.ui ? 'ui' : (it.source ?? it.kind)
+        const hue = it.ui ? ` sc-${it.color}` : ''
         return (
           <li
             key={`${tag}:${it.name}`}
@@ -454,7 +454,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             onMouseDown={(e) => { e.preventDefault(); accept(it) }}
             onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
           >
-            <span className={it.board ? 'slash-name board' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
+            <span className={it.ui ? 'slash-name ui' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
             <span className="slash-desc">{capDesc(it.description ?? it.desc)}</span>
             <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
           </li>
@@ -476,7 +476,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
-    const cmd = boardCmds.find((c) => raw.trim() === `/${c.name}`)
+    const cmd = uiCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
@@ -580,7 +580,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const onBulkClosed = () => { exitSelect(); reload?.() }
 
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
-  // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
+  // button's onClick fires; `uiCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     type: () => setTypeMode((v) => !v),
     eval: () => setRightTab('eval'),
@@ -588,7 +588,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
-  const boardCmds = boardCommandsFor(selSession?.status, runners)
+  const uiCmds = uiCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
@@ -870,14 +870,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <div className="si-actions">
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
-                    : boardCmds.filter((c) => c.button).map((c) => {
+                    : uiCmds.filter((c) => c.button).map((c) => {
                         // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
                         // thinks a select menu is up (the pulse that invites type mode).
                         const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
                         return (
                           <button
                             key={c.name}
-                            className={`si-act board sc-${c.color} ${c.name}${state}`}
+                            className={`si-act ui sc-${c.color} ${c.name}${state}`}
                             data-tip={t(c.titleKey)}
                             onClick={c.run}
                           >{t(c.labelKey)}</button>

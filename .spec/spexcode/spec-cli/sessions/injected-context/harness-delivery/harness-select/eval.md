@@ -37,7 +37,7 @@ scenarios:
       The harness event leaves everything byte-unchanged. The anchor materialize then prunes claude's artifacts
       (.claude gone, the generated CLAUDE.md gone / block stripped) under the narrowed set. A selection change
       self-heals at the next git transition — never via a harness event, never waiting for an unrelated
-      .config edit.
+      .plugins edit.
 ---
 # eval.md — harness-select
 

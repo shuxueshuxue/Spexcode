@@ -12,7 +12,7 @@ scenarios:
   - name: per-tree-manifest-isolation
     tags: [backend-api]
     description: >-
-      Two worktrees of one project diverge in `.config`: tree B adds a `surface: hook` node bound to
+      Two worktrees of one project diverge in `.plugins`: tree B adds a `surface: hook` node bound to
       SessionStart (a marker script), tree A stays stock. Materialize B, then materialize A (A materializes
       LAST),
       then fire a SessionStart dispatch with cwd = B.
@@ -46,7 +46,7 @@ scenarios:
 
 The dispatch layer is measured through the real session round-trip (YATU). Invariants: the persistent
 manifest equals the legacy map (so dashboard hooks are unchanged); a dispatch reads the manifest of ITS OWN
-worktree (per-tree slots — two trees with divergent `.config` never trade hook sets), with the legacy
+worktree (per-tree slots — two trees with divergent `.plugins` never trade hook sets), with the legacy
 global manifest as the migration-window fallback for a not-yet-slotted tree; real blocking rides the stdout
 decision JSON the dispatcher passes through verbatim. Measure the manifest by byte-diff; measure isolation
 by materializing two divergent trees and dispatching from each.

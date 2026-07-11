@@ -28,7 +28,7 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 
 `spec-cli/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
 its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
-result at `GET /api/layout`. Everything downstream consumes the resolved layout, never a hardcoded path or
+result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.
 
 Policy is read from an optional `spexcode.json` at the repo root; absent, the defaults are our
@@ -52,7 +52,7 @@ fails LOUD instead, naming the file and the parse error, so the author sees exac
 The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is
 detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
 branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works
-with no config), else `main`. This single resolution is surfaced two ways downstream — `GET /api/layout`
+with no config), else `main`. This single resolution is surfaced two ways downstream — `GET /api/settings`
 for the dashboard and `spex internal trunk` (one line, for shell consumers like the [[main-guard]] pre-commit hook,
 which asks "is HEAD the trunk?" instead of hardcoding `main`). Both resolve via the shared git **common**
 dir, so they answer identically from the main checkout, a linked worktree, or a commit hook:
@@ -78,9 +78,9 @@ equals its record id); a raw, un-aliased harness id is the last resort, below `S
 The same *policy-not-hardcode* rule governs where the config loaders look. The spec tree's **root
 node** — the single top-level directory under `.spec/` that holds a `spec.md` — is detected at read
 time, never assumed by name: the dogfood repo's is `spexcode`, a `spex init` adopter's is `project`. So
-[[source-of-truth]]'s `specs.ts` resolves the two config roots (`<root>/.config` and `<root>/config`,
+[[source-of-truth]]'s `specs.ts` resolves the two plugin roots (`<root>/.plugins` and `<root>/plugin-system`,
 scanned by `loadSurface` per [[surface]]) from that *detected* root, not a baked-in `spexcode`. Without
-it an adopter's `loadSystemConfig` finds nothing — the `.config/core` contract never loads, launched agents
+it an adopter's `loadSystemConfig` finds nothing — the `.plugins/core` contract never loads, launched agents
 get no system prompt — so portability is only real when the config root travels with the rename.
 
 The reproducibility contract is concrete: `.nvmrc` pins Node (22) and both package-locks are tracked, so

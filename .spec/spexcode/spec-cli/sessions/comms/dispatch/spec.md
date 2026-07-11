@@ -55,7 +55,7 @@ it). No standing `ritual` config node is needed — the flow is the product defa
 
 **Creating or deleting a spec node is NOT a server op.** It is prompt-driven work the launched agent does
 itself — the composer's board chords merely prefill a plain instruction ("create a new node under
-[[parent]]…" / "delete [[node]]…"), and the agent authors or refactors-away the node like any other spec
+`[[parent]]`…" / "delete `[[node]]`…"), and the agent authors or refactors-away the node like any other spec
 work. The server never mutates the spec tree; it only launches. This holds [[mentions]]'s line: outside the
 issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
 surface where the system itself dispatches.

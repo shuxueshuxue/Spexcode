@@ -175,7 +175,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    mirroring the minimal HUD chrome (paper chip, mono type) and the SAME glyph colours the tiles use, so
    it reads as "the board, summed". Each chip is a button that jumps to the first node it counts; a
    zero-count chip dims and goes inert. flex-wrap keeps it from running off a narrow viewport. */
-.board-stats {
+.graph-stats {
   position: absolute; bottom: 14px; left: 18px; z-index: 5;
   display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
   max-width: calc(100% - 36px); padding: 4px 9px;
@@ -195,8 +195,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .bstat-drift { color: var(--yellow); }                                   /* matches .drift-badge */
 .bstat-issue { color: var(--magenta); }                                  /* matches .issue-badge */
 .bstat-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
-.board-stats .score-badge { width: 13px; height: 13px; font-size: 8px; }
-.board-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
+.graph-stats .score-badge { width: 13px; height: 13px; font-size: 8px; }
+.graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
 /* gentle focus grouping — only opacity changes, positions never move */
 /* opacity for focus-kin dimming; transform so a node GLIDES to its new slot when the tree re-plots on
@@ -610,7 +610,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sesswin {
   position: absolute; top: 48px; left: 16px; z-index: 6; width: 232px;
   /* a bounded glance, never a curtain: cap the height at ~80% of the viewport AND keep it clear of
-     the bottom .board-stats strip — top:48px offset + ~64px reserved for that strip and a gap — so
+     the bottom .graph-stats strip — top:48px offset + ~64px reserved for that strip and a gap — so
      a long session list reveals its overflow by wheel/scrollbar inside the window instead of
      extending down over the stats bar below. overflow-x stays hidden to keep the rounded corners. */
   max-height: min(80vh, calc(100vh - 112px));
@@ -1278,8 +1278,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    `/name` and its `[board]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
    the SAME colour as the matching header button — so the menu and the button name one thing in one colour,
    visibly apart from CC's blue `/name` rows. */
-.slash-name.board { color: var(--sc); font-weight: 700; }
-.slash-src.src-board { color: var(--sc); opacity: .9; }
+.slash-name.ui { color: var(--sc); font-weight: 700; }
+.slash-src.src-ui { color: var(--sc); opacity: .9; }
 /* config-preset kinds (new-session `/` palette): a mutating preset edits the graph, a report only reads it. */
 .slash-src.src-mutating { color: var(--yellow); opacity: .85; }
 .slash-src.src-report { color: var(--cyan); opacity: .85; }
@@ -1439,12 +1439,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sc-muted  { --sc: var(--muted); }   /* the soft-stop `exit` hue — dormant grey, matching the offline state it sends the session to */
 /* coloured header button: a resting tint in the identity hue, filled on hover (the proof button's old look,
    now shared by every board button so type/eval/merge read alike). */
-.si-act.board { border-color: var(--sc); color: var(--sc); }
-.si-act.board:hover { background: var(--sc); color: var(--paper); border-color: var(--sc); }
+.si-act.ui { border-color: var(--sc); color: var(--sc); }
+.si-act.ui:hover { background: var(--sc); color: var(--paper); border-color: var(--sc); }
 /* type-mode toggle alone carries two extra states: `.on` = active (filled, like the keyboard cursor);
    `.suggest` = the best-effort menu sniff thinks a select menu is up, so it pulses to invite type mode. */
-.si-act.board.type.on { background: var(--sc); color: var(--paper); }
-.si-act.board.type.suggest { animation: si-type-pulse 1.1s ease-in-out infinite; }
+.si-act.ui.type.on { background: var(--sc); color: var(--paper); }
+.si-act.ui.type.suggest { animation: si-type-pulse 1.1s ease-in-out infinite; }
 @keyframes si-type-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(181, 137, 0, .5); } 50% { box-shadow: 0 0 0 3px rgba(181, 137, 0, 0); } }
 /* type-mode indicator replacing the ❯ box: keys go to the pane, not this box. */
 .si-bottom.type { border-color: var(--yellow); background: var(--panel2); cursor: pointer; gap: 10px; }
@@ -1652,15 +1652,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-datahead { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
 .eval-data { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-data.loading { color: var(--muted); }
-
-/* ---- review proof pane ([[session-eval]]'s slice of the shared stylesheet) ----
-   The backend-rendered proof of work (self-contained HTML over /api/sessions/:id/proof) rendered INLINE as the
-   console's Proof TAB — always available for any selected session, no longer a review-only floating overlay.
-   It fills the right pane below the tab bar: a slim label row over the self-contained (dark) proof iframe. */
-.proof-newtab { margin-left: auto; color: var(--blue); text-decoration: none; font-size: 11px; }
-.proof-newtab:hover { text-decoration: underline; }
-.proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
-/* the empty/loading placeholder — a clean centred note when a session has no proof to show yet. */
 
 /* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
 /* the filter chips are ONE control language across both tabs ([[evals-view]] / [[issues-view]]): a segmented

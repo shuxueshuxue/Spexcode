@@ -41,7 +41,7 @@ a file in that dir:
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the deferred launch prompt of a still-queued session ([[launch]]) |
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
-| `spec-checked` / `spec-of-file-seen` | the [[spec-first]] / [[spec-of-file]] once-per-session sentinel + ledger |
+| `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |
 | `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
 
 `layout.ts` owns the seam — the one place that knows where the store sits: `spexcodeHome()` (the `SPEXCODE_HOME`
@@ -51,10 +51,10 @@ override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()`
 The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-TREE
 materialize slots — `trees/<enc(worktree-toplevel)>/` — that [[hook-dispatch]] / [[harness-delivery]]
 materialize into.
-Each slot holds the artifacts that are a pure function of THAT tree's `.config` (the hook manifest, the
+Each slot holds the artifacts that are a pure function of THAT tree's `.plugins` (the hook manifest, the
 content-hash freshness stamp, the plugin-folder ledger), keyed by the same `encodeProject` transform
 applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (shared global root, slotted
-by identity) applied to trees, so two worktrees with divergent `.config` never trade hook sets. The
+by identity) applied to trees, so two worktrees with divergent `.plugins` never trade hook sets. The
 project tier also carries the Codex app-server socket/pid/log/lock when Codex is launched through
 SpexCode. All of it lives under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
 SpexCode-materialized runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/

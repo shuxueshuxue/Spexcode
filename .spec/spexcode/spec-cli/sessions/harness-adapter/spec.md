@@ -41,7 +41,7 @@ surface:
 
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
-  commands). Decoupled from execution — see [[slash-commands]] (today Claude-only; becomes the Claude impl).
+  commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json`). The shim's LOCATION is a divergence point too:
   Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
@@ -216,7 +216,7 @@ surface:
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-[[slash-commands]]. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
+`slash-commands.ts`. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
 which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
 `if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.
@@ -230,11 +230,11 @@ shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts 
 detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
 path-like token (`sed -n 1p f.ts` → `f.ts`). A patch can bundle SEVERAL `*** … File:` markers (a multi-file
 edit), so `hp_code_path` emits ALL touched paths — one per line — and every consuming hook iterates them
-([[spec-first]] nudges if ANY is non-spec code; [[spec-of-file]] annotates EACH governed code file). The shared
+([[inject-spec-first]] nudges if ANY is non-spec code; [[inject-spec-of-file]] annotates EACH governed code file). The shared
 `hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
-So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
+So [[inject-spec-first]], [[inject-spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
 the main checkout, but its commands run `dispatch.sh` with the thread cwd as `proj`, so each worktree gates
 against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
 global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
@@ -277,8 +277,8 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   f`); an **edit is a distinct tool `tool_name:"apply_patch"`** whose `tool_input.command` is the **bare patch
   envelope** — `*** Begin Patch` / `*** Update File: <path>` / … — carrying NO literal `apply_patch` token and
   NO `file_path`. So the adapter keys the mutation off the `*** … File:` markers (NOT an `apply_patch` token)
-  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[spec-of-file]] and an edit-first
-  [[spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
+  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[inject-spec-of-file]] and an edit-first
+  [[inject-spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
   layer itself is sound (mark-active flip, declare/commit gate, silent non-governed Stop all work once hooks
   fire) — but that was first "proven" on a STANDALONE `.codex` in the cwd, which the interactive/`exec` flow
   AUTO-TRUSTS, masking the dispatched-worker gap: a linked-worktree thread on the shared app-server needs the

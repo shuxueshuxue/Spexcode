@@ -11,7 +11,7 @@ code:
 ## raw source
 
 When a user launches their OWN claude/codex — no SpexCode process in the launch — the whole workflow has
-to reach that agent through files the harness auto-discovers: the artifacts [[materialize]] writes. So
+to reach that agent through files the harness auto-discovers: the artifacts [[harness-delivery]] writes. So
 the question "is this agent actually governed, or silently running free?" has a concrete answer, and
 `spex doctor` is the command that gives it. It DIAGNOSES the materialized contract for the current agent —
 and, behind an explicit gate, will REPAIR it — keeping every footprint visible and reversible, so Spex
@@ -24,7 +24,7 @@ plugin bundle the user installed independently or left behind, doubling every ho
 ## expanded spec
 
 Bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS agent. It loops the
-[[harness-adapter]]'s `HARNESSES` (the same adapters [[materialize]] delivers through), so claude and codex
+[[harness-adapter]]'s `HARNESSES` (the same adapters [[harness-delivery]] materializes through), so claude and codex
 are both covered with no hardcoded paths and a new harness is diagnosed for free:
 
 - **preconditions** — without these nothing downstream fires: `spex` (and the harness CLI) must RESOLVE on
@@ -33,8 +33,8 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
 - **contract** — the `surface:system` block is present in each harness's contract file (CLAUDE.md / AGENTS.md);
   `spex doctor --contract` prints that exact text for any agent.
 - **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the global store
-  ([[runtime-tier]]), and EVERY manifest handler script is readable in the worktree. That last check is the
-  sharp one: a branch predating the hook consolidation has the shim but not the `.config/core/*` handlers,
+  ([[runtime]]), and EVERY manifest handler script is readable in the worktree. That last check is the
+  sharp one: a branch predating the hook consolidation has the shim but not the `.plugins/core/*` handlers,
   so hooks fire and silently no-op.
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
@@ -54,7 +54,9 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
-materialized artifact and any slot held by something not ours. `spex doctor install [--agent claude]
+materialized artifact and any slot held by something not ours. Doctor also carries the one MUTATING flag:
+`spex doctor --migrate`, the term-limited 0.2.x→0.3.0 adopter migrator ([[migrate]] — the repair verb
+behind this diagnosis: the legacy-tree refusal names it). `spex doctor install [--agent claude]
 [--minimal]` will wire the materialized artifacts for a user's own agent ADDITIVELY (merging managed blocks,
 never clobbering) with a manifest, and `uninstall` reverses exactly that — STAGED until the hooks degrade
 safely without a managed session. `--agent` is the adapter seam: it resolves a harness by id, so codex

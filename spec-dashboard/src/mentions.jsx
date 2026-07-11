@@ -9,7 +9,7 @@ import { useT } from './i18n/index.jsx'
 // fork: the CLI resolver is the semantics, this is
 // its thin autocomplete.
 
-// a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.config]]` resolves
+// a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.plugins]]` resolves
 // (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
 // launch grammar and the running-session send-time resolution — one pattern. Token chars are any unicode
 // letter/number (a CJK dir name is a legal node id), mirroring the server's MENTION.

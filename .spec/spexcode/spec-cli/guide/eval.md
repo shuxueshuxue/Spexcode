@@ -2,7 +2,7 @@
 scenarios:
   - name: config-topic-prints-settings-manual
     description: >
-      Run the real CLI verb `spex guide config` and read its stdout. It must print the runtime-settings
+      Run the real CLI verb `spex guide settings` and read its stdout. It must print the runtime-settings
       manual for spexcode.json / spexcode.local.json — the Config fields plus the crucial committed-vs-
       host-local file distinction, with a concrete launcher-profile example. Also probe an unknown topic
       (`spex guide bogus`) to confirm the fallback still names the real topics.

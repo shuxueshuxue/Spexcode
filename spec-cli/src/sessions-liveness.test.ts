@@ -13,7 +13,7 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, launcher: null, launchCmd: null,
   ...over,
 })
-const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), sockets: new Set(), unproven: new Set(), ...over })
+const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), titles: new Map(), sockets: new Set(), unproven: new Set(), ...over })
 
 test('probe FAILURE reads unknown, never a false offline (board honesty under load)', () => {
   const r = rec()

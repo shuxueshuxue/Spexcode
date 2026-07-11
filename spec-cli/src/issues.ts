@@ -305,7 +305,7 @@ export async function runIssues(args: string[]): Promise<number> {
   if (ISSUE_WRITE_SUBS.has(args[0])) return runIssueWrite(args)
   if (args[0] === 'on' || args[0] === 'off' || args[0] === 'status') {
     // v0.3.0 signpost — report the new home, never run ([[cli-surface]]: a removed spelling only points).
-    console.error(`spex: \`spex issue ${args[0]}\` was removed in v0.3.0 — the switch is the \`issues.enabled\` key in spexcode.json (edit the JSON; \`spex guide config\` documents it, \`spex doctor\` reports its state)`)
+    console.error(`spex: \`spex issue ${args[0]}\` was removed in v0.3.0 — the switch is the \`issues.enabled\` key in spexcode.json (edit the JSON; \`spex guide settings\` documents it, \`spex doctor\` reports its state)`)
     return 2
   }
   if (args[0] === 'show') {

@@ -5,12 +5,12 @@ scenarios:
     description: >-
       SPAWN the spec-scout agent (the Agent tool, agentType spec-scout) with a behaviour question and check
       its conclusion. Use the canonical case that began the whole initiative: "does /exit clear a session's
-      worktree and tmux, and how?". The agent runs `spex search --json` → reads the top candidate specs in
+      worktree and tmux, and how?". The agent runs `spex spec search --json` → reads the top candidate specs in
       full → reranks by user-story → takes the winner's `code:` from its frontmatter → returns a conclusion.
       Must be measured by
       ACTUALLY SPAWNING the agent (a newly-added `.claude/agents` type is not live until the harness reloads
       agent types, so it cannot be run in the session that authored it). File with
-      `spex yatsu eval spec-scout --scenario finds-governing-node-by-user-story --result <txt> --pass`.
+      `spex eval add inject-spec-scout --scenario finds-governing-node-by-user-story --pass --result <txt>`.
     expected: >-
       The conclusion names the governing node **session-console** (NOT a code-central node), states the
       user-story it encodes — the dashboard ❯-box intercepts `/exit` alone as a board command and runs
@@ -25,9 +25,9 @@ scenarios:
 # eval.md — spec-scout
 
 The loss watched is **does the agent return the USER-STORY governor, not the code-central node?** Its whole
-reason to exist is that `spex search`'s lexical ranking (and a plain code grep) can miss the node a user's
+reason to exist is that `spex spec search`'s lexical ranking (and a plain code grep) can miss the node a user's
 question is really about. The scenario measures the canonical miss — `/exit` → `session-console` — end to
 end through a real spawn: search, read bodies, rerank, conclude. Supporting evidence already on record: the
-agent's prescribed `spex search` was run by hand on this query and lands `session-console`
+agent's prescribed `spex spec search` was run by hand on this query and lands `session-console`
 + `SessionInterface.jsx` (from that node's `code:`) at rank 1; the spawn-measured reading (the agent's own reranking judgement) is filed
 where the agent type is live — a future session or round-2, not the floorless authoring one.

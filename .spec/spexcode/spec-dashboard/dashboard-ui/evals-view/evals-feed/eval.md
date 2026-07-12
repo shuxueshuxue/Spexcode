@@ -3,7 +3,7 @@ scenarios:
   - name: feed-current-loss-video-first-title-only
     tags: [frontend-e2e]
     description: >
-      With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/evals
+      With at least one fresh video reading filed (spex eval add --video … --timeline …), open #/evals
       in a real browser (board `f` or the URL). Read the real DOM: the evals feed IS the LEFT list,
       its kind dropdown's default value, the rows' media-element count; count /api/graph requests fired by
       opening the page; select a video row and read where its media renders.

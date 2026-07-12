@@ -3,7 +3,7 @@ scenarios:
   - name: video-plays-in-eval-tab
     tags: [frontend-e2e]
     description: >
-      File a yatsu reading whose evidence is a recorded clip (`spex yatsu eval <node> --scenario <s>
+      File an eval reading whose evidence is a recorded clip (`spex eval add <node> --scenario <s>
       --pass --video clip.webm`), then open that node's Eval tab in the dashboard and expand the
       reading. Read the real DOM, not the helper: the evidence must render as an inline HTML5
       `<video controls>` (class `eval-video`) whose `src` is `/api/evidence/<hash>`, and that blob
@@ -14,7 +14,7 @@ scenarios:
       (not an `<img>`, not a download link). `GET /api/evidence/<hash>` returns Content-Type
       `video/webm` (or `video/mp4`) — the MIME sniffed from the bytes, so the browser plays it inline.
       The reading round-trips through the sidecar as `blobKind: "video"` and rides `/api/graph` like any
-      other reading; `spex yatsu show` labels its evidence `video <hash>…`. Image and transcript
+      other reading; `spex eval ls` labels its evidence `video <hash>…`. Image and transcript
       evidence are unchanged.
     code: spec-dashboard/src/NodeView.jsx
     related:

@@ -60,7 +60,7 @@ scenarios:
       frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
       SEEKS + selects on click and renders the circled frame inline. '@new' dispatches a fresh worker
       with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
-      verdict-note input, no file-reading button (readings are filed by agents via `spex yatsu eval`; the
+      verdict-note input, no file-reading button (readings are filed by agents via `spex eval add`; the
       human judges through the remark composer). Switching selection resets the working draft.
   - name: anchor-carries-frame
     tags: [frontend-e2e]

@@ -14,14 +14,15 @@
 type Entry = { line: string; body: string; see?: string }
 
 const SEL_NOTE = `SEL = session id (or unique id-prefix) | node id | branch — every session read/control verb
-accepts any of the three; none (or @all) means every session.`
+accepts any of the three; on the list verbs (ls/watch), none (or @all) means every session.`
 
 const ROUTING_NOTE = `Backend routing: every backend-touching verb accepts --api <url> (--port <n> = localhost sugar) to name
 its backend explicitly — the flag always wins. Bare, it resolves: worker env / the cwd project's live
 recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING).`
 
 const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on (the session's bound node, else the
-node/<id> branch). Every read supports --json.`
+node/<id> branch). One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
+scenario ls · issue ls/show/links) take --json.`
 
 const MENTION_NOTE = `Mentions: @session · [[node]] · @new work in ANY prompt, issue, or remark body — text passed as a CLI
 arg included. [[node]] names the topic node; @session hands the text to that live agent; @new spawns a
@@ -364,6 +365,6 @@ Conventions (stated once, hold everywhere)
   ${ROUTING_NOTE.split('\n').join('\n  ')}
   ${MENTION_NOTE.split('\n').join('\n  ')}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings · guide footprint.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

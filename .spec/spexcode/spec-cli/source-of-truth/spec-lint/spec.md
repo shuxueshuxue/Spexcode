@@ -34,12 +34,20 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
-- **id-format** (error): a node's id — its leaf dir basename — is lowercase url-safe ascii
-  (`[a-z0-9-]`, one optional leading dot for the reflexive `.plugins` root) and **unique tree-wide**.
-  Uniqueness keeps the leaf THE id: on a collision the mint ([[id-url-safe]]) must parent-qualify, and
-  every surface suddenly speaks a longer id than the dir name. The charset is the authored norm — an id
-  also names a `node/<id>` branch and a URL segment, so it must need no escaping anywhere; the resolve
-  machinery stays script-agnostic underneath.
+- **id-format** (error): a node's id — its leaf dir basename — passes an **exact per-character
+  whitelist** and is **unique tree-wide**. This bullet is THE id vocabulary: defined once, here;
+  [[mentions]] and [[id-url-safe]] reference it, never restate it. The table, judged on NFC (the
+  mint's canonical form), deterministically and with no heuristics:
+  - **allowed**: ascii `[a-z0-9-]`; any **non-ascii unicode letter or number** — CJK and every other
+    letter script is a first-class id, exactly what the resolve machinery accepts; one optional
+    **leading dot** (the reflexive `.plugins` root).
+  - **forbidden** (by construction — anything off the whitelist): space, `/`, **uppercase Latin**
+    (lowercase is the Latin norm), control characters, and `_` — reserved as the mint's
+    parent-qualification join, which is also why a mention TOKEN accepts `_` while a dir name never
+    contains one.
+
+  Uniqueness keeps the leaf THE id: on a collision the mint ([[id-url-safe]]) must parent-qualify,
+  and every surface suddenly speaks a longer id than the dir name.
 - **mention** (error): every `[[id]]` in body PROSE names a real node — a dangling mention is a broken
   edge in the very graph the tree keeps honest. Retarget it or drop it; a placeholder (`[[node]]`,
   `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text.
@@ -68,7 +76,10 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
 - **confusable-id** (warn): two leaf ids exactly one edit apart read as the same word — a typo in either
   reaches a real, wrong node. Deliberately conservative (distance 1 only): hierarchy naming like
   graph/graph-delivery and verb pairs like evidence-put/evidence-get never warn — better to miss a
-  borderline pair than to nag legitimate siblings.
+  borderline pair than to nag legitimate siblings. Distance counts **code points**, script-agnostic: a
+  CJK pair one character apart (节点/结点 — the classic homophone IME slip) warns like an ascii pair,
+  and a pure-CJK id never sits one edit from a pure-ascii one, so mixed-script trees get no cross-script
+  false positives.
 
 Beside the graph rules sits the **vocabulary backstop**, [[dead-words]]: a CI grep gate over the RENAMED
 concepts' old names, scoped to product surfaces (strings, file names, node dir names) with prose exempt —

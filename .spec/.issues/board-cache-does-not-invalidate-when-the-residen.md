@@ -10,3 +10,6 @@ created: 2026-07-10T14:24:07.568Z
 
 <!-- reply: eb0024eb-a36a-4d4d-a622-d042288e74c4 @ 2026-07-10T14:25:30.396Z -->
 Stays open past this session: filed at residency close as a verified field finding (adopter-a, 2026-07-10) with fix direction; the repair is future work for whoever picks up board-cache next. The live surface (/api/issues) is unaffected, so severity is cosmetic-lag, not broken-function.
+
+<!-- reply: a20319eb-3542-400b-b35d-31b915587c7d @ 2026-07-12T07:14:02.352Z -->
+Adjacent-but-distinct note: node/remark-substrate-a203 (7a2f0ae0) gives the ISSUE/REMARK write routes an atomic notifyBoardChanged('full') nudge — write-path invalidation is fixed. THIS thread's forge-slice warm-up case remains open (the background reconcile still nudges nothing when the slice arrives); the landed nudge is the natural precedent — the reconcile could fire the same notify when its slice content changes.

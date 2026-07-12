@@ -26,6 +26,24 @@ scenarios:
       file(s) across <M> node(s) drifted ahead of their spec (SOFT … never blocks, no ack, no
       yatsu)`, not one line per file; it adds 0 errors and the run still exits clean (the gate is
       unaffected).
+  - name: cjk-id-chain
+    tags: [cli]
+    description: >-
+      Prove a CJK node id is first-class on EVERY surface, deterministically — the id-format rule and
+      the runtime must speak the same vocabulary. On a throwaway git tree, seed a CJK-named node
+      (e.g. `评测视图`), a second unrelated CJK node (`会话看板`), and a sibling whose body mentions
+      `[[评测视图]]`. Then measure one real probe per surface: (1) `spex spec lint` on the fixture;
+      (2) `git branch node/评测视图-xxxx` in the fixture repo; (3) a real `spex serve` on the fixture,
+      `GET /api/specs/<encodeURIComponent(id)>`; (4) `GET /api/graph` lists the node. Also seed one
+      node with a space, one with uppercase Latin, and one with an underscore to prove the forbidden
+      list still bites.
+    expected: >-
+      `spex spec lint` counts 0 error(s) for the CJK ids: `id-format` accepts them (whitelist —
+      lowercase ascii `[a-z0-9-]` plus any non-ASCII unicode letter/number, one optional leading
+      dot), the `[[评测视图]]` mention resolves, and `confusable-id` emits NO warn for the CJK ids
+      (no cross-script or unrelated-pair false positive). The space/uppercase/underscore seeds each
+      ERROR. The branch is created, the URL-encoded `/api/specs/:id` fetch returns the node, and
+      `/api/graph` contains it — one deterministic id, every surface.
   - name: name-rules
     tags: [cli]
     description: >-

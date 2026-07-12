@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
+import { parseCodeEntry } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
 const ROOT = repoRoot()
@@ -174,7 +175,7 @@ function claimMatcher(file: string): (cf: string) => boolean {
 // frontmatter (cheap, no git) so a per-edit hook can call it.
 export function specOwners(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
-  return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+  return raws().filter((r) => list(r.fm.code).some((e) => claims(parseCodeEntry(e).path))).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
 // spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift, never eval freshness):
@@ -226,7 +227,11 @@ export async function loadSpecs() {
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
-    const code = list(r.fm.code)
+    // a code: entry may pin a symbol (`path#fn` — [[code-anchor]]): `code` carries the PATHS (what every
+    // path consumer — drift, claims, eval attribution — expects); the anchors ride separately for lint.
+    const codeEntries = list(r.fm.code).map(parseCodeEntry)
+    const code = codeEntries.map((e) => e.path)
+    const anchors = codeEntries.filter((e): e is { path: string; anchor: string } => e.anchor !== null)
     const related = list(r.fm.related)
     const S = h[0]?.hash || ''
     const driftFiles = code
@@ -250,6 +255,7 @@ export async function loadSpecs() {
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
+      anchors,
       related,
       version: h.length,
       reason: h[0]?.reason || '',
@@ -271,7 +277,7 @@ export async function loadSpecs() {
 export async function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return []
-  const codePaths = list(node.fm.code)
+  const codePaths = list(node.fm.code).map((e) => parseCodeEntry(e).path)
   // index (cached) and the code-path walk are independent — run them in parallel, both async git.
   const [idx, cStats] = await Promise.all([historyIndex(ROOT), pathsStats(ROOT, codePaths)])
   const sStats = statsFor(idx, node.relPath)

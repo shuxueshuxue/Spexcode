@@ -425,20 +425,16 @@ if (cmd === 'serve') {
       console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
-    const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')
     const findings = await specLint()
     const errors = findings.filter((f) => f.level === 'error')
     for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
     console.error(`spex spec lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
-    // drift teaches + gates from the ONE `spex spec lint` (no flag): print the remediation guidance wherever
-    // drift exists, then apply the commit-local gate — which reads the staged index itself, so it only
-    // blocks an in-flight commit that touches an already heavily-drifted node. CI/manual (nothing staged)
-    // stays advisory, per the ci-gate contract.
-    const { blocked, touched, threshold } = await driftGate()
-    if (findings.some((f) => f.rule === 'drift') || touched.length) console.error(`\n${DRIFT_GUIDANCE}`)
-    for (const t of touched) console.error(`  ${t.drift >= threshold ? '✗' : '•'} drift-gate: '${t.id}' is ${t.drift} behind${t.drift >= threshold ? ' — BLOCKS this commit' : ' (advisory)'}`)
-    if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
-    process.exit(errors.length || blocked.length ? 1 : 0)
+    // drift teaches from the ONE `spex spec lint` (no flag). Unanchored drift stays advisory forever; the
+    // blocking tier is anchor-drift ([[code-anchor]]) — an ERROR like any other, so the pre-commit shim
+    // (and CI) gates on it with no separate staged-index machinery.
+    if (findings.some((f) => f.rule === 'drift' || f.rule === 'anchor-drift')) console.error(`\n${DRIFT_GUIDANCE}`)
+    process.exit(errors.length ? 1 : 0)
   } else if (sub === 'ack') {
     // An EMPTY stamp commit on top of HEAD, never an amend: driftFor (git.ts) quiets every drift commit
     // REACHABLE from an ack, so a child stamp covers exactly what amending HEAD would — and it works where
@@ -451,13 +447,13 @@ if (cmd === 'serve') {
     const reason = (flag('reason') ?? '').trim()
     if (!nodes.length || !reason) {
       console.error('usage: spex spec ack <node-id>… --reason "<why this change keeps each spec valid>"')
-      console.error('  --reason is required (it forces you to check before acking) and is NOT stored — git keeps only the Spec-OK trailer.')
+      console.error('  --reason is required (it forces you to check before acking) and is recorded in the ack commit\'s message body — an ack that quiets an anchor hit is a strong claim, so its why must be durable.')
       process.exit(2)
     }
     try {
-      git(['commit', '--only', '--allow-empty', '-m', `ack: Spec-OK ${nodes.join(', ')}`,
+      git(['commit', '--only', '--allow-empty', '-m', `ack: Spec-OK ${nodes.join(', ')}`, '-m', reason,
         ...nodes.flatMap((n) => ['--trailer', `Spec-OK: ${n}`])])
-      console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (empty stamp commit; reason required, not stored)`)
+      console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (empty stamp commit; reason recorded in the commit body)`)
     } catch (e: any) {
       console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
     }

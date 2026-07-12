@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
+import { installConnectionReaper } from './reaper.js'
 
 // @@@ resolvePublicConfig - the cert/gate is a RESOLVED value, never hardcoded. Reads the same precedence
 // chain the spec promises: flag > env > spexcode.json > self-signed default. Returns null when public mode
@@ -150,14 +151,17 @@ export function startGateway(opts: GatewayOpts): void {
   }
 
   // server-side connection reaping ([[spec-cli]] / [[public-mode]]) - the internet-facing gateway is the
-  // public server in public mode, so it carries the SAME reaping as the child: an abandoned/slow connection
-  // dies here instead of piling up. Idle keep-alive / slow-header / never-completing request only; the gated
-  // WS upgrade (handled below) is an active connection, not reaped by these. Set AT CONSTRUCTION so the
-  // connection-checking sweep is armed with our cadence (a post-hoc set leaves it under-effective).
+  // public server in public mode, so it carries the SAME reaping as the child. The `reap` HTTP timeouts are
+  // kept (harmless) but are NOT the mechanism — MEASURED (eval server-reaps-abandoned-connections), Node's
+  // headersTimeout/requestTimeout don't reap an INCOMPLETE request; the real reaper is the socket-level
+  // `installConnectionReaper` (reaper.ts), applied below at every http server the serving path creates.
+  // Idle keep-alive / slow-loris / never-completing request only; the gated WS upgrade (handled below) is an
+  // active stream and exempt for its lifetime.
   const reap = { keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000 }
   const server = secure
     ? https.createServer({ cert: opts.tls!.cert, key: opts.tls!.key, ...reap }, handler)
     : http.createServer(reap, handler)
+  installConnectionReaper(server)
 
   // @@@ WS gate - the terminal socket rides an HTTP upgrade. Gate it by the SAME cookie (the browser sends
   // it on the same-origin handshake), then raw-pipe to the loopback supervisor, replaying the buffered

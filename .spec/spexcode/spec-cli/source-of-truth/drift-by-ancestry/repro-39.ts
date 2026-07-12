@@ -11,7 +11,7 @@ const SCRATCH = '/tmp/spexcode-39-repro'
 // defaults reproduce #39 (small corpus); the off-history-probe-memo-scale scenario overrides via env
 // to push the distinct (sha, path) probe-key count past the code-axis memos' bound (SPEX39_ANCHORS=600)
 const ANCHORS = Number(process.env.SPEX39_ANCHORS || 30)      // orphaned anchor commits
-const SCENARIOS = Number(process.env.SPEX39_SCENARIOS || 10)  // scenarios per yatsu.md
+const SCENARIOS = Number(process.env.SPEX39_SCENARIOS || 10)  // scenarios per eval.md
 const NODE_DIR = '.spec/proj/thing'
 
 const sh = (args: string[], cwd = SCRATCH) =>
@@ -25,14 +25,14 @@ function gitEnv(): NodeJS.ProcessEnv {
 }
 
 const names = Array.from({ length: SCENARIOS }, (_, i) => `s${i + 1}`)
-function yatsuSrc(rev: number): string {
+function evalSrc(rev: number): string {
   const items = names.map((n) => [
     `  - name: ${n}`,
     `    tags: [cli]`,
     `    description: measure ${n} rev${rev}`,
     `    expected: ${n} behaves rev${rev}`,
   ].join('\n')).join('\n')
-  return `scenarios:\n${items}\n---\n# yatsu\nmeasured by hand.\n`
+  return `scenarios:\n${items}\n---\n# eval\nmeasured by hand.\n`
 }
 
 rmSync(SCRATCH, { recursive: true, force: true })
@@ -41,16 +41,16 @@ mkdirSync(join(SCRATCH, 'src'), { recursive: true })
 sh(['init', '-q', '-b', 'main'])
 writeFileSync(join(SCRATCH, '.spec/proj/spec.md'), '---\ntitle: proj\nstatus: active\n---\n# proj\nroot.\n')
 writeFileSync(join(SCRATCH, NODE_DIR, 'spec.md'), '---\ntitle: thing\nstatus: active\ncode:\n  - src/app.js\n---\n# thing\nthe thing.\n')
-writeFileSync(join(SCRATCH, NODE_DIR, 'yatsu.md'), yatsuSrc(0))
+writeFileSync(join(SCRATCH, NODE_DIR, 'eval.md'), evalSrc(0))
 writeFileSync(join(SCRATCH, 'src/app.js'), 'export const v = 0\n')
 sh(['add', '-A']); sh(['commit', '-q', '-m', 'seed'])
 
-// side branch: each commit edits yatsu.md + the governed file, so every anchor's tree differs from
+// side branch: each commit edits eval.md + the governed file, so every anchor's tree differs from
 // HEAD on both paths; readings anchor here, then the branch is deleted → anchors off-history.
 sh(['checkout', '-q', '-b', 'side'])
 const anchors: string[] = []
 for (let i = 1; i <= ANCHORS; i++) {
-  writeFileSync(join(SCRATCH, NODE_DIR, 'yatsu.md'), yatsuSrc(i))
+  writeFileSync(join(SCRATCH, NODE_DIR, 'eval.md'), evalSrc(i))
   writeFileSync(join(SCRATCH, 'src/app.js'), `export const v = ${i}\n`)
   sh(['add', '-A']); sh(['commit', '-q', '-m', `edit ${i}`])
   anchors.push(sh(['rev-parse', 'HEAD']))
@@ -60,7 +60,7 @@ sh(['branch', '-q', '-D', 'side'])   // objects remain (no gc) — the "anchor e
 
 const readings = anchors.flatMap((sha, i) => names.map((n) =>
   JSON.stringify({ scenario: n, codeSha: sha, verdict: { status: 'pass' }, ts: `2026-07-0${(i % 9) + 1}T00:00:00.000Z` })))
-writeFileSync(join(SCRATCH, NODE_DIR, 'yatsu.evals.ndjson'), readings.join('\n') + '\n')
+writeFileSync(join(SCRATCH, NODE_DIR, 'evals.ndjson'), readings.join('\n') + '\n')
 
 process.chdir(SCRATCH)
 // the engine under measurement — this repo's evaltab, resolved relative to this co-located script

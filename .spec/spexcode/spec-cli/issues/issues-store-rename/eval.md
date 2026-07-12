@@ -31,7 +31,8 @@ scenarios:
     expected: >-
       The store refuses to guess: it fails LOUD with an error naming both directories and the manual repair
       (reconcile threads into `.spec/.issues`, remove `.spec/.forum`, re-run) — it never silently merges or
-      picks one, so no thread can be dropped.
+      picks one, so no thread can be dropped. The failure surface is the same on READ and WRITE alike: one
+      clean `spex issue: <message>` line and a non-zero exit — never a raw JS stack trace.
   - name: concurrent-first-touch
     tags: [cli]
     code: spec-cli/src/localIssues.ts

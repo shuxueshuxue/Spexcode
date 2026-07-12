@@ -302,11 +302,11 @@ export async function specDiffAt(id: string, hash: string) {
 // harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean; tools: string[] }
-// field-driven surface - a plugin is a FLAT direct child of a plugin root (`<root>/<name>/spec.md`)
-// that carries a `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
+// field-driven surface - a plugin is a spec node at ANY depth under a plugin root that carries a
+// `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
 // `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
-// graph child of its root. BOTH plugin roots participate: `.plugins` (the instance — DIY dev-flow plugins) and
+// graph child (a grouping parent like `.plugins/prompts` is itself a spec node, never a bare dir). BOTH plugin roots participate: `.plugins` (the instance — DIY dev-flow plugins) and
 // `plugin-system` (the project system spec). loadConfig gathers the `command` surface, loadSystemConfig the `system`
 // surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface, loadAgentConfig the `agent`
 // surface (sub-agent definitions); each scans the children under every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
@@ -354,13 +354,12 @@ function bundleFiles(dir: string): string[] {
   return out.sort()
 }
 // gather the preset nodes under a plugin root that declare `surface: <surface>`. The scan is RECURSIVE —
-// `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth and a
-// grouping parent may itself be a plugin (e.g. `.plugins/core` is a `surface: system` contract whose CHILDREN
+// `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth: under a
+// surface-less grouping shelf (the `surface: system` contracts live under `.plugins/prompts/`), or under a
+// plugin that is itself a grouping parent (`prompts/core` is a `surface: system` contract whose CHILDREN
 // are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
-// surface, so descending past a matched node never double-counts (children carry a different surface). For
-// `system`/`command` the result is identical to the old one-level scan on the current tree — every existing
-// such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
-// the appended system prompt and the command dropdown) is byte-for-byte unchanged.
+// surface, so descending past a matched node never double-counts (children carry a different surface),
+// and the gather set is path-independent — regrouping a plugin never changes what materializes.
 function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {

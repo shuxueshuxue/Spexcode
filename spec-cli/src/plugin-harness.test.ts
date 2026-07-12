@@ -8,7 +8,7 @@ import { emitPlugin, cleanPlugin, pluginBundleDir } from './plugin-harness.js'
 const BUNDLE = {
   contract: 'GUIDE\n\nSYSTEM CONTRACT "with quotes"\nand a newline',
   skills: [{ name: 'taste', content: '---\nname: taste\n---\nbody\n' }],
-  agents: [{ name: 'spec-scout', content: '---\nname: spec-scout\n---\nagent\n' }],
+  agents: [{ name: 'sample-agent', content: '---\nname: sample-agent\n---\nagent\n' }],
   commands: [{ name: 'tidy', content: '---\ndescription: "tidy"\n---\n\ntidy body\n' }],
   spex: '/abs/tsx /abs/cli.ts',
   version: '9.9.9',
@@ -51,7 +51,7 @@ test('emitPlugin writes a self-contained Claude-plugin bundle under <folder>/plu
 
   // skills / agents / commands in the Claude-plugin layout
   assert.ok(readFileSync(join(bundle, 'skills', 'taste', 'SKILL.md'), 'utf8').includes('name: taste'))
-  assert.ok(readFileSync(join(bundle, 'agents', 'spec-scout.md'), 'utf8').includes('agent'))
+  assert.ok(readFileSync(join(bundle, 'agents', 'sample-agent.md'), 'utf8').includes('agent'))
   assert.ok(readFileSync(join(bundle, 'commands', 'tidy.md'), 'utf8').includes('tidy body'))
 })
 

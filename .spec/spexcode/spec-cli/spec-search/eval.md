@@ -9,8 +9,8 @@ scenarios:
       --json --limit 10` — take the returned `id` list (already score-DESC), and find the rank of the first
       expected id. Labels are node LEAF names matched with the SAME de-collision rule the loader applies
       (specs.ts reId): a returned id hits a label if it IS the label or ends with `_<label>`, so a bare leaf
-      keeps matching after collision-qualification renames it (e.g. spec-scout →
-      injected-context_spec-scout); a label may be written pre-qualified to pin one collision branch. A case
+      keeps matching after collision-qualification renames it (e.g. the downstream re-ranking consumer →
+      injected-context_the downstream re-ranking consumer); a label may be written pre-qualified to pin one collision branch. A case
       passes@k if any expected id is in the top k. Score recall@1, recall@3, and MRR (mean of 1/rank, 0 if
       absent) over all 16. The runnable harness `spec-cli/src/search.bench.mjs` drives exactly these calls
       and prints the numbers; file its output as the reading.
@@ -31,7 +31,7 @@ scenarios:
       (12) "the one-shot nudge that makes an agent read its spec before touching code" → spec-first.
       (13) "zero-downtime backend reload without dropping connections" → supervisor.
       (14) "can several specs own the same code file, and what happens if too many do?" → governed-related.
-      (15) "an injected sub-agent that searches specs for the agent, the spec analog of Explore" → spec-scout.
+      (15) "an injected sub-agent that searches specs for the agent, the spec analog of Explore" → the downstream re-ranking consumer.
       (16) "how does a worker declare it is done" → state (regression: a live miss caught 2026-07-06 —
       eval-proactive sat #1 off an incidental desc word while the lifecycle governor sat #5).
       PLUS two non-rank zero-result regressions (the reply must route to a next step, never dead-end):
@@ -55,7 +55,7 @@ scenarios:
       ~3200-word body while a sibling carries `ordering` in its NAME (nav-mode-key-ordering, lexically
       indistinguishable). All other 14 cases sit in the top 3 — the few not at #1 (e.g. `api-endpoint`,
       `eval-core`, `governed-related` vs its remedy-sibling `regroup`) are canonical-vs-sibling ties the
-      spec-scout `--deep` LLM layer is meant to break; being inside the top 3 is the floor doing its job.
+      the downstream re-ranking consumer `--deep` LLM layer is meant to break; being inside the top 3 is the floor doing its job.
       Measured 2026-07-09 at 164 nodes after re-calibrating the desc tier weight (W_DESC 3 → 2) — the
       recall@3 had drifted to 0.813 (below this floor) as the corpus grew and incidental desc mentions began
       outranking body concentration; lowering the desc tier restored it: recall@1 0.625, recall@3 0.875,

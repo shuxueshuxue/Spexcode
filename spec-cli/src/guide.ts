@@ -83,8 +83,8 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
   one-govern (error)  a node governs (code:) at most ONE file — keep the true subject, move the rest
                       to related:.
   living     (error)  no "## vN" changelog headings — the body is current-state.
-  id-format  (error)  a node id is lowercase url-safe ascii ([a-z0-9-]) and its leaf dir name is
-                      unique tree-wide.
+  id-format  (error)  each id char is ascii [a-z0-9-] or a non-ascii unicode letter/number (CJK ok;
+                      no space / '/' / '_' / uppercase Latin), and its leaf dir name is unique tree-wide.
   mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
   altitude   (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
                       code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.

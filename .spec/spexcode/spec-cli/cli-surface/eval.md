@@ -7,7 +7,7 @@ scenarios:
       state the shared conventions (SEL · `.` · --json · --api routing · mentions) once; (2)
       `spex help session` and `spex session wait --help` — a drawer's usage with its caveats (watch
       never exits; send --keys marked last-resort/unstable) and the map/guide footer; (3)
-      `spex guide yatsu` — the skill page must footer back to the help layers. Also probe the
+      `spex guide eval` — the skill page must footer back to the help layers. Also probe the
       dead-ends: `spex nosuch`, `spex help nosuch`, `spex guide nosuch`, bare `spex internal`, and an
       unknown drawer verb (`spex spec nosuch`) must each fail loud AND name the layer to return to;
       `spex session new --help` must print help without creating a session.

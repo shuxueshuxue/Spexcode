@@ -13,7 +13,7 @@ scenarios:
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
       Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The sessions
       section explains maxActive's default and that it counts compute slots, not total sessions. The
-      unknown topic fails loud, listing `Topics: spec, yatsu, config`.
+      unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.
     tags: cli
     code: spec-cli/src/guide.ts
 ---

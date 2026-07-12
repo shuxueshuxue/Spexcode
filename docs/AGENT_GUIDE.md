@@ -76,12 +76,17 @@ each. There is no discovery phase.
   (`review` / `done` / `offline` / `error` / `needs-input`) → `closed`. A booting worker reads
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
-- **WAIT WITH `spex session wait <id>`** — to wait on a dispatched worker, background `spex session wait <id>`: it blocks
-  until the worker hits an actionable status, prints it, and **exits** (the exit is your wake-up — the
-  harness re-invokes you when the backgrounded command finishes). It **draws the watcher→worker edge on the
+- **WAIT WITH `spex session wait <id>`** — to wait on a dispatched worker, background `spex session wait <id>`: it prints
+  the worker's current status on arrival, then blocks until it **observes the worker transition from a
+  non-actionable into an actionable status** (edge-triggered — an already-actionable arrival state does not
+  return it; to just READ the current state, use the snapshot verbs below), prints the observed status path
+  (`working→review`, last token = the reached status), and **exits** (the exit is your wake-up — the
+  harness re-invokes you when the backgrounded command finishes). This is also how you wait for a dispatched
+  MERGE to actually land: the merge agent's activity presses the status to `working`, and the post-merge
+  declaration edges it back to actionable — no `git merge-base` polling. It **draws the watcher→worker edge on the
   session graph** for the whole wait (so your supervision is visible, not an invisible spin) and is
-  **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker stuck in any
-  non-actionable state can't hang you). Background one wait per worker; N waits draw N edges. One trap:
+  **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker that never produces
+  an edge can't hang you; the timeout message carries the observed path). Background one wait per worker; N waits draw N edges. One trap:
   **never block on `spex session watch`** — that's the human's *forever* stream, no `<id>`, and it freezes your turn.
   (`spex session review <id>` / `spex session ls` still return a one-shot snapshot; `spex graph --json` dumps the board JSON for a glance.)
 - **REVIEW** — `spex session review <id>` prints the one review payload: commits ahead of `main`, the

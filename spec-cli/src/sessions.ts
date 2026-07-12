@@ -1740,22 +1740,31 @@ export function launchEvent(s: Session): string {
 // clientListSessions), so `spex session watch` streams whatever backend SPEXCODE_API_URL points at — including a
 // REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
 // silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
-export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number } }
+export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number; onObserved?: (status: DisplayStatus, previous: DisplayStatus | null) => void } }
 // @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
 // plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
-// "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
-// EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
-// (`working`/`parked`/`idle`/`queued`/`starting`) can never hang the caller — it exits at the deadline.
-// `reached` = the target hit an actionable status; the rest are the loud exits. `backendDown` is a verdict
+// "block for a worker's NEXT transition, then exit" that is GUARANTEED to return. Bounded mode is
+// EDGE-TRIGGERED ([[session-edges]]): it resolves only upon OBSERVING a watched target transition from a
+// non-actionable status INTO an actionable one — an already-actionable first sighting is recorded and
+// narrated (`onObserved`, arrival first) but never resolves, so "wait for the dispatched merge to actually
+// land" has a real signal instead of an instant false return on the standing `review` level. Every observed
+// status per target accumulates into a `path` (arrival first); the resolving target's path rides the outcome
+// so the caller can print the whole observed sequence. The deadline is checked EVERY poll, before
+// EVERY sleep (and even when a poll throws), so a target that never produces an edge — stuck in ANY
+// non-actionable state (`working`/`parked`/`idle`/`queued`/`starting`), or sitting forever on an
+// already-actionable level — can never hang the caller: it exits at the deadline, path carried for the report.
+// `reached` = an observed edge into an actionable status; the rest are the loud exits. `backendDown` is a verdict
 // about the TRANSPORT, never the session — `kind` keeps its two shapes distinct for the caller's outcome
 // surface: 'unreachable' (nothing listening, the whole timeout was spent retrying) vs 'http' (reachable but
 // broken, failed loud at once). The caller must surface these OUTSIDE the session-status vocabulary — a
 // supervisor must never be able to read a transport failure as a session state (issue #40).
-export type WatchOutcome = { reached: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string; kind: 'unreachable' | 'http' }
+export type WatchOutcome = { reached: DisplayStatus; path: DisplayStatus[] } | { timedOut: true; path: DisplayStatus[] } | { gone: true; path: DisplayStatus[] } | { backendDown: string; kind: 'unreachable' | 'http' }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<WatchOutcome> {
   const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as, until } = opts
   const tag = as ? `[${as}] ` : ''
   const prev = new Map<string, DisplayStatus>()
+  const paths = new Map<string, DisplayStatus[]>()   // bounded mode: every status observed per target, arrival first
+  const anyPath = () => (paths.size ? [...paths.values()][0] : [])
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   // the no-hang wall: a fixed deadline computed ONCE, checked unconditionally every iteration below.
   const deadline = until ? Date.now() + Math.max(1000, until.timeoutMs) : 0
@@ -1773,10 +1782,23 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       warnedDown = false; downMsg = null   // a successful poll re-arms the down-warning (and clears the deadline's down-report)
       const ids = new Set(all.map((s) => s.id))
       const passesStatus = (st: DisplayStatus) => !statuses?.length || statuses.includes(st)
+      let edge: { status: DisplayStatus; path: DisplayStatus[] } | null = null
       for (const s of all) {
-        if (!prev.has(s.id)) emit(tag + launchEvent(s)) // FIRST sighting → launched, any status (incl. 'working'), once
-        if (s.status === prev.get(s.id)) continue // only on transition, not every tick
+        const was = prev.has(s.id) ? prev.get(s.id)! : null
+        if (was === null) emit(tag + launchEvent(s)) // FIRST sighting → launched, any status (incl. 'working'), once
+        if (s.status === was) continue // only on transition, not every tick
         prev.set(s.id, s.status)
+        if (until) {
+          const p = paths.get(s.id) ?? []
+          p.push(s.status)
+          paths.set(s.id, p)
+          until.onObserved?.(s.status, was)
+          // THE edge: a previously-observed NON-actionable status transitioning INTO an actionable one. An
+          // actionable ARRIVAL (was === null) is deliberately not an edge — that standing level is what the
+          // old wait false-returned on; and an actionable→actionable hop (review→done) isn't one either. The
+          // rise out of non-actionable is the one signal that means "the target needs you AGAIN".
+          if (was !== null && !isActionable(was) && isActionable(s.status)) edge = { status: s.status, path: p }
+        }
         if (passesStatus(s.status) && (WATCH_ACTIONABLE.has(s.status) || (includeIdle && s.status === 'idle'))) emit(tag + sessionEvent(s))
       }
       // @@@ closed = the worktree is GONE. Because listSessions lists every EXISTING worktree (a flaky detail
@@ -1788,13 +1810,13 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.delete(id)
         emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
       }
-      // BOUNDED mode (`until`, what `spex session wait` runs): return the moment a watched target is actionable; an empty selected set
-      // means the target is gone (absent from the board), which it can never come back from. Both sit inside
-      // the try, after the emit pass, so the caller still saw every transition before we hand control back.
+      // BOUNDED mode (`until`, what `spex session wait` runs): return on an OBSERVED non-actionable→actionable
+      // edge; an empty selected set means the target is gone (absent from the board), which it can never come
+      // back from. Both sit inside the try, after the emit pass, so the caller still saw every transition
+      // before we hand control back.
       if (until) {
-        const hit = all.find((s) => isActionable(s.status))
-        if (hit) return { reached: hit.status }
-        if (!all.length) return { gone: true }
+        if (edge) return { reached: edge.status, path: edge.path }
+        if (!all.length) return { gone: true, path: anyPath() }
       }
     } catch (e) {
       // a backend error in the poll must NOT be swallowed AND must NOT emit a false `closed` for every session:
@@ -1812,10 +1834,10 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       }
     }
     // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep: this
-    // guarantees `spex session wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
+    // guarantees `spex session wait` can never hang on a worker that never produces an edge — nor spin forever on a
     // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
-    // not a false "no actionable status" timeout, so the manager sees the honest cause.
-    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true }
+    // not a false "no edge" timeout, so the manager sees the honest cause.
+    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true, path: anyPath() }
     await sleep(intervalMs)
   }
 }

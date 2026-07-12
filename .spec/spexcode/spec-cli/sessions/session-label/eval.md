@@ -20,10 +20,11 @@ scenarios:
     tags: [cli]
     description: >
       Take ONE node-less session (name set from its prompt, empty node, an auto branch like
-      `node/spec-cli-3ec0`) and name it through two different CLI surfaces: `spex ls` and
-      `spex review <id>`. Both are "who is this session" displays and must agree.
+      `node/spec-cli-3ec0`) and name it through two different CLI surfaces: `spex session ls` and
+      `spex session review <id>`. Both are "who is this session" displays and must agree.
     expected: >
-      `spex ls` and `spex review` show the SAME identity for the session — the derived label (its name),
+      `spex session ls` and `spex session review` show the SAME identity for the session — the derived
+      label (its name),
       never one showing the name while the other falls back to the raw branch. Zero loss = the review
       surface reads a `deriveLabel`-produced field, not its own re-inlined `node||branch||id` chain.
     code: [spec-cli/src/cli.ts, spec-cli/src/sessions.ts]

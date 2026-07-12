@@ -5,7 +5,7 @@
 // is why they sit in flat plateaus rather than being fitted to any case.
 const W_NAME_PREFIX = 8
 const W_NAME_SUBSTR = 5
-const W_DESC = 2
+const W_DESC = 2.2
 const W_BODY = 1
 
 // a tiny stoplist of question scaffolding + length-1 tokens, dropped so "how does the … is it …" can't drown
@@ -68,6 +68,24 @@ function stem(t: string): string {
 function nameMatch(term: string, w: string): boolean { return w.startsWith(stem(term)) }
 function textMatch(term: string, w: string): boolean { return w.startsWith(stem(term)) || (w.length >= 3 && term.startsWith(w)) }
 
+// how strongly a query term's name-prefix hit counts, over a doc's name words: the FRACTION of the matched
+// name word the query term actually spans. A full word (`port`→`port`, `api`→`api`) is 1.0 — the strong
+// signal a name tier is for; a short query term that only PREFIXES a longer, unrelated word (`port`→`portable`,
+// `governs`→`governed`) covers less of it and is weaker evidence, so it earns proportionally less than the
+// full name weight. Floored at 0.5 (a prefix is still evidence, not noise). Returns 0 when no name word is
+// prefixed. This is what stops a corpus-growth collision — a sibling whose NAME merely starts with a query
+// word (portable-layout for "port", governed-related for "governs") — from outranking the node that owns the
+// concept; the floor sat at an implicit 1.0 before, which let those partial prefixes score a full name hit.
+const NAME_COVER_FLOOR = 0.5
+function nameCover<T>(term: string, n: Fields<T>): number {
+  const st = stem(term)
+  let best = 0
+  for (const w of n.nameWords) {
+    if (w.startsWith(st)) { const r = st.length / w.length; if (r > best) best = r }
+  }
+  return best > 0 ? Math.max(NAME_COVER_FLOOR, best) : 0
+}
+
 // classic BM25 tf: frequency with saturation (K1 sets how fast it saturates) and length-normalisation (B),
 // both in a wide insensitive plateau. tf=0 → 0.
 const K1 = 1.2
@@ -82,13 +100,16 @@ type Fields<T> = { ref: T; name: string; nameWords: string[]; desc: string; desc
 
 // the pre-IDF weight a term earns against one doc, picking its single best tier (three fields): a name
 // word-prefix beats a name substring beats a desc hit beats a body hit. Name is a short, chosen field →
-// binary presence. Desc is presence too (a curated one-liner — repetition there is stuffing, not evidence)
+// near-binary, scaled only by prefix COVERAGE (a full word counts full; a query term that is a mere prefix
+// of a longer name word counts proportionally less — see nameCover). Desc is presence too (a curated
+// one-liner — repetition there is stuffing, not evidence)
 // but LENGTH-NORMALISED: it was flat-binary until descs drifted long and a bloated desc became a cheat code
 // (one 60-word desc catches every query term a curated one-liner can't). bm25tf(1, avgLen, avgLen) = 1, so
 // a hit in an average-length desc scores exactly the old binary W_DESC — the normalisation only bites
 // outliers. The body keeps the full BM25-saturated term-frequency that discriminates the long ties.
 function tierWeight<T>(term: string, n: Fields<T>, avgBodyLen: number, avgDescLen: number): number {
-  if (n.nameWords.some((w) => nameMatch(term, w))) return W_NAME_PREFIX
+  const cover = nameCover(term, n)
+  if (cover > 0) return W_NAME_PREFIX * cover
   if (n.name.includes(term)) return W_NAME_SUBSTR
   if (n.descWords.some((w) => textMatch(term, w))) return W_DESC * bm25tf(1, n.descWords.length, avgDescLen)
   const tf = n.bodyWords.reduce((c, w) => c + (textMatch(term, w) ? 1 : 0), 0)
@@ -156,7 +177,12 @@ export function rankDocs<T>(query: string, inputs: RankInput<T>[], opts: { limit
   const scored: Ranked<T>[] = []
   for (const n of docs) {
     let score = 0
-    for (const t of qterms) score += tierWeight(t, n, avgBodyLen, avgDescLen) * idf[t]
+    // cap EACH term's contribution at W_NAME_PREFIX: idf and BM25 order the tiers WITHIN this ceiling, but no
+    // single query term may out-score a full name hit. A many-word question should be answered by the node
+    // that matches it BROADLY, not by one that spikes on a single rare word it happens to carry in its NAME
+    // (a `spex search`-named node swallowing "…searches specs…", an injected-* node swallowing "injected…") —
+    // the corpus-growth failure where one uncapped idf×name term buried a node matching more of the query.
+    for (const t of qterms) score += Math.min(tierWeight(t, n, avgBodyLen, avgDescLen) * idf[t], W_NAME_PREFIX)
     if (score <= 0) continue
     scored.push({ ref: n.ref, score: Math.round(score * 100) / 100, snippet: snippetFor(n.snippetText, n.desc, qterms) })
   }

@@ -43,7 +43,9 @@ same store lock every write already holds ([[local-issues]]), so a burst produce
 commit: the racer that waited re-checks under the lock and finds the move already done. The one state the
 store must never resolve by guessing is **both** directories present — a genuine `.spec/.forum` *and* a
 genuine `.spec/.issues` — since auto-merging could drop threads; that fails **loud** with the manual repair,
-never a silent union.
+never a silent union. Loud has one shape on every surface: a read (`spex issue ls`/`show`) and a write
+(`open`/`reply`) alike fail as the CLI's clean one-line `spex issue: <message>` plus a non-zero exit — the
+message carries both directory names and the repair; a raw stack trace is internals, never the error surface.
 
 This retires [[eval-issue-split]]'s "deliberate residue": the forum kill is now complete at every layer, and
 the migration mechanism — not the old name — is the standing contract.

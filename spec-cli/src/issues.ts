@@ -302,6 +302,14 @@ function renderIssue(t: Issue): string {
 // (`nudge` left this drawer for `spex internal nudge` — only the post-merge hook calls it; the old
 // on|off|status toggle verbs are gone — the switch is the `issues.enabled` settings key.)
 export async function runIssues(args: string[]): Promise<number> {
+  // the drawer's READ verbs (ls/show) surface a store failure exactly as the writes do
+  // ([[issues-store-rename]]'s both-exist teeth): one clean `spex issue: <message>` line + exit 1, never a
+  // raw stack — the message carries the repair, the stack is internals. The verbs that already catch with
+  // a more specific prefix (open/reply/close/promote) return before this guard ever sees their errors.
+  try { return await issueVerbs(args) }
+  catch (e) { console.error(`spex issue: ${e instanceof Error ? e.message : e}`); return 1 }
+}
+async function issueVerbs(args: string[]): Promise<number> {
   if (ISSUE_WRITE_SUBS.has(args[0])) return runIssueWrite(args)
   if (args[0] === 'on' || args[0] === 'off' || args[0] === 'status') {
     // v0.3.0 signpost — report the new home, never run ([[cli-surface]]: a removed spelling only points).

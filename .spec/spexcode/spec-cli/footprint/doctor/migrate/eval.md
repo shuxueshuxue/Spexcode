@@ -9,12 +9,17 @@ scenarios:
       migrated stop-gate.sh against a governed active session record.
     expected: >
       One `spex doctor --migrate` run brings the 0.2.x tree to a fully working 0.3.0 state:
-      `spex spec lint` reports 0 errors, `spex eval lint` reports 0 malformed with the pre-migration
-      readings visible again (no false eval-coverage gaps on nodes that had yatsu.md measurements),
-      `spex materialize` succeeds, and the migrated stop-gate.sh — invoked through the real hook
-      protocol with the new `spex internal` verbs — blocks an undeclared governed stop with the
-      decision:block JSON. Un-migrated, the same chain must fail LOUDLY (materialize refuses, naming
-      `spex doctor --migrate`), never silently.
+      `spex spec lint` reports ZERO errors in the migration-owned classes (integrity / one-govern /
+      living — the classes a botched rewrite or git-mv would trip); errors from the post-0.2.8
+      content rules (id-format / mention, landed 2026-07-12) are permitted ONLY on the archive's own
+      pre-existing content (its leaf-id collisions and the mention resolution they break) — those
+      are the adopter's documented post-migration cleanup TODO (deploy runbook step: "clear any lint
+      errors the new rules surface"), not migration damage. `spex eval lint` reports 0 malformed
+      with the pre-migration readings visible again (no false eval-coverage gaps on nodes that had
+      yatsu.md measurements), `spex materialize` succeeds, and the migrated stop-gate.sh — invoked
+      through the real hook protocol with the new `spex internal` verbs — blocks an undeclared
+      governed stop with the decision:block JSON. Un-migrated, the same chain must fail LOUDLY
+      (materialize refuses, naming `spex doctor --migrate`), never silently.
     tags: [cli]
     test: .spec/spexcode/spec-cli/footprint/doctor/migrate/rehearsal.sh
   - name: customized-asset-flagged

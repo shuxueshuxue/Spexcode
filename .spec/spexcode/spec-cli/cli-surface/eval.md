@@ -40,12 +40,15 @@ scenarios:
       <node>`, `spex issue ls`, `spex evidence put -`, `spex internal commit-gate`); (3) every
       REMOVED spelling signposts — one stderr line naming the replacement, non-zero exit, verb never
       executed: bare `lint`/`tree`/`board`/`new`/`ls`/`watch`/`wait`/`review`/`merge`/`send`,
-      `yatsu …`, `blob …`, `issues …`, `forge …`, `dashboard`, `resolve`/`retract`,
-      `session rawkey`, `session state`, `doctor contract`. A signposted verb must produce no side
+      `blob …`, `issues …`, `forge …`, `dashboard`, `resolve`/`retract`,
+      `session rawkey`, `session state`, `doctor contract`. The `yatsu` tombstone was retired EARLY
+      by human ruling (ahead of its 0.4.0 schedule): `yatsu …` now exits 2 as a plain unknown
+      command pointing at `spex help` — no replacement line. A signposted verb must produce no side
       effect (e.g. `spex board` writes no JSON to stdout).
     expected: >
       Bare nouns = drawer help (exit 0); new spellings behave; removed spellings exit 2 with a
-      one-line signpost naming the new spelling and never execute the old verb.
+      one-line signpost naming the new spelling and never execute the old verb; `yatsu` (tombstone
+      retired early) exits 2 as a plain unknown command with the `spex help` pointer.
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
 ---

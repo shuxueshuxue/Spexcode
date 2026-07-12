@@ -47,7 +47,7 @@ scenarios:
       own when IT filed it, not only when its codeSha is a branch commit), and the ✦ count chip is present
       to narrow to those. Inherited rows (other sessions' latest readings) sit below an explicit divider
       naming them, so the session's own work and the inherited baseline can never be misread as one. A
-      retired scenario (declared in no yatsu.md) contributes NO row — the tab is bounded by declared
+      retired scenario (declared in no eval.md) contributes NO row — the tab is bounded by declared
       scenarios, the same latest-per-scenario computation every eval face reads.
   - name: eval-cli-read
     tags: [cli]

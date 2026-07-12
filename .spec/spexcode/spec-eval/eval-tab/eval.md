@@ -3,14 +3,14 @@ scenarios:
   - name: declared-scenarios-visible-without-readings
     tags: [frontend-e2e, desktop]
     description: >-
-      Open the dashboard, focus a node that declares scenarios but has none measured yet (a yatsu.md
+      Open the dashboard, focus a node that declares scenarios but has none measured yet (an eval.md
       with no readings — or use a route fixture that sets a node's `evals` to []), and open its eval
       tab (key `4`). The tab must NOT dead-end at a bare "no measurements yet" line: under that hint it
       lists each DECLARED scenario as a blind-spot row — an empty score ring, the scenario name, the
       files it tracks, and its `expected`. For a node where some scenarios are measured and others not,
       the unmeasured ones LEAD the one reading timeline as the same kind of blind-spot row (no fenced-off
       band, no second scrollbar — the empty ring is the only distinction). Screenshot the popup's eval tab and file with
-      `spex yatsu eval eval-tab --scenario declared-scenarios-visible-without-readings --image <png> --pass`.
+      `spex eval add eval-tab --scenario declared-scenarios-visible-without-readings --image <png> --pass`.
     expected: >-
       The eval tab surfaces the WHOLE declared set, not only the readings: a scenario with no reading
       shows its name + expected (+ tracked files) under a blind-spot ring, so a node's measurable intent
@@ -28,7 +28,7 @@ scenarios:
       must render as a GALLERY: every image shows AND the video plays inline, together in the one
       expanded figure — not a single element switched on one kind. A pruned entry shows its own
       *miss original file* sentinel. Screenshot the expanded gallery and file with
-      `spex yatsu eval eval-tab --scenario multi-evidence-gallery --image a.png --image b.png --video clip.webm --pass --image <shot>`.
+      `spex eval add eval-tab --scenario multi-evidence-gallery --image a.png --image b.png --video clip.webm --pass --image <shot>`.
     expected: >-
       The expanded reading shows the reading's whole evidence LIST as a vertical gallery: N `<img>`
       thumbnails plus an inline `<video controls>`, all present at once. Backward-compatible — a legacy

@@ -38,24 +38,25 @@ scenarios:
       and fired while the first launch is still in flight, without the resolving launch clobbering the new
       draft. Each new session simply appears as a new row in the list below (surfaced by the board poll). Both
       sessions can be created back-to-back without ever leaving New Session. The only thing that moves your selection is a tab's removal (the close-command /
-      close-tab-fallback scenarios — note `/exit` does NOT remove a tab, it only stops the session), never a
+      close-tab-fallback scenarios — note `/stop` does NOT remove a tab, it only stops the session), never a
       creation.
   - name: exit-command-stops-keeps-worktree
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
-      (non-offline) session whose `❯` box is enabled. Type exactly `/exit` into the box (dismiss the `/`
+      (non-offline) session whose `❯` box is enabled. Type exactly `/stop` into the box (dismiss the `/`
       completion menu if it opened, so Enter dispatches rather than completes) and press Enter. Watch the
       session list and active pane. Screenshot the tab list + pane before typing and after Enter settles.
       Then confirm resumability: the same tab now shows a relaunch panel — click it and watch the session
-      come back online on the SAME conversation.
+      come back online on the SAME conversation. (v0.3.0 respelled this stop verb `/exit`→`/stop`; the
+      scenario id keeps its `exit` name as a stable anchor.)
     expected: |
       The session is STOPPED but NOT removed: its row STAYS in the list (it does not drop off), now reading
       `offline`, and the active tab swaps the live terminal for the relaunch panel — the same offline+relaunch
       a crash would produce — with NO confirmation prompt (typing the exact command IS the deliberate act). The
       view does NOT jump to New Session (no tab removal). Clicking relaunch `--resume`s the same conversation
-      (the transcript survives). The literal text `/exit` is never dispatched into the terminal/agent (the
-      read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
+      (the transcript survives). The literal text `/stop` is never dispatched into the terminal/agent (the
+      read-only pane shows no new `/stop` line). Any other text, including `/stop` with trailing words,
       dispatches normally to the agent.
   - name: close-command-removes
     tags: [frontend-e2e, desktop]
@@ -75,7 +76,8 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, with MORE live/queued sessions than fit the
       viewport at once (a dozen or more), look at the top-left SessionWindow glance together with the
-      bottom-left `.board-stats` strip. Measure three things from a full-board screenshot: (a) the
+      bottom-left `.graph-stats` strip (v0.3.0 renamed the board glance's stats strip board→graph). Measure
+      three things from a full-board screenshot: (a) the
       window's rendered height against the viewport height, (b) whether the window's bottom edge stays
       ABOVE the stats strip with a gap (they never overlap), and (c) that the rows past the cap are
       reachable — wheel/drag the scrollbar inside the window down to its end and screenshot the last
@@ -96,11 +98,12 @@ scenarios:
       (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
       action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
       `/` and read the completion menu: the board's own
-      commands (`/type`, `/eval`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
+      commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
       painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
-      type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly ONCE (the board's
-      coloured row), not a duplicate pair, and that each row's description reads as a sentence (first letter
-      capitalised, e.g. "Exit — stop the agent…", not "exit — …").
+      type `/stop`, the board's muted-grey stop verb (v0.3.0 respelled it from `/exit`): confirm the menu shows
+      `/stop` exactly ONCE (the board's coloured row). Then type `/exit`, a name Claude Code ships that the board
+      no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
+      sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
       (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
       to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
       view. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
@@ -111,13 +114,15 @@ scenarios:
       rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
       permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
       surface says "proof" (the tab, the command, and its menu description all say eval).
-      In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
+      In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
-      by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
+      by destructiveness — stop muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
-      blue (rgb(38,139,210)); one element, one colour in both places. A name the board owns that Claude Code
-      also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's twin, never a duplicate pair —
+      blue (rgb(38,139,210)); one element, one colour in both places. The board's `/stop` appears exactly ONCE as
+      its coloured row; `/exit` — the pre-v0.3.0 spelling the board no longer owns after the `/exit`→`/stop`
+      respelling — now shows only as CC's own blue built-in row (the override still filters a same-named CC twin,
+      but no board command currently collides with a CC name) —
       and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
       shows the same inline view the tab click does (one shared tab-state); typing `/type` toggles type mode
       exactly as the type button does, and the button reflects that same state. A board command is never
@@ -147,7 +152,8 @@ scenarios:
     description: >
       Measure type mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
       that renders control bytes visibly (`cat -v`), then exercise the REAL product path the dashboard
-      uses — `POST /api/sessions/:id/rawkey` with `{key}` (the same body sendRawKey posts) — for the tokens
+      uses — `POST /api/sessions/:id/input` with `{kind:'keys', keys:[<token>]}` (the same body sendRawKey
+      posts; v0.3.0's session domain merged the old `/rawkey` into `/input {kind}`) — for the tokens
       typeKeyToken produces: a control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a
       meta-uppercase `M-B`, a shift-arrow `S-Up`, an interrupt `C-c`, and a malformed `C-C-x`. After each,
       capture the pane to read what the program actually received. (Browser variant: open the console on a
@@ -163,7 +169,8 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface on a LIVE session and
-      confirm the reserved-toggle contract. Intercept `/rawkey` so no keystroke can reach a real agent,
+      confirm the reserved-toggle contract. Intercept `/api/sessions/:id/input` (the `kind:'keys'` channel —
+      v0.3.0 renamed the old `/rawkey` route into it) so no keystroke can reach a real agent,
       recording only WHICH keys attempt a forward. With type mode OFF, press ⌥+I (Option+I — note ⌥I emits a
       dead-key glyph on a mac, so this also proves the e.code match) then ⌘+I; then enter type mode and
       press an ordinary key (`x`); then ⌥+I again. Then, with type mode OFF, press ⌥+⌘+I (all three keys
@@ -171,7 +178,7 @@ scenarios:
       does NOT preventDefault it. Watch the bottom-bar type-mode indicator and the recorded forwards.
     expected: |
       ⌥+I and ⌘+I (a SINGLE modifier + I) toggle type mode on and off every time (the bottom-bar type-mode
-      indicator appears/disappears) and forward NOTHING — no `/rawkey` attempt is recorded for either. An
+      indicator appears/disappears) and forward NOTHING — no `/input` keys attempt is recorded for either. An
       ordinary key pressed while type mode is ON DOES forward (recorded), so the carve-out is exactly the two
       reserved chords, not a blanket block. ⌥+⌘+I held TOGETHER is left alone: the type-mode indicator does not
       change and the app does not cancel the event, so the browser's devtools accelerator opens normally
@@ -181,13 +188,14 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface on a LIVE session and
-      enter type mode (⌥/⌘+I or the type button). Intercept `/rawkey` so no keystroke reaches a real agent,
+      enter type mode (⌥/⌘+I or the type button). Intercept `/api/sessions/:id/input` (the `kind:'keys'`
+      channel — v0.3.0 renamed the old `/rawkey` route into it) so no keystroke reaches a real agent,
       recording WHICH keys attempt a forward. Press Esc once, then press Esc twice in rapid succession
       (well under a second apart — the cadence that used to be the double-Esc exit), then a third burst of
       several fast Escs. After each burst read the bottom-bar type-mode indicator and the recorded forwards.
       Finally exit via ⌥/⌘+I (or the click) to confirm the sanctioned exits still work.
     expected: |
-      Every Esc press — single, paired, or rapid-fire — forwards to the pane as a `/rawkey` Escape and
+      Every Esc press — single, paired, or rapid-fire — forwards to the pane as an `/input` Escape and
       type mode STAYS ON: the bottom-bar indicator never disappears on any Esc cadence, because Esc belongs
       to the agent's own menus and a human cancelling something in the terminal must never be bounced out of
       the mode. There is no double-Esc exit. Type mode leaves only by the reserved ⌥/⌘+I toggle, the type

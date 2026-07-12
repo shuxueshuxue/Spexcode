@@ -18,7 +18,7 @@ scenarios:
       rows; then open the search palette and look at the SCENARIO rows. Each scenario shows its
       classification tags as a row of compact chips (the shared TagChips / `.tag-chip` element),
       identical across both surfaces; a NODE row in search shows no chips. Capture and file with
-      `spex yatsu eval eval-score-badge --scenario tags-render-as-chips --image <png> --pass`.
+      `spex eval add eval-score-badge --scenario tags-render-as-chips --image <png> --pass`.
     expected: >-
       Every scenario renders its tags as small paper chips wherever it surfaces (focus panel rows,
       search SCENARIO rows, eval-tab declared rows), reading off the same `.tag-chip` style; a

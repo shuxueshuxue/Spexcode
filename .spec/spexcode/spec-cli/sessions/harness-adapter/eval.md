@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: nested-subagent-hooks-do-not-clobber-parent-record
+    tags: [backend-api]
+    code: spec-cli/hooks/harness.sh
+    description: >-
+      A governed claude session (record P, declared `parked`) spawns nested subagents (Task tool), which
+      inherit SPEXCODE_SESSION_ID=P in their environment but carry their OWN session_id in every hook
+      payload. Simulate the child's hook exactly: a PreToolUse payload with session_id=S-child piped to
+      dispatch.sh with SPEXCODE_SESSION_ID=P exported. Also simulate the two legit env uses: the parent's
+      own payload (session_id=P) and a payload with NO session_id at all. Read record P after each.
+    expected: >-
+      The child's hook resolves to ITS payload id (S-child, non-governed, no record → the board-lifecycle
+      hooks no-op) and record P stays `parked` with its note intact — a parent's declared state survives
+      its own subagents' activity (the measured failure: every park was clobbered back to `active` within
+      seconds by inherited-env mark-active, so the session read `working` on the board forever). The
+      parent's own payload still writes P, and a payload-less event still falls back to the env id — the
+      payload wins only when present, mirroring the codex alias rule one case below.
   - name: codex-apply-patch-triggers-spec-hooks
     tags: [backend-api]
     description: >-

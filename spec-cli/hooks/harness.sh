@@ -59,12 +59,17 @@ hp_field() {
 # the session id from a payload (both harnesses use session_id).
 # Codex hooks run inside ONE shared per-project app-server. That process can inherit the FIRST launched
 # session's SPEXCODE_SESSION_ID, so on codex the payload session_id (the acting thread id) must win and then
-# hp_store_dir aliases it to the governed record. Claude's payload id already equals its governed record id,
-# so preferring SPEXCODE_SESSION_ID there preserves the launcher's pinned id path.
+# hp_store_dir aliases it to the governed record. Claude's payload id equals its governed record id, so the
+# PAYLOAD is the acting identity; the inherited env is only a fallback for payload-less events. Env-first was
+# a live bug: a nested subagent (Task tool) inherits the parent's SPEXCODE_SESSION_ID, so with env winning,
+# every child tool call fired mark-active against the PARENT's record — the parent read `working` forever and
+# every park/done declaration was clobbered within seconds (measured). Same staleness class the codex branch
+# already guards against (payload-first below); claude now follows the same rule.
 hp_session_id() {
+  local pid
   case "$SPEXCODE_HARNESS" in
     codex) hp_field "$1" session_id ;;
-    *)     printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}" ;;
+    *)     pid=$(hp_field "$1" session_id); printf '%s' "${pid:-$SPEXCODE_SESSION_ID}" ;;
   esac
 }
 

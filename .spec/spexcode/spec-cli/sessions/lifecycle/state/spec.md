@@ -137,8 +137,10 @@ composing both axes** for one-glyph surfaces — a convenience, never a third so
 
 ### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
 
-Every hook reads the **effective session id** through the harness resolver. Claude can trust
-`SPEXCODE_SESSION_ID` from the governed launcher because its payload id is the same record id. Codex cannot:
+Every hook reads the **effective session id** through the harness resolver. For Claude the PAYLOAD's
+session_id is the acting identity (env `SPEXCODE_SESSION_ID` is only the fallback for payload-less events):
+a nested subagent inherits the parent's env, so env-first let every child tool call clobber the PARENT's
+declared state (measured: a park erased within seconds, the session reading `working` forever). Codex cannot:
 hooks run inside the shared per-project app-server, whose env can carry another session's
 `SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
 that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch

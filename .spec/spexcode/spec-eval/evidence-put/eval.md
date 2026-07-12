@@ -13,7 +13,7 @@ scenarios:
       All three puts print the SAME 64-hex hash (content-addressed idempotence — re-putting is the
       documented repair for a clone whose cache lacks a referenced blob) and exit 0; the blob lands
       once in the per-clone `.git/spexcode/evidence` cache. An empty input is refused loudly (exit 2,
-      "refusing an empty blob") — never a hash for nothing.
+      "refusing empty evidence") — never a hash for nothing.
 ---
 
 Measured YATU through the installed `spex` CLI — real `evidence put` invocations from a shell comparing

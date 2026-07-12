@@ -23,8 +23,9 @@ scenarios:
       node's Eval tab, select the reading, and read the detail's DOM: is a step RAIL (`.an-ruler`) present
       even with no clip, and what do its button labels read?
     expected: |
-      The eval detail shows a step rail (`.an-ruler`) UNDER the transcript even though there is no video —
-      the rail is no longer welded to the clip. Each step button reads `L<line-no> <step>` (the `line`-axis
+      The eval detail shows a step rail (`.an-ruler`) alongside the transcript even though there is no
+      video — the rail is no longer welded to the clip. Each step button reads `L<line-no> <step>` (the
+      `line`-axis
       label, not m:ss), naming the step at its line position. No custom video scrubber renders (no clip);
       the `--timeline` filed clean beside a transcript because the CLI's axis↔kind gate accepts a `line`
       map on a transcript entry. This is the axis generalization's payoff: step evidence on any axis.

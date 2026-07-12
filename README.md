@@ -12,7 +12,7 @@
 <p>
   <img alt="Linux" src="https://img.shields.io/badge/Linux-supported-success?logo=linux&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-supported-success?logo=apple&logoColor=white">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-untested-lightgrey">
+  <img alt="Windows: via WSL2" src="https://img.shields.io/badge/Windows-WSL2-success">
   <img alt="database: git" src="https://img.shields.io/badge/database-git-f05032?logo=git&logoColor=white">
 </p>
 
@@ -37,9 +37,10 @@ Quick links: [the model](#the-model) · [quick start](#quick-start) ·
 <div align="center"><img src="docs/sdd-tuxedo-pooh.png" alt="spec-driven development meme" width="260"></div>
 
 A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
-`code:` list of the files it governs) plus a prose body stating what that part of the system is
-supposed to do, right now. Nodes nest, so the tree mirrors how you think about the project rather
-than the file layout. The body has two parts. The short **raw source** states the intent; changing it takes explicit
+`code:` pointer to the file it governs, a `related:` list for files it references) plus a prose
+body stating what that part of the system is supposed to do, right now. Nodes nest, so the tree
+mirrors how you think about the project rather than the file layout. The body can split into two
+labelled parts. The short **raw source** states the intent; changing it takes explicit
 human approval (an agent can draft it, a human signs off). The **expanded spec** is the agent's
 detailed reading of that intent; it iterates freely but must always match the raw source.
 
@@ -48,7 +49,7 @@ detailed reading of that intent; it iterates freely but must always match the ra
 Two rules make this workable:
 
 1. **Git is the database.** There is no separate store. A node's version count is the number of
-   commits that touched its `spec.md`, its history view is `git log` on that file, and each version
+   commits that changed its `spec.md`, its history view is `git log` on that file, and each version
    is attributed to an agent session through a `Session:` commit trailer. This is also why a spec
    body always describes present intent and gets rewritten in place: changelog headings inside the
    body are banned (the linter enforces it), because git already keeps the history.
@@ -56,16 +57,16 @@ Two rules make this workable:
    code it justifies. When code moves without its spec, the linter flags it,
 
    ```
-   drift: spec-cli/src/board.ts is 1 commit(s) ahead of spec 'board-lean' (v8) — may be stale
+   drift: spec-cli/src/graph.ts is 1 commit(s) ahead of spec 'graph-lean' (v12) — may be stale
    ```
 
    and keeps flagging until the spec catches up.
 
 ## The optimization loop
 
-Specs, commits, and evals compose into one loop. The spec is the loss function: it states what you want, and
-it's the half a human signs off on. Commits are the optimizer. **eval**, the measurement
-subsystem, is the eval: it scores how far live behavior currently sits from the spec, and the
+Specs, commits, and evals compose into one loop. The spec is the loss function: it states what you
+want, and it's the half a human signs off on. Commits are the optimizer. **eval**, the measurement
+subsystem, scores how far live behavior currently sits from the spec, and the
 score's history lives in git like everything else.
 
 <img src="docs/readme-loop.png" alt="the spec/code optimization loop">
@@ -87,16 +88,16 @@ spex serve ui            # dashboard on :5173, proxying to the backend
 ```
 
 `spex init` is additive. It works on any existing git repo and never overwrites your files: it
-creates a root `.spec/project/spec.md` and a starter `spexcode.json`, installs the pre-commit
-hooks, and writes a managed block into `CLAUDE.md`/`AGENTS.md` so any agent working in the repo
+creates a root `.spec/project/spec.md` and a starter `spexcode.json`, installs the git hooks, and
+writes a managed block into `CLAUDE.md`/`AGENTS.md` so any agent working in the repo
 discovers the workflow on its own.
 
 Then grow the tree:
 
 1. Edit `.spec/project/spec.md` to describe the project.
-2. Add child nodes for the parts you want governed, each with a `code:` list pointing at existing
-   files.
-3. Run `spex lint`. Coverage warnings list the source files no spec claims yet; that list is your
+2. Add child nodes for the parts you want governed, each with a `code:` entry pointing at an
+   existing file (`related:` for the files it touches but doesn't own).
+3. Run `spex spec lint`. Coverage warnings list the source files no spec claims yet; that list is your
    adoption TODO.
 
 You are not expected to hand-author all of this. The intended workflow is to have an agent do most
@@ -114,7 +115,7 @@ This part needs tmux and a logged-in [Claude Code](https://www.anthropic.com/cla
 on the machine.
 
 ```sh
-spex new "make the settings page remember the last tab" --node settings
+spex session new "make the settings page remember the last tab" --node settings
 ```
 
 launches a worker session in its own worktree on branch `node/settings-…`. The `--node` flag (or a
@@ -130,9 +131,9 @@ themselves use when they delegate.
 You supervise from outside — on the board, or with the same commands your agent uses:
 
 ```sh
-spex watch              # stream session transitions: launched / review / done / needs-input ...
-spex review settings    # commits ahead of trunk, merge-base diff, typecheck/lint gates
-spex merge settings     # gated merge into the trunk
+spex session watch              # stream session transitions: launched / review / done / needs-input ...
+spex session review settings    # commits ahead of trunk, merge-base diff, merge-conflict/lint gates
+spex session merge settings     # gated merge into the trunk
 spex session close settings
 ```
 
@@ -149,8 +150,8 @@ prompt stays task-only. More on this mode of working:
 
 eval is the measuring half of
 [the loop](#the-optimization-loop), built on the YATU discipline (**You As The User**): you measure
-behavior from the product's real surface, the way a
-clueless real end user would touch it, not through an internal helper or shortcut that makes the
+behavior from the product's real surface, the way a real end user would touch it, not through an
+internal helper or shortcut that makes the
 proof easy. A spec says what a part should do; an
 `eval.md` beside it says how to check. Each scenario is a plain description plus an expected
 result. eval itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
@@ -177,13 +178,13 @@ and recorded video evidence in the middle.*
 | `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
 | `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
 | `spec-eval` | Scenario definitions, evals, evidence. |
-| `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
+| `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub and GitLab drivers today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
 
 ## The linter
 
-`spex lint` checks the spec↔code graph and is the real gate (the git hook is fast local feedback):
+`spex spec lint` checks the spec↔code graph and is the real gate (the git hook is fast local feedback):
 
-- **integrity** (error): a `code:` path that doesn't exist
+- **integrity** (error): a `code:` or `related:` path that doesn't exist
 - **living** (error): a changelog heading in a spec body
 - **altitude** (warn): a body that slid from contract prose into an implementation dump. The usual
   smell is a numbered step list or a wall of function names; this rule is why spec bodies stay
@@ -191,20 +192,23 @@ and recorded video evidence in the middle.*
 - **coverage** (warn): unclaimed source files
 - **drift** (warn): governed code changed after its spec's last version, derived live from git
 
+plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors; `breadth`,
+`related-drift`, `owners`, `confusable-id` as warns) — `spex guide spec` lists them all.
+
 ## Configuration
 
 `spexcode.json` (committed, portable: layout, lint budgets, dashboard identity, launcher names) and
-`spexcode.local.json` (gitignored, host-specific: absolute launcher paths, plus a `private: true`
-overlay for repos you use but don't own) cover every setting. No `spex config set` yet: you edit the two files by hand (or ask your agent
-to), and `spex guide config` documents every field. The other
-manuals are `spex guide` (the workflow), `spex guide spec`, and `spex guide eval`; `spex help`
-maps the commands.
+`spexcode.local.json` (gitignored, host-specific: absolute launcher paths, cert paths) cover every
+setting. There is no imperative settings verb: you edit the two files by hand (or ask your agent
+to), and `spex guide settings` documents every field. The other
+manuals are `spex guide` (the workflow), `spex guide spec`, `spex guide eval`, and
+`spex guide footprint`; `spex help` maps the commands.
 
 ## Contributing
 
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) gets you from a clone to a first merged change.
 [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) has the full mechanics of the node model and the
-reflexive config system.
+reflexive plugin system.
 
 ## Credit
 

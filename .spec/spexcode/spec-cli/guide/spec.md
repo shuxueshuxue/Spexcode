@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `config` the runtime-settings manual, `footprint` the residence-model manual.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -16,7 +16,7 @@ the agent from one verb, picked by an optional topic:
 
 - **no topic → the human SETUP workflow.** The model it teaches is **install once, then let an agent
   drive** — one global install (`npm i -g spexcode`, the [[packaging]] contract) serves *every* project
-  (the `spex` CLI acts on whatever repo is cwd, `spex dashboard` is a viewer pointed per project), so the
+  (the `spex` CLI acts on whatever repo is cwd, `spex serve ui` is a viewer pointed per project), so the
   human's only manual steps are the global install and pointing at a backend; authoring spec nodes and the
   dogfood ritual are an agent's job. Each step names the real seam, not internals: **cwd** is the "which
   repo" knob, **`--api-port`** is the dashboard's endpoint seam, **`spexcode.json`** governs lint's layout.
@@ -29,11 +29,12 @@ the agent from one verb, picked by an optional topic:
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
   it. The eval page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
   steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
-  The concept is tool-neutral (Playwright is one emitter); the page scopes the tool honestly — `--timeline`
-  covers the video TIME axis (`tMs`) today, the frame/line generalization named as an open gap, not faked.
+  The concept is tool-neutral (Playwright is one emitter); `--timeline` is axis-tagged (a video's `time`,
+  a transcript's `line`, a still sequence's `frame`, a data export's `index` — legacy `tMs` maps read as
+  `time`), and a filing's axis must match an attached evidence entry's kind.
   The always-on system prompt is the **clue** that the format exists; this manual carries the detail. An
   unknown topic fails loud (names the real topics), never a silent setup dump.
-- **`config` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
+- **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide settings` prints every `spexcode.json`
   / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable

@@ -9,6 +9,13 @@
   <a href="https://spexcode.net"><img alt="docs" src="https://img.shields.io/badge/docs-spexcode.net-8957e5"></a>
 </p>
 
+<p>
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-supported-success?logo=linux&logoColor=white">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-supported-success?logo=apple&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-untested-lightgrey">
+  <img alt="database: git" src="https://img.shields.io/badge/database-git-f05032?logo=git&logoColor=white">
+</p>
+
 </div>
 
 Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside

@@ -12,15 +12,16 @@ scenarios:
       yields an EMPTY forge slice — local threads intact, no `github#N` leak, no error) and /api/graph
       answers 200. Also probe
       the resolver directly across remote shapes: github.com URL → github, gitlab.com scp and a
-      self-hosted https form (e.g. dev.innerdev.cn) → gitlab, an explicit forge.host override beating the
+      self-hosted https form (e.g. dev.innerdev.cn) → gitlab, a bitbucket.org remote → bitbucket (a
+      resolved host with NO registered driver), an explicit forge.host override beating the
       remote, and no origin → the default. File the transcript with --result.
     expected: >-
-      resolveForgeHost() derives github/gitlab per the ladder (config override > remote hostname >
+      resolveForgeHost() derives github/gitlab/bitbucket per the ladder (config override > remote hostname >
       DEFAULT_FORGE_HOST); a github repo's issues surface is byte-identical in shape to the hardwired
       era; a gitlab-resolved repo offers the gitlab store (the driver is registered) and an
       unreachable/untokened host degrades to an empty forge slice — local issues intact, zero foreign
-      `<host>#N` ids leaked, 200s throughout, nothing spawned against the wrong host. (A resolved host
-      with NO registered driver would offer no forge store at all — no such host ships today.)
+      `<host>#N` ids leaked, 200s throughout, nothing spawned against the wrong host. A resolved host
+      with NO registered driver (bitbucket today) offers no forge store at all — stores = [local] only.
     code:
       - spec-forge/src/drivers.ts
 ---

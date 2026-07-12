@@ -7,7 +7,7 @@ scenarios:
       written but NOT committed (untracked), then GET `/api/edit?source=<worktree>&path=<spec.md>`
       for three paths: that untracked new node, a tracked spec.md with no pending change, and a
       tracked spec.md with an uncommitted edit. File the transcript with
-      `spex yatsu eval spec-cli --scenario edit-shows-uncommitted-node --result <txt> --pass`.
+      `spex eval add spec-cli --scenario edit-shows-uncommitted-node --result <txt> --pass`.
     expected: >-
       The untracked brand-new node returns a NON-empty all-additions diff carrying its full
       spec.md body (not `{patch:""}`), so the overlay edit tab shows the just-created node's
@@ -39,7 +39,7 @@ scenarios:
       socket that sends PARTIAL headers and never completes the request (an abandoned/slow client — the shape
       every client-side timeout-kill leaves behind), and observe when the SERVER closes it. Separately, confirm
       an ACTIVE long-lived response is NOT reaped: open the board-stream SSE (`/api/graph/stream`) and hold it
-      idle past the timeout — it must stay open. File the transcript with `spex yatsu eval spec-cli --scenario
+      idle past the timeout — it must stay open. File the transcript with `spex eval add spec-cli --scenario
       server-reaps-abandoned-connections --result <txt> --pass`.
     expected: >-
       The stalled/partial request is REAPED server-side (the server closes the socket) at ~headersTimeout,
@@ -57,7 +57,7 @@ scenarios:
       once and capture the response status, the `ETag` header, and the body size. Then GET it
       again sending `If-None-Match: <that ETag>`, and once more sending a deliberately stale
       `If-None-Match` value. File the transcript with
-      `spex yatsu eval spec-cli --scenario board-conditional-request --result <txt> --pass`.
+      `spex eval add spec-cli --scenario board-conditional-request --result <txt> --pass`.
     expected: >-
       The first GET is `200` with an `ETag` header over the serialized body. The matching
       `If-None-Match` request returns `304 Not Modified` with NO body (the saved transfer), still

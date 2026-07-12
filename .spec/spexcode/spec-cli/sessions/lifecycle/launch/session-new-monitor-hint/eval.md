@@ -3,9 +3,9 @@ scenarios:
   - name: hint-names-monitor-and-comm
     tags: [cli]
     description: >
-      Launch a real session with `spex new`, capturing stdout and stderr separately. Check the stderr
+      Launch a real session with `spex session new`, capturing stdout and stderr separately. Check the stderr
       reminder printed after the create: it must carry the new session id, at least one monitor path
-      (`spex wait <id>` / `spex watch`), and the comm line (`spex send <id> "<msg>"` with the warning off
+      (`spex session wait <id>` / `spex session watch`), and the comm line (`spex session send <id> "<msg>"` with the warning off
       raw tmux keystrokes). Check stdout in the same run: it must be exactly the parseable session JSON,
       untouched by the reminder.
     expected: |

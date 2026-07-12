@@ -156,21 +156,25 @@ export async function specLint(): Promise<Finding[]> {
     claimed.add(f)
   }
 
-  // id-format: a node id (its leaf dir basename) is lowercase url-safe ASCII — [a-z0-9-] — and UNIQUE
-  // tree-wide (ERROR). Uniqueness is what keeps the leaf THE id: on a collision the mint ([[id-url-safe]])
-  // must parent-qualify with `_`, so every surface suddenly speaks a longer id than the dir name — legal to
-  // the machinery, illegible to people. The charset is the authored NORM, stricter than what the resolve
-  // layer survives (the mint stays script-agnostic; see [[id-url-safe]]): an id also names a `node/<id>`
-  // branch and a URL segment, so it must need no escaping anywhere. One optional leading dot is allowed —
-  // the reflexive plugin root `.plugins` is dot-prefixed by design.
-  const ID_RE = /^\.?[a-z0-9-]+$/
+  // id-format: a node id (its leaf dir basename) passes an EXACT per-character whitelist — an ascii char
+  // must be [a-z0-9-]; a non-ascii char must be a unicode letter/number (judged on NFC, the mint's
+  // canonical form) — and is UNIQUE tree-wide (ERROR). This is THE id vocabulary, defined once (the
+  // spec-lint node's rule table) and referenced by [[mentions]] / [[id-url-safe]]: CJK and every other
+  // letter script is first-class, exactly what the script-agnostic resolve machinery already accepts.
+  // Everything else is forbidden by construction, no heuristics — space, '/', uppercase Latin (lowercase
+  // is the Latin norm), control chars, and '_' (reserved as the mint's parent-qualification join; a '_'
+  // inside a basename would make that join ambiguous). One optional leading dot is allowed — the
+  // reflexive plugin root `.plugins` is dot-prefixed by design. Uniqueness is what keeps the leaf THE id:
+  // on a collision the mint must parent-qualify with `_`, so every surface suddenly speaks a longer id
+  // than the dir name — legal to the machinery, illegible to people.
+  const ID_RE = /^\.?(?:[a-z0-9-]|(?![\x00-\x7F])[\p{L}\p{N}])+$/u
   const leafOf = (p: string) => { const segs = p.split('/'); return segs[segs.length - 2] }
   const byLeaf = new Map<string, string[]>()
   for (const s of specs) {
     const leaf = leafOf(s.path)
     byLeaf.set(leaf, [...(byLeaf.get(leaf) ?? []), s.path])
-    if (!ID_RE.test(leaf))
-      out.push({ level: 'error', rule: 'id-format', spec: s.id, msg: `node dir '${leaf}' is not a valid id — an id is lowercase url-safe ascii ([a-z0-9-], one optional leading dot); rename the directory` })
+    if (!ID_RE.test(leaf.normalize('NFC')))
+      out.push({ level: 'error', rule: 'id-format', spec: s.id, msg: `node dir '${leaf}' is not a valid id — each char is ascii [a-z0-9-] or a non-ascii unicode letter/number (one optional leading dot); space, '/', '_', uppercase Latin and control chars are forbidden; rename the directory` })
   }
   for (const [leaf, paths] of byLeaf) {
     if (paths.length > 1)
@@ -180,12 +184,17 @@ export async function specLint(): Promise<Finding[]> {
   // confusable-id: two leaf ids one edit apart read as the same word (WARN — a typo in either reaches a
   // real, wrong node). Deliberately conservative: distance exactly 1, so hierarchy naming like
   // graph/graph-delivery (a whole suffix apart) and verb pairs like evidence-put/evidence-get (distance 2)
-  // never warn — better to miss a borderline pair than to nag legitimate siblings.
+  // never warn — better to miss a borderline pair than to nag legitimate siblings. Distance is measured
+  // in CODE POINTS, script-agnostic: a CJK pair one character apart (节点/结点 — a classic homophone
+  // IME slip) warns like an ascii pair, an astral char counts as one edit (not two surrogate units), and
+  // a pure-CJK id can never sit one edit from a pure-ascii one.
   const lev1 = (a: string, b: string): boolean => {
-    if (Math.abs(a.length - b.length) > 1 || a === b) return false
+    const A = [...a], B = [...b]
+    if (Math.abs(A.length - B.length) > 1 || a === b) return false
     let i = 0
-    while (i < a.length && i < b.length && a[i] === b[i]) i++
-    return a.slice(i + 1) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i) || a.slice(i) === b.slice(i + 1)
+    while (i < A.length && i < B.length && A[i] === B[i]) i++
+    const rest = (x: string[], k: number) => x.slice(k).join('')
+    return rest(A, i + 1) === rest(B, i + 1) || rest(A, i + 1) === rest(B, i) || rest(A, i) === rest(B, i + 1)
   }
   const leaves = [...byLeaf.keys()]
   for (let i = 0; i < leaves.length; i++) for (let j = i + 1; j < leaves.length; j++) {

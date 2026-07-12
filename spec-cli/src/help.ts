@@ -122,7 +122,8 @@ over-owned → split the file). --actionable prints NOTHING unless action is nee
 
 lint — checks the whole spec↔code graph and exits non-zero on errors (or a blocked commit-local
 drift gate). Errors: integrity (a code:/related: file does not exist) · one-govern (a node governs >1
-file) · living (a "## vN" changelog heading) · id-format (an id not lowercase [a-z0-9-], or a leaf id
+file) · living (a "## vN" changelog heading) · id-format (an id char outside the whitelist — ascii
+[a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a leaf id
 reused) · mention (a [[id]] naming no node). Warns: altitude · breadth · coverage · drift ·
 related-drift · owners · confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
 contrast \`spex eval lint\`, which is pure advisory and never blocks anyone.

@@ -52,7 +52,7 @@ const DISABLED = new Set((process.env.SPEXCODE_DISABLE_WATCHERS || '').split(','
 const warnedDisabled = new Set<string>()
 function isDisabled(name: string): boolean {
   if (!DISABLED.has(name)) return false
-  if (!warnedDisabled.has(name)) { warnedDisabled.add(name); console.warn(`spec-cli: board watcher '${name}' disabled via SPEXCODE_DISABLE_WATCHERS — the cold-tick patrol must cover it`) }
+  if (!warnedDisabled.has(name)) { warnedDisabled.add(name); console.warn(`spec-cli: graph watcher '${name}' disabled via SPEXCODE_DISABLE_WATCHERS — the cold-tick patrol must cover it`) }
   return true
 }
 
@@ -107,7 +107,7 @@ async function rebuildAndBroadcast(): Promise<void> {
       if (changedKeys.length && tags.length === 1 && tags[0] === 'patrol')
         console.warn(`spec-cli: PATROL-REPAIR — the cold tick caught a change no leaf watcher pushed; changed units: [${changedKeys.join(', ')}] — a blind watcher, investigate`)
       if (DEBUG)
-        console.warn(`spec-cli: board broadcast — changed [${changedKeys.join(', ')}] triggers {${tags.join(', ')}} build ${buildMs}ms`)
+        console.warn(`spec-cli: graph broadcast — changed [${changedKeys.join(', ')}] triggers {${tags.join(', ')}} build ${buildMs}ms`)
       triggerTags.clear()
     } while (dirty)
   } finally { building = false }

@@ -132,20 +132,20 @@ const FILE_REWRITES: [RegExp, string][] = [
 ]
 // dead spellings that survive every rewrite rule (no deterministic new home) → review items, never guessed at.
 const MD_FLAG_PATTERNS: [RegExp, string][] = [
-  [/\bspex yatsu\b/, 'unmapped `spex yatsu …` spelling'],
-  [/\byatsu (scan|eval|show|retract|clean)\b/, 'un-prefixed yatsu verb (script-style invocation)'],
+  [/\bspex yatsu\b/, 'unmapped `spex yatsu …` spelling'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
+  [/\byatsu (scan|eval|show|retract|clean)\b/, 'un-prefixed yatsu verb (script-style invocation)'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
   [/\bspex forge\b/, 'unmapped `spex forge …` spelling (drawer dissolved into `spex issue links`)'],
   [/\bspex issues (on|off|status)\b/, '`spex issues on|off|status` was deleted — the switch is the spexcode.json `issues.enabled` key'],
-  [/\bspex review proof\b/, '`spex review proof` was deleted — use `spex eval ls --session <SEL> --export`'],
+  [/\bspex review proof\b/, '`spex review proof` was deleted — use `spex eval ls --session <SEL> --export`'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
   [/\bspex eval\b(?!\s+(?:add|ls|scenario|lint|retract|clean)\b|\s+--|\s*[.,;:)`'"]|\s*$)/m, 'old top-level `spex eval <SEL>` session read — now `spex eval ls --session <SEL>`'],
-  [/\byatsu-[a-z]+:/, 'unmapped yatsu-* lint label'],
-  [/\byatsu\.md\b/, 'a yatsu.md reference survived rewriting'],
+  [/\byatsu-[a-z]+:/, 'unmapped yatsu-* lint label'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
+  [/\byatsu\.md\b/, 'a yatsu.md reference survived rewriting'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
 ]
 // executable patterns that make an UNKNOWN (non-template) script a review item — scripts are never rewritten.
 const SCRIPT_FLAG_PATTERNS: [RegExp, string][] = [
-  [/\byatsu\b/, 'invokes/greps the yatsu vocabulary'],
+  [/\byatsu\b/, 'invokes/greps the yatsu vocabulary'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
   [/\bsession (state|fail|idle|commit-gate)\b/, 'calls a hook verb that moved to `spex internal …`'],
-  [/\bblob (put|get)\b/, 'calls the blob verbs (now `spex evidence put|get`)'],
+  [/\bblob (put|get)\b/, 'calls the blob verbs (now `spex evidence put|get`)'],  // dead-words-ok: the migrator names the old vocabulary it migrates from
   [/\bspex (board|tree|dashboard|search|owner|lint|ack|new|ls|watch|wait|review|merge)\b/, 'calls a retired top-level spelling'],
   [/\/api\/(board|config|layout|launchers|yatsu)\b/, 'hits a renamed API route'],
 ]
@@ -194,12 +194,12 @@ export async function runMigrate(): Promise<number> {
     summary.push(`renamed node ${rel(world.configNode)} → plugin-system (git mv; stock plugin-system spec, hash-verified)`)
   }
   // yatsu file renames — re-walk (paths moved under .plugins)
-  const yatsuNow = walk(join(root, '.spec')).filter((f) => basename(f) === 'yatsu.md' || basename(f).endsWith('yatsu.evals.ndjson'))
+  const yatsuNow = walk(join(root, '.spec')).filter((f) => basename(f) === 'yatsu.md' || basename(f).endsWith('yatsu.evals.ndjson'))  // dead-words-ok: the migrator names the old vocabulary it migrates from
   for (const f of yatsuNow) {
-    const target = basename(f) === 'yatsu.md' ? join(dirname(f), 'eval.md') : join(dirname(f), basename(f).replace(/yatsu\.evals\.ndjson$/, 'evals.ndjson'))
+    const target = basename(f) === 'yatsu.md' ? join(dirname(f), 'eval.md') : join(dirname(f), basename(f).replace(/yatsu\.evals\.ndjson$/, 'evals.ndjson'))  // dead-words-ok: the migrator names the old vocabulary it migrates from
     git(root, ['mv', f, target])
   }
-  if (yatsuNow.length) summary.push(`renamed ${yatsuNow.length} measurement file(s): yatsu.md → eval.md, *yatsu.evals.ndjson → *evals.ndjson (git mv)`)
+  if (yatsuNow.length) summary.push(`renamed ${yatsuNow.length} measurement file(s): yatsu.md → eval.md, *yatsu.evals.ndjson → *evals.ndjson (git mv)`)  // dead-words-ok: the migrator names the old vocabulary it migrates from
 
   // ---------- 2. template hook-asset upgrade (exact-match replace or flag — NEVER a silent rewrite) ----------
   let replaced = 0, current = 0, retiredStock = 0
@@ -223,7 +223,7 @@ export async function runMigrate(): Promise<number> {
       } else {
         // not shipped any more: a stock copy of a retired template is reported; an unknown script with
         // executable old vocabulary is flagged. Unknown .md bodies fall through to the vocabulary pass.
-        const oldNames = [r, r.replace(/eval\.md$/, 'yatsu.md'), r.replace(/evals\.ndjson$/, 'yatsu.evals.ndjson')]
+        const oldNames = [r, r.replace(/eval\.md$/, 'yatsu.md'), r.replace(/evals\.ndjson$/, 'yatsu.evals.ndjson')]  // dead-words-ok: the migrator names the old vocabulary it migrates from
         const retiredKey = oldNames.find((n) => RETIRED_ASSETS[n])
         if (retiredKey && RETIRED_ASSETS[retiredKey].includes(git(root, ['hash-object', f]))) {
           retiredStock++
@@ -285,8 +285,8 @@ export async function runMigrate(): Promise<number> {
 
   // ---------- 5. per-clone evidence cache: yatsu-blobs → evidence (lossless dir rename) ----------
   const commonDir = git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
-  const oldCache = join(commonDir, 'spexcode', 'yatsu-blobs'), newCache = join(commonDir, 'spexcode', 'evidence')
-  if (existsSync(oldCache) && !existsSync(newCache)) { renameSync(oldCache, newCache); summary.push('evidence cache: .git/spexcode/yatsu-blobs → evidence (bytes preserved)') }
+  const oldCache = join(commonDir, 'spexcode', 'yatsu-blobs'), newCache = join(commonDir, 'spexcode', 'evidence')  // dead-words-ok: the migrator names the old vocabulary it migrates from
+  if (existsSync(oldCache) && !existsSync(newCache)) { renameSync(oldCache, newCache); summary.push('evidence cache: .git/spexcode/yatsu-blobs → evidence (bytes preserved)') }  // dead-words-ok: the migrator names the old vocabulary it migrates from
 
   // ---------- 6. post-checks: the new CLI must actually work on the migrated tree ----------
   console.log('— migration applied; running post-checks —\n')
@@ -347,9 +347,9 @@ async function inspectAsync(cwd: string, refusals: string[]): Promise<World | nu
   }
   for (const p of pluginRoots) refusals.push(`${relative(root, p)}/.plugins already exists — this tree is already migrated${configRoots.length ? ' (and a .config root ALSO exists — half-migrated state, resolve by hand)' : ''}.`)
 
-  const yatsuFiles = walk(specDir).filter((f) => basename(f) === 'yatsu.md' || basename(f).endsWith('yatsu.evals.ndjson'))
+  const yatsuFiles = walk(specDir).filter((f) => basename(f) === 'yatsu.md' || basename(f).endsWith('yatsu.evals.ndjson'))  // dead-words-ok: the migrator names the old vocabulary it migrates from
   if (!configRoots.length && !yatsuFiles.length && !pluginRoots.length)
-    refusals.push('nothing to migrate — no .config plugin root and no yatsu.md/yatsu.evals.ndjson files under .spec/ (this tree already speaks 0.3.0, or never had the 0.2.x vocabulary).')
+    refusals.push('nothing to migrate — no .config plugin root and no yatsu.md/yatsu.evals.ndjson files under .spec/ (this tree already speaks 0.3.0, or never had the 0.2.x vocabulary).')  // dead-words-ok: the migrator names the old vocabulary it migrates from
 
   if (!git(root, ['ls-files', '.spec']).length)
     refusals.push('.spec is not tracked by git (an old `/.spec` exclude line?) — remove the exclude, `git add .spec` and commit it first, then re-run.')
@@ -368,7 +368,7 @@ async function inspectAsync(cwd: string, refusals: string[]): Promise<World | nu
 
   for (const dir of configRoots) if (existsSync(join(dir, '.plugins'))) refusals.push(`${relative(root, dir)}/.plugins already exists beside .config — resolve by hand.`)
   for (const f of yatsuFiles) {
-    const target = basename(f) === 'yatsu.md' ? join(dirname(f), 'eval.md') : join(dirname(f), basename(f).replace(/yatsu\.evals\.ndjson$/, 'evals.ndjson'))
+    const target = basename(f) === 'yatsu.md' ? join(dirname(f), 'eval.md') : join(dirname(f), basename(f).replace(/yatsu\.evals\.ndjson$/, 'evals.ndjson'))  // dead-words-ok: the migrator names the old vocabulary it migrates from
     if (existsSync(target)) refusals.push(`rename collision: ${relative(root, target)} already exists beside ${relative(root, f)}.`)
   }
 

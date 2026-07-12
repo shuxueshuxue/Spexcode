@@ -40,12 +40,14 @@ scenarios:
       sessions can be created back-to-back without ever leaving New Session. The only thing that moves your selection is a tab's removal (the close-command /
       close-tab-fallback scenarios — note `/exit` does NOT remove a tab, it only stops the session), never a
       creation.
-  - name: exit-command-stops-keeps-worktree
+  - name: stop-command-stops-keeps-worktree
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
-      (non-offline) session whose `❯` box is enabled. Type exactly `/exit` into the box (dismiss the `/`
-      completion menu if it opened, so Enter dispatches rather than completes) and press Enter. Watch the
+      (non-offline) session whose `❯` box is enabled. Type exactly `/stop` into the box (dismiss the `/`
+      completion menu if it opened, so Enter dispatches rather than completes) and press Enter. `/stop` is
+      the board's soft-stop verb — renamed off the old `/exit` that collided with Claude Code's own `/exit`
+      ([[board-command-parity]]), so `/exit` is now Claude Code's and forwards to the agent. Watch the
       session list and active pane. Screenshot the tab list + pane before typing and after Enter settles.
       Then confirm resumability: the same tab now shows a relaunch panel — click it and watch the session
       come back online on the SAME conversation.
@@ -54,8 +56,8 @@ scenarios:
       `offline`, and the active tab swaps the live terminal for the relaunch panel — the same offline+relaunch
       a crash would produce — with NO confirmation prompt (typing the exact command IS the deliberate act). The
       view does NOT jump to New Session (no tab removal). Clicking relaunch `--resume`s the same conversation
-      (the transcript survives). The literal text `/exit` is never dispatched into the terminal/agent (the
-      read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
+      (the transcript survives). The literal text `/stop` is never dispatched into the terminal/agent (the
+      read-only pane shows no new `/stop` line). Any other text, including `/stop` with trailing words,
       dispatches normally to the agent.
   - name: close-command-removes
     tags: [frontend-e2e, desktop]

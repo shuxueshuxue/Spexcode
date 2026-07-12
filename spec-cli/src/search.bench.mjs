@@ -3,7 +3,7 @@
 //
 // Labels are node LEAF names, matched with the same de-collision rule the loader applies (specs.ts reId):
 // a returned id matches a label if it IS the label or ends with `_<label>` — so a bare leaf keeps matching
-// after collision-qualification renames it (e.g. `spec-scout` → `injected-context_spec-scout`). A label may
+// after collision-qualification renames it (e.g. a colliding `probe` leaf → `a_probe`). A label may
 // also be written pre-qualified to pin one collision branch.
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -26,7 +26,7 @@ const CASES = [
   ['read-before-code', 'the one-shot nudge that makes an agent read its spec before touching code', ['spec-first']],
   ['hot-reload', 'zero-downtime backend reload without dropping connections', ['supervisor']],
   ['many-owners', 'can several specs own the same code file, and what happens if too many do?', ['governed-related']],
-  ['active-spec-search', 'an injected sub-agent that searches specs for the agent, the spec analog of Explore', ['spec-scout']],
+  ['active-spec-search', 'an injected sub-agent that searches specs for the agent, the spec analog of Explore', ['spec-search']],
   ['declare-done', 'how does a worker declare it is done', ['state']],
 ]
 

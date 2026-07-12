@@ -43,14 +43,16 @@ scenarios:
     tags: [cli]
     description: >-
       Through the real `spex eval lint`: take a node whose eval.md holds several scenarios with fresh
-      readings, then commit a change to ONE scenario's block (edit it, or add a brand-new sibling
-      scenario) in that eval.md, leaving every other scenario's block byte-identical. Re-run
-      `spex eval lint`.
+      readings, then land a change to ONE scenario's block, leaving every other scenario's block
+      byte-identical — both the linear shape (commit the edit directly) AND the fleet-parallel shape
+      (one branch edits scenario A and files A's reading, a SIBLING branch edits scenario B, the two
+      merge). Re-run `spex eval lint` after each.
     expected: >-
-      Only the scenario whose OWN block moved (or the newly-added one) is flagged `eval-drift` on the
-      scenario axis; every sibling whose block was untouched stays fresh. The scenario axis is
-      per-scenario, not per-file — a sibling's edit never re-stales this reading, so one eval.md's
-      routine growth no longer generates a wave of false stale scores.
+      Only the scenario whose OWN semantic text (description + expected) moved is flagged `eval-drift`
+      on the scenario axis; every sibling whose text is unchanged stays fresh — including across the
+      merge: a reading filed on one branch is NOT re-staled by a sibling scenario's edit arriving from
+      a parallel branch, so concurrent filing+merging converges to zero stale instead of each merge
+      re-flagging the other branch's readings (issue #61's non-convergence).
   - name: dirty-governed-warns-at-filing
     tags: [cli]
     code: [spec-eval/src/cli.ts]

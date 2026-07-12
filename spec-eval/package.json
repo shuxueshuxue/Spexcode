@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The eval/loss engine \u2014 eval.md declares scenarios, a flat evals.ndjson sidecar records readings (a second git-as-database axis), freshness is derived live from git (no stored hashes), and evidence lives content-addressed under the shared git common dir. `spex eval add|ls|scenario ls|lint|retract|clean`.",
+  "description": "The eval/loss engine \u2014 eval.md declares scenarios, a flat evals.ndjson sidecar records readings (a second git-as-database axis), freshness compares each reading's stored scenario-contract hash and git ancestry on its governed code, and evidence lives content-addressed under the shared git common dir. `spex eval add|ls|scenario ls|lint|retract|clean`.",
   "scripts": {
     "test": "tsx --test src/*.test.ts"
   },

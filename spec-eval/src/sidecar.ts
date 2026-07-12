@@ -27,6 +27,12 @@ export type Evidence = { hash: string; kind: EvidenceKind }
 export type Reading = {
   scenario: string
   codeSha: string
+  // content hash of the scenario's semantic text (description+expected, normalized — scenarios.ts
+  // scenarioHash) as DECLARED at filing time: the record of which contract this measurement was taken
+  // against. When present it alone decides the scenario freshness axis (a pure compare against the current
+  // declaration's hash); a legacy reading without it is decided by the git-derived rule instead — one
+  // track per reading, never both ([[eval-core]]).
+  scenarioHash?: string
   evidence?: Evidence[]
   // legacy scalar evidence — read for old readings, never written by new filings.
   blob?: string | null

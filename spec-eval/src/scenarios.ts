@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { join, relative, basename } from 'node:path'
 import { mintIds } from '../../spec-cli/src/specs.js'
 
@@ -116,6 +117,20 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
 }
 
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
+
+// @@@scenario contract hash - the deterministic content hash of a scenario's SEMANTIC text, stamped on each
+// reading at filing time ([[eval-core]]'s scenario freshness axis). Hashes ONLY the measurement contract —
+// description (what to measure) + expected (what zero loss looks like) — never name/tags/test/code/related.
+// Normalization (spec'd, don't drift): each field independently collapses every whitespace run (space, tab,
+// CR, LF) to a single space and trims its ends, so a prose re-wrap, an indent shift, CRLF churn or trailing
+// whitespace never changes the hash; the two normalized fields join with a single '\n' (neither can contain
+// one after normalization, so the join is unambiguous) and sha256-hex the UTF-8 bytes. The hash is pure text
+// over the parsed declaration — no git, no file position — so it is identical wherever and however the same
+// contract text is read.
+const normSemantic = (s: string) => s.replace(/\s+/g, ' ').trim()
+export function scenarioHash(s: Pick<Scenario, 'description' | 'expected'>): string {
+  return createHash('sha256').update(`${normSemantic(s.description)}\n${normSemantic(s.expected)}`, 'utf8').digest('hex')
+}
 
 // a scenario's optional list field (`code:`/`related:`) is a comma-separated path list (a YAML flow list
 // `[a, b]` or bare `a, b`, or a single path) — the tiny parser stays scalar-only, so it is split here.

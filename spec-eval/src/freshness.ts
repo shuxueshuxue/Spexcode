@@ -1,5 +1,6 @@
 import { git, headSha, ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
+import { scenarioHash, type Scenario } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
@@ -112,14 +113,30 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]
   return out
 }
 
-// scenario freshness is PER-SCENARIO and SEMANTIC, not per-file: a reading stales only when ITS OWN
-// scenario's semantic block (description+expected — [[scenariofresh]]'s blockContent projection) moved in
-// scenarioSha..HEAD — never when a sibling in the same eval.md did, and never on a metadata-only edit
-// (tags/test/code/related). Reads exactly like the code axis's changedSince — the per-scenario
-// change-commits ([[scenariofresh]], rename-followed so a bare git-mv reparent isn't a change) tested for
-// ancestry — and an off-history codeSha takes the same content fallback at the same granularity and the
-// same projection: an unchanged eval.md clears it outright, a changed one stales only if THIS scenario's
-// semantic block differs between the anchor and HEAD.
+// @@@scenario axis decides by stored contract hash - a reading filed since #61 carries `scenarioHash`, the
+// content hash of the semantic text it was measured against (scenarios.ts scenarioHash — normalized
+// description+expected). For such a reading the scenario axis is a PURE TEXT COMPARE: recorded hash vs the
+// CURRENT declaration's hash — no git walk, no chain, no ancestry. That is what makes it converge under
+// fleet-parallel filing+merging: a sibling scenario's edit, a sidecar-only commit, a merge's textual shift,
+// a whitespace re-wrap — none of them move THIS scenario's hash, so none can re-stale its reading; only the
+// contract actually changing (or the scenario disappearing from eval.md — `current` undefined) does. A
+// LEGACY reading without the hash is decided by the git-derived per-scenario rule below, unchanged — the
+// one-shot degradation: exactly ONE track decides each reading (hash if present, else git), never both
+// OR-ed together.
+function scenarioStaleByHash(reading: Reading, current: Scenario | undefined): boolean | undefined {
+  if (reading.scenarioHash === undefined) return undefined   // legacy → the git rule decides
+  return current ? scenarioHash(current) !== reading.scenarioHash : true
+}
+
+// LEGACY scenario freshness (readings filed before the stored contract hash) — PER-SCENARIO and SEMANTIC,
+// not per-file: a reading stales only when ITS OWN scenario's semantic block (description+expected —
+// [[scenariofresh]]'s blockContent projection) moved in scenarioSha..HEAD — never when a sibling in the
+// same eval.md did, and never on a metadata-only edit (tags/test/code/related). Reads like the code axis's
+// changedSince — the per-scenario change-commits ([[scenariofresh]], rename-followed so a bare git-mv
+// reparent isn't a change) tested for ancestry — and an off-history codeSha takes the same content fallback
+// at the same granularity and the same projection. Known limit (#61, why the hash replaced it for new
+// readings): the change-commit chain is built off a LINEARIZED log walk, so parallel branches editing one
+// eval.md cross-attribute each other's edits and can false-stale a sibling's reading across a merge.
 function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, evalPath: string, scenario: string, probe?: ContentProbe): boolean {
   const anc = ancestorsOf(didx, sinceSha)
   if (anc) return scenarioChangeCommits(scIdx, evalPath, scenario).some((h) => !inAncestors(didx, anc, h))
@@ -137,14 +154,18 @@ export function staleAxes(
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
   probe?: ContentProbe,
+  current?: Scenario,   // the scenario's CURRENT declaration (undefined = gone from eval.md) — the hash compare's other side
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
+  const byHash = scenarioStaleByHash(reading, current)
   if (probe && !ancestorsOf(didx, reading.codeSha) && probe.changedPaths(reading.codeSha) === null) {
-    // the anchor commit object is GONE — neither git axis can testify; say that, not "content changed"
+    // the anchor commit object is GONE — neither git axis can testify; say that, not "content changed".
+    // The stored contract hash needs no anchor, so it still decides the scenario axis when present.
     axes.push('anchor')
+    if (byHash) axes.push('scenario')
   } else {
     if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f, probe))) axes.push('code')
-    if (scenarioMoved(scIdx, didx, reading.codeSha, evalPath, reading.scenario, probe)) axes.push('scenario')
+    if (byHash ?? scenarioMoved(scIdx, didx, reading.codeSha, evalPath, reading.scenario, probe)) axes.push('scenario')
   }
   if (remarkStale(reading, remarks)) axes.push('remark')
   return axes
@@ -158,6 +179,7 @@ export function isStale(
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
   probe?: ContentProbe,
+  current?: Scenario,
 ): boolean {
-  return staleAxes(reading, codeFiles, evalPath, didx, scIdx, remarks, probe).length > 0
+  return staleAxes(reading, codeFiles, evalPath, didx, scIdx, remarks, probe, current).length > 0
 }

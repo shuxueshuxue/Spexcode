@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { changedSince, codeDrift, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
+import { scenarioHash } from './scenarios.js'
 import type { DriftIndex } from '../../spec-cli/src/git.js'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
@@ -128,4 +129,48 @@ test('codeDrift: off-history fallback reports only content-changed files, by the
   assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts'], probe), [{ file: 'a.ts', behind: 7 }])
   // no probe → the old conservative every-touch count
   assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts']), [{ file: 'a.ts', behind: 1 }, { file: 'b.ts', behind: 1 }])
+})
+
+// ---- the stored-contract-hash scenario axis (#61): pure text compare, one track per reading ----
+
+const SC = (description: string, expected: string) => ({ name: 's1', description, expected })
+const HASHED = { ...READING, codeSha: 'B', scenarioHash: scenarioHash(SC('measure it', 'it behaves')) }
+
+test('hash axis: a matching current declaration reads FRESH even when the git chain claims a non-ancestor change (#61 merge shape)', () => {
+  const i = didx({ TIP: ['B', 'C'], B: ['BASE'], C: ['BASE'], BASE: [] }, [])
+  // the linearized-chain bug: a sibling branch's commit C got misattributed to s1 — with the stored
+  // hash the git chain is not consulted at all, so the cross-branch misattribution cannot re-stale it.
+  const scidx = new Map([['y/eval.md', new Map([['s1', ['C']]])]])
+  assert.deepEqual(staleAxes(HASHED, [], 'y/eval.md', i, scidx, [], undefined, SC('measure it', 'it behaves')), [])
+})
+
+test('hash axis: whitespace churn (re-wrap, CRLF, indent) never moves the hash; a semantic edit does', () => {
+  const i = didx({ TIP: ['B'], B: ['BASE'], BASE: [] }, [])
+  const scidx = new Map()
+  assert.deepEqual(staleAxes(HASHED, [], 'y/eval.md', i, scidx, [], undefined, SC('measure\r\n   it', ' it\tbehaves ')), [])
+  assert.deepEqual(staleAxes(HASHED, [], 'y/eval.md', i, scidx, [], undefined, SC('measure it', 'it behaves BETTER')), ['scenario'])
+})
+
+test('hash axis: the scenario gone from eval.md → stale (nothing current to compare against)', () => {
+  const i = didx({ TIP: ['B'], B: ['BASE'], BASE: [] }, [])
+  assert.deepEqual(staleAxes(HASHED, [], 'y/eval.md', i, new Map(), [], undefined, undefined), ['scenario'])
+})
+
+test('hash axis: a LEGACY reading (no hash) is decided by the git rule alone — the one-shot degradation', () => {
+  const i = didx({ TIP: ['B', 'C'], B: ['BASE'], C: ['BASE'], BASE: [] }, [])
+  const scidx = new Map([['y/eval.md', new Map([['s1', ['C']]])]])
+  const legacy = { ...READING, codeSha: 'B' }
+  // same DAG, same chain, same CURRENT declaration — but no stored hash → the git rule decides (stale),
+  // and the matching current text does NOT rescue it (no dual-track OR).
+  assert.deepEqual(staleAxes(legacy, [], 'y/eval.md', i, scidx, [], undefined, SC('measure it', 'it behaves')), ['scenario'])
+  // and with a clean chain the legacy rule still reads fresh, exactly as before
+  assert.deepEqual(staleAxes(legacy, [], 'y/eval.md', i, new Map([['y/eval.md', new Map()]]), [], undefined, SC('anything', 'else')), [])
+})
+
+test('hash axis: the stored hash testifies even when the anchor commit is pruned', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [])
+  const gone = { ...HASHED, codeSha: 'GONE' }
+  // anchor object gone (probe null): code axis can only say "anchor", but the hash still decides scenario
+  assert.deepEqual(staleAxes(gone, ['f.ts'], 'y/eval.md', i, new Map(), [], probeOf(null), SC('measure it', 'it behaves')), ['anchor'])
+  assert.deepEqual(staleAxes(gone, ['f.ts'], 'y/eval.md', i, new Map(), [], probeOf(null), SC('changed', 'contract')), ['anchor', 'scenario'])
 })

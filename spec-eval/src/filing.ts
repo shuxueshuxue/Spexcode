@@ -1,5 +1,5 @@
 import { repoRoot, headSha } from '../../spec-cli/src/git.js'
-import { evalNodes, resolveEvalNode } from './scenarios.js'
+import { evalNodes, resolveEvalNode, scenarioHash } from './scenarios.js'
 import { appendReading, readReadings, isJsonBlob, type Reading, type EvidenceKind } from './sidecar.js'
 import { putBlob } from './cache.js'
 
@@ -30,6 +30,8 @@ export function fileHumanReading(
   const reading: Reading = {
     scenario: sc.name,
     codeSha: headSha(root),
+    // the contract this measurement was taken against — the HTTP filer stamps it exactly like the CLI
+    scenarioHash: scenarioHash(sc),
     ...(blob ? { evidence: [{ hash: blob, kind: (buf && isJsonBlob(buf) ? 'data' : 'transcript') as EvidenceKind }] } : {}),
     // the filing session (caller-passed — the human annotator has no reachable session, so it stays absent
     // there and the eval-comment loop-in is silent, per [[mentions]])

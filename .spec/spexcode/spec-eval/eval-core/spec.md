@@ -2,7 +2,7 @@
 title: eval-core
 status: active
 hue: 140
-desc: The scoreboard slice of spec-eval — eval.md scenarios (how to measure loss), the readings sidecar with verdicts, git-derived freshness, add/ls/scenario ls/lint/retract/clean, and a content-addressed evidence cache. eval runs nothing; the agent measures.
+desc: The scoreboard slice of spec-eval — eval.md scenarios (how to measure loss), the readings sidecar with verdicts, freshness (ancestry code axis + stored scenario-contract hash), add/ls/scenario ls/lint/retract/clean, and a content-addressed evidence cache. eval runs nothing; the agent measures.
 code:
   - spec-eval/src/scenarios.ts
 related:
@@ -48,7 +48,7 @@ it inherits the node's whole `code:` list. So two scenarios on one node, trackin
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `eval-owners` smell (split it). Measurements live apart in a flat
 **evals.ndjson** sidecar — **append-only, one JSON line per EVENT**. A filing appends a *reading*
-(scenario, codeSha, an **evidence LIST** (each entry
+(scenario, codeSha, the **`scenarioHash`** contract stamp (see freshness below), an **evidence LIST** (each entry
 a typed `{hash, kind ∈ image|video|transcript|data}` — the render taxonomy ([[evidence-kind-taxonomy]])),
 the video entry's optional timelineBlob ([[step-timeline]]),
 an optional **`by`** (the SESSION that filed
@@ -84,57 +84,69 @@ run: several stills beside the recorded clip. Backward-compatible: a legacy **sc
 `blobKind`) reads as a one-entry list, so old readings still render; one filed before verdicts existed — or a
 legacy note-only reading — renders as *legacy*.
 
-**Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
-two git-derived (a governed `code:` file changed, or its scenario's *content* changed) plus a
-**non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
-scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
-resolve exists. The scenario-content axis is **per-scenario and semantic, not per-file**: because a scenario is the unit of
-measurement, a reading stales only when ITS OWN measurement contract moved — the **semantic fields,
-description + expected** (what to measure, what zero loss looks like) — never when a *sibling* scenario
-sharing the same eval.md did, and never on a **metadata-only edit**: tags (routing — which surface/hand
-measures), and the file pointers test/code/related, change nothing about what an already-taken reading
-proved, so one file's routine growth (an added scenario, a neighbour's reword) AND a tree-wide hygiene
-sweep (a schema-clean retag, a coverage retune) both leave untouched contracts fresh instead of spraying
-false stale across every reading they hold. (A renamed scenario is not an edit but a remove+add — a new
-key, honestly unmeasured; a `code`/`related` retune reaches freshness anyway, because the code axis reads
-the CURRENT governed set live.) Because freshness is derived live from git and never stored, narrowing the
-projection **self-heals retroactively by design, not as a side effect**: historical metadata-only commits
-simply stop registering as scenario changes the moment the engine reads them — no migration, no stored
-hashes to rebuild. The deliberate tradeoff: a wrong→right retag means an old reading may have been measured
-through the wrong modality, and it still reads fresh — accepted because the reading's **evidence kind**
-(image/video/transcript/data) already records how it was ACTUALLY measured, so a modality mismatch stays
-visible to a human and to review, while the false-positive cost of staling a whole tree on a tags sweep is
-paid instantly and everywhere. Git has no
-sub-file history, so this is built (`scenariofresh.ts`): per scenario NAME, the commits where that block's
-**semantic projection**
-changed, rename-followed — a bare `git mv` reparent leaves the block byte-identical, so it records no change
-and never stales (the same content-not-path rule a reparented spec node follows). A block version is keyed by
-its **projection hash**, so a scenario's freshness is identical in every checkout that shares the history — a
-worktree reads the same score as the main line, without a per-branch rebuild — and the walk is **whole-history**,
-never first-parent-simplified, so a block edit that landed on a node branch and merged in still counts and is
-never silently read as fresh. The walk's pathspec names BOTH spellings of the scenario file — the live
-`*eval.md` AND the retired `*yatsu.md` — because it reads **immutable history, and an archive answers only
-to its archive name**: pre-rename commits touched files literally named yatsu.md, so a single live-name
-pathspec would truncate every chain at the rename commit, diff the earliest visible version against
-nothing, and spray false stale across every reading filed before the rename (the adopter corpora this
-protects are real — hundreds of readings). The rename commit itself is a pure `git mv` (R100, block
-byte-identical), so it records no change and stales nothing. Both git axes then judge
-"changed since" by the SAME true ancestry ([[drift-by-ancestry]]) — the code axis over a governed file's
-commits, the scenario axis over that one scenario's block-change commits: a commit stales the reading iff it
-is *not an ancestor* of its codeSha. An **off-history codeSha** — orphaned by a fold, rebase, squash-merge or
-cherry-pick, or sitting on a never-merged branch — is where ancestry stops testifying, but the trees still
-do: while the anchor commit object exists locally, freshness **falls back to content** — the anchor's tree
-diffed against HEAD, scoped to the reading's governed files on the code axis and to that ONE scenario's
-semantic projection on the scenario axis (the same per-scenario granularity and the same projection, so a
-sibling's edit or a metadata sweep still can't
-stale it). Byte-identical content reads fresh; a real difference stales exactly the moved axis — so a
-routine history rewrite no longer sprays false stale across readings whose governed content never moved.
-Only when the anchor commit object is truly gone (pruned) does the conservative stale remain, surfaced as
-its own **anchor** axis so "anchor lost" never masquerades as "content changed". The fallback is fed to the
-pure decision functions at the call sites (a content probe, exactly like the remark track) and the
-in-history fast path pays no extra git call. No hashes kept; an
-ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
-at the call sites, never read from the issue store here.
+**Freshness is derived at read time, never stored as a verdict.** A reading goes stale on three axes —
+the CODE axis (git-derived: a governed `code:` file changed since its codeSha), the SCENARIO axis (its
+own measurement contract moved), plus a **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved
+remark on the scenario ages it like a drift event, and a resolved one keeps it stale until a reading
+taken *after* the resolve exists.
+
+The scenario axis is **per-scenario, semantic, and decided by a stored contract hash**. Because a
+scenario is the unit of measurement, a reading stales only when ITS OWN measurement contract moved — the
+**semantic fields, description + expected** (what to measure, what zero loss looks like) — never when a
+*sibling* scenario sharing the same eval.md did, never on a sidecar-only commit, never on a merge's
+textual reshuffle, and never on a **metadata-only edit**: tags (routing — which surface/hand measures)
+and the file pointers test/code/related change nothing about what an already-taken reading proved. Each
+filing stamps the reading with **`scenarioHash`** — the content hash of the semantic projection of the
+scenario declaration it measured — and freshness is then a **pure text compare**: the stored hash against
+the hash of the scenario's CURRENT declaration. Equal → fresh; different → stale; scenario gone from
+eval.md → stale (nothing current answers for it; a renamed scenario is not an edit but a remove+add — a
+new key, honestly unmeasured). The hash definition is deterministic and normative: each of description
+and expected independently **collapses every whitespace run (space, tab, CR, LF) to a single space and
+trims its ends** — so a prose re-wrap, an indent shift, CRLF churn, a literal-vs-folded block-scalar
+restyle never move it — then the two normalized fields join with a single `\n` (unambiguous: neither can
+contain one after normalization) and the UTF-8 bytes are sha256-hexed (`scenarios.ts scenarioHash`, the
+one definition both filing seams and freshness read). The hash is pure text over the parsed declaration —
+no git walk, no file position, no history — so it is identical in every checkout, on any branch shape,
+however the same contract text got there. That is what makes fleet-parallel measurement **converge**:
+agents filing readings and merging waves cannot re-stale each other's readings unless a contract's text
+actually changed (issue #61 — the previous, git-derived axis keyed change-commits off a linearized
+whole-history walk, and a DAG flattened to a list cross-attributes parallel branches' edits to one
+eval.md, so every merge re-flagged the other branch's readings and the stale count never reached zero).
+A text round-trip (edit away, edit back) reads fresh by design — the contract measured and the contract
+now are the same text. The deliberate tradeoff carried over from the projection: a wrong→right retag
+means an old reading may have been measured through the wrong modality and still reads fresh — accepted
+because the reading's **evidence kind** (image/video/transcript/data) already records how it was ACTUALLY
+measured, so the mismatch stays visible to a human and to review.
+
+**Legacy readings degrade to the git-derived rule, one-shot and exclusive.** A reading filed before the
+hash existed carries none, and for it the retained per-scenario git axis decides (`scenariofresh.ts`):
+per scenario NAME, the commits where that block's semantic projection (the same description+expected,
+block-scalar-folded) changed, rename-followed — the walk is **whole-history**, never
+first-parent-simplified (a block edit that landed on a node branch and merged in still counts), and its
+pathspec names BOTH spellings of the scenario file — the live `*eval.md` AND the retired `*yatsu.md` —
+because it reads **immutable history, and an archive answers only to its archive name**: pre-rename
+commits touched files literally named yatsu.md, so a single live-name pathspec would truncate every chain
+at the rename commit and spray false stale across every pre-rename reading (the adopter corpora this
+protects are real — hundreds of readings; the rename commit itself is a pure `git mv`, R100, and stales
+nothing). Exactly ONE track decides each reading: hash present → the hash compare alone; hash absent →
+the git rule alone — never both OR-ed into a double jeopardy, and no third fallback behind either. The
+degradation is honest (the old rule's #61 over-staling persists for old readings) and self-retiring: the
+next filing of that scenario carries the hash and leaves the legacy track for good.
+
+Both the code axis and the legacy scenario track judge "changed since" by TRUE ancestry
+([[drift-by-ancestry]]) — a commit stales the reading iff it is *not an ancestor* of its codeSha. An
+**off-history codeSha** — orphaned by a fold, rebase, squash-merge or cherry-pick, or sitting on a
+never-merged branch — is where ancestry stops testifying, but the trees still do: while the anchor commit
+object exists locally, freshness **falls back to content** — the anchor's tree diffed against HEAD,
+scoped to the reading's governed files on the code axis and to that ONE scenario's semantic projection on
+the legacy scenario track. Byte-identical content reads fresh; a real difference stales exactly the moved
+axis. Only when the anchor commit object is truly gone (pruned) does the conservative stale remain,
+surfaced as its own **anchor** axis so "anchor lost" never masquerades as "content changed" — and a
+hash-bearing reading's scenario axis still testifies even then, because the stored hash needs no anchor.
+The fallback is fed to the pure decision functions at the call sites (a content probe, exactly like the
+remark track) and the in-history fast path pays no extra git call. An ack vindicates a *spec*, not a
+reading. `freshness.ts` stays a pure computation — the remark track is fed in at the call sites, never
+read from the issue store here.
 
 The code axis also **reports its drift for display**, not just decides it: `codeDrift` counts, per governed
 file, how many commits in `codeSha..HEAD` touched it (the same ancestry reachability, reused — not a second

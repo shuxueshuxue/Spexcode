@@ -15,7 +15,7 @@ scenarios:
       self-summary — it must NOT flicker through tmux's default pane title (the host name, e.g.
       `ser581555022561`) or a bare `Claude Code` splash on the way, because a genuine self-summary always
       leads with a status glyph and a glyph-less title is rejected as "not spoken yet". Screenshot it and file
-      with `spex yatsu eval session-activity --image <png> --pass`.
+      with `spex eval add session-activity --scenario headline-is-self-summary --image <png> --pass`.
     expected: >-
       A live working session's row is ONE compact line whose headline is its tmux self-summary — the agent's
       own description of what it is doing now, having overridden the launch-prompt placeholder it started
@@ -40,8 +40,8 @@ scenarios:
       read where the console DOES name the session — the left sidebar's selected row — and compare its
       headline text to that session's row headline in the board's top-left window: one shared line, verbatim.
       The stable handle (node/branch/id) appears nowhere as a console title. Screenshot the console (sidebar
-      beside the strip) next to the board row and file with `spex yatsu eval session-activity --image <png>
-      --pass`.
+      beside the strip) next to the board row and file with `spex eval add session-activity --scenario
+      console-header-matches-headline --image <png> --pass`.
     expected: >-
       The console repeats no headline over the terminal: the top strip is tabs + actions only, with NO
       `si-th-name` element in the DOM. The session is identified once, by its sidebar row — whose headline is
@@ -63,7 +63,7 @@ scenarios:
       the dashboard and read that session's Row-1 headline (and the Enter console action strip). It must be the
       TASK — the launch-prompt preview — NOT the worktree folder name `codex-naming`. Contrast a CLAUDE
       session in the same view: its headline IS its live pane-title self-summary, unchanged. Screenshot both
-      rows and file with `spex yatsu eval session-activity --image <png> --pass`.
+      rows and file with `spex eval add session-activity --scenario codex-headline-is-task-not-folder --image <png> --pass`.
     expected: >-
       The codex row's headline is its launch-prompt task, never the worktree folder name its pane title
       carries — because codex's pane title is NOT a self-summary (the harness declares

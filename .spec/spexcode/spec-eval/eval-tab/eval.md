@@ -28,7 +28,7 @@ scenarios:
       must render as a GALLERY: every image shows AND the video plays inline, together in the one
       expanded figure — not a single element switched on one kind. A pruned entry shows its own
       *miss original file* sentinel. Screenshot the expanded gallery and file with
-      `spex eval add eval-tab --scenario multi-evidence-gallery --pass --image <shot>`.
+      `spex eval add eval-tab --scenario multi-evidence-gallery --image a.png --image b.png --video clip.webm --pass --image <shot>`.
     expected: >-
       The expanded reading shows the reading's whole evidence LIST as a vertical gallery: N `<img>`
       thumbnails plus an inline `<video controls>`, all present at once. Backward-compatible — a legacy

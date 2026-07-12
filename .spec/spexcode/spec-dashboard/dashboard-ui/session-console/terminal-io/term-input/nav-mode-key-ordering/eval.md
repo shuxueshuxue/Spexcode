@@ -4,7 +4,8 @@ scenarios:
     tags: [backend-api]
     description: >-
       Measure the ordering contract of the raw-key channel through the REAL product surface: the
-      `POST /api/sessions/:id/rawkey` route the dashboard's type mode drives. Start the real backend against a
+      `POST /api/sessions/:id/input` route (`{kind:'keys', keys:[…]}` — v0.3.0 merged the old `/rawkey`
+      into `/input {kind}`) the dashboard's type mode drives. Start the real backend against a
       tmux socket, create a session running a shell, then send a long run of known distinct printable
       characters (e.g. the 26 lowercase letters `abcdefghijklmnopqrstuvwxyz`) the way the client coalescer
       hands them over — as ONE ordered `keys` batch in strike order — over the real HTTP route. The backend
@@ -12,7 +13,7 @@ scenarios:
       what the pane actually received (`tmux capture-pane -p` on the prompt line) and compare the received
       character sequence to the sequence sent. (The client half of the contract — coalescing fast keystrokes
       into that single in-flight ordered batch so batches can't overtake — lives in `SessionInterface.jsx`;
-      this backend-api scenario measures the delivery half the route owns.) File with `spex yatsu eval
+      this backend-api scenario measures the delivery half the route owns.) File with `spex eval add
       nav-mode-key-ordering --scenario rawkey-batch-preserves-strike-order --result <txt>`.
     expected: >-
       The characters land in the pane in EXACTLY the order they were sent — `abc…z` reads back as `abc…z`,
@@ -24,7 +25,7 @@ scenarios:
 # eval.md — nav-mode-key-ordering
 
 The contract is measured through the **real raw-key channel** the dashboard's type mode uses —
-`POST /api/sessions/:id/rawkey` into a live tmux pane — not an internal probe or a stubbed sender. YATU: fire
+`POST /api/sessions/:id/input` (`{kind:'keys'}`, the v0.3.0 successor of `/rawkey`) into a live tmux pane — not an internal probe or a stubbed sender. YATU: fire
 a known character sequence the way the client coalescer sends it (one ordered batch / a coalesced burst), then
 read the pane back with `tmux capture-pane` and check the received order against the struck order.
 

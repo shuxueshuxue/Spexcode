@@ -178,6 +178,7 @@ console.log('dead-words: clean')
 // (caught in the field: needs-eval/yatsu.md orphan hid a scenario+reading from the loader).
 import { execSync } from 'node:child_process'
 const specFiles = execSync("git ls-files '.spec'", { encoding: 'utf8' }).split('\n').filter(Boolean)
+  .filter((f) => !f.startsWith('.spec/.issues/'))  // issue archives keep their historical slugs
 for (const f of specFiles) {
   const base = f.split('/').pop()
   if (/yatsu/i.test(base)) { console.error(`dead-words: .spec filenames: ${f} — rename to the eval vocabulary`); process.exitCode = 1 }

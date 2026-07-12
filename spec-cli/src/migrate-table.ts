@@ -296,11 +296,11 @@ export const RETIRED_ASSETS: Record<string, string[]> = {
     "c05f182fc92fcd224f4c7953dc118e59665971aa",
     "c617fc05780f921c55280b68d9f55e60110f74eb"
   ],
-  "core/stop-gate/yatsu.evals.ndjson": [
+  "core/stop-gate/yatsu.evals.ndjson": [  // dead-words-ok: the migrator names the old vocabulary it migrates from
     "268c06c27f3b2dc71da8c0aca4d0507a227829f9",
     "e681fe71b8519577c19bb4f13bc0f310fb92dc31"
   ],
-  "core/stop-gate/yatsu.md": [
+  "core/stop-gate/yatsu.md": [  // dead-words-ok: the migrator names the old vocabulary it migrates from
     "f83f6b2406eb359beb1181bf0145558241806116"
   ],
   "e2e-review/spec.md": [

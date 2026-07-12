@@ -34,6 +34,6 @@ spec text into a prompt: point at the live file, ground before the first read, n
 enforce elsewhere.
 
 All three are **passive** and assume the agent already knows *which* node is its ground truth. A fourth,
-**active** injection is in design — [[inject-spec-scout]], an injected spec-consult sub-agent (the spec analog of
+**active** injection is a retired experiment — an injected spec-consult sub-agent (the spec analog of
 code search) for behaviour questions not bound to one node — so a session can *find* its governing spec, not
 only be pointed at one it already knows. Pending; the three above are what ships today.

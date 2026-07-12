@@ -117,9 +117,7 @@ each. There is no discovery phase.
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.plugins`** holds the concrete
   *instance* plugins (`core` + `deploy-runbook` + `forge-link` + `memory-hygiene` + `reproduce-before-fix`
   are `surface: system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`;
-  `e2e-review` + `taste` are `surface: skill` (`distill` is both skill and command); `spec-scout` is
-  `surface: agent`; `core`'s children are `surface: hook` handlers); **`plugin-system`** holds the *spec of
-  the plugin system* itself (children `surface`, `init-preset`). Each plugin carries a `surface`
+  `e2e-review` + `taste` are `surface: skill` (`distill` is both skill and command). Each plugin carries a `surface`
   frontmatter **field** — `surface: system` materializes its body (in name order) into the
   `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness
   **auto-discovers** it as always-on context (not a launch-time `--append-system-prompt`); `surface:

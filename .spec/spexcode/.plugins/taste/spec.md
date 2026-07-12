@@ -54,6 +54,12 @@ The principles, in the maintainer's own framing:
     harness* (agents navigate code; the LLM judge reads semantics) and symbol-level history *through git*
     (`log -L`, hunk-header funcname drivers) — so SpexCode never speaks the LSP protocol itself. A capability
     worth having usually has a pillar-native form; integrating it directly is how tools bloat.
+15. **Each pillar gets exactly ONE adapter seam.** The maintainer's framing: "harness adapter, language
+    adapter, test framework adapter — 我们最终会拥有这三方面的适配". Harness adapter exists (`harness.ts` +
+    launchers + materialize); language adapter is the anchor/coverage extraction seam; test-framework adapter
+    is where eval evidence producers will plug in. Every seam shares one shape: an interface + an ordered
+    registry + per-instance DATA rows (a new harness/language/runner is a row, not a branch), loud degradation
+    when a tier is unavailable — and product semantics never learn which adapter sits on the other side.
 
 ## expanded spec
 

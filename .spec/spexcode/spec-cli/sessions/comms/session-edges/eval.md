@@ -1,5 +1,35 @@
 ---
 scenarios:
+  - name: wait-edge-triggered-return
+    tags: [backend-api]
+    description: >-
+      With a backend up and a session sitting in an ALREADY-actionable declared state (review — a merge
+      proposal awaiting its manager), hang `spex session wait <id>` on it. Then drive the session through a
+      real merge dispatch: the session's own agent performs the merge (its activity presses the status back
+      to working), the merge lands on main, and the closing declaration returns the status to an actionable
+      state. Read the wait's full transcript and exit code.
+    expected: >-
+      The wait prints and records the arrival status (review) immediately but does NOT return on it — an
+      already-actionable arrival is not an edge. It returns only upon OBSERVING a transition from a
+      non-actionable status into an actionable one (here the post-merge declaration), printing the full
+      observed status path on stdout (e.g. review→working→close-pending, last token = the reached status),
+      exit 0. Level-triggered instant return on the arrival state is the failure mode this scenario
+      reproduces.
+  - name: wait-usage-legibility-haiku
+    tags: [backend-api]
+    description: >-
+      Comprehension test of the wait docs by a deliberately small model: give a Haiku-class agent ONLY the
+      user-facing wait prose (the `spex help session` wait entry plus the contract block's WAIT bullet and
+      the launch monitor reminder) and one real supervision task — "a merge was dispatched for session X,
+      currently showing review; report when it has actually landed" — with no coaching. Observe which verb
+      it picks, how it runs it, and how it reads the output.
+    expected: >-
+      From the docs alone the small model picks `spex session wait <id>` (not merge-base polling, not
+      blocking on watch), runs it in the BACKGROUND, does not expect an instant return from the
+      already-actionable review arrival state (a snapshot need it routes to ls/review instead), and on exit
+      reads the printed status path correctly (last token = the state reached). Any misuse means the docs
+      are not yet blunt enough — iterate the prose and re-test until the small model uses it right on the
+      first try.
   - name: wait-foreground-agent-hint
     tags: [backend-api]
     description: >-
@@ -32,6 +62,7 @@ scenarios:
 ---
 # eval.md — graph
 
-`spex wait` is an agent's event-loop primitive (take-one-and-exit), and a foreground wait freezes the
+`spex wait` is an agent's event-loop primitive (take-one-TRANSITION-and-exit, edge-triggered), and a
+foreground wait freezes the
 calling agent's turn — measured through the real CLI from a shell carrying the managed-session env, never
 by reasoning about the code.

@@ -3,11 +3,11 @@ scenarios:
   - name: fail-loud-intake
     tags: [cli]
     description: >
-      Through the real CLI, hit every refusal seam of `spex new --prompt-file`: (a) an inline prompt AND
+      Through the real CLI, hit every refusal seam of `spex session new --prompt-file`: (a) an inline prompt AND
       `--prompt-file` together, (b) a nonexistent path, (c) an empty file, (d) `-` with empty stdin. None
       of these may reach the backend — each must refuse before the create POST.
     expected: |
-      All four exit 2 with a one-line `spex new:` error on stderr and no session created: (a) names the
+      All four exit 2 with a one-line `spex session new:` error on stderr and no session created: (a) names the
       either/or conflict without picking a source, (b) names the unreadable path, (c)/(d) name the empty
       file (or stdin) and refuse the promptless launch. No silent fallback to the other prompt source.
     code: spec-cli/src/cli.ts

@@ -125,11 +125,11 @@ async function launchMonitorReminder(id: string): Promise<void> {
   const agent = ownSessionId()
   console.error(`\nspex: launched session ${id} — now MONITOR it, or its review/failure goes unnoticed:`)
   if (agent) {
-    // a supervising agent: the per-worker monitor is a backgrounded `spex session wait`, which exits on an actionable status.
-    console.error(`  supervising agent → background \`spex session wait ${id}\` (blocks until it hits an actionable status, then exits)`)
+    // a supervising agent: the per-worker monitor is a backgrounded `spex session wait`, which is edge-triggered.
+    console.error(`  supervising agent → background \`spex session wait ${id}\` (edge-triggered: exits when it OBSERVES the session transition into an actionable status — also how you await a dispatched merge actually landing; its exit is your wake-up. Already actionable and you just want to read it? \`spex session ls\`)`)
     console.error(`  or watch the whole stream: \`spex session watch\``)
   } else {
-    console.error(`  \`spex session watch\` — the live stream of actionable session transitions (or \`spex session wait ${id}\` to block on this one)`)
+    console.error(`  \`spex session watch\` — the live stream of actionable session transitions (or \`spex session wait ${id}\` to sleep until this one's next transition into actionable)`)
   }
   console.error(`  talk to it: \`spex session send ${id} "<msg>"\` — plain text; \`send --keys\` is a LAST RESORT (unstable raw TUI keys — only when a text send provably can't land)`)
 }
@@ -648,11 +648,11 @@ if (cmd === 'serve') {
     const [id] = positionals(4)
     if (!id) { console.error('usage: spex session wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
     // point-of-use turn-freeze warning ([[session-edges]]): a managed agent that runs this wait in the FOREGROUND
-    // freezes its whole turn until the target turns actionable — a warning that used to live only in help
+    // freezes its whole turn until the target produces an edge — a warning that used to live only in help
     // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
     // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
     const own = ownSessionId()
-    if (own) console.error(`spex session wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until ${id} turns actionable; run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
+    if (own) console.error(`spex session wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${id} transition from non-actionable into an actionable status (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
     const intervalMs = (Number(flag('interval')) || 2) * 1000
     const timeoutSec = Number(flag('timeout')) || 1200
     const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
@@ -660,20 +660,31 @@ if (cmd === 'serve') {
       selectors: [id],
       includeIdle: has('idle'),
       intervalMs,
-      until: { timeoutMs: timeoutSec * 1000 },
+      until: {
+        timeoutMs: timeoutSec * 1000,
+        // the arrival state and each observed transition narrate on stderr AS THEY HAPPEN, so a backgrounded
+        // wait's transcript is the state sequence itself; stdout stays the one machine verdict (the observed
+        // path on an edge, or a transport token).
+        onObserved: (st, was) => console.error(was
+          ? `spex session wait: observed ${was} → ${st}`
+          : `spex session wait: current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
+      },
     }))
-    if ('reached' in r) { console.log(r.reached); process.exit(0) }
+    // the observed status path is the stdout verdict: read the LAST token as the status reached. Printing the
+    // whole path (not just the final status) is the point — a manager sees what the wait lived through
+    // (e.g. review→working→close-pending across a merge dispatch), not a bare word out of context.
+    if ('reached' in r) { console.log(r.path.join('→')); process.exit(0) }
     if ('gone' in r) { console.error(`spex session wait: no such (living) session ${id}`); process.exit(2) }
     // a backend failure is a verdict about the TRANSPORT, never the session ([[session-edges]], issue #40): it prints
     // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
     // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
-    // exits 3, distinct from the plain no-actionable-status timeout (1) and the vanished target (2).
+    // exits 3, distinct from the plain no-edge timeout (1) and the vanished target (2).
     if ('backendDown' in r) {
       console.error(`spex session wait: ${r.backendDown}`)
       console.log(r.kind === 'unreachable' ? 'backend-unreachable' : 'backend-error')
       process.exit(3)
     }
-    console.error(`spex session wait: timeout — ${id} did not reach an actionable status within ${timeoutSec}s`)
+    console.error(`spex session wait: timeout — observed no non-actionable→actionable transition on ${id} within ${timeoutSec}s (status path: ${r.path.join('→') || 'never sighted'})`)
     process.exit(1)
   } else if (sub === 'review') {
     const first = positionals(4)[0]

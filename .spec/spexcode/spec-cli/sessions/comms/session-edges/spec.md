@@ -3,6 +3,8 @@ title: session-edges
 status: active
 hue: 280
 desc: The live session-monitor network — edge A→B iff A subscribes to B (`spex session watch` stream or `spex session wait` one-shot) — over one shared poll + edge lifecycle.
+code:
+  - spec-cli/src/watch-resilience.test.ts
 related:
   - spec-cli/src/sessions.ts
 ---
@@ -58,14 +60,31 @@ under two **consumption policies**; only how they consume transitions differs:
 
 - **`spex session watch [SEL…]`** — *stream forever*, for a human monitoring the sessions. Emits every actionable
   transition; never exits (so a turn must never block on it).
-- **`spex session wait <id>`** — *take-one-and-exit*, an agent's event-loop primitive. Polls until `<id>` is
-  actionable, prints that status, and **exits** — an agent backgrounds it and the harness re-invokes when
-  the command exits, so the exit IS the wake-up. (Emit is silent: a backgrounded wait wants one clean status
-  line, not the stream.) Because a FOREGROUND wait freezes the calling agent's whole turn, that warning
+- **`spex session wait <id>`** — *take-one-TRANSITION-and-exit*, an agent's event-loop primitive, and it is
+  **edge-triggered, never level-triggered**. On its first successful poll it prints and records `<id>`'s
+  CURRENT status (the arrival state opens the wait's output stream), then keeps polling until it **observes a
+  transition from a non-actionable status INTO an actionable one** — an *edge*, which by construction means at
+  least two observed states. Only that edge returns: it prints the full observed status path on stdout
+  (`review→working→close-pending` — the LAST token is the reached status), and **exits** — an agent
+  backgrounds it and the harness re-invokes when the command exits, so the exit IS the wake-up. An arrival
+  state that is ALREADY actionable does **not** return; the wait holds for the next edge. Each observed
+  transition also narrates one stderr line as it happens, so a backgrounded wait's transcript is the state
+  sequence itself. Because a FOREGROUND wait freezes the calling agent's whole turn, that warning
   lives at the point of use, not only in help prose: when the shell carries a managed-session env
   (`ownSessionId` resolves), the wait prints one prominent stderr line at start — background this; the exit
   is your wake-up — then proceeds unchanged (foreground vs background is indistinguishable from inside, so
   the hint rides every managed-agent wait; a human shell gets none).
+
+**Why edge-triggered.** The old level-triggered wait returned the moment the target *was* actionable — which
+made it useless for the one thing a manager most needs to await: a dispatched merge actually landing. During
+a merge dispatch the session sits in `review` (its declared proposal state), so a wait hung "for the merge to
+land" returned instantly with `review` and "wait until the merge is really on main" had no first-class verb —
+managers fell back to `git merge-base --is-ancestor` polling, and one such poll misread a moved HEAD as a
+landed merge, closed the session, and killed the live merge agent (recovered by fsck). Edge semantics cover
+it natively: the merge agent's activity presses the status back to `working` (non-actionable), and the
+landing's closing declaration jumps it back to an actionable state — a real edge, one wake-up, at the true
+completion. The complementary need — "it's already actionable and I want to read it NOW" — belongs to the
+one-shot snapshot verbs (`spex session ls` / `spex session review`), never to wait.
 
 **Edge-drawing belongs to the subscription, not to `watch`** (`withWatchEdge` in `cli.ts`): BOTH commands
 report the `watcher→targets` edge (register + TTL heartbeat) for as long as they run and clear it on exit.
@@ -76,8 +95,10 @@ killed process's edge expires by TTL), even though the poll itself does need the
 
 `wait` is **guaranteed to terminate** — the one invariant that matters for an event loop. A `--timeout`
 (default 1200s) sets a deadline checked **every poll, before every sleep, even after a thrown poll**, so a
-worker stuck in *any* non-actionable state (`working`, `parked`, `idle`, `queued`, `starting`) can never
-hang the caller — it exits non-zero at the deadline. Actionable = `WATCH_ACTIONABLE` (which excludes
+target that never produces an edge — stuck in *any* non-actionable state (`working`, `parked`, `idle`,
+`queued`, `starting`), or parked on an already-actionable arrival state that never moves — can never hang the
+caller: it exits non-zero at the deadline, and the timeout message carries the observed status path so the
+caller sees exactly what the wait lived through. Actionable = `WATCH_ACTIONABLE` (which excludes
 self-resuming `parked`, so a parked worker correctly does *not* end the wait), plus `idle` when `--idle` is
 given. A vanished/closed target exits at once.
 
@@ -89,12 +110,13 @@ dying the instant a sibling merge lands; only exhausting the *whole* timeout sti
 backend-down, not a false timeout). An **HTTP error** (reachable but broken — a `BackendError` *with* a
 status) is a real terminal condition and still **fails loud at once**.
 
-**A transport failure is never a session verdict.** `wait`'s stdout line is the one thing a supervisor acts
-on, so its vocabulary is split in two: a **session status** (`review`, `done`, `offline`, …) may only ever
-relay a **successful backend answer** — `offline` in particular only when that answer says the session's
+**A transport failure is never a session verdict.** `wait`'s stdout is the one surface a supervisor acts
+on, so its vocabulary is split in two: a **status path** (`working→review`, statuses only) may only ever
+relay **successful backend answers** — `offline` in particular only when such an answer says the session's
 tmux/agent is genuinely gone — while a **backend failure** exits with its own transport-scoped token
 **outside** that vocabulary: `backend-unreachable` (the whole budget spent retrying an unreachable backend)
 or `backend-error` (reachable but broken, immediate), each with the failure detail on stderr. The exit codes
-keep the outcomes machine-distinct: `0` actionable status, `1` plain timeout (backend fine, session never
-actionable), `2` target gone, `3` backend failure. A slow or dead backend can therefore delay a wait's answer,
+keep the outcomes machine-distinct: `0` edge reached (stdout = the observed path, last token the reached
+status), `1` plain timeout (backend fine, no edge observed), `2` target gone, `3` backend failure. A slow or
+dead backend can therefore delay a wait's answer,
 but can never make it *claim* anything about the session (the false-`offline` supervisor trap, issue #40).

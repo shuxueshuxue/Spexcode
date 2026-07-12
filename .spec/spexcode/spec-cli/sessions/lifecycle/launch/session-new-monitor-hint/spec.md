@@ -37,8 +37,10 @@ the same signal [[session-nesting]] reads):
 
 - **`spex watch`** — the canonical live stream of actionable session transitions; the human/interactive
   monitor (and the path a supervising Claude-Code agent turns into a live Monitor).
-- background **`spex wait <id>`** — blocks until *this* session hits an actionable status then exits; the
-  [[manager-cockpit]] manager loop's per-worker monitor. Surfaced first when the caller is itself an agent.
+- background **`spex wait <id>`** — blocks until it observes *this* session transition from non-actionable
+  into an actionable status (edge-triggered, [[session-edges]]), then exits printing the observed status
+  path; the [[manager-cockpit]] manager loop's per-worker monitor. Surfaced first when the caller is itself
+  an agent.
 
 And, for every caller, one **comm line**: `spex send <id> "<msg>"` is how you talk to the worker — with
 the explicit warning off raw tmux keystrokes, since that is the dangerous improvisation the line exists

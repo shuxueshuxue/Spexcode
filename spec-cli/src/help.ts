@@ -144,9 +144,16 @@ edit the spec instead — same commit as the code.`,
   spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]
       Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream. An
       agent must background it or use wait; blocking a turn on watch freezes you.
-  spex session wait <SEL> [--timeout S=1200] [--interval S=2]
-      Block until the session is actionable, print the status, EXIT (guaranteed to terminate; the
-      supervisor's per-worker monitor — background one wait per worker; the exit is your wake-up).
+  spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]
+      EDGE-TRIGGERED sleep on one session — ALWAYS run it in the BACKGROUND; its exit is your wake-up.
+      Prints the session's current status immediately (stderr), then exits 0 only when it OBSERVES
+      the session TRANSITION from a non-actionable status into an actionable one, printing the
+      observed path on stdout (e.g. working→review — read the LAST token as the status reached).
+      USE IT to sleep until a dispatched worker next needs you — including a dispatched MERGE
+      actually landing (review→working while the merge runs, then the edge back is your wake-up).
+      It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
+      use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
+      observed path on stderr). Background one wait per worker.
   spex session review <SEL> [--json]     the merge cockpit: ahead · uncommitted · proposal · gates ·
                                          merge-base diff — decide from this, don't hand-run git
   spex session merge <SEL>               gated merge, dispatched to the session's OWN agent; confirm

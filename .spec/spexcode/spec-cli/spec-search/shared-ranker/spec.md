@@ -26,11 +26,16 @@ and its query intent.
 `ranker.ts` is the **pure, I/O-free scoring core** ([[spec-search]]'s scorer, lifted out): a CJK-aware
 `tokenize` · `terms` · a light query-side `stem` (plural-`s`/mute-`e` drop) · `nameMatch`/`textMatch` ·
 `tierWeight` (name > desc > body; desc is presence × BM25 length-norm, body full BM25 term-frequency — the
-tier weights are read FROM the corpus and re-calibratable as it grows: the desc weight was lowered 3 → 2 when
-sibling desc-word collisions at ~164 nodes started outranking body concentration, see [[spec-search]]) ·
-corpus IDF · `snippetFor`, all behind one entrypoint `rankDocs(query, docs)` over a generic
-`{ ref, name, desc, body }` shape. No fs, no git, no DOM — so **tsx runs it server-side and vite bundles it
-for the browser** (verified: a cross-package import from the dashboard builds clean).
+tier weights are read FROM the corpus and re-calibratable as it grows: the desc weight was re-read
+(3 → 2 → 2.2) as sibling desc-word collisions shifted with the tree, see [[spec-search]]) ·
+corpus IDF · two corpus-drift SHAPING RULES that keep sibling-name collisions from stealing the rank as the
+tree grows — a **name-prefix coverage** factor (a name hit counts by the fraction of the matched word the
+query term spans, so a short term that merely prefixes a longer unrelated name word earns less than a
+full-word hit) and a **per-term ceiling** at the name weight (no single query term out-scores one full name
+hit, so a broad match beats a one-word spike) · `snippetFor`, all behind one entrypoint `rankDocs(query,
+docs)` over a generic `{ ref, name, desc, body }` shape. No fs, no git, no DOM — so **tsx runs it
+server-side and vite bundles it for the browser** (verified: a cross-package import from the dashboard builds
+clean).
 
 **Both callers tokenize CJK.** A whitespace/`[^a-z0-9]` split silently discards every CJK character, which
 blinded BOTH surfaces to Chinese: `spex search` couldn't reach the CJK prose a few nodes carry (the root

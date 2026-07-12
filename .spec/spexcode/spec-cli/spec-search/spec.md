@@ -79,11 +79,24 @@ repetition inside a one-line summary is stuffing, not evidence, and without the 
 corpus grew. Together with the desc boost they reach the floor's reason to exist: the keyword in a node's
 body or summary, not its title. The constants (field weights, BM25 `K1`/`B`) sit in flat plateaus, the tell
 that recall is earned by the general rule, not fitted — and because they are read FROM the corpus, a plateau
-can DRIFT as the tree grows: the desc weight was re-read downward (3 → 2) once the corpus reached ~164 nodes,
-where more sibling nodes collide on a curated desc word and an incidental desc mention was outranking a node
-that genuinely concentrates the term in its BODY. Lowering the desc tier toward the BM25 body term-frequency
-lets the concentrating node win; the new value sits at the CENTRE of a flat recall@3=0.875 band (W_DESC ∈
-[1.85, 2.4] at the current `K1`), so it is a re-calibration to the grown corpus, not a fit to the benchmark.
+can DRIFT as the tree grows: the desc weight was first re-read DOWN (3 → 2) at ~164 nodes, where sibling
+nodes collide on a curated desc word and an incidental desc mention was outranking a node that genuinely
+concentrates the term in its BODY; at ~173 nodes it re-read back UP a notch (to 2.2) to keep a
+concept node's curated desc ahead of a same-family sibling's near-tied one. Both readings stay inside one
+flat recall@3=0.875 band (W_DESC ∈ [1.85, 2.4] at the current `K1`), so each is a re-calibration to the grown
+corpus, not a fit to the benchmark.
+
+Two SHAPING RULES on top guard the same drift as the tree keeps growing and sibling names collide — both
+read from the corpus, neither aimed at a case. **Name-prefix coverage:** a name hit counts by the FRACTION
+of the matched name word the query term spans (floored at half — a prefix is still evidence). A full word
+(`api`→`api`) is the strong signal the name tier is for; a short query term that merely PREFIXES a longer,
+unrelated word (`port`→`portable-layout`, `governs`→`governed-related`) covers less of it and earns less than
+a full name hit, so a sibling whose name only STARTS with a query word can no longer swallow the node that
+owns the concept. **Per-term ceiling:** no single query term out-scores one full name hit (its IDF/BM25 order
+the tiers only up to that ceiling). A many-word question is answered by the node that matches it BROADLY, not
+by one that spikes on a single rare word it happens to carry in its NAME — the collision where a `spex
+search`-named node buried "…searches specs…" or an injected-* sibling buried a concept node purely on one
+uncapped name term.
 
 It reads the spec tree from the **filesystem only** (no git walk), so a cold `spex search` is cheap to call
 as freely as `grep`. `cli.ts`'s `search` verb is a thin router over `searchSpecs`; all scoring lives there so

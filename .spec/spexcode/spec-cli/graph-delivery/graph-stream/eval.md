@@ -15,8 +15,8 @@ scenarios:
       guarantee rather than watcher luck.
   - name: lifecycle-push-latency
     tags: [backend-api]
-    code: spec-cli/src/boardStream.ts
-    related: [spec-cli/src/boardCache.ts, spec-cli/src/board.ts]
+    code: spec-cli/src/graphStream.ts
+    related: [spec-cli/src/graphCache.ts, spec-cli/src/graph.ts]
     description: >-
       With a delta subscriber attached (`curl -N '/api/board/stream?mode=delta'`), watch the per-user
       session store with fs.watch (the truth clock) and time, for REAL worker lifecycle transitions
@@ -30,7 +30,7 @@ scenarios:
       burst width (tens of ms), not a flat 150ms wait.
   - name: uncommitted-spec-edit-visibility
     tags: [backend-api]
-    code: spec-cli/src/boardStream.ts
+    code: spec-cli/src/graphStream.ts
     description: >-
       In an isolated fixture project (own SPEXCODE_HOME, own git repo with a .spec tree and one linked
       worktree), start a backend, attach a delta subscriber, then EDIT a governed spec.md inside the

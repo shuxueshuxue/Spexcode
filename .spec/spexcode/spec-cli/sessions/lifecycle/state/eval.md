@@ -92,14 +92,19 @@ scenarios:
   - name: resume-preserves-standing-proposal
     tags: [backend-api]
     description: >-
-      Put a session into review (lifecycle awaiting, proposal=merge) and resume it (reopen) WITHOUT the agent
-      resuming work — isolate reopen's write via the online path (POST /review then POST /resume on a live,
-      paused agent, so there is no relaunch and no mark-active). Read the record.
+      Put a session into review (agent-authored `done --propose merge` → lifecycle awaiting, proposal=merge)
+      and reopen it WITHOUT the agent resuming work, across BOTH reopen faces the status-propagation refactor
+      now distinguishes. (1) On the ALIVE proposing agent, POST /api/sessions/:id/resume — the resume-on-alive
+      guard refuses relaunch (409), so reopen never even writes. (2) The write path that COULD withdraw a
+      proposal is the OFFLINE relaunch: stop the proposing session (offline, proposal must persist), then
+      resume it (relaunch), and read the record immediately and a few seconds later. Read the record after each.
     expected: >-
-      reopen preserves the standing proposal: the record stays `awaiting` with proposal `merge` intact (board
-      shows review), NOT silently withdrawn to idle. reopen never touches the `proposal` field. A proposal is
-      reversed only when the agent actually WORKS again (its mark-active hook) or by the merge dispatch's
-      delivered prompt — never as a hidden side-effect of the relaunch itself.
+      reopen preserves the standing proposal on both faces. Alive agent: resume is refused 409 and the record
+      is untouched (stays awaiting/merge). Offline relaunch: the record stays `awaiting` with proposal `merge`
+      intact (board shows review), NOT silently withdrawn to idle, immediately after relaunch and while the
+      resumed agent sits at its conversation. reopen never touches the `proposal` field. A proposal is reversed
+      only when the agent actually WORKS again (its mark-active hook) or by the merge dispatch's delivered
+      prompt — never as a hidden side-effect of the relaunch itself.
   - name: propose-close-echoes-cleanup-reminder
     tags: [backend-api]
     description: >-
@@ -197,7 +202,7 @@ scenarios:
       reuses an already-online agent without refusing, and relaunches only a confirmed-offline one.
   - name: liveness-push-latency
     tags: [backend-api]
-    related: [spec-cli/src/sessions.ts, spec-cli/src/harness.ts, spec-cli/src/boardStream.ts]
+    related: [spec-cli/src/sessions.ts, spec-cli/src/harness.ts, spec-cli/src/graphStream.ts]
     description: >-
       With a delta subscriber attached to the backend, kill a governed worker (`spex session stop` — tmux
       window and agent die together; also a direct kill -9 of the registered pid with the window left

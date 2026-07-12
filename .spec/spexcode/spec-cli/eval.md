@@ -20,15 +20,16 @@ scenarios:
       Drive the shared port-ownership contract through the real CLI. Start `spex serve --port P`,
       wait until P serves, then run a SECOND `spex serve --port P` on the same port; capture its
       exit code, its stderr, and whether the private child it booted before failing is still
-      listening. Repeat with `spex dashboard --port Q` (two on the same Q). File the transcript with
-      `spex yatsu eval spec-cli --scenario port-bind-failure --result <txt> --pass`.
+      listening. Repeat with `spex serve ui --port Q` (v0.3.0 removed the `spex dashboard` verb —
+      the dashboard is now `spex serve ui`; two on the same Q). File the transcript with
+      `spex eval add spec-cli --scenario port-bind-failure --result <txt> --pass`.
     expected: >-
       The second `serve` exits NON-ZERO (1) printing a single loud line naming the busy port and the
       repair (`cannot bind — port P is already in use. Free :P …`), never a "serving" success line,
       and leaves NO zombie child (the private port it booted is no longer listening); the first serve
-      is untouched. The second `dashboard` behaves identically (exit 1, the same `cannot bind` line) —
+      is untouched. The second `serve ui` behaves identically (exit 1, the same `cannot bind` line) —
       one busy-port condition, one behaviour on both surfaces, not a silent zombie under serve and a
-      crash under dashboard.
+      crash under the dashboard.
     code: [spec-cli/src/listen.ts, spec-cli/src/supervise.ts]
     related: spec-cli/src/gateway.ts
   - name: server-reaps-abandoned-connections

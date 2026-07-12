@@ -96,11 +96,12 @@ scenarios:
       (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
       action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
       `/` and read the completion menu: the board's own
-      commands (`/type`, `/eval`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
-      painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
-      type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly ONCE (the board's
-      coloured row), not a duplicate pair, and that each row's description reads as a sentence (first letter
-      capitalised, e.g. "Exit — stop the agent…", not "exit — …").
+      commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
+      painted its identity colour, visibly apart from Claude Code's blue command rows. Confirm each board name
+      appears exactly ONCE (no duplicate pair) — the board renamed its stop verb off the old `/exit` that
+      collided with Claude Code's own `/exit`, so the five board names no longer twin any CC command — and that
+      each row's description reads as a sentence (first letter capitalised, e.g. "Stop — kill the agent…", not
+      "stop — …").
       (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
       to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
       view. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
@@ -111,14 +112,15 @@ scenarios:
       rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
       permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
       surface says "proof" (the tab, the command, and its menu description all say eval).
-      In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
+      In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
-      by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
+      by destructiveness — stop muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
-      blue (rgb(38,139,210)); one element, one colour in both places. A name the board owns that Claude Code
-      also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's twin, never a duplicate pair —
-      and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
+      blue (rgb(38,139,210)); one element, one colour in both places. Each of the five board names appears
+      exactly ONCE — the board's stop verb was renamed off the old `/exit` that twinned Claude Code's own
+      `/exit`, so no board name now duplicates a CC command — and every row's description reads as a capitalised
+      sentence. Typing `/eval` switches to the Eval tab and
       shows the same inline view the tab click does (one shared tab-state); typing `/type` toggles type mode
       exactly as the type button does, and the button reflects that same state. A board command is never
       dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/type` text reaches the pane.

@@ -109,8 +109,21 @@ export async function buildBoard() {
   // openIssues, attached only when non-empty). Non-blocking: residentForgeState never waits on `gh` and is
   // empty absent a forge, so the fold then carries the local slice alone. Sorted open-first, newest first.
   const isOpen = (i: { status: string }) => i.status === 'open'
+  const merged = mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id))
+  // ONE board-level freshness stamp over EVERY issue thread (noded or nodeless, both stores):
+  // open-count : thread-count : reply-count : latest-activity. Every thread write — open, reply, remark,
+  // resolve, retract, close — moves at least one component, so a store write ALWAYS moves board bytes:
+  // [[graph-delta]] suppresses no-change broadcasts, and without a moving byte an external write would
+  // stay invisible to viewers until the fallback poll ([[remark-substrate]] write-visibility). The per-node
+  // fold below stays [[graph-lean]]-slim (no reply payloads); this stamp is the freshness carrier.
+  const issuesStamp = [
+    merged.filter(isOpen).length,
+    merged.length,
+    merged.reduce((n, i) => n + i.replies.length, 0),
+    merged.flatMap((i) => [i.created, ...i.replies.flatMap((r) => [r.at, r.resolvedAt ?? ''])]).reduce((a, b) => (b > a ? b : a), ''),
+  ].join(':')
   const issuesByNode: Record<string, ReturnType<typeof mergedIssues>> = {}
-  for (const issue of mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id)))
+  for (const issue of merged)
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
   for (const n of nodes) {
     const issues = issuesByNode[n.id]
@@ -145,7 +158,7 @@ export async function buildBoard() {
   const dash = readConfig(root).dashboard
   // project names the tab ([[tab-title]]); projectIcon is the tab favicon ([[tab-icon]]) — both ride the
   // /api/graph poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
-  return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '' }
+  return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '', issuesStamp }
 }
 
 // @@@ spliceSessions — the SESSIONS-ONLY producer ([[graph-cache]]). A session-scoped change (a lifecycle

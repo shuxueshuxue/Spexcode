@@ -64,7 +64,9 @@ straight to the trunk.
   scenario-scoped concern is a remark, not an issue (I1), so it never shows in the drain here; it lives on
   the Evals page instead (the [[evals-feed]] row + the [[event-detail]] remark track). The list is app-held
   state beside the board (one data path): the page renders instantly from it on every visit; freshness
-  inherits the board's own pattern — the push/change signal triggers a throttled refetch, the 15s cold lane
+  inherits the board's own pattern — the push/change signal triggers a throttled refetch (the throttle
+  DEFERS an in-window signal to the window's edge, never drops it — an external write always lands within
+  the throttle window, not the cold lane; [[remark-substrate]] write-visibility), the 15s cold lane
   backstops (forge-cache updates arrive nowhere else), and `GET /api/issues` answers **304 via ETag** so a
   no-change refetch costs headers only. A write forces the refetch so it shows up where it lands. The view
   renders each issue **in the order the API returns** — [[issues]]'s one time line, stores interleaved

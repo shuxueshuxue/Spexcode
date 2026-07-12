@@ -42,7 +42,10 @@ merged tmux call for window/title state plus the rendezvous tri-state), both →
 `.git/worktrees` REGISTRY watcher — git's own birth-ledger for every worktree, hand-made or dispatched —
 which attaches a `.spec` subtree watch to each live worktree and detaches on removal; a draft spec edit
 fires 'full' (overlays live on node units). And (0) the exported explicit nudge (`notifyBoardChanged`) for
-a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions'. All
+a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions', and the
+issue/remark write routes pass 'full' **atomically with their store persist** ([[remark-substrate]]
+write-visibility: the writer's own post-write refetch must never race an asynchronous fs event into the
+stale cache; the issue store dir is deliberately not a watched leaf — one mechanism per surface). All
 funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED fs-event burst width
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
 is the coalescer for anything wider, so the old flat 150ms was pure added latency.

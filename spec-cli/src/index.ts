@@ -198,6 +198,7 @@ app.post('/api/issues/:id/reply', async (c) => {
       : null
     const r = await replyIssue(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
+    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -212,6 +213,7 @@ app.post('/api/issues/:id/close', async (c) => {
   try {
     const r = await closeIssue(id)
     if (r.store !== 'local') await refreshForgeNow()
+    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, ...r })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -231,6 +233,7 @@ app.post('/api/issues', async (c) => {
   try {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
     if (r.store !== 'local') await refreshForgeNow()
+    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarize(r.outcomes) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
@@ -248,6 +251,7 @@ app.post('/api/issues/:id/promote', async (c) => {
   try {
     const r = await promote(id, { author: 'human' })
     await refreshForgeNow()
+    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, ...r })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -265,6 +269,13 @@ app.post('/api/issues/:id/promote', async (c) => {
 // resolves through the CLI, and self-resolve stays rejected by the same identity comparison ('human' can
 // never resolve a human-authored remark) — and retract binds to the author (only the human's own remarks).
 // Who-may-resolve/retract cannot depend on transport.
+//
+// Every issue/remark write route below ends its success path with notifyBoardChanged('full') — the board
+// cache is invalidated ATOMICALLY with persistence ([[remark-substrate]] write-visibility), before the
+// response, so the writer's own post-write refetch can never race an async fs event into the stale cache.
+// This explicit nudge is the ONE in-process mechanism (the store dir is deliberately NOT in the watch set);
+// a cross-process write (a CLI `spex remark add`) reaches the board through its trunk commit via the
+// existing refs watcher instead.
 app.post('/api/remarks', async (c) => {
   if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
@@ -277,6 +288,7 @@ app.post('/api/remarks', async (c) => {
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
   try {
     const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
+    notifyBoardChanged('full')
     return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
@@ -291,6 +303,7 @@ app.post('/api/remarks/:action{resolve|retract}', async (c) => {
   try {
     if (c.req.param('action') === 'resolve') resolveRemark(ref, by)
     else retractRemark(ref, by)
+    notifyBoardChanged('full')
     return c.json({ ok: true, ref })
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)

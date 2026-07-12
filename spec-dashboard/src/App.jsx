@@ -21,12 +21,21 @@ export default function App() {
   // app-held state instead of cold-fetching per mount). Freshness inherits the board's own pattern: a
   // push/change signal triggers a throttled refetch, the 15s cold lane backstops (forge-cache updates
   // arrive nowhere else), and the route answers 304 via ETag so a no-change refetch costs headers only.
+  // The throttle DEFERS, never drops ([[issues-view]]): a change signal landing inside the 5s window
+  // schedules one trailing refetch for the window's edge — dropping it would leave an external write
+  // (a second remark in quick succession) invisible until the 15s lane, exactly the staleness the
+  // push exists to kill.
   const [issuesData, setIssuesData] = useState(null)
   const issuesSeq = useRef(0)
   const issuesLast = useRef(0)
-  const reloadIssues = useCallback((force = false) => {
+  const issuesTrail = useRef(null)
+  const reloadIssues = useCallback(function load(force = false) {
     const now = Date.now()
-    if (!force && now - issuesLast.current < 5000) return Promise.resolve()
+    const wait = issuesLast.current + 5000 - now
+    if (!force && wait > 0) {
+      if (!issuesTrail.current) issuesTrail.current = setTimeout(() => { issuesTrail.current = null; load(true) }, wait)
+      return Promise.resolve()
+    }
     issuesLast.current = now
     const mine = ++issuesSeq.current
     return loadIssues().then((d) => { if (mine === issuesSeq.current) setIssuesData(d) }).catch(() => {})
@@ -54,7 +63,7 @@ export default function App() {
       onLegacyChange: () => { reload(); reloadIssues() },
     })
     const id = setInterval(() => { reload(); reloadIssues() }, 15000)
-    return () => { unsub(); clearInterval(id) }
+    return () => { unsub(); clearInterval(id); clearTimeout(issuesTrail.current); issuesTrail.current = null }
   }, [reload, reloadIssues])
   useEffect(() => {
     const name = projectTitle(board)

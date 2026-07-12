@@ -68,5 +68,28 @@ session from the CLI, the human from the dashboard — and `human` is an identit
 never resolve a human-authored remark (self-resolve stays structurally rejected) and retract touches only
 the caller's own unresolved remarks.
 
+## Write-visibility
+
+A persisted write must be *visible*, not merely durable: remarks exist to be seen by a second party, so a
+write that sits in the store until a ~15s fallback poll is a broken loop. Two legs, one per surface — and
+deliberately **no third track**:
+
+- **In-process (the server routes).** Every issue/remark write route ends its success path with the board
+  stream's explicit nudge — the board cache is invalidated **atomically with persistence**, before the
+  response, so the writer's own post-write refetch can never race an asynchronous fs event into the stale
+  cache. The store directory is deliberately NOT in the fs watch set: a watch cannot give that atomicity,
+  and two invalidation tracks for one write is the dual-mechanism smell.
+- **Cross-process (the CLI verbs).** A store write commits to the trunk, and that commit reaches the board
+  through [[graph-stream]]'s existing refs watcher — best-effort like every leaf, healed by the patrol
+  within one cold tick (and flagged loud) when the leaf is blind. No new watch, no second track.
+
+Invalidation alone is not visibility: [[graph-delta]] broadcasts only when board bytes move, so the board
+carries one top-level freshness stamp over the whole merged issue set (open/thread/reply counts + the
+latest activity instant) that **every** thread write moves — a reply, a remark, a resolve, a retract, a
+close, on a noded or nodeless thread alike; a scenario-hosted remark moves its reading's thread overlay the
+same way. On the client, the resident issues list's throttled refetch *defers* an in-window push to the
+throttle edge, never drops it ([[issues-view]]). Measured end to end: a remark landing through
+POST /api/remarks shows in a viewing browser within one debounce + rebuild, never the fallback lane.
+
 Out of scope here (later milestones): the freshness/staleness computation that reads the resolved bit,
 the server-side overlay join, and any dashboard UI — this node builds only the substrate they stand on.

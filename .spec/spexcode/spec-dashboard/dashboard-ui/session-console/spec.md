@@ -115,16 +115,17 @@ a candidate never fires the line. Only a plain Enter that ends no composition se
 a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
 only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
 ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity
-colour**, never two codepaths. The two terminal verbs split by what they destroy: **`/exit`** stops this
-session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keeps the worktree**, so the session
-goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
-removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
-twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` jumps to the **Eval tab** (cyan). In the inbox
-`/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's blue command rows; accepting one
-**runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
-same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
-duplicate row: one command, one identity. Row descriptions render as sentences (first letter capitalised).
-Typed `/exit` and `/close` carry **no
+colour**, never two codepaths. The two terminal verbs split by what they destroy: **`/stop`** stops this
+session (`act('stop')`, **muted grey** — v0.3.0 respelled it off the old `/exit`, which collided with Claude
+Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux but **keeps the worktree**, so
+the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
+**`/close`** removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's
+right-click Close's twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` jumps to the
+**Eval tab** (cyan). In the inbox `/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's
+blue command rows; accepting one **runs** it (the one row that acts, not inserts — see [[term-input]]). A
+board command still **overrides** a same-named CC command so a name shows **once** — though after the
+`/exit`→`/stop` respelling no board name currently twins a CC one: one command, one identity. Row
+descriptions render as sentences (first letter capitalised). Typed `/stop` and `/close` carry **no
 confirm** — typing the exact command is itself the deliberate act, where the row-menu's Close guards an
 easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking

@@ -14,7 +14,7 @@ scenarios:
       command menu, the declare-LAST reminder, and a recovery entry (spex help session) from which an agent
       that never saw the full text — a compacted context — can rebuild every choice's condition. The full
       text never repeats within a session.
-    code: .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
+    code: .spec/spexcode/.plugins/prompts/core/stop-gate/stop-gate.sh
     related: spec-cli/templates/spec/project/.plugins/core/stop-gate/stop-gate.sh
 ---
 Measured YATU on the hook surface itself: invoke stop-gate.sh the way dispatch.sh invokes it — the

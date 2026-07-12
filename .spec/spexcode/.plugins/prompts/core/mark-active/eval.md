@@ -18,7 +18,7 @@ scenarios:
       top-level agent_id key (scanned only in the pre-tool_input prefix, where every string value's
       quotes are JSON-escaped, so tool parameters can never fake it) — deterministic, never a
       heuristic or a timing window.
-    code: .spec/spexcode/.plugins/core/mark-active/mark-active.sh
+    code: .spec/spexcode/.plugins/prompts/core/mark-active/mark-active.sh
     related: spec-cli/hooks/harness.sh
 ---
 Measured the way dispatch.sh invokes the hook: the captured payload on stdin, SPEXCODE_HARNESS_LIB

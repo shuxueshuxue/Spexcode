@@ -62,27 +62,28 @@ independent facts, computed independently:
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
   still booting — see [[launch]]), `unknown` (the liveness PROBE ITSELF failed — see below), else `online`.
-  Read from the **adapter's runtime signal, never the pane's foreground command**: Claude requires a **live
-  LISTENER on its rendezvous socket** — a `connect()` the running agent accepts, **not** the socket FILE
-  merely existing, because a crashed claude leaves its unix-socket path on disk and a file-existence check
-  then read a DEAD pane as `online` indefinitely (a dead pane must read `offline` within seconds); Codex uses
-  the shared app-server socket only after the governed record has captured the Codex thread id, because a
-  project socket alone is not a session address.
+  Detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn
+  death detector: launch registers the agent's real pid (`agent.pid`, stamped pre-`exec` so it IS the agent's
+  own pid), and one `kill(pid,0)` syscall reads it — an ESRCH death is **latched per (pid, mtime)** (the
+  pid-reuse guard; only a relaunch's fresh write resets it), so a thrashed loop can't hang it. The **warm 1s
+  tier** is one bounded tmux snapshot plus the rendezvous probe: Claude requires a **live
+  LISTENER on its rendezvous socket** — a `connect()` the running agent accepts, **not** the socket FILE merely
+  existing (a crashed claude leaves its socket path on disk; a file check read a DEAD pane `online` indefinitely
+  — it must read `offline` within seconds). Codex reads the hot tier's `agent.pid`; its old whole-box `ps`
+  descendant walk is **demoted to a self-extinguishing legacy fallback** for a pre-registration session with no
+  `agent.pid`.
 
-  **Board honesty under load — the probe can fail, and a failed probe is not a death.** This holds for BOTH
-  liveness probes. The tmux snapshot is one bounded call; under heavy load it can time out — a timed-out probe
-  means we **cannot tell** who is alive, which is categorically different from "tmux is up and this session is
-  gone," so it yields `unknown` for the affected rows — rendered **probe-failed**, never `offline`/`closed`,
-  and the row **never vanishes** from the list (the list is enumerated from the durable store, and the tmux
-  call is bounded so a hung tmux can't freeze board assembly into a stale/empty view). The **listener probe
-  is tri-state for the same reason**: only a completed connect (`live`) or an instant refusal/absence
-  (`ECONNREFUSED` off a stale socket file / `ENOENT` — proven `dead`) actually settle the question; a connect
-  **timeout** (a thrashed event loop fires the expired timer before the pending connect — the load spike that
-  read every live worker as a corpse in one board answer) or **EAGAIN** (the listen backlog is full, which
-  proves a listener *alive*-but-busy) are `unproven`, and an unproven death reads `unknown`, never `offline`.
-  This is the honesty rule that the mass-restore incident violated from one side (a slow box read as a
-  graveyard, the human restored everything, and live workers died) and the false-`offline` wait verdict
-  (issue #40) violated from the other. Fail loud (`unknown`), never guess (`offline`).
+  **Board honesty under load — the probe can fail, and a failed probe is not a death.** The tmux snapshot is
+  one bounded call; under heavy load it can time out — a timed-out probe means we **cannot tell** who is alive,
+  categorically different from "tmux is up and this session is gone," so those rows yield `unknown`, rendered
+  **probe-failed**, never `offline`/`closed`, and the row **never vanishes** (enumerated from the durable
+  store). The **listener probe is tri-state for the same reason**:
+  only a completed connect (`live`) or an instant refusal/absence (`ECONNREFUSED` off a stale socket file /
+  `ENOENT` — proven `dead`) settle the question; a connect **timeout** (a thrashed loop fires the timer before
+  the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read
+  `unknown`, never `offline`. This is the honesty rule the mass-restore incident violated (a slow box read as a
+  graveyard, live workers relaunched to death) and the false-`offline` wait verdict (issue #40) too. Fail loud
+  (`unknown`), never guess (`offline`).
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —

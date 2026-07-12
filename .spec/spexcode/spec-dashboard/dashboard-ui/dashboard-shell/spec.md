@@ -73,13 +73,13 @@ channel — a full on connect, then patches the data layer applies to its unit-m
 state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
 fresh full. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
 surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
-subscription to exactly this refetch path. Third, a **slow fallback poll that always runs**. The shell deliberately keeps NO push-liveness detector: a
-silently dead stream (a half-open tunnel, a sleep-resume, a network switch) delivers no data and no error
-event, so it is indistinguishable from a healthy quiet one — a poll that stands down behind "push is proven
-alive" freezes the board in exactly those modes. Instead the poll's cost is zeroed by conditional requests:
-`loadBoard` remembers the board's ETag and sends `If-None-Match`, an unchanged board answers a bodyless 304
-and the shell skips the repaint — so an untouched board costs headers only, yet no failure mode (silently
-dead SSE, SSE-stripping proxy, old backend) is ever staler than the poll period. Because pushed boards and in-flight fetches can
+subscription to exactly this refetch path. Third, a **slow fallback poll that always runs** as the final belt. Between them a **heartbeat watchdog**
+holds the stream to its contract: the server pings on a fixed cadence, so silence past 2.5× that window means
+the stream is DEAD (half-open tunnel, sleep-resume, frozen tab), not merely quiet. On a breach it reopens
+(board-full re-anchors and repaints) and kicks the ETag refetch, so catch-up is instant; a frozen tab
+converges likewise as its overdue tick fires on resume. The poll's cost is zeroed by conditional
+requests: `loadBoard` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
+the repaint, so no failure mode is staler than the poll period. Because pushed boards and in-flight fetches can
 interleave, the shell stamps every application with a monotonic sequence — a pushed board is freshest by
 channel order, so it bumps the sequence and invalidates any older fetch still in flight; a superseded
 response is dropped, never painted. Without that guard a just-closed session resurrects: the post-close

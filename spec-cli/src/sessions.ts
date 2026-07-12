@@ -332,37 +332,104 @@ async function procSnapshot(): Promise<ProcTable> {
   }
   return t
 }
-// @@@ LiveSnap - the ONE liveness snapshot the whole session list shares. `windows` = our live tmux windows
-// (id → PaneProbe) + one whole-box process table; `sockets` = the ids whose rendezvous socket has a LIVE
-// LISTENER (connect-probed once here, not the file-exists lie — [[harness-adapter]]); `unproven` = the ids whose
-// LISTENER probe could not conclude (timeout under load / EAGAIN off a full-but-alive backlog — see
-// rendezvousListening's tri-state) — death UNPROVEN, so those rows read `unknown`, never `offline`;
-// `probeFailed` = the tmux window probe itself FAILED (timed out under load), which is DISTINCT from "tmux up,
-// no sessions" — the former means death is UNPROVEN so those rows read `unknown`, the latter is authoritative
-// and reads `offline`.
-export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; sockets: Set<string>; unproven: Set<string> }
+// @@@ LiveSnap - the ONE liveness snapshot the whole session list shares, built from a SINGLE tmux spawn
+// (`list-panes -a` yields every session's window presence, pane pid, AND pane title at once — every session has
+// ≥1 pane). `windows` = our live tmux windows (id → PaneProbe: pane pid + the hot-tier `pidAlive` verdict + the
+// legacy `procs` table when a pid-less codex session needs it); `titles` = each pane's RAW title (harness-
+// interpreted later in paneActivity — claude: a self-authored task summary; codex: a spinner + the cwd folder
+// name); `sockets` = the ids whose rendezvous socket has a LIVE LISTENER (connect-probed once here, not the
+// file-exists lie — [[harness-adapter]]); `unproven` = the ids whose LISTENER probe could not conclude (timeout
+// under load / EAGAIN off a full-but-alive backlog — see rendezvousListening's tri-state) — death UNPROVEN, so
+// those rows read `unknown`, never `offline`; `probeFailed` = the tmux probe itself FAILED (timed out under
+// load), DISTINCT from "tmux up, no sessions" — the former means death is UNPROVEN so those rows read `unknown`,
+// the latter is authoritative and reads `offline`.
+export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
+
+// @@@ parseLivePanes - the pure parser for the SINGLE merged `list-panes -a -F
+// '#{session_name}\t#{pane_pid}\t#{pane_title}'` snapshot: id → { panePid, title }. First pane per session wins
+// (our sessions are single-pane by construction). The title is the remainder AFTER the 2nd tab, so a title that
+// itself contains tabs survives intact. Exported so the parse is unit-auditable without a tmux spawn.
+export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
+  const m = new Map<string, { panePid?: number; title?: string }>()
+  for (const line of out.split('\n')) {
+    if (!line) continue
+    const t1 = line.indexOf('\t')
+    const name = (t1 < 0 ? line : line.slice(0, t1)).trim()
+    if (!name || m.has(name)) continue   // first pane per session wins
+    if (t1 < 0) { m.set(name, {}); continue }
+    const rest = line.slice(t1 + 1)
+    const t2 = rest.indexOf('\t')
+    const pid = Number((t2 < 0 ? rest : rest.slice(0, t2)).trim())
+    const title = t2 < 0 ? '' : rest.slice(t2 + 1)
+    m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, title: title || undefined })
+  }
+  return m
+}
+
+// @@@ agent.pid hot registry - the per-session death-latch backing BOTH hotSignature (the 100ms tier) and
+// liveSnapshot's codex `pidAlive` verdict, so ONE latch rule serves both. keyed by session id → the last
+// agent.pid { mtime, pid, deadLatched }. agentAlive statSyncs the pid file: missing → undefined (a
+// pre-registration/old session — the warm tier / legacy tree-walk covers it); mtime changed → a relaunch wrote
+// a fresh pid, so re-read + RESET the latch; then kill-0 the pid — alive (or EPERM) = true, ESRCH = false and
+// LATCH permanently for this (pid, mtime) so a later pid-reuse by an unrelated process can never resurrect a
+// dead session (the portable pid-reuse guard: death is irreversible per registration; only a NEW agent.pid
+// write — a fresh mtime — resets). Sync fs + one kill-0 syscall, NO child process, so it stays honest under a
+// thrashed event loop — exactly when a spawn-based probe would hang.
+type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
+const pidRegistry = new Map<string, PidEntry>()
+function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
+function agentAlive(id: string): boolean | undefined {
+  const pidPath = sessionArtifactPath(id, 'agent.pid')
+  let mtimeMs: number
+  try { mtimeMs = statSync(pidPath).mtimeMs } catch { pidRegistry.delete(id); return undefined }   // no pid file → pre-registration
+  let e = pidRegistry.get(id)
+  if (!e || e.mtimeMs !== mtimeMs) { e = { mtimeMs, pid: readAgentPid(pidPath), deadLatched: false }; pidRegistry.set(id, e) }
+  if (e.deadLatched) return false                                     // latched dead stays dead until a new write (fresh mtime)
+  if (!Number.isFinite(e.pid) || e.pid <= 0) return false
+  try { process.kill(e.pid, 0); return true }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EPERM') return true  // alive but not ours to signal
+    e.deadLatched = true                                             // ESRCH → proven dead, latch it permanently
+    return false
+  }
+}
+
+// @@@ needsCodexProcScan - the legacy ps-scan GATE, factored PURE so it is assertable. The whole-box `ps`
+// (procSnapshot) is paid ONLY when a windowed CODEX session has NO registered agent.pid (a pre-registration
+// launch that still needs the paneTreeRunsCodex tree-walk). A box with no codex, or all pid-registered
+// launches, returns false → zero ps spawn. Self-extinguishes as pre-registration sessions close.
+export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean }[]): boolean {
+  return windowed.some((w) => (w.harness || 'claude') === 'codex' && !w.hasPid)
+}
+
 async function liveSnapshot(): Promise<LiveSnap> {
   const windows = new Map<string, PaneProbe>()
+  const titles = new Map<string, string>()
   let out: string
   try {
-    out = await tmux(['list-sessions', '-F', '#{session_name}\t#{pane_pid}'], TMUX_PROBE_TIMEOUT_MS)
+    // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
+    out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}'], TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
     // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
-    return { probeFailed: probeTimedOut(e), windows, sockets: new Set(), unproven: new Set() }
+    return { probeFailed: probeTimedOut(e), windows, titles, sockets: new Set(), unproven: new Set() }
   }
-  const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
-  for (const line of out.split('\n')) {
-    const tab = line.indexOf('\t'); if (tab < 0) { const name = line.trim(); if (name) windows.set(name, { procs }); continue }
-    const name = line.slice(0, tab).trim(); if (!name) continue
-    const pid = Number(line.slice(tab + 1).trim())
-    windows.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, procs })
+  // the hot-tier pid verdict per windowed session (latch-consistent with hotSignature) + the legacy-scan gate.
+  const legacy: { harness: string; hasPid: boolean }[] = []
+  for (const [id, p] of parseLivePanes(out)) {
+    windows.set(id, { panePid: p.panePid, pidAlive: agentAlive(id) })
+    if (p.title) titles.set(id, p.title)
+    if (windows.get(id)!.pidAlive === undefined) { const rec = readRecord(id); if (rec) legacy.push({ harness: rec.harness, hasPid: false }) }
   }
-  // LISTENER probe for every windowed session, once, in parallel (tooth: a live listener, not a lingering
-  // socket file). A codex session has no rvSock → instant ENOENT → proven dead for the socket axis (codex
-  // ignores it anyway). The tri-state matters here: 'unproven' (timeout/EAGAIN — a wedged or thrashed but
-  // possibly-alive listener) lands in `unproven`, never silently in the not-live bucket, so liveness() can
-  // render it `unknown` instead of a false `offline` (issue #40's load-spike graveyard).
+  // the whole-box ps table is gathered ONCE, and ONLY for the legacy pid-less-codex fallback (paneTreeRunsCodex).
+  if (needsCodexProcScan(legacy)) {
+    const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
+    if (procs) for (const probe of windows.values()) probe.procs = procs
+  }
+  // LISTENER probe for every windowed session, once, in parallel (a live listener, not a lingering socket
+  // file). A codex session has no rvSock → instant ENOENT → proven dead for the socket axis (codex ignores it).
+  // The tri-state matters: 'unproven' (timeout/EAGAIN — a wedged or thrashed but possibly-alive listener) lands
+  // in `unproven`, never silently not-live, so liveness() renders `unknown` not a false `offline` (issue #40).
   const ids = [...windows.keys()]
   const listening = await Promise.all(ids.map((id) => rendezvousListening(id)))
   const sockets = new Set<string>()
@@ -371,39 +438,43 @@ async function liveSnapshot(): Promise<LiveSnap> {
     if (listening[i] === 'live') sockets.add(id)
     else if (listening[i] === 'unproven') unproven.add(id)
   })
-  return { probeFailed: false, windows, sockets, unproven }
+  return { probeFailed: false, windows, titles, sockets, unproven }
 }
 
-// @@@ paneTitles - every session pane's RAW tmux title, free from tmux. The worker launches one pane per
-// session, named with the session id, so ONE `list-panes -a` maps id → its raw `#{pane_title}`. Same shape
-// and cost as liveTmux (one tmux call for the whole list); failure → empty map, so a tmux hiccup just drops
-// the subtitle for a tick, never the session. The raw title is NOT yet a headline — what a pane title MEANS
-// is harness-specific (claude: a self-authored task summary; codex: a spinner + the cwd folder name), so the
-// id→harness gating + glyph parse happens per session in paneActivity, not here.
-async function paneTitles(): Promise<Map<string, string>> {
-  const m = new Map<string, string>()
-  let out = ''
-  try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}'], TMUX_PROBE_TIMEOUT_MS) } catch { return m }
-  for (const line of out.split('\n')) {
-    const tab = line.indexOf('\t'); if (tab < 0) continue
-    const id = line.slice(0, tab), title = line.slice(tab + 1)
-    if (id && title) m.set(id, title)
+// @@@ hotSignature - the 100ms zero-spawn death detector ([[state]] hot tier). NO child processes, NO async
+// socket connects — sync fs + one kill-0 syscall per session, so it stays honest under a thrashed event loop
+// (exactly when a spawn-based probe would hang). The id list is refreshed LAZILY (at most once/second) from
+// listSessionIds; per call each id's verdict comes from agentAlive (the shared death-latch registry). A session
+// with NO agent.pid (pre-registration/old) is SKIPPED here — the warm tier covers it. The fingerprint is the
+// sorted `${id}:${alive?1:0}` pairs plus the id set, so it moves the instant a registered agent dies.
+let hotIds: string[] = []
+let hotIdsAt = 0
+export async function hotSignature(): Promise<string> {
+  const now = Date.now()
+  if (now - hotIdsAt >= 1000) { hotIds = listSessionIds(); hotIdsAt = now }
+  const pairs: string[] = []
+  const present: string[] = []
+  for (const id of hotIds) {
+    const alive = agentAlive(id)
+    if (alive === undefined) continue   // no agent.pid → the warm tier's concern, not the hot death detector
+    present.push(id)
+    pairs.push(`${id}:${alive ? 1 : 0}`)
   }
-  return m
+  // prune latch entries for ids no longer registered (closed sessions), keeping the registry bounded.
+  const live = new Set(hotIds)
+  for (const k of [...pidRegistry.keys()]) if (!live.has(k)) pidRegistry.delete(k)
+  return pairs.sort().join(',') + '|' + present.sort().join(',')
 }
 
-// @@@ sessionSignature - a CHEAP fingerprint of the two live board signals the session-store fs-watch can't
-// see, because they are tmux-derived, not file writes: LIVENESS (which sessions exist — a crash/offline) and
-// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[graph-stream]] can
-// poll this to push a `board-changed` the instant a worker dies or updates its headline, instead of the
-// dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
-export async function sessionSignature(): Promise<string> {
-  const [snap, titles] = await Promise.all([liveSnapshot(), paneTitles()])
-  // fold in probe-failure, the live-listener set AND the unproven set so a socket dying (claude exit), the
-  // probe flipping to unknown, or a listener wedging (unproven) pushes a board-changed immediately, not only
-  // on window churn.
+// @@@ warmSignature - the 1s tier ([[state]] warm tier): the SINGLE merged tmux snapshot (windows + pane pids +
+// titles) plus the rendezvous listener tri-state, fingerprinted so a socket dying (claude exit), the probe
+// flipping to unknown, a listener wedging (unproven), or a headline changing pushes a board-changed the instant
+// it happens — not on window churn alone. Sorted so it only moves on a real change; NO git, NO extra store walk.
+export async function warmSignature(): Promise<string> {
+  const snap = await liveSnapshot()
   return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
-    [...snap.sockets].sort().join(',') + '~' + [...snap.unproven].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
+    [...snap.sockets].sort().join(',') + '~' + [...snap.unproven].sort().join(',') + '|' +
+    [...snap.titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
 }
 
 // @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
@@ -557,17 +628,17 @@ const lastKnownSession = new Map<string, Session>()
 // non-governed (user-self-launched) records are excluded — board state is a managed-session concern ([[state]]).
 // Offline and awaiting ones still appear (their record persists), so a session is never lost from view.
 export async function listSessions(): Promise<Session[]> {
-  // ONE store enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
-  // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
-  const [ids, snap, titles] = await Promise.all([
-    Promise.resolve(listSessionIds()), liveSnapshot(), paneTitles(),
+  // ONE store enumeration + ONE tmux snapshot (windows + pane pids + titles, merged) for the whole list, then
+  // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
+  const [ids, snap] = await Promise.all([
+    Promise.resolve(listSessionIds()), liveSnapshot(),
   ])
   const rows = ids.map((id) => guardSession(id, () => {
     const rec = readRecord(id)
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
     // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
-    const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), titles.get(id))
+    const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), snap.titles.get(id))
     const s = toSession(rec, reconcile(rec, snap), liveness(rec, snap), activity)
     lastKnownSession.set(id, s)
     return s
@@ -870,6 +941,9 @@ export function launcherCmd(rec: SessRec): string | undefined {
   if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
 }
+// @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
+// invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
+const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -878,6 +952,16 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
   // ambient default so resume reuses the same auth. Undefined is only for old records before launch_cmd existed.
   const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
+  // @@@ birth registration - record the AGENT's real pid BEFORE exec, the anchor of the 100ms hot death tier
+  // ([[state]]). Each attempt runs `sh -c '<pid-write>; exec env <invocation>'`: the sh writes its own `$$` to
+  // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
+  // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
+  // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
+  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shq1) so the
+  // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
+  // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
+  const pidPath = join(storeDir(id), 'agent.pid')
+  const born = `sh -c ${shq1(`printf %s "$$" > ${shq1(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -888,7 +972,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   writeFileSync(file, [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
-    `  ${invocation}`,
+    `  ${born}`,
     `  __spex_rc=$?`,
     `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
     `  printf '[spex launch] attempt %s exited in %ss (rc=%s) - fast launcher exit before readiness; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,

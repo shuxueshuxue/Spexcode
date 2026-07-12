@@ -12,7 +12,7 @@ related:
 # evidence-put
 
 Evidence has two halves — the **bytes** (a clip, a screenshot, a transcript, content-addressed in the
-shared cache) and the **record** that cites them (a yatsu reading's `evidence[]`, an issue thread's typed
+shared cache) and the **record** that cites them (an eval reading's `evidence[]`, an issue thread's typed
 hashes). Until this verb the only door into the cache was `spex eval add --video/--image`, which welds
 the two: you could not cache a clip without also filing a reading. `spex evidence put <file|->` is the bare
 transport half — put the bytes ([[eval-core]]'s `putBlob`, the same cache every surface reads via

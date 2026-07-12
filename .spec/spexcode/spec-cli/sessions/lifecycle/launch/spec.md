@@ -45,7 +45,7 @@ one app-server per session or cross into another project's socket.
 
 **Materialized delivery, not injection:** the spec-discipline contract is NOT pushed on the command line.
 Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), writing the `surface: system`
-bodies (name order — the `core` node + rules like `voice-before-ask` alongside it) into the `<spexcode>`
+bodies (name order — the `core` node + rules like `memory-hygiene` alongside it) into the `<spexcode>`
 managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, plus the dispatch shims. The agent then launches
 **plainly** and **auto-discovers** them — the SAME path a user-self-launched agent takes — so editing any
 always-on contract is a spec edit, not a code change. There is **no `--append-system-prompt` and no `--settings`**.

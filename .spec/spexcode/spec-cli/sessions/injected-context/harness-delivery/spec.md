@@ -64,7 +64,7 @@ scoped per project, for each SELECTED harness:
   allowlist, spawned **on demand**, not always-on. Same shape as skills, one definition per harness: the dir
   is the adapter's `agentDir(proj)`; a harness with NO agent primitive (e.g. Codex today) gets none, exactly
   as `skillDir` null skips skills. Exclude-hidden like the shims + skills (generated, no user prose) — so the
-  formerly-committed `.claude/agents/spec-scout.md` becomes a generated artifact joining the same managed block;
+  formerly-committed `.claude/agents/*.md` definitions become generated artifacts joining the same managed block;
 - **the Codex trust** — a directory-trust + per-hook `trusted_hash` written ADDITIVELY into the user's GLOBAL
   `~/.codex/config.toml`, scoped to this project path. The hash is computed deterministically (the pinned
   codex-rs algorithm), so a user-self-launched codex skips its trust prompts entirely.

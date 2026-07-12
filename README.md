@@ -63,7 +63,7 @@ Two rules make this workable:
 
 ## The optimization loop
 
-Specs, commits, and eval readings compose into one loop. The spec is the loss function: it states what you want, and
+Specs, commits, and evals compose into one loop. The spec is the loss function: it states what you want, and
 it's the half a human signs off on. Commits are the optimizer. **eval**, the measurement
 subsystem, is the eval: it scores how far live behavior currently sits from the spec, and the
 score's history lives in git like everything else.
@@ -72,7 +72,7 @@ score's history lives in git like everything else.
 
 It also settles where the human stands day to day: nobody reads a neural net by staring at its
 weights, and between merge gates you don't have to stare at agent diffs either. Attention goes to
-the spec and the eval readings; the diff gets read once, at merge time.
+the spec and the evals; the diff gets read once, at merge time.
 
 ## Quick start
 
@@ -83,7 +83,7 @@ npm i -g spexcode        # installs the `spex` command
 cd your-repo
 spex init                # seeds .spec/, installs git hooks, materializes the agent contract
 spex serve               # API backend on :8787
-spex dashboard           # board UI on :5173, proxying to the backend
+spex serve ui            # dashboard on :5173, proxying to the backend
 ```
 
 `spex init` is additive. It works on any existing git repo and never overwrites your files: it
@@ -104,7 +104,7 @@ of the spec writing; `spex guide spec` prints the exact file format it needs.
 [Getting started](https://spexcode.net/getting-started/) on the docs site walks the setup end to
 end.
 
-<img src="docs/readme-board.png" alt="dashboard screenshot">
+<img src="docs/readme-graph.png" alt="dashboard screenshot">
 
 *SpexCode's own repo on its own board; the sessions top-left are agents building the tool.*
 
@@ -155,19 +155,19 @@ proof easy. A spec says what a part should do; an
 `eval.md` beside it says how to check. Each scenario is a plain description plus an expected
 result. eval itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
 a test file, a real browser, or just clicking through by hand and screenshotting. It compares
-actual to expected and files the reading with evidence:
+actual to expected and files the eval with evidence:
 
 ```sh
-spex eval add settings --scenario remembers-tab --pass --image proof.png
+spex eval add settings --scenario remembers-tab --pass --image evidence.png
 ```
 
-Readings live in a git-tracked ndjson next to the spec, so measurements get the same attribution
-and history as spec versions. Bug fixes are expected to bracket: file a failing reading that
-reproduces the bug, fix, then file a passing reading on the same scenario.
+Evals live in a git-tracked ndjson next to the spec, so measurements get the same attribution
+and history as spec versions. Bug fixes are expected to bracket: file a failing eval that
+reproduces the bug, fix, then file a passing eval on the same scenario.
 
 <img src="docs/readme-eval.png" alt="eval view screenshot">
 
-*The eval view: scenario readings on the left; the selected reading's expected result, staleness,
+*The eval view: scenario evals on the left; the selected eval's expected result, staleness,
 and recorded video evidence in the middle.*
 
 ## What's in the repo
@@ -176,7 +176,7 @@ and recorded video evidence in the middle.*
 |---|---|
 | `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
 | `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
-| `spec-eval` | Scenario definitions, readings, evidence blobs. |
+| `spec-eval` | Scenario definitions, evals, evidence. |
 | `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
 
 ## The linter

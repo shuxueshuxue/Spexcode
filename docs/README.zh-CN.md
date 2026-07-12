@@ -94,7 +94,7 @@ spex serve ui           # 看板 UI,:5173,代理到后端
 确切文件格式。完整的安装过程见文档站的
 [getting started](https://spexcode.net/getting-started/)。
 
-<img src="readme-board.png" alt="看板截图">
+<img src="readme-graph.png" alt="看板截图">
 
 *SpexCode 自己的仓库跑在自己的看板上;左上角那些会话就是正在造它的 agent。*
 
@@ -139,7 +139,7 @@ scenario 就是一段普通描述加一个期望结果。eval 自己什么都不
 一起把读数记档:
 
 ```sh
-spex eval add settings --scenario remembers-tab --pass --image proof.png
+spex eval add settings --scenario remembers-tab --pass --image evidence.png
 ```
 
 读数存在 spec 旁边一个 git 跟踪的 ndjson 里,所以测量和 spec 版本享有同样的归属和历史。修 bug 要求

@@ -114,7 +114,7 @@ each. There is no discovery phase.
   duplicate the id).
 - **The plugin system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.plugins`** holds the concrete
-  *instance* plugins (`core` + `forge-link` + `memory-hygiene` + `voice-before-ask` are `surface:
+  *instance* plugins (`core` + `forge-link` + `memory-hygiene` + `deploy-runbook` are `surface:
   system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`); **`plugin-system`** holds the *spec of
   the plugin system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
   frontmatter **field** — `surface: system` materializes its body (in name order) into the

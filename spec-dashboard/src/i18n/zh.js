@@ -60,6 +60,11 @@ export default {
     summary: ({ n }) => `${n} 条当前`,
     empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
     annotate: '打开并标注',
+    okBtn: '签核',
+    okTitle: '人工签核这条读数 — 表示你已复核并认可其判定；已签核且未过期的场景会离开默认列表，直到新读数落地或它过期',
+    okdTip: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
+    okChip: ({ n }) => `☑ ${n} 已签核`,
+    okChipTitle: '显示被默认隐藏的已签核场景',
   },
 
   masterList: {
@@ -84,6 +89,10 @@ export default {
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
+    ok: '签核',
+    okTitle: '人工签核这条读数 — 你已复核并认可其判定。只绑定当前这条最新读数；单调（无撤销）— 新读数落地时不继承签核。',
+    okd: '已签核',
+    okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
   },
   thread: {
     anchorNow: '锚定',

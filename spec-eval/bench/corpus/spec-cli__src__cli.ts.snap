@@ -425,16 +425,20 @@ if (cmd === 'serve') {
       console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
-    const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
     const findings = await specLint()
     const errors = findings.filter((f) => f.level === 'error')
     for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
     console.error(`spex spec lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
-    // drift teaches from the ONE `spex spec lint` (no flag). Unanchored drift stays advisory forever; the
-    // blocking tier is anchor-drift ([[code-anchor]]) — an ERROR like any other, so the pre-commit shim
-    // (and CI) gates on it with no separate staged-index machinery.
-    if (findings.some((f) => f.rule === 'drift' || f.rule === 'anchor-drift')) console.error(`\n${DRIFT_GUIDANCE}`)
-    process.exit(errors.length ? 1 : 0)
+    // drift teaches + gates from the ONE `spex spec lint` (no flag): print the remediation guidance wherever
+    // drift exists, then apply the commit-local gate — which reads the staged index itself, so it only
+    // blocks an in-flight commit that touches an already heavily-drifted node. CI/manual (nothing staged)
+    // stays advisory, per the ci-gate contract.
+    const { blocked, touched, threshold } = await driftGate()
+    if (findings.some((f) => f.rule === 'drift') || touched.length) console.error(`\n${DRIFT_GUIDANCE}`)
+    for (const t of touched) console.error(`  ${t.drift >= threshold ? '✗' : '•'} drift-gate: '${t.id}' is ${t.drift} behind${t.drift >= threshold ? ' — BLOCKS this commit' : ' (advisory)'}`)
+    if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
+    process.exit(errors.length || blocked.length ? 1 : 0)
   } else if (sub === 'ack') {
     // An EMPTY stamp commit on top of HEAD, never an amend: driftFor (git.ts) quiets every drift commit
     // REACHABLE from an ack, so a child stamp covers exactly what amending HEAD would — and it works where
@@ -447,13 +451,13 @@ if (cmd === 'serve') {
     const reason = (flag('reason') ?? '').trim()
     if (!nodes.length || !reason) {
       console.error('usage: spex spec ack <node-id>… --reason "<why this change keeps each spec valid>"')
-      console.error('  --reason is required (it forces you to check before acking) and is recorded in the ack commit\'s message body — an ack that quiets an anchor hit is a strong claim, so its why must be durable.')
+      console.error('  --reason is required (it forces you to check before acking) and is NOT stored — git keeps only the Spec-OK trailer.')
       process.exit(2)
     }
     try {
-      git(['commit', '--only', '--allow-empty', '-m', `ack: Spec-OK ${nodes.join(', ')}`, '-m', reason,
+      git(['commit', '--only', '--allow-empty', '-m', `ack: Spec-OK ${nodes.join(', ')}`,
         ...nodes.flatMap((n) => ['--trailer', `Spec-OK: ${n}`])])
-      console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (empty stamp commit; reason recorded in the commit body)`)
+      console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (empty stamp commit; reason required, not stored)`)
     } catch (e: any) {
       console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
     }
@@ -523,12 +527,12 @@ if (cmd === 'serve') {
       if (!n.hasEvalFile && !n.uncoveredFrontend) console.log('      (no eval.md — nothing declared to measure)')
       else if (n.hasEvalFile && !n.scenarios.length) console.log('      (eval.md declares no scenarios)')
     }
-  } else if (['add', 'ls', 'scenario', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
+  } else if (['add', 'ls', 'scenario', 'lint', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.
     const { runEval } = await import('../../spec-eval/src/cli.js')
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
-    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | ok | retract | clean  (spex help eval)`)
+    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | retract | clean  (spex help eval)`)
     if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export])`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     process.exit(2)
   }

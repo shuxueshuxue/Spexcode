@@ -272,25 +272,6 @@ function writeStoreFile(p: Issue, message: string): boolean {
   return true
 }
 
-// @@@ the shared trunk-data commit — the committing half of the store discipline, exported for OTHER
-// git-tracked data writes that need a durable landing with no worktree ritual behind them (the eval
-// sidecar's human-ok, [[human-ok]]). Same rules as the issue store's own write: only the trunk checkout
-// itself commits (a linked-worktree caller gets 'not-primary' back and leaves its append for its own
-// session's ritual commit — the sidecar, unlike the issue store, legitimately lives per-branch and
-// merges); the commit is `--no-verify` and provably scoped to the one data path; the shared store lock
-// serializes it against every other trunk data write so racing writers never fight over the git index.
-export function commitTrunkData(relPath: string, message: string): 'committed' | 'no-op' | 'not-primary' {
-  if (overrideStoreDir()) return 'not-primary'   // a disposable-store test rig commits nothing, ever
-  if (!isPrimaryCheckout()) return 'not-primary'
-  return withStoreLock(() => {
-    const root = mainCheckout()
-    git(['-C', root, 'add', '--', relPath])
-    if (!git(['-C', root, 'status', '--porcelain', '--', relPath]).trim()) return 'no-op'
-    git(['-C', root, 'commit', '--no-verify', '-m', message, '--', relPath])
-    return 'committed'
-  })
-}
-
 // prepare (a FRESH read-modify or a new thread) + write + commit a single store file, all under the store
 // lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/close reads the
 // current thread, never a stale copy. A pre-rename store migrates first (before the lock — ensure takes it).

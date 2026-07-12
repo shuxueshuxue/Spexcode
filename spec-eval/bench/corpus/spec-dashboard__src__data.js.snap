@@ -210,15 +210,6 @@ export async function postRemark({ node, scenario, issue, body, codeSha, evidenc
   })
   return res.json()
 }
-// the human sign-off on a scenario's latest reading ([[human-ok]]) — the CLI-parity write behind the ok
-// affordance (feed row + detail header): the server binds the ok to the latest reading and derives the
-// identity ('human') itself, never from this call. Returns { ok, already, humanOk } or { error }.
-export async function postEvalOk(node, scenario) {
-  const res = await apiFetch(`/api/specs/${encodeURIComponent(node)}/evals/ok`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario }),
-  })
-  return res.json()
-}
 // stash a captured video frame (PNG bytes) in the content-addressed blob store; returns { hash } — what an
 // anchored annotation references (image link in its body, and the typed evidence[] on its thread).
 export async function putFrameBlob(blob) {

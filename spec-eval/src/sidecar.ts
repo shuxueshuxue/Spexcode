@@ -72,18 +72,28 @@ export function isJsonBlob(b: Buffer): boolean {
 
 // a RETRACTION is the sanctioned inverse of a filing — itself an appended event, never a deleted line
 // (the sidecar stays append-only; git shows who retracted what, when). `retracts` is the target reading's
-// `ts` within `scenario` (its natural key). The two event kinds are told apart POSITIVELY — a retraction
-// carries `retracts`, a reading carries `codeSha`; neither is recognized by another field's absence. `by`
-// is the retracting session; `note` says why (a botched e2e filing, a wrong verdict).
+// `ts` within `scenario` (its natural key). The event kinds are told apart POSITIVELY — a retraction
+// carries `retracts`, a reading carries `codeSha`, a human-ok carries `kind: 'human-ok'`; none is ever
+// recognized by another field's absence. `by` is the retracting session; `note` says why (a botched e2e
+// filing, a wrong verdict).
 export type Retraction = { retracts: string; scenario: string; note?: string; by?: string; ts: string }
 
-// parse the sidecar RAW: one event per non-blank line — a Reading, or a Retraction (a line carrying a
-// string `retracts`). A malformed line is skipped (the file is append-only and git-tracked, so a partial
-// write or a hand-edit shouldn't sink the whole read) — fail soft per line.
-export function readSidecar(sidecarPath: string): { readings: Reading[]; retractions: Retraction[] } {
+// a HUMAN-OK ([[human-ok]]) is the human's sign-off on ONE immutable reading — an appended event like the
+// others, never a mutation. `okTs`+`okSha` anchor the blessed reading (its ts is the natural key within
+// `scenario`, exactly retraction's join; the sha rides for the human reader). The ok is MONOTONIC — there
+// is no un-ok event: a newer reading is a different object the ok never transfers to, and staleness is
+// computed live, so both automatically bring the scenario back. A pre-human-ok toolchain skips these lines
+// silently (no top-level `codeSha`, so its reading parse never claims them).
+export type HumanOk = { kind: 'human-ok'; scenario: string; okTs: string; okSha: string; by: string; ts: string }
+
+// parse the sidecar RAW: one event per non-blank line — a Reading, a Retraction (a line carrying a string
+// `retracts`), or a HumanOk (kind 'human-ok'). A malformed line is skipped (the file is append-only and
+// git-tracked, so a partial write or a hand-edit shouldn't sink the whole read) — fail soft per line.
+export function readSidecar(sidecarPath: string): { readings: Reading[]; retractions: Retraction[]; oks: HumanOk[] } {
   const readings: Reading[] = []
   const retractions: Retraction[] = []
-  if (!existsSync(sidecarPath)) return { readings, retractions }
+  const oks: HumanOk[] = []
+  if (!existsSync(sidecarPath)) return { readings, retractions, oks }
   for (const line of readFileSync(sidecarPath, 'utf8').split('\n')) {
     const t = line.trim()
     if (!t) continue
@@ -91,10 +101,11 @@ export function readSidecar(sidecarPath: string): { readings: Reading[]; retract
       const r = JSON.parse(t)
       if (!r || typeof r.scenario !== 'string') continue
       if (typeof r.retracts === 'string') retractions.push(r as Retraction)
+      else if (r.kind === 'human-ok' && typeof r.okTs === 'string') oks.push(r as HumanOk)
       else if (typeof r.codeSha === 'string') readings.push(r as Reading)
     } catch { /* skip a malformed line */ }
   }
-  return { readings, retractions }
+  return { readings, retractions, oks }
 }
 
 // the retraction join, shared by every effective-view reader: drop each reading a retraction targets by
@@ -125,6 +136,21 @@ export function appendReading(sidecarPath: string, r: Reading): void {
 // that filed the reading; the target line stays in place as history.
 export function appendRetraction(sidecarPath: string, r: Retraction): void {
   appendFileSync(sidecarPath, JSON.stringify(r) + '\n')
+}
+
+// append ONE human-ok as a JSON line — the sign-off writes through the same append-only surface; the
+// blessed reading stays untouched, the ok binds to it by (scenario, okTs).
+export function appendHumanOk(sidecarPath: string, r: HumanOk): void {
+  appendFileSync(sidecarPath, JSON.stringify(r) + '\n')
+}
+
+// the ok that binds to a reading — the LAST ok row targeting (scenario, ts), or null. An ok anchored to a
+// retracted/superseded reading is inert history: it binds to nothing current, so the join is by exact
+// (scenario, okTs) against whichever readings the caller passes.
+export function humanOkFor(oks: HumanOk[], scenario: string, readingTs: string): HumanOk | null {
+  let hit: HumanOk | null = null
+  for (const o of oks) if (o.scenario === scenario && o.okTs === readingTs) hit = o
+  return hit
 }
 
 // the latest reading per scenario (the file is chronological, so the LAST line for a name wins). clean's

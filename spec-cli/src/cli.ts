@@ -70,7 +70,6 @@ const SIGNPOSTS: Record<string, string> = {
   ack: 'spex spec ack <node>… --reason "<why>"',
   tree: 'spex graph',
   board: 'spex graph --json',
-  yatsu: 'spex eval — add (was: yatsu eval) · ls (was: show) · lint (was: scan) · retract · clean; `yatsu check-staged` → spex internal check-staged', // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
   blob: 'spex evidence put|get',
   issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
@@ -325,7 +324,7 @@ if (cmd === 'serve') {
   if (process.argv[3] === 'config') signpost('spex guide config', 'spex guide settings')
   const text = guideText(process.argv[3])
   if (text === null) {
-    console.error(`spex guide: no topic '${process.argv[3]}'${process.argv[3] === 'yatsu' ? " — renamed: `spex guide eval`" : ''}. Topics: spec, eval, settings, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, eval, settings, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
     process.exit(2)
   }
   console.log(text)
@@ -534,7 +533,7 @@ if (cmd === 'serve') {
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
     console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | retract | clean  (spex help eval)`)
-    if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export]; the \`spex yatsu\` verbs moved into this drawer)`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
+    if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export])`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     process.exit(2)
   }
 } else if (cmd === 'evidence') {

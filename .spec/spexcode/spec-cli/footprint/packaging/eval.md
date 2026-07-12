@@ -3,7 +3,7 @@ scenarios:
   - name: dashboard-serves-bundled
     tags: [cli]
     description: >
-      Against a built bundle, run `spex dashboard --port P --api-port 8787` and drive it as a browser would
+      Against a built bundle, run `spex serve ui --port P --api-port 8787` and drive it as a browser would
       with curl: the dashboard index, a hashed bundled asset, an unknown SPA route, and an /api hit that must
       reach a running `spex serve`. Read the startup line and confirm the bind is loopback-only.
     expected: |

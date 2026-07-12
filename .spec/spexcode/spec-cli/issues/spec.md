@@ -61,7 +61,10 @@ path, so an eval-remark thread is invisible to `show` exactly as it is to the li
 per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
 slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
-same mixed set with no second path.
+same mixed set with no second path; the board also carries ONE top-level freshness stamp over the whole
+merged set (open/thread/reply counts + latest activity), so any thread write — reply, remark, resolve,
+retract, close, on a noded or nodeless thread — moves board bytes and reaches a delta-subscribed viewer
+([[remark-substrate]] write-visibility) while the per-node fold stays [[graph-lean]]-slim.
 
 **Writes stay where they're owned — and store-routed verbs stay one port, on BOTH surfaces.** Creation is
 ONE verb over every store (`createIssue` — `spex issue open [--store <store>]` and `POST /api/issues` are

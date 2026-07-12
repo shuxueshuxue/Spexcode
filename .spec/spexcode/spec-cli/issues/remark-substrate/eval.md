@@ -19,6 +19,18 @@ scenarios:
       resolving the HUMAN-authored remark is refused (400, self-resolve); the human retracting the
       AGENT's remark is refused (400, author-only); the human retracting their OWN unresolved remark
       succeeds (200, the reply removed from the thread).
+  - name: external-write-freshness
+    tags: [frontend-e2e]
+    code: spec-cli/src/index.ts
+    related: [spec-cli/src/graph.ts, spec-dashboard/src/App.jsx]
+    description: >-
+      A real browser sits on the dashboard's Issues page with a local thread's detail open (an on-page
+      wall clock burned into the recording). A remark then lands on that thread through POST /api/remarks
+      — the dashboard-parity write surface — from outside the tab. Record the whole window as video.
+    expected: >-
+      The write is push-visible: persistence atomically invalidates the board cache and the viewer's
+      thread shows the new remark within a couple of seconds (one debounce + rebuild + refetch), never
+      waiting for the ~15s cold/fallback lane.
 ---
 # measuring remark-substrate
 

@@ -11,11 +11,12 @@ const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const TEMPLATES = join(pkgRoot, 'templates')
 
 // the cumulative preset chain, lean → cautious (see [[init-preset]]). `default` is the live `.plugins`
-// instance set (planted from templates/spec); every higher tier is a SEPARATE package under
-// templates/presets/<tier>/ that seeding stacks ON TOP — a superset, so selecting `careful` seeds the
-// default set PLUS the careful package. Selection matters ONLY here at seed time; the running repo just
+// instance set (planted from templates/spec); a higher tier would be a SEPARATE package under
+// templates/presets/<tier>/ that seeding stacks ON TOP — a superset. No non-default tier ships today
+// (the `careful` package was retired); the chain mechanism stays for when one earns its keep.
+// Selection matters ONLY here at seed time; the running repo just
 // walks whatever `.plugins` ended up planted, so there is no launcher-side preset gate.
-const PRESET_TIERS = ['default', 'careful'] as const
+const PRESET_TIERS = ['default'] as const
 const presetRank = (name: string): number => (PRESET_TIERS as readonly string[]).indexOf(name)
 
 // recursively copy srcDir -> destDir, NEVER overwriting an existing file. Returns the repo-relative

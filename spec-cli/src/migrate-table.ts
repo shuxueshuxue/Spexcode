@@ -6,13 +6,6 @@
 export type MigrateAsset = { rel: string; template: string; oldShas: string[] }
 export const TEMPLATE_ASSETS: MigrateAsset[] = [
   {
-    "rel": "clarify-before-code/spec.md",
-    "template": "templates/presets/careful/.plugins/prompts/clarify-before-code/spec.md",
-    "oldShas": [
-      "a1b9c7e189df9b75a27005d381b43682d717ee6f"
-    ]
-  },
-  {
     "rel": "core/idle/idle.sh",
     "template": "templates/spec/project/.plugins/prompts/core/idle/idle.sh",
     "oldShas": [
@@ -291,6 +284,9 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
 ]
 // old-world template assets the shipped package no longer carries (recognized → reported, not replaced):
 export const RETIRED_ASSETS: Record<string, string[]> = {
+  "clarify-before-code/spec.md": [
+    "a1b9c7e189df9b75a27005d381b43682d717ee6f"
+  ],
   "core/harness-session-id/harness-session-id.sh": [
     "32b3b963ba6c2c659f0543e82a2a34128c4860bf",
     "626d7f3c56d6430c5dafb7713880a606b4ee8b03"

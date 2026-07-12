@@ -7,16 +7,20 @@ scenarios:
       read GET /api/issues: the stores list offers the `github` forge store and, once the resident cache
       warms, real `github#N` issues appear in the merged list — unchanged pre-seam behaviour. Then make
       the resolved host gitlab (a gitlab-form remote, or `{"forge":{"host":"gitlab"}}` in
-      spexcode.local.json), restart, and read the SAME surfaces: /api/issues answers 200 with local
-      threads only (no forge store, no `<host>#N` ids, no error) and /api/graph answers 200. Also probe
+      spexcode.local.json), restart, and read the SAME surfaces: /api/issues answers 200 (the gitlab
+      forge store is offered now that its driver is registered, but an unreachable/untokened gitlab
+      yields an EMPTY forge slice — local threads intact, no `github#N` leak, no error) and /api/graph
+      answers 200. Also probe
       the resolver directly across remote shapes: github.com URL → github, gitlab.com scp and a
       self-hosted https form (e.g. dev.aminer.cn) → gitlab, an explicit forge.host override beating the
       remote, and no origin → the default. File the transcript with --result.
     expected: >-
       resolveForgeHost() derives github/gitlab per the ladder (config override > remote hostname >
       DEFAULT_FORGE_HOST); a github repo's issues surface is byte-identical in shape to the hardwired
-      era; a resolved host with no registered driver degrades to an empty forge slice — local issues
-      intact, stores without a forge entry, 200s throughout, nothing spawned against the wrong host.
+      era; a gitlab-resolved repo offers the gitlab store (the driver is registered) and an
+      unreachable/untokened host degrades to an empty forge slice — local issues intact, zero foreign
+      `<host>#N` ids leaked, 200s throughout, nothing spawned against the wrong host. (A resolved host
+      with NO registered driver would offer no forge store at all — no such host ships today.)
     code:
       - spec-forge/src/drivers.ts
 ---

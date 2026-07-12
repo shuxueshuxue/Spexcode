@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: stream-survives-public-gateway
+    tags: [frontend-e2e, backend-api]
+    code: spec-cli/src/reaper.ts
+    related: [spec-cli/src/gateway.ts, spec-cli/src/graphStream.ts, spec-dashboard/src/SessionTerm.jsx]
+    description: >-
+      Through a REAL TLS `--public` gateway (the deployed dashboard's actual surface — https, password
+      login), open the dashboard in a real browser, switch to the session interface with a live terminal,
+      and HOLD for minutes with WebSocket/EventSource lifecycles instrumented and the reconnecting caption
+      observed. Both push channels (`/api/graph/stream?mode=delta` SSE, `/api/sessions/:id/socket` WS) are
+      actively heartbeating (10s ping contract), so nothing on the wire is idle.
+    expected: >-
+      Zero unsolicited drops for the whole hold: no SSE error/re-open cycles, no WS close code=1006 waves,
+      and the loud "reconnecting…" caption never appears. Connection reaping applies to slow-loris and idle
+      keep-alive sockets ONLY, identically on the TLS gateway and the plain-HTTP child — an armed deadline
+      must always be reachable (and disarmed) from the socket a request/upgrade actually reports, never
+      stranded on a wrapped socket the reaper can no longer see.
   - name: rename-nudge
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts

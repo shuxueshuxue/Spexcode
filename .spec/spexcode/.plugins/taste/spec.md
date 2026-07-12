@@ -14,7 +14,7 @@ SpexCode is **self-referential** — we build a spec-driven tool *with* the spec
 that guide its development must themselves live in the spec tree, not only in a chat that can be compacted away.
 These are the durable "tastes" (品味) the maintainer has stated while building it. Preserve the raw intent; let
 the campaign distill + refine, and let the rules that should govern every agent graduate into `.plugins`
-surface:system nodes (the way [[memory-hygiene]] / [[voice-before-ask]] already did).
+surface:system nodes (the way [[memory-hygiene]] already did).
 
 The principles, in the maintainer's own framing:
 

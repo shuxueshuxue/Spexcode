@@ -147,11 +147,12 @@ scenarios:
     description: >
       Measure type mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
       that renders control bytes visibly (`cat -v`), then exercise the REAL product path the dashboard
-      uses — `POST /api/sessions/:id/rawkey` with `{key}` (the same body sendRawKey posts) — for the tokens
-      typeKeyToken produces: a control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a
-      meta-uppercase `M-B`, a shift-arrow `S-Up`, an interrupt `C-c`, and a malformed `C-C-x`. After each,
-      capture the pane to read what the program actually received. (Browser variant: open the console on a
-      live session, enter type mode, press ⌃R / ⌥B / Shift+Tab and watch the agent's TUI respond.)
+      uses — `POST /api/sessions/:id/input` with `{kind:"keys", keys:[<token>]}` (the ordered token batch the
+      dashboard's type mode posts; the old `/rawkey` route is gone) — for the tokens typeKeyToken produces: a
+      control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a meta-uppercase `M-B`, a
+      shift-arrow `S-Up`, an interrupt `C-c`, and a malformed `C-C-x` (sent alone). After each, capture the
+      pane to read what the program actually received. (Browser variant: open the console on a live session,
+      enter type mode, press ⌃R / ⌥B / Shift+Tab and watch the agent's TUI respond.)
     expected: |
       Each modifier combo arrives as the correct terminal bytes — `C-r` → `^R` (0x12), `M-b` → `ESC b`,
       `S-Tab` → the back-tab `^[[Z` (what Claude Code's mode-cycle reads), `M-B` → `ESC B`, `S-Up` →

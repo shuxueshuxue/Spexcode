@@ -20,10 +20,10 @@ benchmark.** Mirror the keyboard-nav `/` palette's ranking (title/id prefix > ti
 but server-side, over nodes, in TS — don't import the JSX.
 
 One locked output contract, because two consumers reuse the SAME return: the CLI (a human reads it) and the
-[[inject-spec-scout]] agent (re-ranks it with an LLM/user-story pass, then reads the winning bodies and takes their
+a downstream consumer (an agent that re-ranks it with an LLM/user-story pass, reads the winning bodies and takes their
 `code:` straight from the frontmatter — feeding Explore/grep without a second index). This node builds ONLY
 the floor: the lexical scorer + the `search` CLI verb + `--json`. It does NOT build the user-story rerank,
-embeddings, or the ranker on top — those belong to [[inject-spec-scout]].
+embeddings, or the ranker on top — those belong to whatever consumer sits above.
 
 Don't overfit. A holdout benchmark MEASURES robustness; it is not a target to game. If a case misses, prefer
 a simpler general rule over a special-case — a couple of clean misses beats a gamed rule.
@@ -40,7 +40,7 @@ returns results sorted by `score` DESC, each `{ id, title, path, score, snippet 
     WHY it matched (falls back to the desc when only the name matched).
 
 Default output is a pretty terminal list (rank · title · id · path · snippet); `--json` prints exactly the
-array above, verbatim — the machine surface that the [[inject-spec-scout]] agent re-consumes. `--limit`
+array above, verbatim — the machine surface a downstream consumer re-reads. `--limit`
 caps the count (default 10). The scorer is CJK-aware — its tokenizer ([[shared-ranker]]) makes each Chinese
 character a token, so a Chinese query reaches the CJK prose a few nodes carry (the root node's body is a whole
 Chinese paragraph) with the same fielded ranking English gets, no per-language branch. A **zero-result** reply

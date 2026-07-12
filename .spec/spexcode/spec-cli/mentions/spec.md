@@ -37,7 +37,7 @@ grammar is uniform, the logic is tiny.
 - **The grammar is script-agnostic, and its charset is not defined here.** A reference token speaks
   THE id vocabulary — the whitelist defined once in [[spec-lint]]'s id-format rule (unicode letters/
   numbers, `-`, optional leading dot; no uppercase Latin) — plus `_`, which never occurs in a dir name
-  but does occur in a minted parent-qualified id ([[id-url-safe]]), so `[[.plugins_spec-scout]]`
+  but does occur in a minted parent-qualified id ([[id-url-safe]]), so a minted `` [[.plugins_<id>]] ``
   mentions as one token. The same vocabulary slugify already grants branch/worktree names — so a CJK
   dir name is a legal node id and `[[中文节点]]` binds a launch exactly like an ASCII id, in the
   parser, the autocomplete's trigger scan, and the server's node derivation alike. An ASCII-only

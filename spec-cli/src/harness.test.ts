@@ -280,22 +280,22 @@ test('claude clean SURGICALLY removes only spexcode artifacts, sparing user pros
   const shim = join(proj, '.claude', 'settings.json')
   writeFileSync(shim, JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: 'bash /pkg/hooks/dispatch.sh claude Stop' }] }] } }))
   // a spexcode skill + a USER skill in the same dir; a spexcode agent + a USER agent
-  mkdirSync(join(proj, '.claude', 'skills', 'spec-scout'), { recursive: true })
-  writeFileSync(join(proj, '.claude', 'skills', 'spec-scout', 'SKILL.md'), 'generated')
+  mkdirSync(join(proj, '.claude', 'skills', 'sample-agent'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'skills', 'sample-agent', 'SKILL.md'), 'generated')
   mkdirSync(join(proj, '.claude', 'skills', 'my-skill'), { recursive: true })
   writeFileSync(join(proj, '.claude', 'skills', 'my-skill', 'SKILL.md'), 'mine')
   mkdirSync(join(proj, '.claude', 'agents'), { recursive: true })
-  writeFileSync(join(proj, '.claude', 'agents', 'spec-scout.md'), 'generated')
+  writeFileSync(join(proj, '.claude', 'agents', 'sample-agent.md'), 'generated')
   writeFileSync(join(proj, '.claude', 'agents', 'mine.md'), 'mine')
 
-  claudeHarness.clean(proj, { skills: ['spec-scout'], agents: ['spec-scout'] })
+  claudeHarness.clean(proj, { skills: ['sample-agent'], agents: ['sample-agent'] })
 
   const md = readFileSync(claudeMd, 'utf8')
   assert.ok(md.includes('USER PROSE') && !md.includes('spexcode:start'))         // prose kept, block gone
   assert.ok(!existsSync(shim))                                                   // our shim deleted
-  assert.ok(!existsSync(join(proj, '.claude', 'skills', 'spec-scout')))          // our skill pruned
+  assert.ok(!existsSync(join(proj, '.claude', 'skills', 'sample-agent')))          // our skill pruned
   assert.ok(existsSync(join(proj, '.claude', 'skills', 'my-skill')))             // user skill spared
-  assert.ok(!existsSync(join(proj, '.claude', 'agents', 'spec-scout.md')))       // our agent pruned
+  assert.ok(!existsSync(join(proj, '.claude', 'agents', 'sample-agent.md')))       // our agent pruned
   assert.ok(existsSync(join(proj, '.claude', 'agents', 'mine.md')))              // user agent spared
 })
 

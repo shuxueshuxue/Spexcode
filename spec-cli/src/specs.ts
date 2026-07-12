@@ -97,7 +97,7 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 // single token — never a '/'-joined path, which would break every `:id` route and fetch that treats an id
 // as one path segment. So the disambiguation separator is '_': like '/' it never occurs inside a dir
 // basename (so the join stays unambiguous), but unlike '/' it is a URL/wikilink/DOM-safe unreserved char,
-// so a collision-qualified id (e.g. `.plugins_spec-scout`) stays a single token everywhere it is resolved.
+// so a collision-qualified id (e.g. `.plugins_<id>`) stays a single token everywhere it is resolved.
 // Exported as the ONE mint every id producer shares: spec-eval mints its node ids through this same
 // function over this same universe (every spec node), so a colliding leaf carries one canonical id
 // system-wide instead of a second, diverging bare-leaf scheme.

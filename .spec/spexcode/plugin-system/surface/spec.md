@@ -31,7 +31,7 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   never folded into the always-on contract. Its `tools:` field is the spawned agent's read/write tool
   allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
-  exactly as a harness with no skill primitive gets no `SKILL.md`. The canonical example is [[spec-scout]].
+  exactly as a harness with no skill primitive gets no `SKILL.md`.
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
 **recursively** under a plugin root — so a grouping plugin may itself be a plugin whose children carry a

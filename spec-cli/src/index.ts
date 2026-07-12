@@ -21,6 +21,7 @@ import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { evalNodes } from '../../spec-eval/src/scenarios.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
+import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -112,6 +113,19 @@ app.post('/api/specs/:id/evals', async (c) => {
   if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
   const r = fileHumanReading(c.req.param('id'), b)
   return r.ok ? c.json({ ok: true, reading: r.reading }) : c.json({ error: r.error }, 400)
+})
+// the HUMAN SIGN-OFF write ([[human-ok]]) — the dashboard's ok affordance and `spex eval ok` share this ONE
+// write (LAW L: no dashboard-only path). Identity is SERVER-DERIVED 'human', never the request body (the
+// same rule as /api/remarks). The write appends a monotonic human-ok event bound to the scenario's latest
+// reading and — on the trunk checkout — commits it straight to trunk; the board cache is invalidated
+// atomically with persistence so the writer's own refetch never races a stale cache.
+app.post('/api/specs/:id/evals/ok', async (c) => {
+  const b = await c.req.json().catch(() => null)
+  if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario }' }, 400)
+  const r = fileHumanOk(c.req.param('id'), b.scenario, 'human')
+  if (!r.ok) return c.json({ error: r.error }, 400)
+  notifyBoardChanged('full')
+  return c.json({ ok: true, already: r.already, humanOk: r.humanOk })
 })
 // serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).

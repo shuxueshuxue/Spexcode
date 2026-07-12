@@ -51,8 +51,11 @@ export function currentEntries(nodes) {
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
 // one eval row — the shared row grammar every eval face uses (the issues page's list here; the session Eval
-// tab reuses it verbatim so the two surfaces can never drift apart).
-export function EvalRow({ e, selected, onClick }) {
+// tab reuses it verbatim so the two surfaces can never drift apart). `onOk` arms the human sign-off
+// affordance ([[human-ok]]) — only the Evals feed passes it; a home without it (the session tab) still
+// renders the settled ☑ mark on an ok'd reading, just no write.
+export function EvalRow({ e, selected, onClick, onOk }) {
+  const t = useT()
   return (
     <button className={`ef-row ${selected ? 'sel' : ''}`} onClick={onClick}>
       <ScoreBadge state={e.state} />
@@ -60,6 +63,12 @@ export function EvalRow({ e, selected, onClick }) {
       <span className="ef-scenario" data-tip={e.scenario}>{e.scenario}</span>
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
       <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).filter(Boolean).join('·')}</span>
+      {e.humanOk
+        ? <span className="ef-okd" data-tip={t('evalsFeed.okdTip', { by: e.humanOk.by, at: new Date(e.humanOk.ts).toLocaleString() })}>☑</span>
+        : onOk
+          ? <span role="button" tabIndex={-1} className="ef-okbtn" data-tip={t('evalsFeed.okTitle')}
+              onClick={(ev) => { ev.stopPropagation(); onOk(e) }}>{t('evalsFeed.okBtn')}</span>
+          : null}
       <span className="ef-time">{rel(e.ts)}</span>
     </button>
   )
@@ -80,10 +89,11 @@ const rel = (ts) => {
 // group carries no title of its own — the [[side-nav]] rail names the Evals page; this list's head is the
 // shared two-row cluster: the CONTROL row (`lead` — the shell's anchored fold toggle — beside the kind
 // dropdown, the SAME shared control as the issues drain's store filter) over the chip row.
-export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRows, mustShow = null, lead = null }) {
+export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRows, onOk = null, mustShow = null, lead = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [liveOnly, setLiveOnly] = useState(false) // [[live-session-filter]]: only readings whose filer is alive
+  const [showOk, setShowOk] = useState(false)     // [[human-ok]]: reveal the fresh, human-ok'd scenarios the feed default-hides
 
   // latest reading per scenario, already newest-first (currentEntries) — fresh AND stale MIXED, always.
   // Freshness is never a filter here: a stale reading is real measured loss and stays in the time-ordered
@@ -99,17 +109,25 @@ export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRo
   // liveSession join the originator chip renders, so the chip and the dots can never disagree.
   const isLive = (e) => !!liveSession(sessions, e.by)
   const liveCount = useMemo(() => kindRows.filter(isLive).length, [kindRows, sessions])
-  const rows = useMemo(() => (liveOnly ? kindRows.filter(isLive) : kindRows), [kindRows, liveOnly, sessions])
+  const filtered = useMemo(() => (liveOnly ? kindRows.filter(isLive) : kindRows), [kindRows, liveOnly, sessions])
+  // [[human-ok]] feed-level triage — the ONE default hide: a scenario whose latest reading is fresh AND
+  // human-ok'd is reviewed loss, not current loss, so it leaves the default feed. Both release conditions
+  // are automatic (a newer reading unbinds the ok; staleness is computed live), and the show-all chip keeps
+  // the ok'd set reachable — hidden is triage, never invisible-forever. Node detail, A/B strip, and history
+  // still show everything; this predicate lives only here.
+  const okHidden = (e) => !!(e.fresh && e.humanOk)
+  const okCount = useMemo(() => filtered.filter(okHidden).length, [filtered])
+  const rows = useMemo(() => (showOk ? filtered : filtered.filter((e) => !okHidden(e))), [filtered, showOk])
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
   // a deep-linked eval hidden by the current filters un-hides itself: widen the kind dropdown to 'all'
-  // (and release the live chip) so the canonical URL always renders its eval — but only when the entry
-  // actually exists; a bad address changes nothing.
+  // (and release the live chip + the ok-hide) so the canonical URL always renders its eval — but only when
+  // the entry actually exists; a bad address changes nothing.
   useEffect(() => {
     if (!mustShow) return
     if (rows.some((e) => entryKey(e) === mustShow)) return
-    if (all.some((e) => entryKey(e) === mustShow)) { setKind('all'); setLiveOnly(false) }
+    if (all.some((e) => entryKey(e) === mustShow)) { setKind('all'); setLiveOnly(false); setShowOk(true) }
   }, [mustShow, rows, all])
 
   return (
@@ -123,18 +141,28 @@ export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRo
         {/* [[live-session-filter]]: the chip self-hides at N=0 ONLY while the filter is OFF. Once liveOnly
             is on it stays mounted even as liveCount → 0 (the routine case: the live filer worker closes
             after its merge), so the filter is always releasable and the feed never dead-ends empty. */}
-        {(liveOnly || liveCount > 0) && (
+        {(liveOnly || liveCount > 0 || showOk || okCount > 0) && (
           <span className="ef-chipbar">
-            <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
-              data-tip={t('masterList.liveChipTitle')}>
-              {t('masterList.liveChip', { n: liveCount })}
-            </button>
+            {(liveOnly || liveCount > 0) && (
+              <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
+                data-tip={t('masterList.liveChipTitle')}>
+                {t('masterList.liveChip', { n: liveCount })}
+              </button>
+            )}
+            {/* [[human-ok]] show-all: like the live chip, it self-hides at N=0 only while OFF — once on it
+                stays mounted so the reveal is always releasable and the feed never dead-ends. */}
+            {(showOk || okCount > 0) && (
+              <button type="button" className={`ef-chip ef-okchip ${showOk ? 'on' : ''}`} onClick={() => setShowOk((v) => !v)}
+                data-tip={t('evalsFeed.okChipTitle')}>
+                {t('evalsFeed.okChip', { n: okCount })}
+              </button>
+            )}
           </span>
         )}
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (
-        <EvalRow key={entryKey(e)} e={e} selected={sel === entryKey(e)} onClick={() => onSel(entryKey(e), e)} />
+        <EvalRow key={entryKey(e)} e={e} selected={sel === entryKey(e)} onClick={() => onSel(entryKey(e), e)} onOk={onOk} />
       ))}
     </section>
   )

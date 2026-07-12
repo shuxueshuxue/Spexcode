@@ -192,7 +192,7 @@ ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · ok · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
@@ -200,6 +200,7 @@ ${MENTION_NOTE}`,
        spex eval ls --session <SEL> --export [--open | --out <path>]
        spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
        spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
+       spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest reading
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
@@ -221,6 +222,11 @@ stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source 
 (eval-coverage — the same name and shape as spec lint's coverage, one rule per layer) · over-owned
 files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
 commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
+
+ok — the human's reviewed-and-agreed mark on the scenario's LATEST reading: an appended, monotonic
+sign-off bound to that one immutable reading (a newer reading or staleness releases it on its own —
+no un-ok exists). The evals feed default-hides a fresh, ok'd scenario; a governed session is refused
+(an agent's judgment on a reading is a remark, never a self-blessing).
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
 deletes a line); the previous eval becomes latest again, or the scenario honestly returns to

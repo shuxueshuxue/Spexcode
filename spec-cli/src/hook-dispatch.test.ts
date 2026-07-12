@@ -107,3 +107,52 @@ test('a slot-less tree falls back to the legacy global manifest (migration windo
   assert.equal(slotted.status, 0, slotted.stderr)
   assert.ok(!/SLOT-HIT/.test(slotted.stdout), 'the slot shadows the legacy file even when it dispatches nothing')
 })
+
+// [[mark-active]] in-process subagents (issue #60) — a Task-subagent tool call fires the PARENT's hooks with
+// the PARENT's session_id but a top-level agent_id stamp. mark-active must skip it (a parent's declared
+// park/ask survives its subagents' activity, so the stop-gate never races its own declaration), while the
+// parent's OWN calls (no agent_id) keep flipping to active. The payloads mirror a live capture (claude
+// 2.1.207): agent_id sits before tool_input; an agent_id-named TOOL PARAM sits inside tool_input and must
+// NOT be mistaken for the stamp.
+test('claude mark-active skips a subagent tool call but still flips on the parent\'s own', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-subagent-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', 'sid_P'), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  writeFileSync(join(runtime, 'hooks-manifest'), 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
+  const record = () => JSON.stringify({
+    session_id: 'sid_P', governed: true, status: 'parked', proposal: '', note: 'waiting on a background wait',
+  }, null, 2)
+  const fire = (payload: string) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
+    cwd: dir,
+    env: { ...process.env, SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'), SPEXCODE_HOME: home },
+    input: payload,
+    encoding: 'utf8',
+  })
+  const rec = join(runtime, 'sessions', 'sid_P', 'session.json')
+
+  // subagent-executed call: top-level agent_id (harness stamp, before tool_input) → record untouched
+  writeFileSync(rec, record())
+  let r = fire('{"session_id":"sid_P","transcript_path":"/x/sid_P.jsonl","cwd":"/x","agent_id":"ab737f25195ee419a","agent_type":"general-purpose","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo CHILD"}}')
+  assert.equal(r.status, 0, r.stderr)
+  let j = readFileSync(rec, 'utf8')
+  assert.match(j, /"status": "parked"/, 'a subagent tool call must not clobber the parent\'s declaration')
+  assert.match(j, /"note": "waiting on a background wait"/)
+
+  // the parent's own call (no agent_id) still flips to active and clears the note
+  r = fire('{"session_id":"sid_P","transcript_path":"/x/sid_P.jsonl","cwd":"/x","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo PARENT"}}')
+  assert.equal(r.status, 0, r.stderr)
+  j = readFileSync(rec, 'utf8')
+  assert.match(j, /"status": "active"/, 'the freshness signal itself must survive the fix')
+  assert.match(j, /"note": ""/)
+
+  // an agent_id-NAMED tool parameter lives inside tool_input (past the scan prefix) → NOT a subagent stamp
+  writeFileSync(rec, record())
+  r = fire('{"session_id":"sid_P","hook_event_name":"PreToolUse","tool_name":"mcp__x__y","tool_input":{"agent_id":"a-param-not-a-stamp"}}')
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(readFileSync(rec, 'utf8'), /"status": "active"/, 'a tool param named agent_id must still flip (deterministic prefix scan)')
+})

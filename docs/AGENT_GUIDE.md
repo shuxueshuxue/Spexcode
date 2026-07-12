@@ -2,8 +2,7 @@
 
 SpexCode is a spec-driven, self-developing dev tool that **dogfoods itself**: every change to the
 tool is recorded as a versioned *spec node* and merged into `main` through a `node/*` branch. Read
-this before starting — it's the stuff that isn't obvious from the file tree, and it's what costs an
-agent the most time to rediscover.
+this before starting — it covers what isn't obvious from the file tree.
 
 ## The dogfood ritual (how every change lands)
 
@@ -38,7 +37,7 @@ backend creates the `node/<id>` branch, the `prepare-commit-msg` hook stamps the
 the commit-before-declare contract is the **`.plugins/core`** node — materialized (with this guide)
 into the worktree's `CLAUDE.md`/`AGENTS.md` contract block that the harness **auto-discovers**, the
 SAME path for a dispatched and a self-launched agent, not a launch-time `--append-system-prompt`
-(there is no baked `CORE_CONTRACT` constant — the contract is *data*, a config node) — and the
+(the contract is *data*, a config node — not a string baked into the CLI) — and the
 `--no-ff` merge style is stated at merge time by the merge prompt. So don't restate the flow when
 dispatching — the system enforces it.
 
@@ -73,7 +72,7 @@ each. There is no discovery phase.
   git serializes the merges, and a conflict just means you re-merge. Never throttle parallel work to
   avoid conflicts.
 - **MONITOR** — `spex session watch` streams the session lifecycle: `launched` → actionable transitions
-  (`review` / `done` / `offline` / `error` / `needs-input`) → `closed`. A booting worker reads
+  (`review` / `done` / `close-pending` / `offline` / `error` / `asking`) → `closed`. A booting worker reads
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
 - **WAIT WITH `spex session wait <id>`** — to wait on a dispatched worker, background `spex session wait <id>`: it prints
@@ -87,11 +86,12 @@ each. There is no discovery phase.
   session graph** for the whole wait (so your supervision is visible, not an invisible spin) and is
   **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker that never produces
   an edge can't hang you; the timeout message carries the observed path). Background one wait per worker; N waits draw N edges. One trap:
-  **never block on `spex session watch`** — that's the human's *forever* stream, no `<id>`, and it freezes your turn.
+  **never block on `spex session watch`** — that's the human's *forever* stream: it never exits, and it freezes your turn.
   (`spex session review <id>` / `spex session ls` still return a one-shot snapshot; `spex graph --json` dumps the board JSON for a glance.)
 - **REVIEW** — `spex session review <id>` prints the one review payload: commits ahead of `main`, the
-  merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
-  you don't hand-run git or read the source.
+  merge-base diff (the worker's real changes), and the merge-conflict/lint gates (there is deliberately no
+  typecheck/test gate — soundness is proven by eval scenarios, not a language-specific checker). Decide from
+  that — you don't hand-run git or read the source.
 - **MERGE** — `git -C <root> merge --no-ff <branch>`. Then **confirm the merge landed**: `git -C <root>
   log -1` must show `HEAD` advanced to the new merge commit **before** you go any further. Never close
   an unmerged branch — closing discards the work.
@@ -107,40 +107,46 @@ each. There is no discovery phase.
 - A node = a directory under `.spec/` containing a `spec.md`. `id` = directory basename; `parent` =
   the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
   (the project). Its children are the package nodes — `spec-cli` (Hono backend + source-of-truth
-  guards), `spec-dashboard` (UI), and `spec-forge` (a built, read-only forge **link tracer**) — plus
-  the **reflexive plugin system** (`.plugins` and `plugin-system`, next bullet). A node is a
+  guards), `spec-dashboard` (UI), `spec-eval` (the measurement system), and `spec-forge` (a built,
+  read-only forge **link tracer**) — plus `extensions` (satellite features living in their own repos)
+  and the **reflexive plugin system** (`.plugins` and `plugin-system`, next bullet). A node is a
   *directory*, not a file — that's what lets it both nest (children = subdirs) and co-locate assets;
   the id lives in the dir name, so the file is always `spec.md` (never `<id>.md` — that would
   duplicate the id).
 - **The plugin system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.plugins`** holds the concrete
-  *instance* plugins (`core` + `forge-link` + `memory-hygiene` + `deploy-runbook` are `surface:
-  system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`); **`plugin-system`** holds the *spec of
-  the plugin system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
+  *instance* plugins (`core` + `deploy-runbook` + `forge-link` + `memory-hygiene` + `reproduce-before-fix`
+  are `surface: system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`;
+  `e2e-review` + `taste` are `surface: skill` (`distill` is both skill and command); `spec-scout` is
+  `surface: agent`; `core`'s children are `surface: hook` handlers); **`plugin-system`** holds the *spec of
+  the plugin system* itself (children `surface`, `init-preset`). Each plugin carries a `surface`
   frontmatter **field** — `surface: system` materializes its body (in name order) into the
   `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness
   **auto-discovers** it as always-on context (not a launch-time `--append-system-prompt`); `surface:
-  command` exposes it as a `/`-dropdown preset for new sessions.
-  There are no `system/`/`command/` bucket dirs and no path-driven surface — the surface *is* the field,
-  so every plugin is a real graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` gather the two
-  surfaces; only built/active plugins gather (a `pending` plugin renders on the board but reaches no
-  surface).
-- `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`,
-  optional `code:` list; plugin nodes also carry a `surface` field) + a markdown body.
+  command` exposes it as a `/`-dropdown preset for new sessions; `skill`/`agent`/`hook` materialize
+  into the harness's skill/agent dirs and the hook manifest.
+  There are no `system/`/`command/` bucket dirs and no path-driven surface — the surface *is* the field
+  (discovered recursively, so a plugin may nest under a grouping plugin), and every plugin is a real
+  graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` (plus the hook/skill/agent loaders in
+  `specs.ts`) gather the surfaces; only built/active plugins gather (a `status: pending` plugin renders
+  on the board but reaches no surface).
+- `spec.md` = frontmatter (`title`, `status` ∈ pending|active|merged|drift — mostly backend-derived,
+  rarely hand-set, `session`, `hue`, `desc`, optional `code:` and `related:` lists; plugin nodes also
+  carry a `surface` field) + a markdown body. `spex guide spec` prints the full format.
 - **The body is a living current-state document, never a changelog.** It always describes the node's
   *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
   `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
   `## vN …`.) `spex spec lint`'s **living** rule enforces this. Version evolution is read from git and
-  shown in the dashboard's **recent / history** tabs (each commit's reason, session, and line-diff).
+  shown in the dashboard's **history** tab (each commit's reason, session, and line-diff).
 - **Git is the database.** A node's `version` is the number of **content commits** to its `spec.md`
-  (`git log --follow`, *excluding pure renames* — moving a file in a reparent isn't a version); the
-  recent/history rows are those same commits, each attributed via the `Session:` commit trailer.
+  (*excluding pure renames* — moving a file in a reparent isn't a version); the
+  history rows are those same commits, each attributed via the `Session:` commit trailer.
   There is no separate datastore — the dashboard is a read-time aggregator over git.
 
 ## Kinds of commit (not every commit is a spec commit)
 
-Git knows nothing about specs. A commit becomes a node's *version* **only because it changed a file
-under `.spec/`** — the entire data extraction is `git log -- .spec/.../<id>/spec.md`. The `spec:`
+Git knows nothing about specs. A commit becomes a node's *version* **only because it changed that
+node's `.spec/.../<id>/spec.md`** — the data extraction is a git-history walk over that path. The `spec:`
 message prefix is cosmetic: what counts is *which file the commit touched*, not what its subject says.
 
 Three kinds of commit coexist in history:
@@ -149,7 +155,7 @@ Three kinds of commit coexist in history:
   justifies). Becomes a version row: subject = the "reason", `Session:` trailer = attribution.
 - **Merge commit** — `merge node/<id>: …`, the `--no-ff` gate onto `main`. Not a version itself.
 - **Plain code/docs commit** — touches code or docs but no `spec.md` (e.g. the early `spec-cli:` /
-  `spec-dashboard:` build commits, or this `CLAUDE.md`). **Invisible to the spec timeline** — just
+  `spec-dashboard:` build commits, or this guide). **Invisible to the spec timeline** — just
   ordinary git.
 
 So you *can* commit code without a spec, and the engine simply ignores it. The ritual deliberately
@@ -164,31 +170,33 @@ together — that is a project choice, not a git requirement.
   (+ `/diff/:hash`), `GET /api/settings` (the resolved layout + launcher profiles), `GET /api/plugins`
   (the gathered command-surface plugins),
   `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
-  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `edges`).
+  merge/resume/capture/input/stop/close/rename + the **`:id/socket` terminal WebSocket** and `edges`).
   Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
   portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
   non-default layouts).
 - `spec-dashboard/` — Vite + React. `src/data.js`'s `loadGraph()` fetches **`/api/graph`**; the x/y
-  tidy-tree `layout()` is exported from `data.js` but **applied in `App.jsx`** (focus-driven
+  tidy-tree `layout()` is exported from `data.js` but **applied in `Dashboard.jsx`** (focus-driven
   drill-down — a pure view concern, the backend has no pixels). The live Sessions console is a **real
-  terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket. `data.js` still carries
-  a legacy mock `SESSION_LOG`, but it now feeds **only the dormant `TermPane.jsx`**, not the live UI.
-- `spec-forge` — a third package node, now **built and `active`**: a host-agnostic, **read-only forge
+  terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket.
+- `spec-eval/` — the measurement system behind the `spex eval` / `spex evidence` drawers: scenario
+  schema, eval filings, freshness, and the content-addressed evidence store.
+- `spec-forge` — a sibling package node, **built and `active`**: a host-agnostic, **read-only forge
   link tracer** that reads a forge's open issues/PRs and resolves each to the spec node it serves
   (git/`.spec` stays the single source of truth — a node's status stays git-derived). Real `spec-forge/`
-  package (`src/{cli,links,port,cache,resident,needs-eval,drivers}.ts`, `src/drivers/github.ts`) with active child
-  nodes `forge-cli`, `dashboard-issues`, `freshness`, `links`, `port`.
+  package (`src/{cli,links,port,cache,resident,needs-eval,drivers}.ts`, `src/drivers/{github,gitlab}.ts`)
+  with active child nodes `forge-cli`, `dashboard-issues`, `forge-cache`, `forge-host`, `gitlab`,
+  `links`, `needs-eval`, `port` (plus the `pending` `conformance-gate` subtree).
 
 ## Running it
 
-> **Live dogfood deployment** (the public `:443` dashboard, the multi-process topology, the watchdog, and
+> **Live dogfood deployment** (the public dashboard gateway, the multi-process topology, the watchdog, and
 > the **rebuild-the-dist-on-merge** discipline) is operator infra, deliberately **not** in this product repo
 > — it lives in the sibling **`spexcode-ops`** repo (`deploy/` scripts + recipe; secrets via a git-ignored
 > `.env`). Reach for it when serving SpexCode publicly or when a merged dashboard change isn't showing up on
 > a deployed instance. The notes below are the plain local dev loop.
 
-- Backend: `npm run api` → http://localhost:8787 (a supervisor that hot-reloads `spec-cli/src` and
-  owns the public port for zero-downtime restarts).
+- Backend: `npm run api` → http://localhost:8787 (a supervisor that hot-reloads the backend source —
+  `spec-cli/src`, `spec-eval/src`, `spec-forge/src` — and owns the public port for zero-downtime restarts).
   - **The supervisor hot-reloads the CHILD server, never ITSELF.** On a `spec-cli/src` change it boots a
     fresh child (`index.ts` + the modules it imports — server logic, `sessions.ts`, …) behind the stable
     public port, so those edits go live on their own. But a change to **`supervise.ts`**, or to **how the
@@ -215,18 +223,21 @@ together — that is a project choice, not a git requirement.
 - `spex session watch` — the **canonical session monitor**: streams actionable session transitions as they
   happen (`spex session ls` for a one-shot table). The dashboard's live Sessions console is the GUI
   equivalent.
-- `spex spec lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
-  **integrity** (error — a `code:` path doesn't exist), **living** (error — a body contains a `## vN`
-  changelog heading instead of staying current-state; see "the body is a living document" above),
-  **altitude** (warn — a body slid below contract altitude into a mechanics dump: over its line/char
-  budget, code-identifier density > 1.3/line, or ≥3 step-by-step lines; budgets overridable via
-  `spexcode.json`), **coverage** (warn — a governed source file isn't claimed by any spec), **drift**
-  (warn — a governed file changed after its spec's last version, derived live from git, no stored hashes). The
+- `spex spec lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph.
+  Errors: **integrity** (a `code:`/`related:` path doesn't exist), **one-govern** (a node governs more than
+  one file), **living** (a body contains a `## vN` changelog heading instead of staying current-state; see
+  "the body is a living document" above), **id-format**, and **mention** (a `[[id]]` naming no node). Warns:
+  **altitude** (a body slid below contract altitude into a mechanics dump: over its line/char budget,
+  code-identifier density > 1.3/line, or ≥3 step-by-step lines; budgets overridable via `spexcode.json`'s
+  `lint` key), **breadth**, **coverage** (a governed source file isn't claimed by any spec), **drift**
+  (a governed file changed after its spec's last version, derived live from git, no stored hashes),
+  **related-drift**, **owners**, and **confusable-id**. `spex guide spec` documents every rule. The
   pre-commit hook is a thin shim over it that blocks on errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
-- A spec node declares the files it owns via a `code:` list in its frontmatter — that edge is what
-  `spex spec lint` and (later) the LLM judge anchor to.
+- A spec node declares the file it owns via a `code:` list in its frontmatter (at most ONE file — the
+  one-govern error; move the rest to `related:`) plus a `related:` list for files it references — those
+  edges are what `spex spec lint` and eval freshness anchor to.
 - To configure SpexCode's runtime settings (launchers, dashboard icon, lint budgets, layout), run
   **`spex guide settings`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
   field and which of the two files it belongs in (committed & portable vs. gitignored & host-specific).
@@ -237,8 +248,8 @@ together — that is a project choice, not a git requirement.
 ### Measuring a frontend node's eval scenario — drive a real browser
 
 A frontend scenario (a favicon, a rendered view, a tab title) is measured through the **actual running
-product**, never by reasoning about the code — and you never file a `spex eval add --pass` off anything
-weaker than the browser's real reading. The loop: run the worktree dashboard (`npm run dev` in
+product**, never by reasoning about the code — you never file a `spex eval add --pass` off anything
+weaker than what a real browser renders. The loop: run the worktree dashboard (`npm run dev` in
 `spec-dashboard`; a worktree has no `node_modules`, so symlink the main checkout's first), start a `spex
 serve` when the scenario needs a backend/config case (poll `/api/graph` until it reflects your config — the
 serve supervisor spawns a child that takes a few seconds to warm), then drive a headless browser to read the
@@ -301,9 +312,10 @@ live):
 
 1. Add `.spec/<area>/spec.md` nodes for the parts you want governed, each with a `code:` list pointing
    at the existing files.
-2. `npm run hooks`.
+2. Install the git hooks: copy `spec-cli/templates/hooks/*` into `$(git rev-parse --git-path hooks)`
+   and mark them executable (adopter repos have no `npm run hooks`; `spex init` below does this for you).
 3. Run `spex spec lint` — the **coverage** warnings are your adoption TODO: every source file not yet
-   claimed by a spec. Work the list down; promote coverage to an error once the graph is complete.
+   claimed by a spec. Work the list down.
 4. If your layout differs from the default (main at root, worktrees in `.worktrees/`, `node/<id>`
    branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.
 
@@ -311,7 +323,7 @@ live):
 node + the default `.plugins` plugins), plants a starter `spexcode.json`, installs the hooks, and
 **materializes** the harness artifacts — the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
 (this guide's prose FOLLOWED BY the `surface: system` plugin bodies, which the harness auto-discovers) and
-the `.claude`/`.codex` shims (the `settings.json` hooks). Those materialized artifacts are **generated and
+the harness shims (`.claude/settings.json`, `.codex/hooks.json`). Those materialized artifacts are **generated and
 never tracked** (hidden via the per-clone `.git/info/exclude`) — regenerated per clone, kept fresh by the
 git-native anchors (an unconditional materialize in pre-commit, plus post-checkout/post-merge refreshes;
 no harness event ever triggers a materialize) — so a
@@ -323,6 +335,6 @@ adoption (launchers, dashboard icon, lint budgets) all live in those two `spexco
 ## Naming
 
 The project is **SpexCode**. npm root package: `spexcode`; CLI package: `@spexcode/spec-cli`. The
-package *directory* names (`spec-cli`, `spec-dashboard`, `spec-forge`) are component
+package *directory* names (`spec-cli`, `spec-dashboard`, `spec-eval`, `spec-forge`) are component
 names and stay lowercase-hyphen — they are not the brand. Env escape hatch: `SPEXCODE_ALLOW_MAIN`.
 Optional layout override file: `spexcode.json`.

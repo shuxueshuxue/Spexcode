@@ -10,7 +10,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    the \`spexcode\` package itself, never the internal @spexcode/spec-cli. Both paths own the same
    \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`; a legacy link of the
    inner package uninstalls as \`@spexcode/spec-cli\`). A source link ships no
-   prebuilt dashboard dist — \`spex serve ui\` needs a manual dashboard build, or use the dev server.)
+   prebuilt dashboard dist — \`spex serve ui\` builds it once on first run (needs spec-dashboard's
+   npm deps installed), or use the dev server.)
 
 2. Adopt a repo
      cd <your-repo> && spex init                 # seeds .spec/ + git hooks (additive, never overwrites)
@@ -18,8 +19,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 
 3. Run the backend — it reads .spec + git from the cwd repo
-     spex serve                                  # http://localhost:8787  (PORT=<n> for another endpoint)
-   Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
+     spex serve                                  # http://localhost:8787  (--port <n> for another endpoint)
+   Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two ports.
 
 4. Open the dashboard — the SAME dashboard for every project, pointed per project
      spex serve ui                              # serves the bundled dashboard on :5173, proxying /api
@@ -56,16 +57,20 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   desc     one-line summary shown on the graph.
   hue      node colour on the graph, 0–360. Default 210.
   status   pending | active | merged | drift. Usually DERIVED from git state — rarely hand-set.
-  code:    files this node GOVERNS (is source of truth for) — ideally ONE, a YAML list of repo-relative
-           paths/dirs/*-globs. Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
+  code:    the file this node GOVERNS (is source of truth for) — a YAML list, but AT MOST ONE entry
+           (the \`one-govern\` lint error otherwise: keep the true subject, move the rest to related:).
+           Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
            composition); a file governed by > maxOwners nodes warns (the \`owners\` rule — split it). Omit
            for a pure-prose node: a cross-cutting contract no file owns.
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
            (never drift, never eval freshness, nothing to ack); it is the many-to-many net that claims the files
            govern doesn't. Every listed path must exist (lint integrity error otherwise).
-  surface  plugin-system/.plugins nodes only: system (folded into every agent's prompt) | command (a /command) |
-           hook (a lifecycle hook handler — a co-located script the dispatcher runs on the harness events
-           in events:, ordered by order:, blocking when block: true). hook nodes may nest under a grouping
+  surface  plugin-system/.plugins nodes only: one or MORE of system (folded into every agent's prompt) |
+           command (a /command) | skill (an on-demand SKILL.md the harness loads when a task matches the
+           node's desc) | agent (a spawnable sub-agent definition; its \`tools:\` list is the spawned
+           agent's tool allowlist) | hook (a lifecycle hook handler — a co-located script the dispatcher
+           runs on the harness events in events:, ordered by order:, blocking when block: true).
+           Comma-list several to plug into each. hook nodes may nest under a grouping
            plugin (e.g. .plugins/core/<id>); surface is a field, discovered recursively.
   events   hook surface only: harness lifecycle events this node binds (YAML list — PreToolUse, Stop, …).
   order    hook surface only: integer; the dispatcher runs same-event hooks low to high.
@@ -83,8 +88,9 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
   one-govern (error)  a node governs (code:) at most ONE file — keep the true subject, move the rest
                       to related:.
   living     (error)  no "## vN" changelog headings — the body is current-state.
-  id-format  (error)  each id char is ascii [a-z0-9-] or a non-ascii unicode letter/number (CJK ok;
-                      no space / '/' / '_' / uppercase Latin), and its leaf dir name is unique tree-wide.
+  id-format  (error)  each id char is ascii [a-z0-9-] or a non-ascii unicode letter/number (CJK ok; one
+                      optional leading dot; no space / '/' / '_' / uppercase Latin), and its leaf dir name
+                      is unique tree-wide.
   mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
   altitude   (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
                       code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
@@ -140,8 +146,9 @@ looks at / calls the real product surface, not an internal helper chosen to make
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:
-  spex eval add <node> --scenario <name> (--pass | --fail) [--note <text>]
-                 [--image <png> …repeatable] [--result <txt>|-] [--video <webm|mp4> [--timeline <json>]]
+  spex eval add <node> [--scenario <name>] (--pass | --fail) [--note <text>]
+                 [--image <png> …repeatable] [--result <txt>|-] [--video <webm|mp4>] [--timeline <json>]
+(--scenario may be omitted only when the node declares exactly one scenario.)
 The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an unmeasured scenario is \`missing\`,
 not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
 pass sits from ideal); it does NOT replace evidence — the image/video/transcript is the captured actual behaviour.
@@ -154,7 +161,8 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       — never a value the agent eyeballs off the finished artefact afterwards (that's
                       misaligned and dishonest, worse than none). \`--timeline <json>\` carries one; its \`axis\`
                       is the evidence's: a video is \`time\` (ms), a transcript \`line\`, a still SEQUENCE \`frame\`,
-                      an action trace \`index\` (the set is OPEN — an unknown axis just renders as a bare number).
+                      a structured data export \`index\` (record ordinals; the format's axis set is open — an
+                      unknown axis just renders as a bare number).
                       \`at\` = the position on that axis, \`step\` = a short name for that moment; copy this shape:
                         { "v": 2, "axis": "time",
                           "events": [ { "at": 0, "step": "open graph" },
@@ -166,8 +174,8 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       skip it for a short single-step artefact. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
                       time axis with \`tMs\` — is still accepted, read as \`axis: "time"\`.)
   STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
-  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin). A STRUCTURED export (a JSON
-                      \`--export-json\`, an API payload, a metrics dump) is recognized BY CONTENT and kept as
+  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin). A STRUCTURED export (a tool's
+                      \`--export-json\` dump, an API payload, a metrics dump) is recognized BY CONTENT and kept as
                       \`data\` — rendered as a validatable data block, not flattened into scrolling transcript
                       text; free-form output stays a transcript. You pick the flag; the KIND follows the bytes.
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.
@@ -238,7 +246,9 @@ Example:
   { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
 
 ── SESSIONS / WORKERS ──
-  sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 8).
+  sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 8;
+                            precedence: spexcode.json → SPEXCODE_MAX_ACTIVE env → default; read live, so
+                            an edit applies without a restart).
                             Counts compute slots, not total sessions: idle/asking/review/done do not
                             occupy one. A policy number → committed spexcode.json; omit it to use the
                             default, or tune higher/lower for the project's usual host.
@@ -278,12 +288,13 @@ in the committed spexcode.json — the merge keeps both:
     }
   }
 
-── SERVE (spexcode.json — public-exposure for \`spex serve --public\`) ──
+── SERVE (spexcode.json ONLY — public-exposure for \`spex serve --public\`; this section is read straight
+   from spexcode.json, the local overlay is NOT consulted here) ──
   serve.public.enabled   turn public mode on without the --public flag.
   serve.public.http      drop TLS (the --http escape hatch) — the password then travels in cleartext.
   serve.public.tls       { "cert": "<path>", "key": "<path>" } — PATHS to your own cert/key; omit for a
-                         cached self-signed default. If the paths are host-specific, put them in
-                         spexcode.local.json.
+                         cached self-signed default. Host-specific paths can instead ride the
+                         --tls-cert/--tls-key flags or SPEXCODE_TLS_CERT/SPEXCODE_TLS_KEY env (which win).
 The gateway password is NEVER read from these files (flag/env only), so serve.public stays committable.
 
 ── BACKEND ROUTING (not a config field — how a \`spex\` command picks its backend) ──
@@ -312,9 +323,10 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
 ── FORGE (spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
   forge.host          explicit forge host id ('github' | 'gitlab' | …) overriding the automatic derivation.
                       Normally OMIT it: spec-forge resolves the host from the origin remote's hostname —
-                      github.com → github, a gitlab/self-hosted remote → gitlab — and only an ambiguous
-                      self-hosted domain the heuristic misreads needs the override. A resolved host with no
-                      registered driver degrades to an EMPTY forge slice (local issues still work, no error).
+                      github.com → github, bitbucket → bitbucket, any other remote → gitlab (the common
+                      self-hosted shape) — and only a domain the heuristic misreads needs the override.
+                      A resolved host with no registered driver degrades to an EMPTY forge slice (local
+                      issues still work, no error).
 
 ── LINT (spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).

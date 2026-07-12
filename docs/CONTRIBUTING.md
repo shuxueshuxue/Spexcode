@@ -1,15 +1,15 @@
 # Contributing to SpexCode
 
 Thanks for wanting to work on SpexCode. This file is the **human** entry point. The full mechanics —
-the spec-node model, the lint rules, the reflexive config system — live in [`AGENT_GUIDE.md`](./AGENT_GUIDE.md)
+the spec-node model, the lint rules, the reflexive plugin system — live in [`AGENT_GUIDE.md`](./AGENT_GUIDE.md)
 and in `spex guide`; this page gets you from a clone to your first merged change without reading all of
 that first.
 
 ## The one idea you must hold
 
 SpexCode **dogfoods itself**: a change to the tool isn't "done" until it's a *spec node* merged into
-`main`. A spec node is a `.spec/**/spec.md` whose body states a part's **present** intent (it's
-rewritten in place — never a `## vN` changelog; version history is git's job). Every code change lands
+`main`. A spec node is a directory under `.spec/` whose `spec.md` body states a part's **present** intent
+(it's rewritten in place — never a `## vN` changelog; version history is git's job). Every code change lands
 **together with** the `spec.md` that justifies it. So the unit of contribution is not "a diff" — it's
 "intent + implementation, in one commit."
 
@@ -25,27 +25,28 @@ Requires **Node ≥ 22** (`.nvmrc` pins it) and **git**. npm, not pnpm.
 git clone https://github.com/shuxueshuxue/spexcode && cd spexcode
 npm --prefix spec-cli install
 npm --prefix spec-dashboard install
-npm run hooks          # install the per-clone git hooks (main-guard + the session-stamp hook)
+npm run hooks          # install the per-clone git hooks (main-guard + lint shim, session-stamp, footprint refresh)
 ```
 
 `npm run hooks` is **not optional and not one-time-global** — git never clones `.git/hooks/`, so every
-fresh clone (and every worktree) needs it. Re-run it whenever the hook source under
+fresh clone needs it (one run covers all of that clone's worktrees: the hooks install into the shared
+git common dir). Re-run it whenever the hook source under
 `spec-cli/templates/hooks/` changes. The hook is advisory local feedback; the real gate is CI running
 `spex spec lint`.
 
-The dev loop runs from source, with hot-reload (this is what separates a contributor from an installed
-user, who runs `spex serve` / `spex serve ui`):
+The dev loop runs from the source checkout (an installed user runs `spex serve` / `spex serve ui`
+instead):
 
 ```sh
 npm run api            # backend on :8787, hot-reloads on spec-cli/src changes
 npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 ```
 
-> Note: the live, multi-agent *session* features (dispatching workers, the board's live terminals) shell
+> Note: the live, multi-agent *session* features (dispatching workers, the dashboard's live terminals) shell
 > out to a coding-agent harness — **Claude Code or Codex** — and **tmux**; see the prerequisites in
 > [`README.md`](../README.md). You
 > do **not** need either to work on the governance layer (`spex spec lint`, the spec tree, the dashboard, the
-> git-as-database reader). Most contributions never touch the session layer.
+> git-as-database reader).
 
 ## The contribution ritual, for a human
 
@@ -66,13 +67,14 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
   don't spend it casually.
 - **The spec body stays a living current-state document** — present tense, rewritten in place. If you
   find yourself appending a "## v2" section, stop: that's what git history and the dashboard's
-  recent/history tabs are for.
+  history tab are for.
 - **One independently-scoped feature → its own node.** Cosmetic polish riding along inside an unrelated
   node's commit is the smell.
 - **Fail loudly.** Don't hide errors behind silent fallbacks.
 
-The deeper engineering taste of the project (`spex guide`, the `taste` config node, `AGENT_GUIDE.md`) is
-worth reading once you've landed a first change.
+The project's engineering taste lives in the `taste` plugin node
+(`.spec/spexcode/.plugins/taste/spec.md`) and in [`AGENT_GUIDE.md`](./AGENT_GUIDE.md) — worth reading
+once you've landed a first change.
 
 ## Reporting bugs & proposing features
 

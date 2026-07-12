@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpexCode</title>
+    <!-- tab-icon: pre-load default favicon (the SpexCode mark — a spec-tree glyph on a compass arc);
+         a configured dashboard.icon replaces it at runtime once the board loads. Inline SVG — no asset to ship. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20x='2'%20y='2'%20width='60'%20height='60'%20rx='14'%20fill='%236b46c1'/%3E%3Cpath%20d='M15%2035%20Q32%2044%2049%2035'%20stroke='%23fff'%20stroke-width='2.8'%20fill='none'%20stroke-linecap='round'/%3E%3Cg%20stroke='%23fff'%20stroke-width='3.2'%20stroke-linecap='round'%20fill='none'%3E%3Cpath%20d='M32%2017%20L20%2042'/%3E%3Cpath%20d='M32%2017%20L44%2042'/%3E%3C/g%3E%3Cg%20fill='%23fff'%3E%3Ccircle%20cx='32'%20cy='16.5'%20r='5'/%3E%3Ccircle%20cx='20'%20cy='42.6'%20r='5'/%3E%3Ccircle%20cx='44'%20cy='42.6'%20r='5'/%3E%3C/g%3E%3C/svg%3E" />
+    <!-- theme: apply the saved light/dark choice (else the OS preference) to <html data-theme> BEFORE
+         first paint, so there's no light-flash before the module boots. Mirrors theme.js's getTheme(). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('spexcode.theme')
+          if (t !== 'light' && t !== 'dark')
+            t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.setAttribute('data-theme', t)
+        } catch (e) { /* localStorage/matchMedia unavailable — default (light) stands */ }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

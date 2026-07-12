@@ -6,11 +6,11 @@ scenarios:
     related: [spec-cli/src/issues.ts, spec-eval/src/cli.ts]
     description: >-
       Through the real CLI, on a scenario that already has a passing reading, walk the whole teeth
-      lifecycle with no server: `spex remark <node> --scenario <s>`, then `spex yatsu scan`; file a fresh
-      `spex yatsu eval --pass` WITHOUT resolving; `spex resolve <ref>` as a SECOND identity; file a fresh
-      eval AFTER the resolve; finally author a new remark and `spex retract` it.
+      lifecycle with no server: `spex remark add <node> --scenario <s>`, then `spex eval lint`; file a fresh
+      `spex eval add --pass` WITHOUT resolving; `spex remark resolve <ref>` as a SECOND identity; file a fresh
+      eval AFTER the resolve; finally author a new remark and `spex remark retract` it.
     expected: >-
-      scan flips the scenario stale on the `remark` axis the moment the remark exists, and it STAYS stale
+      lint flips the scenario stale on the `remark` axis the moment the remark exists, and it STAYS stale
       through a fresh eval filed before the resolve AND through the resolve itself (the latest reading
       pre-dates resolvedAt). Only a reading filed strictly AFTER the resolve clears it. A brand-new remark
       re-stales it, and a `retract` clears it again with no eval at all. You cannot out-run a remark by

@@ -55,9 +55,14 @@ function walk(dir) {
 const newRoots = [join(REPO, 'spec-cli/templates/spec/project/.plugins')]
 for (const e of readdirSync(join(REPO, 'spec-cli/templates/presets'))) newRoots.push(join(REPO, 'spec-cli/templates/presets', e, '.plugins'))
 const templateSrc = new Map() // rel → path relative to spec-cli/ (runtime PKG_ROOT), for the new content
+// the `prompts/` shelf is presentation, not identity: shipped system plugins live at prompts/<plugin>/…
+// but their asset identity (the rel the .config-era history and a 0.2.x adopter's flat tree both speak)
+// stays shelf-less — strip the shelf when a plugin sits under it. The shelf's OWN spec.md (`prompts/spec.md`,
+// no deeper component) keeps its literal rel: it is a new asset, not a resident.
+const shelfless = (rel) => rel.replace(/^prompts\/(?=.+\/)/, '')
 for (const root of newRoots) {
   for (const f of walk(root)) {
-    const rel = relative(root, f)
+    const rel = shelfless(relative(root, f))
     if (templateSrc.has(rel)) throw new Error(`template rel path collides across roots: ${rel}`)
     templateSrc.set(rel, relative(join(REPO, 'spec-cli'), f))
   }

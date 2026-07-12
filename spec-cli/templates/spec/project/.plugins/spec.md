@@ -6,10 +6,12 @@ desc: The instance home — this repo's DIY dev-flow plugins live here as skill-
 ---
 `.plugins/` is the **instance** of the plugin system: the concrete dev-flow plugins this repo ships for
 working in it. Each plugin is a skill-shaped node — its folder *is* the unit (a `spec.md` plus any
-co-located scripts) — living as a flat child of `.plugins/` and carrying a `surface: command|system` field
-that names where it plugs in.
+co-located scripts) — carrying a `surface: command|system|…` field that names where it plugs in.
+Discovery is recursive and field-driven, so plugins may sit under a grouping shelf: the
+`surface: system` prompt contracts live under `prompts/`; invocable presets (command/skill/agent)
+are flat children here.
 
 The launcher's system gather and the new-session dropdown read from here. Only **active** plugins
-gather: a `pending` node is declared intent, not yet an active plugin. The seed ships `core`
+gather: a `pending` node is declared intent, not yet an active plugin. The seed ships `prompts/core`
 (`surface: system` — the spec-discipline contract folded into every agent) plus command presets like
 `tidy`; add your own by creating a sibling node with a `surface` field.

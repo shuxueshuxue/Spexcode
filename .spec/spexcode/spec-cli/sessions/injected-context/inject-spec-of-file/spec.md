@@ -6,7 +6,7 @@ desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the 
 code:
   - .spec/spexcode/.plugins/prompts/core/spec-of-file/spec-of-file.sh
 related:
-  - spec-cli/templates/spec/project/.plugins/core/spec-of-file/spec-of-file.sh
+  - spec-cli/templates/spec/project/.plugins/prompts/core/spec-of-file/spec-of-file.sh
 ---
 
 # inject-spec-of-file

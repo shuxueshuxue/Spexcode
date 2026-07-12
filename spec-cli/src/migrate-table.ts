@@ -7,14 +7,14 @@ export type MigrateAsset = { rel: string; template: string; oldShas: string[] }
 export const TEMPLATE_ASSETS: MigrateAsset[] = [
   {
     "rel": "clarify-before-code/spec.md",
-    "template": "templates/presets/careful/.plugins/clarify-before-code/spec.md",
+    "template": "templates/presets/careful/.plugins/prompts/clarify-before-code/spec.md",
     "oldShas": [
       "a1b9c7e189df9b75a27005d381b43682d717ee6f"
     ]
   },
   {
     "rel": "core/idle/idle.sh",
-    "template": "templates/spec/project/.plugins/core/idle/idle.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/idle/idle.sh",
     "oldShas": [
       "21abdf5593bf2f73823cff9afe079ce79a8f3d2b",
       "2de24b434d53e281e60dc1a57b62536df2f8e528",
@@ -24,7 +24,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/idle/spec.md",
-    "template": "templates/spec/project/.plugins/core/idle/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/idle/spec.md",
     "oldShas": [
       "1283e0c3be0db754fdf88b6e939f727bbb990a03",
       "52f84eb9c7d60c6058a3e9e3f0b410a272ec3bf2",
@@ -33,7 +33,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/mark-active/mark-active.sh",
-    "template": "templates/spec/project/.plugins/core/mark-active/mark-active.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/mark-active/mark-active.sh",
     "oldShas": [
       "0e4836f0dc0bf9f7878631040bc0848f665e7655",
       "61cc56baea4ba77e2bd0861f436c7860f68e580f",
@@ -42,7 +42,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/mark-active/spec.md",
-    "template": "templates/spec/project/.plugins/core/mark-active/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/mark-active/spec.md",
     "oldShas": [
       "55a76108cfa749dc022b9566c77a69acbde96892",
       "6469e1d31f41e49774e148416aca1b69bf105a5c"
@@ -50,7 +50,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/session-fail/fail.sh",
-    "template": "templates/spec/project/.plugins/core/session-fail/fail.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/session-fail/fail.sh",
     "oldShas": [
       "54b6b4a10265063ae7e1306f4aaeba7a5f878181",
       "61da557a1a370edda0c13702abd587fa3406cf29",
@@ -60,7 +60,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/session-fail/spec.md",
-    "template": "templates/spec/project/.plugins/core/session-fail/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/session-fail/spec.md",
     "oldShas": [
       "0877dbe2f94ed8fcf5ded09b48e9705e9427ffad",
       "41fbbaf512d6074a89720f2d2081059ece3c0ef1",
@@ -69,7 +69,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/spec-first/spec-first.sh",
-    "template": "templates/spec/project/.plugins/core/spec-first/spec-first.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/spec-first/spec-first.sh",
     "oldShas": [
       "98f0448bf625ed57bfbb108183b7f5dc9ff227d4",
       "a9776998b7c7b2b196a34569f9c231c9fd4bdc6a",
@@ -81,7 +81,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/spec-first/spec.md",
-    "template": "templates/spec/project/.plugins/core/spec-first/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/spec-first/spec.md",
     "oldShas": [
       "3b4deed2d004bbc30443b2faa7cf94d2e9892c77",
       "44b6c83ce4091fc4903a917cfb8f275477323404"
@@ -89,7 +89,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/spec-of-file/spec-of-file.sh",
-    "template": "templates/spec/project/.plugins/core/spec-of-file/spec-of-file.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/spec-of-file/spec-of-file.sh",
     "oldShas": [
       "29684a87e418e0a0af331ed2e1ac04463726eb4d",
       "6afc41d97fef1feb18bb46e9e32ca787197bc6b5",
@@ -103,7 +103,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/spec-of-file/spec.md",
-    "template": "templates/spec/project/.plugins/core/spec-of-file/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/spec-of-file/spec.md",
     "oldShas": [
       "5fbf9f0ecc3c8ec7d76f9e3d4a06c3aad5e7c92b",
       "657428043cc46fe5a94382681b9e00f52a740a5a",
@@ -112,7 +112,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/spec.md",
-    "template": "templates/spec/project/.plugins/core/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/spec.md",
     "oldShas": [
       "0c04edb308902a768a290586e2af8be779fef2e9",
       "1e422538d16ae7995480542e65606d7ffafe1cbc",
@@ -133,7 +133,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/stop-gate/spec.md",
-    "template": "templates/spec/project/.plugins/core/stop-gate/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/core/stop-gate/spec.md",
     "oldShas": [
       "16eb95ec994dd2fa4eb3e2a8bd3c2387145876fc",
       "5507a7c09160b4eee24526273ffdfb5e12ecc179",
@@ -146,7 +146,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "core/stop-gate/stop-gate.sh",
-    "template": "templates/spec/project/.plugins/core/stop-gate/stop-gate.sh",
+    "template": "templates/spec/project/.plugins/prompts/core/stop-gate/stop-gate.sh",
     "oldShas": [
       "1596389b23b9813955316f617b61f188319eb1e4",
       "372fe4c89780cfcfbc7aca045822661233271fe1",
@@ -196,7 +196,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "forge-link/spec.md",
-    "template": "templates/spec/project/.plugins/forge-link/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/forge-link/spec.md",
     "oldShas": [
       "2472c085e6f72364eea004ba1d1b1f8d6b4e13ac",
       "c86439c5a3fe6cb3ece2c40186da0f476d1c52d4"
@@ -204,10 +204,15 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "memory-hygiene/spec.md",
-    "template": "templates/spec/project/.plugins/memory-hygiene/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/memory-hygiene/spec.md",
     "oldShas": [
       "2b5313e770c7d2e857817adcf7bb72aecaeca45f"
     ]
+  },
+  {
+    "rel": "prompts/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/spec.md",
+    "oldShas": []
   },
   {
     "rel": "regroup/spec.md",
@@ -220,7 +225,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "reproduce-before-fix/spec.md",
-    "template": "templates/spec/project/.plugins/reproduce-before-fix/spec.md",
+    "template": "templates/spec/project/.plugins/prompts/reproduce-before-fix/spec.md",
     "oldShas": [
       "28eef30893a83b634900e43dfe729043c8f60ea8",
       "2d056b7344cbc0c4eb0dbeb0ba69ccee0e8b47db",
@@ -296,11 +301,11 @@ export const RETIRED_ASSETS: Record<string, string[]> = {
     "c05f182fc92fcd224f4c7953dc118e59665971aa",
     "c617fc05780f921c55280b68d9f55e60110f74eb"
   ],
-  "core/stop-gate/yatsu.evals.ndjson": [  // dead-words-ok: the migrator names the old vocabulary it migrates from
+  "core/stop-gate/yatsu.evals.ndjson": [
     "268c06c27f3b2dc71da8c0aca4d0507a227829f9",
     "e681fe71b8519577c19bb4f13bc0f310fb92dc31"
   ],
-  "core/stop-gate/yatsu.md": [  // dead-words-ok: the migrator names the old vocabulary it migrates from
+  "core/stop-gate/yatsu.md": [
     "f83f6b2406eb359beb1181bf0145558241806116"
   ],
   "e2e-review/spec.md": [

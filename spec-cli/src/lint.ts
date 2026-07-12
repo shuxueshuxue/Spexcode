@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, stagedFiles, git } from './git.js'
+import { repoRoot, git, driftIndex, historyIndex, rowsFor } from './git.js'
 import { loadSpecs } from './specs.js'
 import { readJsonConfig } from './layout.js'
+import { extractors, extractorFor, extOf, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
@@ -13,7 +14,6 @@ export type LintConfig = {
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
   maxChildren: number        // breadth budget: warn at >= this many direct children
-  driftErrorThreshold: number// commit-local gate HARD-BLOCKS a commit touching a node >= this many commits behind
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
   scenarioTags: string[]     // the closed vocabulary an eval scenario's `tags:` must draw from; extend it to mint a new tag
 }
@@ -24,7 +24,6 @@ const DEFAULT_CONFIG: LintConfig = {
   identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
   maxChildren: 8,
-  driftErrorThreshold: 3,
   maxOwners: 3,
   scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
 }
@@ -277,6 +276,59 @@ export async function specLint(): Promise<Finding[]> {
     out.push({ level: 'warn', rule: 'owners', msg: `${over.length} file(s) are governed by > ${cfg.maxOwners} nodes — each holds more separately-specified functionality than one file should. Worst: ${top}. SPLIT the file so each governor owns its own module (or merge the nodes, or give it a single foundation owner + related:).` })
   }
 
+  // code anchors ([[code-anchor]]): a code: entry may pin one named unit (`path#symbol`). The anchor is
+  // the BLOCKING tier of drift: a window commit (spec's last version..HEAD, non-merge, touching the
+  // governed file) whose --unified=0 hunks intersect the unit's line range — extracted from the file AS
+  // OF that commit, by the extension's ONE designated extractor — is an anchor-drift ERROR unless a
+  // Spec-OK ack covers it. Resolution failures are never silent: a dead or ambiguous anchor, an
+  // unparseable working-tree file, an extension with no designated extractor, and a designated extractor
+  // that can't run here (no host typescript) all ERROR with the repair spelled out.
+  const regs = extractors(root)
+  const [didx, hidx] = await Promise.all([driftIndex(root), historyIndex(root)])
+  const readyWarned = new Set<string>()
+  for (const s of specs) {
+    for (const { path, anchor } of s.anchors) {
+      const x = extractorFor(regs, extOf(path))
+      if (!x) {
+        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${anchor}, but no extractor is designated for '.${extOf(path)}' files — this language has no anchor support yet: add a LangSpec row (anchors.ts) or drop the #${anchor}` })
+        continue
+      }
+      const ready = x.ready()
+      if (ready !== true) {
+        // once per (extractor, reason), even across several anchored nodes — one repair, one message.
+        if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); out.push({ level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` }) }
+        continue
+      }
+      if (!existsSync(join(root, path))) continue // the missing FILE already errored above
+      let units
+      try { units = x.extract(readFileSync(join(root, path), 'utf8'), path) } catch (e: any) {
+        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${anchor} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` })
+        continue
+      }
+      const res = resolveAnchor(units, anchor)
+      if ('dead' in res) {
+        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${anchor} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's code: entry to follow it` })
+        continue
+      }
+      if ('ambiguous' in res) {
+        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${anchor} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` })
+        continue
+      }
+      if (res.ok.typeOnly)
+        out.push({ level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${anchor} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` })
+      const since = rowsFor(hidx, s.path)[0]?.hash || ''
+      const win = windowCommits(didx, since, path)
+      if (!win.length) continue
+      const hits = await anchorHitCommits(root, win, path, anchor, x)
+      const unparseable = hits.filter((h) => h.unparseable)
+      if (hits.length) {
+        const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')
+        const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
+        out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${anchor} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
+      }
+    }
+  }
+
   // drift: a governed file has commits NOT yet reflected in its spec. Judged by true git ancestry —
   // loadSpecs computes `driftFiles` via driftFor() over the one cached driftIndex walk (git.ts): a
   // commit to the file counts iff it is NOT reachable from the spec's latest version (in-memory
@@ -321,22 +373,3 @@ Diagnose, then apply the one honest remedy:
                               maps to a node, or file an issue and link it (defer honestly)
 
 Never patch. A reasoned ack or a real fix are recorded and re-judged at review; a blind ack is a lie.`
-
-// commit-local: an empty staged index (CI, audit) → no blockers, drift stays advisory; non-empty → block
-// only when an OWN staged file belongs to a node already >= driftErrorThreshold behind. Sub-threshold drift
-// on a touched node is returned for an advisory nudge; the backlog on untouched nodes never blocks.
-export async function driftGate(): Promise<{ blocked: string[]; touched: { id: string; drift: number }[]; threshold: number }> {
-  const root = repoRoot()
-  const cfg = loadConfig(root)
-  const staged = stagedFiles(root)
-  if (!staged.length) return { blocked: [], touched: [], threshold: cfg.driftErrorThreshold }
-  const specs = await loadSpecs()
-  const owners = new Map<string, string[]>()
-  for (const s of specs) for (const f of s.code) owners.set(f, [...(owners.get(f) ?? []), s.id])
-  const byId = new Map(specs.map((s) => [s.id, s]))
-  const ids = new Set<string>()
-  for (const f of staged) for (const o of owners.get(f) ?? []) ids.add(o)
-  const touched = [...ids].map((id) => byId.get(id)!).filter((s) => s && s.drift > 0)
-    .map((s) => ({ id: s.id, drift: s.drift })).sort((a, b) => b.drift - a.drift)
-  return { blocked: touched.filter((t) => t.drift >= cfg.driftErrorThreshold).map((t) => t.id), touched, threshold: cfg.driftErrorThreshold }
-}

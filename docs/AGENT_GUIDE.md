@@ -28,7 +28,7 @@ Doer (in the `node/<id>` worktree):
 Manager (the human reviewer, after reviewing the proposal):
 
 5. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`. The merge is itself a **dispatch** —
-   the manager reopens the session and the session's *own* agent runs the `git merge` (it knows the
+   the manager dispatches the merge back to the session and the session's *own* agent runs the `git merge` (it knows the
    work's intent and can resolve conflicts); the server never touches `main`'s tree.
 6. Delete the node branch; retire the worktree.
 
@@ -176,7 +176,7 @@ together — that is a project choice, not a git requirement.
 - `spec-forge` — a third package node, now **built and `active`**: a host-agnostic, **read-only forge
   link tracer** that reads a forge's open issues/PRs and resolves each to the spec node it serves
   (git/`.spec` stays the single source of truth — a node's status stays git-derived). Real `spec-forge/`
-  package (`src/{cli,links,port,cache,resident,proof}.ts`, `src/drivers/github.ts`) with active child
+  package (`src/{cli,links,port,cache,resident,needs-eval,drivers}.ts`, `src/drivers/github.ts`) with active child
   nodes `forge-cli`, `dashboard-issues`, `freshness`, `links`, `port`.
 
 ## Running it

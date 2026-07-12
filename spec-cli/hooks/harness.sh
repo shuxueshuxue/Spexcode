@@ -73,6 +73,21 @@ hp_session_id() {
   esac
 }
 
+# is THIS payload a tool call executed by an IN-PROCESS SUBAGENT (Claude's Task tool — a sub-conversation
+# inside the SAME harness process) rather than the session's own top-level agent? The subagent's payload
+# carries the PARENT's session_id/transcript_path (measured live, claude 2.1.207), so hp_session_id cannot
+# tell them apart — but the harness stamps every subagent-executed call with a top-level `agent_id`
+# (+ `agent_type`) field that a top-level call NEVER carries. The check is structural, never a heuristic:
+# scan ONLY the payload prefix before the first `"tool_input"` (every harness-stamped top-level field
+# precedes tool_input), and require the key shape `"agent_id":`. Inside a JSON string value every quote is
+# escaped (\"), so a bare-quoted `"agent_id"` followed by a colon in that prefix can only be the harness's
+# own stamp — a tool parameter literally NAMED agent_id (an MCP tool) sits inside tool_input, past the
+# truncation, and file/prompt content can never fake an unescaped quote. Codex payloads carry no such field
+# (its verified field set) so this never matches there. Echoes "1" when yes, else nothing.
+hp_is_subagent() {
+  printf '%s' "${1%%\"tool_input\"*}" | grep -q '"agent_id"[[:space:]]*:' && printf 1
+}
+
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
 # worktree). The per-session dirs and the per-tree materialize slots (hp_tree_dir) live under it.

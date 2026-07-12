@@ -233,7 +233,15 @@ edit), so `hp_code_path` emits ALL touched paths — one per line — and every 
 ([[inject-spec-first]] nudges if ANY is non-spec code; [[inject-spec-of-file]] annotates EACH governed code file). The shared
 `hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
-quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
+quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture. `hp_is_subagent`
+reads the acting-agent discriminator: a Claude IN-PROCESS subagent (Task tool) fires the parent's hooks with the
+PARENT's `session_id`/`transcript_path` but a top-level `agent_id` (+ `agent_type`) stamp the parent's own calls never
+carry (measured live, claude 2.1.207 — the payload-id rule above cannot separate them, this stamp can). The scan is
+structural: only the pre-`tool_input` payload prefix is searched for the `"agent_id":` key shape — every string value's
+quotes arrive JSON-escaped and an agent_id-NAMED tool parameter sits inside `tool_input`, past the truncation — so the
+answer is deterministic, never a content heuristic. Codex payloads carry no such field (its verified field set below), so
+the probe never matches there; mark-active consumes it to keep a supervising parent's declared state out of its
+subagents' reach (the stop-gate race).
 So [[inject-spec-first]], [[inject-spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
 the main checkout, but its commands run `dispatch.sh` with the thread cwd as `proj`, so each worktree gates
 against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +

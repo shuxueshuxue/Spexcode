@@ -15,6 +15,13 @@
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 payload=$(cat 2>/dev/null)
+# an IN-PROCESS SUBAGENT's tool call (Claude's Task tool) fires the parent's hooks with the PARENT's
+# session_id — flipping here let a supervising parent's own subagents erase its declared park/ask within
+# seconds and race the stop-gate into "undeclared stop" (issue #60). A subagent working is not the parent
+# agent ACTING, so its calls never touch the record; the parent's own next tool call still flips. The
+# discriminator is the payload's own top-level agent_id stamp (hp_is_subagent) — deterministic, never a
+# timing window.
+[ -n "$(hp_is_subagent "$payload")" ] && exit 0
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"

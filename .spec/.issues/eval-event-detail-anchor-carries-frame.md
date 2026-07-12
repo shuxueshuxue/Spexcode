@@ -12,5 +12,5 @@ Remarks on the `anchor-carries-frame` eval of [[event-detail]].
 ▶0:15 · send the anchored remark
 这里的 13 秒等待很诡异
 
-<!-- reply: 7aaac700-95b2-4e45-bdea-c6bd5e4f19d5 @ 2026-07-10T07:28:58.273Z :: rid=rtxi3 sha=55be64afca19dd083390b473db2b68a23c505548 -->
+<!-- reply: 7aaac700-95b2-4e45-bdea-c6bd5e4f19d5 @ 2026-07-10T07:28:58.273Z :: rid=rtxi3 sha=55be64afca19dd083390b473db2b68a23c505548 resolved=5ab7aac3-02f1-46bf-8547-77f891e3cd42@2026-07-12T01:29:29.190Z -->
 那 13 秒是录屏 rig 的伪影：remark POST 当场 201、store 立即落盘；视频里的停顿是测量脚本在轮询冷的一次性后端重建 board（无 SSE、每次全量 git 读）。真实部署 SSE ~1s 内到。产品写路径没有 13s 的成本。

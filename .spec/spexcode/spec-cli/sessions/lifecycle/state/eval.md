@@ -195,6 +195,24 @@ scenarios:
       (probe-failed) liveness ALSO refuses — death is unproven. `--force` is the ONLY way to relaunch an alive
       agent (the wedged-but-alive escape, a deliberate kill). The merge dispatch (guard:false) is exempt: it
       reuses an already-online agent without refusing, and relaunches only a confirmed-offline one.
+  - name: liveness-push-latency
+    tags: [backend-api]
+    related: [spec-cli/src/sessions.ts, spec-cli/src/harness.ts, spec-cli/src/boardStream.ts]
+    description: >-
+      With a delta subscriber attached to the backend, kill a governed worker (`spex session stop` — tmux
+      window and agent die together; also a direct kill -9 of the registered pid with the window left
+      alive), and, against a 100ms truth clock, time the gap to the SSE frame whose liveness reads
+      offline. Aggregate several runs; report worst and median. (The launch edge — window up → online —
+      is dominated by the agent's OWN boot time, seconds for a real claude/codex; it is reported for
+      context but the ≤1s bound below applies to DEATH detection, where no third party's boot is in the
+      path.)
+    expected: >-
+      A death reaches the board in ≤1s worst case: liveness detection is a hot ~100ms tier of pure
+      SYNCHRONOUS syscalls — kill(pid, 0) against the launch-registered agent.pid (with a death latch
+      against pid reuse) — no tmux client spawn and no async socket connect sits on the hot path, so the
+      reading stays honest under load; the change then rides the sessions-scoped push. The async
+      rendezvous-connect probe (addressability, tri-state with `unproven`) stays on the slower warm tier
+      with its honesty rules intact.
 ---
 # eval.md — state
 

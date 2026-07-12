@@ -25,10 +25,17 @@ import { git } from './git.js'
 export type HarnessId = 'claude' | 'codex'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
-// the pane's root pid (tmux `#{pane_pid}`) plus one whole-box pid→(ppid, comm) table (a single `ps` spawn).
-// The adapter that cares (codex) walks the pane pid's descendants in that table; claude ignores it.
+// the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
+// one whole-box pid→(ppid, comm) table (a single `ps` spawn).
+//   `pidAlive` = the hot registry's verdict for THIS session's launch-registered `agent.pid`: true = the pid
+//     answers kill-0 (alive), false = proven dead (ESRCH, permanently latched per pid-reuse guard), undefined =
+//     NO agent.pid file (a pre-registration/old session). codex reads this as its liveness truth when present
+//     and falls back to `procs` (the whole-box tree walk) only when it is undefined; claude ignores it (its
+//     truth is the rendezvous socket).
+//   `procs` is gathered (the single `ps` spawn) ONLY when a pid-less codex session still needs the legacy
+//     tree-walk, so a box with no codex — or all pid-registered launches — never pays for it.
 export type ProcTable = Map<number, { ppid: number; comm: string }>
-export type PaneProbe = { panePid?: number; procs?: ProcTable }
+export type PaneProbe = { panePid?: number; procs?: ProcTable; pidAlive?: boolean }
 
 export interface Harness {
   readonly id: HarnessId
@@ -116,11 +123,13 @@ export interface Harness {
   // live listener (the caller probes all windowed sessions once per snapshot). The adapter adds only its own
   // channel check. claude: online iff the window is up AND its reclaude rendezvous socket has a live LISTENER
   // (`socketLive` — a connect that a live claude accepts and a stale socket FILE refuses; claude IGNORES the
-  // pane probe). codex: online iff the window is up AND a codex-ish process (`codex` by any
-  // name, or the `node` its CLI runs under) is live in the pane pid's DESCENDANT tree — NOT the pane's
-  // foreground command name (that is `bash`, the launch wrapper, even while the TUI renders — field-confirmed),
-  // and NOT the SHARED per-project app-server socket (it stays bound after a failed `--remote resume` dropped
-  // the pane back to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
+  // pane probe). codex: online iff the window is up AND the launch-registered `agent.pid` is alive
+  // (`pane.pidAlive`, the hot-tier kill-0 verdict — zero ps scan); a pre-registration session with no agent.pid
+  // (`pidAlive` undefined) falls back to the LEGACY whole-box tree walk — a codex-ish process (`codex` by any
+  // name, or the `node` its CLI runs under) live in the pane pid's DESCENDANT tree, NOT the pane's foreground
+  // command name (that is `bash`, the launch wrapper, even while the TUI renders — field-confirmed), and NOT the
+  // SHARED per-project app-server socket (it stays bound after a failed `--remote resume` dropped the pane back
+  // to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
@@ -1042,11 +1051,18 @@ export const codexHarness: Harness = {
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: codexSlashCommands,
-  // online iff the tmux window is up AND a codex-ish process is live in the pane pid's DESCENDANT tree — see
-  // paneTreeRunsCodex. NOT the pane's foreground command (that is `bash`, the launch wrapper, even while the
-  // TUI renders — the field-confirmed false-OFFLINE) and NOT the app-server socket (SHARED per-project, it
-  // survives a failed `--remote resume` — the earlier false-ONLINE).
-  liveness: (_rec, tmuxAlive, _runtimeDir, pane) => (tmuxAlive && paneTreeRunsCodex(pane) ? 'online' : 'offline'),
+  // online iff the tmux window is up AND the agent is live. PRIMARY: the launch-registered `agent.pid` hot-tier
+  // verdict (`pidAlive`) — a 100ms syscall (kill-0), no ps scan. LEGACY: a pre-registration session has no
+  // agent.pid (`pidAlive` undefined) → fall back to the whole-box ps DESCENDANT-tree walk (paneTreeRunsCodex):
+  // a codex-ish process live below the pane pid, NOT the pane's foreground command (that is `bash`, the launch
+  // wrapper, even while the TUI renders — the field-confirmed false-OFFLINE) and NOT the app-server socket
+  // (SHARED per-project, it survives a failed `--remote resume` — the earlier false-ONLINE). The legacy path
+  // self-extinguishes as pre-registration sessions close.
+  liveness: (_rec, tmuxAlive, _runtimeDir, pane) => {
+    if (!tmuxAlive) return 'offline'
+    if (pane?.pidAlive !== undefined) return pane.pidAlive ? 'online' : 'offline'
+    return paneTreeRunsCodex(pane) ? 'online' : 'offline'
+  },
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on

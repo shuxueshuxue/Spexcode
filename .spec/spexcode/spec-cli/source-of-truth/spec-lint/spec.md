@@ -28,7 +28,14 @@ vocabulary must stay retired.
 Errors block; warns advise. The full registry (every rule, its level, its one-line meaning) is printed by
 `spex help spec` and `spex guide spec` — the manual lists ALL rules, always:
 
-- **integrity** (error): every file a spec lists in `code:` exists — broken links block.
+- **integrity** (error): every file a spec lists in `code:` exists — broken links block. An ANCHOR
+  (`code: path#symbol`, [[code-anchor]]) must also resolve: dead (unit deleted/renamed), ambiguous
+  (two same-named units), an unparseable file, or a language whose designated extractor is missing or
+  can't run all error with the repair spelled out — never a silent pass.
+- **anchor-drift** (error): a commit since the node's version intersected the ANCHORED unit's line
+  range (measured from the file as it existed at each commit) with no covering Spec-OK ack — the
+  blocking tier of drift, replacing the retired count-based `driftErrorThreshold` gate. See
+  [[code-anchor]].
 - **one-govern** (error): a node governs (`code:`) at most ONE file, so drift/eval/ack have one
   unambiguous subject; keep the true subject, demote the rest to `related:` ([[governed-related]]).
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
@@ -60,6 +67,7 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
 - **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
+  ALWAYS advisory: unanchored drift never blocks a commit; the blocking tier is **anchor-drift** above.
 - **related-drift** (warn): the SOFT tier — a `related:` file moved ahead of the node; one summary line,
   never the commit gate, never eval freshness.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
@@ -95,10 +103,10 @@ green-washes the very altitude/coverage warnings they meant to enforce is a conf
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
-**Gated with no flag:** `spex lint` reads the staged index — nothing staged (CI, see [[ci-gate]], and
-manual audit) keeps drift advisory; mid-commit it applies a **commit-local gate**, blocking a commit
-whose staged files belong to a node `≥ lint.driftErrorThreshold` (default 3) behind. Errors always
-block; bypass with `SPEXCODE_SKIP_LINT=1`.
+**One gate, no staged-index machinery:** the retired count-based commit-local gate
+(`lint.driftErrorThreshold`) is replaced by the anchor tier ([[code-anchor]]) — an anchor hit is an
+ordinary lint ERROR, so the same errors-block rule (pre-commit shim and CI alike, see [[ci-gate]])
+carries it, while unanchored drift stays advisory everywhere. Bypass with `SPEXCODE_SKIP_LINT=1`.
 
 ### Spec-OK — acknowledging an implementation-only change
 
@@ -112,6 +120,7 @@ gone and [[main-guard]] rightly rejects it (the guard passes the stamp through i
 the same door waives this node's commit-local drift gate for the stamp — a no-content commit can't
 introduce drift, and gating it on the REAL index would block an ack on the very drift it acknowledges
 whenever unrelated work is staged).
-The reason is **required but not stored** — it forces the agent to articulate why the spec still holds
-before quieting it. A shared file drifts every governor, so `Spec-OK:` accepts several ids — one ack per
-co-owner.
+The reason is **required and recorded in the ack commit's message body** — it forces the agent to
+articulate why the spec still holds before quieting it, and an ack that quiets an anchor hit
+([[code-anchor]]) is a strong claim whose why must be durable. A shared file drifts every governor, so
+`Spec-OK:` accepts several ids — one ack per co-owner.

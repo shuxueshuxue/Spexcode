@@ -366,28 +366,36 @@ export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boo
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
 }
 
-// pure lookup, no git: a commit to `path` is drift iff it is NOT an ancestor of `sinceHash` — it lies
-// in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
-//
-// `sinceHash` is the node's OWN latest version commit, so the node(s) it's a version of
-// (specNodes[sinceHash]) name the node being measured; an ack counts only if its `Spec-OK:` set names
-// one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that is itself an ancestor of the
-// version can't speak for it (a re-version invalidates older acks); a valid ack quiets exactly the
-// commits reachable from it. An off-history `sinceHash` → 0: no basis on HEAD to measure from.
-export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
-  if (!sinceHash) return 0
+// the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,
+// so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured; an ack counts
+// only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that
+// is itself an ancestor of the version can't speak for it (a re-version invalidates older acks); a valid
+// ack quiets exactly the commits reachable from it. Shared by driftFor (the count) and the anchor
+// engine's windowCommits (the commit set) so both read ONE ack rule.
+export function ackCoverFor(idx: DriftIndex, sinceHash: string): Uint8Array[] {
   const base = ancestorsOf(idx, sinceHash)
-  if (!base) return 0
+  if (!base) return []
   const targets = idx.specNodes.get(sinceHash)
-  const ackCover: Uint8Array[] = []
+  const cover: Uint8Array[] = []
   if (targets) {
     for (const [h, ackSet] of idx.acks) {
       if (inAncestors(idx, base, h)) continue
       if (![...targets].some((t) => ackSet.has(t))) continue
       const a = ancestorsOf(idx, h)
-      if (a) ackCover.push(a)
+      if (a) cover.push(a)
     }
   }
+  return cover
+}
+
+// pure lookup, no git: a commit to `path` is drift iff it is NOT an ancestor of `sinceHash` — it lies
+// in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
+// An off-history `sinceHash` → 0: no basis on HEAD to measure from.
+export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
+  if (!sinceHash) return 0
+  const base = ancestorsOf(idx, sinceHash)
+  if (!base) return 0
+  const ackCover = ackCoverFor(idx, sinceHash)
   let n = 0
   for (const h of idx.fileCommits.get(path) ?? []) {
     if (inAncestors(idx, base, h)) continue           // reachable from the version → not drift

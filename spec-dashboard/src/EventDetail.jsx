@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { postRemark, putFrameBlob, specUrl } from './data.js'
+import { postEvalOk, postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
@@ -134,7 +134,9 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
       .then((tl) => { if (on && Array.isArray(tl?.readings)) setHistory(tl.readings.filter((r) => r.scenario === entry.scenario)) })
       .catch(() => {})
     return () => { on = false }
-  }, [entry.node, entry.scenario, entry.ts, entry.blob])
+    // entry.humanOk?.ts rides the deps so a just-landed sign-off ([[human-ok]]) refetches the history —
+    // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok.
+  }, [entry.node, entry.scenario, entry.ts, entry.blob, entry.humanOk?.ts])
 
   // flipping A/B changes the clip/stills under the pen — drop any in-progress mark or draft.
   useEffect(() => { setDrag(null); setDraft(null) }, [histIdx])
@@ -423,6 +425,19 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
         {/* the filer's liveness — whether the session that filed this eval is still alive; live filers click
             through to their session-board tab. */}
         <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" onOpenSession={onOpenSession} />
+
+        {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark; an un-ok'd one offers
+            the ok ONLY while the viewed reading IS the scenario's latest — the ok binds to one immutable
+            reading, so blessing an older A/B pole would claim a reading the feed no longer scores. Same
+            server write as `spex eval ok`; identity is server-derived. */}
+        {viewing.humanOk
+          ? <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>
+          : (!history || histIdx === 0) && (
+            <button type="button" className="an-okbtn" data-tip={t('annotator.okTitle')}
+              onClick={async () => { const r = await postEvalOk(entry.node, entry.scenario).catch((err) => ({ error: String(err) })); onWrite?.(r?.error || '') }}>
+              ☑ {t('annotator.ok')}
+            </button>
+          )}
 
         {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
             repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one

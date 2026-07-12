@@ -1,3 +1,10 @@
+---
+title: Fleet deployment runbook
+status: active
+desc: The complete operator runbook for deploying SpexCode to its four dogfood targets — two supply chains, iron ordering, verification loop.
+surface: system
+---
+
 # Deploying the fleet (operator runbook)
 
 Four deployments, two supply chains. (Correction to folk memory: gugu/z-code do NOT pull from the npm

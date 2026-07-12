@@ -173,3 +173,12 @@ if (findings.length) {
   process.exit(1)
 }
 console.log('dead-words: clean')
+
+// .spec filenames sweep — a renamed concept must not survive as a FILE NAME under .spec
+// (caught in the field: needs-eval/yatsu.md orphan hid a scenario+reading from the loader).
+import { execSync } from 'node:child_process'
+const specFiles = execSync("git ls-files '.spec'", { encoding: 'utf8' }).split('\n').filter(Boolean)
+for (const f of specFiles) {
+  const base = f.split('/').pop()
+  if (/yatsu/i.test(base)) { console.error(`dead-words: .spec filenames: ${f} — rename to the eval vocabulary`); process.exitCode = 1 }
+}

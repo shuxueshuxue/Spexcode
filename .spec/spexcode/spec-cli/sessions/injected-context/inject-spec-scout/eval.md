@@ -4,7 +4,7 @@ scenarios:
     tags: [cli]
     description: >-
       SPAWN the spec-scout agent (the Agent tool, agentType spec-scout) with a behaviour question and check
-      its conclusion. Use the canonical case that began the whole initiative: "does /exit clear a session's
+      its conclusion. Use the canonical case that began the whole initiative: "does /stop clear a session's
       worktree and tmux, and how?". The agent runs `spex spec search --json` → reads the top candidate specs in
       full → reranks by user-story → takes the winner's `code:` from its frontmatter → returns a conclusion.
       Must be measured by
@@ -13,9 +13,9 @@ scenarios:
       `spex eval add inject-spec-scout --scenario finds-governing-node-by-user-story --pass --result <txt>`.
     expected: >-
       The conclusion names the governing node **session-console** (NOT a code-central node), states the
-      user-story it encodes — the dashboard ❯-box intercepts `/exit` alone as a board command and runs
-      `act('exit')`: it kills the agent + tmux but deliberately KEEPS the worktree (a resumable offline
-      stop; `/close` is the destroyer that removes worktree + branch), so /exit neither orphans the tmux
+      user-story it encodes — the dashboard ❯-box intercepts `/stop` alone as a board command and runs
+      `act('stop')`: it kills the agent + tmux but deliberately KEEPS the worktree (a resumable offline
+      stop; `/close` is the destroyer that removes worktree + branch), so /stop neither orphans the tmux
       nor silently discards work — and points at the code to read
       (`SessionInterface.jsx` among the first). It is read-only (edits nothing). If the lexical floor's top and its
       user-story judgement disagree it says which it trusts and why. This is the exact node a pure
@@ -26,7 +26,7 @@ scenarios:
 
 The loss watched is **does the agent return the USER-STORY governor, not the code-central node?** Its whole
 reason to exist is that `spex spec search`'s lexical ranking (and a plain code grep) can miss the node a user's
-question is really about. The scenario measures the canonical miss — `/exit` → `session-console` — end to
+question is really about. The scenario measures the canonical miss — `/stop` → `session-console` — end to
 end through a real spawn: search, read bodies, rerank, conclude. Supporting evidence already on record: the
 agent's prescribed `spex spec search` was run by hand on this query and lands `session-console`
 + `SessionInterface.jsx` (from that node's `code:`) at rank 1; the spawn-measured reading (the agent's own reranking judgement) is filed

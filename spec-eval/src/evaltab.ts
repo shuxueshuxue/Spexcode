@@ -176,7 +176,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
-      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe)
+      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
     const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else

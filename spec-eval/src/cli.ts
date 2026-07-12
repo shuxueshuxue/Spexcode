@@ -4,7 +4,7 @@ import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { evalNodes, validateScenarios, resolveEvalNode, EVAL_FILE, type EvalNode } from './scenarios.js'
+import { evalNodes, validateScenarios, resolveEvalNode, scenarioHash, EVAL_FILE, type EvalNode } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
@@ -143,7 +143,7 @@ async function scan(args: string[] = []): Promise<number> {
           continue
         }
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
-        const axes = staleAxes(r, codeFiles, y.evalPath, idx, scidx, remSignals, probe)
+        const axes = staleAxes(r, codeFiles, y.evalPath, idx, scidx, remSignals, probe, sc)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes
@@ -300,6 +300,8 @@ async function evalCmd(args: string[]): Promise<number> {
   const reading: Reading = {
     scenario: scenario.name,
     codeSha: headSha(root),
+    // the contract this measurement was taken against — decides the scenario freshness axis by pure compare
+    scenarioHash: scenarioHash(scenario),
     ...(evidence.length ? { evidence } : {}),
     ...(timelineBlob ? { timelineBlob } : {}),
     // the filing session — the originator an eval-comment thread loops in ([[mentions]]); absent if unknown

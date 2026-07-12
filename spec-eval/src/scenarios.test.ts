@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode } from './scenarios.js'
+import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode, scenarioHash } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
@@ -526,4 +526,15 @@ test('resolveEvalNode: exact canonical id wins; unique bare leaf is a convenienc
   }
   const missing = resolveEvalNode(nodes, 'nope')
   assert.ok(!missing.ok && !missing.ambiguous)
+})
+
+test('scenarioHash: deterministic over whitespace churn, moved by semantic change only', () => {
+  const base = scenarioHash({ description: 'measure the loop end to end', expected: 'it converges' })
+  // re-wrap / CRLF / tabs / trailing whitespace → same hash (each whitespace run is one space, ends trimmed)
+  assert.equal(scenarioHash({ description: 'measure the loop\r\n  end   to\tend', expected: '  it converges\n' }), base)
+  // a semantic edit to either field moves it
+  assert.notEqual(scenarioHash({ description: 'measure the loop end to end', expected: 'it diverges' }), base)
+  assert.notEqual(scenarioHash({ description: 'measure the whole loop end to end', expected: 'it converges' }), base)
+  // the '\n' join keeps the two fields apart — text sliding across the boundary is a change
+  assert.notEqual(scenarioHash({ description: 'measure the loop end to', expected: 'end it converges' }), base)
 })

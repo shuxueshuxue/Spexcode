@@ -1,7 +1,7 @@
 ---
 concern: issue store both-exist 守卫在读路径裸抛栈而非 spex issue: 干净出错面
 by: 14f79c23-b5ae-490e-a9d8-c9c6983f336f
-status: open
+status: landed
 nodes: local-issues, issues-store-rename
 created: 2026-07-12T00:27:01.230Z
 ---

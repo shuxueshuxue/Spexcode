@@ -7,6 +7,7 @@ desc: The server + CLI — reads .spec and git, serves the API, and houses the s
 code:
   - spec-cli/src/index.ts
 related:
+  - spec-cli/src/reaper.ts
   - spec-cli/src/supervise.ts
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
@@ -84,15 +85,25 @@ KEEPS SERVING rather than exiting and dropping the public port (and the tmux ses
 wedges even while its event loop is idle: a client that times out and kills its request leaks one server-side
 socket each time, and enough of them (135 were observed piling on the public port) starve the backend into
 *looking* dead while it is actually healthy — the trigger of the mass-restore cascade. Two layers close this,
-matched to what each server is. The **child** (and, in public mode, the **gateway**) is a real HTTP server, so
-it carries `keepAliveTimeout` / `headersTimeout` / `requestTimeout`: an idle keep-alive socket, a slow-header
-crawler, or a request whose body never completes is reaped by the HTTP layer — which reaps only IDLE/STALLED
-sockets, so an *active* WS/SSE response (the board-stream, the terminal socket) is never mistaken for
-abandoned and cut. The **supervisor** is a raw-TCP proxy, so its equivalent is pairing: a close on *either*
-half tears down *both* — the old handler bailed only on `error`, so a clean FIN or a silent client drop left
-the upstream half-open forever (the leak). A truly silent abandon that never sends FIN/RST is reaped from the
-child by its idle timeout, whose close then propagates back through the proxy — so no raw idle timeout is put
-on the proxy itself, which would blind it to a legitimately-idle WS/SSE.
+matched to what each server is. The **child** (and, in public mode, the **gateway**) is a real HTTP server.
+Node's own `keepAliveTimeout` / `headersTimeout` / `requestTimeout` are set on it (harmless) but are **not the
+mechanism**: MEASURED (eval `server-reaps-abandoned-connections`, on a minimal `http.createServer`, Node
+20/22/24), only `keepAliveTimeout` — the idle-*between*-requests case — ever fires; `headersTimeout` and
+`requestTimeout` do **not** reap an *incomplete* request through the `connectionsCheckingInterval` sweep, so a
+slow-loris (TCP connect + partial headers, never completed) survives indefinitely and the pileup protection
+those options claim is not delivered. So the real reaper is an explicit **socket-level deadline** at the
+server boundary (`reaper.ts`, one helper installed at every HTTP `createServer`/`serve` site): on connect a
+socket is armed with a header deadline it must complete a request within, else it is destroyed; while a
+request is in flight the deadline is disarmed (so a slow board build or a streaming response is never cut);
+when the response ends the socket re-arms an idle keep-alive deadline. It keys on "no request completed yet /
+idle between requests", **never on response duration**, so an *active* WS/SSE stream (the board-stream, the
+terminal socket) is exempt for as long as it streams — a WebSocket upgrade is marked exempt for its whole
+lifetime. Deadlines are env-tunable (`SPEXCODE_REAP_HEADER_MS` ≈30s, `SPEXCODE_REAP_IDLE_MS` ≈15s). The
+**supervisor** is a raw-TCP proxy, so its equivalent is pairing: a close on *either* half tears down *both* —
+the old handler bailed only on `error`, so a clean FIN or a silent client drop left the upstream half-open
+forever (the leak). A truly silent abandon that never sends FIN/RST is reaped from the child by its
+socket-level deadline, whose close then propagates back through the proxy — so no raw idle timeout is put on
+the proxy itself, which would blind it to a legitimately-idle WS/SSE.
 
 Read routes: `/api/graph` (the assembled board — merged tree + per-worktree overlay + session list, the
 dashboard's single source, identical to `spex graph --json`) and its push companion `/api/graph/stream`

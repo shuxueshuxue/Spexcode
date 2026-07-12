@@ -3,9 +3,9 @@ scenarios:
   - name: json-result-files-as-data
     tags: [cli]
     description: >-
-      Through the real `spex yatsu eval` CLI: file one reading whose `--result` is a genuine JSON export
+      Through the real `spex eval add` CLI: file one reading whose `--result` is a genuine JSON export
       (e.g. a hyperfine `--export-json` object) and another whose `--result` is free-form terminal text.
-      Read the appended lines in `yatsu.evals.ndjson` and confirm the stored evidence kind. Then fetch each
+      Read the appended lines in `evals.ndjson` and confirm the stored evidence kind. Then fetch each
       blob through the shared blob route and read its Content-Type.
     expected: >-
       The JSON result is stored with `kind: "data"`, the plain-text result with `kind: "transcript"` — the

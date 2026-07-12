@@ -147,3 +147,20 @@ export async function buildBoard() {
   // /api/graph poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
   return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '' }
 }
+
+// @@@ spliceSessions — the SESSIONS-ONLY producer ([[graph-cache]]). A session-scoped change (a lifecycle
+// write, a liveness/activity poll flip) reshapes only the board's `sessions` rows — the node/meta units are
+// untouched — so the cache re-derives ONLY the sessions and splices them onto the previous board verbatim,
+// skipping the whole loadSpecs/layout/eval assembly a full buildBoard() pays. Pure aside from listSessions:
+// each row is decorated EXACTLY as buildBoard's sess mapping (`{...s, source: s.path, ops}`), and every
+// path's `ops` is REUSED from the previous board (a path→ops map). A session path absent in `prev` gets []
+// — a brand-new worktree has no pending spec ops yet, and any later ops-CHANGING event (a commit, a
+// worktree `.spec` edit) is refs/worktree-scoped, i.e. a FULL rebuild, never a sessions splice. So the
+// splice is byte-indistinguishable from a full rebuild whenever only session state moved.
+export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>): Promise<Awaited<ReturnType<typeof buildBoard>>> {
+  const sessions = await listSessions()
+  const opsByPath: Record<string, any[]> = {}
+  for (const s of prev.sessions) opsByPath[s.source] = s.ops
+  const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
+  return { ...prev, sessions: sess }
+}

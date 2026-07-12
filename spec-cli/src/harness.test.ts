@@ -333,6 +333,22 @@ test('codex liveness walks the pane descendant tree, NOT the foreground name or 
   assert.equal(codexHarness.liveness(rec, true, dir, { procs: healthy }), 'offline')
 })
 
+test('codex liveness PRIMARY path: the registered agent.pid verdict wins over the ps tree-walk', () => {
+  const rec = { session: 'spex-1', harnessSessionId: 'codex-thread-1' }
+  // a codex session with a registered agent.pid: `pidAlive` IS the truth — no ps scan, and it OVERRIDES the
+  // pane tree. Even a healthy-looking tree reads offline when the registered pid is dead, and a bare-shell tree
+  // reads online when the registered pid is alive (the tree is not consulted at all on the pid path).
+  const healthy = new Map([[100, { ppid: 1, comm: 'bash' }], [101, { ppid: 100, comm: 'codex' }]])
+  const bareShell = new Map([[100, { ppid: 1, comm: 'bash' }]])
+  assert.equal(codexHarness.liveness(rec, true, undefined, { panePid: 100, pidAlive: true, procs: bareShell }), 'online')
+  assert.equal(codexHarness.liveness(rec, true, undefined, { panePid: 100, pidAlive: false, procs: healthy }), 'offline')
+  // tmux down → offline regardless of a live registered pid.
+  assert.equal(codexHarness.liveness(rec, false, undefined, { pidAlive: true }), 'offline')
+  // pidAlive UNDEFINED (a pre-registration session, no agent.pid) → LEGACY tree-walk fallback still decides.
+  assert.equal(codexHarness.liveness(rec, true, undefined, { panePid: 100, procs: healthy }), 'online')
+  assert.equal(codexHarness.liveness(rec, true, undefined, { panePid: 100, procs: bareShell }), 'offline')
+})
+
 test('claude liveness verifies a LISTENER, not the socket file — tmux up AND socketLive gates online', () => {
   const rec = { session: 'spex-c', harnessSessionId: null }
   // tooth 2: online iff the window is up AND a live listener answered the connect probe (socketLive). A stale

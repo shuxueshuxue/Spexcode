@@ -1,4 +1,4 @@
-import { buildBoard } from './graph.js'
+import { buildBoard, spliceSessions } from './graph.js'
 
 // @@@ graph-cache — single-flight + cache for the hot /api/graph build ([[graph-lean]]). Assembling the
 // board is expensive (two full-history git-log walks cold, a full `.spec` fs walk every build), so the
@@ -30,34 +30,52 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // fires on a genuine wedge.
 const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
 
-let cached: Board | null = null   // last completed build; served while `valid`
+// the cache's staleness has a DOMAIN, not just a bit: a 'sessions' change (a lifecycle write, a
+// liveness/activity poll flip) touches only the session rows, so the next read can SPLICE fresh sessions
+// onto the still-valid node/meta units instead of re-walking git+`.spec`; a 'full' change (a ref move, a
+// worktree `.spec` edit, the cold-tick patrol) can reshape anything, so the next read does the whole
+// buildBoard(). 'none' = clean.
+type Scope = 'sessions' | 'full'
+let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
 let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
-let valid = false
+let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 let inflight: Promise<Board> | null = null
 let gen = 0                       // bumped on every invalidation — detects a change that landed MID-build
 
-// mark the cache stale. Called by every board-stream freshness source (see boardStream.fireChanged), so a
-// real change forces the next getBoard() to rebuild while a quiet poll storm keeps hitting the cache.
-export function invalidateBoard(): void {
+// mark the cache stale at a SCOPE. Called by every board-stream freshness source (see
+// boardStream.fireChanged), so a real change forces the next getBoard() to rebuild while a quiet poll storm
+// keeps hitting the cache. The scope only ESCALATES within a dirty window: none→sessions→full, and a
+// 'sessions' signal arriving while 'full' is already pending stays 'full' (a full rebuild subsumes a
+// sessions splice). cachedJson is dropped either way — a splice replaces the board object, so its old
+// serialization is stale regardless of scope.
+export function invalidateBoard(scope: Scope = 'full'): void {
   gen++
-  valid = false
+  if (scope === 'full' || dirty === 'full') dirty = 'full'
+  else dirty = 'sessions'
+  cachedJson = null
 }
 
 // the coalesced board read the route and the SSE rebuild both go through. A concurrent caller during a
 // build shares the in-flight promise; a caller after a completed build gets the cached value until the
-// next invalidation. A change that lands WHILE a build runs (gen moved) leaves the cache invalid so the
-// NEXT read rebuilds — the just-finished build still returns to its waiters (freshest available when they
-// asked), never cached as current. Mirrors [[graph-stream]]'s building/dirty loop.
+// next invalidation. A 'sessions'-scoped dirty with a cached board takes the SPLICE path (spliceSessions —
+// fresh session rows onto the cached node/meta units) under the SAME single-flight promise + watchdog +
+// generation rules; anything else (dirty 'full', or no cache to splice onto) does a full buildBoard(). A
+// change that lands WHILE a build runs (gen moved) leaves the cache dirty so the NEXT read rebuilds — a
+// 'full' invalidation landing mid-splice leaves it dirty 'full' for the next read. The just-finished build
+// still returns to its waiters (freshest available when they asked), never cached as current. Mirrors
+// [[graph-stream]]'s building/dirty loop.
 export function getBoard(): Promise<Board> {
   if (inflight) return inflight
-  if (valid && cached) return Promise.resolve(cached)
+  if (dirty === 'none' && cached) return Promise.resolve(cached)
   const startGen = gen
+  const sessionsOnly = dirty === 'sessions' && cached !== null
+  const prev = cached
   const p = (async () => {
     const t0 = Date.now()
     let watchdog: ReturnType<typeof setTimeout> | undefined
     try {
       const board = await Promise.race([
-        buildBoard(),
+        sessionsOnly ? spliceSessions(prev!) : buildBoard(),
         // the race consumes the loser's eventual settlement, so an abandoned build that fails later
         // can't surface as an unhandled rejection; unref'd so a pending watchdog never holds a one-shot
         // CLI process open.
@@ -71,7 +89,9 @@ export function getBoard(): Promise<Board> {
       ])
       cached = board
       cachedJson = null   // invalidate the memoized serialization; re-serialized lazily on first read
-      valid = gen === startGen
+      // clean ONLY if no invalidation landed during the build; otherwise leave `dirty` at whatever scope
+      // those in-build invalidations escalated it to (a mid-splice 'full' stays 'full' for the next read).
+      if (gen === startGen) dirty = 'none'
       return board
     } finally {
       clearTimeout(watchdog)

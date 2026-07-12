@@ -1,4 +1,6 @@
 import { serve } from '@hono/node-server'
+import type { Server as HttpServer } from 'node:http'
+import { installConnectionReaper } from './reaper.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
@@ -468,7 +470,7 @@ app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
-  if (ok) notifyBoardChanged()
+  if (ok) notifyBoardChanged('sessions')
   return c.json({ ok }, ok ? 200 : 404)
 })
 
@@ -484,15 +486,13 @@ app.post('/api/sessions/:id/sort', async (c) => {
 const port = Number(process.env.PORT || 8787)
 // @@@ server-side connection reaping ([[spec-cli]]) - abandoned connections must die SERVER-SIDE, or they
 // pile up and wedge the backend (135 leaked conns once starved :8787 into looking dead — the cascade that
-// triggered the mass-restore incident, since every client-side timeout-kill leaks one). keepAliveTimeout
-// reaps an idle keep-alive socket; headersTimeout a slow-header/slow-loris; requestTimeout a request whose
-// body never completes. These reap IDLE/STALLED sockets only — an ACTIVE WS/SSE response is not "keep-alive
-// idle", so the board-stream SSE and the terminal socket are untouched. requestTimeout bounds RECEIVING a
-// request only (not the response), so a slow board build or a streaming SSE/WS response is never cut. Node
-// enforces these on a periodic sweep whose cadence (connectionsCheckingInterval) is armed AT CONSTRUCTION —
-// so they MUST ride `serverOptions` (setting them post-`serve()` leaves the sweep on its 30s default and the
-// change under-effective); a 10s sweep makes reaping land within timeout+10s, well under the multi-minute
-// defaults (requestTimeout 300s) that let the conns accumulate. headersTimeout > keepAliveTimeout (Node's rule).
+// triggered the mass-restore incident, since every client-side timeout-kill leaks one). The `serverOptions`
+// timeouts below are kept (harmless), but they are NOT the mechanism: MEASURED (eval
+// server-reaps-abandoned-connections), Node's `headersTimeout`/`requestTimeout` do NOT reap an INCOMPLETE
+// request via the connectionsCheckingInterval sweep — a slow-loris survives indefinitely; only
+// keepAliveTimeout (idle-between-requests) ever fires. So the real reaper is the explicit socket-level
+// `installConnectionReaper` below (see reaper.ts): a per-socket deadline that reaps a slow-loris / idle
+// keep-alive but exempts an ACTIVE WS/SSE stream (board-stream, terminal socket) for as long as it streams.
 // @@@ loopback bind ([[public-mode]]) - this child is NEVER the internet face: the supervisor (and in public
 // mode the gateway) fronts it, and dials it only via 127.0.0.1. Binding loopback is what makes "loopback is
 // the trust boundary" true — without a hostname Node binds all interfaces and the child is reachable from
@@ -500,6 +500,7 @@ const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1', serverOptions: {
   keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000,
 } })
+installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
 superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)

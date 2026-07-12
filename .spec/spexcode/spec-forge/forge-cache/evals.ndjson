@@ -1,0 +1,1 @@
+{"scenario":"resident-delta-freshness","codeSha":"37e54d6e81fa85158ed2453a2e8db363a9a27691","evidence":[{"hash":"e1b8d6e9ae7c476ed8da4ebbc3005be7bed3f644690eee943bc114d147eefbb1","kind":"transcript"}],"by":"14f79c23-b5ae-490e-a9d8-c9c6983f336f","verdict":{"status":"pass","note":"POST 写后读回即见；带外 gh close 在一个增量周期(~6s)内翻转、无重启；cache.test 2/2 辅证"},"ts":"2026-07-12T00:22:09.830Z"}

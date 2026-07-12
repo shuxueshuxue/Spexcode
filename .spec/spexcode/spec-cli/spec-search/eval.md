@@ -5,7 +5,7 @@ scenarios:
     test: spec-cli/src/search.bench.mjs
     description: >-
       A held-out question→node benchmark MEASURING the lexical floor's robustness (NOT a target to game).
-      For each of the 16 natural-language questions below, run the REAL tool — `spex search "<question>"
+      For each of the 16 natural-language questions below, run the REAL tool — `spex spec search "<question>"
       --json --limit 10` — take the returned `id` list (already score-DESC), and find the rank of the first
       expected id. Labels are node LEAF names matched with the SAME de-collision rule the loader applies
       (specs.ts reId): a returned id hits a label if it IS the label or ends with `_<label>`, so a bare leaf
@@ -35,18 +35,18 @@ scenarios:
       (16) "how does a worker declare it is done" → state (regression: a live miss caught 2026-07-06 —
       eval-proactive sat #1 off an incidental desc word while the lifecycle governor sat #5).
       PLUS two non-rank zero-result regressions (the reply must route to a next step, never dead-end):
-      (a) run `spex search "会话"` (会/话 appear NOWHERE in the corpus — no --json) — zero results MUST print
-      the corpus-is-English translate-and-retry fact AND the `browse all: spex tree` line (no nearest
+      (a) run `spex spec search "会话"` (会/话 appear NOWHERE in the corpus — no --json) — zero results MUST print
+      the corpus-is-English translate-and-retry fact AND the `browse all: spex graph` line (no nearest
       titles — CJK has nothing to be lexically near); a Chinese query that DOES hit corpus prose is the
-      separate [[cjk-retrieval]] scenario; (b) run `spex search "kyeboard"` — zero results MUST
+      separate [[cjk-retrieval]] scenario; (b) run `spex spec search "kyeboard"` — zero results MUST
       print a `nearest titles` list containing `keyboard-nav` (per-word edit-distance fallback) AND the
-      `spex tree` line.
+      `spex graph` line.
       Cases 4, 10, 12, 13 deliberately hide the keyword OUTSIDE the title/path — they test prose-reach (the
       whole reason spec search beats plain `grep` on titles). Lift recall by GENERALISING the ranking (fielded
       name>desc>body weighting, IDF, BM25 term-frequency, stemming), never by special-casing a question.
     expected: >-
       recall@3 ≥ 0.875 (14/16) with recall@1 ≥ 0.50, MRR ≥ 0.65, and BOTH zero-result checks PASS (cjk:
-      corpus-is-English fact + spex-tree pointer; typo: nearest-titles incl. keyboard-nav + spex-tree
+      corpus-is-English fact + spex-graph pointer; typo: nearest-titles incl. keyboard-nav + spex-graph
       pointer), achieved WITHOUT any benchmark-specific branch in search.ts/ranker.ts. EXACTLY TWO cases are accepted
       misses, both label-vs-prose limits no purely-lexical rule can bridge, left as holdouts rather than
       special-cased: (13) the node literally named `supervisor` is the manager-agent prompt preset and
@@ -67,7 +67,7 @@ scenarios:
     description: >-
       Track the floor's PURE search-compute time. The floor has NO index or cache — every call re-reads and
       re-ranks the whole tree, O(Q×D) in the corpus token count — so this measures whether that recompute
-      stays cheap as the tree grows. Run `spex search "<any question>"` and read the stderr line
+      stays cheap as the tree grows. Run `spex spec search "<any question>"` and read the stderr line
       `[spec-search] compute <ms>ms · <nodes> nodes · <tokens> tokens`: that ms is the floor's compute only
       (loadSpecsLite read+parse + rankDocs's tokenize/IDF/BM25), excluding process boot and the lazy import.
       File the number against the current corpus scale.
@@ -87,22 +87,22 @@ scenarios:
       tokenizer must therefore treat CJK, not only `[a-z0-9]`: each Han/kana character is its own token (a
       unigram), so a Chinese query reaches the CJK content the same fielded name>desc>body + IDF + BM25
       machinery ranks English with — one shared rule, no per-language branch. Two checks through the REAL
-      `spex search`: (a) `spex search "节点" --json` must return `spexcode` (the root node repeats 节点
+      `spex spec search`: (a) `spex spec search "节点" --json` must return `spexcode` (the root node repeats 节点
       throughout its body) in the top results — a Chinese content word finds the node whose prose carries it;
-      (b) `spex search "会话"` (会/话 appear NOWHERE in the corpus) must still return zero results and print
-      the corpus-is-English translate-and-retry fact + the `browse all: spex tree` line — CJK support does
+      (b) `spex spec search "会话"` (会/话 appear NOWHERE in the corpus) must still return zero results and print
+      the corpus-is-English translate-and-retry fact + the `browse all: spex graph` line — CJK support does
       NOT suppress the honest zero-result route when a query genuinely matches nothing. This same tokenizer
       lives in the shared [[shared-ranker]] core, so the dashboard search palette gains CJK over its
       (often-Chinese) session/issue planes for free.
     expected: >-
-      (a) `spex search "节点"` returns `spexcode` at rank 1 (its body concentrates 节/点 and the CJK IDF is
-      high because few nodes carry any CJK); (b) `spex search "会话"` returns zero results WITH the
-      corpus-is-English hint + `spex tree` pointer. Both achieved by the general per-CJK-character tokenizer,
+      (a) `spex spec search "节点"` returns `spexcode` at rank 1 (its body concentrates 节/点 and the CJK IDF is
+      high because few nodes carry any CJK); (b) `spex spec search "会话"` returns zero results WITH the
+      corpus-is-English hint + `spex graph` pointer. Both achieved by the general per-CJK-character tokenizer,
       no benchmark-specific branch. Filed via search.bench.mjs's cjk-positive + cjk-zero-result checks.
 ---
 # eval.md — spec-search
 
-The lexical floor is measured the way a consumer uses it: through the REAL `spex search --json` surface
+The lexical floor is measured the way a consumer uses it: through the REAL `spex spec search --json` surface
 (YATU), never by calling `searchSpecs` with a hand-picked corpus. The loss being watched is **retrieval
 robustness** — does an agent's plain-language question surface the node that actually governs the answer,
 especially when the keyword sits in the body rather than the title. The benchmark is a HOLDOUT: it exists to

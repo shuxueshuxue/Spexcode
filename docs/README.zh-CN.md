@@ -38,7 +38,7 @@ review 和 merge;工具负责让意图和实现不分家。
 一个 spec 节点就是 `.spec/` 下的一个目录,里面有一个 `spec.md`:frontmatter(title、status、
 指向它管辖文件的 `code:`,以及列出它引用文件的 `related:` 清单)加一段正文,描述系统这一部分当前应该做什么。节点可以嵌套,所以这棵树
 对应你对项目的理解方式,而不是文件布局。正文可以分成两个带标题的部分。很短的 **raw source** 写意图,改它需要
-人的明确认可(agent 可以起草,由人拍板);**expanded spec** 是 agent 对这个意图的详细展开,自由
+人的明确认可(agent 可以起草,由人确认);**expanded spec** 是 agent 对这个意图的详细展开,自由
 迭代,但必须始终和 raw source 一致。
 
 <img src="readme-node.png" alt="节点弹窗">
@@ -60,7 +60,7 @@ review 和 merge;工具负责让意图和实现不分家。
 
 ## 优化循环
 
-spec、commit、eval,这几样合起来是一个循环。spec 是损失函数:定义你要什么,这一半由人拍板。commit 是优化器。
+spec、commit、eval,这几样合起来是一个循环。spec 是损失函数:定义你要什么,这一半由人来定。commit 是优化器。
 **eval** 是测量子系统:量出当前行为离 spec 还有多远,分数的历史照样存在 git 里。
 
 <img src="readme-loop.zh.png" alt="优化循环示意">

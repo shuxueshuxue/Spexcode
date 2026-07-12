@@ -197,7 +197,7 @@ scenarios:
       reuses an already-online agent without refusing, and relaunches only a confirmed-offline one.
   - name: liveness-push-latency
     tags: [backend-api]
-    related: [spec-cli/src/sessions.ts, spec-cli/src/harness.ts, spec-cli/src/boardStream.ts]
+    related: [spec-cli/src/sessions.ts, spec-cli/src/harness.ts, spec-cli/src/graphStream.ts]
     description: >-
       With a delta subscriber attached to the backend, kill a governed worker (`spex session stop` — tmux
       window and agent die together; also a direct kill -9 of the registered pid with the window left

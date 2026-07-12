@@ -1,0 +1,1 @@
+{"scenario":"links-report-pair","codeSha":"984f29eadde62375056a5c303e25e22414f0828e","evidence":[{"hash":"c58a8737d3208d673088b92608ac9a08ae659301304312406aa949180cdb5cae","kind":"transcript"}],"by":"14f79c23-b5ae-490e-a9d8-c9c6983f336f","verdict":{"status":"pass","note":"pending 在 live repo 恰为空——非空 NodeEvalPending 形状未正向覆盖，诚实现状"},"ts":"2026-07-12T00:25:25.276Z"}

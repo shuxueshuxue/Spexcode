@@ -1,0 +1,1 @@
+{"scenario":"three-sources-invert","codeSha":"984f29eadde62375056a5c303e25e22414f0828e","evidence":[{"hash":"07c70d5ab1f8534adec5486e0e8ec034284a173487a1a8cf04f90f8ad2af4404","kind":"transcript"}],"by":"14f79c23-b5ae-490e-a9d8-c9c6983f336f","verdict":{"status":"pass","note":"marker/typo/unmarked 三腿全证；branch 长匹配腿本轮无开放 node/* PR 可测，未伪造"},"ts":"2026-07-12T00:25:26.333Z"}

@@ -40,6 +40,24 @@ scenarios:
       304. Zero loss = no silent-death mode can stall the board past the poll period, and the poll
       that guarantees it is free when the board is quiet.
     code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
+  - name: dead-stream-self-replacement
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]
+    description: >-
+      Real browser against a live backend with /api routed through a per-connection relay (the
+      silent-push-death rig). Once the SSE push channel is established, freeze the relay's established
+      pairs WITHOUT closing them (half-open: no FIN, no error event) and watch the CLIENT'S STREAM
+      itself, not just the board: does a replacement /api/graph/stream connection ever get opened, and
+      does push freshness (sub-second updates on a server change) come back? Note: a CDP page-freeze is
+      NOT this failure — a frozen tab's SSE frames buffer at the network layer and flush on resume
+      (measured pre-fix: 6/6 freeze runs caught up ≤200ms), so freezing proves nothing about stream death.
+    expected: >-
+      The client holds the server to its HEARTBEAT CONTRACT (a ping every 10s; silence past 2.5 windows
+      = the stream is DEAD, not quiet): within ~30s of the half-open kill it tears the dead EventSource
+      down, opens a replacement (visible as a fresh stream connection + a board-full re-anchor), fires
+      one refetch, and sub-second push freshness RESUMES. Without the watchdog the dead stream is never
+      detected (no FIN, no error event — auto-reconnect never fires) and the board silently degrades to
+      15s poll-only freshness FOREVER: the permanent half-alive mode this scenario exists to forbid.
 ---
 # dashboard-shell — measurement
 

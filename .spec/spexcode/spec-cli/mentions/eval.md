@@ -39,7 +39,7 @@ scenarios:
     code: spec-cli/src/mentions.ts
     description: >-
       In an isolated store (SPEXCODE_HOME + SPEXCODE_TMUX isolated, the configured launcher `cmd` pointed at an inert command),
-      seed one governed session record, then through the real CLI post `spex issues open … --body "@new …"`
+      seed one governed session record, then through the real CLI post `spex issue open … --body "@new …"`
       twice: once authored BY that session (SPEXCODE_SESSION_ID = its id), once authored by a non-session
       identity (`human`/`unknown`/a forge login). Read each spawned worker's session.json `parent` field.
     expected: >-
@@ -66,8 +66,8 @@ scenarios:
     related: [spec-cli/src/sessions.ts, spec-eval/src/cli.ts]
     description: >-
       Through the real CLI, name the same referent with and without its sigil: a session selector as
-      `<sel>`, `@<sel>`, and `[[<sel>]]` (a list verb like `spex ls` AND a control verb through the
-      single-target resolver), and a node arg as `<node>` and `[[<node>]]` (`spex yatsu show`/`eval`).
+      `<sel>`, `@<sel>`, and `[[<sel>]]` (a list verb like `spex session ls` AND a control verb through the
+      single-target resolver), and a node arg as `<node>` and `[[<node>]]` (`spex eval ls`/`eval add`).
     expected: >-
       Identical output for every pair — a sigiled CLI argument resolves to exactly what the bare token
       resolves to, never widening a match (a wrong sigiled token errors the same as the bare one). Sigils
@@ -76,7 +76,7 @@ scenarios:
 
 # measuring mentions
 
-YATU through the real `mentions` module and the real `spex issues`/`note` CLI. The pure grammar (parse +
+YATU through the real `mentions` module and the real `spex issue`/`spex remark` CLI. The pure grammar (parse +
 resolve) is measured directly on the exported functions; the wiring is measured by posting to the issue store and
 reading the loud dispatch summary. The one part that needs a running backend + live sessions — an actual
 `sendKeys` delivery and an `@new` spawn — is deferred to a real-deployment measurement, not faked here.

@@ -1,0 +1,1 @@
+{"scenario":"flag-forms-and-open-only","codeSha":"37e54d6e81fa85158ed2453a2e8db363a9a27691","evidence":[{"hash":"760b27256949ba837b6bc3f0037d3289f4d583c176b1bcfcfce4323d7d94c24e","kind":"transcript"}],"by":"14f79c23-b5ae-490e-a9d8-c9c6983f336f","verdict":{"status":"pass","note":"label/body-line 对称、trailing-content 非 flag、无路由不发明节点、close 即掉出"},"ts":"2026-07-12T00:22:08.701Z"}

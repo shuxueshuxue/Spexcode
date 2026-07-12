@@ -4,8 +4,8 @@ scenarios:
     tags: [backend-api]
     code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts]
     description: >
-      Score a node that declares ONE passing scenario while its append-only yatsu.evals.ndjson still carries
-      a second, RETIRED scenario's stale reading (removed from yatsu.md but never deleted from the sidecar).
+      Score a node that declares ONE passing scenario while its append-only evals.ndjson still carries
+      a second, RETIRED scenario's stale reading (removed from eval.md but never deleted from the sidecar).
       Read the proof model's node score, its passed/total ribbon, and the reading cards it renders, and put
       them beside the dashboard's own reading of the same node (score.jsx scenarioStates → aggregateState /
       ScenarioCount). The two must agree.
@@ -53,18 +53,20 @@ scenarios:
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts]
     description: >
-      Drive the real CLI against a live backend: `spex eval <SEL>` on a session with committed changes
-      and readings, on a session with an empty diff, and with --json; `spex eval <SEL> --export` and the
-      old `spex review proof <SEL>` spelling; the help probes (`spex help eval`, `spex eval <SEL> --help`,
-      `spex help review`, the `spex help` map). Capture stdout/stderr + exit codes as the transcript.
+      Drive the real CLI against a live backend: `spex eval ls --session <SEL>` on a session with
+      committed changes and readings, on a session with an empty diff, and with --json;
+      `spex eval ls --session <SEL> --export`, then the removed spellings `spex review <SEL>` and
+      `spex session review proof <SEL>`; the help probes (`spex help eval`, `spex eval --help`,
+      the `spex help` map). Capture stdout/stderr + exit codes as the transcript.
     expected: >
-      `spex eval <SEL>` renders the /evals model as text in the tab's attention order — gates strip, a ✦
-      legend when the session filed its own readings, per changed node: blind spots lead, ✦-marked own
-      readings, then the inherited baseline under a named divider; an empty diff prints a clean
-      nothing-to-evaluate line; --json dumps the model. --export writes the self-contained HTML path (its
-      --json = the model). `spex review proof` still works but echoes the canonical `spex eval <SEL>
-      --export` deprecation line on stderr. Help: the map lists eval beside review, `spex help review` no
-      longer carries a proof sub-noun, and an --help probe never fires the verb.
+      `spex eval ls --session <SEL>` renders the /evals model as text in the tab's attention order — gates
+      strip, a ✦ legend when the session filed its own readings, per changed node: blind spots lead,
+      ✦-marked own readings, then the inherited baseline under a named divider; an empty diff prints a
+      clean nothing-to-evaluate line; --json dumps the model. --export writes the self-contained HTML
+      path (its --json = the model). The removed spellings are tombstones, not aliases: `spex review`
+      signposts `spex session review`, and `spex session review proof` signposts the canonical
+      `spex eval ls --session <SEL> --export` — one stderr line, exit non-zero, the old verb never
+      executes. Help: the map lists eval as its own noun and an --help probe never fires the verb.
   - name: eval-tab-shared-shell
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]

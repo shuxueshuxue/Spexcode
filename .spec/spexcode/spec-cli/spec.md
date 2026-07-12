@@ -8,6 +8,7 @@ code:
   - spec-cli/src/index.ts
 related:
   - spec-cli/src/reaper.ts
+  - spec-cli/src/reaper.test.ts
   - spec-cli/src/supervise.ts
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
@@ -92,13 +93,24 @@ mechanism**: MEASURED (eval `server-reaps-abandoned-connections`, on a minimal `
 `requestTimeout` do **not** reap an *incomplete* request through the `connectionsCheckingInterval` sweep, so a
 slow-loris (TCP connect + partial headers, never completed) survives indefinitely and the pileup protection
 those options claim is not delivered. So the real reaper is an explicit **socket-level deadline** at the
-server boundary (`reaper.ts`, one helper installed at every HTTP `createServer`/`serve` site): on connect a
-socket is armed with a header deadline it must complete a request within, else it is destroyed; while a
+server boundary (`reaper.ts`, one helper installed at every HTTP `createServer`/`serve` site): on socket
+birth it is armed with a header deadline it must complete a request within, else it is destroyed; while a
 request is in flight the deadline is disarmed (so a slow board build or a streaming response is never cut);
 when the response ends the socket re-arms an idle keep-alive deadline. It keys on "no request completed yet /
 idle between requests", **never on response duration**, so an *active* WS/SSE stream (the board-stream, the
 terminal socket) is exempt for as long as it streams — a WebSocket upgrade is marked exempt for its whole
-lifetime. Deadlines are env-tunable (`SPEXCODE_REAP_HEADER_MS` ≈30s, `SPEXCODE_REAP_IDLE_MS` ≈15s). The
+lifetime. **Which socket carries the deadline is part of the contract**: the deadline must live on the socket
+`'request'`/`'upgrade'` actually report, because a deadline the request path cannot reach never disarms and
+becomes a kill-timer for *every* connection. On a TLS server (the public gateway) that socket is the
+TLSSocket born at `'secureConnection'` — NOT the raw TCP socket `'connection'` delivers; arming the raw
+socket there once severed every healthy gateway connection (the actively-pinging board SSE, live terminal
+WebSockets) at exactly the header deadline, the dashboard's ~30s "reconnecting…" storm (MEASURED, eval
+`stream-survives-public-gateway` on [[graph-stream]]). The raw pre-handshake phase keeps its own header
+deadline (a TCP connect that never finishes the TLS handshake is the same slow-loris one layer down), handed
+off to the TLSSocket at handshake completion via the connection's addr:port pair — public API only, and a
+criterion, not an allowlist: no route- or protocol-specific exemptions, just "deadlines are reachable from
+request handling, streams in flight are never duration-reaped". Deadlines are env-tunable
+(`SPEXCODE_REAP_HEADER_MS` ≈30s, `SPEXCODE_REAP_IDLE_MS` ≈15s). The
 **supervisor** is a raw-TCP proxy, so its equivalent is pairing: a close on *either* half tears down *both* —
 the old handler bailed only on `error`, so a clean FIN or a silent client drop left the upstream half-open
 forever (the leak). A truly silent abandon that never sends FIN/RST is reaped from the child by its

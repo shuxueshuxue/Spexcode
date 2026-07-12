@@ -428,6 +428,51 @@ async function retractCmd(args: string[]): Promise<number> {
   return 0
 }
 
+// `spex eval ok` — the HUMAN sign-off on a scenario's latest reading ([[human-ok]]): appends a monotonic
+// human-ok event bound to that one immutable reading (a newer reading or live-computed staleness brings the
+// scenario back on its own — no un-ok verb exists). CLI parity with the dashboard's affordance (LAW L);
+// identity is the surface's: 'human' here — and a GOVERNED session is REFUSED, because the sign-off is the
+// human's own deliberate judgment and an agent blessing its own reading would hide it from exactly the
+// review the ok certifies (the no-self-resolve analogue). Flag set closed, like every eval verb.
+async function okCmd(args: string[]): Promise<number> {
+  const root = repoRoot()
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (!a.startsWith('--')) continue
+    if (a === '--scenario') { i++; continue }
+    console.error(`spex eval ok: unknown flag '${a}' — accepts --scenario`)
+    return 2
+  }
+  if (envSessionId()) {
+    console.error('spex eval ok: refusing under a governed session — human-ok is the HUMAN\'s sign-off, never an agent\'s self-blessing. Ask the human to ok it from the dashboard or their own terminal; an agent\'s judgment on a reading is a remark (`spex remark add`).')
+    return 1
+  }
+  const sel = positional(args)
+  if (!sel || sel === '.') { console.error('spex eval ok: name a node — usage: spex eval ok <node> --scenario <name>'); return 2 }
+  const node = stripRefSigil(sel)
+  const scName = flag(args, 'scenario')
+  const res = resolveEvalNode(evalNodes(root), node)
+  if (!res.ok) { console.error(`spex eval ok: ${res.error}`); return 1 }
+  const declared = res.node.scenarios.map((s) => s.name)
+  const scenario = scName ?? (declared.length === 1 ? declared[0] : undefined)
+  if (!scenario) {
+    console.error(`spex eval ok: '${res.node.id}' declares ${declared.length} scenarios — name one with --scenario <name> (declared: ${declared.join(', ')})`)
+    return 1
+  }
+  const { fileHumanOk } = await import('./humanok.js')
+  const r = fileHumanOk(res.node.id, scenario, 'human')
+  if (!r.ok) { console.error(`spex eval ok: ${r.error}`); return 1 }
+  if (r.already) {
+    console.log(`spex eval ok: '${res.node.id}' scenario '${scenario}' reading @ ${r.humanOk.okTs} is already human-ok'd (by ${r.humanOk.by}, ${r.humanOk.ts}) — monotonic, nothing appended`)
+    return 0
+  }
+  console.log(`  ☑ '${res.node.id}' scenario '${scenario}' reading @ ${r.humanOk.okTs} (${r.humanOk.okSha.slice(0, 7)}) human-ok'd`)
+  console.log(r.landed === 'committed'
+    ? 'spex eval ok: 1 sign-off filed (committed straight to the trunk)'
+    : 'spex eval ok: 1 sign-off filed (an appended event — commit the sidecar so the sign-off lands)')
+  return 0
+}
+
 async function clean(args: string[]): Promise<number> {
   const root = repoRoot()
   const all = has(args, 'all')
@@ -521,7 +566,8 @@ export function formatTimeline(tl: EvalTimeline): string {
     const ev = list.length
       ? list.map((e) => e.state === 'miss' ? 'miss original file' : `${e.kind} ${(e.hash ?? '').slice(0, 12)}…`).join(', ')
       : 'no evidence'
-    const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
+    const okTag = r.humanOk ? `  ☑ human-ok (${r.humanOk.by})` : ''
+    const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}${okTag}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
   return [`spex eval ls: '${tl.node}' — ${tl.readings.length} eval(s), newest first`, '', ...lines, ...retractLines].join('\n')
@@ -585,13 +631,14 @@ async function scenarioLs(args: string[]): Promise<number> {
 
 // the `spex eval` drawer's node-scoped verbs ([[cli-surface]]): add (file a measurement) · ls (a node's
 // reading timeline) · scenario ls (the declared contracts, --unmeasured = blind spots) · lint (the
-// measurement-layer lint — advisory, always exit 0) · retract · clean.
+// measurement-layer lint — advisory, always exit 0) · ok (the human sign-off) · retract · clean.
 // The session-scoped read (`spex eval ls --session <SEL>`) is intercepted in cli.ts before this runs;
 // `check-staged` is hook plumbing, exported separately for `spex internal check-staged`.
 export async function runEval(args: string[]): Promise<number> {
   const sub = args[0]
   if (sub === 'lint') return scan(args.slice(1))
   if (sub === 'add') return evalCmd(args.slice(1))
+  if (sub === 'ok') return okCmd(args.slice(1))
   if (sub === 'retract') return retractCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'ls') return show(args.slice(1))
@@ -600,7 +647,7 @@ export async function runEval(args: string[]): Promise<number> {
     console.error('spex eval scenario: ls [<node>|.] [--unmeasured] [--json] — list declared scenarios (the measurement contracts)')
     return 2
   }
-  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | lint [--changed] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
+  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | lint [--changed] | ok <node> [--scenario <name>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
   return 2
 }
 

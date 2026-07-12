@@ -3,7 +3,7 @@ import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex 
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { evalNodes, type EvalNode } from './scenarios.js'
-import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
+import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, codeDrift, contentProbeFor, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
@@ -64,6 +64,10 @@ export type EvalEntry = {
   // so the eval detail pane reads its whole comment thread from the reading overlay — the counterpart to
   // splitting eval-remark threads OUT of the issue surfaces (mergedIssues). Absent until the first remark.
   thread?: Issue
+  // the human sign-off bound to THIS reading ([[human-ok]]) — present only on the exact reading an ok row
+  // anchors (by scenario + ts), so a newer reading arrives unblessed and the feed's hide releases itself.
+  // Rides the board fold verbatim (latestPerScenario is a filter, never a projection).
+  humanOk?: { by: string; ts: string }
 }
 
 // a remark overlaid onto its display host (a reading, above) → the RemarkView the surfaces read.
@@ -163,8 +167,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
   }))
   // one raw sidecar read: the effective readings feed the scoreboard rows below; the retraction events ride
-  // along as the undo trace (newest-first, like the readings).
-  const { readings: rawReadings, retractions } = readSidecar(ynode.sidecarPath)
+  // along as the undo trace (newest-first, like the readings), the human-ok events as the sign-off overlay.
+  const { readings: rawReadings, retractions, oks } = readSidecar(ynode.sidecarPath)
   // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
   // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
   const probe = contentProbeFor(root)
@@ -183,6 +187,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // first) drives the scalar compat fields for single-evidence consumers.
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
     const primary = evidence.find((e) => e.kind === 'video') ?? evidence[0]
+    // the sign-off join ([[human-ok]]): the ok binds by exact (scenario, ts), so only the very reading the
+    // human blessed carries it — a newer or retract-revealed reading reads unblessed.
+    const okRow = humanOkFor(oks, r.scenario, r.ts)
     return {
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',
@@ -200,6 +207,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       ...(drift.length ? { codeDrift: drift } : {}),
       blobState: primary ? primary.state : 'none',
       ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),
+      ...(okRow ? { humanOk: { by: okRow.by, ts: okRow.ts } } : {}),
     }
   })
   readings.reverse()   // newest-first

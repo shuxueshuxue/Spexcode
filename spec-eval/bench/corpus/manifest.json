@@ -1,0 +1,211 @@
+{
+ "frozenAt": "dc2a626c",
+ "note": "content snapshots frozen from this repo's own tree; scores are only comparable against these exact bytes",
+ "entries": [
+  {
+   "snap": "spec-cli__src__sessions.ts.snap",
+   "file": "spec-cli/src/sessions.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__harness.ts.snap",
+   "file": "spec-cli/src/harness.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__specs.ts.snap",
+   "file": "spec-cli/src/specs.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__lint.ts.snap",
+   "file": "spec-cli/src/lint.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__cli.ts.snap",
+   "file": "spec-cli/src/cli.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__layout.ts.snap",
+   "file": "spec-cli/src/layout.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__guide.ts.snap",
+   "file": "spec-cli/src/guide.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__index.ts.snap",
+   "file": "spec-cli/src/index.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__git.ts.snap",
+   "file": "spec-cli/src/git.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__graph.ts.snap",
+   "file": "spec-cli/src/graph.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__issues.ts.snap",
+   "file": "spec-cli/src/issues.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__localIssues.ts.snap",
+   "file": "spec-cli/src/localIssues.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__materialize.ts.snap",
+   "file": "spec-cli/src/materialize.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__search.ts.snap",
+   "file": "spec-cli/src/search.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__ranker.ts.snap",
+   "file": "spec-cli/src/ranker.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__pty-bridge.ts.snap",
+   "file": "spec-cli/src/pty-bridge.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-eval__src__freshness.ts.snap",
+   "file": "spec-eval/src/freshness.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-eval__src__timeline.ts.snap",
+   "file": "spec-eval/src/timeline.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-forge__src__port.ts.snap",
+   "file": "spec-forge/src/port.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-forge__src__resident.ts.snap",
+   "file": "spec-forge/src/resident.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-forge__src__drivers.ts.snap",
+   "file": "spec-forge/src/drivers.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-cli__src__client.ts.snap",
+   "file": "spec-cli/src/client.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-forge__src__cache.ts.snap",
+   "file": "spec-forge/src/cache.ts",
+   "cls": "backend-ts"
+  },
+  {
+   "snap": "spec-dashboard__src__SessionInterface.jsx.snap",
+   "file": "spec-dashboard/src/SessionInterface.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__NodeView.jsx.snap",
+   "file": "spec-dashboard/src/NodeView.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__IssuesPage.jsx.snap",
+   "file": "spec-dashboard/src/IssuesPage.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__EventDetail.jsx.snap",
+   "file": "spec-dashboard/src/EventDetail.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__App.jsx.snap",
+   "file": "spec-dashboard/src/App.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__FoldToggle.jsx.snap",
+   "file": "spec-dashboard/src/FoldToggle.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__SessionSelectBar.jsx.snap",
+   "file": "spec-dashboard/src/SessionSelectBar.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__GraphStats.jsx.snap",
+   "file": "spec-dashboard/src/GraphStats.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__SpecNode.jsx.snap",
+   "file": "spec-dashboard/src/SpecNode.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__EvalsFeed.jsx.snap",
+   "file": "spec-dashboard/src/EvalsFeed.jsx",
+   "cls": "jsx"
+  },
+  {
+   "snap": "spec-dashboard__src__escStack.js.snap",
+   "file": "spec-dashboard/src/escStack.js",
+   "cls": "plain-js"
+  },
+  {
+   "snap": "spec-dashboard__src__session.js.snap",
+   "file": "spec-dashboard/src/session.js",
+   "cls": "plain-js"
+  },
+  {
+   "snap": "spec-dashboard__src__data.js.snap",
+   "file": "spec-dashboard/src/data.js",
+   "cls": "plain-js"
+  },
+  {
+   "snap": "spec-dashboard__src__theme.js.snap",
+   "file": "spec-dashboard/src/theme.js",
+   "cls": "plain-js"
+  },
+  {
+   "snap": "spec-dashboard__src__useResizable.js.snap",
+   "file": "spec-dashboard/src/useResizable.js",
+   "cls": "plain-js"
+  },
+  {
+   "snap": "spec-cli__templates__hooks__pre-commit.snap",
+   "file": "spec-cli/templates/hooks/pre-commit",
+   "cls": "control"
+  },
+  {
+   "snap": "spec__spexcode__.plugins__core__stop-gate__stop-gate.sh.snap",
+   "file": ".spec/spexcode/.plugins/core/stop-gate/stop-gate.sh",
+   "cls": "control"
+  },
+  {
+   "snap": "spec-dashboard__index.html.snap",
+   "file": "spec-dashboard/index.html",
+   "cls": "control"
+  }
+ ]
+}

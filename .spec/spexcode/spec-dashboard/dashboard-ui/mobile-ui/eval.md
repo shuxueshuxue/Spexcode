@@ -10,8 +10,9 @@ scenarios:
     expected: |
       The timeline renders the session's recorded status events oldest-first (colored status word + HH:MM
       time; a declaration's complete note shows as a block under its status line — not truncated to the
-      board's 50-char cap). Sending appends a "you" event with the message text and an "↩ note" tag within
-      one refresh; the draft clears on success. The agent actually RECEIVES the message (its record flips
+      board's 50-char cap). Sending appends a "you" event with the message text, tagged "asked for a note
+      reply" — the tag names the REQUEST riding the send, never implying the message itself was stored as
+      a note — within one refresh; the draft clears on success. The agent actually RECEIVES the message (its record flips
       to working), and because the dispatch carried replyVia:"note", its next declaration's full note —
       the reply — appears in the same timeline. No terminal is ever mounted.
   - name: sessions-tab-status-colour

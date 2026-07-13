@@ -54,11 +54,12 @@ export function useFold() {
   return { expanded, toggle }
 }
 
-// `showAvatar` gates the leading identity face: the map-side SessionWindow (beside the spec-node graph)
-// KEEPS it so a session cross-references its node avatars; only the console's own terminal-styled sidebar
-// hides it (redundant next to the headline). `compact` is the one-line face: the status collapses from the
-// word to a single STATUS_GLYPH mark (word kept in the title). `lead` is the optional nesting fold gutter.
-export function SessionRow({ s, locked, showAvatar = true, compact = false, lead = null }) {
+// THE session row face — ONE face for every list surface, desktop and mobile: the headline plus a single
+// colour-coded STATUS_GLYPH mark (the exact status word stays on the hover title for a11y). The only
+// per-surface flex is `showAvatar`: the map-side SessionWindow (beside the spec-node graph) KEEPS the
+// avatar so a session cross-references its node avatars; the console sidebar and the phone drop it
+// (redundant next to the headline). `lead` is the optional nesting fold gutter.
+export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const headline = sessionHeadline(s)
@@ -71,9 +72,7 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
           flex row) so that, when a selected row wraps ([[session-activity]] reveal), it can FLOAT onto the
           headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
-        {compact
-          ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
-          : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
+        <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
       <span className="sess-id" data-tip={headline}>{headline}</span>
@@ -115,7 +114,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
               onDoubleClick={() => onOpenSession(s.id)}
               data-tip={t('sessionWindow.rowTitle')}
             >
-              <SessionRow s={s} locked={locked} compact lead={lead} />
+              <SessionRow s={s} locked={locked} lead={lead} />
             </button>
           )
         })

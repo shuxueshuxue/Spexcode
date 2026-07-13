@@ -692,7 +692,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // single click switches tab; double-click locks the session and returns to the graph — no
             // pending-ops precondition: an ops-less session still locks (the banner explains the empty
             // grip), the console-side twin of the board window's single-click lock.
-            // The face is the shared SessionRow, compact + avatar-less here.
+            // The face is the shared SessionRow, avatar-less here.
             // In multi-select mode ([[session-multi-select]]) the row is a checkbox instead: a click toggles
             // its pick (never switches the pane), and the rename/lock gestures are suppressed.
             const isPicked = selecting && picked.has(s.id)
@@ -708,7 +708,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
               >
                 {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
-                <SessionRow s={s} locked={false} showAvatar={false} compact lead={lead} />
+                <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
               </button>
             )
           })}

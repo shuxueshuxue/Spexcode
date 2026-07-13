@@ -39,13 +39,14 @@ The two planes, made native to touch:
 - **Specs** — the graph becomes a drill-down. A breadcrumb names where you are; tapping a row
   descends into that node. Each node screen is a compact header over the SAME reading panes the
   desktop popup renders. A branch opens to its children first; a leaf opens to its spec.
-- **Sessions** — the list keeps the desktop's zone partition and nesting forest (always expanded —
-  depth shows as indent; fold pods are a pointer luxury), each row the shared SessionRow face.
-  Opening one is the terminal-free conversation: an identity card (current status + liveness are
-  the board row's, present-tense), the timeline — day-separated, each status event a colored
-  glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed (you /
-  the sending session) — and a docked composer. The composer's note-reply chip (default ON) marks
-  the dispatch `replyVia:"note"`, so the agent is told to put its complete answer where this
+- **Sessions** — the list IS the desktop console's list: the same zone partition, the same nesting
+  forest with fold rails/pods, and the ONE shared avatar-less SessionRow face (colour-coded status
+  glyph + live headline) — no mobile-only variant, no second implementation; only the wrapper row
+  is touch-sized. Opening one is the terminal-free conversation: a header (current status +
+  liveness are the board row's, present-tense), the timeline — day-separated, each status event a
+  colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
+  (you / the sending session) — and a docked composer. The composer's note-reply chip (default ON)
+  marks the dispatch `replyVia:"note"`, so the agent is told to put its complete answer where this
   surface can read it. A changes tab keeps the node cross-over (tap a changed node → Specs,
   focused there). Offline shows an honest can't-deliver hint; a failed send fails loud, keeping
   the draft.

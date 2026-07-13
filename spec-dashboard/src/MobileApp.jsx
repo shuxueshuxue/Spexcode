@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS, GLYPH } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
-import { SessionRow } from './SessionWindow.jsx'
+import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -164,7 +164,6 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
         <div className="m-ev m-ev-sent" key={i}>
           <div className="m-ev-head">
             <span className="m-ev-from">{fromLabel(e.from)}</span>
-            {e.replyVia === 'note' && <span className="m-ev-notetag">{t('mobile.noteTag')}</span>}
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
           <div className="m-ev-text">{e.text}</div>
@@ -177,7 +176,6 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
   return (
     <div className="m-sessdetail chat">
       <div className="m-sess-card">
-        <Avatar seed={s.id} status={s.status} />
         <div className="m-sess-meta">
           <span className="m-sess-name">{sessionHeadline(s)}</span>
           <span className="m-sess-status" style={{ color: STATUS_COLOR[s.status] }}>
@@ -243,12 +241,14 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
   )
 }
 
-// the sessions plane: the same zone grouping + nesting forest every desktop session list renders
-// ([[session-console]]'s partition), always expanded — depth shows as indent, fold pods are a pointer luxury.
+// the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
+// with fold pods (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
+// beyond the touch-sized wrapper row.
 function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null
-  const forest = useMemo(() => sessionForest(sessions, () => true), [sessions])
+  const { expanded, toggle } = useFold()
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   if (open) return <MobileSessionDetail s={open} sessions={sessions} byId={byId} goToNode={goToNode} />
   if (!sessions.length) return <div className="m-empty big">{t('mobile.noSessions')}</div>
   return (
@@ -256,9 +256,12 @@ function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
       {forest.map((it) => {
         if (it.type === 'zone') return <div className="m-zone" key={`z-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
         const s = it.s
+        const lead = (it.expandable || it.depth)
+          ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
+          : null
         return (
-          <button key={s.id} className="m-sess-row" style={it.depth ? { paddingLeft: 14 + it.depth * 18 } : undefined} onClick={() => setOpenId(s.id)}>
-            <SessionRow s={s} locked={false} />
+          <button key={s.id} className="m-sess-row" onClick={() => setOpenId(s.id)}>
+            <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
           </button>
         )
       })}

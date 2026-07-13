@@ -19,17 +19,18 @@ scenarios:
     tags: [frontend-e2e, mobile]
     description: >
       On a PHONE viewport (≤ 640px, where useIsMobile flips App to render MobileApp), tap the bottom
-      Sessions tab. The list reuses the shared SessionRow face, so each row shows the session's status
-      WORD; tapping a session opens its detail (the m-sess-status word, the activity line, the changing
-      nodes). With at least a couple of live sessions in different states, read each status word's RENDERED
-      colour (computed `color`) on the list rows and in the opened detail. Screenshot the sessions list and
-      one detail.
+      Sessions tab. The list renders the ONE shared one-line SessionRow face (the same as the desktop
+      console sidebar): status folded to an inline GLYPH, no avatar; tapping a session opens its detail,
+      whose header shows the status WORD. With at least a couple of live sessions in different states,
+      read the rendered colour (computed `color`) of each row's status glyph and of the opened detail's
+      status word. Screenshot the sessions list and one detail.
     expected: |
-      Every status word — on the list rows and in the opened detail — is painted by its bucket hue from the
-      single STATUS_COLOR map (four hues: working and parked green rgb(133,153,0); the waiting-on-you states
-      asking/review/done yellow rgb(181,137,0); error red; the dormant rest
+      Every status mark — the glyph on each list row, the word in the opened detail header — is painted by
+      its bucket hue from the single STATUS_COLOR map (four hues: working and parked green rgb(133,153,0);
+      the waiting-on-you states asking/review/done yellow rgb(181,137,0); error red; the dormant rest
       idle/starting/queued/close-pending/offline muted grey rgb(147,161,161)) — the SAME colour the
-      desktop surfaces show, never a flat uniform grey.
+      desktop surfaces show, never a flat uniform grey. No avatar and no status-word second line appears
+      on any row: the retired two-row face must be nowhere to be found.
 ---
 
 # mobile-ui — yatsu

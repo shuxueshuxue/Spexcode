@@ -2,7 +2,7 @@
 title: session-activity
 status: active
 hue: 260
-desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; both desktop lists render the compact one-line face (status folded to an inline colour-coded glyph, the word on hover) — the map-side window keeps the avatar, the console sidebar drops it — and only mobile keeps the two-row face with the status word + op tally on a second line.
+desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; every list surface — the map-side window, the console sidebar, and the phone — renders the ONE compact one-line face (status folded to an inline colour-coded glyph, the word on hover); the map-side window alone keeps the avatar.
 code:
   - spec-cli/src/selfSummary.test.ts
 related:
@@ -61,15 +61,18 @@ first words of the launch prompt (`promptPreview`) as a **placeholder** that the
 moment it arrives, so the human's initial wording disappears once the agent has named its own task. A human
 **rename (`name`) still wins** over both — the [[session-rename]] override stays authoritative everywhere.
 
-Two things flex by surface, through the face's `compact` and `showAvatar` props. Both **desktop list
-surfaces** are the **compact one-line** face (`compact`): the headline followed by a single colour-coded
-status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the exact word kept on
-the hover title for a11y — grouped into the three triage zones ([[session-console]]). They differ only in the
-**avatar**: the **map-side** board window (SessionWindow) **keeps** it, the
+There is ONE row face, and one thing flexes by surface: `showAvatar`. Every list surface — the two desktop
+lists and the phone's ([[mobile-ui]]) — renders the **compact one-line** face: the headline followed by a
+single colour-coded status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the
+exact word kept on the hover title for a11y — grouped into the three triage zones ([[session-console]]).
+The **map-side** board window (SessionWindow) **keeps** the avatar, the
 fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
-edits**; the **console's own sidebar drops it** (`showAvatar={false}`, redundant beside the headline in its
-dense list). Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
-list, so the headline still renarrates each turn without the row losing its place.
+edits**; the **console sidebar and the phone drop it** (`showAvatar={false}`, redundant beside the headline).
+Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
+list, so the headline still renarrates each turn without the row losing its place. (An older **two-row**
+variant — status word + op tally on a second line — lived on as the mobile list's face long after both
+desktop lists folded it into the glyph; it is retired, deleted with its `compact` prop rather than kept as
+a dead second implementation.)
 
 The compact single line is a **resting** state, not a hard clip. Widening the whole sidebar to fit long
 headlines is the wrong lever — it buys a few more characters for every row at the cost of the terminal
@@ -81,16 +84,8 @@ under the cursor and shove the rows below it down, turning every click into a mo
 have already committed to opens, so the list stays a **stable click surface**. When the headline wraps, the
 small **markers** (the status glyph, the op tally) stay pinned to its **first line's top-right** — they leave
 the row's flow rather than reserving a column down every line, so the wrapped lines beneath run the **full
-width**. The **mobile list** alone keeps the older **two-row** face, its status on a second line, described
-next.
-
-The two-row variant's **status line** is the small state badges moved off the headline: the colour-coded
-status **word** and the op tally (how many spec nodes this session is changing, e.g. `~2`), in a smaller,
-dimmer font spanning the **whole row width** (the flex row wraps and the line takes a full-width basis, so it
-drops below the avatar too). It is the parking spot for any further at-a-glance metadata we add later. When
-this row is the **locked** selection a 🔒 sits at the end of Row 1, and the status word **stays** below
-(locking no longer hides it). This two-row face is now the **mobile** list's; both desktop lists fold the
-same status onto their single compact row as its glyph.
+width**. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule; the
+meta line stays the parking spot for any further at-a-glance metadata added later.
 
 **The console repeats no headline over the terminal.** The Enter interface names the session ONCE, in its
 left **sidebar** — the selected row, untruncated ([[session-console]]) — and the slim strip over the

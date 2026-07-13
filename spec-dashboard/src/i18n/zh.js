@@ -93,6 +93,10 @@ export default {
     okTitle: '人工签核这条读数 — 你已复核并认可其判定。只绑定当前这条最新读数；单调（无撤销）— 新读数落地时不继承签核。',
     okd: '已签核',
     okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
+    menuReview: '评审命令',
+    cmd: {
+      okDesc: '签核这条读数 — 与 ☑ 签核按钮同一个动作（同一 runner、同一门槛）',
+    },
   },
   thread: {
     anchorNow: '锚定',

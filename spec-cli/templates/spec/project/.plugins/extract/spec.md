@@ -45,7 +45,7 @@ Then grow nodes under that spine:
 `.svelte`/`.css`, or the dashboard) is a blind spot until it carries a `eval.md` — so write one as you
 extract it: a **real user-path** scenario — a goal and the steps to reach it through the running app (never a
 bare render-check), covering a failure/empty/edge state — with a **description** of those steps and the
-**expected** zero-loss result. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
+**expected** zero-loss result. Frontend scenarios are measured by looking — through the running product, as a real user would — a screenshot filed with
 `spex eval add <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex eval lint` to
 list the frontend nodes still uncovered.
 

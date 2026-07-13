@@ -2,20 +2,24 @@
 title: prompts
 status: active
 hue: 110
-desc: Grouping home for the `surface: system` plugins — the always-on prompt contracts materialized into the agent's CLAUDE.md/AGENTS.md block. A shelf, not a surface — routing stays field-driven per [[surface]].
+desc: Grouping shelf for the auxiliary `surface: system` prompt contracts — single-body always-on prose. Core is NOT a resident — the core contract subsystem is a direct `.plugins` child. A shelf, not a surface — routing stays field-driven per [[surface]].
 ---
 # prompts
 
-The `surface: system` plugins live here: the plugins whose body IS prose an agent must always carry —
-materialized (in name order) into the `<!-- spexcode -->` contract block — rather than a verb it invokes.
-Grouping them makes `.plugins/` legible at a glance: prompt contracts on this shelf, invocable surfaces
-(command/skill/agent) as flat children beside it.
+The **auxiliary** `surface: system` prompt contracts live here: leaf plugins whose whole substance is one
+prose body an agent must always carry — materialized (in name order, together with every other system
+body) into the `<!-- spexcode -->` contract block — rather than a verb it invokes. Grouping them keeps
+`.plugins/` legible at a glance: peripheral prompt contracts on this shelf; the invocable surfaces
+(command/skill/agent) and [[core]] as flat children beside it.
+
+The shelf boundary is **leafness, not surface**: a single-body prose contract shelves here, while a
+contract that anchors its own subtree outranks the shelf — [[core]], the dev-flow contract subsystem
+whose children are the `surface: hook` gates, is a *peer* of this shelf, never a resident.
 
 This node is a **shelf, not a surface**: it declares no `surface` field and gathers nothing itself.
-Discovery is recursive and field-driven ([[surface]]), so residents plug in exactly as they did at the
+Discovery is recursive and field-driven ([[surface]]), so residents plug in exactly as they would at the
 root — nothing about materialization order (name order, unchanged names) or gathering changes with the
-path. A resident may still be a grouping parent in its own right ([[core]] carries the `surface: hook`
-children). The init templates mirror this layout — a fresh `spex init` (preset packages included, per
-[[init-preset]]) seeds its system plugins under the same `prompts/` shelf — while the shelf stays pure
+path. The init templates mirror this layout — a fresh `spex init` (per [[init-preset]]) seeds `core`
+flat and its auxiliary system plugins under the same `prompts/` shelf — while the shelf stays pure
 presentation for [[migrate]]'s asset table: an asset's identity rel is shelf-less, so a 0.2.x adopter's
 flat tree hashes against the same rows.

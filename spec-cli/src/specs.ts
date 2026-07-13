@@ -361,9 +361,9 @@ function bundleFiles(dir: string): string[] {
 }
 // gather the preset nodes under a plugin root that declare `surface: <surface>`. The scan is RECURSIVE —
 // `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth: under a
-// surface-less grouping shelf (the `surface: system` contracts live under `.plugins/prompts/`), or under a
-// plugin that is itself a grouping parent (`prompts/core` is a `surface: system` contract whose CHILDREN
-// are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
+// surface-less grouping shelf (the auxiliary `surface: system` contracts live under `.plugins/prompts/`),
+// or under a plugin that is itself a grouping parent (`.plugins/core` is a `surface: system` contract whose
+// CHILDREN are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
 // surface, so descending past a matched node never double-counts (children carry a different surface),
 // and the gather set is path-independent — regrouping a plugin never changes what materializes.
 function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent'): ConfigPreset[] {

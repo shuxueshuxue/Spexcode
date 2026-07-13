@@ -5,7 +5,7 @@ hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
 desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (eval circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
 code:
-  - spec-dashboard/src/GraphStats.jsx
+  - spec-dashboard/src/GraphStats.jsx#GraphStats
 related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js

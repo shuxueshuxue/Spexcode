@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: One lexical scoring core, two callers — the server floor and the dashboard palette rank by the same maths (not a second hand-rolled scorer), so the palette stops ranking node prose more crudely than the agent's spex search.
 code:
-  - spec-cli/src/ranker.ts
+  - spec-cli/src/ranker.ts#rankDocs
 related:
   - spec-cli/src/search.ts
   - spec-dashboard/src/SpecSearch.jsx

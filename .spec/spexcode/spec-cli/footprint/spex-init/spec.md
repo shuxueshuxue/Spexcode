@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: `spex init [dir]` scaffolds a repo to adopt SpexCode by copying shipped DATA templates, never code-embedded strings; its messages report what was actually planted. Footprint needs no vote — one residence behavior, decided by kind.
 code:
-  - spec-cli/src/init.ts
+  - spec-cli/src/init.ts#specInit
 related:
   - spec-cli/src/init.test.ts
 ---

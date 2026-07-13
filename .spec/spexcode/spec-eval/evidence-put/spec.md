@@ -4,7 +4,7 @@ status: active
 hue: 140
 desc: "`spex evidence put <file|->` — the bare evidence-transport verb: stash bytes in the shared content-addressed cache and print the hash, decoupled from filing a reading."
 code:
-  - spec-eval/src/cli.ts
+  - spec-eval/src/cli.ts#blobPut
 related:
   - spec-cli/src/cli.ts
   - spec-eval/src/cache.ts

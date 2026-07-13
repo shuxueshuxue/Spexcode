@@ -4,7 +4,7 @@ status: active
 hue: 310
 desc: Right-clicking a spec node opens a custom action menu — the mouse parallel of the board's node verbs — instead of the browser's default menu.
 code:
-  - spec-dashboard/src/NodeContextMenu.jsx
+  - spec-dashboard/src/NodeContextMenu.jsx#NodeContextMenu
 related:
   - spec-dashboard/src/App.jsx
 ---

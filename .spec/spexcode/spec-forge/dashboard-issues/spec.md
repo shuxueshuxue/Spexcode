@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge on the tile, plus the full set folded onto the node for the focus panel and the node-info Issues tab. Owns the FORGE slice (a resident ForgeCache) of the board's unified Issue fold; non-blocking and silent without a forge.
 code:
-  - spec-forge/src/resident.ts
+  - spec-forge/src/resident.ts#refreshIfStale
 related:
   - spec-cli/src/graph.ts
   - spec-dashboard/src/IssueCard.jsx

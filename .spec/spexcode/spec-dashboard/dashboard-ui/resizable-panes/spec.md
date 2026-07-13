@@ -4,7 +4,7 @@ status: active
 hue: 210
 desc: Fixed-width side panes are user-resizable — drag the pane border (session list, graph focus panel), width clamps and persists per pane.
 code:
-  - spec-dashboard/src/useResizable.js
+  - spec-dashboard/src/useResizable.js#useResizable
 ---
 
 # resizable-panes

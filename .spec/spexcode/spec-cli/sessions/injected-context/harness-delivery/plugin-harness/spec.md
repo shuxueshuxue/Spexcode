@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The plugin BUNDLE emitter — materialize the whole SpexCode system into one self-contained Claude-plugin bundle dropped into the spexcode.json-named folder, so a plugin host (adopter-a/Claude/future Codex) reads it natively with zero --append-system-prompt.
 code:
-  - spec-cli/src/plugin-harness.ts
+  - spec-cli/src/plugin-harness.ts#emitPlugin
 related:
   - spec-cli/src/plugin-harness.test.ts
 ---

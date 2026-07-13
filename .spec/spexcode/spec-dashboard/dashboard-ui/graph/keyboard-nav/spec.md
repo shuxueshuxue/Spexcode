@@ -5,7 +5,7 @@ session: sess-1c9d
 hue: 320
 desc: Move by relationship, not geometry.
 code:
-  - spec-dashboard/src/keymap.js
+  - spec-dashboard/src/keymap.js#ACT
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Dashboard.jsx

@@ -4,7 +4,7 @@ status: active
 hue: 160
 desc: "`spex doctor --migrate` — the one-shot 0.2.x → 0.3.0 migrator for an adopter repo: tree renames, hash-gated hook-asset upgrades, executable-surface vocabulary rewrites; refuses loudly, stages everything, guesses nothing. Ships with 0.3.0, deleted in 0.4.0."
 code:
-  - spec-cli/src/migrate.ts
+  - spec-cli/src/migrate.ts#runMigrate
 related:
   - spec-cli/src/migrate-table.ts
   - scripts/gen-migrate-table.mjs

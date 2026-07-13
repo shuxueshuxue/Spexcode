@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The host-agnostic resolver — inverts a host's raw issues/PRs into node → { issues, prs } via three link sources (PR branch, issue-body marker, transitive).
 code:
-  - spec-forge/src/links.ts
+  - spec-forge/src/links.ts#resolveLinks
 ---
 # links
 

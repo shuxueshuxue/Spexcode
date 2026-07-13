@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: One "N live" toggle chip on the review pickers' chip row — the issues list and the evals feed each narrow to the entries a LIVE session is behind (issue originator/reply authors; a reading's filer), reusing the originator chip's one liveness join (session.js liveSession), never a second aliveness judgment.
 code:
-  - spec-dashboard/src/session.js
+  - spec-dashboard/src/session.js#liveSession
 related:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/EvalsFeed.jsx

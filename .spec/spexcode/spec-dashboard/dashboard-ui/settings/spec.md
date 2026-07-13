@@ -5,7 +5,7 @@ session: 8533a220-bbd6-4529-babe-7800cda2d9f2
 hue: 160
 desc: Internationalized copy + the settings page (#/settings) that picks the language.
 code:
-  - spec-dashboard/src/Settings.jsx
+  - spec-dashboard/src/Settings.jsx#Settings
 related:
   - spec-dashboard/src/i18n/index.jsx
   - spec-dashboard/src/i18n/en.js

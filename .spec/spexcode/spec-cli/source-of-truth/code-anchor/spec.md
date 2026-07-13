@@ -4,7 +4,7 @@ status: active
 hue: 15
 desc: A code: entry may pin one named unit (`path#symbol`); drift that touches the anchored unit is the BLOCKING tier (anchor-drift error), replacing the retired count-based driftErrorThreshold gate. Anchors are optional — an unanchored node never blocks.
 code:
-  - spec-cli/src/anchors.ts
+  - spec-cli/src/anchors.ts#anchorHitCommits
 related:
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts

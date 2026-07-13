@@ -4,7 +4,7 @@ status: active
 hue: 20
 desc: `spex uninstall [dir]` = materialize(∅) plus the store — the forgetting law's empty policy removes every generated artifact by its identity stamp, then the global per-project store and any plugin bundle go too; the user's `.spec`/`.plugins` data and prose are NEVER touched.
 code:
-  - spec-cli/src/uninstall.ts
+  - spec-cli/src/uninstall.ts#uninstall
 related:
   - spec-cli/src/uninstall.test.ts
 ---

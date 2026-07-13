@@ -4,7 +4,7 @@ status: active
 hue: 140
 desc: The human sign-off on an eval reading — a monotonic, append-only 'human-ok' event binding ONE immutable reading (the scenario's latest at ok-time); the evals feed default-hides a fresh, ok'd scenario until a newer reading or live staleness releases it. CLI `spex eval ok` and the dashboard affordances share one server write; on the trunk checkout it commits straight to trunk under the local-issues discipline.
 code:
-  - spec-eval/src/humanok.ts
+  - spec-eval/src/humanok.ts#fileHumanOk
 related:
   - spec-eval/src/sidecar.ts
   - spec-eval/src/evaltab.ts

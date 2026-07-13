@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Durable worktree sessions — the subsystem overview; lifecycle/comms/injected-context own the detail.
 code:
-  - spec-cli/src/graph.ts
+  - spec-cli/src/graph.ts#buildBoard
 ---
 
 # sessions

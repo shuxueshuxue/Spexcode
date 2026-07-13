@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The second ForgeDriver — self-hosted/SaaS GitLab over REST API v4 (fetch + PAT). Issues and merge requests by per-project iid; base-url + project parsed from the origin remote; token from GITLAB_TOKEN env or git's credential store, never a config value.
 code:
-  - spec-forge/src/drivers/gitlab.ts
+  - spec-forge/src/drivers/gitlab.ts#gitlabDriver
 related:
   - spec-forge/src/port.ts
   - spec-forge/src/drivers.ts

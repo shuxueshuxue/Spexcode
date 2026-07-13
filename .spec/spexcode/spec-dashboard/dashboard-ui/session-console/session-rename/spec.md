@@ -4,7 +4,7 @@ status: active
 hue: 300
 desc: Right-click a session row on the session board to give it a human name — a persisted override that wins over the derived label.
 code:
-  - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
 related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css

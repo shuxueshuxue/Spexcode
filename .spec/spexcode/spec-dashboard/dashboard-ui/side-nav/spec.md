@@ -4,7 +4,7 @@ status: active
 hue: 210
 desc: The modern-app skeleton — a left icon rail with one entry per top-level page (graph · sessions · evals · issues · settings), each page at its own URL (#/…) so it can be bookmarked, reloaded, and history-walked.
 code:
-  - spec-dashboard/src/SideBar.jsx
+  - spec-dashboard/src/SideBar.jsx#SideBar
 related:
   - spec-dashboard/src/route.js
 ---

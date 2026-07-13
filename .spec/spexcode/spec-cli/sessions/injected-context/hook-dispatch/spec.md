@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The harness-agnostic hook delivery layer — discover surface:hook nodes, compile them into a PERSISTENT flat manifest in the materialized tree's own store slot, and run them deterministically through one pure-shell dispatcher; dispatch only, never a materialize trigger (the old content-hash gate is retired).
 code:
-  - spec-cli/src/hooks.ts
+  - spec-cli/src/hooks.ts#compileManifest
 related:
   - spec-cli/src/hook-dispatch.test.ts
   - spec-cli/hooks/dispatch.sh

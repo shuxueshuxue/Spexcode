@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { postEvalOk, postRemark, putFrameBlob, specUrl } from './data.js'
+import { loadReviewPlugins, postEvalOk, postRemark, putFrameBlob, specUrl } from './data.js'
+import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
@@ -122,6 +123,15 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   const [history, setHistory] = useState(null)
   const [histIdx, setHistIdx] = useState(0)
   const viewing = (history && history[histIdx]) || entry
+
+  // the review-track prose presets (`surface: review` plugins, [[review-commands]]) — fetched once; each
+  // becomes a `/` command that PREFILLS the composer with its placeholder-filled body.
+  const [reviewPresets, setReviewPresets] = useState([])
+  useEffect(() => {
+    let on = true
+    loadReviewPlugins().then((d) => { if (on && Array.isArray(d)) setReviewPresets(d) }).catch(() => {})
+    return () => { on = false }
+  }, [])
 
   // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
   // then refetch this scenario's slice of the node's timeline.
@@ -413,6 +423,21 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0),
   }
 
+  // the review-track commands ([[review-commands]]): the BUILT-IN verbs bind the registry's when-gates to
+  // per-render runners — okRun is THE human-ok closure, called by the header button AND the typed /ok, so
+  // the two can never drift; the gate mirrors the button exactly (viewed reading is the scenario's latest
+  // and not yet ok'd). The presets ride behind them, each prefilling its placeholder-filled body.
+  const okRun = async () => { const r = await postEvalOk(entry.node, entry.scenario).catch((err) => ({ error: String(err) })); onWrite?.(r?.error || '') }
+  const reviewCmds = reviewCommandsFor({ okd: !!viewing.humanOk, isLatest: !history || histIdx === 0 }, { ok: okRun })
+  const okCmd = reviewCmds.find((c) => c.name === 'ok') || null
+  const composerCommands = [
+    ...reviewCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color, run: c.run })),
+    ...reviewPresets.map((p) => ({
+      name: p.name, description: p.desc || p.title, source: 'review',
+      prefill: () => fillPreset(p.body, { node: entry.node, scenario: entry.scenario, expected: viewing.expected || '' }),
+    })),
+  ]
+
   return (
     <div className="an-detail">
       {/* the slim header — identity + verdict + the A/B strip, one row band over the workspace */}
@@ -429,13 +454,13 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
         {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark; an un-ok'd one offers
             the ok ONLY while the viewed reading IS the scenario's latest — the ok binds to one immutable
             reading, so blessing an older A/B pole would claim a reading the feed no longer scores. Same
-            server write as `spex eval ok`; identity is server-derived. */}
+            server write as `spex eval ok`. The button IS the registry's /ok command ([[review-commands]]):
+            one when-gate, one runner — typing /ok in the composer fires this exact closure. */}
         {viewing.humanOk
           ? <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>
-          : (!history || histIdx === 0) && (
-            <button type="button" className="an-okbtn" data-tip={t('annotator.okTitle')}
-              onClick={async () => { const r = await postEvalOk(entry.node, entry.scenario).catch((err) => ({ error: String(err) })); onWrite?.(r?.error || '') }}>
-              ☑ {t('annotator.ok')}
+          : okCmd && (
+            <button type="button" className="an-okbtn" data-tip={t(okCmd.titleKey)} onClick={okCmd.run}>
+              ☑ {t(okCmd.labelKey)}
             </button>
           )}
 
@@ -553,7 +578,8 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 
         <EvalRemarks entry={entry} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
           codeSha={viewing.codeSha} seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
-          selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null} />
+          selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null}
+          commands={composerCommands} />
       </div>
     </div>
   )
@@ -570,7 +596,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 // circled frame; the selected and playhead-active remarks highlight in sync with the scrubber's markers; a
 // resolved remark renders settled ([[remark-teeth]]). Rendered on EVERY eval home — a fresh scenario shows
 // an empty track with a live composer.
-function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events }) {
+function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events, commands = null }) {
   const t = useT()
   const send = (text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha, evidence })
   return (
@@ -587,7 +613,9 @@ function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekM
         {/* keyed by the (node, scenario) identity: the composer owns its body state, so only a remount
             resets the working draft on selection change — a half-typed or circle-prefilled remark must
             die with its selection, never surface on another eval's thread (it would post there). */}
-        <ReplyComposer key={`${entry.node}·${entry.scenario}`} onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
+        {/* `commands` arms the composer's review-track `/` menu ([[review-commands]]) — the built-in verbs
+            + the `surface: review` presets the host gathered; the composer itself stays home-agnostic. */}
+        <ReplyComposer key={`${entry.node}·${entry.scenario}`} onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} commands={commands} />
       </div>
     </aside>
   )

@@ -146,6 +146,13 @@ export async function loadPlugins() {
   return res.json()
 }
 
+// the review-track prose presets (plugin nodes with `surface: review`, [[review-commands]]) — the eval
+// detail's remark-composer `/` palette; picking one prefills the composer, never a new write path.
+export async function loadReviewPlugins() {
+  const res = await apiFetch('/api/plugins?surface=review')
+  return res.json()
+}
+
 // the resolved runtime settings the backend serves at /api/settings: `{ layout, launchers: [{ name, harness }],
 // default: '<name>' }` (never the host `cmd`) — `default` is the configured `defaultLauncher` so the New-Session
 // dropdown pre-selects the SAME launcher a bare `spex session new` uses ([[launcher-select]]). Built-in

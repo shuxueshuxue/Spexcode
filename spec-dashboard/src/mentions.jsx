@@ -76,6 +76,65 @@ export function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
+// filter a `/` command list by the typed prefix: startsWith beats a mid-string include; server order is
+// preserved within a score band (stable sort). Empty query (just `/`) lists everything. ONE matcher for
+// every `/` palette — the ❯ inbox's command menu, the New box's preset palette, the eval detail's review
+// menu ([[review-commands]]) — so the palettes rank identically.
+export function matchSlash(cmds, query) {
+  const q = query.toLowerCase()
+  const scored = []
+  for (const c of cmds) {
+    const n = c.name.toLowerCase()
+    let score
+    if (!q) score = 1
+    else if (n.startsWith(q)) score = 0
+    else if (n.includes(q)) score = 1
+    else continue
+    scored.push({ c, score })
+  }
+  scored.sort((a, b) => a.score - b.score)
+  return scored.slice(0, 10).map((x) => x.c)
+}
+
+// dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
+const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+
+// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
+// flags one of OUR commands (close/merge/type/eval — or the eval detail's /ok): it runs HERE, not in the
+// agent (see sessionCommands.js / reviewCommands.js). `[review]` tags a review-track preset.
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]', review: '[review]' }
+
+// ONE render for every `/` dropdown — the ❯ inbox's command menu (`up`, above the docked box), the New
+// box's preset palette (downward), and the eval composer's review menu (`up`). Rows: /name · description ·
+// source tag; a board/review command carries its identity hue (`sc-<color>`), CC commands their source tag,
+// presets their kind. `head` is the dim title label.
+export function SlashMenu({ menu, up, head, onPick, onHover }) {
+  const t = useT()
+  return (
+    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
+      <li className="mention-head">// {head} — {t('session.menuHint')}</li>
+      {menu.items.map((it, i) => {
+        const tag = it.ui ? 'ui' : (it.source ?? it.kind)
+        const hue = it.ui ? ` sc-${it.color}` : ''
+        return (
+          <li
+            key={`${tag}:${it.name}`}
+            role="option"
+            aria-selected={i === menu.index}
+            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${hue}`}
+            onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
+            onMouseEnter={() => onHover(i)}
+          >
+            <span className={it.ui ? 'slash-name ui' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
+            <span className="slash-desc">{capDesc(it.description ?? it.desc)}</span>
+            <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 // the node-mention trigger — positional (Obsidian `[[`): scan back from the caret over id-chars; if the two
 // chars just before that run are `[[`, the caret sits inside an UNCLOSED `[[query` token — the query is the
 // text between the `[[` and the caret. Returns the menu descriptor, or null when the caret isn't in a token.

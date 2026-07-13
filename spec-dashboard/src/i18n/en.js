@@ -94,6 +94,10 @@ export default {
     okTitle: 'human-ok this reading — you reviewed it and agree with its verdict. Binds to THIS latest reading only; monotonic (no un-ok) — a newer reading arrives unblessed.',
     okd: 'human-ok',
     okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
+    menuReview: 'review commands',
+    cmd: {
+      okDesc: 'sign off this reading — the same act as the ☑ ok button (one runner, one gate)',
+    },
   },
   thread: {
     anchorNow: 'anchor',

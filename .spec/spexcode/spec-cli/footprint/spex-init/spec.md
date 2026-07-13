@@ -22,8 +22,8 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   default `.plugins` of dev-flow plugins, each a flat child carrying a `surface` field (the `system`
   contract `core` + `forge-link`, and the `command` presets), a verbatim copy of the dogfood `.plugins`
   node so a fresh adopt ships the *current* set. That default `.plugins` is the **default preset**; with
-  `--preset <name>` the named non-default package under `templates/presets/<name>/` is copied in **on top**
-  — cumulative, so `careful` stacks its plugins over the default set. The spexcode-only plugins live only
+  `--preset <name>` a named non-default package under `templates/presets/<name>/` would be copied in **on
+  top** — cumulative — though no non-default tier ships today. The spexcode-only plugins live only
   in the dogfood `.plugins`, never in the template, so they are never seeded. [[init-preset]] owns which
   sets exist; this command owns the copy.
 - **The git hooks** — `templates/hooks/*` (the main-guard + footprint-surgery pre-commit, the

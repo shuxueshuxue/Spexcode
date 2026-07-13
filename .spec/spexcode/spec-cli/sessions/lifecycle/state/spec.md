@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Two orthogonal axes — agent-authored lifecycle and runtime-derived liveness — that never override each other; plus the gating hooks that force the lifecycle write.
 code:
-  - .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
+  - .spec/spexcode/.plugins/prompts/core/stop-gate/stop-gate.sh
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts

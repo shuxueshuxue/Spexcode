@@ -2,11 +2,10 @@
 title: init-preset
 status: active
 hue: 100
-desc: The preset system — default preset = the live .plugins instance set; non-default presets (careful) are cumulative template packages selection stacks on at `spex init`; selection only matters at seed time.
-code:
-  - spec-cli/templates/presets
+desc: The preset system — default preset = the live .plugins instance set; a non-default preset would be a cumulative template package selection stacks on at `spex init` (none ships today); selection only matters at seed time.
 related:
   - spec-cli/templates/spec/project/.plugins
+  - spec-cli/src/init.ts
 ---
 # init-preset
 
@@ -20,14 +19,14 @@ plain `spex init` plants, shipped as the `spec-cli/templates/spec/project/.plugi
 tree. The dotted [[.plugins]] (the instance) and the un-dotted [[plugin-system]] (this spec of the plugin
 system) stay strictly distinct: a **non-default** preset NEVER lives in `.plugins`.
 
-**Non-default presets are template packages.** A more cautious tier — `careful` — is a separate
+**Non-default presets are template packages — none ships today.** A non-default tier is a separate
 **source package** under `spec-cli/templates/presets/<name>/`, mirroring the default template layout (a
-`.plugins/<plugin>` subtree). It is shippable CLI code, *not* a spec node in this repo and never part of
-the live `.plugins` the launcher walks. Its first member is `clarify-before-code` — surface a misread as
-a stated assumption in the proposal, blocking the human only on a load-bearing ambiguity.
-
-**Cumulative.** The tiers form a chain, lean → cautious: `careful` is a strict superset of `default`.
-Selecting `careful` seeds the default `.plugins` set AND stacks the careful package on top of it.
+`.plugins/<plugin>` subtree): shippable CLI code, *not* a spec node in this repo and never part of the
+live `.plugins` the launcher walks. Tiers form a cumulative chain, lean → cautious — selecting a higher
+tier seeds the default set AND stacks the named package on top. The mechanism (init.ts's tier chain +
+overlay copy) stays live; the one shipped tier, `careful` (sole member `clarify-before-code`), was
+retired as not worth its surface — a future tier re-enters by adding its package and its
+`PRESET_TIERS` entry.
 
 **The measurement contract ships in DEFAULT, not `careful`.** A loss signal that is blind from day one is
 not a "careful-only" concern — it is the premise the whole optimizer rests on, and adoption coverage is

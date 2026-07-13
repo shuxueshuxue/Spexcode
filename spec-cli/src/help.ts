@@ -45,7 +45,7 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
   },
   init: {
     line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name]',
-    body: `Usage: spex init [dir=cwd] [--preset default|careful]
+    body: `Usage: spex init [dir=cwd] [--preset default]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +

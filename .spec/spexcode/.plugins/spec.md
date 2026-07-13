@@ -6,8 +6,10 @@ desc: The instance home — SpexCode's DIY dev-flow plugins live here as skill-s
 ---
 `.plugins/` is the **instance** of the plugin system: the concrete dev-flow plugins SpexCode ships for
 working in this repo. Each plugin is a skill-shaped node — its folder *is* the unit (a `spec.md` plus any
-co-located scripts) — living as a flat child of `.plugins/` and carrying a `surface: command|system` field
-that names where it plugs in, per [[plugin-system]]'s [[surface]] field-driven routing.
+co-located scripts) — carrying a `surface: command|system|…` field that names where it plugs in, per
+[[plugin-system]]'s [[surface]] field-driven routing. Discovery is recursive, so a plugin may sit under a
+grouping shelf: the `surface: system` prompt contracts live under [[prompts]]; the invocable surfaces
+(command/skill/agent) are flat children here.
 
 `/api/plugins` and the launcher's system gather read from here, not from [[plugin-system]] (which holds the
 *spec of the plugin system* itself). Only **built/active** plugins gather — a `pending` node is declared

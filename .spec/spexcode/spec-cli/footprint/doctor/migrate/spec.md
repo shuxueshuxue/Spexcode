@@ -39,7 +39,10 @@ The rewrite has three honesty tiers, strictly ordered by how much we KNOW about 
   ONLY when its git blob sha matches a KNOWN historical stock version. That table
   (migrate-table.ts) is GENERATED from this repo's own git history by gen-migrate-table.mjs — every blob
   each template ever shipped as, across the template tree, the preset packages, and the live `.spec`
-  copy — never hand-typed; re-run the generator when templates change. A file matching no known version
+  copy — never hand-typed; re-run the generator when templates change. An asset's identity `rel` is
+  **shelf-less**: the shipped tree files its system plugins under the `prompts/` grouping shelf, but the
+  generator strips the shelf when keying, so a 0.2.x adopter's flat `.config`-era file hashes against
+  the same row (the shelf is presentation, never identity). A file matching no known version
   is hand-customized: flagged for review and left byte-identical. Retired-stock files (shipped once,
   gone now) are reported; their .md bodies still get the vocabulary pass (the bytes are provably ours),
   their scripts stay frozen.

@@ -6,7 +6,7 @@
 // the first two and ops-patched from the third). Re-run after any release that changes templates history:
 //   node scripts/gen-migrate-table.mjs
 import { execFileSync } from 'node:child_process'
-import { writeFileSync, readdirSync, statSync } from 'node:fs'
+import { writeFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -53,11 +53,17 @@ function walk(dir) {
   return out
 }
 const newRoots = [join(REPO, 'spec-cli/templates/spec/project/.plugins')]
-for (const e of readdirSync(join(REPO, 'spec-cli/templates/presets'))) newRoots.push(join(REPO, 'spec-cli/templates/presets', e, '.plugins'))
+const presetsDir = join(REPO, 'spec-cli/templates/presets')   // no preset package ships today — tolerate absence
+if (existsSync(presetsDir)) for (const e of readdirSync(presetsDir)) newRoots.push(join(presetsDir, e, '.plugins'))
 const templateSrc = new Map() // rel → path relative to spec-cli/ (runtime PKG_ROOT), for the new content
+// the `prompts/` shelf is presentation, not identity: shipped system plugins live at prompts/<plugin>/…
+// but their asset identity (the rel the .config-era history and a 0.2.x adopter's flat tree both speak)
+// stays shelf-less — strip the shelf when a plugin sits under it. The shelf's OWN spec.md (`prompts/spec.md`,
+// no deeper component) keeps its literal rel: it is a new asset, not a resident.
+const shelfless = (rel) => rel.replace(/^prompts\/(?=.+\/)/, '')
 for (const root of newRoots) {
   for (const f of walk(root)) {
-    const rel = relative(root, f)
+    const rel = shelfless(relative(root, f))
     if (templateSrc.has(rel)) throw new Error(`template rel path collides across roots: ${rel}`)
     templateSrc.set(rel, relative(join(REPO, 'spec-cli'), f))
   }

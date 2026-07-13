@@ -319,7 +319,9 @@ live):
 
 `spex init` does steps 1–4's scaffolding in one shot: it seeds a starter `.spec/` tree (a root `project`
 node + the default `.plugins` plugins), plants a starter `spexcode.json`, installs the hooks, and
-**materializes** the harness artifacts — the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
+**materializes** the harness artifacts. Materialize is the **base operation of harness adaptation** —
+one pass renders the spec tree into whatever artifacts the selected harness auto-discovers: the
+`<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
 (this guide's prose FOLLOWED BY the `surface: system` plugin bodies, which the harness auto-discovers) and
 the harness shims (`.claude/settings.json`, `.codex/hooks.json`). Those materialized artifacts are **generated and
 never tracked** (hidden via the per-clone `.git/info/exclude`) — regenerated per clone, kept fresh by the

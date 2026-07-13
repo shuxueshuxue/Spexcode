@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: terminal-free-conversation
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport (≤ 640px), open the Sessions tab and tap a live worker. The detail is the
+      terminal-free conversation ([[session-timeline]]): the timeline of the session's status transitions
+      (timestamps + the FULL declaration note text) with the composer docked below, note-reply chip ON by
+      default. Type a message and send it. Record the whole interaction as a video.
+    expected: |
+      The timeline renders the session's recorded status events oldest-first (colored status word + HH:MM
+      time; a declaration's complete note shows as a block under its status line — not truncated to the
+      board's 50-char cap). Sending appends a "you" event with the message text and an "↩ note" tag within
+      one refresh; the draft clears on success. The agent actually RECEIVES the message (its record flips
+      to working), and because the dispatch carried replyVia:"note", its next declaration's full note —
+      the reply — appears in the same timeline. No terminal is ever mounted.
   - name: sessions-tab-status-colour
     tags: [frontend-e2e, mobile]
     description: >

@@ -10,6 +10,7 @@ import { loadSpecs } from './specs.js'
 import { defaultHarness, defaultLauncher, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { recordSent } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -863,6 +864,14 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
+// @@@ withNoteReplyHint - the TERMINAL-FREE sender's insert, withSenderHint's sibling: a phone (or any
+// no-terminal surface, [[mobile-ui]]) cannot read the pane, so the only text that ever reaches its human is
+// the declaration NOTE ([[session-timeline]]). This one-line insert tells the agent exactly that, so its
+// next stop carries the complete answer in `--note` instead of prose that dies in an unseen terminal.
+// Appended server-side (the input route passes replyVia:'note'), so the phrase lives in ONE place and any
+// surface — desktop included, later — can opt in with the same flag.
+export const withNoteReplyHint = (text: string): string =>
+  `${text}\n\n— sent from a terminal-free client: the sender CANNOT see your terminal output. When you next stop (done/ask/park), put your COMPLETE reply to this message in the declaration's --note (e.g. spex session done --note "<full answer>") — the note is the only text that reaches them.`
 async function postJSON(path: string, body: unknown): Promise<void> {
   try {
     await fetch(`${await apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -1849,15 +1858,20 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
 // harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-export async function sendText(id: string, text: string, from?: string): Promise<DispatchResult> {
+export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
   const h = harnessById(rec.harness || defaultHarness.id)
-  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, text)
+  // a terminal-free sender's dispatch carries the note-reply insert ([[session-timeline]]); appended here,
+  // beside the delivery, so every input surface shares the one phrase and the timeline records the message
+  // WITHOUT it (the hint is transport, not conversation).
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, opts.replyVia === 'note' ? withNoteReplyHint(text) : text)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)
+  // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.
+  if (r.ok) recordSent(id, text, from ?? null, opts.replyVia)
   return r
 }
 

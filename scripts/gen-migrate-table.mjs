@@ -56,12 +56,13 @@ const newRoots = [join(REPO, 'spec-cli/templates/spec/project/.plugins')]
 const presetsDir = join(REPO, 'spec-cli/templates/presets')   // no preset package ships today — tolerate absence
 if (existsSync(presetsDir)) for (const e of readdirSync(presetsDir)) newRoots.push(join(presetsDir, e, '.plugins'))
 const templateSrc = new Map() // rel → path relative to spec-cli/ (runtime PKG_ROOT), for the new content
-// the `prompts/` shelf is presentation, not identity: the auxiliary shipped system plugins live at
-// prompts/<plugin>/… but their asset identity (the rel the .config-era history and a 0.2.x adopter's flat
-// tree both speak) stays shelf-less — strip the shelf when a plugin sits under it. `core` ships flat
-// (rel == location, so a .config-era tree migrates to its final home in one hop). The shelf's OWN spec.md
-// (`prompts/spec.md`, no deeper component) keeps its literal rel: it is a new asset, not a resident.
-const shelfless = (rel) => rel.replace(/^prompts\/(?=.+\/)/, '')
+// the presentation shelves (`prompts/`, `commands/`, `skills/`) are layout, not identity: a shelved
+// plugin lives at <shelf>/<plugin>/… but its asset identity (the rel the .config-era history and a
+// 0.2.x adopter's flat tree both speak) stays shelf-less — strip the shelf when a plugin sits under one.
+// `core` ships flat (rel == location, so a .config-era tree migrates to its final home in one hop). A
+// shelf's OWN spec.md (`prompts/spec.md`, no deeper component) keeps its literal rel: it is a new asset,
+// not a resident.
+const shelfless = (rel) => rel.replace(/^(?:prompts|commands|skills)\/(?=.+\/)/, '')
 for (const root of newRoots) {
   for (const f of walk(root)) {
     const rel = shelfless(relative(root, f))

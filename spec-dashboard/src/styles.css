@@ -1263,12 +1263,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .mention-item.new .mention-id { color: var(--green); font-style: italic; }
 .mention-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; align-self: center; }
 .mention-id { color: var(--blue); flex: none; }
-.mention-id .mention-hit { color: var(--ink2); font-weight: 700; }
+.mention-id .mention-hit { font-weight: 700; }
 .mention-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* @@@ slash-command rows - mirror CC's `/` menu: `/name`, a dim description that ellipses, and a
    right-aligned source tag. Same dropdown shell as @-mention (square, hairline, monospace). */
 .slash-name { color: var(--blue); flex: none; }
-.slash-name .mention-hit { color: var(--ink2); font-weight: 700; }
+.slash-name .mention-hit { font-weight: 700; }
 .slash-desc { color: var(--muted); font-size: 11px; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .slash-src { color: var(--muted); font-size: 10.5px; flex: none; opacity: .7; }
 .slash-src.src-user { color: var(--green); opacity: .85; }

@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "SpexCode CLI + server — INTERNAL monorepo package. The published npm unit is `spexcode` at the repo ROOT (it ships this package's src plus the sibling spec-eval/spec-forge src and the dashboard dist, preserving the layout so the cross-package ../../spec-* imports resolve). See .spec/spexcode/spec-cli/packaging.",

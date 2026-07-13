@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig } from './specs.js'
 import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
@@ -171,7 +171,9 @@ app.get('/api/settings', async (c) => c.json({
 // the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
-app.get('/api/plugins', (c) => c.json(loadConfig()))
+// `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
+// remark-composer `/` dropdown); the exposed surfaces stay this explicit whitelist, never a passthrough.
+app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? loadReviewConfig() : loadConfig()))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors

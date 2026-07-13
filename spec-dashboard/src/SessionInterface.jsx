@@ -3,7 +3,7 @@ import SessionTerm from './SessionTerm.jsx'
 import { loadPlugins, loadSettings } from './data.js'
 import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
-import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
+import { MENTION_RE, specPath, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon } from './icons.jsx'
@@ -64,48 +64,8 @@ function typeKeyToken(e) {
 // the textarea auto-grow (reset + clamp at a per-surface max-height) is the SHARED ./textarea.js
 // fitTextarea — one routine for the New-tab prompt, the ❯ inbox, and the thread composers.
 
-// filter the command list by the typed prefix: startsWith beats a mid-string include; server order is
-// preserved within a score band (stable sort). Empty query (just `/`) lists everything.
-function matchSlash(cmds, query) {
-  const q = query.toLowerCase()
-  const scored = []
-  for (const c of cmds) {
-    const n = c.name.toLowerCase()
-    let score
-    if (!q) score = 1
-    else if (n.startsWith(q)) score = 0
-    else if (n.includes(q)) score = 1
-    else continue
-    scored.push({ c, score })
-  }
-  scored.sort((a, b) => a.score - b.score)
-  return scored.slice(0, 10).map((x) => x.c)
-}
-
-// dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
-const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
-
-// the New Session `/` palette over command presets — same prefix-rank shape as matchSlash.
-function matchConfig(presets, query) {
-  const q = query.toLowerCase()
-  const scored = []
-  for (const p of presets) {
-    const n = p.name.toLowerCase()
-    let score
-    if (!q) score = 1
-    else if (n.startsWith(q)) score = 0
-    else if (n.includes(q)) score = 1
-    else continue
-    scored.push({ p, score })
-  }
-  scored.sort((a, b) => a.score - b.score)
-  return scored.slice(0, 10).map((x) => x.p)
-}
-
-// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see uiCommandsFor).
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]' }
-
+// the `/` matcher + dropdown render (matchSlash, SlashMenu) are the SHARED module ./mentions.jsx too —
+// one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
@@ -381,7 +341,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (active === 'new') {
       const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
       if (cm) {
-        const items = matchConfig(commandPresets, cm[1])
+        const items = matchSlash(commandPresets, cm[1])
         if (!items.length) return null
         return { kind: 'config', items, index: 0, start: 0, end: value.length, query: cm[1] }
       }
@@ -436,31 +396,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
 
-  // ONE render for both `/` palettes — the inbox's CC-command menu (`up`, opens above the box) and the New
-  // box's config-preset menu (downward). Only the right-hand tag differs. `head` is the dim title label.
+  // both `/` palettes — the inbox's CC-command menu (`up`, opens above the box) and the New box's
+  // config-preset menu (downward) — render through the ONE shared SlashMenu; only the head label differs.
   const slashMenu = (up, head) => (
-    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
-      <li className="mention-head">// {head} — {t('session.menuHint')}</li>
-      {menu.items.map((it, i) => {
-        // a board command carries its identity hue (sc-<color>); CC commands → source tag, presets → kind.
-        const tag = it.ui ? 'ui' : (it.source ?? it.kind)
-        const hue = it.ui ? ` sc-${it.color}` : ''
-        return (
-          <li
-            key={`${tag}:${it.name}`}
-            role="option"
-            aria-selected={i === menu.index}
-            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${hue}`}
-            onMouseDown={(e) => { e.preventDefault(); accept(it) }}
-            onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
-          >
-            <span className={it.ui ? 'slash-name ui' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
-            <span className="slash-desc">{capDesc(it.description ?? it.desc)}</span>
-            <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
-          </li>
-        )
-      })}
-    </ul>
+    <SlashMenu menu={menu} up={up} head={head} onPick={accept}
+      onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
   )
 
   // the node-mention/`@`-actor dropdown, on either surface — downward under the centered New box, or `up`

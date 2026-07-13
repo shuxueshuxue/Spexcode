@@ -168,7 +168,9 @@ join is the server overlay ([[remark-teeth]] / [[eval-issue-split]]), attached t
 session tab through the proof model. The composer authors a **remark** through the CLI-parity `/api/remarks`
 (find-or-create by (node, scenario) — no thread id or concern needed on the write side; identity is
 server-derived `'human'`, L: no dashboard-only write): the first remark mints the thread, every later one
-appends; an `@session`/`@new` typed in it dispatches ([[mentions]]). Because the write path needs no resident
+appends; an `@session`/`@new` typed in it dispatches ([[mentions]]), and a `/` at the line's start opens the
+review track's typed command menu ([[review-commands]] — /ok as the header sign-off's typed twin, `surface:
+review` presets as prefills; the send stays this same remark write). Because the write path needs no resident
 list, the pane renders on **EVERY** eval home — a fresh scenario shows an empty track with a live composer,
 and the session eval tab's old "no resident issues list" degradation is gone (it now renders the full thread
 + composer like the issues page). The reply list and composer are the SAME shared thread UI the issue detail

@@ -309,7 +309,7 @@ export async function specDiffAt(id: string, hash: string) {
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean; tools: string[] }
 // field-driven surface - a plugin is a spec node at ANY depth under a plugin root that carries a
-// `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
+// `surface: system|command|hook|skill|agent|review` frontmatter field naming where it plugs in. There are no
 // `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
 // graph child (a grouping parent like `.plugins/prompts` is itself a spec node, never a bare dir). BOTH plugin roots participate: `.plugins` (the instance — DIY dev-flow plugins) and
@@ -366,7 +366,7 @@ function bundleFiles(dir: string): string[] {
 // CHILDREN are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
 // surface, so descending past a matched node never double-counts (children carry a different surface),
 // and the gather set is path-independent — regrouping a plugin never changes what materializes.
-function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent'): ConfigPreset[] {
+function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent' | 'review'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {
     if (existsSync(join(nodeDir, 'spec.md'))) {
@@ -417,3 +417,7 @@ export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') 
 // .claude/agents/<name>.md). Like a skill, the node's `desc` is the on-demand load-trigger and its `body` is the
 // agent's system prompt; additionally its `tools` field is the harness tool allowlist for the spawned agent.
 export function loadAgentConfig(): ConfigPreset[] { return loadSurface('agent') }
+// the review-track prose presets ([[review-commands]]): offered in the eval detail's remark-composer `/`
+// dropdown; picking one PREFILLS the composer with the node's `body` ({node}/{scenario}/{expected}
+// placeholders filled at insert time). Display+prefill only — the send stays the ordinary remark write.
+export function loadReviewConfig(): ConfigPreset[] { return loadSurface('review') }

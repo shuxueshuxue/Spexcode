@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
-import { useMentionAutocomplete } from './mentions.jsx'
+import { useMentionAutocomplete, matchSlash, SlashMenu } from './mentions.jsx'
 import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
@@ -170,6 +170,20 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
   })
 }
 
+// the review-track `/` trigger ([[review-commands]]) — the session box's leading-`/` grammar, applied per
+// LINE: a `/token` from the start of the caret's line to the caret opens the command menu. Line-start (not
+// value-start) so a stamped `▶` anchor or a circled frame above never disarms the trigger — the natural
+// review flow is circle → type `/refuse` on the fresh line below the anchor. No matching command (the
+// when-gates already filtered the list) → no menu, exactly like the console.
+function slashAt(value, caret, commands) {
+  const lineStart = value.lastIndexOf('\n', caret - 1) + 1
+  const m = /^\/(\S*)$/.exec(value.slice(lineStart, caret))
+  if (!m) return null
+  const items = matchSlash(commands, m[1])
+  if (!items.length) return null
+  return { items, index: 0, start: lineStart, end: caret, query: m[1] }
+}
+
 // the docked composer bar — the console-❯-box shape, shared by every home: its writing surface is
 // ALREADY USABLE at idle — a multi-line textarea floored at ~3 lines, never a hairline one-line sliver and
 // never a click-to-expand — and it auto-grows with the draft ABOVE that floor (the shared fitTextarea,
@@ -184,7 +198,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
 // AND its captured frame at the body's head; a circle pushes a `draft` (prefilled anchored body + the
 // rect-burned frame link) — either way a mark is thereafter an ordinary — replyable, @-able — reply,
 // its frame indexed as the thread's evidence[].
-export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null }) {
+export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null, commands = null }) {
   const t = useT()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -192,6 +206,36 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const [focused, setFocused] = useState(false)
   const taRef = useRef(null)
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
+  // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
+  // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
+  // a BUILT-IN verb (`run`) fires the SAME closure its header button calls (reviewCommands.js, so button
+  // and command never drift) after the typed token is removed; a PRESET (`prefill`) replaces the draft
+  // with its filled template, keeping a stamped `▶` anchor head (the anchor line + its own riding frame).
+  const [slash, setSlash] = useState(null)
+  const syncSlash = (el) => setSlash(el && commands?.length ? slashAt(el.value, el.selectionStart, commands) : null)
+  const acceptSlash = (item) => {
+    if (!item || !slash) return
+    const rest = body.slice(0, slash.start) + body.slice(slash.end)
+    setSlash(null)
+    if (item.run) { setBody(rest.trim() ? rest : ''); item.run(); return }
+    const ex = parseAnchor(rest)
+    let head = ''
+    if (ex) {
+      const frame = HEAD_FRAME_RE.exec(ex.rest)?.[0] ?? ''
+      head = `${ex.label}\n${frame}`
+      if (!head.endsWith('\n')) head += '\n'
+    }
+    setBody(head + item.prefill())
+    requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } })
+  }
+  const onSlashKey = (e) => {
+    if (!slash) return false
+    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setSlash((m) => ({ ...m, index: (m.index + 1) % m.items.length })); return true }
+    if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setSlash((m) => ({ ...m, index: (m.index - 1 + m.items.length) % m.items.length })); return true }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); acceptSlash(slash.items[slash.index]); return true }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSlash(null); return true }
+    return false
+  }
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
   const engaged = focused || !!body || frames.length > 0 || !!err
 
@@ -255,10 +299,12 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       )}
       <div className="fv-tawrap">
         <textarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
-          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
-          onSelect={(e) => ac.sync(e.target)} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); ac.close() }}
-          onKeyDown={(e) => { if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
+          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target); syncSlash(e.target) }}
+          onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); ac.close(); setSlash(null) }}
+          onKeyDown={(e) => { if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
+        {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('annotator.menuReview')}
+          onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
       </div>
       {/* the buttons swallow mousedown so a click never blurs the textarea; the row itself stays mounted. */}
       <div className="fv-actions">

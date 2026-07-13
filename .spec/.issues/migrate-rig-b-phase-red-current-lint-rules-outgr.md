@@ -1,7 +1,7 @@
 ---
 concern: migrate rig B-phase red: current lint rules outgrew the frozen 0.2.8 adopter expectations
 by: 966892e0-965c-41dd-8a3a-8828d89cc3a9
-status: open
+status: landed
 nodes: migrate
 created: 2026-07-12T14:38:36.546Z
 ---

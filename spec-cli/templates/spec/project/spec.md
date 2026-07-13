@@ -12,7 +12,7 @@ made it. This node is the founding spec everything else hangs from — **rewrite
 your own project**, then grow child package/feature nodes beneath it (each its own directory with a
 `spec.md`).
 
-`.plugins/` holds the dev-flow plugins this instance ships — skill-shaped flat child nodes, each tagged
+`.plugins/` holds the dev-flow plugins this instance ships — skill-shaped child nodes, each tagged
 with a `surface` field: a `surface: system` node folds into every launched agent's system prompt as
 always-on contract (the seed ships `core`), and a `surface: command` node is a prompt preset the
 new-session dropdown composes over target nodes (the seed ships `tidy`). Add, edit, or

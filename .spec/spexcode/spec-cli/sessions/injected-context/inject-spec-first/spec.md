@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: A one-shot PreToolUse nudge — read your node's spec (and its neighbors) before you read or edit code, reconcile against it, never silently diverge.
 code:
-  - .spec/spexcode/.plugins/prompts/core/spec-first/spec-first.sh
+  - .spec/spexcode/.plugins/core/spec-first/spec-first.sh
 ---
 
 # inject-spec-first

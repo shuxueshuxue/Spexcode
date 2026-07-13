@@ -19,8 +19,9 @@ What it plants, both resolved from the CLI package's OWN location via `import.me
 when the package is installed outside the dogfood repo — never a hardcoded repo path):
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
-  default `.plugins` of dev-flow plugins, each a flat child carrying a `surface` field (the `system`
-  contract `core` + `forge-link`, and the `command` presets), a verbatim copy of the dogfood `.plugins`
+  default `.plugins` of dev-flow plugins, each carrying a `surface` field (the `system` contract `core`
+  flat + `forge-link` under the `prompts/` shelf, the `command` presets under `commands/`, the `skill`
+  plugins under `skills/`), a verbatim copy of the dogfood `.plugins`
   node so a fresh adopt ships the *current* set. That default `.plugins` is the **default preset**; with
   `--preset <name>` a named non-default package under `templates/presets/<name>/` would be copied in **on
   top** — cumulative — though no non-default tier ships today. The spexcode-only plugins live only

@@ -9,8 +9,8 @@ desc: Grouping shelf for the auxiliary `surface: system` prompt contracts — si
 The **auxiliary** `surface: system` prompt contracts live here: leaf plugins whose whole substance is one
 prose body an agent must always carry — materialized (in name order, together with every other system
 body) into the `<!-- spexcode -->` contract block — rather than a verb it invokes. Grouping them keeps
-`.plugins/` legible at a glance: peripheral prompt contracts on this shelf; the invocable surfaces
-(command/skill/agent) and [[core]] as flat children beside it.
+`.plugins/` legible at a glance: peripheral prompt contracts on this shelf; the command presets on
+[[commands]], the skill plugins on [[skills]], and [[core]] as a flat child beside it.
 
 The shelf boundary is **leafness, not surface**: a single-body prose contract shelves here, while a
 contract that anchors its own subtree outranks the shelf — [[core]], the dev-flow contract subsystem

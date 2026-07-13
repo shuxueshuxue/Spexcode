@@ -6,6 +6,11 @@
 export type MigrateAsset = { rel: string; template: string; oldShas: string[] }
 export const TEMPLATE_ASSETS: MigrateAsset[] = [
   {
+    "rel": "commands/spec.md",
+    "template": "templates/spec/project/.plugins/commands/spec.md",
+    "oldShas": []
+  },
+  {
     "rel": "core/idle/idle.sh",
     "template": "templates/spec/project/.plugins/core/idle/idle.sh",
     "oldShas": [
@@ -155,7 +160,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "distill/digest.mjs",
-    "template": "templates/spec/project/.plugins/distill/digest.mjs",
+    "template": "templates/spec/project/.plugins/skills/distill/digest.mjs",
     "oldShas": [
       "b596d196d35688130157698ca90950d412bf527f",
       "faff3509b004e8529d5c7f3abd29512fb389ceb9"
@@ -163,7 +168,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "distill/spec.md",
-    "template": "templates/spec/project/.plugins/distill/spec.md",
+    "template": "templates/spec/project/.plugins/skills/distill/spec.md",
     "oldShas": [
       "3e3fd25db1d465f72b636e6af8bcd873c0ceb3c2",
       "4a0b547ad63e15aa80ed7f826581ad90ca02d0f4",
@@ -172,7 +177,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "extract/spec.md",
-    "template": "templates/spec/project/.plugins/extract/spec.md",
+    "template": "templates/spec/project/.plugins/commands/extract/spec.md",
     "oldShas": [
       "064efd8321925bd0cff7ee725771b500a7baf6e7",
       "45c2b0fe12224ebc124b5f5fecafd1e8d82de93e",
@@ -209,7 +214,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "regroup/spec.md",
-    "template": "templates/spec/project/.plugins/regroup/spec.md",
+    "template": "templates/spec/project/.plugins/commands/regroup/spec.md",
     "oldShas": [
       "37f632450faba3e9c5290468b52535e766faf45e",
       "aa3097a1b7ff51c4a8a0bfab82ac06a585081caa",
@@ -226,6 +231,11 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
       "cb5495db2cc4ba34251ddd47b1b56a18186b8bab",
       "fc3c060af70b01b2073163880a42d002e285ddc5"
     ]
+  },
+  {
+    "rel": "skills/spec.md",
+    "template": "templates/spec/project/.plugins/skills/spec.md",
+    "oldShas": []
   },
   {
     "rel": "spec.md",
@@ -247,7 +257,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "supervisor/spec.md",
-    "template": "templates/spec/project/.plugins/supervisor/spec.md",
+    "template": "templates/spec/project/.plugins/commands/supervisor/spec.md",
     "oldShas": [
       "036d5602a038e2565cd968e4a8a443ce80026025",
       "05963c00bc1031ba0d4f91ea68d60b1731f475f2",
@@ -269,7 +279,7 @@ export const TEMPLATE_ASSETS: MigrateAsset[] = [
   },
   {
     "rel": "tidy/spec.md",
-    "template": "templates/spec/project/.plugins/tidy/spec.md",
+    "template": "templates/spec/project/.plugins/commands/tidy/spec.md",
     "oldShas": [
       "096fc1dd48a1692aeb87614a93bcce2473f2050a",
       "16ccbf044e74765a5c9cc212fba38356950a7e69",

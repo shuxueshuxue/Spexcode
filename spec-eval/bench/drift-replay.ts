@@ -6,7 +6,9 @@
 //   A1  one-drift-blocks           — every window commit blocks
 //   A3  count>=3 (retired product) — the 3rd+ accumulated window commit blocks
 //   B   anchor-hit (current)       — blocks iff the commit's hunks intersect the anchored unit,
-//                                    extracted from the file AS OF that commit (spec-cli/src/anchors.ts)
+//                                    extracted from the file AS OF that commit (spec-cli/src/anchors.ts);
+//                                    an unanchored node NEVER blocks (the shipped semantics)
+//   B'  anchor-hit, unanchored=always — same on anchored nodes; an unanchored node's every event blocks
 //
 // Two label tracks:
 //   behavioral — the commit also versioned this node's spec.md (the fused ritual commit): the author's
@@ -44,11 +46,10 @@ const walk = (d: string) => {
 }
 walk(join(ROOT, '.spec'))
 
-type Ev = { id: string; node: string; specTouched: boolean; anchorHit: boolean; idx: number }
+type Ev = { id: string; node: string; anchored: boolean; specTouched: boolean; anchorHit: boolean; idx: number }
 const events: Ev[] = []
 const seen = new Set<string>()
 for (const r of roster) {
-  if (!r.anchor) continue
   const specPath = specPathOf.get(r.node)
   if (!specPath) continue
   // spec version commits, oldest first, pure renames excluded (a rename is not a version)
@@ -65,23 +66,25 @@ for (const r of roster) {
     let win: string[] = []
     try { win = git(['rev-list', '--reverse', '--no-merges', `${versions[i]}..${to}`, '--', r.codePath]).trim().split('\n').filter(Boolean) } catch { continue }
     if (!win.length) continue
-    const hits = new Set((await anchorHitCommits(ROOT, win, r.codePath, r.anchor, x)).map((h) => h.commit))
+    const hits = r.anchor ? new Set((await anchorHitCommits(ROOT, win, r.codePath, r.anchor, x)).map((h) => h.commit)) : new Set<string>()
     win.forEach((c, k) => {
       const id = `${r.node}@${c.slice(0, 8)}`
       if (seen.has(id)) return
       seen.add(id)
-      events.push({ id, node: r.node, specTouched: vset.has(c), anchorHit: hits.has(c), idx: k + 1 })
+      events.push({ id, node: r.node, anchored: !!r.anchor, specTouched: vset.has(c), anchorHit: hits.has(c), idx: k + 1 })
     })
   }
 }
 
 // ---- behavioral track (full population, live) ----
+const bB = (e: Ev) => e.anchorHit
+const bBp = (e: Ev) => (e.anchored ? e.anchorHit : true)
 const neg = events.filter((e) => !e.specTouched), pos = events.filter((e) => e.specTouched)
 const pct = (a: number, b: number) => ((100 * a) / b).toFixed(1) + '%'
-console.log(`\nreplayed ${events.length} drift events on ${new Set(events.map((e) => e.node)).size} anchored nodes`)
+console.log(`\nreplayed ${events.length} drift events on ${new Set(events.map((e) => e.node)).size} nodes (${events.filter((e) => e.anchored).length} on anchored nodes)`)
 console.log('\nbehavioral track (label = commit also versioned the spec):')
-console.log(`  code-only events blocked   A1 ${pct(neg.length, neg.length)} · A3 ${pct(neg.filter((e) => e.idx >= 3).length, neg.length)} · B ${pct(neg.filter((e) => e.anchorHit).length, neg.length)}   (n=${neg.length})`)
-console.log(`  fused events caught        A1 100.0% · A3 ${pct(pos.filter((e) => e.idx >= 3).length, pos.length)} · B ${pct(pos.filter((e) => e.anchorHit).length, pos.length)}   (n=${pos.length})`)
+console.log(`  code-only events blocked   A1 100.0% · A3 ${pct(neg.filter((e) => e.idx >= 3).length, neg.length)} · B ${pct(neg.filter(bB).length, neg.length)} · B' ${pct(neg.filter(bBp).length, neg.length)}   (n=${neg.length})`)
+console.log(`  fused events caught        A1 100.0% · A3 ${pct(pos.filter((e) => e.idx >= 3).length, pos.length)} · B ${pct(pos.filter(bB).length, pos.length)} · B' ${pct(pos.filter(bBp).length, pos.length)}   (n=${pos.length})`)
 
 // ---- LLM-truth track (frozen sample, frozen stratum weights) ----
 const byId = new Map(events.map((e) => [e.id, e]))
@@ -100,9 +103,18 @@ function score(name: string, blocks: (e: Ev) => boolean) {
   return { fp, fn }
 }
 console.log(`\nLLM-truth track (${joined.length}/${truth.rows.length} judged events matched; population-weighted to ${W.toFixed(0)}):`)
-score('A1 one-drift-blocks    ', () => true)
-score('A3 count>=3 (retired)  ', (e) => e.idx >= 3)
-const b = score('B  anchor-hit (current)', (e) => e.anchorHit)
+score("A1 one-drift-blocks     ", () => true)
+score("A3 count>=3 (retired)   ", (e) => e.idx >= 3)
+score("B  anchor-hit (current) ", bB)
+score("B' anchor-hit+un=always ", bBp)
+// anchored-only subtable (the report's original main table — comparability with round 1)
+{
+  const sub = joined.filter((t) => byId.get(t.id)!.anchored)
+  const subW = sub.reduce((a, t) => a + w(t), 0)
+  let tp = 0, fp = 0, fn = 0, tn = 0
+  for (const t of sub) { const e = byId.get(t.id)!, b = bB(e), ww = w(t); b && t.truth ? tp += ww : b && !t.truth ? fp += ww : !b && t.truth ? fn += ww : tn += ww }
+  console.log(`  (anchored-only B: blocks ${pct(tp + fp, subW)} · precision ${pct(tp, tp + fp)} · recall ${pct(tp, tp + fn)} · false blocks ${fp.toFixed(0)}/${(fp + tn).toFixed(0)})`)
+}
 if (joined.length < truth.rows.length * 0.95) {
   console.error(`\nWARN: ${truth.rows.length - joined.length} judged events no longer replay (history rewrite?) — scores may not be comparable`)
   process.exit(1)

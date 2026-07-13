@@ -55,15 +55,17 @@ a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',
   },
   materialize: {
-    line: 'materialize           re-materialize the harness artifacts (contract block · shims) for cwd’s project',
+    line: 'materialize           the base pass of harness adaptation: render .spec/.plugins into your harness’s artifacts',
     body: `Usage: spex materialize
 
-Materializes the surface:system plugin nodes into the managed <!-- spexcode --> block of
-CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. The materialize anchors on
-git-native events only (init · this verb · session-worktree creation · the pre-commit/post-checkout/
-post-merge hooks) — run it by hand after a toolchain update, or in the setup step of any clone that
-has no spex-planted hooks yet (CI, a cloud agent): the artifacts are generated and excluded, so they
-never arrive via git.`,
+The base operation of HARNESS ADAPTATION: one pass renders the spec tree's surface nodes into the
+artifacts each selected harness auto-discovers — the managed <!-- spexcode --> block of
+CLAUDE.md/AGENTS.md, the .claude/.codex shims, the skills/agents — and prints the content hash.
+The outputs are derived and never tracked: to change one, edit its source (.plugins, spexcode.json)
+and re-materialize — never the artifact. Not a one-time setup: it anchors on git-native events
+(init · this verb · session-worktree creation · the pre-commit/post-checkout/post-merge hooks) —
+run it by hand after a toolchain update, or in the setup step of any clone that has no spex-planted
+hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arrive via git.`,
     see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {

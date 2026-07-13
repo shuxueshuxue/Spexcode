@@ -376,9 +376,11 @@ const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and 
 
 SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (the storage of
 measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
-stitches the two ends into a closed loop. The footprint follows: the head+tail (.spec, spexcode.json,
-evals) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
-Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
+stitches the two ends into a closed loop. Materialize is the base operation of harness ADAPTATION:
+one pass renders the spec tree into whatever artifacts the selected harness auto-discovers, so that
+is how SpexCode reaches an agent — never a launch-time flag. The footprint follows: the head+tail
+(.spec, spexcode.json, evals) is the ASSET and lives in git like source; everything else is derived
+wiring or a machine fact. Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
 behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
 ── THE FOUR KINDS (all fixed) ──

@@ -27,7 +27,12 @@ loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 ## expanded spec
 
 `spex materialize` is a pure function of the spec tree's [[surface]] nodes into the flat
-artifacts each consumer reads cheaply. Its anchors are GIT-NATIVE only ([[commit-surgery]]): the explicit
+artifacts each consumer reads cheaply. It is the **base operation of harness adaptation** — the
+[[harness-adapter]] seam's render step: "adapting SpexCode to a harness" means exactly *materializing
+into that harness's auto-discovery points*, so supporting a new harness is an adapter row this one
+pass loops over, never a new delivery mechanism. That framing is how the verb should be explained
+wherever it is defined (help, guides, onboarding docs): not a one-time setup — a re-runnable render
+whose outputs are derived, untracked, and edited only via their sources. Its anchors are GIT-NATIVE only ([[commit-surgery]]): the explicit
 verbs (`spex init`, `spex materialize`), session-worktree creation, and the planted pre-commit /
 post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
 (`.plugins` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a

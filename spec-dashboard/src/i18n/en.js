@@ -457,8 +457,6 @@ export default {
     noEvents: 'nothing recorded yet — status changes and messages will land here',
     asked: 'original ask',
     you: 'you',
-    noteReply: '↩ reply via note',
-    noteReplyHint: 'ask the agent to put its complete reply in the declaration note — the only text a terminal-free client can read',
     inputPlaceholder: 'message the agent…',
     send: 'send',
     sendFailed: 'not delivered — the agent may be offline',

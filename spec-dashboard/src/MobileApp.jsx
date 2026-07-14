@@ -112,7 +112,6 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
-  const [noteReply, setNoteReply] = useState(true)   // the terminal-free default: ask for the reply in the note
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const scrollRef = useRef(null)
@@ -128,7 +127,9 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
     const text = draft.trim()
     if (!text || sending) return
     setSending(true); setSendErr(null)
-    const r = await sendSessionText(s.id, text, { replyVia: noteReply ? 'note' : undefined })
+    // replyVia:'note' is this surface's FIXED property, not a per-message choice: a terminal-free sender
+    // can only ever read declaration notes, so every dispatch asks for its reply there — silently.
+    const r = await sendSessionText(s.id, text, { replyVia: 'note' })
     setSending(false)
     if (r.ok) { setDraft(''); load() }
     else setSendErr(r.error || t('mobile.sendFailed'))
@@ -219,11 +220,6 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
           {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
           {sendErr && <div className="m-senderr">{sendErr}</div>}
           <div className="m-composer">
-            <button
-              className={noteReply ? 'm-chip on' : 'm-chip'}
-              onClick={() => setNoteReply((v) => !v)}
-              title={t('mobile.noteReplyHint')}
-            >{t('mobile.noteReply')}</button>
             <div className="m-composer-line">
               <textarea
                 className="m-input"

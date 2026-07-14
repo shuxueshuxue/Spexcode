@@ -1626,11 +1626,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
 .m-senderr { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
-.m-chip {
-  font-family: var(--mono); font-size: 11px; color: var(--muted); background: none;
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; margin-bottom: 6px;
-}
-.m-chip.on { color: var(--blue); border-color: var(--blue); }
 .m-composer-line { display: flex; align-items: flex-end; gap: 8px; }
 .m-input {
   flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: 14px;

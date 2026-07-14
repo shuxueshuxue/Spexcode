@@ -1,0 +1,97 @@
+content-recoverability pre-registration verification
+cwd: repository root
+date: 2026-07-15 Asia/Shanghai
+policy: zero benchmark model calls, zero judge calls, zero paid runs, zero network calls, zero R0 generation/read
+
+RC capture discipline for every command below: redirect the original command's stdout+stderr directly to a
+fresh mktemp file; immediately assign command_rc=$?; only then display all output or the named summary lines;
+delete the temporary raw file; report original_command_rc. No pipe or summary command carries the original rc.
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs --write
+freeze write ok: modules=6 moduleUnits=620 leaves=2 leafUnits=39
+protocolFreezeSha256=4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7
+effectiveModuleR0=0 paidRuns=0 networkCalls=0
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs --write
+freeze write ok: modules=6 moduleUnits=620 leaves=2 leafUnits=39
+protocolFreezeSha256=4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7
+effectiveModuleR0=0 paidRuns=0 networkCalls=0
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs --check
+freeze check ok: 8 files byte-stable
+protocolFreezeSha256=4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7
+effectiveModuleR0=0
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs --check
+freeze check ok: 8 files byte-stable
+protocolFreezeSha256=4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7
+effectiveModuleR0=0
+[original_command_rc=0]
+
+$ sha256sum spec-eval/bench/reconstruction/recoverability/frame.json spec-eval/bench/reconstruction/recoverability/units-skeleton.json spec-eval/bench/reconstruction/recoverability/segmentation-audit.json spec-eval/bench/reconstruction/recoverability/rewrite-map.json spec-eval/bench/reconstruction/recoverability/control-plan.json spec-eval/bench/reconstruction/recoverability/tree-only-ablation.json spec-eval/bench/reconstruction/recoverability/run-state.json spec-eval/bench/reconstruction/recoverability/freeze-manifest.json
+71d34cdc8088a20ac8687a6b96872a6aaa425a29eb67eb5154b073dc842b11e8  spec-eval/bench/reconstruction/recoverability/frame.json
+823a40e3aa818160248164c156c8f4f7c4df911315c44898ce1e518bdcc21f82  spec-eval/bench/reconstruction/recoverability/units-skeleton.json
+0da589372f72dbb4514781a23dbc2f6527b1ef342d682a3ee9c6d8db3128517d  spec-eval/bench/reconstruction/recoverability/segmentation-audit.json
+59e0ddb94a335182766d75d9fb3921c9a2f1be7baddf6268cd08b22cbb1b4388  spec-eval/bench/reconstruction/recoverability/rewrite-map.json
+66c603ee0ab389716732e7c36f4eebfa1323810fa2def0b021cb155095ce8444  spec-eval/bench/reconstruction/recoverability/control-plan.json
+546629c65ef67f93108fb9ef6792692518b1af7a5acb7e2caeb924e0841978bf  spec-eval/bench/reconstruction/recoverability/tree-only-ablation.json
+c9b82b623a3d6d86c58e073fce6c38ae9a9e59eb449692ec9a14b93f4ad7e7c2  spec-eval/bench/reconstruction/recoverability/run-state.json
+b171ccd3f05f5cfc21e8c5d0ffe8f07e7fb662fc633fbb4eb08cf56c1b2da988  spec-eval/bench/reconstruction/recoverability/freeze-manifest.json
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs dry --case positive
+dry fixture positive: ADMITTED
+gates=none
+modelCalls=0 networkCalls=0 effectiveModuleR0=0
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs dry --case negative
+dry fixture negative: REJECTED
+gates=annotation-feasibility,packet-blinding,o0-self-recall,fabricated-false-recovery,latent-contamination-audit,stale-recovery-bad-signal,category-kappa,style-identity,tree-only-breadcrumb,constructor-family-judge,loo-category-order,aggregation-shape
+modelCalls=0 networkCalls=0 effectiveModuleR0=0
+[original_command_rc=1 expected: all 12 negative gates rejected]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs dry
+dry oracle: positive=admitted negative=rejected negativeGates=12/12
+dry-report=spec-eval/bench/reconstruction/recoverability/runs/dry-report.json sha256=5b1d98c2e37e07269098ae049f446679880571a4edadf2cac4756b8596c00543
+modelCalls=0 networkCalls=0 effectiveModuleR0=0
+dry oracle ok
+[original_command_rc=0]
+
+$ node spec-eval/bench/reconstruction/recoverability/run.mjs preflight
+reconstruction preflight is read-only and launches nothing
+labels blocked: annotation-feasibility-approval.json: missing
+labels blocked: unit-cards.json: missing
+labels blocked: fabricated-units.json: missing
+labels blocked: tree-only-results.json: missing
+labels blocked: style-probe.json: missing
+labels blocked: judge-panel.json: missing
+labels blocked: parent-dry-attestation.json: missing
+labels blocked: annotation-state.json: missing
+preflight blocked: blind dual-label/control freeze is incomplete; current effectiveModuleR0=0
+[original_command_rc=1 expected: no human burden approval or blind annotations exist]
+
+$ npx tsx spec-eval/bench/reconstruction/run.ts dry
+summary extracted after original_command_rc was saved:
+selection-frozen ✓  c0=038dce1f cEval=5723eaca — 2 leaves, module pair (comms, lifecycle, Δ=1), whole
+episode-frame-frozen ✓  798 episodes (699 pre / 1 migration / 98 post), 482 eligible, primary horizon 430
+[leak-positive-twin]  ✓ detection power — mask fired=true leakage fired=true plant detected=true (all three MUST be true)
+all gates passed ✓  (report: spec-eval/bench/reconstruction/runs/dry/dry-report.json)
+[original_command_rc=0]
+
+$ spex spec lint
+summary extracted after original_command_rc was saved:
+spex spec lint: 0 error(s), 87 warning(s)
+[original_command_rc=0]
+
+$ spex eval lint --changed
+  • eval-missing: 'content-recoverability' scenario 'protocol-freeze-and-dry-oracle' [cli] has no eval yet — measure with `spex eval add content-recoverability`
+spex eval lint --changed: 1 node(s) flagged (0 malformed, 0 stale, 1 missing, 0 coverage gap(s))
+[original_command_rc=0; expected before the post-commit eval filing]
+
+All temporary raw capture files were deleted immediately after their original command rc and required output
+were recorded. The parent dry report is the parent benchmark's ordinary ignored dry artifact; this protocol
+does not treat it as a paid or R0 result.

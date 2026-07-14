@@ -1,0 +1,62 @@
+{
+  "v": 1,
+  "protocol": "docs/content-recoverability.md",
+  "development": {
+    "source": "frame.json#taxonomyDevPool",
+    "sampleNodesExcluded": true,
+    "r0Seen": false,
+    "rule": "Developed on the deterministic non-sample C0 dev pool before any sample-unit label. Exactly one primary category per census unit; secondary tags never enter primary aggregation."
+  },
+  "assignmentPrecedence": [
+    "historical-incident",
+    "design-rationale",
+    "ownership-topology",
+    "responsibility-boundary",
+    "constraint-invariant",
+    "operational-mechanism",
+    "behavioral-contract"
+  ],
+  "categories": [
+    {
+      "id": "behavioral-contract",
+      "primaryEligible": true,
+      "definition": "Externally observable behavior, refusal, default, or user-facing promise not better described by a more specific category."
+    },
+    {
+      "id": "responsibility-boundary",
+      "primaryEligible": true,
+      "definition": "What a component is responsible for or explicitly does not own; includes scope and handoff boundaries but not tree placement itself."
+    },
+    {
+      "id": "ownership-topology",
+      "primaryEligible": true,
+      "definition": "Parent/child structure, routing, file or capability ownership, and which component sits where in the module graph."
+    },
+    {
+      "id": "design-rationale",
+      "primaryEligible": true,
+      "definition": "The reason, tradeoff, or rejected alternative that explains why a contract has its current shape."
+    },
+    {
+      "id": "constraint-invariant",
+      "primaryEligible": true,
+      "definition": "A state, quantity, ordering, identity, or safety property that must hold across transitions."
+    },
+    {
+      "id": "operational-mechanism",
+      "primaryEligible": true,
+      "definition": "How an operation proceeds or is triggered when the mechanism itself carries information beyond the outward behavior."
+    },
+    {
+      "id": "historical-incident",
+      "primaryEligible": false,
+      "definition": "A past failure, regression, migration hazard, or learned incident whose value depends on historical memory; always secondary even if a cell is numerically sufficient."
+    }
+  ],
+  "agreementGate": {
+    "metric": "Cohen kappa on the two raw primary-category labels",
+    "minimum": 0.6,
+    "revisionLimit": 1,
+    "failure": "NO-GO after one taxonomy revision and complete blind relabel"
+  }
+}

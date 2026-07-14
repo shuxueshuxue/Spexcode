@@ -1,0 +1,56 @@
+{
+  "v": 1,
+  "protocol": "docs/content-recoverability.md",
+  "closedWorld": true,
+  "unitSkeleton": {
+    "keys": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawText", "rawTextSha256", "chars"],
+    "required": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawText", "rawTextSha256", "chars"],
+    "scale": ["module", "leaf"]
+  },
+  "unitCard": {
+    "keys": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawTextSha256", "rewriteId", "labels", "adjudication"],
+    "required": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawTextSha256", "rewriteId", "labels", "adjudication"],
+    "labelKeys": ["annotator", "stratum", "taxonomy", "structuralFacet", "evidenceRefs", "note"],
+    "adjudicationKeys": ["stratum", "taxonomy", "structuralFacet", "adjudicator", "note"],
+    "stratum": ["A-supported", "B-latent", "S-stale-contradicted"],
+    "structuralFacet": ["none", "responsibility", "non-responsibility", "topology-ownership", "cross-leaf-contract"],
+    "rules": ["exactly two distinct annotators", "A-supported labels require at least one C0 evidenceRef", "exactly one primary taxonomy", "every skeleton unit appears exactly once"]
+  },
+  "fabricatedUnit": {
+    "keys": ["fabricatedId", "cluster", "scale", "rewriteText", "targetCategory", "verifiers", "absenceEvidence", "note"],
+    "required": ["fabricatedId", "cluster", "scale", "rewriteText", "targetCategory", "verifiers", "absenceEvidence"],
+    "rules": ["two distinct verifiers", "plausible but unsupported and uncontradicted at C0", "10-15 percent of real plus fabricated probes within each scale; deterministic cluster allocation"]
+  },
+  "rewriteMap": {
+    "keys": ["unitId", "rawTextSha256", "rewriteId", "rewriteText", "appliedRules"],
+    "rules": ["one row per skeleton unit", "no residual yatsu-era token", "rewriteText unique across distinct rawTextSha256 values"]
+  },
+  "blindPacket": {
+    "keys": ["v", "packetId", "statement", "candidates"],
+    "candidateKeys": ["candId", "text"],
+    "forbidden": ["arm or control labels", "taxonomy", "A/B/S", "source paths or node ids", "constructor identity", "seed material", "embedded label map"],
+    "allowedContext": "cluster-local anonymous component-NN subject slot",
+    "labelMap": "stored outside packets; only its sha256 commitment enters the packet manifest"
+  },
+  "judgeRecord": {
+    "keys": ["packetId", "candId", "judge", "verdict", "note"],
+    "verdict": ["full", "partial", "absent", "contradicted"]
+  },
+  "annotationFreeze": {
+    "keys": ["v", "protocolFreezeSha256", "assets", "categoryKappa", "taxonomyRevisionRound", "moduleR0AtFreeze", "phaseLeafR0ReadBeforeFreeze"],
+    "rules": ["moduleR0AtFreeze equals 0", "phaseLeafR0ReadBeforeFreeze equals false", "all asset hashes are sha256 of exact bytes", "categoryKappa at least 0.6 after at most one revision"]
+  },
+  "annotationFeasibilityApproval": {
+    "keys": ["v", "decision", "approvedBy", "approvedAt", "protocolFreezeSha256", "moduleUnits", "realUnitCards", "minimumIndependentDecisions", "note"],
+    "required": ["v", "decision", "approvedBy", "approvedAt", "protocolFreezeSha256", "moduleUnits", "realUnitCards", "minimumIndependentDecisions"],
+    "decision": ["approve-full-census"],
+    "frozenCounts": { "moduleUnits": 620, "realUnitCards": 659, "minimumIndependentDecisions": 1508 },
+    "alternative": "Before any R0/result is seen, replace the external module-scope rule, rerun protocol --write/--check, and obtain approval for the newly frozen burden. Unit sampling is forbidden."
+  },
+  "aggregation": {
+    "primary": "full recovery among adjudicated A-supported units, category by scale; module is primary and leaf is calibration",
+    "insufficient": "fewer than 3 clusters or 15 units: report counts and insufficient only, no rate or CI",
+    "nAtMost6": "descriptive per-cluster and macro rates only in sufficient cells; no bootstrap, CI, significance, pooled score, or scale curve",
+    "historicalIncident": "secondary only"
+  }
+}

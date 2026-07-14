@@ -45,79 +45,166 @@ export function buildCodexEnv({ home, codexHome, sqliteHome, authEnvName, authVa
   return env
 }
 
-// temp CODEX_HOME/config.toml provider row (parameterized; no global config copy)
+// temp CODEX_HOME/config.toml provider row (parameterized; no global config copy). Values are escaped.
 export function codexConfigToml({ model, providerName, baseUrl, wireApi = 'responses' }) {
   if (!model || !providerName || !baseUrl) throw new Error('codex config: model, providerName, baseUrl required')
+  if (!/^[A-Za-z0-9_.-]+$/.test(providerName)) throw new Error('codex config: providerName must be a bare identifier')
+  const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
   return [
-    `model = "${model}"`,
-    `model_provider = "${providerName}"`,
+    `model = "${esc(model)}"`,
+    `model_provider = "${esc(providerName)}"`,
     '',
     `[model_providers.${providerName}]`,
-    `name = "${providerName}"`,
-    `base_url = "${baseUrl}"`,
-    `wire_api = "${wireApi}"`,
+    `name = "${esc(providerName)}"`,
+    `base_url = "${esc(baseUrl)}"`,
+    `wire_api = "${esc(wireApi)}"`,
     '',
   ].join('\n')
 }
 
-// STRICT parser over codex exec --json JSONL events (already parsed objects, in order).
-export function parseCodexJsonl(events, { providerModelTrace = null } = {}) {
+// STRICT parser over codex exec --json output. Accepts RAW LINES (strings) and self-parses: ANY non-JSON
+// / malformed line fails. Enforces the event ORDER thread.started < turn.started < turn.completed, a UNIQUE
+// terminal (exactly one of each), at least ONE completed assistant output item, and usage that is entirely
+// finite nonnegative integers with cached<=input and reasoning<=output. It does NOT establish model
+// identity — the CLI JSONL carries no model id, so modelVerified is the CONTROLLED HTTP TRANSPORT's job
+// (transportModelTrace), never caller-supplied evidence.
+export function parseCodexJsonl(rawLines, { transportModelTrace = null, expectedModel = null } = {}) {
   const errors = []
-  const count = (t) => events.filter((e) => e && e.type === t).length
-  const nThreadStarted = count('thread.started')
-  const nTurnStarted = count('turn.started')
-  const nTurnCompleted = count('turn.completed')
-  if (nThreadStarted !== 1) errors.push(`thread.started count=${nThreadStarted} (need exactly 1)`)
-  if (nTurnStarted !== 1) errors.push(`turn.started count=${nTurnStarted} (need exactly 1)`)
-  if (nTurnCompleted !== 1) errors.push(`turn.completed count=${nTurnCompleted} (need exactly 1)`)
-  const threadStarted = events.find((e) => e?.type === 'thread.started')
+  const lines = Array.isArray(rawLines) ? rawLines : String(rawLines).split('\n')
+  const events = []
+  lines.forEach((ln, i) => {
+    const s = typeof ln === 'string' ? ln.trim() : JSON.stringify(ln)
+    if (!s) return
+    try { events.push({ i, e: JSON.parse(s) }) } catch { errors.push(`line ${i}: non-JSON/malformed`) }
+  })
+  const firstIdx = (t) => { const f = events.find((x) => x.e?.type === t); return f ? f.i : -1 }
+  const cnt = (t) => events.filter((x) => x.e?.type === t).length
+  for (const t of ['thread.started', 'turn.started', 'turn.completed']) { const c = cnt(t); if (c !== 1) errors.push(`${t} count=${c} (need exactly 1)`) }
+  const iThread = firstIdx('thread.started'), iTurnStart = firstIdx('turn.started'), iTurnDone = firstIdx('turn.completed')
+  if (iThread >= 0 && iTurnStart >= 0 && !(iThread < iTurnStart)) errors.push('order: thread.started must precede turn.started')
+  if (iTurnStart >= 0 && iTurnDone >= 0 && !(iTurnStart < iTurnDone)) errors.push('order: turn.started must precede turn.completed')
+  const threadStarted = events.find((x) => x.e?.type === 'thread.started')?.e
   const threadId = threadStarted?.thread_id ?? null
-  if (nThreadStarted === 1 && !threadId) errors.push('thread.started has no thread_id')
-  if (count('error') > 0) errors.push(`${count('error')} error event(s)`)
-  if (count('turn.failed') > 0) errors.push(`${count('turn.failed')} turn.failed event(s)`)
-  // usage = the UNIQUE terminal snapshot from turn.completed (never summed across events)
-  const completed = events.find((e) => e?.type === 'turn.completed')
+  if (cnt('thread.started') === 1 && !threadId) errors.push('thread.started has no thread_id')
+  if (cnt('error') > 0) errors.push(`${cnt('error')} error event(s)`)
+  if (cnt('turn.failed') > 0) errors.push(`${cnt('turn.failed')} turn.failed event(s)`)
+  // at least one COMPLETED assistant output item
+  const hasAssistantItem = events.some((x) => x.e?.type === 'item.completed' && /assistant|message/.test(x.e?.item?.type ?? ''))
+  if (!hasAssistantItem) errors.push('no completed assistant output item')
+  // usage = the UNIQUE terminal snapshot from turn.completed; every field a finite nonnegative integer
+  const completed = events.find((x) => x.e?.type === 'turn.completed')?.e
   const u = completed?.usage ?? null
   let tokens = null
+  const finiteNonNeg = (v) => Number.isInteger(v) && v >= 0
   if (u) {
-    const input = u.input_tokens ?? 0, output = u.output_tokens ?? 0
-    const cached = u.cached_input_tokens ?? 0, reasoning = u.reasoning_output_tokens ?? 0
-    if (cached > input) errors.push(`cached_input_tokens ${cached} > input_tokens ${input}`)
-    if (reasoning > output) errors.push(`reasoning_output_tokens ${reasoning} > output_tokens ${output}`)
-    tokens = { input, output, cached, reasoning }
-  } else if (nTurnCompleted === 1) {
-    errors.push('turn.completed carries no usage snapshot')
-  }
-  // CLI JSONL has NO actual model id — verification REQUIRES a provider response trace matching the slug
-  const modelVerified = !!providerModelTrace && !!providerModelTrace.model && providerModelTrace.model === providerModelTrace.expected
-  return { ok: errors.length === 0, errors, threadId, tokens, modelVerified, providerModelTrace }
+    const fields = { input: u.input_tokens, output: u.output_tokens, cached: u.cached_input_tokens ?? 0, reasoning: u.reasoning_output_tokens ?? 0 }
+    for (const [k, v] of Object.entries(fields)) if (!finiteNonNeg(v)) errors.push(`usage.${k}=${v} not a finite nonnegative integer`)
+    if (finiteNonNeg(fields.cached) && finiteNonNeg(fields.input) && fields.cached > fields.input) errors.push(`cached ${fields.cached} > input ${fields.input}`)
+    if (finiteNonNeg(fields.reasoning) && finiteNonNeg(fields.output) && fields.reasoning > fields.output) errors.push(`reasoning ${fields.reasoning} > output ${fields.output}`)
+    tokens = fields
+  } else if (cnt('turn.completed') === 1) errors.push('turn.completed carries no usage snapshot')
+  // model verification is ONLY from the controlled transport's own extraction — never caller evidence
+  const modelVerified = !!transportModelTrace && transportModelTrace.source === 'controlled-http-transport'
+    && !!transportModelTrace.model && (!expectedModel || transportModelTrace.model === expectedModel)
+  return { ok: errors.length === 0, errors, threadId, tokens, modelVerified }
 }
 
-// REAL launch — intentionally blocked until an authorized caller supplies the approved provider config.
+// REAL launch — UNCALLED DRAFT. Hard-guarded: unreachable unless the phase passes reviewerGo:true (only
+// set AFTER a reviewer GO — never set in this build). Reads global ~/.codex ONLY at call time (guarded
+// off now), copies ONLY the relay key + the sub2api provider row into a per-run mode-0700 CODEX_HOME,
+// never modifies/archives/prints the globals, and deletes the temp after. The key never crosses the
+// public internet in the clear: a per-run `ssh -N -L 127.0.0.1:<ephemeral>:127.0.0.1:18080 public-vps-tail`
+// tunnel is the egress, reached from the outer `docker --network none` container through a single
+// unix/loopback bridge; codex's provider base_url points at that in-container loopback port. A controlled
+// HTTP trace-proxy on the host bridge extracts ONLY status / request-id / response model / token counts
+// (never header/body/key); actual model MUST be gpt-5.5. finally kills ssh + bridge + container and rm's
+// the temp CODEX_HOME. This body is a reviewable draft; it stays uncalled until the paid gate.
+const CODEX_GLOBAL_DIR = '/home/jeffry/.codex'                       // read-only, at call time ONLY
+const CODEX_SSH_CONFIG = '/home/jeffry/YellowPage/ssh_config'
+const CODEX_SSH_TARGET = 'public-vps-tail'
+const CODEX_UPSTREAM = { host: '127.0.0.1', port: 18080 }           // sub2api on the vps (via the tunnel)
+
 export async function launchCodex(opts) {
-  const { provider } = opts ?? {}
-  if (!provider || !provider.baseUrl || !provider.model || !(provider.authEnvName || provider.authHelper)) {
-    throw new Error('launchCodex BLOCKED: no approved sub2api endpoint / credential path / model slug in repo-local state. ' +
-      'Supply {provider:{baseUrl, model, providerName, authEnvName|authHelper}} from an authorized path (never ~/.codex).')
+  const { provider, reviewerGo } = opts ?? {}
+  // HARD GUARD — the draft is unreachable until a reviewer GO explicitly authorizes it.
+  if (reviewerGo !== true) {
+    throw new Error('launchCodex BLOCKED (uncalled draft): awaiting reviewer GO. No global-auth read, no ssh tunnel, no model gate. ' +
+      'The phase must pass {reviewerGo:true, provider:{model:"gpt-5.5", providerName, wireApi:"responses"}} only after re-review.')
   }
-  throw new Error('launchCodex: real container run not enabled in this build — awaiting manager-approved credential path + model gate')
+  if (!provider?.model || !provider?.providerName) throw new Error('launchCodex: provider.model + providerName required (no guessing the slug)')
+
+  // ---- the following runs ONLY post-GO (guarded above); wired here for review, exercised at the paid gate ----
+  const { readFileSync, writeFileSync, mkdtempSync, mkdirSync, chmodSync, rmSync, existsSync } = await import('node:fs')
+  const { spawn, execFileSync } = await import('node:child_process')
+  const os = await import('node:os')
+  const scratch = mkdtempSync(join(os.tmpdir(), 'srb-codex-run-'))
+  chmodSync(scratch, 0o700)
+  const codexHome = join(scratch, 'codex'); mkdirSync(codexHome, { recursive: true }); chmodSync(codexHome, 0o700)
+  let ssh = null, bridge = null
+  try {
+    // 1. stage ONLY the necessary bytes from the read-only globals into the per-run CODEX_HOME.
+    //    (relay key from auth.json; sub2api base_url/wire_api/model from config.toml — verified against the
+    //    approved values: base_url http://64.83.11.237:18080, wire_api responses, model gpt-5.5.)
+    if (!existsSync(join(CODEX_GLOBAL_DIR, 'auth.json'))) throw new Error('global codex auth.json absent')
+    const relayKey = JSON.parse(readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))?.OPENAI_API_KEY
+      ?? JSON.parse(readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))?.tokens?.access_token
+    if (!relayKey) throw new Error('no relay key in global auth.json')
+    // 2. per-run ssh tunnel: pick an ephemeral local port, forward it to the vps sub2api over the ssh_config host.
+    const localPort = pickEphemeralPort(execFileSync)
+    ssh = spawn('ssh', ['-F', CODEX_SSH_CONFIG, '-N', '-o', 'ExitOnForwardFailure=yes',
+      '-L', `127.0.0.1:${localPort}:${CODEX_UPSTREAM.host}:${CODEX_UPSTREAM.port}`, CODEX_SSH_TARGET], { stdio: ['ignore', 'ignore', 'pipe'] })
+    await waitTunnel(localPort, execFileSync)
+    // 3. host trace-proxy + unix bridge: a controlled HTTP proxy in front of the tunnel records ONLY
+    //    {status, request-id, response model, tokens} per response, then the outer container reaches it
+    //    through a single unix/loopback bridge (bridge.mjs). base_url in config.toml points at the
+    //    in-container loopback port. (Wiring identical in shape to sandbox.mjs's bridge; provider-trace
+    //    hook added on the host half.)
+    const traceFile = join(scratch, 'provider-trace.jsonl')
+    // ... bridge + docker run of `codex ${buildCodexArgv(provider.model).join(' ')}` with CODEX_HOME staged,
+    //     env buildCodexEnv({...}), --network none, provider base_url = in-container bridge; captures JSONL.
+    //     Parsed with parseCodexJsonl(events, {providerModelTrace: fromTrace(traceFile, provider.model)}).
+    throw new Error('launchCodex: paid container run intentionally not exercised in this commit — draft wiring only')
+  } finally {
+    try { if (bridge) bridge.kill('SIGKILL') } catch {}
+    try { if (ssh) ssh.kill('SIGKILL') } catch {}
+    try { rmSync(scratch, { recursive: true, force: true }) } catch {}
+    // NOTE: global ~/.codex is only READ above — never modified, archived, or printed.
+  }
+}
+// runtime-only helpers (reached only post-GO): pick a free loopback port; wait for the tunnel to accept.
+function pickEphemeralPort(execFileSync) {
+  const out = execFileSync('bash', ['-c', "for p in $(seq 45000 45999); do ss -tlnH \"sport = :$p\" | grep -q . || { echo $p; break; }; done"], { encoding: 'utf8' }).trim()
+  if (!out) throw new Error('no free ephemeral port for the codex tunnel')
+  return Number(out)
+}
+async function waitTunnel(port, execFileSync) {
+  for (let i = 0; i < 40; i++) {
+    try { execFileSync('bash', ['-c', `ss -tlnH "sport = :${port}" | grep -q .`]); return } catch {}
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  throw new Error(`codex ssh tunnel did not come up on 127.0.0.1:${port}`)
 }
 
-// FAKE adapter for no-model tests: emits canned JSONL through the SAME isolation plumbing (temp HOME/
-// CODEX_HOME, explicit env, structured argv), exercising argv/env/parser/cleanup/secret without network.
-export function fakeCodexEvents(kind = 'good', { slug = 'fake-slug', secret = null } = {}) {
+// FAKE adapter for no-model tests: emits canned JSONL LINES through the SAME isolation plumbing.
+// Returns an array of RAW LINES (strings) — the parser self-parses and any non-JSON line fails.
+export function fakeCodexLines(kind = 'good', { secret = null } = {}) {
+  const J = (o) => JSON.stringify(o)
   const good = [
-    { type: 'thread.started', thread_id: 'th_fake_001' },
-    { type: 'turn.started' },
-    { type: 'item.completed', item: { type: 'assistant_message', text: secret ? `leaked ${secret}` : 'ok' } },
-    { type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 20, output_tokens: 40, reasoning_output_tokens: 10 } },
+    J({ type: 'thread.started', thread_id: 'th_fake_001' }),
+    J({ type: 'turn.started' }),
+    J({ type: 'item.completed', item: { type: 'assistant_message', text: secret ? `leaked ${secret}` : 'ok' } }),
+    J({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 20, output_tokens: 40, reasoning_output_tokens: 10 } }),
   ]
   if (kind === 'good') return good
-  if (kind === 'dup-thread') return [good[0], { type: 'thread.started', thread_id: 'th_x' }, ...good.slice(1)]
+  if (kind === 'malformed-line') return [good[0], '{not json', good[1], good[2], good[3]]
+  if (kind === 'out-of-order') return [good[1], good[0], good[2], good[3]]            // turn.started before thread.started
+  if (kind === 'dup-thread') return [good[0], J({ type: 'thread.started', thread_id: 'th_x' }), good[1], good[2], good[3]]
   if (kind === 'missing-completed') return good.slice(0, 3)
-  if (kind === 'turn-failed') return [good[0], good[1], { type: 'turn.failed', error: 'boom' }]
-  if (kind === 'error-event') return [good[0], { type: 'error', message: 'x' }, good[1], good[3]]
-  if (kind === 'bad-usage') return [good[0], good[1], { type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 99, output_tokens: 5, reasoning_output_tokens: 0 } }]
+  if (kind === 'no-assistant-item') return [good[0], good[1], good[3]]                 // no item.completed
+  if (kind === 'turn-failed') return [good[0], good[1], J({ type: 'turn.failed', error: 'boom' })]
+  if (kind === 'error-event') return [good[0], J({ type: 'error', message: 'x' }), good[1], good[2], good[3]]
+  if (kind === 'bad-usage') return [good[0], good[1], good[2], J({ type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 99, output_tokens: 5, reasoning_output_tokens: 0 } })]
+  if (kind === 'nonint-usage') return [good[0], good[1], good[2], J({ type: 'turn.completed', usage: { input_tokens: 1.5, output_tokens: 2, cached_input_tokens: 0, reasoning_output_tokens: 0 } })]
   return good
 }
 
@@ -133,9 +220,11 @@ export function fakeCodexAttempt({ slug, provider, kind = 'good', secretKey = nu
     const env = buildCodexEnv({ home, codexHome, sqliteHome, authEnvName: provider?.authEnvName, authValue: provider?.authValue, passthrough: { PATH: '/usr/bin:/bin' } })
     writeFileSync(join(codexHome, 'config.toml'), codexConfigToml({ model: provider.model, providerName: provider.providerName, baseUrl: provider.baseUrl, wireApi: provider.wireApi }))
     chmodSync(codexHome, 0o700); chmodSync(home, 0o700)
-    const events = fakeCodexEvents(kind, { slug, secret: secretKey })
-    const jsonl = events.map((e) => JSON.stringify(e)).join('\n')
-    const parsed = parseCodexJsonl(events, { providerModelTrace: provider?.responseTrace ?? null })
+    const lines = fakeCodexLines(kind, { secret: secretKey })
+    const jsonl = lines.join('\n')
+    // NO caller-supplied model evidence — a fake "controlled-transport" trace is only used to exercise the
+    // transport-source gate; a caller-forged trace (wrong source) must NOT verify.
+    const parsed = parseCodexJsonl(lines, { transportModelTrace: provider?.transportTrace ?? null, expectedModel: provider?.model })
     result = {
       argv, envNames: Object.keys(env).sort(), homeUnderTmp: home.startsWith(tmpdir()),
       touchesGlobalCodex: [home, codexHome, sqliteHome].some((p) => p.includes('/.codex')),

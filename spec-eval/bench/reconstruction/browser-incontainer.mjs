@@ -47,8 +47,11 @@ export const MarkerType={ArrowClosed:'arrowclosed'}
 export function useReactFlow(){return {fitView(){},setCenter(){},getZoom(){return 1}}}`,
   '@xyflow/react/dist/style.css': `export default ''`,
 }
+// RACE driver runs on the POLL harness (mount + one poll tick → 2 in-flight). SINGLE driver runs on the
+// NO-POLL harness (interval disabled → EXACTLY the one mount reload); it asserts pending===1 before
+// resolving, and that a NEVER-UPDATES impl (which produces no #srb-sessions text) fails.
 const RACE_DRIVER = `(async()=>{const s=window.__srb;const t=Date.now();while((s.pending?.length??0)<2&&Date.now()-t<4000)await new Promise(r=>setTimeout(r,20));if((s.pending?.length??0)<2)return{error:'lt2',n:s.pending?.length??0};s.pending[1]({nodes:[],sessions:[{id:'keep'}]});await new Promise(r=>setTimeout(r,40));s.pending[0]({nodes:[],sessions:[{id:'keep'},{id:'stale'}]});await new Promise(r=>setTimeout(r,120));const e=document.getElementById('srb-sessions');const x=e?e.textContent:null;return{text:x,freshWins:x==='keep',staleAppeared:!!(x&&x.includes('stale'))}})()`
-const SINGLE_DRIVER = `(async()=>{const s=window.__srb;const t=Date.now();while((s.pending?.length??0)<1&&Date.now()-t<4000)await new Promise(r=>setTimeout(r,20));if((s.pending?.length??0)<1)return{error:'lt1'};s.pending[0]({nodes:[],sessions:[{id:'solo'}]});await new Promise(r=>setTimeout(r,120));const e=document.getElementById('srb-sessions');const x=e?e.textContent:null;return{text:x,updated:x==='solo'}})()`
+const SINGLE_DRIVER = `(async()=>{const s=window.__srb;const t=Date.now();while((s.pending?.length??0)<1&&Date.now()-t<4000)await new Promise(r=>setTimeout(r,20));await new Promise(r=>setTimeout(r,200));const n=s.pending?.length??0;if(n!==1)return{error:'expected exactly 1 in-flight reload, got '+n,n};s.pending[0]({nodes:[],sessions:[{id:'solo'}]});await new Promise(r=>setTimeout(r,150));const e=document.getElementById('srb-sessions');const x=e?e.textContent:null;return{text:x,pending:n,updated:x==='solo'}})()`
 
 async function bundle() {
   const esbuild = await import('esbuild')
@@ -56,7 +59,8 @@ async function bundle() {
 import {createRoot} from 'react-dom/client'
 import App from ${JSON.stringify(APP)}
 window.__srb={pending:[]}
-const _si=window.setInterval.bind(window); window.setInterval=(fn,ms,...a)=>_si(fn,Math.min(ms||0,40),...a)
+if(window.__SRB_NO_POLL){window.setInterval=()=>0}   // isolated one-request page: NO poll, only the mount reload
+else{const _si=window.setInterval.bind(window); window.setInterval=(fn,ms,...a)=>_si(fn,Math.min(ms||0,40),...a)}
 createRoot(document.getElementById('root')).render(React.createElement(App))`)
   const stub = { name: 'stub', setup(b) {
     b.onResolve({ filter: /.*/ }, (a) => STUBS[a.path] ? { path: a.path, namespace: 'stub' } : null)
@@ -64,7 +68,9 @@ createRoot(document.getElementById('root')).render(React.createElement(App))`)
   } }
   const r = await esbuild.build({ entryPoints: [`${OUT}/entry.jsx`], bundle: true, format: 'iife', write: false, logLevel: 'silent', jsx: 'automatic', absWorkingDir: '/work', nodePaths: ['/work/node_modules'], plugins: [stub], loader: { '.js': 'jsx' } })
   writeFileSync(`${OUT}/bundle.js`, r.outputFiles[0].text)
-  writeFileSync(`${OUT}/harness.html`, '<!doctype html><html><body><div id="root"></div><script src="bundle.js"></script></body></html>')
+  // POLL harness (race) + NO-POLL harness (single) — the flag is set BEFORE the bundle runs
+  writeFileSync(`${OUT}/race.html`, '<!doctype html><html><body><div id="root"></div><script src="bundle.js"></script></body></html>')
+  writeFileSync(`${OUT}/single.html`, '<!doctype html><html><body><div id="root"></div><script>window.__SRB_NO_POLL=1</script><script src="bundle.js"></script></body></html>')
 }
 
 function launchChrome() {
@@ -97,8 +103,8 @@ const main = async () => {
   try {
     const list = await (await fetch(`http://127.0.0.1:${chrome.port}/json`)).json()   // loopback (lo up under --network none)
     const page = list.find((t) => t.type === 'page') ?? list[0]
-    const single = await cdp(page.webSocketDebuggerUrl, SINGLE_DRIVER, `file://${OUT}/harness.html`)
-    const race = await cdp(page.webSocketDebuggerUrl, RACE_DRIVER, `file://${OUT}/harness.html`)
+    const single = await cdp(page.webSocketDebuggerUrl, SINGLE_DRIVER, `file://${OUT}/single.html`)
+    const race = await cdp(page.webSocketDebuggerUrl, RACE_DRIVER, `file://${OUT}/race.html`)
     process.stdout.write('SRBVERDICT:' + JSON.stringify({ single, race }))
   } finally {
     try { chrome.proc.kill('SIGKILL') } catch {}

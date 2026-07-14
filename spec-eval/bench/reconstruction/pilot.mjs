@@ -13,10 +13,10 @@
 //                  O0/R0/N0 executor arms on the SAME frozen future task (arms differ only in the
 //                  injected neutral bundle; N0 = empty). Every run archived; secret-scanned.
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { launchAgent, secretScan, rawByteScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
+import { launchAgent, secretScan, rawByteScan, scanTreeRaw, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
 import { scoreSpecLint, scoreControls } from './scorer.mjs'
 import { scoreMobileUi, scoreControlsMobile } from './browser-scorer.mjs'
 
@@ -253,15 +253,16 @@ function scopeAnalysis(preSnapDir, workDir, governed) {
 
 // ---- leaf phase (order-balanced blocks): recon is per UNIQUE leaf; arms run per BLOCK in the block's
 // frozen rotation. A repeat block reuses its leaf's cached recon + bundles (recon spent once). ----
-export async function reconLeaf(leaf, cards, c0, credPath, abort) {
+export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir) {
   const id = leaf.id
   // (H) guard on the FIRST line of the exported entry — a direct call (bypassing leafPhase enforcement)
   // must not spend money on a leaf with no real behavioural scorer.
   if (!SCORER_IMPLEMENTED.has(id)) throw new Error(`reconLeaf refused: leaf ${id} has no implemented behavioural scorer (gated blind) — no paid launch`)
   if (!abort || typeof abort !== 'object') throw new Error('reconLeaf refused: missing shared abort state — call via leafPhase')
+  if (!stageDir) throw new Error('reconLeaf refused: missing stageDir — all phase output goes through the staging tree')
   const card = cards.leaves[leaf.relDir]
   if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
-  const base = join(RUNS, 'pilot', 'leaf', id)
+  const base = join(stageDir, 'leaf', id)
   mkdirSync(base, { recursive: true })
   const upstream = upstreamHead()
   // 1. R0 generation snapshot (C0, leaf-masked)
@@ -296,12 +297,13 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort) {
 
 // run ONE order-balanced block: the arms in block.armOrder against the frozen future task, using the
 // leaf's cached recon bundles. Archived under leaf/<id>/block-<n>/arm-<arm> (disambiguates a repeat).
-export async function runBlock(block, leaf, ctx, credPath, abort) {
+export async function runBlock(block, leaf, ctx, credPath, abort, stageDir) {
   if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runBlock refused: leaf ${block.leafId} has no behavioural scorer`)
   if (!abort || typeof abort !== 'object') throw new Error('runBlock refused: missing shared abort state')
+  if (!stageDir) throw new Error('runBlock refused: missing stageDir — all phase output goes through the staging tree')
   const { card, bundles, upstream } = ctx
   const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
-  const bdir = join(RUNS, 'pilot', 'leaf', block.leafId, `block-${block.block}`)
+  const bdir = join(stageDir, 'leaf', block.leafId, `block-${block.block}`)
   mkdirSync(bdir, { recursive: true })
   const arms = {}
   for (const arm of block.armOrder) {
@@ -350,6 +352,13 @@ export async function leafPhase({ credPath }) {
   const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
   const cards = JSON.parse(readFileSync(join(HERE, 'task-cards.json'), 'utf8'))
   const abort = { stopped: false, reason: null }
+  // (4) EVERY byte this phase produces goes into a staging tree first; nothing is published in place.
+  // At the end the WHOLE archive is fail-closed raw-scanned and staging is promoted by ONE atomic rename
+  // (or quarantined). A crash mid-phase leaves only .STAGING — never a half-published archive.
+  const STAGE = join(RUNS, 'pilot', 'phase-leaf.STAGING')
+  const FINAL = join(RUNS, 'pilot', 'phase-leaf')
+  rmSync(STAGE, { recursive: true, force: true })
+  mkdirSync(STAGE, { recursive: true })
 
   // (6) phase enforcement — bind to the exact frozen inputs + committed runner/image + the prior-stage
   // traces, not operator memory. (A) preflight.json, check.json and the verify-model trace must ALL exist,
@@ -385,13 +394,13 @@ export async function leafPhase({ credPath }) {
   const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
   if (specLintLeaf) {
     const ctl = scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)
-    writeFileSync(join(RUNS, 'pilot', 'scorer-controls-spec-lint.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
+    writeFileSync(join(STAGE, 'scorer-controls-spec-lint.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
     E('scorer-controls-spec-lint', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
   }
   if (mobileLeaf) {
     const ctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState)
-    writeFileSync(join(RUNS, 'pilot', 'scorer-controls-mobile.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
-    E('scorer-controls-mobile', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
+    writeFileSync(join(STAGE, 'scorer-controls-mobile.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
+    E('scorer-controls-mobile', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, unchanged ${ctl.negatives?.unchanged.passed}/${ctl.negatives?.unchanged.total}, never-updates ${ctl.negatives?.neverUpdates.passed}/${ctl.negatives?.neverUpdates.total}`)
   }
 
   // gate: only leaves whose behavioural scorer is implemented run paid arms; others are declared blind
@@ -405,51 +414,51 @@ export async function leafPhase({ credPath }) {
   // recon is spent ONCE per unique leaf; blocks (incl the repeat) reuse the cached recon/bundles.
   const reconCtx = {}, results = [], failures = []
   const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
-  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort)))
+  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE)))
   reconSettled.forEach((s, i) => { if (s.status === 'fulfilled') reconCtx[uniqueLeafIds[i]] = s.value; else failures.push({ stage: 'recon', leaf: uniqueLeafIds[i], error: String(s.reason?.message ?? s.reason) }) })
   // run the 3 order-balanced blocks concurrently; shared abort halts new launches after any hard failure
   const blockSettled = await Promise.allSettled(blocks.map((b) => {
     const leaf = tasks.leaves.find((l) => l.id === b.leafId)
     const ctx = reconCtx[b.leafId]
     if (!ctx) return Promise.reject(new Error(`block ${b.block}: recon for ${b.leafId} unavailable (recon failed/aborted)`))
-    return runBlock(b, leaf, ctx, credPath, abort)
+    return runBlock(b, leaf, ctx, credPath, abort, STAGE)
   }))
   blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
   const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
-  // (2) write the report FIRST, then scan EVERY byte in the archive INCLUDING the report itself; on any
-  // hit, atomically quarantine the whole archive and fail nonzero — the scan result gates the rc.
-  const report = { v: 4, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
-  writeFileSync(join(RUNS, 'pilot', 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
-  const finalScan = finalArchiveScan(join(RUNS, 'pilot'), credPath)
-  writeFileSync(join(RUNS, 'pilot', 'final-scan.json'), JSON.stringify({ at: nowIso(), ...finalScan }, null, 2) + '\n')
-  report.finalArchiveScan = finalScan
-  if (!finalScan.clean) {
+  // (4) final gate over the COMPLETE archive: report first, then a fail-closed raw scan of EVERY byte
+  // under runs/pilot (prior stages + this staging tree). The scan verdict is itself published bytes
+  // (embedded in the report + final-scan.json), so scan→embed→RE-SCAN until the verdict of the final
+  // on-disk bytes is count-stable — the LAST act before promotion is always a scan, never a write. No
+  // fixpoint in 3 passes = unclean (fail-closed). Clean → ONE atomic rename publishes the staging tree;
+  // unclean → the whole pilot archive is quarantined, and a failed quarantine move is FATAL, not a log line.
+  const report = { v: 6, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
+  writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
+  let key = null; try { key = readCredential(credPath) } catch {}
+  const summarize = (s) => ({ scannedFiles: s.scannedFiles, keyHits: s.keyHits, prefixHits: s.prefixHits, b64Hits: s.b64Hits, scanError: s.scanError, errors: s.errors, clean: s.clean })
+  let scan = key ? scanTreeRaw(join(RUNS, 'pilot'), key) : { scannedFiles: 0, keyHits: null, prefixHits: null, b64Hits: null, scanError: true, errors: ['credential unreadable — cannot certify archive'], clean: false }
+  let stable = false
+  for (let pass = 1; key && pass <= 3 && !stable; pass++) {
+    report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
+    writeFileSync(join(STAGE, 'final-scan.json'), JSON.stringify({ at: nowIso(), pass, scanRoot: 'runs/pilot', ...summarize(scan) }, null, 2) + '\n')
+    writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
+    const re = scanTreeRaw(join(RUNS, 'pilot'), key)
+    stable = re.clean === scan.clean && re.scanError === scan.scanError && re.keyHits === scan.keyHits && re.prefixHits === scan.prefixHits && re.b64Hits === scan.b64Hits
+    scan = re
+  }
+  if (!report.finalArchiveScan) report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
+  const publishable = stable && scan.clean
+  if (publishable) {
+    rmSync(FINAL, { recursive: true, force: true })
+    renameSync(STAGE, FINAL)                       // atomic promote: same parent, one rename
+    report.publishedTo = FINAL
+  } else {
     const q = join(RUNS, 'pilot') + '.QUARANTINE'
-    try { rmSync(q, { recursive: true, force: true }); execFileSync('mv', [join(RUNS, 'pilot'), q]) } catch {}
+    rmSync(q, { recursive: true, force: true })
+    try { renameSync(join(RUNS, 'pilot'), q) }
+    catch (e) { throw new Error(`FATAL: archive unclean/unstable (${JSON.stringify(summarize(scan))}, stable=${stable}) AND quarantine move failed: ${e.message} — do not publish`) }
     report.quarantined = q
   }
   return report
-}
-
-// (2)(C) scan EVERY file under the pilot archive (text AND binary) for the credential — exact key bytes on
-// the raw Buffer + prefix + base64 (on both text and base64-of-bytes). prefixHits counts into cleanliness.
-// A hit means credential bytes already reached disk; the caller atomically quarantines and fails nonzero.
-function finalArchiveScan(dir, credPath) {
-  let key = null
-  try { key = readCredential(credPath) } catch { return { scanned: 0, clean: false, note: 'credential unreadable — cannot certify archive clean' } }
-  let scanned = 0, keyHits = 0, prefixHits = 0, b64Hits = 0, diagUtf8Hits = 0
-  const hitFiles = []
-  for (const rel of walkRel(dir)) {
-    const abs = join(dir, rel)
-    let buf = null; try { buf = readFileSync(abs) } catch { continue }
-    scanned++
-    const raw = rawByteScan(buf, key)                 // AUTHORITATIVE raw-byte gate
-    const diag = secretScan(buf.toString('utf8'), key) // additional diagnostic only
-    if (raw.keyHits || raw.prefixHits || raw.b64Hits) hitFiles.push(rel)
-    keyHits += raw.keyHits; prefixHits += raw.prefixHits; b64Hits += raw.b64Hits
-    diagUtf8Hits += diag.keyHits + diag.b64Hits
-  }
-  return { scanned, keyHits, prefixHits, b64Hits, diagUtf8Hits, clean: keyHits === 0 && b64Hits === 0 && prefixHits === 0, hitFiles: hitFiles.slice(0, 20) }
 }
 
 // ---- CLI ----
@@ -483,7 +492,8 @@ if (sub === 'preflight') {
     for (const a of b.armOrder) console.log(`    ${a}: model=${JSON.stringify(b.arms[a].trace.model.observedSet)} score=${b.arms[a].score.passed}/${b.arms[a].score.total} scope-viol=${b.arms[a].scopeViolations} in/out=${b.arms[a].trace.tokens.input}/${b.arms[a].trace.tokens.output}`)
   }
   for (const f of report.failures) console.log(`  STOP [${f.stage ?? ''} ${f.leaf ?? ''}${f.block != null ? '#' + f.block : ''}]: ${f.error}`)
-  process.exit(report.failures.length || report.aborted || (report.finalArchiveScan && !report.finalArchiveScan.clean) ? 1 : 0)
+  console.log(report.publishedTo ? `  published (atomic promote): ${report.publishedTo}` : `  NOT published — quarantined: ${report.quarantined ?? 'n/a'} (finalArchiveScan=${JSON.stringify(report.finalArchiveScan)})`)
+  process.exit(report.failures.length || report.aborted || !report.publishedTo ? 1 : 0)
 } else if (sub === 'check') {
   // NO-MODEL regression + control suite — must pass rc0 BEFORE any paid run. Runs every gate that
   // needs no paid call: usage aggregation regression, scorer positive/negative controls, frozen frames,
@@ -500,7 +510,7 @@ if (sub === 'preflight') {
   const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
   let mctl = { discriminates: false }
   if (mobileLeaf) { try { mctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState) } catch (e) { mctl = { __err: String(e.message ?? e) } } }
-  K('scorer-controls-mobile', !!mctl.discriminates, mctl.discriminates ? `positive ${mctl.positive.passed}/${mctl.positive.total}, negative ${mctl.negative.passed}/${mctl.negative.total} (browser/DOM, pre-state rejected)` : `FAILED ${mctl.__err ?? 'no discrimination'}`)
+  K('scorer-controls-mobile', !!mctl.discriminates, mctl.discriminates ? `positive ${mctl.positive.passed}/${mctl.positive.total}, unchanged ${mctl.negatives.unchanged.passed}/${mctl.negatives.unchanged.total}, never-updates ${mctl.negatives.neverUpdates.passed}/${mctl.negatives.neverUpdates.total} (browser/DOM, both negatives rejected)` : `FAILED ${mctl.__err ?? 'no discrimination'}`)
   for (const c of ['select', 'episodes', 'tasks']) { const r = tryRun(c, () => runTs([c, '--check'])); K(`frame-${c}`, !r.__err, r.__err ? `FAILED ${r.__err}` : 'byte-identical') }
   const dry = tryRun('dry', () => runTs(['dry'])); K('dry-oracle', !dry.__err, dry.__err ? `FAILED ${dry.__err}` : 'all gates + twin')
   const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))

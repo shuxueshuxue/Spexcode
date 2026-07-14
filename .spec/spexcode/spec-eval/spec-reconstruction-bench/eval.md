@@ -22,9 +22,10 @@ scenarios:
       三者 exit 0：selection-frozen ✓ 报 c0=038dce1f、cEval=5723eaca、2 leaves、size-matched module
       pair（comms, lifecycle，Δ=1）与 whole；episode-frame-frozen ✓ 报 798 episodes
       （699 pre / 1 migration / 98 post）、482 eligible、primary horizon 430；task-frame-frozen ✓ 报
-      2 leaf future tasks（spec-lint→3f07397f preState fa18935a、mobile-ui→f308cded preState 171b7cf0），
-      即每 leaf 取 first-parent 序最早可回放 eligible episode（机械 replay 排除依赖同 episode 新建兄弟
-      模块的候选）——三个冻结文件从各自 pinned 输入字节级重现，任何不重现立刻非零退出。
+      2 leaf future tasks（spec-lint→episode 185f52b1 preState a02fe430、mobile-ui→episode db80b33d
+      preState 3f07397f），即每 leaf 取 first-parent 序最早可回放 eligible episode（机械 replay 排除
+      依赖同 episode 新建兄弟模块的候选）——三个冻结文件从各自 pinned 输入字节级重现，任何不重现立刻
+      非零退出。
     tags: [cli]
   - name: pilot-preflight-gates
     description: >
@@ -44,26 +45,35 @@ scenarios:
       回归+正负对照套件。
     expected: >
       exit 0：usage-aggregation-regression（cumulative snapshot 不双计、非单调 fail-loud、缺失字段保留
-      前值）、scorer-controls-discriminate（spec-lint 行为 scorer 正控 3/3 通过、负控=pre-state fs-walk
-      lint 被拒 1/3）、frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards
-      sha 匹配 tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录）全绿。
+      前值）、scorer-controls-spec-lint（行为 scorer 正控=committed post-episode lint 3/3 通过、负控=
+      pre-state fs-walk lint 被拒）、scorer-controls-mobile（docker --network none 内 browser/DOM 双
+      harness——race 用 poll 页、single-refresh 用独立 no-poll 页断言恰 1 个 in-flight——正控=committed
+      post-episode App.jsx 3/3，unchanged pre-state 与 never-updates 伪实现两个负控均被拒）、
+      frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配
+      tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录；scorer 镜像
+      每次评分重验 immutable id）全绿。
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
       【付费，等人批预算 + preflight/pilot check 全绿 + 有效 verify-model 后才测】run.ts pilot phase
       --scale leaf：两个 leaf（spec-lint、mobile-ui）各重建 R0（隔离 Claude Code + GLM-5.2 via BigModel
       endpoint，fresh HOME/独立 CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口），
-      再对每 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（counterbalanced 顺序，臂只差中性投影 bundle）。
+      再按 tasks.json 冻结的三个 order-balanced blocks 跑 O0/R0/N0 executor（Latin-square 轮转：
+      block0 spec-lint O0→R0→N0、block1 mobile-ui R0→N0→O0、block2 mobile-ui repeat N0→O0→R0；repeat
+      复用该 leaf 缓存的 recon/bundle，臂只差中性投影 bundle）。
     expected: >
       两 leaf 的 R0 产出结构合法 .spec-recon（frontmatter + 非空 body，required-file&schema 门过）；每 arm
       入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean 全过，否则共享
       abort 停批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
       spec-lint 在 docker --network none 内跑产出 lint（合成 git fixture，tracked-only 覆盖 + testGlobs），
       mobile-ui 用无头 chromium + CDP Network offline 跑产出 App.jsx 驱动 board-poll 竞态（latest-issued 赢、
-      stale 丢）；两者正负 control 均判别（pilot check rc0）；scope 用 pre/post diff（含删除）；每 run 归档
-      trace（endpoint host、HTTP status/request-id、session set、逐字段 token、provenance image-id/claude-
-      digest、mount audit、secret-scan 命中）+ workspace + scorer raw；最终全档 raw+二进制 secret scan
-      （exact/prefix/base64）零命中；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
+      stale 丢）+ 独立 no-poll 页的 single-refresh；两者正负 control 均判别（pilot check rc0）；scope 用
+      pre/post diff（含删除）；每 run 归档 trace（endpoint host、HTTP status/request-id、session set、逐
+      字段 token、provenance image-id/claude-digest、mount audit、secret-scan 命中）+ workspace + scorer
+      raw；phase 全部产出先落 staging 树，终扫用同一 fail-closed scanTreeRaw（raw Buffer exact/prefix/
+      base64，walk/stat/read/symlink/special 任一错误 hard-stop）对整个 runs/pilot 扫到 count-stable，
+      report 内嵌 finalArchiveScan 后原子 rename promote，否则整档 quarantine 且 move 失败 FATAL；失败/
+      gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

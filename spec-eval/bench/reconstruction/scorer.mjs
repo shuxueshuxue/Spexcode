@@ -26,10 +26,13 @@ const ROOT = join(HERE, '../../..')
 // mounted READ-ONLY, and only the throwaway fixture writable. This image has git 2.39 + node 24 + we
 // mount tsx from node_modules. Resolved to an immutable image ID at first use.
 const SANDBOX_IMAGE = 'adopter-a-registry.tencentcloudcr.com/sandbox/adopter-a-e2e:lean'
+// (6) provenance re-verified on EVERY score run: re-inspect each call, must still match the first-pinned
+// immutable ID — a tag swapped mid-batch is fail-loud, never silently used.
 let SANDBOX_IMAGE_ID = null
 function sandboxImageId() {
-  if (SANDBOX_IMAGE_ID) return SANDBOX_IMAGE_ID
-  SANDBOX_IMAGE_ID = execFileSync('docker', ['image', 'inspect', SANDBOX_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
+  const id = execFileSync('docker', ['image', 'inspect', SANDBOX_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
+  if (!SANDBOX_IMAGE_ID) SANDBOX_IMAGE_ID = id
+  else if (id !== SANDBOX_IMAGE_ID) throw new Error(`sandbox image ${SANDBOX_IMAGE} changed since pin (${id} != ${SANDBOX_IMAGE_ID}) — refusing to score`)
   return SANDBOX_IMAGE_ID
 }
 const NM = (() => { try { return execFileSync('readlink', ['-f', join(ROOT, 'node_modules')], { encoding: 'utf8' }).trim() } catch { return join(ROOT, 'node_modules') } })()
@@ -83,7 +86,7 @@ export function scoreSpecLint(workspaceSrcDir) {
       { name: 'testfile-not-flagged', ok: !flagged.has('src/thing.test.ts'), evidence: [...flagged].join(',') },
       { name: 'ungoverned-tracked-flagged', ok: flagged.has('src/ungoverned.ts'), evidence: [...flagged].join(',') },
     ]
-    return { scorer: 'behavioral:spec-lint-fixture-run', checks, passed: checks.filter((c) => c.ok).length, total: checks.length, coverageFindings: cov }
+    return { scorer: 'behavioral:spec-lint-fixture-run', provenance: { image: SANDBOX_IMAGE, imageId: sandboxImageId() }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, coverageFindings: cov }
   } finally {
     rmSync(fixture, { recursive: true, force: true })
   }

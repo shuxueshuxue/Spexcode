@@ -1,79 +1,65 @@
 // no-model isolation + fake controls for the Codex adapter ([[spec-reconstruction-bench]]).
 //   run: node spec-eval/bench/reconstruction/codex.selftest.mjs   (exit 0 = pass)
-// Exercises argv / env-allowlist / global-config-trap / strict parser / cleanup / secret scan WITHOUT any
-// network or model call. The REAL model gate is NOT fired here (blocked on an approved endpoint/credential
-// /slug); launchCodex must refuse.
-import { buildCodexArgv, buildCodexEnv, codexConfigToml, parseCodexJsonl, fakeCodexAttempt, launchCodex, CODEX_ENV_ALLOW } from './codex-adapter.mjs'
-import { secretScan } from './sandbox.mjs'
+// Exercises argv / env-allowlist / global-config-trap / STRICT parser (raw lines, order, unique terminal,
+// assistant output item, finite usage, malformed-line, transport-only model evidence) / cleanup / secret
+// scan WITHOUT any network or model call. The REAL model gate is NOT fired (launchCodex refuses).
+import { buildCodexArgv, buildCodexEnv, codexConfigToml, parseCodexJsonl, fakeCodexLines, fakeCodexAttempt, launchCodex, CODEX_ENV_ALLOW } from './codex-adapter.mjs'
+import { rawByteScan } from './sandbox.mjs'
 
 let failed = 0
 const check = (name, cond, detail = '') => { if (!cond) { failed++; console.log(`  ✗ ${name} ${detail}`) } else console.log(`  ✓ ${name}`) }
+const P = (kind, opts) => parseCodexJsonl(fakeCodexLines(kind), opts)
+const PROVIDER = { model: 'gpt-5.5', providerName: 'sub2api', baseUrl: 'http://127.0.0.1:18080/v1', wireApi: 'responses', authEnvName: 'SRB_CODEX_KEY', authValue: 'FAKEKEY-abc123' }
 
-const PROVIDER = { model: 'fake-slug', providerName: 'sub2api', baseUrl: 'http://127.0.0.1:18080/v1', wireApi: 'responses', authEnvName: 'SRB_CODEX_KEY', authValue: 'FAKEKEY-abc123', responseTrace: { model: 'fake-slug', expected: 'fake-slug' } }
-
-// argv: structured, exact, no split-string, refuses missing slug
+// argv: structured, exact, refuses missing slug
 check('argv-structured', JSON.stringify(buildCodexArgv('m')) === JSON.stringify(['exec', '--json', '--ephemeral', '--ignore-rules', '--skip-git-repo-check', '--sandbox', 'danger-full-access', '-m', 'm']))
-let argvThrew = false; try { buildCodexArgv() } catch { argvThrew = true }
-check('argv-refuses-missing-slug', argvThrew)
+let t = false; try { buildCodexArgv() } catch { t = true } check('argv-refuses-missing-slug', t)
 
-// env: explicit allowlist only + isolation vars; ambient not inherited
-process.env.SRB_LEAKY_VAR = 'should-not-appear'
+// env: allowlist only, no ambient inheritance
+process.env.SRB_LEAKY_VAR = 'nope'
 const env = buildCodexEnv({ home: '/t/h', codexHome: '/t/c', sqliteHome: '/t/s', authEnvName: 'SRB_CODEX_KEY', authValue: 'K', passthrough: { PATH: '/usr/bin', SRB_LEAKY_VAR: 'x' } })
-check('env-no-ambient-inheritance', !('SRB_LEAKY_VAR' in env) || env.SRB_LEAKY_VAR === undefined, JSON.stringify(Object.keys(env)))
+check('env-no-ambient', !('SRB_LEAKY_VAR' in env))
 check('env-allowlist-only', Object.keys(env).every((k) => CODEX_ENV_ALLOW.includes(k) || ['HOME', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'SRB_CODEX_KEY'].includes(k)))
-check('env-sets-isolation-homes', env.HOME === '/t/h' && env.CODEX_HOME === '/t/c' && env.CODEX_SQLITE_HOME === '/t/s')
+check('env-isolation-homes', env.HOME === '/t/h' && env.CODEX_HOME === '/t/c' && env.CODEX_SQLITE_HOME === '/t/s')
 delete process.env.SRB_LEAKY_VAR
 
-// config.toml provider row shape
-const toml = codexConfigToml({ model: 'm', providerName: 'sub2api', baseUrl: 'http://x', wireApi: 'responses' })
-check('config-provider-row', /model = "m"/.test(toml) && /\[model_providers\.sub2api\]/.test(toml) && /wire_api = "responses"/.test(toml) && /base_url = "http:\/\/x"/.test(toml))
+// config.toml: provider row + value escaping + bare-identifier guard
+check('config-provider-row', /model = "m"/.test(codexConfigToml({ model: 'm', providerName: 'sub2api', baseUrl: 'http://x' })) && /\[model_providers\.sub2api\]/.test(codexConfigToml({ model: 'm', providerName: 'sub2api', baseUrl: 'http://x' })))
+check('config-escapes-quotes', /base_url = "http:\/\/x\\"evil"/.test(codexConfigToml({ model: 'm', providerName: 'p', baseUrl: 'http://x"evil' })))
+let ct = false; try { codexConfigToml({ model: 'm', providerName: 'bad name', baseUrl: 'x' }) } catch { ct = true } check('config-rejects-bad-provider-name', ct)
 
-// parser: good stream ok; each malformed variant fails
-check('parser-good', parseCodexJsonl(fakeEvents('good')).ok === true)
-check('parser-dup-thread-fails', parseCodexJsonl(fakeEvents('dup-thread')).ok === false)
-check('parser-missing-completed-fails', parseCodexJsonl(fakeEvents('missing-completed')).ok === false)
-check('parser-turn-failed-fails', parseCodexJsonl(fakeEvents('turn-failed')).ok === false)
-check('parser-error-event-fails', parseCodexJsonl(fakeEvents('error-event')).ok === false)
-check('parser-bad-usage-fails', parseCodexJsonl(fakeEvents('bad-usage')).ok === false)
-// usage is the terminal snapshot, not summed
-const goodParsed = parseCodexJsonl(fakeEvents('good'))
-check('usage-terminal-snapshot', goodParsed.tokens?.input === 100 && goodParsed.tokens?.output === 40 && goodParsed.tokens?.cached === 20)
-// model unverified without a provider trace (CLI JSONL has no model id)
-check('model-unverified-without-trace', parseCodexJsonl(fakeEvents('good'), {}).modelVerified === false)
-check('model-verified-with-matching-trace', parseCodexJsonl(fakeEvents('good'), { providerModelTrace: { model: 'x', expected: 'x' } }).modelVerified === true)
-check('model-unverified-with-mismatch-trace', parseCodexJsonl(fakeEvents('good'), { providerModelTrace: { model: 'y', expected: 'x' } }).modelVerified === false)
+// STRICT parser
+check('parser-good', P('good').ok === true)
+check('parser-malformed-line-fails', P('malformed-line').ok === false)
+check('parser-out-of-order-fails', P('out-of-order').ok === false)
+check('parser-dup-thread-fails', P('dup-thread').ok === false)
+check('parser-missing-completed-fails', P('missing-completed').ok === false)
+check('parser-no-assistant-item-fails', P('no-assistant-item').ok === false)
+check('parser-turn-failed-fails', P('turn-failed').ok === false)
+check('parser-error-event-fails', P('error-event').ok === false)
+check('parser-bad-usage-fails', P('bad-usage').ok === false)
+check('parser-noninteger-usage-fails', P('nonint-usage').ok === false)
+check('usage-terminal-snapshot', P('good').tokens?.input === 100 && P('good').tokens?.output === 40 && P('good').tokens?.cached === 20)
 
-// full fake attempt: isolation + cleanup + secret scan
-const good = fakeCodexAttempt({ slug: 'fake-slug', provider: PROVIDER, kind: 'good', scanFn: secretScan })
+// model evidence ONLY from the controlled transport — a caller-forged trace (wrong source) must NOT verify
+check('model-unverified-without-trace', P('good').modelVerified === false)
+check('model-unverified-with-forged-caller-trace', P('good', { transportModelTrace: { model: 'gpt-5.5' }, expectedModel: 'gpt-5.5' }).modelVerified === false)
+check('model-verified-only-from-transport', P('good', { transportModelTrace: { source: 'controlled-http-transport', model: 'gpt-5.5' }, expectedModel: 'gpt-5.5' }).modelVerified === true)
+check('model-unverified-on-slug-mismatch', P('good', { transportModelTrace: { source: 'controlled-http-transport', model: 'other' }, expectedModel: 'gpt-5.5' }).modelVerified === false)
+
+// full fake attempt: isolation + cleanup + secret scan (raw-byte helper)
+const good = fakeCodexAttempt({ slug: 'gpt-5.5', provider: PROVIDER, kind: 'good', scanFn: (blob, k) => rawByteScan(Buffer.from(blob, 'utf8'), k) })
 check('attempt-home-under-tmp', good.homeUnderTmp === true)
 check('attempt-no-global-codex-touch', good.touchesGlobalCodex === false)
 check('attempt-config-written', good.configHasProvider === true)
 check('attempt-cleanup', good.cleanedUp === true)
 check('attempt-good-parses', good.parsed.ok === true)
-const leaky = fakeCodexAttempt({ slug: 'fake-slug', provider: PROVIDER, kind: 'good', secretKey: 'FAKEKEY-abc123', scanFn: secretScan })
+const leaky = fakeCodexAttempt({ slug: 'gpt-5.5', provider: PROVIDER, kind: 'good', secretKey: 'FAKEKEY-abc123', scanFn: (blob, k) => rawByteScan(Buffer.from(blob, 'utf8'), k) })
 check('attempt-secret-scan-catches-leak', leaky.secretScanResult && leaky.secretScanResult.keyHits >= 1, JSON.stringify(leaky.secretScanResult))
 
-// REAL launch must refuse without an approved provider config, and even with one (not enabled in build)
-let noProvThrew = false; try { await launchCodex({}) } catch { noProvThrew = true }
-check('launchCodex-blocked-without-provider', noProvThrew)
-let withProvThrew = false; try { await launchCodex({ provider: PROVIDER }) } catch { withProvThrew = true }
-check('launchCodex-blocked-real-run', withProvThrew)
-
-function fakeEvents(kind) {
-  // mirror fakeCodexEvents shapes for direct parser tests
-  const good = [
-    { type: 'thread.started', thread_id: 'th_1' }, { type: 'turn.started' },
-    { type: 'item.completed', item: { type: 'assistant_message', text: 'ok' } },
-    { type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 20, output_tokens: 40, reasoning_output_tokens: 10 } },
-  ]
-  if (kind === 'good') return good
-  if (kind === 'dup-thread') return [good[0], { type: 'thread.started', thread_id: 'th_2' }, ...good.slice(1)]
-  if (kind === 'missing-completed') return good.slice(0, 3)
-  if (kind === 'turn-failed') return [good[0], good[1], { type: 'turn.failed', error: 'boom' }]
-  if (kind === 'error-event') return [good[0], { type: 'error', message: 'x' }, good[1], good[3]]
-  if (kind === 'bad-usage') return [good[0], good[1], { type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 99, output_tokens: 5, reasoning_output_tokens: 0 } }]
-  return good
-}
+// REAL launch refuses without reviewer GO (uncalled draft)
+let g1 = false; try { await launchCodex({}) } catch { g1 = true } check('launchCodex-blocked-no-go', g1)
+let g2 = false; try { await launchCodex({ provider: PROVIDER }) } catch { g2 = true } check('launchCodex-blocked-without-reviewerGo', g2)
 
 console.log(failed ? `\nCODEX SELFTEST FAILED (${failed})` : '\ncodex selftest ✓ all pass (no model call; real gate blocked)')
 process.exit(failed ? 1 : 0)

@@ -1,7 +1,11 @@
 // raw-byte secret-scan regression ([[spec-reconstruction-bench]]) — proves the archive gate catches the
-// credential's exact / prefix / base64-literal bytes embedded in BINARY blobs (NUL-surrounded), and stays
-// clean on innocent binary. run: node spec-eval/bench/reconstruction/scan.selftest.mjs   (exit 0 = pass)
-import { rawByteScan } from './sandbox.mjs'
+// credential's exact / prefix / base64-literal bytes embedded in BINARY blobs (NUL-surrounded), stays
+// clean on innocent binary, and that the shared FAIL-CLOSED tree scan hard-stops on symlink / unreadable
+// / missing-root instead of silently skipping. run: node spec-eval/bench/reconstruction/scan.selftest.mjs
+import { rawByteScan, scanTreeRaw } from './sandbox.mjs'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 let failed = 0
 const check = (name, cond, detail = '') => { if (!cond) { failed++; console.log(`  ✗ ${name} ${detail}`) } else console.log(`  ✓ ${name}`) }
@@ -33,6 +37,36 @@ check('clean-binary-negative', rClean.keyHits === 0 && rClean.prefixHits === 0 &
 // counts multiple occurrences
 const twice = Buffer.concat([Buffer.from(KEY), NUL, Buffer.from(KEY)])
 check('counts-occurrences', rawByteScan(twice, KEY).keyHits === 2)
+
+// ---- scanTreeRaw: the shared fail-closed tree gate ----
+const tree = (build) => { const d = mkdtempSync(join(tmpdir(), 'srb-scantree-')); build(d); return d }
+
+// clean tree → clean, every file counted
+const tClean = tree((d) => { mkdirSync(join(d, 'sub')); writeFileSync(join(d, 'a.txt'), 'hello'); writeFileSync(join(d, 'sub/b.bin'), NUL) })
+const rTreeClean = scanTreeRaw(tClean, KEY)
+check('tree-clean', rTreeClean.clean === true && rTreeClean.scanError === false && rTreeClean.scannedFiles === 2, JSON.stringify(rTreeClean))
+
+// planted key deep in the tree → hit, unclean
+const tPlant = tree((d) => { mkdirSync(join(d, 'deep/deeper'), { recursive: true }); writeFileSync(join(d, 'deep/deeper/leak.bin'), Buffer.concat([NUL, Buffer.from(KEY)])) })
+const rTreePlant = scanTreeRaw(tPlant, KEY)
+check('tree-planted-key-caught', rTreePlant.keyHits === 1 && rTreePlant.clean === false, JSON.stringify(rTreePlant))
+
+// symlink anywhere → HARD scanError, walk stops (file behind it never certified)
+const tLink = tree((d) => { writeFileSync(join(d, 'a.txt'), 'x'); symlinkSync('/etc/hostname', join(d, 'escape')) })
+const rTreeLink = scanTreeRaw(tLink, KEY)
+check('tree-symlink-hard-stop', rTreeLink.scanError === true && rTreeLink.clean === false && rTreeLink.errors.some((e) => /symlink/.test(e)), JSON.stringify(rTreeLink.errors))
+
+// unreadable file → HARD scanError (never a silent skip)
+const tPerm = tree((d) => { writeFileSync(join(d, 'locked.bin'), 'x'); chmodSync(join(d, 'locked.bin'), 0o000) })
+const rTreePerm = scanTreeRaw(tPerm, KEY)
+check('tree-unreadable-hard-stop', rTreePerm.scanError === true && rTreePerm.clean === false, JSON.stringify(rTreePerm.errors))
+chmodSync(join(tPerm, 'locked.bin'), 0o600)
+
+// missing scan root → fail-closed scanError, NOT an empty clean pass
+const rTreeMissing = scanTreeRaw(join(tmpdir(), 'srb-scantree-definitely-absent'), KEY)
+check('tree-missing-root-fail-closed', rTreeMissing.scanError === true && rTreeMissing.clean === false, JSON.stringify(rTreeMissing.errors))
+
+for (const d of [tClean, tPlant, tLink, tPerm]) rmSync(d, { recursive: true, force: true })
 
 console.log(failed ? `\nSCAN SELFTEST FAILED (${failed})` : '\nscan selftest ✓ all pass')
 process.exit(failed ? 1 : 0)

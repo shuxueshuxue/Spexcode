@@ -53,15 +53,43 @@ export function walkFiles(dir, base = dir) {
 }
 const readTextSafe = (abs) => { try { const b = readFileSync(abs); return b.subarray(0, 4096).includes(0) ? null : b.toString('utf8') } catch { return null } }
 
-// RAW-BYTE scan: count occurrences of the credential's exact / prefix / base64-literal bytes directly in a
-// Buffer (Buffer.includes on Buffer needles) — encoding-independent and the AUTHORITATIVE archive gate.
-// A UTF-8 secretScan is only an additional diagnostic, never the raw-byte gate.
+// RAW-BYTE scan of a single Buffer (exact / prefix / base64-literal). AUTHORITATIVE; UTF-8 is diagnostic.
 export function rawByteScan(buf, key) {
   const count = (needle) => { let n = 0, i = 0; while ((i = buf.indexOf(needle, i)) !== -1) { n++; i += needle.length } return n }
   const keyBuf = Buffer.from(key)
   const prefixBuf = Buffer.from(key.slice(0, 6))
   const b64Buf = Buffer.from(Buffer.from(key).toString('base64'))
   return { keyHits: count(keyBuf), prefixHits: prefixBuf.length >= 4 ? count(prefixBuf) : 0, b64Hits: count(b64Buf) }
+}
+
+// (2)(3) FAIL-CLOSED tree scan, shared by the per-run archive scan and the final staging scan (ONE
+// helper, no per-run vs final divergence). Any walk/stat/read failure, symlink, special/non-regular
+// file — or a missing scan root — HARD-STOPS the walk immediately: scanError=true, clean=false. Never
+// a silent skip; a tree this scan cannot fully read is a tree it will not certify.
+export function scanTreeRaw(dir, key) {
+  let keyHits = 0, prefixHits = 0, b64Hits = 0, scannedFiles = 0
+  const errors = []
+  const fail = (msg) => { errors.push(msg); return false }   // hard-stop: first error ends the walk
+  const walk = (d) => {
+    let ents
+    try { ents = readdirSync(d, { withFileTypes: true }) } catch (e) { return fail(`readdir ${d}: ${e.code ?? e.message}`) }
+    for (const ent of ents) {
+      const p = join(d, ent.name)
+      if (ent.isSymbolicLink()) return fail(`symlink not permitted in archive: ${p}`)
+      let st
+      try { st = statSync(p, { throwIfNoEntry: true }) } catch (e) { return fail(`stat ${p}: ${e.code ?? e.message}`) }
+      if (ent.isDirectory()) { if (!walk(p)) return false; continue }
+      if (!ent.isFile() || !st.isFile()) return fail(`non-regular file in archive: ${p}`)
+      let buf
+      try { buf = readFileSync(p) } catch (e) { return fail(`read ${p}: ${e.code ?? e.message}`) }
+      const r = rawByteScan(buf, key); keyHits += r.keyHits; prefixHits += r.prefixHits; b64Hits += r.b64Hits; scannedFiles++
+    }
+    return true
+  }
+  if (!existsSync(dir)) fail(`scan root missing: ${dir}`)
+  else walk(dir)
+  const scanError = errors.length > 0
+  return { keyHits, prefixHits, b64Hits, scannedFiles, scanError, errors, clean: !scanError && keyHits === 0 && prefixHits === 0 && b64Hits === 0 }
 }
 
 // PINNED provenance (computed once): docker image id, claude version + package digest, runner commit.
@@ -230,24 +258,23 @@ export async function launchAgent(opts) {
     }))]
     const httpStatus = agg.apiError ? (agg.apiError.match(/\((\d{3})\)/)?.[1] ?? null) : (agg.realCompletion ? 200 : null)
 
-    // secret scan + redactor across EVERYTHING to be archived: transcript, stderr, prompt AND every file
-    // in the writable workspace copy. Any exact/prefix/base64 hit => quarantine the whole archive + fail.
+    // (2) secret scan across EVERYTHING to be archived — transcript, stderr, prompt AND every workspace
+    // file — using the SAME rawByteScan helper as the final archive scan (raw Buffer.indexOf on exact /
+    // prefix / base64 bytes). No per-run vs final divergence; prefixHits gates too. UTF-8 secretScan is
+    // kept only as a redactor input, never the gate.
     const b64 = Buffer.from(key).toString('base64')
     const redact = (s) => s.split(key).join('«REDACTED-KEY»').split(b64).join('«REDACTED-KEY-B64»')
     const workOut = join(archiveDir, 'workspace')
     rmSync(workOut, { recursive: true, force: true })
     if (existsSync(workDir)) cpSync(workDir, workOut, { recursive: true })
-    // scan the workspace files (bytes that would be archived) in addition to transcript/stderr/prompt
-    let wsScanKeyHits = 0, wsScanB64Hits = 0, wsScanPrefixHits = 0
-    for (const rel of walkFiles(workOut)) {
-      const t = readTextSafe(join(workOut, rel)); if (t === null) continue
-      const s = secretScan(t, key); wsScanKeyHits += s.keyHits; wsScanB64Hits += s.b64Hits; wsScanPrefixHits += s.prefixHits
-    }
-    const streamScan = secretScan(rawOut + '\n' + rawErr + '\n' + prompt, key)
-    const keyHits = streamScan.keyHits + wsScanKeyHits
-    const b64Hits = streamScan.b64Hits + wsScanB64Hits
-    const prefixHits = streamScan.prefixHits + wsScanPrefixHits
-    const secretClean = keyHits === 0 && b64Hits === 0 && prefixHits === 0   // (2) prefixHits also gates
+    // (2)(7) one helper, fail-CLOSED: scan the stream bytes + EVERY workspace file (symlink/special/
+    // unreadable → scanError → unclean). No silent skip; prefixHits gates too.
+    const streamHits = rawByteScan(Buffer.from(rawOut + '\n' + rawErr + '\n' + prompt, 'utf8'), key)
+    const wsScan = scanTreeRaw(workOut, key)
+    const keyHits = streamHits.keyHits + wsScan.keyHits
+    const prefixHits = streamHits.prefixHits + wsScan.prefixHits
+    const b64Hits = streamHits.b64Hits + wsScan.b64Hits
+    const secretClean = !wsScan.scanError && keyHits === 0 && b64Hits === 0 && prefixHits === 0
 
     writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
     writeFileSync(join(archiveDir, 'transcript.stream-json'), redact(rawOut))
@@ -278,7 +305,7 @@ export async function launchAgent(opts) {
         writable: ['/work', '/agent (tmpfs)', '/tmp (tmpfs)'],
         egress: `unix:/run/glm.sock → host bridge → ${ENDPOINT_HOST}:${ENDPOINT_PORT} (TLS end-to-end)`,
       },
-      secretScan: { keyHits, prefixHits, b64Hits, keySha256Prefix: streamScan.keySha256.slice(0, 12), scannedWorkspace: true, clean: secretClean },
+      secretScan: { keyHits, prefixHits, b64Hits, keySha256Prefix: sha256(key).slice(0, 12), scanner: 'scanTreeRaw', scanError: wsScan.scanError, scanErrors: wsScan.errors, scannedFiles: wsScan.scannedFiles, clean: secretClean },
     }
     writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify(trace, null, 2) + '\n')
 

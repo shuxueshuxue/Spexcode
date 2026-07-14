@@ -24,10 +24,13 @@ const CHROME_DIR = '/home/jeffry/.cache/ms-playwright/chromium-1228'     // cont
 const SCORER_IMAGE = 'scb-scorer:chromium'
 const INCONTAINER = join(HERE, 'browser-incontainer.mjs')
 const NM = (() => { try { return execFileSync('readlink', ['-f', join(ROOT, 'spec-dashboard/node_modules')], { encoding: 'utf8' }).trim() } catch { return join(ROOT, 'spec-dashboard/node_modules') } })()
+// (6) provenance re-verified on EVERY score run: the image is re-inspected each call and must still
+// resolve to the FIRST-pinned immutable ID — a tag swapped mid-batch is fail-loud, never silently used.
 let IMAGE_ID = null
 function scorerImageId() {
-  if (IMAGE_ID) return IMAGE_ID
-  IMAGE_ID = execFileSync('docker', ['image', 'inspect', SCORER_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
+  const id = execFileSync('docker', ['image', 'inspect', SCORER_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
+  if (!IMAGE_ID) IMAGE_ID = id
+  else if (id !== IMAGE_ID) throw new Error(`scorer image ${SCORER_IMAGE} changed since pin (${id} != ${IMAGE_ID}) — refusing to score`)
   return IMAGE_ID
 }
 
@@ -54,20 +57,36 @@ export async function scoreMobileUi(workspaceDir) {
     { name: 'race-latest-issued-wins', ok: !!v?.race?.freshWins, evidence: `#srb-sessions="${v?.race?.text}"` },
     { name: 'race-stale-dropped', ok: v?.race && !v.race.staleAppeared, evidence: `staleAppeared=${v?.race?.staleAppeared}` },
   ]
-  return { scorer: 'behavioral:browser-dom-board-poll-race (docker --network none)', checks, passed: checks.filter((c) => c.ok).length, total: checks.length, verdict: v }
+  return { scorer: 'behavioral:browser-dom-board-poll-race (docker --network none)', provenance: { image: SCORER_IMAGE, imageId: scorerImageId() }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, verdict: v }
 }
 
+// (1) NEVER-UPDATES pseudo-implementation: issues the mount reload but never applies the response.
+// The independent no-poll single-refresh harness must reject it (board text never becomes 'solo').
+const NEVER_UPDATES_APP = `import React from 'react'
+import { loadBoard } from './data.js'
+import MobileApp from './MobileApp.jsx'
+export default function App() {
+  React.useEffect(() => { loadBoard() }, [])
+  return React.createElement(MobileApp, { sessions: [] })
+}
+`
+
+// (1) controls: the COMMITTED post-episode tree must pass 3/3; BOTH negatives must be rejected —
+// the unchanged pre-state tree (race not fixed) and the never-updates pseudo-impl (no refresh at all).
 export async function scoreControlsMobile(repoRoot, positiveSha, negativeSha) {
-  const mat = (sha) => {
-    const d = mkdtempSync(join(tmpdir(), 'srb-app-'))
-    execFileSync('bash', ['-c', `mkdir -p ${d}/spec-dashboard/src`])
-    writeFileSync(join(d, 'spec-dashboard/src/App.jsx'), execFileSync('git', ['-C', repoRoot, 'show', `${sha}:spec-dashboard/src/App.jsx`], { encoding: 'utf8' }))
-    return d
-  }
+  const matDir = () => { const d = mkdtempSync(join(tmpdir(), 'srb-app-')); execFileSync('bash', ['-c', `mkdir -p ${d}/spec-dashboard/src`]); return d }
+  const mat = (sha) => { const d = matDir(); writeFileSync(join(d, 'spec-dashboard/src/App.jsx'), execFileSync('git', ['-C', repoRoot, 'show', `${sha}:spec-dashboard/src/App.jsx`], { encoding: 'utf8' })); return d }
   const posDir = mat(positiveSha), negDir = mat(negativeSha)
+  const nuDir = matDir(); writeFileSync(join(nuDir, 'spec-dashboard/src/App.jsx'), NEVER_UPDATES_APP)
   try {
     const pos = await scoreMobileUi(posDir)
-    const neg = await scoreMobileUi(negDir)
-    return { discriminates: pos.passed === pos.total && neg.passed < neg.total, positive: { sha: positiveSha, passed: pos.passed, total: pos.total, checks: pos.checks }, negative: { sha: negativeSha, passed: neg.passed, total: neg.total, checks: neg.checks } }
-  } finally { rmSync(posDir, { recursive: true, force: true }); rmSync(negDir, { recursive: true, force: true }) }
+    const negUnchanged = await scoreMobileUi(negDir)
+    const negNever = await scoreMobileUi(nuDir)
+    const row = (r, extra) => ({ ...extra, passed: r.passed, total: r.total, checks: r.checks })
+    return {
+      discriminates: pos.passed === pos.total && negUnchanged.passed < negUnchanged.total && negNever.passed < negNever.total,
+      positive: row(pos, { sha: positiveSha }),
+      negatives: { unchanged: row(negUnchanged, { sha: negativeSha }), neverUpdates: row(negNever, { impl: 'never-updates' }) },
+    }
+  } finally { for (const d of [posDir, negDir, nuDir]) rmSync(d, { recursive: true, force: true }) }
 }

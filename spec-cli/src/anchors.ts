@@ -27,8 +27,44 @@ export type Extractor = {
 export type CodeEntry = { path: string; anchor: string | null }
 export function parseCodeEntry(raw: string): CodeEntry {
   const i = raw.indexOf('#')
-  if (i < 0) return { path: raw, anchor: null }
-  return { path: raw.slice(0, i), anchor: raw.slice(i + 1).trim() || null }
+  if (i < 0) return { path: raw.trim(), anchor: null }
+  return { path: raw.slice(0, i).trim(), anchor: raw.slice(i + 1).trim() || null }
+}
+
+// ---- relation parsing: ONE structured path+selector grammar for code: AND related: ----
+// A relation's raw rows group per base path: a row is bare (`path`, whole-file — today's semantics,
+// unchanged) or scoped (`path#symbol`), and any number of scoped rows on the SAME base file fold into
+// one entry whose selectors are OR'd (a commit hitting any counts once; no selector-count cap — the
+// benchmark roster's 1–3 was an annotation rubric, never product syntax). STRUCTURAL verdicts live
+// here, pure and loud: an exact duplicate row, mixing bare with selectors on one base path, and a
+// selector on a glob are all `problems` the caller turns into integrity errors. Filesystem/git
+// verdicts (existence, directories, dead/ambiguous units, extractor readiness) stay the caller's —
+// this parser never touches fs.
+export type RelationEntry = { path: string; selectors: string[] }
+export type RelationParse = { entries: RelationEntry[]; problems: string[] }
+export function parseRelation(raws: string[], relation: 'code' | 'related'): RelationParse {
+  const order: string[] = []
+  const byPath = new Map<string, { bare: boolean; selectors: string[] }>()
+  const problems: string[] = []
+  for (const raw of raws) {
+    const { path, anchor } = parseCodeEntry(raw)
+    let e = byPath.get(path)
+    if (!e) { e = { bare: false, selectors: [] }; byPath.set(path, e); order.push(path) }
+    if (anchor === null) {
+      if (e.bare) problems.push(`${relation}: lists '${path}' twice — drop the duplicate entry`)
+      e.bare = true
+    } else if (e.selectors.includes(anchor)) {
+      problems.push(`${relation}: lists selector '${path}#${anchor}' twice — drop the duplicate`)
+    } else e.selectors.push(anchor)
+  }
+  for (const path of order) {
+    const e = byPath.get(path)!
+    if (e.bare && e.selectors.length)
+      problems.push(`${relation}: mixes bare '${path}' with '${path}#…' selectors — one base path is either whole-file or selector-scoped, never both; drop one form`)
+    if (e.selectors.length && path.includes('*'))
+      problems.push(`${relation}: '${path}#${e.selectors[0]}' puts a selector on a glob — a selector scopes ONE real file`)
+  }
+  return { entries: order.map((p) => ({ path: p, selectors: byPath.get(p)!.selectors })), problems }
 }
 
 // ---- extractor: ts-ast (the designated extractor for the JS family) ----
@@ -280,21 +316,26 @@ export function windowCommits(idx: DriftIndex, sinceHash: string, path: string):
   return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, base, h) && !cover.some((a) => inAncestors(idx, a, h)))
 }
 
-// which window commits TOUCHED the anchored unit: the commit's --unified=0 hunks intersect the unit's
-// line range extracted from the file AS IT EXISTED AT THAT COMMIT (never from HEAD — units later renamed
-// or moved still attribute correctly). A version whose content the extractor cannot parse is a
-// CONSERVATIVE hit (`unparseable` set) — over-warn, never silently skip.
-export type AnchorHit = { commit: string; unparseable?: string }
-export async function anchorHitCommits(root: string, win: string[], path: string, symbol: string, x: Extractor): Promise<AnchorHit[]> {
+// which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a
+// unit's line range extracted from the file AS IT EXISTED AT THAT COMMIT (never from HEAD — units later
+// renamed or moved still attribute correctly). Several selectors are OR — a commit appears ONCE, with
+// `selectors` naming exactly which units its hunks intersected (so diagnostics can attribute the hit).
+// A version whose content the extractor cannot parse is a CONSERVATIVE hit for every selector
+// (`unparseable` set) — over-warn, never silently skip.
+export type AnchorHit = { commit: string; selectors: string[]; unparseable?: string }
+export async function anchorHitCommits(root: string, win: string[], path: string, symbols: string[], x: Extractor): Promise<AnchorHit[]> {
   const hits: AnchorHit[] = []
   for (const c of win) {
     const at = await unitsAt(root, c, path, x)
     if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
-    if ('unparseable' in at) { hits.push({ commit: c, unparseable: at.unparseable }); continue }
-    const ranges = at.units.filter((u) => u.name === symbol)
-    if (!ranges.length) continue // unit didn't exist under this name at that commit
+    if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
+    const bySym = symbols
+      .map((sym) => ({ sym, ranges: at.units.filter((u) => u.name === sym) }))
+      .filter((s) => s.ranges.length) // a unit absent under this name at that commit can't be touched
+    if (!bySym.length) continue
     const hunks = await hunksAt(root, c, path)
-    if (hunks.some(([a, b]) => ranges.some((u) => a <= u.end && u.start <= b))) hits.push({ commit: c })
+    const touched = bySym.filter((s) => hunks.some(([a, b]) => s.ranges.some((u) => a <= u.end && u.start <= b))).map((s) => s.sym)
+    if (touched.length) hits.push({ commit: c, selectors: touched })
   }
   return hits
 }

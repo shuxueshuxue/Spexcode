@@ -124,14 +124,18 @@ owner — the reverse edge: a file's GOVERNORS (code: — drives drift + eval fr
 over-owned → split the file). --actionable prints NOTHING unless action is needed (hook use).
 
 lint — checks the whole spec↔code graph and exits non-zero on errors. Errors: integrity (a
-code:/related: file does not exist; a dead/ambiguous/unverifiable \`path#symbol\` anchor; an anchor
-whose language has no designated extractor or whose extractor can't run here) · anchor-drift (a
-commit since the spec's version touched the ANCHORED unit's lines, unacked — the blocking tier of
-drift) · one-govern (a node governs >1 file) · living (a "## vN" changelog heading) · id-format (an
+code:/related: file does not exist; a dead/ambiguous/unverifiable \`path#symbol\` selector; a selector
+whose language has no designated extractor or whose extractor can't run here; a duplicate entry, a
+base path both bare and scoped, or a selector on a glob/directory) · anchor-drift (a
+commit since the spec's version touched an ANCHORED unit's lines, unacked — the blocking tier of
+drift; same-file selectors OR'd, one error naming the hit selectors) · one-govern (a node
+governs >1 DISTINCT file) · living (a "## vN" changelog heading) · id-format (an
 id char outside the whitelist — ascii [a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a
 leaf id reused) · mention (a [[id]] naming no node). Warns: altitude · breadth · coverage · drift
-(UNANCHORED drift — always advisory, never blocks) · anchor (anchoring a type) · related-drift ·
-owners · confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
+(UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
+"ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
+per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·
+confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
 contrast \`spex eval lint\`, which is pure advisory and never blocks anyone.
 
 ack — stamp Spec-OK on HEAD (an empty stamp commit): the drift remedy when only MECHANICS changed

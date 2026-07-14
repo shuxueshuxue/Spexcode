@@ -404,7 +404,11 @@ if (cmd === 'serve') {
     const owners = specOwners(p)
     const related = specRelated(p)
     const maxOwners = loadConfig(process.cwd()).maxOwners
-    const names = (xs: { id: string }[]) => xs.map((o) => `'${o.id}'`).join(', ')
+    // a selector-SCOPED governor (every claiming code: entry carries `#symbol` — [[code-anchor]]) still
+    // DISPLAYS, marked, but does not count toward the too-many-owners bound: it claims named units, not
+    // the whole file.
+    const whole = owners.filter((o) => !o.scoped)
+    const names = (xs: { id: string; scoped?: boolean }[]) => xs.map((o) => `'${o.id}'${o.scoped ? ' (scoped)' : ''}`).join(', ')
     const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift, no eval freshness)` : ''
     if (owners.length === 0 && related.length === 0) {
       console.log(`${rel} — no spec claims this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
@@ -413,16 +417,16 @@ if (cmd === 'serve') {
       // but a human asking gets the honest nuance: nothing tracks this file's drift.
       if (has('actionable')) process.exit(0)
       console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). Nothing tracks its drift; if your change is substantive, consider giving it a governing home.`)
-    } else if (owners.length <= maxOwners) {
+    } else if (whole.length <= maxOwners) {
       // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
       // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.
       if (has('actionable')) process.exit(0)
-      const named = owners.map((o) => `'${o.id}'`).join(', ')
+      const named = names(owners)
       const lead = owners.length === 1 ? `${rel} is governed by ${named} — ${owners[0].desc}` : `${rel} is governed by ${named} (shared, fine).`
       console.log(`${lead} Read/honor the spec; if your change shifts the intent, update the spec in the SAME commit.${relLine}`)
     } else {
-      const ids = owners.map((o) => o.id).join(', ')
-      console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
+      const ids = names(owners)
+      console.log(`${rel} is governed whole-file by ${whole.length} specs (all claims: ${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
     const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')

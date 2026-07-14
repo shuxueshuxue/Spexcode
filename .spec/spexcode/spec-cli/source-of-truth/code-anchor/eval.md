@@ -26,6 +26,44 @@ scenarios:
       An `integrity` ERROR reading "dead anchor" says the unit was deleted or renamed and tells the
       author to update the spec's code: entry; exit 1. (An ambiguous anchor — two same-named units —
       errors the same way, worded "ambiguous anchor".)
+  - name: multi-selector-dedupe
+    tags: [cli]
+    description: >
+      Fixture node pins several same-file selectors (src/calc.ts#applyRate + #helper — and a variant
+      with 4+ selectors, since no selector-count cap exists); one post-version commit changes lines
+      inside BOTH units. Run `spex spec lint`.
+    expected: >
+      Exactly ONE `anchor-drift` error for the entry (never one per selector — the commit counts once),
+      naming both hit selectors (#applyRate, #helper); exit 1. The 4-selector variant lints clean with
+      no integrity/one-govern error, and a hit on the 4th unit blocks.
+  - name: structural-defects-error
+    tags: [cli]
+    description: >
+      Three malformed fixtures: (a) the same selector listed twice; (b) one base path listed both bare
+      and with a selector in one relation; (c) selectors on two DIFFERENT files in code:. Run
+      `spex spec lint` on each.
+    expected: >
+      (a) and (b) are `integrity` errors naming the duplicate / the bare-scoped mix; (c) stays the
+      ordinary `one-govern` error (one-govern counts distinct base paths). Exit 1 in all three.
+  - name: scoped-miss-setting
+    tags: [cli]
+    description: >
+      Anchored fixture where the post-version commit touches only a NON-pinned unit (a miss). Run
+      `spex spec lint` with no setting, then with `lint.scopedCodeMiss: "ignore"` in spexcode.json,
+      then touch the pinned unit under "ignore".
+    expected: >
+      Default: the ordinary advisory `drift` warn appears, no anchor-drift, exit 0. With "ignore": that
+      one advisory disappears (exit 0, nothing else changes — bare nodes keep their drift warn). A HIT
+      under "ignore" still raises the anchor-drift error, exit 1 — the knob never touches the block.
+  - name: related-selector-hit-miss
+    tags: [cli]
+    description: >
+      A node lists related: src/calc.ts#applyRate. One commit moves only another unit (miss), a later
+      one moves applyRate (hit). Run `spex spec lint` after each.
+    expected: >
+      Miss: NO related-drift line for the scoped row — silent. Hit: a soft `related-drift` warn naming
+      the selector and the node; exit stays 0 both times (related never blocks, needs no ack, feeds no
+      eval freshness).
   - name: no-typescript-errors
     tags: [cli]
     description: >

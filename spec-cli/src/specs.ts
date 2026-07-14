@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
-import { parseCodeEntry } from './anchors.js'
+import { parseCodeEntry, parseRelation } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
 const ROOT = repoRoot()
@@ -172,17 +172,21 @@ function claimMatcher(file: string): (cf: string) => boolean {
 }
 
 // spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift + eval freshness); reads only
-// frontmatter (cheap, no git) so a per-edit hook can call it.
-export function specOwners(file: string): { id: string; desc: string }[] {
+// frontmatter (cheap, no git) so a per-edit hook can call it. `scoped` = every claiming entry carries a
+// `#selector` — such a governor still displays, but does not count toward the owners bound ([[code-anchor]]).
+export function specOwners(file: string): { id: string; desc: string; scoped: boolean }[] {
   const claims = claimMatcher(file)
-  return raws().filter((r) => list(r.fm.code).some((e) => claims(parseCodeEntry(e).path))).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+  return raws().flatMap((r) => {
+    const entries = list(r.fm.code).map(parseCodeEntry).filter((e) => claims(e.path))
+    return entries.length ? [{ id: r.id, desc: str(r.fm.desc), scoped: entries.every((e) => e.anchor !== null) }] : []
+  })
 }
 
 // spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift, never eval freshness):
 // [[governed-related]]'s other half, same claim rule, same cheap frontmatter-only read.
 export function specRelated(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
-  return raws().filter((r) => list(r.fm.related).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+  return raws().filter((r) => list(r.fm.related).some((e) => claims(parseCodeEntry(e).path))).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
 // memo fileDiffAt by (version sha + spec.md path) — a commit's patch is immutable. Keyed by path too: one
@@ -227,12 +231,18 @@ export async function loadSpecs() {
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
-    // a code: entry may pin a symbol (`path#fn` — [[code-anchor]]): `code` carries the PATHS (what every
-    // path consumer — drift, claims, eval attribution — expects); the anchors ride separately for lint.
-    const codeEntries = list(r.fm.code).map(parseCodeEntry)
-    const code = codeEntries.map((e) => e.path)
-    const anchors = codeEntries.filter((e): e is { path: string; anchor: string } => e.anchor !== null)
-    const related = list(r.fm.related)
+    // a code:/related: row may pin symbols (`path#fn` — [[code-anchor]]): parseRelation groups each
+    // relation per BASE path, so `code`/`related` carry the distinct PATHS (what every path consumer —
+    // drift, claims, eval attribution — expects, file-level as before), the scoped entries (path +
+    // selectors) ride separately for lint's anchor engine, and structural problems (duplicates,
+    // bare/scoped mixing, glob selectors, the code cap) surface as lint integrity errors.
+    const codeRel = parseRelation(list(r.fm.code), 'code')
+    const relatedRel = parseRelation(list(r.fm.related), 'related')
+    const code = codeRel.entries.map((e) => e.path)
+    const codeScoped = codeRel.entries.filter((e) => e.selectors.length > 0)
+    const related = relatedRel.entries.map((e) => e.path)
+    const relatedScoped = relatedRel.entries.filter((e) => e.selectors.length > 0)
+    const relationProblems = [...codeRel.problems, ...relatedRel.problems]
     const S = h[0]?.hash || ''
     const driftFiles = code
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
@@ -240,8 +250,10 @@ export async function loadSpecs() {
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
     // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
     // `drift` — it never feeds status, the commit gate, or eval freshness. It surfaces only as a lint warn nudge.
-    const relatedDriftFiles = related
-      .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
+    // A SCOPED related entry is excluded here: its file-level movement is silent by design — only a
+    // selector HIT warns, and that verdict needs the anchor engine, so lint derives it, not the loader.
+    const relatedDriftFiles = relatedRel.entries.filter((e) => !e.selectors.length)
+      .map((e) => ({ file: e.path, behind: driftFor(didx, S, e.path) }))
       .filter((d) => d.behind > 0)
     const fmStatus = str(r.fm.status, '') || null
     return {
@@ -255,8 +267,10 @@ export async function loadSpecs() {
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
-      anchors,
+      codeScoped,
       related,
+      relatedScoped,
+      relationProblems,
       version: h.length,
       reason: h[0]?.reason || '',
       // ISO date of the node's latest version commit (h is newest-first), or null if unversioned.
@@ -277,7 +291,7 @@ export async function loadSpecs() {
 export async function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return []
-  const codePaths = list(node.fm.code).map((e) => parseCodeEntry(e).path)
+  const codePaths = [...new Set(list(node.fm.code).map((e) => parseCodeEntry(e).path))]
   // index (cached) and the code-path walk are independent — run them in parallel, both async git.
   const [idx, cStats] = await Promise.all([historyIndex(ROOT), pathsStats(ROOT, codePaths)])
   const sStats = statsFor(idx, node.relPath)

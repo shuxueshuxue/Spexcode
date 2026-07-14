@@ -29,6 +29,12 @@ password. Without `--public` nothing changes: dev stays plain
 loopback, no TLS, no gate — a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no
 change (it already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
+**The SPA fallback is for routes, never for files.** Only an extensionless path (`/issues/3`) falls back
+to `index.html`; a missing path *with* an extension is a stale hashed chunk requested by a pre-rebuild
+page still open in some browser, and it answers **404** — serving HTML there would trip the browser's
+strict module-MIME check and hide the miss from the client, stranding the tab, where the 404 lets the
+shell's stale-chunk recovery ([[dashboard-shell]]) see the failure and reload itself onto the fresh build.
+
 **Compression is transport, so it lives at the gateway — once, for every deployment.** Text-ish responses
 ship gzipped when the client accepts it, static and proxied alike; upstream and product semantics never
 know compression exists. Three exclusions are load-bearing: an SSE stream is

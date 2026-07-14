@@ -243,7 +243,14 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDi
   const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '')
   let file = join(distDir, rel)
   if (!file.startsWith(distDir)) file = join(distDir, 'index.html')
-  if (urlPath === '/' || !existsSync(file)) file = join(distDir, 'index.html')
+  if (urlPath === '/' || !existsSync(file)) {
+    // @@@ missing-asset 404 - only extensionless SPA routes fall back to index.html. A missing FILE
+    // request (it has an extension) is a stale hashed chunk from a pre-rebuild page still open in some
+    // browser: answering it with HTML trips the strict module-MIME check and hides the miss from the
+    // client — 404 instead, so the shell's vite:preloadError recovery can see it and reload.
+    if (urlPath !== '/' && extname(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found') }
+    file = join(distDir, 'index.html')
+  }
   if (!existsSync(file)) { res.writeHead(503); return res.end('dashboard build missing') }
   const type = MIME[extname(file)] || 'application/octet-stream'
   const raw = readFileSync(file)

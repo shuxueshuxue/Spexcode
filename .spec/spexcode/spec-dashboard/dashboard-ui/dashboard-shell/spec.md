@@ -35,7 +35,11 @@ global style vocabulary here when the rule is genuinely reused across shell surf
 the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
 the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
 libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never
-behaviour. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
+behaviour. The split's one failure mode is owned here too: after a dist rebuild a still-open page asks for
+OLD hashed chunks the server no longer has (the gateway answers 404, never HTML — [[public-mode]]), so the
+shell catches the failed chunk load (`vite:preloadError`) and **reloads once** onto the fresh index.html —
+a deploy under a live tab costs one automatic reload, never a blanked app; a failure that persists right
+after that reload surfaces as the normal error instead of a reload loop. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
 (session-scoped, so a fresh tab still opens on the root). A feature node lists whichever of these it touches under
 `related:`, so editing the shell or the stylesheet attributes its drift and eval staleness here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the

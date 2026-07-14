@@ -9,6 +9,19 @@ import { useT } from './i18n/index.jsx'
 const Dashboard = lazy(() => import('./Dashboard.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
+// stale-chunk recovery: after a dist rebuild, a page loaded pre-rebuild still asks for the OLD hashed
+// chunks, which the server no longer has (it answers 404) — without this the failed lazy import blanks
+// the whole app. Vite surfaces every failed chunk load as `vite:preloadError`; reload once to pick up
+// the fresh index.html. The timestamp latch keeps a real outage (the reloaded page failing again) from
+// looping — it surfaces as the normal uncaught error instead.
+window.addEventListener('vite:preloadError', (e) => {
+  const last = Number(sessionStorage.getItem('spexcode.chunkReload') || 0)
+  if (Date.now() - last < 10_000) return
+  sessionStorage.setItem('spexcode.chunkReload', String(Date.now()))
+  e.preventDefault()
+  location.reload()
+})
+
 export default function App() {
   const t = useT()
   const isMobile = useIsMobile()

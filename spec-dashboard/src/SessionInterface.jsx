@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import { loadPlugins, loadSettings } from './data.js'
 import { labelColor } from './color.js'
+import { composeLaunch, createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionForest } from './session.js'
-import { MENTION_RE, specPath, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
+import { MENTION_RE, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon } from './icons.jsx'
@@ -75,15 +75,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
-  const [presets, setPresets] = useState([])       // the command presets (GET /api/plugins) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
-  // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole launch
-  // choice. Fetched from /api/settings; built-in claude/codex profiles mean the list is never intentionally empty.
-  const [launchers, setLaunchers] = useState([])
-  const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
-  const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
+  // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
+  // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
+  const { launchers, launcher, pickLauncher } = useLaunchers()
   const [sendErr, setSendErr] = useState(false)   // last text dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [typeMode, setTypeMode] = useState(false)
@@ -150,30 +147,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fetch(`/api/slash-commands?harness=${harness}`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [selSession?.harness])
 
-  // fetch the command presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
-  // its body into the launch prompt (see submit); listing is display-only, like the slash menu.
-  useEffect(() => {
-    loadPlugins().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
-  }, [])
-  // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
-  // rides in the POST body as `launcher`). Initial selection HONORS the config default so the dashboard agrees
-  // with the CLI (`spex new` with no --launcher uses `defaultLauncher`): remembered localStorage pick (if still
-  // valid) → configured `default` → first. Without this the dropdown silently pre-selected the alphabetically
-  // first launcher, disagreeing with the config default — a user "testing claude-glm" could get another launcher.
-  useEffect(() => {
-    loadSettings().then((d) => {
-      const list = d?.launchers
-      if (!Array.isArray(list) || !list.length) return
-      setLaunchers(list)
-      setLauncher((cur) => {
-        if (list.some((l) => l.name === cur)) return cur   // a still-valid remembered pick wins
-        if (d.default && list.some((l) => l.name === d.default)) return d.default   // else the configured default
-        return list[0].name   // else the first
-      })
-    }).catch(() => {})
-  }, [])
-  // /api/plugins returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
-  const commandPresets = presets
+  // the command presets — the New Session box's `/` palette (tidy/health/…). Picking one composes its body
+  // into the launch prompt (see submit); listing is display-only, like the slash menu. Shared fetch (./launch.js).
+  const commandPresets = useCommandPresets()
 
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
@@ -277,27 +253,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fitTextarea(ta, maxH)
   }, [msg, active, open, rightTab, typeMode])
 
-  // assemble the `/<preset> [[<node>]]… <free text>` launch grammar into one prompt: the preset body with its
-  // {{targets}} placeholder filled from the mentions (the server later derives the node from the first
-  // `[[<id>]]`), free text appended. A `/` naming no known preset, or a plain/mention-only prompt, passes through.
-  const composeLaunch = (raw) => {
-    const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
-    if (!m) return raw
-    const preset = commandPresets.find((p) => p.name === m[1])
-    if (!preset) return raw
-    const ids = []
-    const free = m[2].replace(MENTION_RE, (_, id) => { ids.push(id); return '' }).trim()
-    const targets = ids.length
-      ? ids.map((id) => {
-          const s = specs.find((x) => x.id === id)
-          return s ? `- [[${s.id}]] — ${specPath(s.path)}` : `- [[${id}]]`
-        }).join('\n')
-      : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
-    const body = preset.body.includes('{{targets}}')
-      ? preset.body.replace('{{targets}}', targets)
-      : `${preset.body}\n\n${targets}`
-    return free ? `${body}\n\n${free}` : body
-  }
+  // the launch grammar composition (`/<preset> [[node]]… <free text>` → one prompt) is the SHARED
+  // composeLaunch from ./launch.js — one implementation for this tab and the phone's composer.
 
   // the running-session twin of composeLaunch's mention resolution: expand each `[[<id>]]` in a keyed message
   // to an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is aimed at that
@@ -316,18 +273,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const submit = () => {
     const raw = prompt.trim()
     if (!raw) return
-    const text = composeLaunch(raw)
+    const text = composeLaunch(raw, commandPresets, specs)
     setPrompt('')
-    // a launcher SUBSUMES the harness ([[launcher-select]]): send only the chosen launcher; the backend derives
-    // harness from that profile. If the picker has not loaded yet, omit it and let the backend use its default.
-    const body = launcher ? { prompt: text, launcher } : { prompt: text }
-    fetch('/api/sessions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-      .then((res) => res.json().catch(() => null))
-      .then(() => reload?.())
-      .catch(() => {})
+    createSession(text, launcher).then(() => reload?.())
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)

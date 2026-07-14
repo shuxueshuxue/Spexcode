@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/harness.jsx
+  - spec-dashboard/src/launch.js
 ---
 
 # session-console
@@ -62,6 +63,9 @@ profiles add more names. The selected launcher's harness reads as a derived **ic
 vendor glyph updates as the selection changes, but it is an adornment, not a second input. The launcher pick is
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
+The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
+one `POST /api/sessions` — lives in the shared `launch.js`, one path for this tab and the phone's composer
+([[mobile-ui]]); this tab owns only the desktop chrome around it (menus, focus discipline, background fire).
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live

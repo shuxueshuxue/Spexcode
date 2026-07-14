@@ -62,13 +62,22 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
            Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
            composition); a file governed by > maxOwners nodes warns (the \`owners\` rule — split it). Omit
            for a pure-prose node: a cross-cutting contract no file owns.
-           The entry may pin ONE named unit — an ANCHOR: \`path#symbol\` (\`#Class.method\` for a class
-           method; top-level functions, arrow/const declarations, classes, enums anchor cleanly; a
-           type/interface anchor warns). An anchor upgrades drift on THAT unit to a blocking error
-           (\`anchor-drift\`); without one, drift stays advisory forever. Anchors are optional.
+           The entry may pin named units — ANCHORS: one or more \`path#symbol\` rows, ALL on the same
+           base file (\`#Class.method\` for a class method; top-level functions, arrow/const declarations,
+           classes, enums anchor cleanly; a type/interface anchor warns). One-govern counts DISTINCT
+           base paths, so selectors never widen govern past one file. Several selectors are OR: a
+           commit hitting ANY upgrades drift to the blocking \`anchor-drift\` error (one error per
+           entry, naming the hit selectors — a commit counts once). Without an anchor, drift stays
+           advisory forever. A base path is either whole-file (bare) or selector-scoped, never both;
+           duplicates, globs/directories with a selector, and dead/ambiguous units all error loud. A
+           selector-scoped governor claims units, not the file, so it stays out of the \`owners\` bound
+           (spex spec owner still displays it, marked "(scoped)"). Anchors are optional.
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
            (never drift, never eval freshness, nothing to ack); it is the many-to-many net that claims the files
-           govern doesn't. Every listed path must exist (lint integrity error otherwise).
+           govern doesn't. Every listed path must exist (lint integrity error otherwise). A related row
+           may also pin \`path#symbol\`: the node then hears about a commit ONLY when it moves that
+           unit — a hit is a soft \`related-drift\` warn naming the selector, a miss is SILENT (a scoped
+           related file's ordinary file-level nudge is off). Still never blocks, no ack, no eval freshness.
   surface  plugin-system/.plugins nodes only: one or MORE of system (folded into every agent's prompt) |
            command (a /command) | skill (an on-demand SKILL.md the harness loads when a task matches the
            node's desc) | agent (a spawnable sub-agent definition; its \`tools:\` list is the spawned
@@ -92,11 +101,14 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       deleted/renamed), an ambiguous one (two same-named units in one file), a file that
                       no longer parses, a language with no designated extractor, or an extractor that
                       can't run here (e.g. no host typescript — 'npm i -D typescript' or drop the anchor)
-                      all error, never silently pass.
-  anchor-drift (error) a commit since the node's version intersected the ANCHORED unit's lines (judged
+                      all error, never silently pass. So do a relation's STRUCTURAL defects: a duplicate
+                      entry, a base path both bare and selector-scoped, or a selector on a
+                      glob/directory.
+  anchor-drift (error) a commit since the node's version intersected an ANCHORED unit's lines (judged
                       from the file as it existed AT each commit) and no Spec-OK ack covers it — the
-                      blocking tier of drift. Remedy: update the spec, or \`spex spec ack\` with a real
-                      reason (recorded in the ack commit body).
+                      blocking tier of drift. Selectors on one file are OR'd: one error per entry, the
+                      hit selectors named, each commit counted once. Remedy: update the spec, or
+                      \`spex spec ack\` with a real reason (recorded in the ack commit body).
   one-govern (error)  a node governs (code:) at most ONE file — keep the true subject, move the rest
                       to related:.
   living     (error)  no "## vN" changelog headings — the body is current-state.
@@ -111,14 +123,20 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
   coverage   (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift      (warn)   a governed file has commits newer than the node's spec version — it may be stale.
                       ALWAYS advisory: unanchored drift never blocks a commit (the blocking tier is
-                      anchor-drift above). Remedy: edit the spec to the new intent (re-versions the
-                      node), OR \`spex spec ack <node> --reason "…"\` when only mechanics changed and the
-                      contract still holds.
+                      anchor-drift above). On a selector-SCOPED code file whose window has NO hit (a
+                      miss), this advisory stays by default; the committed \`lint.scopedCodeMiss:
+                      "ignore"\` silences ONLY it (hit blocks, bare drift, integrity, acks, related,
+                      eval freshness all untouched). Remedy: edit the spec to the new intent
+                      (re-versions the node), OR \`spex spec ack <node> --reason "…"\` when only
+                      mechanics changed and the contract still holds.
   anchor     (warn)   an anchor pins a type/interface — types reshape with every refactor; anchor the
                       behaviour-bearing unit instead.
-  related-drift (warn) a related: file moved ahead of the node — a soft nudge, one summary line, never blocks.
-  owners     (warn)   a file governed by > maxOwners nodes (default 3) does too much — SPLIT it so each
-                      governor owns its own module (or merge the nodes, or give it one foundation owner).
+  related-drift (warn) a related: file moved ahead of the node — a soft nudge, one summary line, never
+                      blocks. A selector-scoped related row instead warns per HIT (selector named);
+                      its file-level misses are silent.
+  owners     (warn)   a file governed WHOLE-FILE by > maxOwners nodes (default 3) does too much — SPLIT
+                      it so each governor owns its own module (or merge the nodes, or give it one
+                      foundation owner). Selector-scoped governors don't count toward the bound.
   confusable-id (warn) two leaf ids one edit apart read as the same word — rename one to read apart.
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
@@ -354,10 +372,16 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
   lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
                            (defaults 50 / 4200 / 35 / 1.3 / 3).
   lint.maxChildren         breadth budget: warn at >= this many direct children (default 8).
-  lint.maxOwners           warn when a file is governed by > this many nodes (default 3).
+  lint.maxOwners           warn when a file is governed WHOLE-FILE by > this many nodes (default 3).
+                           Selector-scoped governors (code: path#symbol) don't count toward the bound.
                            (lint.driftErrorThreshold is RETIRED: the count-based commit gate is replaced
                            by code anchors — \`code: path#symbol\` — whose hits error unconditionally; a
                            leftover key is ignored.)
+  lint.scopedCodeMiss      "warn" (default) | "ignore" — the file-level drift ADVISORY on a selector-
+                           scoped code: file whose window commits hit no selector (a miss). "ignore"
+                           silences ONLY that advisory; it never touches hit blocks (anchor-drift),
+                           bare-path drift, integrity, Spec-OK acks, related semantics, or eval
+                           freshness. A project policy → committed spexcode.json.
   lint.scenarioTags        the closed vocabulary an eval scenario's tags: must draw from (default
                            ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
 Example — govern your own source dir and loosen the altitude budget:

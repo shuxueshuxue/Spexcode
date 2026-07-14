@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot, git, driftIndex, historyIndex, rowsFor } from './git.js'
 import { loadSpecs } from './specs.js'
@@ -16,6 +16,10 @@ export type LintConfig = {
   maxChildren: number        // breadth budget: warn at >= this many direct children
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
   scenarioTags: string[]     // the closed vocabulary an eval scenario's `tags:` must draw from; extend it to mint a new tag
+  scopedCodeMiss: 'warn' | 'ignore' // the file-level drift ADVISORY on a selector-scoped code: file whose window has no
+                             // selector hit ([[code-anchor]]). 'warn' (default) keeps today's drift warning; 'ignore'
+                             // silences ONLY that advisory — hit blocks, bare code drift, integrity, acks, related
+                             // semantics, and eval freshness are all untouched by this knob.
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -26,6 +30,7 @@ const DEFAULT_CONFIG: LintConfig = {
   maxChildren: 8,
   maxOwners: 3,
   scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
+  scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string): LintConfig {
   // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
@@ -44,6 +49,10 @@ export function loadConfig(root: string): LintConfig {
 //    ROOT-level files and leaks every nested test into coverage. A slash-less glob is a basename intent →
 //    prepend "**/" so it matches that basename at any depth (the default "**/*.test.*" already does).
 export function normalizeConfig(cfg: LintConfig): LintConfig {
+  // a mistyped enum silently reverting to the default would green-wash (or over-warn) exactly the
+  // advisory the author meant to tune — same fail-loud rule as a malformed spexcode.json.
+  if (cfg.scopedCodeMiss !== 'warn' && cfg.scopedCodeMiss !== 'ignore')
+    throw new Error(`spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
   const dedot = (xs: string[]) => xs.map((x) => x.replace(/^\.+/, ''))
   return {
     ...cfg,
@@ -131,15 +140,25 @@ export async function specLint(): Promise<Finding[]> {
   const specs = await loadSpecs()
   const out: Finding[] = []
 
-  // integrity + build the file -> owners map.
+  // integrity + build the file -> owners map. A relation's STRUCTURAL problems (a duplicate entry,
+  // bare/scoped mixing on one base path, a selector on a glob — all from parseRelation,
+  // [[code-anchor]]) are integrity errors: malformed edges block like broken ones.
   const owners = new Map<string, string[]>()
+  const claimed = new Set<string>()
   for (const s of specs) {
+    for (const p of s.relationProblems)
+      out.push({ level: 'error', rule: 'integrity', spec: s.id, msg: `'${s.id}' ${p}` })
+    const scopedPaths = new Set(s.codeScoped.map((e) => e.path))
     for (const f of s.code) {
       if (!existsSync(join(root, f)))
         out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing file: ${f}` })
-      owners.set(f, [...(owners.get(f) ?? []), s.id])
+      claimed.add(f)
+      // a selector-SCOPED entry claims named units, not the whole file, so it stays out of the owners
+      // bound below ([[code-anchor]]) — `spex spec owner` still displays it as a (scoped) governor.
+      if (!scopedPaths.has(f)) owners.set(f, [...(owners.get(f) ?? []), s.id])
     }
-    // one-govern: a node is source of truth for at most ONE file, so drift/eval/ack have a single
+    // one-govern: a node is source of truth for at most ONE file — DISTINCT base paths; several
+    // `path#symbol` selectors on the same file are one subject — so drift/eval/ack have a single
     // unambiguous subject (see [[governed-related]]). >1 is a defect — pick the true subject, demote the
     // rest to related. ERROR (the node-side twin of too-many-owners' file-side bound). 0 is fine.
     if (s.code.length > 1)
@@ -148,7 +167,6 @@ export async function specLint(): Promise<Finding[]> {
   // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
   // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
   // related, not govern (see [[governed-related]]). It carries coverage but never drift, never eval freshness.
-  const claimed = new Set<string>(owners.keys())
   for (const s of specs) for (const f of s.related) {
     if (!existsSync(join(root, f)))
       out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing related file: ${f}` })
@@ -276,55 +294,73 @@ export async function specLint(): Promise<Finding[]> {
     out.push({ level: 'warn', rule: 'owners', msg: `${over.length} file(s) are governed by > ${cfg.maxOwners} nodes — each holds more separately-specified functionality than one file should. Worst: ${top}. SPLIT the file so each governor owns its own module (or merge the nodes, or give it a single foundation owner + related:).` })
   }
 
-  // code anchors ([[code-anchor]]): a code: entry may pin one named unit (`path#symbol`). The anchor is
-  // the BLOCKING tier of drift: a window commit (spec's last version..HEAD, non-merge, touching the
-  // governed file) whose --unified=0 hunks intersect the unit's line range — extracted from the file AS
-  // OF that commit, by the extension's ONE designated extractor — is an anchor-drift ERROR unless a
-  // Spec-OK ack covers it. Resolution failures are never silent: a dead or ambiguous anchor, an
-  // unparseable working-tree file, an extension with no designated extractor, and a designated extractor
-  // that can't run here (no host typescript) all ERROR with the repair spelled out.
+  // code anchors ([[code-anchor]]): a code:/related: entry may pin named units (`path#symbol` — any
+  // number per base file, OR'd). On code:, the anchor is the BLOCKING tier of drift: a window
+  // commit (spec's last version..HEAD, non-merge, touching the governed file) whose --unified=0 hunks
+  // intersect any pinned unit's line range — extracted from the file AS OF that commit, by the
+  // extension's ONE designated extractor — is ONE anchor-drift ERROR naming the hit selectors, unless a
+  // Spec-OK ack covers it. On related:, the SAME engine yields only a soft warn on a hit — a scoped
+  // related miss is silent (never blocks, no ack, no eval freshness). Resolution failures are never
+  // silent for either relation: a dead or ambiguous selector, a selector on a directory, an unparseable
+  // working-tree file, an extension with no designated extractor, and a designated extractor that can't
+  // run here (no host typescript) all ERROR with the repair spelled out.
   const regs = extractors(root)
   const [didx, hidx] = await Promise.all([driftIndex(root), historyIndex(root)])
   const readyWarned = new Set<string>()
   for (const s of specs) {
-    for (const { path, anchor } of s.anchors) {
-      const x = extractorFor(regs, extOf(path))
-      if (!x) {
-        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${anchor}, but no extractor is designated for '.${extOf(path)}' files — this language has no anchor support yet: add a LangSpec row (anchors.ts) or drop the #${anchor}` })
-        continue
-      }
-      const ready = x.ready()
-      if (ready !== true) {
-        // once per (extractor, reason), even across several anchored nodes — one repair, one message.
-        if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); out.push({ level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` }) }
-        continue
-      }
-      if (!existsSync(join(root, path))) continue // the missing FILE already errored above
-      let units
-      try { units = x.extract(readFileSync(join(root, path), 'utf8'), path) } catch (e: any) {
-        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${anchor} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` })
-        continue
-      }
-      const res = resolveAnchor(units, anchor)
-      if ('dead' in res) {
-        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${anchor} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's code: entry to follow it` })
-        continue
-      }
-      if ('ambiguous' in res) {
-        out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${anchor} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` })
-        continue
-      }
-      if (res.ok.typeOnly)
-        out.push({ level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${anchor} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` })
-      const since = rowsFor(hidx, s.path)[0]?.hash || ''
-      const win = windowCommits(didx, since, path)
-      if (!win.length) continue
-      const hits = await anchorHitCommits(root, win, path, anchor, x)
-      const unparseable = hits.filter((h) => h.unparseable)
-      if (hits.length) {
+    for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
+      for (const { path, selectors } of entries) {
+        const x = extractorFor(regs, extOf(path))
+        if (!x) {
+          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — this language has no anchor support yet: add a LangSpec row (anchors.ts) or drop the selector(s)` })
+          continue
+        }
+        const ready = x.ready()
+        if (ready !== true) {
+          // once per (extractor, reason), even across several anchored nodes — one repair, one message.
+          if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); out.push({ level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` }) }
+          continue
+        }
+        if (!existsSync(join(root, path))) continue // the missing FILE already errored above
+        if (statSync(join(root, path)).isDirectory()) {
+          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` })
+          continue
+        }
+        let units
+        try { units = x.extract(readFileSync(join(root, path), 'utf8'), path) } catch (e: any) {
+          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` })
+          continue
+        }
+        // each selector resolves (or errors) on its own; only the live ones feed the window engine.
+        const live: string[] = []
+        for (const sym of selectors) {
+          const res = resolveAnchor(units, sym)
+          if ('dead' in res) {
+            out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's ${relation}: entry to follow it` })
+            continue
+          }
+          if ('ambiguous' in res) {
+            out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${sym} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` })
+            continue
+          }
+          if (res.ok.typeOnly)
+            out.push({ level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${sym} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` })
+          live.push(sym)
+        }
+        if (!live.length) continue
+        const since = rowsFor(hidx, s.path)[0]?.hash || ''
+        const win = windowCommits(didx, since, path)
+        if (!win.length) continue
+        const hits = await anchorHitCommits(root, win, path, live, x)
+        if (!hits.length) continue
+        const hitSyms = [...new Set(hits.flatMap((h) => h.selectors))]
         const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')
+        const unparseable = hits.filter((h) => h.unparseable)
         const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
-        out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${anchor} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
+        if (relation === 'code')
+          out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
+        else
+          out.push({ level: 'warn', rule: 'related-drift', spec: s.id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${s.id}') was changed by ${hits.length} commit(s) since v${s.version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
       }
     }
   }
@@ -334,9 +370,15 @@ export async function specLint(): Promise<Finding[]> {
   // commit to the file counts iff it is NOT reachable from the spec's latest version (in-memory
   // parent-edge reachability, the equivalent of `rev-list <version>..HEAD -- <file>`), never a
   // log-position or timestamp guess.
+  // A selector-SCOPED code file keeps this file-level advisory by default (a miss still nudges); the
+  // committed `lint.scopedCodeMiss: "ignore"` silences ONLY this advisory for scoped entries — the
+  // anchor engine's verdicts above (hit = block, resolution failures = integrity) are untouched.
   for (const s of specs) {
-    for (const d of s.driftFiles)
+    const scopedPaths = new Set(s.codeScoped.map((e) => e.path))
+    for (const d of s.driftFiles) {
+      if (cfg.scopedCodeMiss === 'ignore' && scopedPaths.has(d.file)) continue
       out.push({ level: 'warn', rule: 'drift', spec: s.id, file: d.file, msg: `${d.file} is ${d.behind} commit(s) ahead of spec '${s.id}' (v${s.version}) — may be stale` })
+    }
   }
 
   // related drift: the SOFT tier ([[governed-related]]). A referenced file moved ahead of the node's

@@ -28,16 +28,20 @@ vocabulary must stay retired.
 Errors block; warns advise. The full registry (every rule, its level, its one-line meaning) is printed by
 `spex help spec` and `spex guide spec` — the manual lists ALL rules, always:
 
-- **integrity** (error): every file a spec lists in `code:` exists — broken links block. An ANCHOR
-  (`code: path#symbol`, [[code-anchor]]) must also resolve: dead (unit deleted/renamed), ambiguous
-  (two same-named units), an unparseable file, or a language whose designated extractor is missing or
-  can't run all error with the repair spelled out — never a silent pass.
-- **anchor-drift** (error): a commit since the node's version intersected the ANCHORED unit's line
+- **integrity** (error): every file a spec lists in `code:` exists — broken links block. A SELECTOR
+  (`path#symbol` on either relation, [[code-anchor]]) must also resolve: dead (unit deleted/renamed),
+  ambiguous (two same-named units), an unparseable file, or a language whose designated extractor is
+  missing or can't run all error with the repair spelled out — never a silent pass. So do a relation's
+  structural defects: a duplicate entry, a base path both bare and selector-scoped, and a selector on
+  a glob or directory.
+- **anchor-drift** (error): a commit since the node's version intersected an ANCHORED unit's line
   range (measured from the file as it existed at each commit) with no covering Spec-OK ack — the
-  blocking tier of drift, replacing the retired count-based `driftErrorThreshold` gate. See
+  blocking tier of drift, replacing the retired count-based `driftErrorThreshold` gate. Same-file
+  selectors are OR'd: one error per entry, hit selectors named, each commit counted once. See
   [[code-anchor]].
-- **one-govern** (error): a node governs (`code:`) at most ONE file, so drift/eval/ack have one
-  unambiguous subject; keep the true subject, demote the rest to `related:` ([[governed-related]]).
+- **one-govern** (error): a node governs (`code:`) at most ONE file — DISTINCT base paths, so several
+  selectors on one file are one subject — and drift/eval/ack have one unambiguous subject; keep the
+  true subject, demote the rest to `related:` ([[governed-related]]).
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
@@ -68,8 +72,11 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
   ALWAYS advisory: unanchored drift never blocks a commit; the blocking tier is **anchor-drift** above.
+  On a selector-scoped file's MISS this advisory stays by default; the committed
+  `lint.scopedCodeMiss: "ignore"` silences only it ([[code-anchor]]).
 - **related-drift** (warn): the SOFT tier — a `related:` file moved ahead of the node; one summary line,
-  never the commit gate, never eval freshness.
+  never the commit gate, never eval freshness. A selector-scoped related row warns per HIT (selector
+  named); its misses are silent.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
   chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
@@ -77,8 +84,9 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
 - **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — altitude's
   structural twin, the same "hold it in your head" limit on tree breadth, so passing altitude can't relocate
   sprawl into a flat fan-out. Advisory: a flat list of true peers is sometimes right, so it asks, not mandates.
-- **owners** (warn): one summary line counting files governed by **> `lint.maxOwners`** nodes (default 3) —
-  breadth's mirror on the file (too many owners, not too many children; below the cap is ordinary). Remedy
+- **owners** (warn): one summary line counting files governed WHOLE-FILE by **> `lint.maxOwners`** nodes
+  (default 3) — breadth's mirror on the file (too many owners, not too many children; below the cap is
+  ordinary). A selector-scoped governor claims units, not the file, so it stays out of the count. Remedy
   blames the FILE: **split** it so each governor owns a module, or merge the nodes, or give it a single
   foundation owner + **`related:`**. See [[governed-related]].
 - **confusable-id** (warn): two leaf ids exactly one edit apart read as the same word — a typo in either

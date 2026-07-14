@@ -29,6 +29,20 @@ scenarios:
       renders, never an empty pane host. NOTHING in the phone shell scrolls horizontally: the scan finds
       zero sideways scrollers on spec/history/eval/timeline surfaces — wide content (code blocks, diff
       lines, long paths) WRAPS instead, because a thumb surface scrolls one axis only.
+  - name: timeline-scroll-pinning
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport, open a session detail whose timeline overflows the screen several times
+      over. It opens pinned to its newest entry. Scroll UP into history and stay there across at
+      least one 8s poll cycle, sampling the container's scrollTop each second; record the whole
+      run as a video.
+    expected: |
+      A reader parked in history is never yanked: across the poll the scrollTop holds where the
+      thumb left it — the refetch must not move it, neither by swapping in an identical events
+      array nor by an unconditional pin-on-render. Only a reader already AT the bottom follows new
+      entries, chat style. The detail is the bare conversation — header, timeline, composer, no
+      tab row above the timeline (changed-nodes review is desktop scope) — so the freed line goes
+      to the conversation itself.
   - name: sessions-tab-status-colour
     tags: [frontend-e2e, mobile]
     description: >

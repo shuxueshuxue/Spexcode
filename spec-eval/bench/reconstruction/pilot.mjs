@@ -16,7 +16,8 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync, renameSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { launchAgent, secretScan, rawByteScan, scanTreeRaw, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
+import { secretScan, rawByteScan, scanTreeRaw, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
+import { executorRow, activeExecutorName } from './registry.mjs'
 import { scoreSpecLint, scoreControls } from './scorer.mjs'
 import { scoreMobileUi, scoreControlsMobile } from './browser-scorer.mjs'
 
@@ -157,20 +158,51 @@ async function sandboxNetProbe() {
   }
 }
 
-// ---- minimal paid model-verification gate ----
-export async function verifyModel({ credPath }) {
-  const archiveDir = join(RUNS, 'pilot', 'verify-model')
+// ---- minimal model-verification gate, THROUGH the registry row (never a direct harness call) ----
+// Writes a NORMALIZED verify.json (unified contract fields + executor identity + provenance) that the
+// phase's admittance gate reads — one shape for glm/codex/fake, so the gate never learns the harness.
+export async function verifyModel({ credPath, executor = null, fakeKind = 'good', outDir = join(RUNS, 'pilot') }) {
+  const row = executorRow(executor ?? activeExecutorName())
+  const archiveDir = join(outDir, 'verify-model')
   const snap = execFileSync('mktemp', ['-d'], { encoding: 'utf8' }).trim()
   writeFileSync(join(snap, 'README.txt'), 'model verification probe workspace\n')
   try {
-    return await launchAgent({
+    const r = await row.launch({
       runId: 'verify-model', snapshotDir: snap,
       prompt: 'Reply with exactly the two characters: ok', writeSubdir: '.',
-      credPath, timeoutMs: 5 * 60_000, archiveDir, upstreamCommit: null,
+      credPath, timeoutMs: 5 * 60_000, archiveDir, upstreamCommit: null, fakeKind,
     })
+    const verify = {
+      at: nowIso(), executor: row.name, pin: row.pin,
+      ok: r.ok, exitCode: r.exitCode, timedOut: r.timedOut, modelClean: r.modelClean,
+      realCompletion: r.realCompletion, accountingValid: r.accountingValid, apiError: r.apiError,
+      secretClean: r.secretClean, observedModels: r.trace?.model?.observedSet ?? null,
+      provenance: r.trace?.provenance ?? null,
+    }
+    mkdirSync(archiveDir, { recursive: true })
+    writeFileSync(join(archiveDir, 'verify.json'), JSON.stringify(verify, null, 2) + '\n')
+    return { ...r, verify }
   } finally {
     try { rmSync(snap, { recursive: true, force: true }) } catch {}
   }
+}
+
+// the phase's verify-admittance predicate — PURE and harness-agnostic, exported so the no-model fake-row
+// E2E can exercise the exact gate the paid phase uses. Binds executor identity + every hard gate +
+// provenance (runner commit / immutable image id) when a `prov` to bind against is given.
+export function verifyAdmitted(verify, { executor, prov = null } = {}) {
+  const why = []
+  if (!verify) return { ok: false, why: ['verify.json missing — run `pilot verify-model` first'] }
+  if (verify.executor !== executor) why.push(`verify ran executor=${verify.executor}, batch pins ${executor} — no mixing`)
+  for (const k of ['ok', 'modelClean', 'realCompletion', 'accountingValid', 'secretClean']) if (verify[k] !== true) why.push(`${k}=${verify[k]}`)
+  if (verify.exitCode !== 0) why.push(`exitCode=${verify.exitCode}`)
+  if (verify.timedOut) why.push('timedOut')
+  if (verify.apiError) why.push(`apiError=${verify.apiError} (a 429/rate-limited verify is NOT admissible)`)
+  if (prov) {
+    if (verify.provenance?.runnerCommit !== prov.runnerCommit) why.push('provenance.runnerCommit disagrees with now')
+    if (verify.provenance?.dockerImageId !== prov.dockerImageId) why.push('provenance.dockerImageId disagrees with now')
+  }
+  return { ok: why.length === 0, why }
 }
 
 // ---- helpers for the phase schedules ----
@@ -215,14 +247,17 @@ function guardAbort(abort, label) { if (abort.stopped) throw new BatchStop(`${la
 function stopBatch(abort, msg) { if (!abort.stopped) { abort.stopped = true; abort.reason = msg }; throw new BatchStop(msg) }
 
 // every per-run hard gate; any failure stops the whole batch (no silent downgrade, no retry).
+// HARNESS-AGNOSTIC: reads only the unified runner contract — the expected model comes from the run's
+// own trace (the adapter pin), never from a provider constant baked in here.
 function enforceRunGates(abort, label, r) {
+  const expected = r.trace?.model?.expected ?? 'adapter-pin'
   if (r.quarantined) stopBatch(abort, `${label} QUARANTINED — credential material in archived bytes`)
-  if (r.timedOut) stopBatch(abort, `${label} timed out (${r.trace?.durationMs}ms) — archived, no retry`)
-  if (!r.accountingValid) stopBatch(abort, `${label} accounting-invalid — non-monotonic usage: ${JSON.stringify(r.trace?.accounting?.anomalies)}`)
+  if (r.timedOut) stopBatch(abort, `${label} timed out (${r.durationMs ?? r.trace?.durationMs}ms) — archived, no retry`)
+  if (!r.accountingValid) stopBatch(abort, `${label} accounting-invalid — usage integrity failed: ${JSON.stringify(r.trace?.accounting?.anomalies ?? r.trace?.parsed?.errors ?? null)}`)
   if (r.apiError) stopBatch(abort, `${label} upstream API error — ${r.apiError} — archived, NOT retried`)
-  if (!r.modelClean) stopBatch(abort, `${label} real endpoint model ${JSON.stringify(r.trace?.model?.observedSet)} != {${MODEL}}`)
+  if (!r.modelClean) stopBatch(abort, `${label} real endpoint model ${JSON.stringify(r.trace?.model?.observedSet)} != {${expected}}`)
   if (!r.secretClean) stopBatch(abort, `${label} secret scan hit in archived bytes`)
-  if (!r.realCompletion) stopBatch(abort, `${label} no real ${MODEL} completion (0 output tokens)`)
+  if (!r.realCompletion) stopBatch(abort, `${label} no real ${expected} completion (0 output tokens)`)
   if (r.exitCode !== 0) stopBatch(abort, `${label} exitCode=${r.exitCode}`)
   if (!existsSync(join(r.archiveDir, 'trace.json'))) stopBatch(abort, `${label} archive trace.json missing`)
 }
@@ -253,13 +288,14 @@ function scopeAnalysis(preSnapDir, workDir, governed) {
 
 // ---- leaf phase (order-balanced blocks): recon is per UNIQUE leaf; arms run per BLOCK in the block's
 // frozen rotation. A repeat block reuses its leaf's cached recon + bundles (recon spent once). ----
-export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir) {
+export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row) {
   const id = leaf.id
   // (H) guard on the FIRST line of the exported entry — a direct call (bypassing leafPhase enforcement)
   // must not spend money on a leaf with no real behavioural scorer.
   if (!SCORER_IMPLEMENTED.has(id)) throw new Error(`reconLeaf refused: leaf ${id} has no implemented behavioural scorer (gated blind) — no paid launch`)
   if (!abort || typeof abort !== 'object') throw new Error('reconLeaf refused: missing shared abort state — call via leafPhase')
   if (!stageDir) throw new Error('reconLeaf refused: missing stageDir — all phase output goes through the staging tree')
+  if (!row?.launch) throw new Error('reconLeaf refused: missing executor row — every launch goes through the pinned registry row')
   const card = cards.leaves[leaf.relDir]
   if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
   const base = join(stageDir, 'leaf', id)
@@ -270,9 +306,9 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir) {
   runTs(['snapshot', '--scale', 'leaf', '--target', leaf.relDir, '--out', genDir])
   const genManifest = JSON.parse(readFileSync(join(genDir, 'manifest.json'), 'utf8'))
   if (genManifest.leakage.violations.length || genManifest.canary.hits.length) stopBatch(abort, `${id} generation snapshot leakage/canary hits`)
-  // 2. R0 reconstruction (isolated)
+  // 2. R0 reconstruction (isolated, through the pinned registry row)
   guardAbort(abort, `recon-${id}`)
-  const recon = await launchAgent({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: readFileSync(join(genDir, 'PROMPT.md'), 'utf8'),
+  const recon = await row.launch({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: readFileSync(join(genDir, 'PROMPT.md'), 'utf8'),
     writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: join(base, 'recon'), upstreamCommit: upstream })
   enforceRunGates(abort, `recon-${id}`, recon)
   // 3. R0 required-file + schema gate; empty/failed R0 is a HARD STOP, never a silent N0
@@ -297,10 +333,11 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir) {
 
 // run ONE order-balanced block: the arms in block.armOrder against the frozen future task, using the
 // leaf's cached recon bundles. Archived under leaf/<id>/block-<n>/arm-<arm> (disambiguates a repeat).
-export async function runBlock(block, leaf, ctx, credPath, abort, stageDir) {
+export async function runBlock(block, leaf, ctx, credPath, abort, stageDir, row) {
   if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runBlock refused: leaf ${block.leafId} has no behavioural scorer`)
   if (!abort || typeof abort !== 'object') throw new Error('runBlock refused: missing shared abort state')
   if (!stageDir) throw new Error('runBlock refused: missing stageDir — all phase output goes through the staging tree')
+  if (!row?.launch) throw new Error('runBlock refused: missing executor row — every launch goes through the pinned registry row')
   const { card, bundles, upstream } = ctx
   const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
   const bdir = join(stageDir, 'leaf', block.leafId, `block-${block.block}`)
@@ -317,7 +354,7 @@ export async function runBlock(block, leaf, ctx, credPath, abort, stageDir) {
     runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', governed.join(','), '--out', execDir, ...bundleArgs])
     const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
     if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${block.leafId}#${block.block}/${arm} exec snapshot invalid`)
-    const run = await launchAgent({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
+    const run = await row.launch({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
       writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream })
     enforceRunGates(abort, `${block.leafId}#${block.block}-${arm}`, run)
     const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
@@ -348,18 +385,20 @@ const readdirSyncSafe = (d) => { try { return readdirSync(d, { withFileTypes: tr
 const statSafe = (p) => { try { return statSync(p) } catch { return null } }
 const readFileSafe = (p) => { try { return readFileSync(p, 'utf8') } catch { return null } }
 
-export async function leafPhase({ credPath }) {
+export async function leafPhase({ credPath, executor = null }) {
   const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
   const cards = JSON.parse(readFileSync(join(HERE, 'task-cards.json'), 'utf8'))
   const abort = { stopped: false, reason: null }
-  // (2) EVERY byte this phase produces goes into a staging tree first; nothing is published in place.
-  // At the end the WHOLE archive is fail-closed raw-scanned and staging is promoted by ONE atomic rename
-  // (or quarantined). A crash mid-phase leaves only .STAGING — never a half-published archive. An already-
-  // published phase-leaf is NEVER silently removed: its existence fails the phase before any money is spent.
+  // ONE executor row for the WHOLE batch — pinned before anything launches; recon and every arm go
+  // through this row and only this row (no mixing, no direct harness calls).
+  const row = executorRow(executor ?? activeExecutorName())
+  // EVERY byte this phase produces goes into a staging tree first; nothing is published in place.
+  // At the end the staging tree is fail-closed raw-scanned and promoted by ONE atomic rename (or
+  // quarantined). Pre-existing STAGE or FINAL is NEVER removed — both fail loud and stay for inspection.
   const STAGE = join(RUNS, 'pilot', 'phase-leaf.STAGING')
   const FINAL = join(RUNS, 'pilot', 'phase-leaf')
   if (existsSync(FINAL)) throw new Error(`FATAL: ${FINAL} already exists — a published archive is never overwritten; archive/move it first`)
-  rmSync(STAGE, { recursive: true, force: true })
+  if (existsSync(STAGE)) throw new Error(`FATAL: ${STAGE} already exists (a prior phase crashed mid-stage?) — inspect and move it first; staging is never clobbered`)
   mkdirSync(STAGE, { recursive: true })
 
   // (6) phase enforcement — bind to the exact frozen inputs + committed runner/image + the prior-stage
@@ -374,7 +413,9 @@ export async function leafPhase({ credPath }) {
   E('cards-hash', cardsSha === tasks.cardsSha256, `cards sha ${cardsSha.slice(0, 12)} vs pinned ${String(tasks.cardsSha256).slice(0, 12)}`)
   E('runner-committed', prov.runnerDirty === false, `runner working tree dirty=${prov.runnerDirty} — commit before paid runs`)
   E('docker-image-pinned', !!prov.dockerImageId, `image ${prov.dockerImage} id=${String(prov.dockerImageId).slice(0, 16)}`)
-  E('claude-pinned', !!prov.claudeVersion && !!prov.claudePkgDigest, `claude ${prov.claudeVersion} digest ${prov.claudePkgDigest}`)
+  // the BATCH executor's own provenance must be fully pinned (harness identity fields non-null)
+  const rowProv = row.provenance()
+  E('executor-pinned', Object.values(rowProv).every((v) => v !== null && v !== undefined), `executor=${row.name} pin=${JSON.stringify(row.pin)} provenance keys=${Object.keys(rowProv).join(',')}`)
   // (A) prior stages present + agree on the FULL binding (runner/image/claude/tasksSha/cardsSha/endpoint/model)
   const preflight = readJson(join(RUNS, 'pilot', 'preflight.json'))
   const check = readJson(join(RUNS, 'pilot', 'check.json'))
@@ -386,11 +427,12 @@ export async function leafPhase({ credPath }) {
   E('preflight-binding-agrees', bindingAgrees(preflight?.binding), 'preflight.json binding (runner/image/claude/tasksSha/cardsSha/endpoint/model) disagrees with now')
   E('check-green', !!check && check.checks?.every((c) => c.ok), check ? 'pilot check on record' : 'check.json missing — run `pilot check`')
   E('check-provenance-agrees', !!check && check.provenance?.runnerCommit === prov.runnerCommit && check.provenance?.dockerImageId === prov.dockerImageId && check.provenance?.claudePkgDigest === prov.claudePkgDigest, 'pilot check ran on a different runner/image/claude than now')
-  // (A) the verify-model trace must exist and PASS every hard gate on the same provenance
-  const vtrace = readJson(join(RUNS, 'pilot', 'verify-model', 'trace.json'))
-  const vOk = !!vtrace && vtrace.exitCode === 0 && !vtrace.timedOut && vtrace.model?.clean === true && vtrace.model?.realCompletion === true && vtrace.accounting?.valid === true && !vtrace.apiError && vtrace.secretScan?.clean === true
-  const vProvOk = !!vtrace && vtrace.provenance?.runnerCommit === prov.runnerCommit && vtrace.provenance?.dockerImageId === prov.dockerImageId && vtrace.provenance?.claudePkgDigest === prov.claudePkgDigest && vtrace.endpointHost === ENDPOINT_HOST
-  E('verify-model-admitted', vOk && vProvOk, vtrace ? `verify ok=${vOk} provenanceAgrees=${vProvOk} (a 429/rate-limited verify is NOT admissible)` : 'verify-model trace.json missing — run a VALID `pilot verify-model` first')
+  // (A) the NORMALIZED verify.json must exist, PASS every hard gate, be from THIS batch's pinned
+  // executor, and bind to the same runner commit / immutable image — via the same pure predicate the
+  // no-model fake-row E2E exercises (verifyAdmitted).
+  const verify = readJson(join(RUNS, 'pilot', 'verify-model', 'verify.json'))
+  const vAdmit = verifyAdmitted(verify, { executor: row.name, prov })
+  E('verify-model-admitted', vAdmit.ok, vAdmit.ok ? `executor=${verify.executor} all hard gates + provenance bound` : vAdmit.why.join('; '))
   // scorer controls must discriminate BEFORE paid runs (positive pass, negative rejected) — both leaves
   const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
   const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
@@ -398,11 +440,17 @@ export async function leafPhase({ credPath }) {
     const ctl = scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)
     writeFileSync(join(STAGE, 'scorer-controls-spec-lint.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
     E('scorer-controls-spec-lint', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
+    // (5) the phase's control provenance (image id + every mount digest) must EQUAL what pilot check
+    // recorded — the scorer scoring paid arms is byte-identically the scorer that passed its controls.
+    E('control-provenance-spec-lint-bound', !!check?.controlProvenance?.specLint && JSON.stringify(ctl.provenance) === JSON.stringify(check.controlProvenance.specLint),
+      check?.controlProvenance?.specLint ? `now=${JSON.stringify(ctl.provenance)} check=${JSON.stringify(check.controlProvenance.specLint)}` : 'check.json has no controlProvenance.specLint — re-run `pilot check`')
   }
   if (mobileLeaf) {
     const ctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState)
     writeFileSync(join(STAGE, 'scorer-controls-mobile.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
     E('scorer-controls-mobile', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, unchanged ${ctl.negatives?.unchanged.passed}/${ctl.negatives?.unchanged.total}, never-updates ${ctl.negatives?.neverUpdates.passed}/${ctl.negatives?.neverUpdates.total}`)
+    E('control-provenance-mobile-bound', !!check?.controlProvenance?.mobile && JSON.stringify(ctl.provenance) === JSON.stringify(check.controlProvenance.mobile),
+      check?.controlProvenance?.mobile ? `now=${JSON.stringify(ctl.provenance)} check=${JSON.stringify(check.controlProvenance.mobile)}` : 'check.json has no controlProvenance.mobile — re-run `pilot check`')
   }
 
   // gate: only leaves whose behavioural scorer is implemented run paid arms; others are declared blind
@@ -416,57 +464,63 @@ export async function leafPhase({ credPath }) {
   // recon is spent ONCE per unique leaf; blocks (incl the repeat) reuse the cached recon/bundles.
   const reconCtx = {}, results = [], failures = []
   const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
-  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE)))
+  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE, row)))
   reconSettled.forEach((s, i) => { if (s.status === 'fulfilled') reconCtx[uniqueLeafIds[i]] = s.value; else failures.push({ stage: 'recon', leaf: uniqueLeafIds[i], error: String(s.reason?.message ?? s.reason) }) })
   // run the 3 order-balanced blocks concurrently; shared abort halts new launches after any hard failure
   const blockSettled = await Promise.allSettled(blocks.map((b) => {
     const leaf = tasks.leaves.find((l) => l.id === b.leafId)
     const ctx = reconCtx[b.leafId]
     if (!ctx) return Promise.reject(new Error(`block ${b.block}: recon for ${b.leafId} unavailable (recon failed/aborted)`))
-    return runBlock(b, leaf, ctx, credPath, abort, STAGE)
+    return runBlock(b, leaf, ctx, credPath, abort, STAGE, row)
   }))
   blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
   const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
-  // (2) final gate over the COMPLETE archive: report first, then a fail-closed raw scan of EVERY byte
-  // under runs/pilot (prior stages + this staging tree). The scan verdict is itself published bytes
-  // (embedded in the report + final-scan.json), so scan→embed→RE-SCAN until the verdict of the final
-  // on-disk bytes is stable across counts + scannedFiles + the sorted path-set digest — the LAST act
-  // before the rename is always a full-byte scan with ZERO writes after it. No fixpoint in 3 passes =
-  // unpublishable (fail-closed). The report embeds only the stable shape (file count / path-set digest /
-  // secret summary); the full CONTENT digest goes to a promotion ledger OUTSIDE the scanned tree — a
-  // tree cannot embed a digest of itself. Rename targets are never pre-cleared: existing target =
-  // fail-loud, and both renames are verified (source gone + destination exists) after the fact.
-  const report = { v: 7, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
+  // final gate: report first, then a fail-closed raw scan with the STAGING TREE ITSELF as the scan root —
+  // relative paths (and so pathSetDigest/contentDigest) are IDENTICAL before and after the promote rename,
+  // so the recorded digests truthfully describe the PUBLISHED tree. The scan verdict is itself published
+  // bytes, so scan→embed→RE-SCAN until stable across counts + scannedFiles + path-set digest — the LAST
+  // act before the rename is always a full-byte scan with ZERO writes after it; no fixpoint in 3 passes =
+  // unpublishable. The report embeds only the stable shape (count/path-set/secret summary); the full
+  // CONTENT digest goes to the promotion ledger OUTSIDE the tree (a tree cannot embed its own digest),
+  // written WRITE-AHEAD: prepare entry → atomic rename → committed entry — any ledger append failure is a
+  // hard stop, and at every step FINAL/STAGE are intact and recoverable. Rename targets are never
+  // pre-cleared: existing target = fail-loud; both renames are verified after the fact.
+  const report = { v: 8, at: nowIso(), phase: 'leaf', executor: row.name, pin: row.pin, c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
   writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   let key = null; try { key = readCredential(credPath) } catch {}
   const summarize = (s) => ({ scannedFiles: s.scannedFiles, pathSetDigest: s.pathSetDigest, keyHits: s.keyHits, prefixHits: s.prefixHits, b64Hits: s.b64Hits, scanError: s.scanError, errors: s.errors, clean: s.clean })
-  let scan = key ? scanTreeRaw(join(RUNS, 'pilot'), key) : { scannedFiles: 0, pathSetDigest: null, contentDigest: null, keyHits: null, prefixHits: null, b64Hits: null, scanError: true, errors: ['credential unreadable — cannot certify archive'], clean: false }
+  let scan = key ? scanTreeRaw(STAGE, key) : { scannedFiles: 0, pathSetDigest: null, contentDigest: null, keyHits: null, prefixHits: null, b64Hits: null, scanError: true, errors: ['credential unreadable — cannot certify archive'], clean: false }
   let stable = false
   for (let pass = 1; key && pass <= 3 && !stable; pass++) {
-    report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
-    writeFileSync(join(STAGE, 'final-scan.json'), JSON.stringify({ at: nowIso(), pass, scanRoot: 'runs/pilot', ...summarize(scan) }, null, 2) + '\n')
+    report.finalArchiveScan = { scanRoot: 'phase-leaf', ...summarize(scan) }   // normalized to the FINAL name — relative content identical pre/post rename
+    writeFileSync(join(STAGE, 'final-scan.json'), JSON.stringify({ at: nowIso(), pass, scanRoot: 'phase-leaf', ...summarize(scan) }, null, 2) + '\n')
     writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
-    const re = scanTreeRaw(join(RUNS, 'pilot'), key)
+    const re = scanTreeRaw(STAGE, key)
     stable = ['clean', 'scanError', 'keyHits', 'prefixHits', 'b64Hits', 'scannedFiles', 'pathSetDigest'].every((k) => re[k] === scan[k])
     scan = re
   }
-  if (!report.finalArchiveScan) report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
+  if (!report.finalArchiveScan) report.finalArchiveScan = { scanRoot: 'phase-leaf', ...summarize(scan) }
   const publishable = stable && scan.clean
-  const ledger = (row) => appendFileSync(join(RUNS, 'promotion-ledger.ndjson'), JSON.stringify(row) + '\n')
+  const ledgerPath = join(RUNS, 'promotion-ledger.ndjson')
+  const ledgerAppend = (entry) => {
+    try { appendFileSync(ledgerPath, JSON.stringify(entry) + '\n') }
+    catch (e) { throw new Error(`FATAL: promotion-ledger append failed (${e.message}) at action=${entry.action} — hard stop; STAGE/FINAL are intact on disk and recoverable`) }
+  }
   if (publishable) {
     if (existsSync(FINAL)) throw new Error(`FATAL: ${FINAL} appeared during the phase — refusing to overwrite; do not publish`)
+    ledgerAppend({ at: nowIso(), phase: 'leaf', action: 'prepare-promote', from: STAGE, to: FINAL, executor: row.name, scannedFiles: scan.scannedFiles, pathSetDigest: scan.pathSetDigest, contentDigest: scan.contentDigest })
     renameSync(STAGE, FINAL)                       // atomic promote: same parent, one rename, no pre-clear
     if (existsSync(STAGE) || !existsSync(FINAL)) throw new Error(`FATAL: promote rename ${STAGE} → ${FINAL} did not take effect`)
+    ledgerAppend({ at: nowIso(), phase: 'leaf', action: 'commit-promote', to: FINAL, contentDigest: scan.contentDigest })
     report.publishedTo = FINAL
-    // the promotion ledger lives OUTSIDE the scanned/promoted tree and records the final content digest
-    ledger({ at: nowIso(), phase: 'leaf', action: 'promote', publishedTo: FINAL, scannedFiles: scan.scannedFiles, pathSetDigest: scan.pathSetDigest, contentDigest: scan.contentDigest, clean: scan.clean })
   } else {
-    const q = join(RUNS, `pilot.QUARANTINE-${Date.now()}`)
+    const q = join(RUNS, 'pilot', `phase-leaf.QUARANTINE-${Date.now()}`)
     if (existsSync(q)) throw new Error(`FATAL: quarantine target ${q} already exists — resolve manually; do not publish`)
-    renameSync(join(RUNS, 'pilot'), q)
-    if (existsSync(join(RUNS, 'pilot')) || !existsSync(q)) throw new Error(`FATAL: quarantine rename → ${q} did not take effect — do not publish`)
+    ledgerAppend({ at: nowIso(), phase: 'leaf', action: 'prepare-quarantine', from: STAGE, to: q, stable, scan: summarize(scan), contentDigest: scan.contentDigest })
+    renameSync(STAGE, q)
+    if (existsSync(STAGE) || !existsSync(q)) throw new Error(`FATAL: quarantine rename → ${q} did not take effect — do not publish`)
+    ledgerAppend({ at: nowIso(), phase: 'leaf', action: 'commit-quarantine', to: q })
     report.quarantined = q
-    ledger({ at: nowIso(), phase: 'leaf', action: 'quarantine', quarantinedTo: q, stable, scan: summarize(scan), contentDigest: scan.contentDigest })
   }
   return report
 }
@@ -483,17 +537,18 @@ if (sub === 'preflight') {
   console.log(`report: spec-eval/bench/reconstruction/runs/pilot/preflight.json`)
   process.exit(report.allOk ? 0 : 1)
 } else if (sub === 'verify-model') {
-  const r = await verifyModel({ credPath: opt('--cred', CRED_DEFAULT) })
-  console.log(`verify-model: ok=${r.ok} exit=${r.exitCode} timedOut=${r.timedOut} modelClean=${r.modelClean} realCompletion=${r.realCompletion} secretClean=${r.secretClean}`)
-  console.log(`  real endpoint model set: ${JSON.stringify(r.trace.model.observedSet)} (all seen incl local: ${JSON.stringify(r.trace.model.allSeen)}; expected ${MODEL})`)
+  // --executor <glm|codex|fake>; default = the decision ledger's activeProvider (never a guess)
+  const r = await verifyModel({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null) })
+  console.log(`verify-model[${r.verify.executor}]: ok=${r.ok} exit=${r.exitCode} timedOut=${r.timedOut} modelClean=${r.modelClean} realCompletion=${r.realCompletion} secretClean=${r.secretClean}`)
+  console.log(`  observed model set: ${JSON.stringify(r.verify.observedModels)} (pin ${JSON.stringify(r.verify.pin)})`)
   if (r.apiError) console.log(`  API error: ${r.apiError}`)
-  console.log(`  tokens: in=${r.trace.tokens.input} cacheRead=${r.trace.tokens.cacheRead} out=${r.trace.tokens.output} duration=${r.trace.durationMs}ms`)
-  console.log(`  archive: ${r.archiveDir}`)
+  console.log(`  usage: ${JSON.stringify(r.usage)} duration=${r.durationMs}ms`)
+  console.log(`  archive: ${r.archiveDir} (normalized verify.json alongside)`)
   process.exit(r.ok ? 0 : 1)
 } else if (sub === 'phase') {
   const scale = opt('--scale', 'leaf')
   if (scale !== 'leaf') { console.error(`only --scale leaf implemented in this stage (got ${scale})`); process.exit(2) }
-  const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT) })
+  const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null) })
   console.log(`\nleaf phase: ${report.blocks.length} blocks complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out, aborted=${report.aborted} (order-balanced pilot, no significance claim)`)
   for (const g of report.gatedOut) console.log(`  GATED [${g.leaf}]: ${g.reason}`)
   for (const [lid, rc] of Object.entries(report.recon ?? {})) console.log(`  recon[${lid}] valid=${rc.valid} bodyChars=${rc.bodyChars} o0Overlap=${rc.o0Overlap} model=${JSON.stringify(rc.model)} sessions=${rc.sessionIds?.length}`)
@@ -521,6 +576,12 @@ if (sub === 'preflight') {
   let mctl = { discriminates: false }
   if (mobileLeaf) { try { mctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState) } catch (e) { mctl = { __err: String(e.message ?? e) } } }
   K('scorer-controls-mobile', !!mctl.discriminates, mctl.discriminates ? `positive ${mctl.positive.passed}/${mctl.positive.total}, unchanged ${mctl.negatives.unchanged.passed}/${mctl.negatives.unchanged.total}, never-updates ${mctl.negatives.neverUpdates.passed}/${mctl.negatives.neverUpdates.total} (browser/DOM, both negatives rejected)` : `FAILED ${mctl.__err ?? 'no discrimination'}`)
+  // registry fake-row E2E: the verify→phase-gate wiring, no model, through the SAME registry/gate code
+  const regE2e = tryRun('registry', () => execFileSync(TSX_NODE, [join(HERE, 'registry.selftest.mjs')], { cwd: ROOT, encoding: 'utf8', timeout: 120_000 }))
+  K('registry-fake-e2e', !regE2e.__err, regE2e.__err ? `FAILED ${regE2e.__err}` : 'fake row: unified contract + verify.json → verifyAdmitted gate (accept/reject/mix-refusal)')
+  // codex auth-binding YATU: real CLI in network-none, loopback fake provider, dummy env_key credential
+  const authProbe = tryRun('auth', () => execFileSync(TSX_NODE, [join(HERE, 'auth-probe.mjs')], { cwd: ROOT, encoding: 'utf8', timeout: 200_000 }))
+  K('codex-auth-binding', !authProbe.__err, authProbe.__err ? `FAILED ${authProbe.__err}` : 'CLI sent Bearer <dummy env_key> to loopback pinned provider, body model=gpt-5.5, /v1/responses')
   for (const c of ['select', 'episodes', 'tasks']) { const r = tryRun(c, () => runTs([c, '--check'])); K(`frame-${c}`, !r.__err, r.__err ? `FAILED ${r.__err}` : 'byte-identical') }
   const dry = tryRun('dry', () => runTs(['dry'])); K('dry-oracle', !dry.__err, dry.__err ? `FAILED ${dry.__err}` : 'all gates + twin')
   const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))
@@ -528,11 +589,16 @@ if (sub === 'preflight') {
   const prov = provenanceRecord()
   K('provenance-pinned', !!prov.dockerImageId && !!prov.claudeVersion && !!prov.claudePkgDigest, `image=${String(prov.dockerImageId).slice(0, 19)} claude=${prov.claudeVersion} digest=${prov.claudePkgDigest} runnerDirty=${prov.runnerDirty} (dirty is informational here; the paid phase HARD-gates on committed)`)
   mkdirSync(join(RUNS, 'pilot'), { recursive: true })
-  writeFileSync(join(RUNS, 'pilot', 'check.json'), JSON.stringify({ at: nowIso(), checks, provenance: prov }, null, 2) + '\n')
+  // (5) the CONTROL PROVENANCE (image id + every mount digest) is recorded, not discarded — the paid
+  // phase re-runs its controls and hard-binds their provenance to these very values.
+  writeFileSync(join(RUNS, 'pilot', 'check.json'), JSON.stringify({
+    at: nowIso(), checks, provenance: prov,
+    controlProvenance: { specLint: ctl.provenance ?? null, mobile: mctl.provenance ?? null },
+  }, null, 2) + '\n')
   const hardOk = checks.filter((c) => c.name !== 'provenance-pinned' || c.ok).every((c) => c.ok)
   console.log(hardOk ? '\npilot check ✓ all no-model regressions + controls pass' : '\npilot check ✗ FAILED')
   process.exit(hardOk ? 0 : 1)
 } else if (sub) {
-  console.error(`unknown pilot subcommand: ${sub} (check | preflight | verify-model | phase --scale leaf)`)
+  console.error(`unknown pilot subcommand: ${sub} (check | preflight | verify-model [--executor glm|codex|fake] | phase --scale leaf [--executor …])`)
   process.exit(2)
 }

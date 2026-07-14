@@ -95,6 +95,7 @@ export async function scoreControlsMobile(repoRoot, positiveSha, negativeSha) {
     const row = (r, extra) => ({ ...extra, passed: r.passed, total: r.total, checks: r.checks })
     return {
       discriminates: pos.passed === pos.total && negUnchanged.passed < negUnchanged.total && negNever.passed < negNever.total,
+      provenance: pos.provenance,   // image id + mount digests — recorded by pilot check, re-bound by the phase
       positive: row(pos, { sha: positiveSha }),
       negatives: { unchanged: row(negUnchanged, { sha: negativeSha }), neverUpdates: row(negNever, { impl: 'never-updates' }) },
     }

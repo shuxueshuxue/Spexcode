@@ -16,6 +16,19 @@ scenarios:
       and because every dispatch from this surface SILENTLY carries replyVia:"note" (the surface's fixed
       property — no visible control), its next declaration's full note — the reply — appears in the same
       timeline. No terminal is ever mounted.
+  - name: node-panes-one-axis
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport, drill to a node that declares eval scenarios (e.g. mobile-ui itself) and walk
+      EVERY pane tab the node offers — spec, history, issues, eval, edit/children. Read (a) whether each
+      tab renders real content (the eval tab must show the node's reading rows, not a blank host), and
+      (b) whether ANY element inside the mobile shell scrolls horizontally (scan scrollWidth >
+      clientWidth on elements whose overflow-x is auto/scroll — the history diff is the known offender).
+    expected: |
+      Every offered tab renders its pane — the eval tab shows the same reading timeline the desktop popup
+      renders, never an empty pane host. NOTHING in the phone shell scrolls horizontally: the scan finds
+      zero sideways scrollers on spec/history/eval/timeline surfaces — wide content (code blocks, diff
+      lines, long paths) WRAPS instead, because a thumb surface scrolls one axis only.
   - name: sessions-tab-status-colour
     tags: [frontend-e2e, mobile]
     description: >

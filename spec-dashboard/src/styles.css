@@ -1471,21 +1471,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   font-family: var(--mono); -webkit-tap-highlight-color: transparent;
 }
 
-/* top bar — a thin context strip: optional back chevron + the project brand (which tab am I serving). */
-.m-topbar {
-  flex: none; display: flex; align-items: center; gap: 8px;
-  height: 48px; padding: 0 10px; padding-top: env(safe-area-inset-top, 0);
-  box-sizing: content-box; border-bottom: 1px solid var(--line); background: var(--panel);
-}
-.m-back {
-  flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-  font-size: 26px; line-height: 1; color: var(--blue);
-  background: none; border: none; cursor: pointer;
-}
-.m-back.ghost { visibility: hidden; }          /* keep the brand fixed when there's nothing to go back to */
-.m-brand { font-weight: 700; letter-spacing: .4px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* no top bar: the breadcrumb navigates specs, the session detail carries its own back — content owns
+   the whole height (the notch inset moves onto the main region). */
+.m-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; padding-top: env(safe-area-inset-top, 0); }
 
-.m-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
+/* NO horizontal scrolling anywhere in the phone shell: a thumb surface scrolls one axis. Every mobile
+   scroller is clamped to vertical, and anything that would overflow sideways (code blocks, long paths,
+   diff lines in the reused desktop panes) WRAPS instead — the panes are for reading, not measuring. */
+.m-app .m-timeline, .m-app .m-children, .m-app .m-sesslist, .m-app .m-sess-changes, .m-app .m-sessdetail,
+.m-app .m-pane-host .pane-doc, .m-app .m-pane-host .pane-hist, .m-app .m-pane-host .pane-issues,
+.m-app .m-pane-host .pane-eval, .m-app .m-pane-host .pane-edit { overflow-x: hidden; }
+.m-app pre, .m-app code, .m-app .diff-line, .m-app .hist-diff pre {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
+}
+/* the history/edit diff renderer: desktop scrolls it sideways (.ev-diff overflow-x:auto, .dl pre) — on a
+   phone the diff WRAPS instead (the reproduced h-scrollbar came exactly from here). */
+.m-app .ev-diff { overflow-x: hidden; }
+.m-app .ev-diff .dl { white-space: pre-wrap; overflow-wrap: anywhere; }
+.m-app .m-ev-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-app img, .m-app video { max-width: 100%; height: auto; }
 .m-specs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* breadcrumb — the spine root→here, horizontally scrollable when it's deep; tap any crumb to climb. */
@@ -1592,7 +1596,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    timeline (status transitions with full notes + delivered prompts) over a docked composer. */
 .m-sessdetail { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .m-sessdetail.chat { display: flex; flex-direction: column; overflow: hidden; }
-.m-sess-card { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.m-sess-card { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 6px; border-bottom: 1px solid var(--line); }
+.m-sess-back {
+  flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; line-height: 1; color: var(--blue); background: none; border: none; cursor: pointer;
+}
 .m-sess-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-sess-status { font-size: 12px; color: var(--muted); }

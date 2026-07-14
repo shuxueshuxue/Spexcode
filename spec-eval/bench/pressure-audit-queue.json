@@ -1,0 +1,488 @@
+{
+ "purpose": "HUMAN estimation of π_p — the share of pressure events where the summary parent body TRULY needs rewriting. Per row, a HUMAN reads the parent spec body as of the pressing commit (first `show` command) and the child spec.md change (second `show` command), then sets humanVerdict to true (this child change makes the parent body stale — its summary of this area no longer holds) or false (the parent body still holds as written), plus an optional humanNote. Do not consult the current .spec tree, later history, or whether the parent was later updated/acked. A model must NEVER fill these fields — machine-filled rows void the estimate; π_p is UNKNOWN and this file is not human validation until a person fills it. Rows are stratified by parent depth (recover a row’s depth by counting the parent’s ancestors in .spec) so π_p can be estimated per depth.",
+ "generatedFrom": "pressure events replayed from git history (deterministic; regenerate with --emit-audit-queue)",
+ "frozenAt": "dc0eb6ab2e206cde1996153ea6551c024a1f7f02",
+ "rejoin": "answers rejoin the replay by id; π_p by depth = mean(humanVerdict) within each parent-depth stratum",
+ "rows": [
+  {
+   "id": "doctor<-migrate@a9975ebc",
+   "parentNode": "doctor",
+   "childNode": "migrate",
+   "commit": "a9975ebc6e32e1c3bbe65fdf3961667406d9339b",
+   "show": {
+    "parentSpec": "git show a9975ebc6e32:.spec/spexcode/spec-cli/footprint/doctor/spec.md",
+    "childDiff": "git show a9975ebc6e32 -- .spec/spexcode/spec-cli/footprint/doctor/migrate/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "event-detail<-event-detail-fixes@8f80b1cc",
+   "parentNode": "event-detail",
+   "childNode": "event-detail-fixes",
+   "commit": "8f80b1cc1dd7e40c8497277ec89c88a7ed241727",
+   "show": {
+    "parentSpec": "git show 8f80b1cc1dd7:.spec/spexcode/spec-dashboard/dashboard-ui/evals-view/event-detail/spec.md",
+    "childDiff": "git show 8f80b1cc1dd7 -- .spec/spexcode/spec-dashboard/dashboard-ui/evals-view/event-detail/event-detail-fixes/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "event-detail<-event-detail-fixes@f4072688",
+   "parentNode": "event-detail",
+   "childNode": "event-detail-fixes",
+   "commit": "f407268816a1bc57eeae99f5419bce1249713820",
+   "show": {
+    "parentSpec": "git show f407268816a1:.spec/spexcode/spec-dashboard/dashboard-ui/evals-view/event-detail/spec.md",
+    "childDiff": "git show f407268816a1 -- .spec/spexcode/spec-dashboard/dashboard-ui/evals-view/event-detail/event-detail-fixes/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "harness-delivery<-plugin-harness@38ae4bbb",
+   "parentNode": "harness-delivery",
+   "childNode": "plugin-harness",
+   "commit": "38ae4bbbc859596cb94dc308d3ec6ee6777a98e9",
+   "show": {
+    "parentSpec": "git show 38ae4bbbc859:.spec/spexcode/spec-cli/sessions/injected-context/harness-delivery/spec.md",
+    "childDiff": "git show 38ae4bbbc859 -- .spec/spexcode/spec-cli/sessions/injected-context/harness-delivery/plugin-harness/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "injected-context<-harness-delivery@362fef6b",
+   "parentNode": "injected-context",
+   "childNode": "harness-delivery",
+   "commit": "362fef6b61a009b2b5f8c4d9e83b142c4c7583c2",
+   "show": {
+    "parentSpec": "git show 362fef6b61a0:.spec/spexcode/spec-cli/sessions/injected-context/spec.md",
+    "childDiff": "git show 362fef6b61a0 -- .spec/spexcode/spec-cli/sessions/injected-context/harness-delivery/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "injected-context<-hook-dispatch@b86f659a",
+   "parentNode": "injected-context",
+   "childNode": "hook-dispatch",
+   "commit": "b86f659ad376db0273016c514be972105d59cba0",
+   "show": {
+    "parentSpec": "git show b86f659ad376:.spec/spexcode/spec-cli/sessions/injected-context/spec.md",
+    "childDiff": "git show b86f659ad376 -- .spec/spexcode/spec-cli/sessions/injected-context/hook-dispatch/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "injected-context<-hook-dispatch@e6569f06",
+   "parentNode": "injected-context",
+   "childNode": "hook-dispatch",
+   "commit": "e6569f06a534ee13f6c62d6ca9b6c9816cb7a3d1",
+   "show": {
+    "parentSpec": "git show e6569f06a534:.spec/spexcode/spec-cli/sessions/injected-context/spec.md",
+    "childDiff": "git show e6569f06a534 -- .spec/spexcode/spec-cli/sessions/injected-context/hook-dispatch/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "issues<-eval-issue-split@4d5d1ffb",
+   "parentNode": "issues",
+   "childNode": "eval-issue-split",
+   "commit": "4d5d1ffb515dab8d6155bfede191f64dda46bd5c",
+   "show": {
+    "parentSpec": "git show 4d5d1ffb515d:.spec/spexcode/spec-cli/issues/spec.md",
+    "childDiff": "git show 4d5d1ffb515d -- .spec/spexcode/spec-cli/issues/eval-issue-split/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "issues<-remark-teeth@c6caabab",
+   "parentNode": "issues",
+   "childNode": "remark-teeth",
+   "commit": "c6caababd03b1ab87751e24a5df4da54a28d0e34",
+   "show": {
+    "parentSpec": "git show c6caababd03b:.spec/spexcode/spec-cli/issues/spec.md",
+    "childDiff": "git show c6caababd03b -- .spec/spexcode/spec-cli/issues/remark-teeth/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "lifecycle<-deliver-port@1140b853",
+   "parentNode": "lifecycle",
+   "childNode": "deliver-port",
+   "commit": "1140b853a0207294e83c930f42a5442b5fcbe1f2",
+   "show": {
+    "parentSpec": "git show 1140b853a020:.spec/spexcode/spec-cli/sessions/lifecycle/spec.md",
+    "childDiff": "git show 1140b853a020 -- .spec/spexcode/spec-cli/sessions/lifecycle/deliver-port/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-harness-adapter@08954b7f",
+   "parentNode": "sessions",
+   "childNode": "harness-adapter",
+   "commit": "08954b7f5df7433f9719450b48d2a86d13e4140c",
+   "show": {
+    "parentSpec": "git show 08954b7f5df7:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 08954b7f5df7 -- .spec/spexcode/spec-cli/sessions/harness-adapter/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-harness-adapter@24857c87",
+   "parentNode": "sessions",
+   "childNode": "harness-adapter",
+   "commit": "24857c87e6c29545497959644b6d6c28eb71526e",
+   "show": {
+    "parentSpec": "git show 24857c87e6c2:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 24857c87e6c2 -- .spec/spexcode/spec-cli/sessions/harness-adapter/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-harness-adapter@586922cf",
+   "parentNode": "sessions",
+   "childNode": "harness-adapter",
+   "commit": "586922cf63dac1d450a5cb9684ce9fcbd7229c99",
+   "show": {
+    "parentSpec": "git show 586922cf63da:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 586922cf63da -- .spec/spexcode/spec-cli/sessions/harness-adapter/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-harness-adapter@b6d842f6",
+   "parentNode": "sessions",
+   "childNode": "harness-adapter",
+   "commit": "b6d842f6cfc939724453e88ac96169b6daa9cb98",
+   "show": {
+    "parentSpec": "git show b6d842f6cfc9:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show b6d842f6cfc9 -- .spec/spexcode/spec-cli/sessions/harness-adapter/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-injected-context@65a81a27",
+   "parentNode": "sessions",
+   "childNode": "injected-context",
+   "commit": "65a81a27cf4f42e7a2274ed87aea4da81ee283e7",
+   "show": {
+    "parentSpec": "git show 65a81a27cf4f:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 65a81a27cf4f -- .spec/spexcode/spec-cli/sessions/injected-context/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-live-view@0dfe2376",
+   "parentNode": "sessions",
+   "childNode": "live-view",
+   "commit": "0dfe2376a3d85063837167645441f295a0867317",
+   "show": {
+    "parentSpec": "git show 0dfe2376a3d8:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 0dfe2376a3d8 -- .spec/spexcode/spec-cli/sessions/live-view/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-live-view@4b602dfe",
+   "parentNode": "sessions",
+   "childNode": "live-view",
+   "commit": "4b602dfeeb2491cecf4fd2679fd1d9bf8eb1bd77",
+   "show": {
+    "parentSpec": "git show 4b602dfeeb24:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 4b602dfeeb24 -- .spec/spexcode/spec-cli/sessions/live-view/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-live-view@8d451d2e",
+   "parentNode": "sessions",
+   "childNode": "live-view",
+   "commit": "8d451d2e92bb1a74ad0d3faea08b7dbbd079e86a",
+   "show": {
+    "parentSpec": "git show 8d451d2e92bb:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 8d451d2e92bb -- .spec/spexcode/spec-cli/sessions/live-view/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "sessions<-session-label@148203d2",
+   "parentNode": "sessions",
+   "childNode": "session-label",
+   "commit": "148203d2bb1e063bd4847a420a6c2523408d2451",
+   "show": {
+    "parentSpec": "git show 148203d2bb1e:.spec/spexcode/spec-cli/sessions/spec.md",
+    "childDiff": "git show 148203d2bb1e -- .spec/spexcode/spec-cli/sessions/session-label/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-cli-surface@dc7e5449",
+   "parentNode": "spec-cli",
+   "childNode": "cli-surface",
+   "commit": "dc7e5449d063b4f86def17dc61f8588701bf13a3",
+   "show": {
+    "parentSpec": "git show dc7e5449d063:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show dc7e5449d063 -- .spec/spexcode/spec-cli/cli-surface/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-issues@f3b0fb2c",
+   "parentNode": "spec-cli",
+   "childNode": "issues",
+   "commit": "f3b0fb2c1883e75a5e9d03e7b9cb1badd7af1a52",
+   "show": {
+    "parentSpec": "git show f3b0fb2c1883:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show f3b0fb2c1883 -- .spec/spexcode/spec-cli/issues/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-mentions@3965e310",
+   "parentNode": "spec-cli",
+   "childNode": "mentions",
+   "commit": "3965e31003eca486b1e31fc970154730f1fc662f",
+   "show": {
+    "parentSpec": "git show 3965e31003ec:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show 3965e31003ec -- .spec/spexcode/spec-cli/mentions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-mentions@d271b810",
+   "parentNode": "spec-cli",
+   "childNode": "mentions",
+   "commit": "d271b8103d481d16acec48ca3e2160dea676bc95",
+   "show": {
+    "parentSpec": "git show d271b8103d48:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show d271b8103d48 -- .spec/spexcode/spec-cli/mentions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-public-mode@b1366477",
+   "parentNode": "spec-cli",
+   "childNode": "public-mode",
+   "commit": "b1366477bd752ed7d96a9d9f3656556b731255a5",
+   "show": {
+    "parentSpec": "git show b1366477bd75:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show b1366477bd75 -- .spec/spexcode/spec-cli/public-mode/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-sessions@22055f09",
+   "parentNode": "spec-cli",
+   "childNode": "sessions",
+   "commit": "22055f09f2b0642d71dc5efffad05ec3135a6258",
+   "show": {
+    "parentSpec": "git show 22055f09f2b0:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show 22055f09f2b0 -- .spec/spexcode/spec-cli/sessions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-sessions@405016d3",
+   "parentNode": "spec-cli",
+   "childNode": "sessions",
+   "commit": "405016d3443dfcf40fbe053d379b6f0828c90e18",
+   "show": {
+    "parentSpec": "git show 405016d3443d:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show 405016d3443d -- .spec/spexcode/spec-cli/sessions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-sessions@75fc7489",
+   "parentNode": "spec-cli",
+   "childNode": "sessions",
+   "commit": "75fc7489d19462ae10d0c54f3bc306c2cb81f22c",
+   "show": {
+    "parentSpec": "git show 75fc7489d194:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show 75fc7489d194 -- .spec/spexcode/spec-cli/sessions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-sessions@a27dde93",
+   "parentNode": "spec-cli",
+   "childNode": "sessions",
+   "commit": "a27dde93edf277569f94ec82940bc2886088e53c",
+   "show": {
+    "parentSpec": "git show a27dde93edf2:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show a27dde93edf2 -- .spec/spexcode/spec-cli/sessions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-sessions@aa0d846f",
+   "parentNode": "spec-cli",
+   "childNode": "sessions",
+   "commit": "aa0d846f5e6a2529f619876f8f9977f2203b4278",
+   "show": {
+    "parentSpec": "git show aa0d846f5e6a:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show aa0d846f5e6a -- .spec/spexcode/spec-cli/sessions/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-spec-search@78fd2dae",
+   "parentNode": "spec-cli",
+   "childNode": "spec-search",
+   "commit": "78fd2daedf224b523e4301869abd9dae93699b47",
+   "show": {
+    "parentSpec": "git show 78fd2daedf22:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show 78fd2daedf22 -- .spec/spexcode/spec-cli/spec-search/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-cli<-spec-search@cc6bdbdb",
+   "parentNode": "spec-cli",
+   "childNode": "spec-search",
+   "commit": "cc6bdbdb521fdea100d84116031e47d60f7c30a3",
+   "show": {
+    "parentSpec": "git show cc6bdbdb521f:.spec/spexcode/spec-cli/spec.md",
+    "childDiff": "git show cc6bdbdb521f -- .spec/spexcode/spec-cli/spec-search/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-forge<-dashboard-issues@082a9436",
+   "parentNode": "spec-forge",
+   "childNode": "dashboard-issues",
+   "commit": "082a943632e821e37987b2dcbcc4a7b044f14196",
+   "show": {
+    "parentSpec": "git show 082a943632e8:.spec/spexcode/spec-forge/spec.md",
+    "childDiff": "git show 082a943632e8 -- .spec/spexcode/spec-forge/dashboard-issues/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-forge<-dashboard-issues@6857f0c8",
+   "parentNode": "spec-forge",
+   "childNode": "dashboard-issues",
+   "commit": "6857f0c8d8f367296e5a86d4421b04d38dbf36f7",
+   "show": {
+    "parentSpec": "git show 6857f0c8d8f3:.spec/spexcode/spec-forge/spec.md",
+    "childDiff": "git show 6857f0c8d8f3 -- .spec/spexcode/spec-forge/dashboard-issues/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-forge<-dashboard-issues@736c9f5d",
+   "parentNode": "spec-forge",
+   "childNode": "dashboard-issues",
+   "commit": "736c9f5d072a1930e7eceea712b960c8a046513c",
+   "show": {
+    "parentSpec": "git show 736c9f5d072a:.spec/spexcode/spec-forge/spec.md",
+    "childDiff": "git show 736c9f5d072a -- .spec/spexcode/spec-forge/dashboard-issues/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-forge<-dashboard-issues@7d34387a",
+   "parentNode": "spec-forge",
+   "childNode": "dashboard-issues",
+   "commit": "7d34387a7e9fcd5bd52bb1439bb08aa5e23d4897",
+   "show": {
+    "parentSpec": "git show 7d34387a7e9f:.spec/spexcode/spec-forge/spec.md",
+    "childDiff": "git show 7d34387a7e9f -- .spec/spexcode/spec-forge/dashboard-issues/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spec-forge<-port@1d61ecee",
+   "parentNode": "spec-forge",
+   "childNode": "port",
+   "commit": "1d61ecee4f5f1cc40cf19c9483faca5086b0bc88",
+   "show": {
+    "parentSpec": "git show 1d61ecee4f5f:.spec/spexcode/spec-forge/spec.md",
+    "childDiff": "git show 1d61ecee4f5f -- .spec/spexcode/spec-forge/port/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spexcode<-spec-cli@a25f0ecf",
+   "parentNode": "spexcode",
+   "childNode": "spec-cli",
+   "commit": "a25f0ecf0b7d5f32eb83a5e7082662dfdd1e2eb1",
+   "show": {
+    "parentSpec": "git show a25f0ecf0b7d:.spec/spexcode/spec.md",
+    "childDiff": "git show a25f0ecf0b7d -- .spec/spexcode/spec-cli/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spexcode<-spec-cli@adeeebaa",
+   "parentNode": "spexcode",
+   "childNode": "spec-cli",
+   "commit": "adeeebaa85675ac59bec0e23c6b1c21d5ee71305",
+   "show": {
+    "parentSpec": "git show adeeebaa8567:.spec/spexcode/spec.md",
+    "childDiff": "git show adeeebaa8567 -- .spec/spexcode/spec-cli/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spexcode<-spec-cli@ce3d22f2",
+   "parentNode": "spexcode",
+   "childNode": "spec-cli",
+   "commit": "ce3d22f22318db681f9025c0154ddf275041b160",
+   "show": {
+    "parentSpec": "git show ce3d22f22318:.spec/spexcode/spec.md",
+    "childDiff": "git show ce3d22f22318 -- .spec/spexcode/spec-cli/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  },
+  {
+   "id": "spexcode<-spec-forge@a88fe07e",
+   "parentNode": "spexcode",
+   "childNode": "spec-forge",
+   "commit": "a88fe07efea14966cf1b43591d57af224cec8ddd",
+   "show": {
+    "parentSpec": "git show a88fe07efea1:.spec/spexcode/spec.md",
+    "childDiff": "git show a88fe07efea1 -- .spec/spexcode/spec-forge/spec.md"
+   },
+   "humanVerdict": null,
+   "humanNote": null
+  }
+ ]
+}

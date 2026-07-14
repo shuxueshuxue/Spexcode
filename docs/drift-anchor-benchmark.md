@@ -263,6 +263,48 @@ session-console · session-multi-select · eval-tab
 对报告主题而言这是一个现实注脚：计数门下这些分叉已经安静地存在了一段时间；锚点门装上的第一天就把
 它们点了名。
 
+### 父摘要 pressure 轨：子 spec 版本压父 body（描述轨，不定级）
+
+代码 drift 之外还有第二种失效面：**直接子节点的 spec 内容版本可能把摘要型父 body 压成过期**
+（父的职责就是概括子域）。本轨把它做成与主回放同命令的确定性枚举——**只描述，不实现任何运行时
+lint/gate 行为，不选 block vs warn**；定级要等 π_p（见下）与前瞻实验。
+
+语义规定（`pressure-track.ts`，全部次序只用 git 祖先关系、永不看时间戳）：
+
+- **事件** = 直接子 spec.md 的内容版本（纯 rename 不算）且未在同一 commit 融合更新父。融合提交
+  = 摘要被同步维护，无失效间隙，计 co-versioned；父 spec 在该 commit 祖先里尚不存在的计
+  parent-not-yet-born 边界（多为后建分组节点收编了带历史的子节点），如实报、不猜。
+- **归结四通道**：父内容更新 / 命名该父的 `Spec-OK` ack / parallel（平行 tip 上不可比的双归结，
+  如实报不仲裁）/ open。**ack 只覆盖被点名的父与 ack 祖先可见的子版本**——平行 tip 上未并入的
+  子版本不被覆盖；trailer 可观察，ack 是否真经重读**不可观察**，按边界上报。
+- **pressure 是谓词不是计数**：open 事件数是下次改写的批量待办，不是严重度倍数；一次父改写/ack
+  成批覆盖全部祖先可见待办（batching）。父更新可向上再压它自己的父（深度严格递减→有限收敛），
+  永不向下。
+- **masking 副作用上报**：归结性父更新同时 bump 父自己的 spec 版本，会重置父自身 `code:` 文件的
+  code drift 窗口——每个归结更新都报"它会不会掩掉父自己的待处理 drift"，只上报不裁决意图。
+- **曝露下界**：未归结 span 内兄弟子版本上的外来 `Session:` trailer 去重数——git-only **下界**
+  （无 trailer 记 unattributed；spec 阅读对 git 不可见）。
+
+2026-07-13 HEAD 上的回放（这些数随 HEAD 演化，不入基线；只描述本仓的历史形态）：
+
+- 851 个直接子版本 → **401 个 pressure 事件** + 128 co-versioned + 322 parent-not-yet-born
+  （完备三分，验收门断言）。归结：**更新 206 · ack 95 · parallel 32 · open 68**。
+- **batching 是真实行为**：333 个已归结事件收拢成 73 批（均值 4.6、最大 29）——父摘要的维护
+  节奏天然是"攒一批、一次改写"，而不是逐子响应。这是"pressure 谓词 + 批量覆盖"语义的历史依据。
+- 高压父集中在高扇出的包级节点：spec-cli（130 事件，曝露 ≥58 个外来 session）、sessions（100，
+  ≥46(+48 无署名)）、spec-forge（46，≥20）。12 个父在 HEAD 处于 pressed 状态（含 spec-eval 9 个
+  open——本报告自己的落地也在压它）。
+- **masking 不是假想**：spec-cli 的 16 次归结更新里 14 次落在自身 `code:` 文件有待处理 drift 的
+  窗口上，session-console 2/2、issues 2/5——"为收拢子版本而改写父 body"与"父自身代码 drift 被
+  版本重置吞掉"在历史上大量同发。任何未来的 pressure 机制都必须把这个副作用摆到明面。
+- **π_p（pressure 命中里父 body 真需重写的比例）不可由 git 得出，本轨不估**：
+  `pressure-audit-queue.json` 固化 40 行按父深度分层（每非空层保底 3 行、层内 sha256(id) 序、
+  抽样框冻结在生成时 HEAD——后续提交不重排样本、逐次再生 byte 相同）的盲审队列，每行只带"压点时刻的父 body + 子 spec diff"两条 `git show`
+  指令（40×2 已验证全部可解析），不带归结/深度/曝露任何引擎字段。规矩同 Y1 队列：**机器永远
+  不许填**；填满前，上面的 401 只是事件计数，不得读作"父真需重写 401 次"。
+- 七条可执行断言进验收门：仅向上传播、深度递减有限收敛、反环（归结者不得先于压点）、batching
+  恰分割、无向下振荡、分类完备、队列确定性+盲。任一破即非零退出。
+
 ## 效度威胁
 
 - **回放不主张因果。** 全部数字是"对着标签打分的决策质量"。门装上后开发者行为怎么变（block 是否
@@ -283,6 +325,10 @@ session-console · session-multi-select · eval-tab
   文件级 rename 会截断 rev-list 历史（spec 侧用了 --follow，代码侧未跟 rename），少量早期事件因此缺席。
 - **A3 的近似。** 旧策略按节点累计计数报错，本文以"窗口内第 3 个及以后的事件视为被拦"近似其逐事件
   行为，方向与量级忠实，边界细节（跨窗口累计、ack 清零）未逐一复刻。
+- **pressure 轨的真值缺口。** 401 只是"子版本落地且父未同步"的事件计数，父 body 是否真被压过期
+  （π_p）要等盲审队列填毕，本轨拒绝自估。parent-not-yet-born 排除了 38% 的子版本（后建分组节点
+  收编带历史子节点），对"分组建立之前"的摘要压力本轨无话可说；ack 是否真经重读、commit 之外的
+  spec 阅读，git 一概不可观察——ack 语义与曝露都只敢取 git 可见面（下界），不做推断。
 
 ## 复现
 
@@ -290,8 +336,10 @@ session-console · session-multi-select · eval-tab
 npx tsx spec-eval/bench/drift-replay.ts
 ```
 
-五件套：`spec-eval/bench/drift-replay.ts`（回放 + 打分 + 验收门，直接 import 产品判交引擎）、
-`drift-anchors.json`（96 节点锚点花名册）、`drift-truth.json`（227 条冻结盲评真值，两轮 + 分层权重）、
-`human-audit-queue.json`（40 行人工盲审队列，等人填）、`drift-baseline.json`（冻结真值轨指标基线——
-任何指标位移都非零退出，有意改动用 `--update-baseline` 并在提交理由里说明；行为轨与 episode 数
-随 HEAD 自然演化，不入基线）。判据改动的义务见 [[drift-replay-bench]] 节点。
+七件套：`spec-eval/bench/drift-replay.ts`（回放 + 打分 + 验收门，直接 import 产品判交引擎）、
+`pressure-track.ts`（父摘要 pressure 轨，由主命令调起）、`drift-anchors.json`（96 节点锚点花名册）、
+`drift-truth.json`（227 条冻结盲评真值，两轮 + 分层权重）、`human-audit-queue.json`（40 行人工盲审
+队列，等人填）、`pressure-audit-queue.json`（π_p 的 40 行按深度分层盲审队列，等人填）、
+`drift-baseline.json`（冻结真值轨指标基线——任何指标位移都非零退出，有意改动用 `--update-baseline`
+并在提交理由里说明；行为轨、episode 数与 pressure 轨随 HEAD 自然演化，不入基线）。判据改动的义务
+见 [[drift-replay-bench]] 节点。

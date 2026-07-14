@@ -135,7 +135,7 @@ for (const r of roster) {
     // B→Bm flip be attributed to the selector(s) that fired.
     const selHits = new Map<string, Set<string>>()
     if (r.anchor) for (const sym of multiSelectorsOf.get(r.node) ?? [r.anchor])
-      selHits.set(sym, new Set((await anchorHitCommits(ROOT, win, r.codePath, sym, x)).map((h) => h.commit)))
+      selHits.set(sym, new Set((await anchorHitCommits(ROOT, win, r.codePath, [sym], x)).map((h) => h.commit)))
     const hits = (r.anchor && selHits.get(r.anchor)) || new Set<string>()
     win.forEach((c, k) => {
       const id = `${r.node}@${c.slice(0, 8)}`

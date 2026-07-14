@@ -2,7 +2,7 @@
 title: code-anchor
 status: active
 hue: 15
-desc: A code: entry may pin one named unit (`path#symbol`); drift that touches the anchored unit is the BLOCKING tier (anchor-drift error), replacing the retired count-based driftErrorThreshold gate. Anchors are optional — an unanchored node never blocks.
+desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
   - spec-cli/src/anchors.ts#anchorHitCommits
 related:
@@ -24,11 +24,25 @@ keeps today's advisory-only drift, forever.
 ## expanded spec
 
 **Vocabulary.** An anchor names one top-level unit: a function, an arrow/const declaration (data
-consts included), a class, an enum, or a class method (`#Class.method`). A type/interface resolves but
-warns — anchoring a type is usually wrong. Verdicts about the anchor itself are **loud, never
-silent**: dead (deleted/renamed — follow the rename or fix the spec), ambiguous (two same-named units),
-an unparseable current file, a language with no designated extractor, or an extractor that cannot run
-here — each is a lint **error** naming its repair.
+too), a class, an enum, or a class method (`#Class.method`). A type/interface resolves but
+warns — anchoring a type is usually wrong. A `code:` entry may carry **any number of selectors, all on
+the same exact base file** — measured evidence: [[drift-replay-bench]]'s multi-anchor roster (its 1–3
+cap was annotation rubric, never product syntax — no selector-count cap exists).
+Selectors are **OR**: a commit hitting any blocks, counted **once**, the diagnostic naming the hit
+selectors. One-govern counts **distinct base paths** — cross-file selectors stay an error,
+multiple specs pinning one file stay ordinary. One structured parser reads both relations, refusing
+loud: duplicates, bare+scoped mixing, a selector on a glob/directory. Anchor verdicts
+are equally **loud, never silent**: dead (deleted/renamed — follow the rename or fix the spec),
+ambiguous (two same-named units), an unparseable current file, a language with no designated
+extractor, or an extractor that cannot run here — each a lint **error** naming its repair.
+
+**Scoped govern vs the file.** A scoped governor claims named units, not the whole file: it stays out
+of the too-many-owners bound ([[governed-related]]) though `spex spec owner` still shows it as
+scoped. A scoped file's **miss** keeps the ordinary advisory drift warn by default; the
+committed `lint.scopedCodeMiss: "ignore"` (`spex guide settings`) silences only that advisory — never
+hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval freshness, which stays
+**file-level** in this version. A `related:` row may carry selectors too: a hit is a soft warn naming
+the selector, a miss is silent; related stays never-block, never-ack, no eval freshness.
 
 **Judgment.** The window is the spec's last version → HEAD: the same non-merge, ack-filtered commit
 set [[drift-by-ancestry]]'s walk already derives (one ack rule, shared — `Spec-OK` quiets an anchor

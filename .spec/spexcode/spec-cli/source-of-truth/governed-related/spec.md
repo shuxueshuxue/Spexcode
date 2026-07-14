@@ -36,7 +36,14 @@ Three signal tiers, strongest to none — **govern > related > uncovered**:
   **soft drift warn**: when a related file moves ahead of the node's version, lint WARNS — a nudge that a
   dependency shifted, worth a glance — but it NEVER blocks a commit, needs no ack, and feeds no eval staleness.
   This soft signal is why related is worth maintaining: it is a live-but-quiet dependency edge, not a
-  dead pointer.
+  dead pointer. A related row may narrow its ear with a selector (`path#symbol`, [[code-anchor]]):
+  then only a commit moving that unit warns — misses are silent — and the never-block/never-ack/no-eval
+  nature is unchanged.
+
+Both relations may scope entries to named units ([[code-anchor]]): a `code:` file may carry any number
+of selectors (still ONE base file — one-govern counts distinct paths), and a selector-scoped governor
+claims units, not the file, so it stays out of too-many-owners below while `spex owner` still shows it
+as a scoped claim.
 
 **`spex owner <path>` reports both**, distinctly: the governor as the verdict, referencers as an "also
 referenced by … (related)" line. The per-edit `--actionable` hook still stays SILENT for a related-only

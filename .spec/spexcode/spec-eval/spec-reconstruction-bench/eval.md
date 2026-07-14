@@ -49,17 +49,23 @@ scenarios:
       pre-state fs-walk lint 被拒）、scorer-controls-mobile（docker --network none 内 browser/DOM 双
       harness——race 用 poll 页、single-refresh 用独立 no-poll 页断言恰 1 个 in-flight——正控=committed
       post-episode App.jsx 3/3，unchanged pre-state 与 never-updates 伪实现两个负控均被拒）、
+      registry-fake-e2e（fake executor row 以统一 runner contract 走真实 verifyModel→verify.json→
+      verifyAdmitted 门：admit/混 executor 拒/provenance 失配拒/失败 verify 拒）、codex-auth-binding
+      （network-none 容器内真实 codex CLI 对 loopback 假 Responses endpoint：Authorization 恰为 TOML
+      env_key 声明注入的 dummy key、body model==gpt-5.5、path=/v1/responses）、
       frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配
       tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录；scorer 镜像
       每次评分重验 immutable id，且 node/chromium/node_modules/driver 等 mutable 只读挂载逐 launch
-      内容摘要并对首钉复核）全绿。
+      内容摘要并对首钉复核）全绿；check.json 落盘 controlProvenance（两 scorer 的 image id+mount
+      digest），供 phase 逐字段绑定。
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
       【付费，等人批预算 + preflight/pilot check 全绿 + 有效 verify-model 后才测】run.ts pilot phase
-      --scale leaf：两个 leaf（spec-lint、mobile-ui）各重建 R0（隔离 Claude Code + GLM-5.2 via BigModel
-      endpoint，fresh HOME/独立 CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口），
-      再按 tasks.json 冻结的三个 order-balanced blocks 跑 O0/R0/N0 executor（Latin-square 轮转：
+      --scale leaf [--executor …]：两个 leaf（spec-lint、mobile-ui）各重建 R0——隔离 executor 一律从
+      EXECUTOR_REGISTRY 的 pinned row 启动（默认 ledger activeProvider=codex；GLM/BigModel 行因账号 429
+      已退役为 failure artifact），fresh HOME/隔离 config，docker --network none + unix-socket bridge
+      唯一出口——再按 tasks.json 冻结的三个 order-balanced blocks 跑 O0/R0/N0 executor（Latin-square 轮转：
       block0 spec-lint O0→R0→N0、block1 mobile-ui R0→N0→O0、block2 mobile-ui repeat N0→O0→R0；repeat
       复用该 leaf 缓存的 recon/bundle，臂只差中性投影 bundle）。
     expected: >
@@ -73,11 +79,12 @@ scenarios:
       pre/post diff（含删除）；每 run 归档 trace（endpoint host、HTTP status/request-id、session set、逐
       字段 token、provenance image-id/claude-digest、mount audit、secret-scan 命中）+ workspace + scorer
       raw；phase 全部产出先落 staging 树，终扫用同一 fail-closed scanTreeRaw（raw Buffer exact/prefix/
-      base64，walk/stat/read/symlink/special/缺根任一错误 hard-stop）对整个 runs/pilot 扫到
-      counts+scannedFiles+path-set-digest 全稳定——最后一步必是全字节扫描、之后零写入才 rename；report
-      只内嵌 finalArchiveScan（file count/path-set digest/secret summary），content digest 记树外
-      promotion ledger；promote/quarantine 目标已存在即 fail-loud、rename 后验证 source 消失 +
-      destination 存在，否则 FATAL；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
+      base64，walk/stat/read/symlink/special/缺根任一错误 hard-stop）以 staging 树自身为 scan root（相对
+      路径 rename 前后不变）扫到 counts+scannedFiles+path-set-digest 全稳定——最后一步必是全字节扫描、
+      之后零写入才 rename；report 只内嵌 finalArchiveScan（file count/path-set digest/secret summary），
+      content digest 记树外 promotion ledger（write-ahead prepare→rename→commit，append 失败 hard-stop）；
+      已存在 STAGE/FINAL fail-loud 保留绝不 rm，rename 后验证 source 消失 + destination 存在，否则
+      FATAL；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

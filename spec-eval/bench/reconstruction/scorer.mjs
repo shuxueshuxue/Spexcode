@@ -117,6 +117,7 @@ export function scoreControls(repoRoot, positiveSha, negativeSha) {
     const negReject = neg.passed < neg.total   // the fs-walk lint must FAIL at least one behavioural check
     return {
       discriminates: posPass && negReject,
+      provenance: pos.provenance,   // image id + mount digests — recorded by pilot check, re-bound by the phase
       positive: { sha: positiveSha, passed: pos.passed, total: pos.total, checks: pos.checks },
       negative: { sha: negativeSha, passed: neg.passed, total: neg.total, checks: neg.checks },
     }

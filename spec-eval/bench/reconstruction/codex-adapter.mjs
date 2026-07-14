@@ -14,10 +14,12 @@
 //   • launchCodex — the full isolated launch (per-run 0700 HOME/CODEX_HOME/CODEX_SQLITE_HOME, env
 //     allowlist, structured argv, docker --network none, ssh-tunnel + unix-socket trace proxy as the only
 //     egress). COMPLETE code, but hard-gated: unreachable until reviewerGo:true after a reviewer GO.
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, renameSync, cpSync, appendFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { rawByteScan } from './sandbox.mjs'
+import { rawByteScan, scanTreeRaw, pinMountDigest } from './sandbox.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 
@@ -45,9 +47,13 @@ export function buildCodexEnv({ home, codexHome, sqliteHome, authEnvName, authVa
 }
 
 // temp CODEX_HOME/config.toml provider row (parameterized; no global config copy). Values are escaped.
-export function codexConfigToml({ model, providerName, baseUrl, wireApi = 'responses' }) {
+// AUTH IS DECLARED, never implicit: `envKey` emits the provider row's `env_key` (codex 0.144.x semantics —
+// the CLI reads the bearer token from THAT env var), so the credential binding is visible in the frozen
+// config instead of riding on an undeclared auth.json.
+export function codexConfigToml({ model, providerName, baseUrl, wireApi = 'responses', envKey = null }) {
   if (!model || !providerName || !baseUrl) throw new Error('codex config: model, providerName, baseUrl required')
   if (!/^[A-Za-z0-9_.-]+$/.test(providerName)) throw new Error('codex config: providerName must be a bare identifier')
+  if (envKey !== null && !/^[A-Z][A-Z0-9_]*$/.test(envKey)) throw new Error('codex config: envKey must be an ENV_VAR-shaped name')
   const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
   return [
     `model = "${esc(model)}"`,
@@ -57,6 +63,7 @@ export function codexConfigToml({ model, providerName, baseUrl, wireApi = 'respo
     `name = "${esc(providerName)}"`,
     `base_url = "${esc(baseUrl)}"`,
     `wire_api = "${esc(wireApi)}"`,
+    ...(envKey ? [`env_key = "${esc(envKey)}"`] : []),
     '',
   ].join('\n')
 }
@@ -134,9 +141,30 @@ const CODEX_SSH_CONFIG = '/home/jeffry/YellowPage/ssh_config'
 const CODEX_SSH_TARGET = 'public-vps-tail'
 const CODEX_UPSTREAM = { host: '127.0.0.1', port: 18080 }            // sub2api on the vps (via the tunnel)
 const CODEX_BRIDGE_PORT = 18081                                      // in-container loopback listen port
-const CODEX_NODE_DIST = '/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64'
-const CODEX_PKG = `${CODEX_NODE_DIST}/lib/node_modules/@openai/codex`
-const CODEX_IMAGE = 'scb-spexcode-base:0.4.0'
+export const CODEX_NODE_DIST = '/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64'
+export const CODEX_PKG = `${CODEX_NODE_DIST}/lib/node_modules/@openai/codex`
+export const CODEX_IMAGE = 'scb-spexcode-base:0.4.0'
+const CODEX_AUTH_ENV = 'OPENAI_API_KEY'                              // declared in the TOML via env_key
+
+// PINNED codex provenance (image id, codex version + package digest, node digest, runner commit) —
+// computed once; the per-launch mount digests (pinMountDigest) then re-verify every mutable input on
+// every launch, so a swapped binary/package mid-batch is fail-loud.
+let CODEX_PROVENANCE = null
+export function codexProvenance() {
+  if (CODEX_PROVENANCE) return CODEX_PROVENANCE
+  const sha = (b) => createHash('sha256').update(b).digest('hex')
+  const safe = (fn, d = null) => { try { return fn() } catch { return d } }
+  CODEX_PROVENANCE = {
+    dockerImage: CODEX_IMAGE,
+    dockerImageId: safe(() => execFileSync('docker', ['image', 'inspect', CODEX_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()),
+    codexVersion: safe(() => JSON.parse(readFileSync(join(CODEX_PKG, 'package.json'), 'utf8')).version),
+    codexPkgDigest: safe(() => sha(readFileSync(join(CODEX_PKG, 'package.json')) + '::' + sha(readFileSync(join(CODEX_PKG, 'bin', 'codex.js')))).slice(0, 16)),
+    nodeDigest: safe(() => sha(readFileSync(join(CODEX_NODE_DIST, 'bin', 'node')).subarray(0, 1 << 20)).slice(0, 16)),
+    runnerCommit: safe(() => execFileSync('git', ['-C', HERE, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()),
+    provider: CODEX_PROVIDER,
+  }
+  return CODEX_PROVENANCE
+}
 
 export async function launchCodex(opts) {
   const { reviewerGo, provider, prompt, snapshotDir, archiveDir, runId = 'codex-run' } = opts ?? {}
@@ -155,15 +183,22 @@ export async function launchCodex(opts) {
   }
   if (!prompt || !archiveDir) throw new Error('launchCodex: prompt + archiveDir required')
 
-  const fs = await import('node:fs')
-  const { spawn, execFileSync } = await import('node:child_process')
+  const started = new Date().toISOString()
+  const t0 = Date.now()
+  // provenance: pinned once + EVERY mutable ro mount content-digested and re-verified on THIS launch
+  const provenance = codexProvenance()
+  if (!provenance.dockerImageId) throw new Error('codex: docker image id unresolved — cannot pin an immutable image')
+  const mounts = {
+    node: pinMountDigest('codex:node-dist', CODEX_NODE_DIST),
+    codexPkg: pinMountDigest('codex:pkg', CODEX_PKG),
+    bridge: pinMountDigest('codex:bridge-driver', join(HERE, 'bridge.mjs')),
+  }
   const http = await import('node:http')
-  const os = await import('node:os')
-  const scratch = fs.mkdtempSync(join(os.tmpdir(), 'srb-codex-run-')); fs.chmodSync(scratch, 0o700)
+  const scratch = mkdtempSync(join(tmpdir(), 'srb-codex-run-')); chmodSync(scratch, 0o700)
   const home = join(scratch, 'home'), codexHome = join(scratch, 'codex'), sqliteHome = join(scratch, 'sqlite'), workDir = join(scratch, 'work')
-  for (const d of [home, codexHome, sqliteHome, workDir]) { fs.mkdirSync(d, { recursive: true }); fs.chmodSync(d, 0o700) }
+  for (const d of [home, codexHome, sqliteHome, workDir]) { mkdirSync(d, { recursive: true }); chmodSync(d, 0o700) }
   const sockPath = join(scratch, 'codex.sock')
-  const traceFile = join(scratch, 'provider-trace.jsonl')
+  // provider trace lives ONLY inside this closure — no parameter carries it in, no field leaks it out raw
   const traceEvents = []
   const containerName = `srb-${runId}`.replace(/[^a-zA-Z0-9_.-]/g, '-')
   let ssh = null, proxy = null, docker = null, killer = null, timedOut = false
@@ -173,15 +208,14 @@ export async function launchCodex(opts) {
     try { if (docker && !docker.killed) docker.kill('SIGKILL') } catch {}
     try { if (proxy) proxy.close() } catch {}
     try { if (ssh && !ssh.killed) ssh.kill('SIGKILL') } catch {}
-    try { fs.rmSync(scratch, { recursive: true, force: true }) } catch {}
+    try { rmSync(scratch, { recursive: true, force: true }) } catch {}
   }
   try {
-    // 1. relay key: read-only, call-time only; staged ONLY into the per-run 0600 auth.json
-    const authRaw = JSON.parse(fs.readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))
+    // 1. relay key: read-only, call-time only; injected ONLY via the DECLARED env_key variable in a 0600
+    //    env-file (the TOML provider row states env_key — the binding is visible, never implicit)
+    const authRaw = JSON.parse(readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))
     const relayKey = authRaw?.OPENAI_API_KEY ?? authRaw?.tokens?.access_token
     if (!relayKey) throw new Error('no relay key in global auth.json')
-    fs.writeFileSync(join(codexHome, 'auth.json'), JSON.stringify({ OPENAI_API_KEY: relayKey }) + '\n')
-    fs.chmodSync(join(codexHome, 'auth.json'), 0o600)
     // 2. per-run ssh tunnel to the vps sub2api
     const localPort = pickEphemeralPort(execFileSync)
     ssh = spawn('ssh', ['-F', CODEX_SSH_CONFIG, '-N', '-o', 'ExitOnForwardFailure=yes',
@@ -196,9 +230,7 @@ export async function launchCodex(opts) {
         ur.on('data', (c) => { if (head.length < 65536) head = Buffer.concat([head, c]) })
         ur.on('end', () => {
           const m = head.toString('utf8').match(/"model"\s*:\s*"([^"]+)"/)
-          const ev = { at: new Date().toISOString(), status: ur.statusCode, requestId: ur.headers['x-request-id'] ?? null, model: m ? m[1] : null }
-          traceEvents.push(ev)
-          try { fs.appendFileSync(traceFile, JSON.stringify(ev) + '\n') } catch {}
+          traceEvents.push({ at: new Date().toISOString(), status: ur.statusCode, requestId: ur.headers['x-request-id'] ?? null, model: m ? m[1] : null })
         })
         res.writeHead(ur.statusCode, ur.headers)
         ur.pipe(res)
@@ -207,18 +239,21 @@ export async function launchCodex(opts) {
       req.pipe(up)
     })
     await new Promise((resolve, reject) => { proxy.on('error', reject); proxy.listen(sockPath, resolve) })
-    // 4. per-run config.toml: provider row = the adapter pin; base_url = the in-container bridge port
-    fs.writeFileSync(join(codexHome, 'config.toml'), codexConfigToml({
+    // 4. per-run config.toml: provider row = the adapter pin; auth DECLARED via env_key; base_url = bridge
+    const configToml = codexConfigToml({
       model: CODEX_PROVIDER.model, providerName: CODEX_PROVIDER.providerName,
-      baseUrl: `http://127.0.0.1:${CODEX_BRIDGE_PORT}/v1`, wireApi: CODEX_PROVIDER.wireApi,
-    }))
+      baseUrl: `http://127.0.0.1:${CODEX_BRIDGE_PORT}/v1`, wireApi: CODEX_PROVIDER.wireApi, envKey: CODEX_AUTH_ENV,
+    })
+    writeFileSync(join(codexHome, 'config.toml'), configToml)
+    const configHash = createHash('sha256').update(configToml).digest('hex')
     // 5. isolated container run: --network none; bridge ns → unix socket → trace proxy → tunnel
-    if (snapshotDir) fs.cpSync(snapshotDir, workDir, { recursive: true })
-    const promptMount = join(scratch, 'PROMPT.md'); fs.writeFileSync(promptMount, prompt)
+    if (snapshotDir) cpSync(snapshotDir, workDir, { recursive: true })
+    const promptMount = join(scratch, 'PROMPT.md'); writeFileSync(promptMount, prompt)
     const env = buildCodexEnv({ home: '/agent', codexHome: '/agent/codex', sqliteHome: '/agent/sqlite',
+      authEnvName: CODEX_AUTH_ENV, authValue: relayKey,
       passthrough: { PATH: '/usr/bin:/bin:/opt/node/bin', LANG: 'C.UTF-8' } })
     const envFile = join(scratch, 'codex.env')
-    fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n'); fs.chmodSync(envFile, 0o600)
+    writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n'); chmodSync(envFile, 0o600)
     const inner = [
       'set -e',
       `/opt/node/bin/node /assets/bridge.mjs ns /run/codex.sock ${CODEX_BRIDGE_PORT} 2>/agent/bridge-ns.log &`,
@@ -232,7 +267,7 @@ export async function launchCodex(opts) {
       '-v', `${workDir}:/work`, '-v', `${sockPath}:/run/codex.sock`,
       '-v', `${codexHome}:/agent/codex`, '-v', `${sqliteHome}:/agent/sqlite`,
       '--tmpfs', '/agent:exec,uid=1000,gid=1000,mode=0700',
-      CODEX_IMAGE, 'bash', '-c', inner]
+      provenance.dockerImageId, 'bash', '-c', inner]
     const out = [], errBuf = []
     docker = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] })
     docker.stdout.on('data', (d) => out.push(d.toString()))
@@ -242,25 +277,56 @@ export async function launchCodex(opts) {
       docker.on('close', (code) => { clearTimeout(killer); resolve(code) })
       docker.on('error', () => { clearTimeout(killer); resolve(-1) })
     })
-    // 6. parse (pure) + transport verdict (the seam) + secret scan, then archive
+    // 6. parse (pure) + transport verdict (the seam) + FAIL-CLOSED secret scan over EVERYTHING archived
     const rawOut = out.join(''), rawErr = errBuf.join('')
     const parsed = parseCodexJsonl(rawOut.split('\n'))
     const transport = verifyTransportTrace(traceEvents)
-    const streamHits = rawByteScan(Buffer.from(rawOut + '\n' + rawErr + '\n' + prompt, 'utf8'), relayKey)
-    const secretClean = streamHits.keyHits === 0 && streamHits.prefixHits === 0 && streamHits.b64Hits === 0
     const b64 = Buffer.from(relayKey).toString('base64')
     const redact = (s) => s.split(relayKey).join('«REDACTED-KEY»').split(b64).join('«REDACTED-KEY-B64»')
-    fs.mkdirSync(archiveDir, { recursive: true })
-    fs.writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
-    fs.writeFileSync(join(archiveDir, 'transcript.jsonl'), redact(rawOut))
-    fs.writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify({
-      v: 1, runId, adapter: 'codex', provider: CODEX_PROVIDER, exitCode: exit, timedOut,
-      parsed: { ok: parsed.ok, errors: parsed.errors, threadId: parsed.threadId, tokens: parsed.tokens },
-      transport: { verified: transport.verified, errors: transport.errors, models: transport.models, responses: transport.responses },
-      secretScan: { ...streamHits, clean: secretClean },
-    }, null, 2) + '\n')
+    mkdirSync(archiveDir, { recursive: true })
+    const workOut = join(archiveDir, 'workspace')
+    rmSync(workOut, { recursive: true, force: true })
+    cpSync(workDir, workOut, { recursive: true })
+    const streamHits = rawByteScan(Buffer.from(rawOut + '\n' + rawErr + '\n' + prompt, 'utf8'), relayKey)
+    const wsScan = scanTreeRaw(workOut, relayKey)
+    const secretClean = !wsScan.scanError && streamHits.keyHits + wsScan.keyHits === 0
+      && streamHits.prefixHits + wsScan.prefixHits === 0 && streamHits.b64Hits + wsScan.b64Hits === 0
+    writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
+    writeFileSync(join(archiveDir, 'transcript.jsonl'), redact(rawOut))
+    const errSummary = redact(rawErr).split('\n').filter((l) => l.trim()).slice(-40).join('\n')
+    if (errSummary) writeFileSync(join(archiveDir, 'stderr.summary.txt'), errSummary + '\n')
+    // trace: complete + sanitized — statuses/request-ids/actual model from the transport closure, thread
+    // set, raw terminal usage, full provenance (image id, codex version+digest, node/bridge/pkg digests,
+    // runner commit, config hash). Never headers/bodies/keys.
+    const apiError = transport.verified ? null
+      : (traceEvents.some((e) => e.status && (e.status < 200 || e.status >= 300))
+        ? `upstream non-2xx: ${[...new Set(traceEvents.map((e) => e.status))].join(',')}` : null)
+    const trace = {
+      v: 2, runId, adapter: 'codex', started, ended: new Date().toISOString(), durationMs: Date.now() - t0,
+      exitCode: exit, timedOut,
+      httpStatuses: [...new Set(traceEvents.map((e) => e.status))],
+      requestIds: traceEvents.map((e) => e.requestId).filter(Boolean),
+      threadIds: parsed.threadId ? [parsed.threadId] : [],
+      model: { observedSet: transport.models, expected: CODEX_PROVIDER.model, clean: transport.verified, realCompletion: parsed.ok && (parsed.tokens?.output ?? 0) > 0 },
+      usage: parsed.tokens,
+      parsed: { ok: parsed.ok, errors: parsed.errors },
+      transport: { verified: transport.verified, errors: transport.errors, responses: transport.responses },
+      apiError,
+      provenance: { ...provenance, mounts, configSha256: configHash },
+      secretScan: { keyHits: streamHits.keyHits + wsScan.keyHits, prefixHits: streamHits.prefixHits + wsScan.prefixHits, b64Hits: streamHits.b64Hits + wsScan.b64Hits, scanner: 'scanTreeRaw', scanError: wsScan.scanError, scanErrors: wsScan.errors, scannedFiles: wsScan.scannedFiles, clean: secretClean },
+    }
+    writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify(trace, null, 2) + '\n')
+    // fail-closed quarantine, same discipline as the GLM row: unclean archive is moved aside, LOUDLY
+    if (!secretClean) {
+      const q = archiveDir + '.QUARANTINE'
+      if (existsSync(q)) throw new Error(`FATAL: quarantine target already exists: ${q} — resolve manually; do not publish`)
+      renameSync(archiveDir, q)
+      if (existsSync(archiveDir) || !existsSync(q)) throw new Error(`FATAL: quarantine rename ${archiveDir} → ${q} did not take effect — do not publish`)
+      return { ok: false, exitCode: exit, timedOut, modelClean: transport.verified, realCompletion: trace.model.realCompletion, accountingValid: parsed.ok, apiError, secretClean: false, quarantined: true, trace, archiveDir: q, workDir: null, usage: parsed.tokens, durationMs: trace.durationMs }
+    }
+    // UNIFIED runner contract — identical shape to the GLM row; enforceRunGates never learns the harness
     const ok = exit === 0 && !timedOut && parsed.ok && transport.verified && secretClean
-    return { ok, exitCode: exit, timedOut, parsed, modelVerified: transport.verified, transport, secretClean, archiveDir }
+    return { ok, exitCode: exit, timedOut, modelClean: transport.verified, realCompletion: trace.model.realCompletion, accountingValid: parsed.ok, apiError, secretClean, trace, archiveDir, workDir: workOut, usage: parsed.tokens, durationMs: trace.durationMs }
   } finally {
     cleanup()
   }
@@ -347,8 +413,5 @@ export function fakeCodexAttempt({ kind = 'good', transportKind = 'good', secret
   return result
 }
 
-// the executor registry — same shape for every provider row; the phase picks ONE per batch, never mixes.
-export const EXECUTOR_REGISTRY = {
-  // glm row is provided by sandbox.launchAgent (wired in pilot.mjs); codex row here:
-  codex: { pin: CODEX_PROVIDER, launch: launchCodex, parse: parseCodexJsonl, verifyTransport: verifyTransportTrace, buildArgv: buildCodexArgv, buildEnv: buildCodexEnv },
-}
+// the composed executor registry (glm + codex + fake rows, one launch contract) lives in registry.mjs —
+// this module only exports the codex row's parts.

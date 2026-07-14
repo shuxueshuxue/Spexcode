@@ -172,21 +172,35 @@ surface:
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
   `deliver(rec, text)` sends a
   follow-up prompt and reports whether it landed, but the two harnesses confirm delivery at DIFFERENT layers.
-  **claude** is **OPTIMISTIC-after-liveness**: the socket's presence IS the liveness gate (deliver fails loud
+  **claude** confirms **parse, atomically**: the socket's presence IS the liveness gate (deliver fails loud
   before writing when the rendezvous socket is absent — a missing/dead socket, never tmux, is the not-alive
-  signal), then it connects and WRITES the `{type:reply}` line; once that line flushes to the live socket with no
-  immediate transport error (a connect throw, a socket `error` like ECONNREFUSED/EPIPE, or a `close` before the
-  write flushes — all FREE, INSTANT, and reported), the reply is on the wire and claude submits it the moment it
-  yields, so deliver returns ok THERE. It does **not** wait for an application-level acceptance ack. This is a
-  deliberate reversal of the earlier design, which wrote a `{type:repaint}` probe after the reply and waited up to
-  a 2500ms wall for a `{type:repaint-done}` to prove the reply was processed: that ordering barrier is sound
-  ONE-WAY (`repaint-done` ⟹ delivered) but its ABSENCE within the wall does NOT mean not-delivered — a mid-turn
-  **BUSY** claude cannot answer the probe promptly, so a message that actually landed reported a COMMON, misleading
-  FALSE FAILURE (`rendezvous socket gave no acceptance confirmation within 2500ms`). The confirmation therefore
-  moves to the **transport/liveness** layer, not the application layer. The knowingly-accepted cost: we no longer
-  detect the narrow **alive-but-wedged / reply-rejected / shutting-down** cases — a rare SILENT drop, recoverable
-  because the supervisor sees the worker never transition — in exchange for killing the frequent false-failure on a
-  live-but-busy worker. **codex** confirms at the application layer through the same
+  signal), then it connects and writes the `{type:reply}` line AND a `{type:repaint}` probe line as **ONE
+  chunk**. This shape is forced by the daemon's **single-connection design**: claude's rendezvous server keeps
+  exactly one connection and `destroy()`s the previous socket the moment a new one connects, discarding any
+  received-but-not-yet-parsed data with it — and `rendezvousListening` (our own liveness probe, fired for every
+  session on every board snapshot) IS such a connect. So a bare optimistic write (the previous design) lost
+  prompts whenever a probe landed in the write→parse window and still reported ok — a false success whose
+  window WIDENS exactly when claude is busy mid-turn (measured: 2/10 real sends lost under a 20ms probe
+  hammer; 40/40 in the tight race). The daemon parses a chunk's lines in one synchronous loop, so the atomic
+  pair can only be lost WHOLE, which makes the outcome decidable from the delivery connection alone:
+  `repaint-done` arriving = the reply line before it was parsed (in-order barrier) → ok, CONFIRMED;
+  the connection CLOSING before `repaint-done` — as a clean close OR as ECONNRESET/EPIPE (destroying a socket
+  with our chunk still unread raises RST; a parsed chunk answers first) = the chunk was never parsed (kicked
+  by a concurrent connect) → proven loss, safe to **reconnect and resend** (bounded retries + jitter;
+  exhausted retries fail loud);
+  the WALL (generous, default 10s) expiring with the connection still open = a busy event loop is delaying,
+  not losing → ok, OPTIMISTIC — so the earlier design's lesson stands (its 2500ms `repaint-done`-or-fail wall
+  false-failed on every busy worker; absence of the ack within a wall is NOT non-delivery), while the kick —
+  which that design could not see and the optimistic reversal knowingly ignored — is now detected and
+  retried instead of silently dropped. `reply-rejected`/`auth-rejected`/`shutting-down` fail loud, not retried.
+  Claude also carries the adapter's **`deliveryBlockedBy(paneText)`** predicate — the ONE pane state where a
+  parsed reply is still swallowed: the TUI's **sessions panel** ("← for agents"), which enqueues the injected
+  reply to the panel context and never drains it, with the daemon emitting nothing (verified live: enqueue
+  with no dequeue, no turn, no trace) — so no socket-side confirmation can see it. sendText captures the pane
+  once before delivering and, when the predicate names the panel, REFUSES the send loudly with the recovery
+  in the message (press Enter in the terminal to return to the composer); a missing pane (no window) skips the
+  guard and lets the socket path decide. Codex has no such predicate (its delivery is app-server JSON-RPC;
+  pane state is irrelevant). **codex** confirms at the application layer through the same
   per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
   (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our
   thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the

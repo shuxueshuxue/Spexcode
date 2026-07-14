@@ -1852,8 +1852,9 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 }
 
 // @@@ sendText - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
-// ([[harness-adapter]]) — claude the rendezvous control socket (optimistic-after-liveness: the reply line flushes
-// to a live socket), codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
+// ([[harness-adapter]]) — claude the rendezvous control socket (atomic reply+repaint chunk: repaint-done proves
+// the daemon parsed it, a kicked connection resends, wall expiry on a live connection is busy-not-lost → ok),
+// codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
 // fallback: a prompt that can't be delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
@@ -1863,6 +1864,16 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
   const h = harnessById(rec.harness || defaultHarness.id)
+  // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
+  // prompt its channel confirms (claude's sessions panel), checkable only from the pane — refuse loudly with
+  // the recovery named instead of reporting a false success. A missing pane (window gone, probe failure) skips
+  // the guard: the delivery channel itself is the authority on whether the agent is reachable.
+  if (h.deliveryBlockedBy) {
+    try {
+      const blocked = h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', id], TMUX_PROBE_TIMEOUT_MS))
+      if (blocked) return { ok: false, error: blocked }
+    } catch { /* no pane to consult — let the delivery channel decide */ }
+  }
   // a terminal-free sender's dispatch carries the note-reply insert ([[session-timeline]]); appended here,
   // beside the delivery, so every input surface shares the one phrase and the timeline records the message
   // WITHOUT it (the hint is transport, not conversation).

@@ -16,24 +16,80 @@ scenarios:
     tags: [cli]
   - name: frames-frozen
     description: >
-      同 pipefail 纪律分别运行 run.ts select --check 与 run.ts episodes --check，捕获各自 exit code
-      与输出。
+      同 pipefail 纪律分别运行 run.ts select --check、run.ts episodes --check 与 run.ts tasks --check，
+      捕获各自 exit code 与输出。
     expected: >
-      两者 exit 0：selection-frozen ✓ 报 c0=038dce1f、cEval=5723eaca、2 leaves、size-matched module
+      三者 exit 0：selection-frozen ✓ 报 c0=038dce1f、cEval=5723eaca、2 leaves、size-matched module
       pair（comms, lifecycle，Δ=1）与 whole；episode-frame-frozen ✓ 报 798 episodes
-      （699 pre / 1 migration / 98 post）、482 eligible、primary horizon 430——即提交在案的
-      targets.json 与 episodes.json 从各自 pinned 输入字节级重现，任何不重现立刻非零退出。
+      （699 pre / 1 migration / 98 post）、482 eligible、primary horizon 430；task-frame-frozen ✓ 报
+      2 leaf future tasks（spec-lint→episode 185f52b1 preState a02fe430、mobile-ui→episode db80b33d
+      preState 3f07397f），即每 leaf 取 first-parent 序最早可回放 eligible episode（机械 replay 排除
+      依赖同 episode 新建兄弟模块的候选）——三个冻结文件从各自 pinned 输入字节级重现，任何不重现立刻
+      非零退出。
+    tags: [cli]
+  - name: pilot-preflight-gates
+    description: >
+      【付费 pilot 前置，无模型调用】从仓库根运行 run.ts pilot preflight，捕获 exit code 与
+      runs/pilot/preflight.json。
+    expected: >
+      exit 0，9 门全绿：frames-frozen、dry-oracle、credential-file（mode=600，只记 keyLen+sha256 前缀，
+      不记值）、endpoint-reachable（TLS verify=0，无消息体）、egress-bridge-reaches（经沙盒 bridge 到
+      endpoint 得 HTTP 状态）、egress-direct-blocked（直连 IP ENETUNREACH）、egress-dns-blocked（外域
+      DNS EAI_AGAIN）、zero-residue（探针后 0 bridge/0 container）、secret-scan-power（植入命中=1、干净=0）；
+      preflight.json 另记 historicalPreflightFailures（bwrap userns 被 apparmor 挡、误读全局 wrapper 的
+      provider 越界），不进有效 run 分母。
+    tags: [cli]
+  - name: pilot-check-suite
+    description: >
+      从仓库根运行 run.ts pilot check，捕获 exit code 与 runs/pilot/check.json。付费前必过的无模型
+      回归+正负对照套件。
+    expected: >
+      exit 0：usage-aggregation-regression（cumulative snapshot 不双计、非单调 fail-loud、缺失字段保留
+      前值）、scorer-controls-spec-lint（行为 scorer 正控=committed post-episode lint 3/3 通过、负控=
+      pre-state fs-walk lint 被拒）、scorer-controls-mobile（docker --network none 内 browser/DOM 双
+      harness——race 用 poll 页、single-refresh 用独立 no-poll 页断言恰 1 个 in-flight——正控=committed
+      post-episode App.jsx 3/3，unchanged pre-state 与 never-updates 伪实现两个负控均被拒）、
+      registry-fake-e2e（fake executor row 以统一 runner contract 走真实 verifyModel→verify.json→
+      verifyAdmitted 门：admit/混 executor 拒/provenance 失配拒/失败 verify 拒；每次 gate 唯一新档 +
+      gate-ledger 指向 exact archive + latestVerify 按 provider 取最新；--reviewer-go 只被 verify 接受
+      且传达 row，codex 无 GO 在 auth 前拒，phase CLI 拒收该 flag；codex scratch dead-pid sweep/
+      零残留断言/rm 失败 fail-loud 亦入 codex selftest；serial-first scheduler 回归——冻结展平序、
+      maxInFlight==1、首失败停后续 skipped 入档、每 launch 后 pid 零残留）、codex-auth-binding
+      （network-none 容器内真实 codex CLI 对 loopback 假 Responses endpoint：Authorization 恰为 TOML
+      env_key 声明注入的 dummy key、body model==gpt-5.5、path=/v1/responses）、
+      frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配
+      tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录；scorer 镜像
+      每次评分重验 immutable id，且 node/chromium/node_modules/driver 等 mutable 只读挂载逐 launch
+      内容摘要并对首钉复核）全绿；check.json 落盘 controlProvenance（两 scorer 的 image id+mount
+      digest），供 phase 逐字段绑定。
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
-      【预注册，等人批预算后才测】按 protocol §launch：对 5 个冻结目标（2 leaf、2 module、1 whole）
-      各跑一次隔离重建（Claude Code + GLM-5.2 launcher，fresh HOME/CLAUDE_CONFIG_DIR，无网络，
-      快照只读挂载），产出 .spec-recon 树与 open-path manifest，全部工件带 manifest 归档为本节点
-      eval 证据。
+      【付费，等人批预算 + preflight/pilot check 全绿 + 有效 verify-model 后才测】run.ts pilot phase
+      --scale leaf [--executor …]：两个 leaf（spec-lint、mobile-ui）各重建 R0——隔离 executor 一律从
+      EXECUTOR_REGISTRY 的 pinned row 启动（默认 ledger activeProvider=codex；GLM/BigModel 行因账号 429
+      已退役为 failure artifact），fresh HOME/隔离 config，docker --network none + unix-socket bridge
+      唯一出口——再按 tasks.json 冻结的三个 order-balanced blocks 跑 O0/R0/N0 executor（Latin-square 轮转：
+      block0 spec-lint O0→R0→N0、block1 mobile-ui R0→N0→O0、block2 mobile-ui repeat N0→O0→R0；repeat
+      复用该 leaf 缓存的 recon/bundle，臂只差中性投影 bundle）。
     expected: >
-      5 次 R0 全部产出结构合法的 .spec-recon（节点=目录+spec.md，whole ≤3 层）；每次 run 的归档含
-      snapshot manifest、PROMPT、agent transcript、open-path manifest；clean 快照 plant 零复述；
-      transcript 无网络访问痕迹；失败 run 同样带 manifest 归档并如实记 fail。
+      两 leaf 的 R0 产出结构合法 .spec-recon（frontmatter + 非空 body，required-file&schema 门过）；每 arm
+      入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model==active-adapter-pin（GLM=glm-5.2 /
+      Codex=gpt-5.5，expected 来自 adapter 常量非参数）+secret-clean 全过；全部 launch 全局串行
+      （concurrency=1，冻结 rotation 展平成确定 schedule 入 report，recon 先行、arms 按轮转位交错），
+      首个 hard failure 停全部后续、skipped 如实入档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
+      spec-lint 在 docker --network none 内跑产出 lint（合成 git fixture，tracked-only 覆盖 + testGlobs），
+      mobile-ui 用无头 chromium + CDP Network offline 跑产出 App.jsx 驱动 board-poll 竞态（latest-issued 赢、
+      stale 丢）+ 独立 no-poll 页的 single-refresh；两者正负 control 均判别（pilot check rc0）；scope 用
+      pre/post diff（含删除）；每 run 归档 trace（endpoint host、HTTP status/request-id、session set、逐
+      字段 token、provenance image-id/claude-digest、mount audit、secret-scan 命中）+ workspace + scorer
+      raw；phase 全部产出先落 staging 树，终扫用同一 fail-closed scanTreeRaw（raw Buffer exact/prefix/
+      base64，walk/stat/read/symlink/special/缺根任一错误 hard-stop）以 staging 树自身为 scan root（相对
+      路径 rename 前后不变）扫到 counts+scannedFiles+path-set-digest 全稳定——最后一步必是全字节扫描、
+      之后零写入才 rename；report 只内嵌 finalArchiveScan（file count/path-set digest/secret summary），
+      content digest 记树外 promotion ledger（write-ahead prepare→rename→commit，append 失败 hard-stop）；
+      已存在 STAGE/FINAL fail-loud 保留绝不 rm，rename 后验证 source 消失 + destination 存在，否则
+      FATAL；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >
@@ -49,6 +105,9 @@ scenarios:
 ---
 
 用真实命令行跑 runner 本体（不是 import 内部函数），以 pipefail/显式 rc 捕获判定通过，整份输出作
-transcript 证据（`--result`）与 expected 逐条比对后填 reading。前两个场景是本版本可测的 dry-oracle
-面；后两个是付费 pilot 的预注册合同——在预算获人工批准并执行之前，它们保持 missing（unmeasured），
-这个空缺本身就是诚实的盲区记录，不许用推理或代跑填充。
+transcript 证据（`--result`）与 expected 逐条比对后填 reading。dry-oracle-gates、frames-frozen、
+pilot-check-suite 是无凭证无网络可随时重测的面；pilot-preflight-gates 重测需要凭证文件与 endpoint
+探测（provider 触碰），在禁触 provider 的阶段它如实保持 stale，与付费门同批人批后重测；
+pilot-reconstruction-run 已在人批预算下实测（Codex/gpt-5.5 串行全轨迹，见 reading 与
+runs/pilot/phase-leaf 档案）；blind-forward-scoring 仍是预注册合同——在人批并执行之前保持
+missing（unmeasured），这个空缺本身就是诚实的盲区记录，不许用推理或代跑填充。

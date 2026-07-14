@@ -347,43 +347,77 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row,
   if (!reconValid) stopBatch(abort, `${id} R0 invalid (frontmatter=${hasFrontmatter} bodyChars=${bodyChars}) — required .spec-recon file missing/thin; NOT downgraded to N0`)
   const bundles = { O0: neutralProjection(o0Md, leaf.relDir), R0: neutralProjection(reconMd, leaf.relDir), N0: null }
   return { leaf: id, relDir: leaf.relDir, card, upstream,
-    recon: { valid: reconValid, bodyChars, o0Overlap: overlap.length, model: recon.trace.model.observedSet, sessionIds: recon.trace.sessionIds, tokens: recon.trace.tokens, durationMs: recon.trace.durationMs, archive: join(base, 'recon') },
+    recon: { valid: reconValid, bodyChars, o0Overlap: overlap.length, model: recon.trace.model.observedSet, threads: recon.trace.threadIds ?? recon.trace.sessionIds ?? [], usage: recon.usage, durationMs: recon.durationMs, archive: join(base, 'recon') },
     bundles }
 }
 
 // run ONE order-balanced block: the arms in block.armOrder against the frozen future task, using the
 // leaf's cached recon bundles. Archived under leaf/<id>/block-<n>/arm-<arm> (disambiguates a repeat).
-export async function runBlock(block, leaf, ctx, credPath, abort, stageDir, row, launchAuth) {
-  if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runBlock refused: leaf ${block.leafId} has no behavioural scorer`)
-  if (!abort || typeof abort !== 'object') throw new Error('runBlock refused: missing shared abort state')
-  if (!stageDir) throw new Error('runBlock refused: missing stageDir — all phase output goes through the staging tree')
-  if (!row?.launch) throw new Error('runBlock refused: missing executor row — every launch goes through the pinned registry row')
-  if (launchAuth?.reviewerGo !== true) throw new Error('runBlock refused: no admitted-verify capability — the phase grants launch authorization only after verifyAdmitted passes')
+export async function runArm(block, leaf, ctx, arm, credPath, abort, stageDir, row, launchAuth) {
+  if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runArm refused: leaf ${block.leafId} has no behavioural scorer`)
+  if (!abort || typeof abort !== 'object') throw new Error('runArm refused: missing shared abort state')
+  if (!stageDir) throw new Error('runArm refused: missing stageDir — all phase output goes through the staging tree')
+  if (!row?.launch) throw new Error('runArm refused: missing executor row — every launch goes through the pinned registry row')
+  if (launchAuth?.reviewerGo !== true) throw new Error('runArm refused: no admitted-verify capability — the phase grants launch authorization only after verifyAdmitted passes')
   const { card, bundles, upstream } = ctx
   const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
   const bdir = join(stageDir, 'leaf', block.leafId, `block-${block.block}`)
-  mkdirSync(bdir, { recursive: true })
-  const arms = {}
-  for (const arm of block.armOrder) {
-    guardAbort(abort, `${block.leafId}#${block.block}-${arm}`)
-    const armBase = join(bdir, `arm-${arm}`)
-    const execDir = join(armBase, 'exec-snapshot')
-    const bundleText = bundles[arm]
-    mkdirSync(armBase, { recursive: true })
-    const bundleArgs = bundleText ? ['--bundle-rel', `${leaf.relDir}/BUNDLE.md`, '--bundle-file', join(armBase, 'bundle.md')] : []
-    if (bundleText) writeFileSync(join(armBase, 'bundle.md'), bundleText)
-    runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', governed.join(','), '--out', execDir, ...bundleArgs])
-    const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
-    if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${block.leafId}#${block.block}/${arm} exec snapshot invalid`)
-    const run = await row.launch({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
-      writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream, reviewerGo: launchAuth.reviewerGo })
-    enforceRunGates(abort, `${block.leafId}#${block.block}-${arm}`, run)
-    const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
-    const score = await scoreArm(block.leafId, run.workDir, card)
-    writeFileSync(join(armBase, 'score.json'), JSON.stringify({ block: block.block, arm, score, scope }, null, 2) + '\n')
-    arms[arm] = { archive: armBase, trace: run.trace, scopeViolations: scope.violations.length, score: { scorer: score.scorer, passed: score.passed, total: score.total, checks: score.checks } }
+  guardAbort(abort, `${block.leafId}#${block.block}-${arm}`)
+  const armBase = join(bdir, `arm-${arm}`)
+  const execDir = join(armBase, 'exec-snapshot')
+  const bundleText = bundles[arm]
+  mkdirSync(armBase, { recursive: true })
+  const bundleArgs = bundleText ? ['--bundle-rel', `${leaf.relDir}/BUNDLE.md`, '--bundle-file', join(armBase, 'bundle.md')] : []
+  if (bundleText) writeFileSync(join(armBase, 'bundle.md'), bundleText)
+  runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', governed.join(','), '--out', execDir, ...bundleArgs])
+  const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
+  if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${block.leafId}#${block.block}/${arm} exec snapshot invalid`)
+  const run = await row.launch({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
+    writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream, reviewerGo: launchAuth.reviewerGo })
+  enforceRunGates(abort, `${block.leafId}#${block.block}-${arm}`, run)
+  const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
+  const score = await scoreArm(block.leafId, run.workDir, card)
+  writeFileSync(join(armBase, 'score.json'), JSON.stringify({ block: block.block, arm, score, scope }, null, 2) + '\n')
+  return { archive: armBase, trace: run.trace, usage: run.usage, durationMs: run.durationMs, scopeViolations: scope.violations.length, score: { scorer: score.scorer, passed: score.passed, total: score.total, checks: score.checks } }
+}
+
+// SERIAL-FIRST scheduler (frozen decision): the whole pilot runs with GLOBAL concurrency = 1 — at any
+// moment at most ONE executor launch (and so at most one srb-codex-<pid>-* scratch) exists, so each
+// launch's own-scratch delete + pid-level zero-residue assertion is naturally sound. The frozen
+// task×arm counterbalance is preserved by FLATTENING, not clumping: recons first (leaf order), then
+// arms interleaved position-wise across the frozen block rotations. The exact list is recorded in the
+// report; concurrency is a future node, not a special case here.
+export function buildLeafSchedule(tasks) {
+  const blocks = tasks.blocks ?? []
+  const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
+  const schedule = []
+  for (const leafId of uniqueLeafIds) schedule.push({ seq: schedule.length, kind: 'recon', leafId })
+  const maxLen = Math.max(0, ...blocks.map((b) => b.armOrder.length))
+  for (let pos = 0; pos < maxLen; pos++) {
+    for (const b of blocks) {
+      if (b.armOrder[pos]) schedule.push({ seq: schedule.length, kind: 'arm', block: b.block, leafId: b.leafId, arm: b.armOrder[pos], position: pos })
+    }
   }
-  return { block: block.block, leaf: block.leafId, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState, armOrder: block.armOrder, repeat: block.repeat, arms }
+  return schedule
+}
+
+// the serial executor: awaits steps ONE BY ONE in schedule order. The FIRST hard failure stops every
+// subsequent launch — later steps are recorded as skipped, never silently dropped, never launched.
+export async function runSchedule(schedule, runStep, abort) {
+  const executed = [], failures = []
+  for (const step of schedule) {
+    if (abort.stopped) { executed.push({ ...step, status: 'skipped', reason: abort.reason }); continue }
+    try {
+      await runStep(step)
+      executed.push({ ...step, status: 'ok' })
+    } catch (e) {
+      const error = String(e?.message ?? e)
+      failures.push({ stage: step.kind, ...step, error })
+      executed.push({ ...step, status: 'failed', error })
+      if (!abort.stopped) { abort.stopped = true; abort.reason = `seq ${step.seq} (${step.kind} ${step.leafId}${step.arm ? '/' + step.arm : ''}) failed: ${error}` }
+    }
+  }
+  return { executed, failures }
 }
 
 function execPrompt(request) {
@@ -485,19 +519,29 @@ export async function leafPhase({ credPath, executor = null }) {
   const blocks = tasks.blocks ?? []
   E('order-balanced-blocks', blocks.length === 3, `${blocks.length} frozen blocks (need 3 for a Latin-square order-balanced pilot)`)
 
-  // recon is spent ONCE per unique leaf; blocks (incl the repeat) reuse the cached recon/bundles.
-  const reconCtx = {}, results = [], failures = []
-  const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
-  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE, row, launchAuth)))
-  reconSettled.forEach((s, i) => { if (s.status === 'fulfilled') reconCtx[uniqueLeafIds[i]] = s.value; else failures.push({ stage: 'recon', leaf: uniqueLeafIds[i], error: String(s.reason?.message ?? s.reason) }) })
-  // run the 3 order-balanced blocks concurrently; shared abort halts new launches after any hard failure
-  const blockSettled = await Promise.allSettled(blocks.map((b) => {
+  // SERIAL-FIRST: one flattened deterministic schedule (recons first, arms interleaved by rotation
+  // position), awaited ONE AT A TIME — global concurrency 1, so at most one scratch ever exists and
+  // each launch's pid-level zero-residue assertion is naturally sound. Recon is still spent ONCE per
+  // unique leaf; the repeat block reuses the cached recon/bundles. First hard failure stops all
+  // subsequent launches (skipped rows recorded).
+  const reconCtx = {}, armResults = {}
+  const schedule = buildLeafSchedule(tasks)
+  const { executed, failures } = await runSchedule(schedule, async (step) => {
+    if (step.kind === 'recon') {
+      reconCtx[step.leafId] = await reconLeaf(tasks.leaves.find((l) => l.id === step.leafId), cards, tasks.c0, credPath, abort, STAGE, row, launchAuth)
+      return
+    }
+    const block = blocks.find((b) => b.block === step.block)
+    const leaf = tasks.leaves.find((l) => l.id === step.leafId)
+    const ctx = reconCtx[step.leafId]
+    if (!ctx) throw new Error(`block ${step.block}/${step.arm}: recon for ${step.leafId} unavailable (recon failed/aborted)`)
+    ;(armResults[step.block] ??= {})[step.arm] = await runArm(block, leaf, ctx, step.arm, credPath, abort, STAGE, row, launchAuth)
+  }, abort)
+  // a block is COMPLETE only when all three of its arms ran; partial blocks stay in failures/executed
+  const results = blocks.filter((b) => b.armOrder.every((a) => armResults[b.block]?.[a])).map((b) => {
     const leaf = tasks.leaves.find((l) => l.id === b.leafId)
-    const ctx = reconCtx[b.leafId]
-    if (!ctx) return Promise.reject(new Error(`block ${b.block}: recon for ${b.leafId} unavailable (recon failed/aborted)`))
-    return runBlock(b, leaf, ctx, credPath, abort, STAGE, row, launchAuth)
-  }))
-  blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
+    return { block: b.block, leaf: b.leafId, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState, armOrder: b.armOrder, repeat: b.repeat, arms: armResults[b.block] }
+  })
   const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
   // final gate: report first, then a fail-closed raw scan with the STAGING TREE ITSELF as the scan root —
   // relative paths (and so pathSetDigest/contentDigest) are IDENTICAL before and after the promote rename,
@@ -509,7 +553,7 @@ export async function leafPhase({ credPath, executor = null }) {
   // written WRITE-AHEAD: prepare entry → atomic rename → committed entry — any ledger append failure is a
   // hard stop, and at every step FINAL/STAGE are intact and recoverable. Rename targets are never
   // pre-cleared: existing target = fail-loud; both renames are verified after the fact.
-  const report = { v: 8, at: nowIso(), phase: 'leaf', executor: row.name, pin: row.pin, c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
+  const report = { v: 9, at: nowIso(), phase: 'leaf', executor: row.name, pin: row.pin, c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, serial: true, schedule, executed, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
   writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   let key = null; try { key = readCredential(credPath) } catch {}
   const summarize = (s) => ({ scannedFiles: s.scannedFiles, pathSetDigest: s.pathSetDigest, keyHits: s.keyHits, prefixHits: s.prefixHits, b64Hits: s.b64Hits, scanError: s.scanError, errors: s.errors, clean: s.clean })
@@ -578,12 +622,13 @@ if (sub === 'preflight') {
   const scale = opt('--scale', 'leaf')
   if (scale !== 'leaf') { console.error(`only --scale leaf implemented in this stage (got ${scale})`); process.exit(2) }
   const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null) })
-  console.log(`\nleaf phase: ${report.blocks.length} blocks complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out, aborted=${report.aborted} (order-balanced pilot, no significance claim)`)
+  console.log(`\nleaf phase: ${report.blocks.length} blocks complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out, aborted=${report.aborted} (serial order-balanced pilot, no significance claim)`)
+  console.log(`  schedule (${report.schedule.length} steps, concurrency=1): ${report.executed.map((s) => `${s.seq}:${s.kind === 'recon' ? 'R' : 'b' + s.block + '-' + s.arm}=${s.status}`).join(' ')}`)
   for (const g of report.gatedOut) console.log(`  GATED [${g.leaf}]: ${g.reason}`)
-  for (const [lid, rc] of Object.entries(report.recon ?? {})) console.log(`  recon[${lid}] valid=${rc.valid} bodyChars=${rc.bodyChars} o0Overlap=${rc.o0Overlap} model=${JSON.stringify(rc.model)} sessions=${rc.sessionIds?.length}`)
+  for (const [lid, rc] of Object.entries(report.recon ?? {})) console.log(`  recon[${lid}] valid=${rc.valid} bodyChars=${rc.bodyChars} o0Overlap=${rc.o0Overlap} model=${JSON.stringify(rc.model)} threads=${rc.threads?.length}`)
   for (const b of report.blocks) {
     console.log(`  block ${b.block} [${b.leaf}${b.repeat ? ' REPEAT' : ''}] armOrder=${JSON.stringify(b.armOrder)}`)
-    for (const a of b.armOrder) console.log(`    ${a}: model=${JSON.stringify(b.arms[a].trace.model.observedSet)} score=${b.arms[a].score.passed}/${b.arms[a].score.total} scope-viol=${b.arms[a].scopeViolations} in/out=${b.arms[a].trace.tokens.input}/${b.arms[a].trace.tokens.output}`)
+    for (const a of b.armOrder) { const u = b.arms[a].usage ?? b.arms[a].trace?.usage ?? b.arms[a].trace?.tokens ?? {}; console.log(`    ${a}: model=${JSON.stringify(b.arms[a].trace.model.observedSet)} score=${b.arms[a].score.passed}/${b.arms[a].score.total} scope-viol=${b.arms[a].scopeViolations} in/out=${u.input}/${u.output}`) }
   }
   for (const f of report.failures) console.log(`  STOP [${f.stage ?? ''} ${f.leaf ?? ''}${f.block != null ? '#' + f.block : ''}]: ${f.error}`)
   console.log(report.publishedTo ? `  published (atomic promote): ${report.publishedTo}` : `  NOT published — quarantined: ${report.quarantined ?? 'n/a'} (finalArchiveScan=${JSON.stringify(report.finalArchiveScan)})`)

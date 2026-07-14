@@ -9,8 +9,10 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 import { EXECUTOR_REGISTRY, executorRow, activeExecutorName, FAKE_PIN } from './registry.mjs'
-import { verifyModel, verifyAdmitted } from './pilot.mjs'
+import { verifyModel, verifyAdmitted, buildLeafSchedule, runSchedule } from './pilot.mjs'
 import { provenanceRecord } from './sandbox.mjs'
+import { assertZeroCodexResidue } from './codex-adapter.mjs'
+import { mkdirSync, writeFileSync as wf } from 'node:fs'
 
 let failed = 0
 const check = (name, cond, detail = '') => { if (!cond) { failed++; console.log(`  ✗ ${name} ${detail}`) } else console.log(`  ✓ ${name}`) }
@@ -75,6 +77,51 @@ try {
   check('phase-cli-rejects-reviewer-go-flag', phaseRc === 2, `rc=${phaseRc}`)
 } finally {
   rmSync(tmp, { recursive: true, force: true })
+}
+
+// ---- SERIAL-FIRST scheduler: concurrency=1, frozen flattened order, first failure stops the rest ----
+const tasksFrozen = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
+const sched = buildLeafSchedule(tasksFrozen)
+const expect = [
+  'recon:spec-lint', 'recon:mobile-ui',
+  'arm:0:O0', 'arm:1:R0', 'arm:2:N0',   // position 0 across the three frozen block rotations
+  'arm:0:R0', 'arm:1:N0', 'arm:2:O0',   // position 1
+  'arm:0:N0', 'arm:1:O0', 'arm:2:R0',   // position 2
+]
+const got = sched.map((s) => s.kind === 'recon' ? `recon:${s.leafId}` : `arm:${s.block}:${s.arm}`)
+check('schedule-frozen-flattened-order', JSON.stringify(got) === JSON.stringify(expect), JSON.stringify(got))
+
+// maxInFlight==1 + executed sequence == schedule + pid zero residue after every launch
+{
+  const residueRoot = mkdtempSync(join(tmpdir(), 'srb-serial-'))
+  let inFlight = 0, maxInFlight = 0
+  const order = []
+  const abort = { stopped: false, reason: null }
+  const { executed, failures } = await runSchedule(sched, async (step) => {
+    inFlight++; maxInFlight = Math.max(maxInFlight, inFlight)
+    const scratch = join(residueRoot, `srb-codex-${process.pid}-step${step.seq}`)
+    mkdirSync(scratch); wf(join(scratch, 'codex.env'), 'x')
+    await new Promise((r) => setTimeout(r, 5))
+    rmSync(scratch, { recursive: true })
+    assertZeroCodexResidue({ tmpRoot: residueRoot })   // pid-level assert holds after EVERY launch
+    order.push(step.seq)
+    inFlight--
+  }, abort)
+  rmSync(residueRoot, { recursive: true, force: true })
+  check('serial-max-in-flight-1', maxInFlight === 1, `maxInFlight=${maxInFlight}`)
+  check('serial-sequence-matches-schedule', JSON.stringify(order) === JSON.stringify(sched.map((s) => s.seq)))
+  check('serial-clean-run-no-failures', failures.length === 0 && executed.every((e) => e.status === 'ok'))
+}
+{
+  const abort = { stopped: false, reason: null }
+  const launched = []
+  const { executed, failures } = await runSchedule(sched, async (step) => {
+    launched.push(step.seq)
+    if (step.seq === 3) throw new Error('boom at seq 3')
+  }, abort)
+  check('serial-first-failure-stops-rest', launched.length === 4 && failures.length === 1 && abort.stopped
+    && executed.filter((e) => e.status === 'skipped').length === sched.length - 4
+    && executed[3].status === 'failed', JSON.stringify({ launched, statuses: executed.map((e) => e.status) }))
 }
 
 console.log(failed ? `\nREGISTRY SELFTEST FAILED (${failed})` : '\nregistry selftest ✓ fake row covers verify→phase-gate end to end (no model call)')

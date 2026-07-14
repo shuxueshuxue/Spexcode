@@ -39,6 +39,7 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from '
 import { join, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { tsAstExtractor, anchorHitCommits } from '../../spec-cli/src/anchors.js'
+import { runPressureTrack } from './pressure-track.js'
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const BENCH = join(ROOT, 'spec-eval/bench')
@@ -348,6 +349,12 @@ if (process.argv.includes('--emit-audit-queue')) {
 }
 console.log(`\nhuman audit queue: ${auditMsg}`)
 
+// ---- parent-summary pressure track (Y2-adjacent groundwork; descriptive, ancestry-only) ----
+// A separate measurement surface: child spec content versions pressing their summary parent's body.
+// Lives in pressure-track.ts; its property assertions join the acceptance gates below. --emit-audit-queue
+// regenerates BOTH blinded human queues.
+const pressure = runPressureTrack({ ROOT, BENCH, git, emitQueue: process.argv.includes('--emit-audit-queue') })
+
 // ---- acceptance gates (machine-checkable; any failure exits nonzero) ----
 console.log('\nacceptance gates:')
 let failed = false
@@ -356,6 +363,7 @@ gate(joined.length === truth.rows.length, `all judged rows matched (${joined.len
 gate(channelPartitionOk, 'action channels partition every judged event (block+warn+silent = judged, per policy)')
 gate(auditOk, 'audit queue deterministic + blinded')
 gate(winWithEpisode + winNoEpisode + winGapped >= winKeys.length, 'every judged window classified (episode / no-episode / unresolvable)')
+for (const g of pressure.gates) gate(g.ok, g.msg)
 
 // baseline: frozen-truth metrics must not move silently — any drift is a scorer/engine change and
 // needs a deliberate --update-baseline with the reason in the same commit. (Behavioral-track and

@@ -1,0 +1,995 @@
+{
+ "purpose": "Blinded multi-symbol annotation roster over the anchored nodes of drift-anchors.json — for every currently anchored node, the 1–3 named top-level units (same base file) that the node’s spec body semantically requires, each with a concise reason. ANNOTATION ONLY, pending evaluation: no policy scores against this roster yet, and nothing at runtime reads it. Protocol (blinded): annotators used ONLY each node’s current spec body, its code path, the AST unit inventory from the product extractor, and the single-anchor seed roster — never drift-truth.json, the human audit queues, judge votes, recall/miss analyses, baselines, or report result sections. Selector 0 is always the seed anchor; an extra selector was added ONLY where a distinct load-bearing body promise maps one-to-one onto that named unit, never to improve recall. Validate with: npx tsx spec-eval/bench/multi-anchors-check.ts (dead/ambiguous/typeOnly selectors, base-path/uniqueness/scope-mixing violations, and non-deterministic serialization all fail loud).",
+ "seedRoster": "drift-anchors.json",
+ "frozenAt": "e122be58d85d36f26821bf741e3fe2662ea7cebc",
+ "entries": [
+  {
+   "node": "code-anchor",
+   "codePath": "spec-cli/src/anchors.ts",
+   "selectors": [
+    {
+     "symbol": "anchorHitCommits",
+     "reason": "The Judgment: per window commit, unified-0 hunks intersect the unit's range extracted as of that commit; any unacked intersection is anchor-drift."
+    },
+    {
+     "symbol": "resolveAnchor",
+     "reason": "Body: 'Verdicts about the anchor itself are loud, never silent' — dead and ambiguous are exactly this resolution's verdicts."
+    }
+   ],
+   "sourceOid": "e4a8ec3d2160401e734192b674e42d4e6627e4ab",
+   "specOid": "cb85d2cbcb2c04e97f591cfc2d07c67b7e50e5ca"
+  },
+  {
+   "node": "commit-surgery",
+   "codePath": "spec-cli/src/commit-surgery.ts",
+   "selectors": [
+    {
+     "symbol": "commitSurgery",
+     "reason": "The staged-index surgery — block-strip in place from the staged blob, husk eviction, never delete tracked — is the body's central mechanism."
+    }
+   ],
+   "sourceOid": "c9f039dccd6cab76cda20012ed630222068f03e1",
+   "specOid": "e9b3357a6b62f64df5a8e6ec54264a047691478c"
+  },
+  {
+   "node": "dashboard-issues",
+   "codePath": "spec-forge/src/resident.ts",
+   "selectors": [
+    {
+     "symbol": "refreshIfStale",
+     "reason": "The resident-cache contract — always-instant view, TTL-backed background reconcile, silent swallow on no-forge."
+    },
+    {
+     "symbol": "refreshForgeNow",
+     "reason": "Body names it: a store-routed reply 'forces one refresh past the TTL and AWAITS it (refreshForgeNow)'."
+    }
+   ],
+   "sourceOid": "144b4ccee745ef3614b3a28e10d4edd235d1c16c",
+   "specOid": "bbc3ff36616f27ac70ad6211ec0f8fac1b908107"
+  },
+  {
+   "node": "dashboard-shell",
+   "codePath": "spec-dashboard/src/App.jsx",
+   "selectors": [
+    {
+     "symbol": "App",
+     "reason": "The entry the body narrates: boots the shared data layer, owns the fail-loud boot and stale-chunk recovery, picks the face by viewport width."
+    }
+   ],
+   "sourceOid": "f255cdb7161acbc08b6e2f5f179af367094d8557",
+   "specOid": "b9bddb798a33c3c93ffb4e1bab8d546682187bcd"
+  },
+  {
+   "node": "dead-words",
+   "codePath": "scripts/dead-words.mjs",
+   "selectors": [
+    {
+     "symbol": "main",
+     "reason": "Enumerates exactly the surfaces the spec declares dead and applies the prose exemptions — the scan-scope contract."
+    },
+    {
+     "symbol": "selfCheck",
+     "reason": "Body: 'The scanner distrusts itself: every run starts with a self-check' planting words and refusing a clean report (exit 2)."
+    },
+    {
+     "symbol": "stringLiterals",
+     "reason": "Body: 'A real tokenizer (comment/string/template/regex-aware) does the extraction' so a word in a comment can't false-positive."
+    }
+   ],
+   "sourceOid": "a11d8072611fa2f81a5e33a7d26fc3f3697b0b4b",
+   "specOid": "11784f9a6289fc4c0eb8e8469331c9e3df6da1c1"
+  },
+  {
+   "node": "doctor",
+   "codePath": "spec-cli/src/doctor.ts",
+   "selectors": [
+    {
+     "symbol": "doctor",
+     "reason": "The per-layer diagnosis report (preconditions/contract/hooks/trust/git-hooks/backend/settings) that is the body's core promise."
+    },
+    {
+     "symbol": "doubleDeliveryReport",
+     "reason": "The body's second headline axis — DOUBLE-delivery caught by identity stamp across three channels per harness — is this check."
+    }
+   ],
+   "sourceOid": "1f656e3cce36de3bff045c8c5826290a7e519393",
+   "specOid": "7d64550f47941988edb0c1f56ef470facbb9059a"
+  },
+  {
+   "node": "drift-by-ancestry",
+   "codePath": "spec-cli/src/git.ts",
+   "selectors": [
+    {
+     "symbol": "driftFor",
+     "reason": "The pure ancestry lookup the body promises: a commit is drift iff not reachable from the version, netted against the ack cover."
+    },
+    {
+     "symbol": "ackCoverFor",
+     "reason": "Body's acknowledgement floor: 'a Spec-OK ack quiets exactly the commits reachable from the ack commit, never a sibling branch's changes'."
+    }
+   ],
+   "sourceOid": "ee8e5cadd4bfee53af27e5f4ab842973fc14cecf",
+   "specOid": "ab471ede13aca47f7530a58cc64085739a9cb2da"
+  },
+  {
+   "node": "eval-core",
+   "codePath": "spec-eval/src/scenarios.ts",
+   "selectors": [
+    {
+     "symbol": "scenarioHash",
+     "reason": "Body normatively pins the hash definition: 'scenarios.ts scenarioHash, the one definition both filing seams and freshness read'."
+    },
+    {
+     "symbol": "validateScenarios",
+     "reason": "Body's distinct promise: a strict validator rejects a malformed eval.md LOUD — at scan and the pre-commit gate, never silently reshaped."
+    },
+    {
+     "symbol": "resolveEvalNode",
+     "reason": "Body's resolution promise: a node ref resolves LOUD — exact canonical id wins, a shared leaf errors listing candidates."
+    }
+   ],
+   "sourceOid": "80e922023919557b5b04329928d94963dadab7d0",
+   "specOid": "659a73a177fc48a53505cc4488a3f7367c48e449"
+  },
+  {
+   "node": "eval-tab",
+   "codePath": "spec-eval/src/evaltab.ts",
+   "selectors": [
+    {
+     "symbol": "evalTimeline",
+     "reason": "The read engine's contract — readings joined with expected, freshness, and codeDrift into the newest-first timeline."
+    },
+    {
+     "symbol": "readBlobByHash",
+     "reason": "Body's evidence promise: /api/evidence serves each entry by content hash from the shared cache with a per-entry miss-original-file signal."
+    }
+   ],
+   "sourceOid": "bd59e3d53d05631b6cddfe6d12430bc7f886321c",
+   "specOid": "6c2a057c774aabfcd1e4344fc7706d35fd0e1c1e"
+  },
+  {
+   "node": "evals-feed",
+   "codePath": "spec-dashboard/src/EvalsFeed.jsx",
+   "selectors": [
+    {
+     "symbol": "EvalsGroup",
+     "reason": "The feed component owning the kind filter, mustShow widen, sticky head, and visible-row reporting the body promises."
+    }
+   ],
+   "sourceOid": "bd7a8178ba0a70f78282abb1feaadfef2b0851ac",
+   "specOid": "0023ad168b3cf3f36774f881c277ca9a702995fe"
+  },
+  {
+   "node": "evals-view",
+   "codePath": "spec-dashboard/src/EvalsPage.jsx",
+   "selectors": [
+    {
+     "symbol": "EvalsPage",
+     "reason": "The #/evals top-level page owning the split, fold, selection, canonical-address deep-link, and board data path."
+    },
+    {
+     "symbol": "EvalMasterDetail",
+     "reason": "Body names it: 'That shell is ONE exported component (EvalMasterDetail), and it is deliberately SHARED' with the session eval tab."
+    }
+   ],
+   "sourceOid": "d0ef91ee519acffb65b0cfef215cc16ed09bf804",
+   "specOid": "960eac9512f6c22c6cb5447b55d933d5c262827c"
+  },
+  {
+   "node": "event-detail",
+   "codePath": "spec-dashboard/src/EventDetail.jsx",
+   "selectors": [
+    {
+     "symbol": "EventDetail",
+     "reason": "Body: ONE EventDetail component, store-agnostic, reused in every home — the workspace pane itself."
+    },
+    {
+     "symbol": "StepRail",
+     "reason": "Body's step-timeline promise: a step ruler naming each step at its position, labels keyed by the map's axis."
+    },
+    {
+     "symbol": "EvalRemarks",
+     "reason": "Body's remark-track promise: the (node,scenario) thread rail with the docked composer writing through CLI-parity /api/remarks."
+    }
+   ],
+   "sourceOid": "8f0b499e57da1993a044cbe4950bc0a67ad6d94b",
+   "specOid": "fd431b708e928dd5c0654e44dd66d2787bed927b"
+  },
+  {
+   "node": "evidence-get",
+   "codePath": "spec-eval/src/cli.ts",
+   "selectors": [
+    {
+     "symbol": "blobGet",
+     "reason": "The symmetric twin verb: hash in, bytes out — local cache first, backend fallback, fail loud naming both paths."
+    }
+   ],
+   "sourceOid": "2994478838a8721fedb7078674309bcf1dc3a8a2",
+   "specOid": "aa2ef44cc85a8dc03393d73180f6df112e06bc2f"
+  },
+  {
+   "node": "evidence-put",
+   "codePath": "spec-eval/src/cli.ts",
+   "selectors": [
+    {
+     "symbol": "blobPut",
+     "reason": "The bare transport half — put the bytes, print the 64-hex content hash, file nothing."
+    }
+   ],
+   "sourceOid": "2994478838a8721fedb7078674309bcf1dc3a8a2",
+   "specOid": "291623bf6723b7d5e59f6e5c3ed18a3d1779fc1d"
+  },
+  {
+   "node": "file-attach",
+   "codePath": "spec-cli/src/uploads.ts",
+   "selectors": [
+    {
+     "symbol": "saveUpload",
+     "reason": "The upload sink's core promise — collision-proof safe name in the shared /tmp dir, absolute path returned for splicing."
+    },
+    {
+     "symbol": "safeName",
+     "reason": "Body: a crafted filename can't escape the upload dir — the name is reduced to a bare, sanitised basename first."
+    }
+   ],
+   "sourceOid": "7ab1f49bd80b91fa94205a1ba5a37f4dbd695667",
+   "specOid": "4a87149b509814abaa7aa3cd077140a746d1b33c"
+  },
+  {
+   "node": "focus-panel",
+   "codePath": "spec-dashboard/src/FocusPanel.jsx",
+   "selectors": [
+    {
+     "symbol": "FocusPanel",
+     "reason": "The panel component the body describes end-to-end: head, scenarios join, issues list, lite-corpus prose fill."
+    },
+    {
+     "symbol": "ScenarioRow",
+     "reason": "Body's per-scenario row promise: state mark, clamped expected preview, tracked files — the row a button emitting eval(node, scenario)."
+    }
+   ],
+   "sourceOid": "e070a2ee428e75f0cc75b2a7052a77de6c4bb2d3",
+   "specOid": "f141d9a4f5c3e3cb2e6c2f7a3d1dd15ce844d889"
+  },
+  {
+   "node": "focus-return",
+   "codePath": "spec-dashboard/src/focus.js",
+   "selectors": [
+    {
+     "symbol": "returnFocus",
+     "reason": "The core promise — return-on-close to ticket else declared sink, never body, deferred one frame."
+    }
+   ],
+   "sourceOid": "0ea26875c1b8b28e1776cb4424a1be83b4bfcfda",
+   "specOid": "fb4d20f19e0a0c2b7bb4e09a10545c2bc42ff7d0"
+  },
+  {
+   "node": "fold-toggle",
+   "codePath": "spec-dashboard/src/FoldToggle.jsx",
+   "selectors": [
+    {
+     "symbol": "FoldToggle",
+     "reason": "The one shared button the three homes render — the affordance with the fold/unfold title/aria contract."
+    },
+    {
+     "symbol": "FoldToggleIcon",
+     "reason": "Body explicitly: 'FoldToggle.jsx exports the icon (FoldToggleIcon)' — the sidebar-toggle glyph promise."
+    }
+   ],
+   "sourceOid": "025ccc67b1c8adca79531c3cd6fcd39a701f99d6",
+   "specOid": "e71263ab862144c085c49894fceccf3707c3287d"
+  },
+  {
+   "node": "forge-cache",
+   "codePath": "spec-forge/src/cache.ts",
+   "selectors": [
+    {
+     "symbol": "ForgeCache",
+     "reason": "Body: this node owns that deterministic core — state/delta/view and the reconcile-is-truth invariant are the ForgeCache class."
+    }
+   ],
+   "sourceOid": "284b12465ca9a7eeee5a7495af196a76d104d034",
+   "specOid": "925a42f6bef826d58dfcc13feb82bb7436343514"
+  },
+  {
+   "node": "forge-host",
+   "codePath": "spec-forge/src/drivers.ts",
+   "selectors": [
+    {
+     "symbol": "resolveForgeHost",
+     "reason": "Body: 'resolveForgeHost() reads it from the repo itself' — the config → origin hostname → default resolution ladder with brief memoization."
+    },
+    {
+     "symbol": "forgeDriverFor",
+     "reason": "Body names it: 'The registry (FORGE_DRIVERS / forgeDriverFor) stays the single meeting point' carrying the driverless-host degrade."
+    }
+   ],
+   "sourceOid": "2fed8bfbc88a7fd2e84232789e88b60eb51a3ede",
+   "specOid": "0d027514a95670b0e3361cc76e223045aa86c27a"
+  },
+  {
+   "node": "gitlab",
+   "codePath": "spec-forge/src/drivers/gitlab.ts",
+   "selectors": [
+    {
+     "symbol": "gitlabDriver",
+     "reason": "The port's second driver behind the same driver shape, selected by host id — the driver object is the contract's face."
+    },
+    {
+     "symbol": "parseRemote",
+     "reason": "Body's Where promise: the origin remote parsed into base URL + project path; https and ssh forms collapse to the same pair."
+    },
+    {
+     "symbol": "credentialToken",
+     "reason": "Body's Who promise: a token env var first, else git's own credential store read-only with prompting disabled; no token → fail loud."
+    }
+   ],
+   "sourceOid": "a451efe204fcfcdec20ac16d127f2288b5f69c90",
+   "specOid": "a6b16dcce5cfe7f8dad66b6781d554d3dc71715e"
+  },
+  {
+   "node": "graph-cache",
+   "codePath": "spec-cli/src/graphCache.ts",
+   "selectors": [
+    {
+     "symbol": "getBoard",
+     "reason": "Body: 'getBoard() is the one seam every graph read goes through' holding single-flight, scoped splice/rebuild, cache-until-change, and the watchdog."
+    },
+    {
+     "symbol": "invalidateBoard",
+     "reason": "Body names 'invalidateBoard(scope)': the dirty bit carries a domain — sessions/full, escalating, never downgrading."
+    },
+    {
+     "symbol": "getBoardJson",
+     "reason": "Body: 'getBoardJson() runs JSON.stringify once per build' — the serialization is cached too."
+    }
+   ],
+   "sourceOid": "4ca0a76da53fb64e981ee113431f1635f1414e58",
+   "specOid": "a4d6e425aba44b3e45321887029f218769347242"
+  },
+  {
+   "node": "graph-lean",
+   "codePath": "spec-cli/src/graph.ts",
+   "selectors": [
+    {
+     "symbol": "buildBoard",
+     "reason": "The assembly where the lean cuts (dropped body/parts, latest-per-scenario evals, slim scenarios) are applied to the wire payload."
+    },
+    {
+     "symbol": "latestPerScenario",
+     "reason": "Body's evals cut — 'the graph carries only the latest reading per scenario' — and it names latestPerScenario as 'a filter, never a projection'."
+    },
+    {
+     "symbol": "slimScenarios",
+     "reason": "Body's third cut: 'Each declared scenario rides the graph slim — {name, tags}' maps one-to-one onto this unit."
+    }
+   ],
+   "sourceOid": "8d07fb9c5225a291988bb70726d635e0cf0bab51",
+   "specOid": "3e439e9ccad7d3fc59271701c718eb5a442b80c5"
+  },
+  {
+   "node": "graph-stats",
+   "codePath": "spec-dashboard/src/GraphStats.jsx",
+   "selectors": [
+    {
+     "symbol": "GraphStats",
+     "reason": "The strip component owning the three clusters, chip walks, and ScoreBadge reuse the body narrates."
+    }
+   ],
+   "sourceOid": "6171dab2d14637beb6518a618604508f778cce82",
+   "specOid": "c781af84da88c6da8c4cdeb3cfdb94f11e42d943"
+  },
+  {
+   "node": "harness-delivery",
+   "codePath": "spec-cli/src/materialize.ts",
+   "selectors": [
+    {
+     "symbol": "materialize",
+     "reason": "Body: 'spex materialize is a pure function of the spec tree's surface nodes' obeying the forgetting law over a closed set of landing points."
+    },
+    {
+     "symbol": "dematerialize",
+     "reason": "Body names it: 'dematerialize = materialize(∅)' — the empty policy spex-uninstall builds on."
+    }
+   ],
+   "sourceOid": "9cf166571b718cb6b65f080057ad6ed5c81e8bef",
+   "specOid": "29a5e721b8b15c95562a3da8b233d33b6093cffa"
+  },
+  {
+   "node": "harness-select",
+   "codePath": "spec-cli/src/harness-select.ts",
+   "selectors": [
+    {
+     "symbol": "resolveHarnessTargets",
+     "reason": "Body: this node owns 'the vocabulary + validation (resolveHarnessTargets)' with the two fail-loud invariants."
+    },
+    {
+     "symbol": "partitionHarnesses",
+     "reason": "Body: node also owns 'the select-vs-prune split (partitionHarnesses)', handing resolved plugin folders to its plugins result."
+    }
+   ],
+   "sourceOid": "facbe7372069fbc781fcdb2528d74a8397c261dc",
+   "specOid": "a6740f4afd8877cd05efb438bdea3195fa51837e"
+  },
+  {
+   "node": "hook-dispatch",
+   "codePath": "spec-cli/src/hooks.ts",
+   "selectors": [
+    {
+     "symbol": "compileManifest",
+     "reason": "Body: 'A compiler flattens them into a flat manifest (event · order · block · script), written PERSISTENTLY into the materialized tree's OWN slot'."
+    }
+   ],
+   "sourceOid": "8320b98d5500b59defb012a3dedc9f89c64ff0de",
+   "specOid": "4c826c8c1c2f6f384a1fcb1a2184e7ebdf2799ed"
+  },
+  {
+   "node": "human-ok",
+   "codePath": "spec-eval/src/humanok.ts",
+   "selectors": [
+    {
+     "symbol": "fileHumanOk",
+     "reason": "The one behavior-bearing filing seam: latest-reading anchoring, refusal on unmeasured, idempotent duplicate, append-only sidecar."
+    }
+   ],
+   "sourceOid": "e44fa81768579379e45f42846918cf242601cfdd",
+   "specOid": "bed88cbdbe614eb6a2c23599636b8653a7aa00eb"
+  },
+  {
+   "node": "id-url-safe",
+   "codePath": "spec-cli/src/specs.ts",
+   "selectors": [
+    {
+     "symbol": "mintIds",
+     "reason": "Body: 'the invariant is guaranteed at the MINT' — the exported mint every resolve site relies on, pinned to NFC."
+    },
+    {
+     "symbol": "reId",
+     "reason": "Body names reId as the collision-suffix joiner corrected at the mint: the suffix joins its path segments with _, never /."
+    }
+   ],
+   "sourceOid": "a6ef4e9359d9720ca843e5481654df18904b4b0f",
+   "specOid": "e42c81cf1204214b0ede067ccdd1a77d3a5d9afe"
+  },
+  {
+   "node": "issues-view",
+   "codePath": "spec-dashboard/src/IssuesPage.jsx",
+   "selectors": [
+    {
+     "symbol": "IssuesPage",
+     "reason": "The top-level #/issues master-detail page the body narrates: list column, filter bars, chips, selection-is-detail."
+    },
+    {
+     "symbol": "IssueDetail",
+     "reason": "Body's distinct promise: the full-height DETAIL of the one selection — concern-alone title, meta strip, docked composer."
+    },
+    {
+     "symbol": "NewThreadForm",
+     "reason": "Body: 'New opens as a centered pop-out — concern + optional body, a compact store picker' maps one-to-one onto this unit."
+    }
+   ],
+   "sourceOid": "506fd7fb8ad908ef0697b2d397e7fbc70724f0bc",
+   "specOid": "fbd01b6e0866824e41f1b8eb7d21664e3dfe41c4"
+  },
+  {
+   "node": "keyboard-nav",
+   "codePath": "spec-dashboard/src/keymap.js",
+   "selectors": [
+    {
+     "symbol": "ACT",
+     "reason": "The body's one declarative table — every board binding as {id, keys, rebind, desc} records the handler and help legend project from."
+    }
+   ],
+   "sourceOid": "d03827763253d48ab93caf9f0ce48feb6d9483a0",
+   "specOid": "b904120636d6dcbfdbefa143cdadc00b432cd0e2"
+  },
+  {
+   "node": "links",
+   "codePath": "spec-forge/src/links.ts",
+   "selectors": [
+    {
+     "symbol": "resolveLinks",
+     "reason": "The inversion contract: three link ways into per-node {issues, prs} lists with marker-wins de-dup and only-linked-nodes."
+    },
+    {
+     "symbol": "branchToNode",
+     "reason": "Body's branch clause: resolved by longest-match against the known ids, never by guessing where the -<sha> suffix begins."
+    },
+    {
+     "symbol": "parseSpecMarkers",
+     "reason": "Body's marker clause: an issue body line 'Spec: <id>[, <id>]' (case-insensitive); a typo'd marker links nothing."
+    }
+   ],
+   "sourceOid": "b8b518f9ceb243a52b5cd3576a3ef20db7bab67d",
+   "specOid": "67158b2de8b73650ad2b0ac9754a89f3a9e85281"
+  },
+  {
+   "node": "live-session-filter",
+   "codePath": "spec-dashboard/src/session.js",
+   "selectors": [
+    {
+     "symbol": "liveSession",
+     "reason": "Body says outright 'this node owns that shared helper' — the ONE aliveness judgment both surfaces share."
+    }
+   ],
+   "sourceOid": "d7c3d032121dcdba67e8a50b6c3e7f4dbf02bdf4",
+   "specOid": "086894079dcd4ad9cb2fda3c8c95434219a8f9fa"
+  },
+  {
+   "node": "mentions",
+   "codePath": "spec-cli/src/mentions.ts",
+   "selectors": [
+    {
+     "symbol": "dispatchMentions",
+     "reason": "The body's core claim — '@ just auto-sends a prompt', @new spawn with the originator-parent rule, the drain guard — is the dispatch."
+    },
+    {
+     "symbol": "parseMentions",
+     "reason": "Body: one script-agnostic grammar 'in the parser, the autocomplete's trigger scan, and the server's node derivation alike' — the parse is this unit."
+    },
+    {
+     "symbol": "stripRefSigil",
+     "reason": "Body names it: 'One shared stripRefSigil (in this module, beside the parser) sheds a leading @ or a full [[…]] wrapper', tolerance never widening matching."
+    }
+   ],
+   "sourceOid": "d8371a747b0a819509e199934b4e6cc0b893d538",
+   "specOid": "e9d79c6965f68a2c85408282062fc70494e15d3f"
+  },
+  {
+   "node": "merge-tooling-resilience",
+   "codePath": "spec-cli/bin/spex.mjs",
+   "selectors": [
+    {
+     "symbol": "conflicted",
+     "reason": "The conflict-marker scan over the three source trees that drives the one-line message + exit 75 degradation the body promises."
+    }
+   ],
+   "sourceOid": "3f552cdef326a0ecf3308c9b3927864814e0535f",
+   "specOid": "2f157128d7a82d48af0abad4a6f58e6dba6aa0ba"
+  },
+  {
+   "node": "migrate",
+   "codePath": "spec-cli/src/migrate.ts",
+   "selectors": [
+    {
+     "symbol": "runMigrate",
+     "reason": "The one-shot migrator the body narrates end-to-end: preconditions, the three rewrite tiers, staged output, post-checks through the real new CLI."
+    }
+   ],
+   "sourceOid": "c59a2ad3640a974e4513145a77528ed52b3d579f",
+   "specOid": "873b7da76ecb1ea59249a4cb772835d190220cfc"
+  },
+  {
+   "node": "mobile-ui",
+   "codePath": "spec-dashboard/src/MobileApp.jsx",
+   "selectors": [
+    {
+     "symbol": "MobileApp",
+     "reason": "The phone face's shell — the viewport switch, the two planes, the lazy-chunk entry the body promises."
+    },
+    {
+     "symbol": "MobileSessionDetail",
+     "reason": "Body's headline promise: the terminal-free conversation — header, day-separated timeline, docked composer with silent replyVia note."
+    },
+    {
+     "symbol": "MobileNewSession",
+     "reason": "Body's Create bullet: full-screen composer, busy-gated awaited create, reusing the ONE shared launch path."
+    }
+   ],
+   "sourceOid": "b6a364003c99f14a9507357e9c547ab570434a91",
+   "specOid": "21a381e5d286fe289a83bb1950581a2d985b1c8a"
+  },
+  {
+   "node": "needs-eval",
+   "codePath": "spec-forge/src/needs-eval.ts",
+   "selectors": [
+    {
+     "symbol": "resolveEvalPending",
+     "reason": "Body names it: 'resolveEvalPending narrows each resolved node's issues to the open and flagged ones' — the node's single output."
+    },
+    {
+     "symbol": "isNeedsEval",
+     "reason": "Body's flag predicate: marked needs-eval by a label or a body line that is the bare marker; a trailing-content line is not a flag."
+    }
+   ],
+   "sourceOid": "c3c7e2a00d655cd51e161347964647ad206bf224",
+   "specOid": "4f272268f246fd469032e7fff55e8f1fef59bbac"
+  },
+  {
+   "node": "node-graph",
+   "codePath": "spec-dashboard/src/SpecNode.jsx",
+   "selectors": [
+    {
+     "symbol": "SpecNode",
+     "reason": "The two-row tile — status dot, title, op glyphs, recency, badges, collapsed tab — the body narrates."
+    },
+    {
+     "symbol": "Editors",
+     "reason": "Body's row-2 promise: live editors as one avatar each, deduped per session, capped with +N."
+    },
+    {
+     "symbol": "EDGE_ANCHOR_PROPS",
+     "reason": "Body's dedicated promise: React Flow handles are edge anchors only — never visible, never interactive."
+    }
+   ],
+   "sourceOid": "b2824a54e978845d034eedc648b8210aebf92b59",
+   "specOid": "ff2c5ecaadb0a7615d0729d00d1084665e7350ea"
+  },
+  {
+   "node": "node-menu",
+   "codePath": "spec-dashboard/src/NodeContextMenu.jsx",
+   "selectors": [
+    {
+     "symbol": "NodeContextMenu",
+     "reason": "The file's single unit is the custom right-click node menu the body describes end to end."
+    }
+   ],
+   "sourceOid": "a6b8b0b23a7399e2c4f225a0030ef4c78f5b15f5",
+   "specOid": "f96e072ea4c8bcacfed3f85d7b7560de7a21ecd8"
+  },
+  {
+   "node": "platform-support",
+   "codePath": "spec-cli/src/runtime-guard.ts",
+   "selectors": [
+    {
+     "symbol": "assertSessionRuntime",
+     "reason": "The gate the body promises: key on the missing primitive (tmux), print ONE actionable line, exit before any cryptic downstream failure."
+    }
+   ],
+   "sourceOid": "ded609d434a8aa8cb99f02f0b3d0c4c40291eeba",
+   "specOid": "4500c2ba886aaced8b1897783a49e5eeae41142a"
+  },
+  {
+   "node": "plugin-harness",
+   "codePath": "spec-cli/src/plugin-harness.ts",
+   "selectors": [
+    {
+     "symbol": "emitPlugin",
+     "reason": "Body: this node is the missing EMITTER materializing the whole system into one self-contained bundle under <folder>/plugins/spexcode/."
+    },
+    {
+     "symbol": "cleanPlugin",
+     "reason": "Body: the clean is 'the bundle's surgical inverse, identity-gated on the bundle's own plugin.json name' — removes only a spexcode bundle."
+    }
+   ],
+   "sourceOid": "01051109b7e5c3de1c109b12c221b97783f72552",
+   "specOid": "9597b63528f2a559c689124eb6993cfe24885964"
+  },
+  {
+   "node": "portable-layout",
+   "codePath": "spec-cli/src/layout.ts",
+   "selectors": [
+    {
+     "symbol": "resolveLayout",
+     "reason": "Body: 'resolveLayout() answers — where is main, which branch is its source of truth, how to enumerate the other checkouts'."
+    },
+    {
+     "symbol": "mainBranch",
+     "reason": "Body: the source-of-truth branch 'is detected by mainBranch(), never the baked-in name main' — override, current branch, else main."
+    },
+    {
+     "symbol": "readJsonConfig",
+     "reason": "Body: 'The config read is the ONE fail-loud seam here (readJsonConfig)' — a malformed file fails loud, never a silent revert."
+    }
+   ],
+   "sourceOid": "ecd390ba59ef03b5b807b0c86dfa77ac06821abc",
+   "specOid": "d11b2fefded3076144d80076ae68f17900a9860c"
+  },
+  {
+   "node": "public-mode",
+   "codePath": "spec-cli/src/gateway.ts",
+   "selectors": [
+    {
+     "symbol": "startGateway",
+     "reason": "The gateway the body narrates — TLS termination, the opt-in login gate, static dist, /api and WebSocket proxying."
+    },
+    {
+     "symbol": "resolvePublicConfig",
+     "reason": "Body: 'The certificate is a resolved value, never hardcoded' with the flags > env > spexcode.json > self-signed precedence."
+    },
+    {
+     "symbol": "serveDashboardLocal",
+     "reason": "Body: 'The same gateway powers local serve' — spex dashboard ungated on loopback, --host widens, gate note keys on the loopback boundary."
+    }
+   ],
+   "sourceOid": "82a08daea1f88fd19d56201514cf55f5b6d0d25e",
+   "specOid": "a9cc1797112ab906d7741bf02d199ac82c8e336e"
+  },
+  {
+   "node": "reconnect",
+   "codePath": "spec-dashboard/src/resilientSocket.js",
+   "selectors": [
+    {
+     "symbol": "createResilientSocket",
+     "reason": "The whole reconnect state machine — backoff, stable-vs-flapping reset, intentional-close suppression, health states — is this one factory."
+    }
+   ],
+   "sourceOid": "06f891f6e6e766cef942d92ca0e158ac4a7736c1",
+   "specOid": "6f7feeaf1f737d594c1295427f6f00335f8a575f"
+  },
+  {
+   "node": "remark-teeth",
+   "codePath": "spec-eval/src/freshness.ts",
+   "selectors": [
+    {
+     "symbol": "staleAxes",
+     "reason": "The one computation fed at the call sites: the pure function that takes the remark track explicitly and fires the remark axis every surface reads."
+    }
+   ],
+   "sourceOid": "f4f7ea4e88f5644866bbdf43d3142b455e05cae9",
+   "specOid": "ffc6c455c8347cdd018c2a78fb3d8bf88356337b"
+  },
+  {
+   "node": "residence",
+   "codePath": "spec-cli/src/worktree-sources.ts",
+   "selectors": [
+    {
+     "symbol": "seedWorktreeHostState",
+     "reason": "The third seeding transport the body assigns this file: the machine snapshot is COPIED, a snapshot on purpose."
+    },
+    {
+     "symbol": "hideSeededFromGit",
+     "reason": "Body: 'What seeding makes git-visible it hides in the shared .git/info/exclude — idempotent, self-healing, no force-add bait.'"
+    }
+   ],
+   "sourceOid": "93ea1127410355cf326c670f00b1ca462d2af68e",
+   "specOid": "3ce993c75904dc518c4ea6d9402dc0d765dc3ce9"
+  },
+  {
+   "node": "resizable-panes",
+   "codePath": "spec-dashboard/src/useResizable.js",
+   "selectors": [
+    {
+     "symbol": "useResizable",
+     "reason": "One mechanism for every resizable pane — the single hook (drag, clamp, persist) future panes mount."
+    }
+   ],
+   "sourceOid": "347d3082e60e19c97e2bbb41890aab6d1ca847e9",
+   "specOid": "1d655d93c73a14acd79267ec9b7a9a1a20198954"
+  },
+  {
+   "node": "session-attach",
+   "codePath": "spec-cli/src/attach.ts",
+   "selectors": [
+    {
+     "symbol": "attachSession",
+     "reason": "The verb itself — selector resolve, one detach hint, foreground tmux attach blocking until detach, TTY/offline guards."
+    },
+    {
+     "symbol": "assertLocalBackend",
+     "reason": "Body's deliberate LOCAL exception: 'the verb asserts locality FIRST' — a remote SPEXCODE_API_URL fails loud naming the remote-capable alternatives."
+    }
+   ],
+   "sourceOid": "f9481f60236428f1cebfb7fac626c646fa5c81c6",
+   "specOid": "18af8c9a3513cf229a18c8c828ea5bc3f10ffadf"
+  },
+  {
+   "node": "session-console",
+   "codePath": "spec-dashboard/src/SessionInterface.jsx",
+   "selectors": [
+    {
+     "symbol": "SessionInterface",
+     "reason": "The routed two-pane console page the body describes — list, tabs, terminal, docked input, type mode."
+    },
+    {
+     "symbol": "composingKey",
+     "reason": "Body's IME promise: an Enter that commits a composition is never read as dispatch — the guard covering send, launch, and menus."
+    },
+    {
+     "symbol": "typeKeyToken",
+     "reason": "Body's type-mode promise: every keystroke — ⌃/⌥/⌘ combos included — forwards raw to the pane as key tokens."
+    }
+   ],
+   "sourceOid": "2ebb2c56e39ccce2d19dfeaaa0523f029769bf79",
+   "specOid": "7cbeb8f98c005208174b23c01fcf9647827524fb"
+  },
+  {
+   "node": "session-multi-select",
+   "codePath": "spec-dashboard/src/SessionSelectBar.jsx",
+   "selectors": [
+    {
+     "symbol": "SessionSelectBar",
+     "reason": "Body: the bulk-close bar and its confirm are this node's own surface, the file's single unit."
+    }
+   ],
+   "sourceOid": "29b6aa2b2b8e997a89bc20966f97f28c3e1d5fc8",
+   "specOid": "38ff1cd51f33af8a8bf1475be65ef9d801208e6f"
+  },
+  {
+   "node": "session-rename",
+   "codePath": "spec-dashboard/src/SessionContextMenu.jsx",
+   "selectors": [
+    {
+     "symbol": "SessionContextMenu",
+     "reason": "The cursor-anchored right-click pop-over carrying rename/close/reset-order — the spec's whole gesture surface."
+    }
+   ],
+   "sourceOid": "1fd5fe75f508b057b67376193056d220763c899c",
+   "specOid": "45b0b6f89abbe3842c4af295d6444ea12903a158"
+  },
+  {
+   "node": "sessions",
+   "codePath": "spec-cli/src/graph.ts",
+   "selectors": [
+    {
+     "symbol": "buildBoard",
+     "reason": "Body: 'buildBoard (graph.ts) assembles the dashboard's runtime state' — tree, overlay, session list, project identity — served at /api/graph."
+    }
+   ],
+   "sourceOid": "8d07fb9c5225a291988bb70726d635e0cf0bab51",
+   "specOid": "2e6f0f0b0808da12740c815150f367fbfda4a2cd"
+  },
+  {
+   "node": "settings",
+   "codePath": "spec-dashboard/src/Settings.jsx",
+   "selectors": [
+    {
+     "symbol": "Settings",
+     "reason": "The routed settings page hosting the language, shortcuts, and theme sections the body promises."
+    },
+    {
+     "symbol": "Shortcuts",
+     "reason": "Body's named second section: 'Shortcuts — the editable twin of the help legend', a rebindable table."
+    }
+   ],
+   "sourceOid": "369854497a7caa31ffa72a7af10202e6406ecf38",
+   "specOid": "b1bd725e7a4e8296d58399f84dbe546f7bd6d434"
+  },
+  {
+   "node": "shared-ranker",
+   "codePath": "spec-cli/src/ranker.ts",
+   "selectors": [
+    {
+     "symbol": "rankDocs",
+     "reason": "Body: 'all behind one entrypoint rankDocs(query, docs)' — the shared scoring contract both callers funnel through."
+    },
+    {
+     "symbol": "tokenize",
+     "reason": "Body's CJK promise assigned to tokenize: ASCII runs as one token, each CJK character a unigram."
+    },
+    {
+     "symbol": "tierWeight",
+     "reason": "Body names tierWeight for the name > desc > body tiers with the recalibrated desc weight."
+    }
+   ],
+   "sourceOid": "4efee2808662cbfcd04c00e6c81783683c570d1a",
+   "specOid": "da14b1ed89e62fb9161370d4927f2fb7e18939f9"
+  },
+  {
+   "node": "side-nav",
+   "codePath": "spec-dashboard/src/SideBar.jsx",
+   "selectors": [
+    {
+     "symbol": "SideBar",
+     "reason": "The slim always-visible icon rail page switch the body specifies."
+    },
+    {
+     "symbol": "ENTRIES",
+     "reason": "Body's rail contract: one rail, the page list and order (Evals above Issues — evals lead) map one-to-one onto this table."
+    }
+   ],
+   "sourceOid": "d0869cfb8965e791850ff20301d3612d0987654a",
+   "specOid": "f3446f8fb7012143cc847b0d644ded8e011c1e98"
+  },
+  {
+   "node": "source-of-truth",
+   "codePath": "spec-cli/src/specs.ts",
+   "selectors": [
+    {
+     "symbol": "loadSpecs",
+     "reason": "The loader/aggregator deriving a node's whole observable state (version, drift, session, status) from git at read time — derive, not store."
+    }
+   ],
+   "sourceOid": "a6ef4e9359d9720ca843e5481654df18904b4b0f",
+   "specOid": "8c7a7050ef81008b45189f2a436f2adc1deb77f5"
+  },
+  {
+   "node": "spec-lint",
+   "codePath": "spec-cli/src/lint.ts",
+   "selectors": [
+    {
+     "symbol": "specLint",
+     "reason": "The whole rule registry the body enumerates — every error and warn tier the contract promises fires from this one function."
+    },
+    {
+     "symbol": "loadConfig",
+     "reason": "Body: 'loadConfig reads it through the shared fail-loud readJsonConfig' — the project-shaped lint budgets from spexcode.json."
+    }
+   ],
+   "sourceOid": "ac5313f48a661c9463ebd7abc8a1d3494e722472",
+   "specOid": "878bd6447f507dab9f97c347d5152006c185f6c8"
+  },
+  {
+   "node": "spec-search",
+   "codePath": "spec-cli/src/search.ts",
+   "selectors": [
+    {
+     "symbol": "searchSpecs",
+     "reason": "The retriever carrying the locked output contract; the other units are its helpers."
+    },
+    {
+     "symbol": "nearestTitles",
+     "reason": "Body names nearestTitles for the zero-result route: per-word normalised Levenshtein over title+id, top 3."
+    }
+   ],
+   "sourceOid": "739e647a2e66b18be510cdcd80c023d5da37623b",
+   "specOid": "6d9f97f4bee84350921c9414d9fcd683e3a8c400"
+  },
+  {
+   "node": "spex-init",
+   "codePath": "spec-cli/src/init.ts",
+   "selectors": [
+    {
+     "symbol": "specInit",
+     "reason": "The whole bootstrap the body narrates: git precondition, template copies, hooks, starter spexcode.json, harness validation, truthful success message."
+    }
+   ],
+   "sourceOid": "1bb96fc91bfffb8757b79fc059093f10378e54fe",
+   "specOid": "85496d6b9cab3fdfe8a3127190d2660af1a13e2a"
+  },
+  {
+   "node": "spex-tree",
+   "codePath": "spec-cli/src/tree.ts",
+   "selectors": [
+    {
+     "symbol": "renderTree",
+     "reason": "The indented, status-coloured terminal tree with badges and the base-state labelling law with NO_COLOR degradation."
+    },
+    {
+     "symbol": "treeJson",
+     "reason": "Body's distinct '--json keeps the machine exit' promise — the filtered subtree as nested objects with badge counts precomputed."
+    }
+   ],
+   "sourceOid": "21b3b84f0aed6f51dfee225d08adc2416f5ef203",
+   "specOid": "7dfa57d8088a6fcc4827f50077e7210c9b6fe1c8"
+  },
+  {
+   "node": "spex-uninstall",
+   "codePath": "spec-cli/src/uninstall.ts",
+   "selectors": [
+    {
+     "symbol": "uninstall",
+     "reason": "The identity-stamped total backout the body describes — dematerialize(∅) plus the store."
+    },
+    {
+     "symbol": "sweepPluginBundles",
+     "reason": "Body's distinct removal bullet: 'any spexcode plugin bundle' — identity-gated, also cleans a hand-dropped bundle the emit ledger never knew."
+    },
+    {
+     "symbol": "removeHooks",
+     "reason": "Body: hooks preserved by default; with --hooks a hook is removed ONLY when its content carries a SpexCode identity marker."
+    }
+   ],
+   "sourceOid": "8f86df66dc3e1e48775b1210f2f4a9412fa466ec",
+   "specOid": "dfa9fa89ca4e7c7ddf8796e9f497bf553ad26051"
+  },
+  {
+   "node": "tooltip",
+   "codePath": "spec-dashboard/src/Tooltip.jsx",
+   "selectors": [
+    {
+     "symbol": "TooltipLayer",
+     "reason": "Body: 'One singleton TooltipLayer is the whole system' — every promised behavior lives in it."
+    }
+   ],
+   "sourceOid": "75534a33a675a2ae69d07797636ee11a32a1321a",
+   "specOid": "cdc331c3bef8097e771b9ced5ee3f12055826c8b"
+  },
+  {
+   "node": "worktree-resilience",
+   "codePath": "spec-cli/src/resilience.ts",
+   "selectors": [
+    {
+     "symbol": "guardWorktree",
+     "reason": "The existence-vs-details guard the body centers on: branch on the directory, omit only genuine removal, degraded row on transient failure."
+    },
+    {
+     "symbol": "installProcessGuards",
+     "reason": "Body's last-resort guard promise: a process-level net logs uncaught exceptions/rejections and keeps serving."
+    }
+   ],
+   "sourceOid": "26891f1be9cd91a41e943bf3671a36d1bba93fae",
+   "specOid": "d70284aabfbc92867be54fd33f55d7ddb3560513"
+  }
+ ]
+}

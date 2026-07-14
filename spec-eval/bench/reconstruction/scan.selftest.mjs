@@ -66,6 +66,17 @@ chmodSync(join(tPerm, 'locked.bin'), 0o600)
 const rTreeMissing = scanTreeRaw(join(tmpdir(), 'srb-scantree-definitely-absent'), KEY)
 check('tree-missing-root-fail-closed', rTreeMissing.scanError === true && rTreeMissing.clean === false, JSON.stringify(rTreeMissing.errors))
 
+// shape/content digests: deterministic across runs; content change flips contentDigest but not the
+// path-set; adding a file flips both. (the promotion publisher's stability gate rides on these)
+const rAgain = scanTreeRaw(tClean, KEY)
+check('tree-digests-deterministic', rAgain.pathSetDigest === rTreeClean.pathSetDigest && rAgain.contentDigest === rTreeClean.contentDigest)
+writeFileSync(join(tClean, 'a.txt'), 'hello CHANGED')
+const rMut = scanTreeRaw(tClean, KEY)
+check('tree-content-change-flips-content-digest', rMut.contentDigest !== rTreeClean.contentDigest && rMut.pathSetDigest === rTreeClean.pathSetDigest)
+writeFileSync(join(tClean, 'new.txt'), 'x')
+const rAdd = scanTreeRaw(tClean, KEY)
+check('tree-new-file-flips-path-set-digest', rAdd.pathSetDigest !== rTreeClean.pathSetDigest && rAdd.scannedFiles === 3)
+
 for (const d of [tClean, tPlant, tLink, tPerm]) rmSync(d, { recursive: true, force: true })
 
 console.log(failed ? `\nSCAN SELFTEST FAILED (${failed})` : '\nscan selftest ✓ all pass')

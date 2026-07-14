@@ -13,7 +13,7 @@
 //                  O0/R0/N0 executor arms on the SAME frozen future task (arms differ only in the
 //                  injected neutral bundle; N0 = empty). Every run archived; secret-scanned.
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync, renameSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync, renameSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { launchAgent, secretScan, rawByteScan, scanTreeRaw, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
@@ -352,11 +352,13 @@ export async function leafPhase({ credPath }) {
   const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
   const cards = JSON.parse(readFileSync(join(HERE, 'task-cards.json'), 'utf8'))
   const abort = { stopped: false, reason: null }
-  // (4) EVERY byte this phase produces goes into a staging tree first; nothing is published in place.
+  // (2) EVERY byte this phase produces goes into a staging tree first; nothing is published in place.
   // At the end the WHOLE archive is fail-closed raw-scanned and staging is promoted by ONE atomic rename
-  // (or quarantined). A crash mid-phase leaves only .STAGING — never a half-published archive.
+  // (or quarantined). A crash mid-phase leaves only .STAGING — never a half-published archive. An already-
+  // published phase-leaf is NEVER silently removed: its existence fails the phase before any money is spent.
   const STAGE = join(RUNS, 'pilot', 'phase-leaf.STAGING')
   const FINAL = join(RUNS, 'pilot', 'phase-leaf')
+  if (existsSync(FINAL)) throw new Error(`FATAL: ${FINAL} already exists — a published archive is never overwritten; archive/move it first`)
   rmSync(STAGE, { recursive: true, force: true })
   mkdirSync(STAGE, { recursive: true })
 
@@ -425,38 +427,46 @@ export async function leafPhase({ credPath }) {
   }))
   blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
   const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
-  // (4) final gate over the COMPLETE archive: report first, then a fail-closed raw scan of EVERY byte
+  // (2) final gate over the COMPLETE archive: report first, then a fail-closed raw scan of EVERY byte
   // under runs/pilot (prior stages + this staging tree). The scan verdict is itself published bytes
   // (embedded in the report + final-scan.json), so scan→embed→RE-SCAN until the verdict of the final
-  // on-disk bytes is count-stable — the LAST act before promotion is always a scan, never a write. No
-  // fixpoint in 3 passes = unclean (fail-closed). Clean → ONE atomic rename publishes the staging tree;
-  // unclean → the whole pilot archive is quarantined, and a failed quarantine move is FATAL, not a log line.
-  const report = { v: 6, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
+  // on-disk bytes is stable across counts + scannedFiles + the sorted path-set digest — the LAST act
+  // before the rename is always a full-byte scan with ZERO writes after it. No fixpoint in 3 passes =
+  // unpublishable (fail-closed). The report embeds only the stable shape (file count / path-set digest /
+  // secret summary); the full CONTENT digest goes to a promotion ledger OUTSIDE the scanned tree — a
+  // tree cannot embed a digest of itself. Rename targets are never pre-cleared: existing target =
+  // fail-loud, and both renames are verified (source gone + destination exists) after the fact.
+  const report = { v: 7, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
   writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   let key = null; try { key = readCredential(credPath) } catch {}
-  const summarize = (s) => ({ scannedFiles: s.scannedFiles, keyHits: s.keyHits, prefixHits: s.prefixHits, b64Hits: s.b64Hits, scanError: s.scanError, errors: s.errors, clean: s.clean })
-  let scan = key ? scanTreeRaw(join(RUNS, 'pilot'), key) : { scannedFiles: 0, keyHits: null, prefixHits: null, b64Hits: null, scanError: true, errors: ['credential unreadable — cannot certify archive'], clean: false }
+  const summarize = (s) => ({ scannedFiles: s.scannedFiles, pathSetDigest: s.pathSetDigest, keyHits: s.keyHits, prefixHits: s.prefixHits, b64Hits: s.b64Hits, scanError: s.scanError, errors: s.errors, clean: s.clean })
+  let scan = key ? scanTreeRaw(join(RUNS, 'pilot'), key) : { scannedFiles: 0, pathSetDigest: null, contentDigest: null, keyHits: null, prefixHits: null, b64Hits: null, scanError: true, errors: ['credential unreadable — cannot certify archive'], clean: false }
   let stable = false
   for (let pass = 1; key && pass <= 3 && !stable; pass++) {
     report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
     writeFileSync(join(STAGE, 'final-scan.json'), JSON.stringify({ at: nowIso(), pass, scanRoot: 'runs/pilot', ...summarize(scan) }, null, 2) + '\n')
     writeFileSync(join(STAGE, 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
     const re = scanTreeRaw(join(RUNS, 'pilot'), key)
-    stable = re.clean === scan.clean && re.scanError === scan.scanError && re.keyHits === scan.keyHits && re.prefixHits === scan.prefixHits && re.b64Hits === scan.b64Hits
+    stable = ['clean', 'scanError', 'keyHits', 'prefixHits', 'b64Hits', 'scannedFiles', 'pathSetDigest'].every((k) => re[k] === scan[k])
     scan = re
   }
   if (!report.finalArchiveScan) report.finalArchiveScan = { scanRoot: 'runs/pilot', ...summarize(scan) }
   const publishable = stable && scan.clean
+  const ledger = (row) => appendFileSync(join(RUNS, 'promotion-ledger.ndjson'), JSON.stringify(row) + '\n')
   if (publishable) {
-    rmSync(FINAL, { recursive: true, force: true })
-    renameSync(STAGE, FINAL)                       // atomic promote: same parent, one rename
+    if (existsSync(FINAL)) throw new Error(`FATAL: ${FINAL} appeared during the phase — refusing to overwrite; do not publish`)
+    renameSync(STAGE, FINAL)                       // atomic promote: same parent, one rename, no pre-clear
+    if (existsSync(STAGE) || !existsSync(FINAL)) throw new Error(`FATAL: promote rename ${STAGE} → ${FINAL} did not take effect`)
     report.publishedTo = FINAL
+    // the promotion ledger lives OUTSIDE the scanned/promoted tree and records the final content digest
+    ledger({ at: nowIso(), phase: 'leaf', action: 'promote', publishedTo: FINAL, scannedFiles: scan.scannedFiles, pathSetDigest: scan.pathSetDigest, contentDigest: scan.contentDigest, clean: scan.clean })
   } else {
-    const q = join(RUNS, 'pilot') + '.QUARANTINE'
-    rmSync(q, { recursive: true, force: true })
-    try { renameSync(join(RUNS, 'pilot'), q) }
-    catch (e) { throw new Error(`FATAL: archive unclean/unstable (${JSON.stringify(summarize(scan))}, stable=${stable}) AND quarantine move failed: ${e.message} — do not publish`) }
+    const q = join(RUNS, `pilot.QUARANTINE-${Date.now()}`)
+    if (existsSync(q)) throw new Error(`FATAL: quarantine target ${q} already exists — resolve manually; do not publish`)
+    renameSync(join(RUNS, 'pilot'), q)
+    if (existsSync(join(RUNS, 'pilot')) || !existsSync(q)) throw new Error(`FATAL: quarantine rename → ${q} did not take effect — do not publish`)
     report.quarantined = q
+    ledger({ at: nowIso(), phase: 'leaf', action: 'quarantine', quarantinedTo: q, stable, scan: summarize(scan), contentDigest: scan.contentDigest })
   }
   return report
 }

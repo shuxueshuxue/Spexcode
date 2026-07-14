@@ -21,7 +21,7 @@
 // Every run is bounded by a hard wall timeout; a finally block kills the bridge, force-removes the
 // container, and deletes the socket/tmp. Timeout is archived as a failed run, never silently retried.
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync, readFileSync, mkdtempSync, existsSync, chmodSync, cpSync, readdirSync, statSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, readFileSync, mkdtempSync, existsSync, chmodSync, cpSync, readdirSync, statSync, renameSync, readlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -67,7 +67,8 @@ export function rawByteScan(buf, key) {
 // file — or a missing scan root — HARD-STOPS the walk immediately: scanError=true, clean=false. Never
 // a silent skip; a tree this scan cannot fully read is a tree it will not certify.
 export function scanTreeRaw(dir, key) {
-  let keyHits = 0, prefixHits = 0, b64Hits = 0, scannedFiles = 0
+  let keyHits = 0, prefixHits = 0, b64Hits = 0
+  const files = []   // { path, sha256 } per scanned file — the tree SHAPE and CONTENT the verdict covers
   const errors = []
   const fail = (msg) => { errors.push(msg); return false }   // hard-stop: first error ends the walk
   const walk = (d) => {
@@ -82,14 +83,50 @@ export function scanTreeRaw(dir, key) {
       if (!ent.isFile() || !st.isFile()) return fail(`non-regular file in archive: ${p}`)
       let buf
       try { buf = readFileSync(p) } catch (e) { return fail(`read ${p}: ${e.code ?? e.message}`) }
-      const r = rawByteScan(buf, key); keyHits += r.keyHits; prefixHits += r.prefixHits; b64Hits += r.b64Hits; scannedFiles++
+      const r = rawByteScan(buf, key); keyHits += r.keyHits; prefixHits += r.prefixHits; b64Hits += r.b64Hits
+      files.push({ path: p.slice(dir.length + 1), sha256: sha256(buf) })
     }
     return true
   }
   if (!existsSync(dir)) fail(`scan root missing: ${dir}`)
   else walk(dir)
+  files.sort((a, b) => (a.path < b.path ? -1 : 1))
+  // pathSetDigest = tree SHAPE (sorted path set) — stable across re-embeds of the scan summary;
+  // contentDigest = full content (per-file sha in path order) — for the promotion ledger OUTSIDE the
+  // tree, never embedded back into the tree it describes (that would be self-referential).
+  const pathSetDigest = sha256(files.map((f) => f.path).join('\n'))
+  const contentDigest = sha256(files.map((f) => `${f.path}:${f.sha256}`).join('\n'))
   const scanError = errors.length > 0
-  return { keyHits, prefixHits, b64Hits, scannedFiles, scanError, errors, clean: !scanError && keyHits === 0 && prefixHits === 0 && b64Hits === 0 }
+  return { keyHits, prefixHits, b64Hits, scannedFiles: files.length, pathSetDigest, contentDigest, scanError, errors, clean: !scanError && keyHits === 0 && prefixHits === 0 && b64Hits === 0 }
+}
+
+// (3) provenance for MUTABLE read-only mounts: every executable/dependency input a scorer or executor
+// bind-mounts (node dist, chromium, node_modules, driver files) is content-digested and RE-VERIFIED on
+// every launch against its first pin — an input that changed mid-batch is fail-loud, never silently
+// used. Symlinks digest their link TARGET (node_modules/.bin), never followed; any fs error throws.
+export function digestTree(root) {
+  const st = statSync(root)
+  if (st.isFile()) return sha256(readFileSync(root))
+  const rows = []
+  const walk = (d) => {
+    for (const ent of readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const p = join(d, ent.name)
+      if (ent.isSymbolicLink()) rows.push(`${p.slice(root.length + 1)} -> ${readlinkSync(p)}`)
+      else if (ent.isDirectory()) walk(p)
+      else if (ent.isFile()) rows.push(`${p.slice(root.length + 1)} ${sha256(readFileSync(p))}`)
+      else throw new Error(`digestTree: non-regular entry ${p}`)
+    }
+  }
+  walk(root)
+  return sha256(rows.join('\n'))
+}
+const MOUNT_PINS = new Map()
+export function pinMountDigest(label, path) {
+  const d = digestTree(path)
+  const prev = MOUNT_PINS.get(label)
+  if (!prev) MOUNT_PINS.set(label, d)
+  else if (prev !== d) throw new Error(`mount ${label} (${path}) content changed since first pin (${d.slice(0, 12)} != ${prev.slice(0, 12)}) — refusing to launch`)
+  return d
 }
 
 // PINNED provenance (computed once): docker image id, claude version + package digest, runner commit.
@@ -309,10 +346,13 @@ export async function launchAgent(opts) {
     }
     writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify(trace, null, 2) + '\n')
 
-    // quarantine: if a credential leaked into any archived bytes, move the whole archive aside and fail loud
+    // quarantine: if a credential leaked into any archived bytes, move the whole archive aside — and
+    // FAIL LOUD on any move problem: an unmovable dirty archive must stop the batch, never be logged past.
     if (!secretClean) {
       const q = archiveDir + '.QUARANTINE'
-      try { rmSync(q, { recursive: true, force: true }); execFileSync('mv', [archiveDir, q]) } catch {}
+      if (existsSync(q)) throw new Error(`FATAL: quarantine target already exists: ${q} — resolve manually; do not publish`)
+      renameSync(archiveDir, q)
+      if (existsSync(archiveDir) || !existsSync(q)) throw new Error(`FATAL: quarantine rename ${archiveDir} → ${q} did not take effect — do not publish`)
       return { ok: false, trace, timedOut, modelClean, secretClean: false, realCompletion, apiError, accountingValid, exitCode: exit, archiveDir: q, workDir: null, quarantined: true }
     }
 

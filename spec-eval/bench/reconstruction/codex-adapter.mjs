@@ -4,26 +4,25 @@
 // the same launch(opts)→{ok,trace,modelClean,realCompletion,accountingValid,secretClean,apiError,...}
 // contract as the GLM/sandbox row, so the phase treats them uniformly and NEVER mixes providers in a batch.
 //
-// Codex row (approved as the alternative while GLM is 429-held). Isolation, per the scout:
-//   • per-ATTEMPT mode-0700 HOME + CODEX_HOME + CODEX_SQLITE_HOME (throwaway); NEVER read/write ~/.codex.
-//   • `env -i` with an EXPLICIT allowlist — no inheritance of the ambient environment.
-//   • STRUCTURED argv (never a split string): codex exec --json --ephemeral --ignore-rules
-//     --skip-git-repo-check --sandbox danger-full-access -m <slug>.
-//   • outer clean no-network / controlled-egress container is still the security boundary.
-//   • temp CODEX_HOME/config.toml carries the provider row (model / model_provider / base_url /
-//     wire_api=responses); auth ONLY via an approved per-run env var or an auth-command helper — never a
-//     copy of ~/.codex/auth.json.
-// Parser is strict (parseCodexJsonl): EXACTLY one thread.started (+thread_id), one turn.started, one
-// turn.completed; any error/turn.failed/malformed/duplicate/missing/nonzero fails; usage is the UNIQUE
-// terminal snapshot (never summed) with cached<=input and reasoning<=output. The CLI JSONL carries NO
-// actual model id, so modelVerified REQUIRES a separate provider response trace — else false.
-//
-// REAL launch is BLOCKED here on purpose: there is no repo-local approved sub2api endpoint, credential
-// retrieval path, or exact model slug. launchCodex throws until a config object with all three is passed
-// by an authorized caller. This module ships the parameterized shape + a FAKE adapter for no-model tests.
+// ONE seam per pillar (no arm special-cases):
+//   • parseCodexJsonl — PURE parser over raw `codex exec --json` lines: structure, order, unique terminal,
+//     strict non-empty agent_message output, integer usage. It knows NOTHING about models and accepts NO
+//     evidence parameters — there is no field a caller could forge.
+//   • verifyTransportTrace — the ONE place model identity is established. Only the CONTROLLED transport
+//     (the adapter's own trace proxy, or the fake transport in no-model tests) produces the trace events
+//     it consumes; the expected provider/model is the adapter PIN (sub2api / gpt-5.5), never a parameter.
+//   • launchCodex — the full isolated launch (per-run 0700 HOME/CODEX_HOME/CODEX_SQLITE_HOME, env
+//     allowlist, structured argv, docker --network none, ssh-tunnel + unix-socket trace proxy as the only
+//     egress). COMPLETE code, but hard-gated: unreachable until reviewerGo:true after a reviewer GO.
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { rawByteScan } from './sandbox.mjs'
+
+const HERE = new URL('.', import.meta.url).pathname
+
+// ---- the adapter PIN: the only provider/model this adapter will ever launch or verify against ----
+export const CODEX_PROVIDER = Object.freeze({ providerName: 'sub2api', model: 'gpt-5.5', wireApi: 'responses' })
 
 // env allowlist — the ONLY vars a codex attempt may see (plus the per-run isolation vars we set).
 export const CODEX_ENV_ALLOW = ['PATH', 'LANG', 'LC_ALL', 'TERM']
@@ -62,13 +61,13 @@ export function codexConfigToml({ model, providerName, baseUrl, wireApi = 'respo
   ].join('\n')
 }
 
-// STRICT parser over codex exec --json output. Accepts RAW LINES (strings) and self-parses: ANY non-JSON
-// / malformed line fails. Enforces the event ORDER thread.started < turn.started < turn.completed, a UNIQUE
-// terminal (exactly one of each), at least ONE completed assistant output item, and usage that is entirely
-// finite nonnegative integers with cached<=input and reasoning<=output. It does NOT establish model
-// identity — the CLI JSONL carries no model id, so modelVerified is the CONTROLLED HTTP TRANSPORT's job
-// (transportModelTrace), never caller-supplied evidence.
-export function parseCodexJsonl(rawLines, { transportModelTrace = null, expectedModel = null } = {}) {
+// STRICT PURE parser over codex exec --json output. Accepts RAW LINES (strings) and self-parses: ANY
+// non-JSON / malformed line fails. Enforces the event ORDER thread.started < turn.started < turn.completed,
+// a UNIQUE terminal (exactly one of each), at least ONE completed STRICT non-empty `agent_message` item
+// (a user_message or any other item type never counts), and usage that is entirely finite nonnegative
+// integers with cached<=input and reasoning<=output. It carries NO model fields and takes NO evidence
+// parameters — model identity is verifyTransportTrace's job, out of any caller's reach.
+export function parseCodexJsonl(rawLines) {
   const errors = []
   const lines = Array.isArray(rawLines) ? rawLines : String(rawLines).split('\n')
   const events = []
@@ -88,9 +87,10 @@ export function parseCodexJsonl(rawLines, { transportModelTrace = null, expected
   if (cnt('thread.started') === 1 && !threadId) errors.push('thread.started has no thread_id')
   if (cnt('error') > 0) errors.push(`${cnt('error')} error event(s)`)
   if (cnt('turn.failed') > 0) errors.push(`${cnt('turn.failed')} turn.failed event(s)`)
-  // at least one COMPLETED assistant output item
-  const hasAssistantItem = events.some((x) => x.e?.type === 'item.completed' && /assistant|message/.test(x.e?.item?.type ?? ''))
-  if (!hasAssistantItem) errors.push('no completed assistant output item')
+  // at least one completed STRICT non-empty agent_message (item.type equality — user_message rejected)
+  const agentMessages = events.filter((x) => x.e?.type === 'item.completed' && x.e?.item?.type === 'agent_message'
+    && typeof x.e.item.text === 'string' && x.e.item.text.trim().length > 0)
+  if (agentMessages.length === 0) errors.push('no completed non-empty agent_message output item')
   // usage = the UNIQUE terminal snapshot from turn.completed; every field a finite nonnegative integer
   const completed = events.find((x) => x.e?.type === 'turn.completed')?.e
   const u = completed?.usage ?? null
@@ -103,72 +103,166 @@ export function parseCodexJsonl(rawLines, { transportModelTrace = null, expected
     if (finiteNonNeg(fields.reasoning) && finiteNonNeg(fields.output) && fields.reasoning > fields.output) errors.push(`reasoning ${fields.reasoning} > output ${fields.output}`)
     tokens = fields
   } else if (cnt('turn.completed') === 1) errors.push('turn.completed carries no usage snapshot')
-  // model verification is ONLY from the controlled transport's own extraction — never caller evidence
-  const modelVerified = !!transportModelTrace && transportModelTrace.source === 'controlled-http-transport'
-    && !!transportModelTrace.model && (!expectedModel || transportModelTrace.model === expectedModel)
-  return { ok: errors.length === 0, errors, threadId, tokens, modelVerified }
+  return { ok: errors.length === 0, errors, threadId, tokens, output: agentMessages.map((x) => x.e.item.text) }
 }
 
-// REAL launch — UNCALLED DRAFT. Hard-guarded: unreachable unless the phase passes reviewerGo:true (only
-// set AFTER a reviewer GO — never set in this build). Reads global ~/.codex ONLY at call time (guarded
-// off now), copies ONLY the relay key + the sub2api provider row into a per-run mode-0700 CODEX_HOME,
-// never modifies/archives/prints the globals, and deletes the temp after. The key never crosses the
-// public internet in the clear: a per-run `ssh -N -L 127.0.0.1:<ephemeral>:127.0.0.1:18080 public-vps-tail`
-// tunnel is the egress, reached from the outer `docker --network none` container through a single
-// unix/loopback bridge; codex's provider base_url points at that in-container loopback port. A controlled
-// HTTP trace-proxy on the host bridge extracts ONLY status / request-id / response model / token counts
-// (never header/body/key); actual model MUST be gpt-5.5. finally kills ssh + bridge + container and rm's
-// the temp CODEX_HOME. This body is a reviewable draft; it stays uncalled until the paid gate.
-const CODEX_GLOBAL_DIR = '/home/jeffry/.codex'                       // read-only, at call time ONLY
+// THE transport seam: model identity comes ONLY from trace events the controlled transport itself
+// recorded ({status, requestId, model} per upstream response). Expected model/provider is the adapter
+// PIN — not a parameter — so there is nothing for a caller to supply or forge. The fake transport in
+// no-model tests produces the same event shape and is verified through this same function.
+export function verifyTransportTrace(traceEvents) {
+  const errors = []
+  const evs = Array.isArray(traceEvents) ? traceEvents : []
+  if (evs.length === 0) errors.push('transport recorded no upstream responses')
+  const models = [...new Set(evs.map((e) => e?.model).filter(Boolean))]
+  if (evs.length > 0 && (models.length !== 1 || models[0] !== CODEX_PROVIDER.model)) {
+    errors.push(`observed model set ${JSON.stringify(models)} != {${CODEX_PROVIDER.model}}`)
+  }
+  if (evs.some((e) => !(Number.isInteger(e?.status) && e.status >= 200 && e.status < 300))) errors.push('non-2xx response in transport trace')
+  return { verified: errors.length === 0, errors, models, responses: evs.length }
+}
+
+// ---- REAL launch — COMPLETE isolated implementation, hard-gated (uncalled until reviewer GO). ----
+// Reads global ~/.codex/auth.json ONLY at call time (unreachable now), stages ONLY the relay key into a
+// per-run mode-0700 CODEX_HOME, never modifies/archives/prints the globals. The key never crosses the
+// public internet in the clear: per-run `ssh -N -L` tunnel to the vps sub2api is the egress, reached from
+// `docker --network none` through ONE unix-socket hop — an HTTP trace proxy that privately records ONLY
+// {status, request-id, response model} per response (never headers/bodies/keys). Model identity is then
+// judged by verifyTransportTrace against the adapter PIN. finally kills ssh+proxy+container, rm's scratch.
+const CODEX_GLOBAL_DIR = '/home/jeffry/.codex'                       // read at call time ONLY (gated)
 const CODEX_SSH_CONFIG = '/home/jeffry/YellowPage/ssh_config'
 const CODEX_SSH_TARGET = 'public-vps-tail'
-const CODEX_UPSTREAM = { host: '127.0.0.1', port: 18080 }           // sub2api on the vps (via the tunnel)
+const CODEX_UPSTREAM = { host: '127.0.0.1', port: 18080 }            // sub2api on the vps (via the tunnel)
+const CODEX_BRIDGE_PORT = 18081                                      // in-container loopback listen port
+const CODEX_NODE_DIST = '/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64'
+const CODEX_PKG = `${CODEX_NODE_DIST}/lib/node_modules/@openai/codex`
+const CODEX_IMAGE = 'scb-spexcode-base:0.4.0'
 
 export async function launchCodex(opts) {
-  const { provider, reviewerGo } = opts ?? {}
-  // HARD GUARD — the draft is unreachable until a reviewer GO explicitly authorizes it.
+  const { reviewerGo, provider, prompt, snapshotDir, archiveDir, runId = 'codex-run' } = opts ?? {}
+  const timeoutMs = opts?.timeoutMs ?? 20 * 60_000
+  // HARD GUARD — unreachable until a reviewer GO explicitly authorizes it. Everything below is complete
+  // and reviewable, but no global-auth read, no ssh tunnel, no paid call happens before that GO.
   if (reviewerGo !== true) {
-    throw new Error('launchCodex BLOCKED (uncalled draft): awaiting reviewer GO. No global-auth read, no ssh tunnel, no model gate. ' +
-      'The phase must pass {reviewerGo:true, provider:{model:"gpt-5.5", providerName, wireApi:"responses"}} only after re-review.')
+    throw new Error('launchCodex BLOCKED: awaiting reviewer GO. No global-auth read, no ssh tunnel, no model gate. ' +
+      'The phase must pass {reviewerGo:true} only after re-review; provider/model are the adapter pin, not caller input.')
   }
-  if (!provider?.model || !provider?.providerName) throw new Error('launchCodex: provider.model + providerName required (no guessing the slug)')
+  // the provider is the adapter PIN — a caller may restate it, never change it, and passes NO evidence.
+  for (const k of ['providerName', 'model', 'wireApi']) {
+    if (provider && provider[k] !== undefined && provider[k] !== CODEX_PROVIDER[k]) {
+      throw new Error(`launchCodex: provider.${k}=${provider[k]} conflicts with the adapter pin ${CODEX_PROVIDER[k]} — no caller override`)
+    }
+  }
+  if (!prompt || !archiveDir) throw new Error('launchCodex: prompt + archiveDir required')
 
-  // ---- the following runs ONLY post-GO (guarded above); wired here for review, exercised at the paid gate ----
-  const { readFileSync, writeFileSync, mkdtempSync, mkdirSync, chmodSync, rmSync, existsSync } = await import('node:fs')
+  const fs = await import('node:fs')
   const { spawn, execFileSync } = await import('node:child_process')
+  const http = await import('node:http')
   const os = await import('node:os')
-  const scratch = mkdtempSync(join(os.tmpdir(), 'srb-codex-run-'))
-  chmodSync(scratch, 0o700)
-  const codexHome = join(scratch, 'codex'); mkdirSync(codexHome, { recursive: true }); chmodSync(codexHome, 0o700)
-  let ssh = null, bridge = null
+  const scratch = fs.mkdtempSync(join(os.tmpdir(), 'srb-codex-run-')); fs.chmodSync(scratch, 0o700)
+  const home = join(scratch, 'home'), codexHome = join(scratch, 'codex'), sqliteHome = join(scratch, 'sqlite'), workDir = join(scratch, 'work')
+  for (const d of [home, codexHome, sqliteHome, workDir]) { fs.mkdirSync(d, { recursive: true }); fs.chmodSync(d, 0o700) }
+  const sockPath = join(scratch, 'codex.sock')
+  const traceFile = join(scratch, 'provider-trace.jsonl')
+  const traceEvents = []
+  const containerName = `srb-${runId}`.replace(/[^a-zA-Z0-9_.-]/g, '-')
+  let ssh = null, proxy = null, docker = null, killer = null, timedOut = false
+  const cleanup = () => {
+    try { if (killer) clearTimeout(killer) } catch {}
+    try { execFileSync('docker', ['rm', '-f', containerName], { stdio: 'ignore' }) } catch {}
+    try { if (docker && !docker.killed) docker.kill('SIGKILL') } catch {}
+    try { if (proxy) proxy.close() } catch {}
+    try { if (ssh && !ssh.killed) ssh.kill('SIGKILL') } catch {}
+    try { fs.rmSync(scratch, { recursive: true, force: true }) } catch {}
+  }
   try {
-    // 1. stage ONLY the necessary bytes from the read-only globals into the per-run CODEX_HOME.
-    //    (relay key from auth.json; sub2api base_url/wire_api/model from config.toml — verified against the
-    //    approved values: base_url http://64.83.11.237:18080, wire_api responses, model gpt-5.5.)
-    if (!existsSync(join(CODEX_GLOBAL_DIR, 'auth.json'))) throw new Error('global codex auth.json absent')
-    const relayKey = JSON.parse(readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))?.OPENAI_API_KEY
-      ?? JSON.parse(readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))?.tokens?.access_token
+    // 1. relay key: read-only, call-time only; staged ONLY into the per-run 0600 auth.json
+    const authRaw = JSON.parse(fs.readFileSync(join(CODEX_GLOBAL_DIR, 'auth.json'), 'utf8'))
+    const relayKey = authRaw?.OPENAI_API_KEY ?? authRaw?.tokens?.access_token
     if (!relayKey) throw new Error('no relay key in global auth.json')
-    // 2. per-run ssh tunnel: pick an ephemeral local port, forward it to the vps sub2api over the ssh_config host.
+    fs.writeFileSync(join(codexHome, 'auth.json'), JSON.stringify({ OPENAI_API_KEY: relayKey }) + '\n')
+    fs.chmodSync(join(codexHome, 'auth.json'), 0o600)
+    // 2. per-run ssh tunnel to the vps sub2api
     const localPort = pickEphemeralPort(execFileSync)
     ssh = spawn('ssh', ['-F', CODEX_SSH_CONFIG, '-N', '-o', 'ExitOnForwardFailure=yes',
       '-L', `127.0.0.1:${localPort}:${CODEX_UPSTREAM.host}:${CODEX_UPSTREAM.port}`, CODEX_SSH_TARGET], { stdio: ['ignore', 'ignore', 'pipe'] })
     await waitTunnel(localPort, execFileSync)
-    // 3. host trace-proxy + unix bridge: a controlled HTTP proxy in front of the tunnel records ONLY
-    //    {status, request-id, response model, tokens} per response, then the outer container reaches it
-    //    through a single unix/loopback bridge (bridge.mjs). base_url in config.toml points at the
-    //    in-container loopback port. (Wiring identical in shape to sandbox.mjs's bridge; provider-trace
-    //    hook added on the host half.)
-    const traceFile = join(scratch, 'provider-trace.jsonl')
-    // ... bridge + docker run of `codex ${buildCodexArgv(provider.model).join(' ')}` with CODEX_HOME staged,
-    //     env buildCodexEnv({...}), --network none, provider base_url = in-container bridge; captures JSONL.
-    //     Parsed with parseCodexJsonl(events, {providerModelTrace: fromTrace(traceFile, provider.model)}).
-    throw new Error('launchCodex: paid container run intentionally not exercised in this commit — draft wiring only')
+    // 3. controlled trace proxy on a per-run unix socket: forwards HTTP to the tunnel and PRIVATELY
+    //    records {status, requestId, model} per response (model via regex over the first 64KB — the body
+    //    itself is never archived and the key never enters the trace).
+    proxy = http.createServer((req, res) => {
+      const up = http.request({ host: '127.0.0.1', port: localPort, method: req.method, path: req.url, headers: req.headers }, (ur) => {
+        let head = Buffer.alloc(0)
+        ur.on('data', (c) => { if (head.length < 65536) head = Buffer.concat([head, c]) })
+        ur.on('end', () => {
+          const m = head.toString('utf8').match(/"model"\s*:\s*"([^"]+)"/)
+          const ev = { at: new Date().toISOString(), status: ur.statusCode, requestId: ur.headers['x-request-id'] ?? null, model: m ? m[1] : null }
+          traceEvents.push(ev)
+          try { fs.appendFileSync(traceFile, JSON.stringify(ev) + '\n') } catch {}
+        })
+        res.writeHead(ur.statusCode, ur.headers)
+        ur.pipe(res)
+      })
+      up.on('error', () => { try { res.destroy() } catch {} })
+      req.pipe(up)
+    })
+    await new Promise((resolve, reject) => { proxy.on('error', reject); proxy.listen(sockPath, resolve) })
+    // 4. per-run config.toml: provider row = the adapter pin; base_url = the in-container bridge port
+    fs.writeFileSync(join(codexHome, 'config.toml'), codexConfigToml({
+      model: CODEX_PROVIDER.model, providerName: CODEX_PROVIDER.providerName,
+      baseUrl: `http://127.0.0.1:${CODEX_BRIDGE_PORT}/v1`, wireApi: CODEX_PROVIDER.wireApi,
+    }))
+    // 5. isolated container run: --network none; bridge ns → unix socket → trace proxy → tunnel
+    if (snapshotDir) fs.cpSync(snapshotDir, workDir, { recursive: true })
+    const promptMount = join(scratch, 'PROMPT.md'); fs.writeFileSync(promptMount, prompt)
+    const env = buildCodexEnv({ home: '/agent', codexHome: '/agent/codex', sqliteHome: '/agent/sqlite',
+      passthrough: { PATH: '/usr/bin:/bin:/opt/node/bin', LANG: 'C.UTF-8' } })
+    const envFile = join(scratch, 'codex.env')
+    fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n'); fs.chmodSync(envFile, 0o600)
+    const inner = [
+      'set -e',
+      `/opt/node/bin/node /assets/bridge.mjs ns /run/codex.sock ${CODEX_BRIDGE_PORT} 2>/agent/bridge-ns.log &`,
+      'sleep 0.4',
+      `cd /work && /opt/node/bin/node /opt/codex/bin/codex.js ${buildCodexArgv(CODEX_PROVIDER.model).join(' ')} "$(cat /assets/PROMPT.md)"`,
+    ].join('\n')
+    const args = ['run', '--rm', '--name', containerName, '--user', '1000:1000', '--network', 'none',
+      '--env-file', envFile, '--read-only', '--tmpfs', '/tmp:exec,uid=1000',
+      '-v', `${CODEX_NODE_DIST}:/opt/node:ro`, '-v', `${CODEX_PKG}:/opt/codex:ro`,
+      '-v', `${join(HERE, 'bridge.mjs')}:/assets/bridge.mjs:ro`, '-v', `${promptMount}:/assets/PROMPT.md:ro`,
+      '-v', `${workDir}:/work`, '-v', `${sockPath}:/run/codex.sock`,
+      '-v', `${codexHome}:/agent/codex`, '-v', `${sqliteHome}:/agent/sqlite`,
+      '--tmpfs', '/agent:exec,uid=1000,gid=1000,mode=0700',
+      CODEX_IMAGE, 'bash', '-c', inner]
+    const out = [], errBuf = []
+    docker = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    docker.stdout.on('data', (d) => out.push(d.toString()))
+    docker.stderr.on('data', (d) => errBuf.push(d.toString()))
+    const exit = await new Promise((resolve) => {
+      killer = setTimeout(() => { timedOut = true; try { execFileSync('docker', ['kill', containerName], { stdio: 'ignore' }) } catch {}; try { docker.kill('SIGKILL') } catch {} }, timeoutMs)
+      docker.on('close', (code) => { clearTimeout(killer); resolve(code) })
+      docker.on('error', () => { clearTimeout(killer); resolve(-1) })
+    })
+    // 6. parse (pure) + transport verdict (the seam) + secret scan, then archive
+    const rawOut = out.join(''), rawErr = errBuf.join('')
+    const parsed = parseCodexJsonl(rawOut.split('\n'))
+    const transport = verifyTransportTrace(traceEvents)
+    const streamHits = rawByteScan(Buffer.from(rawOut + '\n' + rawErr + '\n' + prompt, 'utf8'), relayKey)
+    const secretClean = streamHits.keyHits === 0 && streamHits.prefixHits === 0 && streamHits.b64Hits === 0
+    const b64 = Buffer.from(relayKey).toString('base64')
+    const redact = (s) => s.split(relayKey).join('«REDACTED-KEY»').split(b64).join('«REDACTED-KEY-B64»')
+    fs.mkdirSync(archiveDir, { recursive: true })
+    fs.writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
+    fs.writeFileSync(join(archiveDir, 'transcript.jsonl'), redact(rawOut))
+    fs.writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify({
+      v: 1, runId, adapter: 'codex', provider: CODEX_PROVIDER, exitCode: exit, timedOut,
+      parsed: { ok: parsed.ok, errors: parsed.errors, threadId: parsed.threadId, tokens: parsed.tokens },
+      transport: { verified: transport.verified, errors: transport.errors, models: transport.models, responses: transport.responses },
+      secretScan: { ...streamHits, clean: secretClean },
+    }, null, 2) + '\n')
+    const ok = exit === 0 && !timedOut && parsed.ok && transport.verified && secretClean
+    return { ok, exitCode: exit, timedOut, parsed, modelVerified: transport.verified, transport, secretClean, archiveDir }
   } finally {
-    try { if (bridge) bridge.kill('SIGKILL') } catch {}
-    try { if (ssh) ssh.kill('SIGKILL') } catch {}
-    try { rmSync(scratch, { recursive: true, force: true }) } catch {}
-    // NOTE: global ~/.codex is only READ above — never modified, archived, or printed.
+    cleanup()
   }
 }
 // runtime-only helpers (reached only post-GO): pick a free loopback port; wait for the tunnel to accept.
@@ -185,14 +279,15 @@ async function waitTunnel(port, execFileSync) {
   throw new Error(`codex ssh tunnel did not come up on 127.0.0.1:${port}`)
 }
 
-// FAKE adapter for no-model tests: emits canned JSONL LINES through the SAME isolation plumbing.
-// Returns an array of RAW LINES (strings) — the parser self-parses and any non-JSON line fails.
+// FAKE adapter for no-model tests: canned JSONL LINES through the SAME plumbing, and a FAKE TRANSPORT
+// producing the same trace-event shape the real proxy records — verified through the SAME seam
+// (verifyTransportTrace). Returns raw line arrays; the parser self-parses.
 export function fakeCodexLines(kind = 'good', { secret = null } = {}) {
   const J = (o) => JSON.stringify(o)
   const good = [
     J({ type: 'thread.started', thread_id: 'th_fake_001' }),
     J({ type: 'turn.started' }),
-    J({ type: 'item.completed', item: { type: 'assistant_message', text: secret ? `leaked ${secret}` : 'ok' } }),
+    J({ type: 'item.completed', item: { type: 'agent_message', text: secret ? `leaked ${secret}` : 'ok' } }),
     J({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 20, output_tokens: 40, reasoning_output_tokens: 10 } }),
   ]
   if (kind === 'good') return good
@@ -200,7 +295,9 @@ export function fakeCodexLines(kind = 'good', { secret = null } = {}) {
   if (kind === 'out-of-order') return [good[1], good[0], good[2], good[3]]            // turn.started before thread.started
   if (kind === 'dup-thread') return [good[0], J({ type: 'thread.started', thread_id: 'th_x' }), good[1], good[2], good[3]]
   if (kind === 'missing-completed') return good.slice(0, 3)
-  if (kind === 'no-assistant-item') return [good[0], good[1], good[3]]                 // no item.completed
+  if (kind === 'no-assistant-item') return [good[0], good[1], good[3]]                 // no item.completed at all
+  if (kind === 'user-message-item') return [good[0], good[1], J({ type: 'item.completed', item: { type: 'user_message', text: 'echoed prompt' } }), good[3]]
+  if (kind === 'empty-agent-message') return [good[0], good[1], J({ type: 'item.completed', item: { type: 'agent_message', text: '   ' } }), good[3]]
   if (kind === 'turn-failed') return [good[0], good[1], J({ type: 'turn.failed', error: 'boom' })]
   if (kind === 'error-event') return [good[0], J({ type: 'error', message: 'x' }), good[1], good[2], good[3]]
   if (kind === 'bad-usage') return [good[0], good[1], good[2], J({ type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 99, output_tokens: 5, reasoning_output_tokens: 0 } })]
@@ -208,27 +305,38 @@ export function fakeCodexLines(kind = 'good', { secret = null } = {}) {
   return good
 }
 
-// isolate + run the fake codex plumbing: returns the argv/env/config it WOULD run with + parsed result.
-// Proves per-run temp HOME/CODEX_HOME (not ~/.codex), env allowlist, structured argv, cleanup, secret scan.
-export function fakeCodexAttempt({ slug, provider, kind = 'good', secretKey = null, scanFn = null }) {
+// fake transport trace events (same shape the real proxy records) — judged by the SAME verifyTransportTrace.
+export function fakeTransportTrace(kind = 'good') {
+  if (kind === 'good') return [{ at: 'fake', status: 200, requestId: 'req_fake_1', model: CODEX_PROVIDER.model }]
+  if (kind === 'wrong-model') return [{ at: 'fake', status: 200, requestId: 'req_fake_1', model: 'other-model' }]
+  if (kind === 'no-model') return [{ at: 'fake', status: 200, requestId: 'req_fake_1', model: null }]
+  if (kind === 'empty') return []
+  if (kind === 'non-2xx') return [{ at: 'fake', status: 500, requestId: 'req_fake_1', model: CODEX_PROVIDER.model }]
+  return []
+}
+
+// isolate + run the fake codex plumbing: returns the argv/env/config it WOULD run with + parsed result +
+// the transport verdict from the fake transport (same seam as the real launch). Proves per-run temp
+// HOME/CODEX_HOME (not ~/.codex), env allowlist, structured argv, cleanup, secret scan.
+export function fakeCodexAttempt({ kind = 'good', transportKind = 'good', secretKey = null, scanFn = null, authEnvName = null, authValue = null }) {
   const root = mkdtempSync(join(tmpdir(), 'srb-codex-'))
   const home = join(root, 'home'), codexHome = join(root, 'codex'), sqliteHome = join(root, 'sqlite')
   let result
   try {
     for (const d of [home, codexHome, sqliteHome]) mkdirSync(d, { recursive: true })
-    const argv = buildCodexArgv(slug)
-    const env = buildCodexEnv({ home, codexHome, sqliteHome, authEnvName: provider?.authEnvName, authValue: provider?.authValue, passthrough: { PATH: '/usr/bin:/bin' } })
-    writeFileSync(join(codexHome, 'config.toml'), codexConfigToml({ model: provider.model, providerName: provider.providerName, baseUrl: provider.baseUrl, wireApi: provider.wireApi }))
+    const argv = buildCodexArgv(CODEX_PROVIDER.model)
+    const env = buildCodexEnv({ home, codexHome, sqliteHome, authEnvName, authValue, passthrough: { PATH: '/usr/bin:/bin' } })
+    writeFileSync(join(codexHome, 'config.toml'), codexConfigToml({ model: CODEX_PROVIDER.model, providerName: CODEX_PROVIDER.providerName, baseUrl: 'http://127.0.0.1:18081/v1', wireApi: CODEX_PROVIDER.wireApi }))
     chmodSync(codexHome, 0o700); chmodSync(home, 0o700)
     const lines = fakeCodexLines(kind, { secret: secretKey })
     const jsonl = lines.join('\n')
-    // NO caller-supplied model evidence — a fake "controlled-transport" trace is only used to exercise the
-    // transport-source gate; a caller-forged trace (wrong source) must NOT verify.
-    const parsed = parseCodexJsonl(lines, { transportModelTrace: provider?.transportTrace ?? null, expectedModel: provider?.model })
+    const parsed = parseCodexJsonl(lines)                                   // pure — no evidence enters
+    const transport = verifyTransportTrace(fakeTransportTrace(transportKind))  // the ONE model seam
     result = {
       argv, envNames: Object.keys(env).sort(), homeUnderTmp: home.startsWith(tmpdir()),
       touchesGlobalCodex: [home, codexHome, sqliteHome].some((p) => p.includes('/.codex')),
-      parsed, secretScanResult: scanFn && secretKey ? scanFn(jsonl, secretKey) : null,
+      parsed, transport, modelVerified: transport.verified,
+      secretScanResult: scanFn && secretKey ? scanFn(jsonl, secretKey) : null,
       configHasProvider: existsSync(join(codexHome, 'config.toml')),
       root,
     }
@@ -242,5 +350,5 @@ export function fakeCodexAttempt({ slug, provider, kind = 'good', secretKey = nu
 // the executor registry — same shape for every provider row; the phase picks ONE per batch, never mixes.
 export const EXECUTOR_REGISTRY = {
   // glm row is provided by sandbox.launchAgent (wired in pilot.mjs); codex row here:
-  codex: { launch: launchCodex, parse: parseCodexJsonl, buildArgv: buildCodexArgv, buildEnv: buildCodexEnv },
+  codex: { pin: CODEX_PROVIDER, launch: launchCodex, parse: parseCodexJsonl, verifyTransport: verifyTransportTrace, buildArgv: buildCodexArgv, buildEnv: buildCodexEnv },
 }

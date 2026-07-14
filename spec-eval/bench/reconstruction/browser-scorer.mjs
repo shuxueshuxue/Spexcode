@@ -16,6 +16,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { pinMountDigest } from './sandbox.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -35,8 +36,17 @@ function scorerImageId() {
 }
 
 // run the produced App.jsx through the in-container driver (esbuild + chromium, no network). Returns the
-// verdict {single, race}. The produced file is mounted read-only; nothing host-writable is exposed.
+// verdict {single, race} + the mount digests. The produced file is mounted read-only; nothing host-
+// writable is exposed. (6) EVERY mutable ro mount (node dist, chromium, node_modules, driver) is content-
+// digested on THIS launch and re-verified against its first pin — the image id alone is not the scorer's
+// provenance, the mounted executables are part of it.
 function runRace(appJsxPath) {
+  const mounts = {
+    node: pinMountDigest('mobile:node-dist', NODE_DIST),
+    chromium: pinMountDigest('mobile:chromium', CHROME_DIR),
+    nodeModules: pinMountDigest('mobile:node_modules', NM),
+    driver: pinMountDigest('mobile:incontainer-driver', INCONTAINER),
+  }
   const out = execFileSync('timeout', ['180', 'docker', 'run', '--rm', '--network', 'none', '--user', '1000:1000',
     '-e', 'HOME=/home/agent',
     '--tmpfs', '/work/out:exec,uid=1000', '--tmpfs', '/tmp:exec,uid=1000', '--tmpfs', '/home/agent:exec,uid=1000',
@@ -46,18 +56,18 @@ function runRace(appJsxPath) {
     { encoding: 'utf8', timeout: 210_000, maxBuffer: 32 * 1024 * 1024 })
   const line = out.split('\n').find((l) => l.startsWith('SRBVERDICT:'))
   if (!line) throw new Error('in-container mobile driver produced no verdict: ' + out.slice(-200))
-  return JSON.parse(line.slice('SRBVERDICT:'.length))
+  return { verdict: JSON.parse(line.slice('SRBVERDICT:'.length)), mounts }
 }
 
 export async function scoreMobileUi(workspaceDir) {
   const appPath = join(workspaceDir, 'spec-dashboard/src/App.jsx')
-  const v = runRace(appPath)
+  const { verdict: v, mounts } = runRace(appPath)
   const checks = [
     { name: 'single-refresh-updates', ok: !!v?.single?.updated, evidence: `#srb-sessions="${v?.single?.text}"` },
     { name: 'race-latest-issued-wins', ok: !!v?.race?.freshWins, evidence: `#srb-sessions="${v?.race?.text}"` },
     { name: 'race-stale-dropped', ok: v?.race && !v.race.staleAppeared, evidence: `staleAppeared=${v?.race?.staleAppeared}` },
   ]
-  return { scorer: 'behavioral:browser-dom-board-poll-race (docker --network none)', provenance: { image: SCORER_IMAGE, imageId: scorerImageId() }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, verdict: v }
+  return { scorer: 'behavioral:browser-dom-board-poll-race (docker --network none)', provenance: { image: SCORER_IMAGE, imageId: scorerImageId(), mounts }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, verdict: v }
 }
 
 // (1) NEVER-UPDATES pseudo-implementation: issues the mount reload but never applies the response.

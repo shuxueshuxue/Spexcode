@@ -51,7 +51,8 @@ scenarios:
       post-episode App.jsx 3/3，unchanged pre-state 与 never-updates 伪实现两个负控均被拒）、
       frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配
       tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录；scorer 镜像
-      每次评分重验 immutable id）全绿。
+      每次评分重验 immutable id，且 node/chromium/node_modules/driver 等 mutable 只读挂载逐 launch
+      内容摘要并对首钉复核）全绿。
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
@@ -63,7 +64,8 @@ scenarios:
       复用该 leaf 缓存的 recon/bundle，臂只差中性投影 bundle）。
     expected: >
       两 leaf 的 R0 产出结构合法 .spec-recon（frontmatter + 非空 body，required-file&schema 门过）；每 arm
-      入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean 全过，否则共享
+      入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model==active-adapter-pin（GLM=glm-5.2 /
+      Codex=gpt-5.5，expected 来自 adapter 常量非参数）+secret-clean 全过，否则共享
       abort 停批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
       spec-lint 在 docker --network none 内跑产出 lint（合成 git fixture，tracked-only 覆盖 + testGlobs），
       mobile-ui 用无头 chromium + CDP Network offline 跑产出 App.jsx 驱动 board-poll 竞态（latest-issued 赢、
@@ -71,9 +73,11 @@ scenarios:
       pre/post diff（含删除）；每 run 归档 trace（endpoint host、HTTP status/request-id、session set、逐
       字段 token、provenance image-id/claude-digest、mount audit、secret-scan 命中）+ workspace + scorer
       raw；phase 全部产出先落 staging 树，终扫用同一 fail-closed scanTreeRaw（raw Buffer exact/prefix/
-      base64，walk/stat/read/symlink/special 任一错误 hard-stop）对整个 runs/pilot 扫到 count-stable，
-      report 内嵌 finalArchiveScan 后原子 rename promote，否则整档 quarantine 且 move 失败 FATAL；失败/
-      gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
+      base64，walk/stat/read/symlink/special/缺根任一错误 hard-stop）对整个 runs/pilot 扫到
+      counts+scannedFiles+path-set-digest 全稳定——最后一步必是全字节扫描、之后零写入才 rename；report
+      只内嵌 finalArchiveScan（file count/path-set digest/secret summary），content digest 记树外
+      promotion ledger；promote/quarantine 目标已存在即 fail-loud、rename 后验证 source 消失 +
+      destination 存在，否则 FATAL；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

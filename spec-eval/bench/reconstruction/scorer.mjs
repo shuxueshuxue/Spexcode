@@ -17,6 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { pinMountDigest } from './sandbox.mjs'
 
 const NODE = process.execPath
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -74,9 +75,12 @@ process.stdout.write('SRBJSON:' + JSON.stringify(findings))
   return JSON.parse(line.slice('SRBJSON:'.length))
 }
 
-// score a produced spec-cli/src tree (the arm's workspace) behaviourally
+// score a produced spec-cli/src tree (the arm's workspace) behaviourally. (6) the mounted node_modules
+// (the only mutable ro mount besides the SUBJECT lint source) is content-digested per launch and re-
+// verified against its first pin; the subject itself is deliberately NOT pinned — it varies per arm.
 export function scoreSpecLint(workspaceSrcDir) {
   const fixture = buildFixture()
+  const mounts = { nodeModules: pinMountDigest('spec-lint:node_modules', NM) }
   try {
     const findings = runLint(workspaceSrcDir, fixture)
     const cov = findings.filter((f) => f.rule === 'coverage' && f.file)
@@ -86,7 +90,7 @@ export function scoreSpecLint(workspaceSrcDir) {
       { name: 'testfile-not-flagged', ok: !flagged.has('src/thing.test.ts'), evidence: [...flagged].join(',') },
       { name: 'ungoverned-tracked-flagged', ok: flagged.has('src/ungoverned.ts'), evidence: [...flagged].join(',') },
     ]
-    return { scorer: 'behavioral:spec-lint-fixture-run', provenance: { image: SANDBOX_IMAGE, imageId: sandboxImageId() }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, coverageFindings: cov }
+    return { scorer: 'behavioral:spec-lint-fixture-run', provenance: { image: SANDBOX_IMAGE, imageId: sandboxImageId(), mounts }, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, coverageFindings: cov }
   } finally {
     rmSync(fixture, { recursive: true, force: true })
   }

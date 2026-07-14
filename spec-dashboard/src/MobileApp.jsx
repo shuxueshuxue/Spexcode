@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS, GLYPH } from './specMeta.js'
-import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
+import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
@@ -87,6 +87,7 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
         {active === 'spec' && <SpecPane node={node} />}
         {active === 'history' && <HistoryPane node={node} rows={rows} />}
         {active === 'issues' && <IssuesPane node={node} />}
+        {active === 'eval' && <EvalPane node={node} />}
         {active === 'edit' && <EditPane node={node} />}
       </div>
     </div>
@@ -104,7 +105,7 @@ const dayKey = (ts) => new Date(ts).toDateString()
 // declaration note — the agent's reply) and every delivered prompt, timestamped, oldest first, with the
 // composer docked below. Freshness: an 8s poll while open, plus an immediate refetch whenever the board push
 // moves this session's status/note (the board stream is already live in App), plus one after every send.
-function MobileSessionDetail({ s, sessions, byId, goToNode }) {
+function MobileSessionDetail({ s, sessions, byId, goToNode, onBack }) {
   const t = useT()
   const ops = s.ops || []
   const [tab, setTab] = useState('chat')   // 'chat' | 'changes'
@@ -177,6 +178,7 @@ function MobileSessionDetail({ s, sessions, byId, goToNode }) {
   return (
     <div className="m-sessdetail chat">
       <div className="m-sess-card">
+        <button className="m-sess-back" onClick={onBack} aria-label={t('mobile.back')}>‹</button>
         <div className="m-sess-meta">
           <span className="m-sess-name">{sessionHeadline(s)}</span>
           <span className="m-sess-status" style={{ color: STATUS_COLOR[s.status] }}>
@@ -245,7 +247,7 @@ function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
-  if (open) return <MobileSessionDetail s={open} sessions={sessions} byId={byId} goToNode={goToNode} />
+  if (open) return <MobileSessionDetail s={open} sessions={sessions} byId={byId} goToNode={goToNode} onBack={() => setOpenId(null)} />
   if (!sessions.length) return <div className="m-empty big">{t('mobile.noSessions')}</div>
   return (
     <div className="m-sesslist">
@@ -265,7 +267,7 @@ function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
   )
 }
 
-export default function MobileApp({ specs, sessions, project }) {
+export default function MobileApp({ specs, sessions }) {
   const t = useT()
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   const root = useMemo(() => specs.find((s) => !s.parent) || specs[0], [specs])
@@ -294,18 +296,11 @@ export default function MobileApp({ specs, sessions, project }) {
 
   const pushChild = (id) => setPath((p) => [...p.filter((x) => byId[x]), id])
   const goToNode = (id) => { setPath(spineOf(id)); setOpenSessionId(null); setTab('specs') }
-  const canBack = tab === 'specs' ? validPath.length > 1 : !!openSessionId
-  const onBack = () => { if (tab === 'specs') setPath((p) => p.slice(0, -1)); else setOpenSessionId(null) }
 
+  // no top bar: the breadcrumb already navigates the spec drill-down upward, and the session detail
+  // carries its own back control — a title row bought nothing but a lost content line.
   return (
     <div className="m-app">
-      <header className="m-topbar">
-        {canBack
-          ? <button className="m-back" onClick={onBack} aria-label={t('mobile.back')}>‹</button>
-          : <span className="m-back ghost" aria-hidden="true" />}
-        <span className="m-brand">{project || 'SpexCode'}</span>
-      </header>
-
       <main className="m-main">
         {tab === 'specs' ? (
           <div className="m-specs">

@@ -4,7 +4,7 @@
   "cEval": "5723eaca1ba52eb60d28b818ddb4f77d758af01a",
   "protocol": "docs/spec-reconstruction-bench.md",
   "cards": "task-cards.json",
-  "cardsSha256": "a9f66230cc03a89c15f2a327f34ae95580d387f8880c0d7d6eef2460bb1f6075",
+  "cardsSha256": "e534f2b021f47d1bd10f5ffe8e91a9d1dd0084c518f8c7fa1262a58d8547b068",
   "leaves": [
     {
       "stratum": "spec-cli",

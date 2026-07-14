@@ -152,7 +152,22 @@ const RACE_DRIVER = function () {
     await new Promise((r) => setTimeout(r, 120))
     const el = document.getElementById('srb-sessions')
     const text = el ? el.textContent : null
-    return { text, freshWins: text === 'keep', staleAppeared: !!(text && text.includes('stale')), sanityUpdated: !!text }
+    return { text, freshWins: text === 'keep', staleAppeared: !!(text && text.includes('stale')) }
+  })()
+}
+// an INDEPENDENT one-request driver: a single normal refresh must update the board (its sessions appear).
+// A never-updates implementation fails this — it is NOT the race result re-counted.
+const SINGLE_DRIVER = function () {
+  return (async () => {
+    const srb = window.__srb
+    const t0 = Date.now()
+    while ((srb.pending?.length ?? 0) < 1 && Date.now() - t0 < 4000) await new Promise((r) => setTimeout(r, 20))
+    if ((srb.pending?.length ?? 0) < 1) return { error: 'no in-flight reload', n: srb.pending?.length ?? 0 }
+    srb.pending[0]({ nodes: [], sessions: [{ id: 'solo' }] })
+    await new Promise((r) => setTimeout(r, 120))
+    const el = document.getElementById('srb-sessions')
+    const text = el ? el.textContent : null
+    return { text, updated: text === 'solo' }
   })()
 }
 
@@ -163,11 +178,14 @@ async function runRace(appJsxPath) {
     const bundle = await buildBundle(appJsxPath, outDir)
     writeFileSync(join(outDir, 'bundle.js'), bundle)
     writeFileSync(join(outDir, 'harness.html'), '<!doctype html><html><body><div id="root"></div><script src="bundle.js"></script></body></html>')
+    const harnessUrl = `file://${join(outDir, 'harness.html')}`
+    // two INDEPENDENT drivers, each a fresh page load (fresh chromium context) so their reload queues don't mix
     chrome = await launchChrome()
     const list = JSON.parse(execFileSync('bash', ['-c', `curl -sS --max-time 5 http://127.0.0.1:${chrome.port}/json`], { encoding: 'utf8' }))
     const page = list.find((t) => t.type === 'page') ?? list[0]
-    const verdict = await cdp(page.webSocketDebuggerUrl, RACE_DRIVER, `file://${join(outDir, 'harness.html')}`)
-    return verdict
+    const single = await cdp(page.webSocketDebuggerUrl, SINGLE_DRIVER, harnessUrl)
+    const race = await cdp(page.webSocketDebuggerUrl, RACE_DRIVER, harnessUrl)   // navigate reloads the page → fresh queue
+    return { single, race }
   } finally {
     try { if (chrome?.proc) chrome.proc.kill('SIGKILL') } catch {}
     try { if (chrome?.dir) rmSync(chrome.dir, { recursive: true, force: true }) } catch {}
@@ -179,9 +197,9 @@ export async function scoreMobileUi(workspaceDir) {
   const appPath = join(workspaceDir, 'spec-dashboard/src/App.jsx')
   const v = await runRace(appPath)
   const checks = [
-    { name: 'sanity-board-updates', ok: !!v?.sanityUpdated, evidence: `#srb-sessions="${v?.text}"` },
-    { name: 'latest-issued-wins', ok: !!v?.freshWins, evidence: `#srb-sessions="${v?.text}"` },
-    { name: 'stale-dropped', ok: !v?.staleAppeared, evidence: `staleAppeared=${v?.staleAppeared}` },
+    { name: 'single-refresh-updates', ok: !!v?.single?.updated, evidence: `#srb-sessions="${v?.single?.text}"` },
+    { name: 'race-latest-issued-wins', ok: !!v?.race?.freshWins, evidence: `#srb-sessions="${v?.race?.text}"` },
+    { name: 'race-stale-dropped', ok: v?.race && !v.race.staleAppeared, evidence: `staleAppeared=${v?.race?.staleAppeared}` },
   ]
   return { scorer: 'behavioral:browser-dom-board-poll-race', checks, passed: checks.filter((c) => c.ok).length, total: checks.length, verdict: v }
 }

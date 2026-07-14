@@ -16,7 +16,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { launchAgent, secretScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, MODEL } from './sandbox.mjs'
+import { launchAgent, secretScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
 import { scoreSpecLint, scoreControls } from './scorer.mjs'
 import { scoreMobileUi, scoreControlsMobile } from './browser-scorer.mjs'
 
@@ -33,13 +33,13 @@ export async function preflight({ credPath }) {
   const gates = []
   const G = (name, ok, detail) => { gates.push({ name, ok, detail }); return ok }
 
-  // 1. frozen files reproduce (delegates to run.ts select/episodes --check)
+  // 1. frozen files reproduce (delegates to run.ts select/episodes/tasks --check)
   let framesOk = true, frameDetail = ''
-  for (const sub of ['select', 'episodes']) {
+  for (const sub of ['select', 'episodes', 'tasks']) {
     try { execFileSync(`${NODE_DIST}/bin/node`, ['--import', 'tsx', join(HERE, 'run.ts'), sub, '--check'], { cwd: ROOT, stdio: 'pipe' }) }
     catch (e) { framesOk = false; frameDetail += `${sub} --check failed; ` }
   }
-  G('frames-frozen', framesOk, frameDetail || 'select & episodes reproduce byte-identical')
+  G('frames-frozen', framesOk, frameDetail || 'select & episodes & tasks reproduce byte-identical')
 
   // 2. dry-oracle snapshot gates + leak-positive twin (run the runner; read its report)
   let dryOk = false, dryDetail = ''
@@ -87,12 +87,23 @@ export async function preflight({ credPath }) {
   G('secret-scan-power', planted.keyHits === 1 && cleanScan.keyHits === 0, `planted hit=${planted.keyHits} clean hit=${cleanScan.keyHits}`)
 
   const allOk = gates.every((g) => g.ok)
+  // (3) pin the full provenance the phase will bind to: runner commit, docker image id, claude digest,
+  // the frozen tasks/cards hashes, endpoint, model, config. The phase compares ALL of these to `now`.
+  const prov = provenanceRecord()
+  const tasksSha = sha256(readFileSync(join(HERE, 'tasks.json')))
+  const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))
   const report = {
-    v: 1, at: nowIso(), bench: 'spec-reconstruction-bench', phase: 'preflight', model: MODEL,
-    endpointHost: ENDPOINT_HOST,
+    v: 2, at: nowIso(), bench: 'spec-reconstruction-bench', phase: 'preflight',
+    binding: {
+      runnerCommit: prov.runnerCommit, runnerDirty: prov.runnerDirty,
+      dockerImageId: prov.dockerImageId, claudePkgDigest: prov.claudePkgDigest, claudeVersion: prov.claudeVersion,
+      tasksSha256: tasksSha, cardsSha256: cardsSha,
+      endpointHost: ENDPOINT_HOST, model: MODEL, endpointPath: ENDPOINT_PATH,
+    },
     historicalPreflightFailures: [
       { at: '2026-07-14', probe: 'bwrap/unshare userns isolation', outcome: 'blocked by kernel.apparmor_restrict_unprivileged_userns=1', resolution: 'switched to docker --network none + bridge; NOT counted in valid-run denominator' },
       { at: '2026-07-14', probe: 'global claude-glm wrapper read + gateway probe', outcome: 'protocol failure — wrong provider/credential path', resolution: 'discarded; experiment executor uses only the approved BigModel endpoint + per-run env-file; NOT a valid run' },
+      { at: '2026-07-14', probe: 'BigModel account verify-model', outcome: '429 [1302] account rate limit', resolution: 'valid-infra/account-blocked; GLM held; Codex executor row approved as alternative' },
     ],
     gates, allOk,
   }
@@ -354,10 +365,15 @@ export async function leafPhase({ credPath }) {
   E('runner-committed', prov.runnerDirty === false, `runner working tree dirty=${prov.runnerDirty} — commit before paid runs`)
   E('docker-image-pinned', !!prov.dockerImageId, `image ${prov.dockerImage} id=${String(prov.dockerImageId).slice(0, 16)}`)
   E('claude-pinned', !!prov.claudeVersion && !!prov.claudePkgDigest, `claude ${prov.claudeVersion} digest ${prov.claudePkgDigest}`)
-  // (A) prior stages present + agree on provenance
+  // (A) prior stages present + agree on the FULL binding (runner/image/claude/tasksSha/cardsSha/endpoint/model)
   const preflight = readJson(join(RUNS, 'pilot', 'preflight.json'))
   const check = readJson(join(RUNS, 'pilot', 'check.json'))
+  const tasksSha = sha256(readFileSync(join(HERE, 'tasks.json')))
+  const bindingAgrees = (b) => !!b && b.runnerCommit === prov.runnerCommit && b.dockerImageId === prov.dockerImageId
+    && b.claudePkgDigest === prov.claudePkgDigest && b.tasksSha256 === tasksSha && b.cardsSha256 === cardsSha
+    && b.endpointHost === ENDPOINT_HOST && b.model === MODEL
   E('preflight-green', !!preflight && preflight.allOk === true, preflight ? `preflight allOk=${preflight.allOk}` : 'preflight.json missing — run `pilot preflight`')
+  E('preflight-binding-agrees', bindingAgrees(preflight?.binding), 'preflight.json binding (runner/image/claude/tasksSha/cardsSha/endpoint/model) disagrees with now')
   E('check-green', !!check && check.checks?.every((c) => c.ok), check ? 'pilot check on record' : 'check.json missing — run `pilot check`')
   E('check-provenance-agrees', !!check && check.provenance?.runnerCommit === prov.runnerCommit && check.provenance?.dockerImageId === prov.dockerImageId && check.provenance?.claudePkgDigest === prov.claudePkgDigest, 'pilot check ran on a different runner/image/claude than now')
   // (A) the verify-model trace must exist and PASS every hard gate on the same provenance
@@ -389,19 +405,28 @@ export async function leafPhase({ credPath }) {
   const results = [], failures = []
   const settled = await Promise.allSettled(runnable.map((leaf) => runLeaf(leaf, cards, tasks.c0, credPath, abort)))
   settled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ leaf: runnable[i].id, error: String(s.reason?.message ?? s.reason) }))
-  // (C) final archive scan — every byte to be kept (incl binaries) across the whole pilot archive
-  const finalScan = finalArchiveScan(join(RUNS, 'pilot'), credPath)
-  const report = { v: 3, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, finalArchiveScan: finalScan, results, failures }
+  // (2) write the report FIRST, then scan EVERY byte in the archive INCLUDING the report itself; on any
+  // hit, atomically quarantine the whole archive and fail nonzero — the scan result gates the rc.
+  const report = { v: 3, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, results, failures }
   writeFileSync(join(RUNS, 'pilot', 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
+  const finalScan = finalArchiveScan(join(RUNS, 'pilot'), credPath)
+  writeFileSync(join(RUNS, 'pilot', 'final-scan.json'), JSON.stringify({ at: nowIso(), ...finalScan }, null, 2) + '\n')
+  report.finalArchiveScan = finalScan
+  if (!finalScan.clean) {
+    const q = join(RUNS, 'pilot') + '.QUARANTINE'
+    try { rmSync(q, { recursive: true, force: true }); execFileSync('mv', [join(RUNS, 'pilot'), q]) } catch {}
+    report.quarantined = q
+  }
   return report
 }
 
-// (C) scan EVERY file under the pilot archive (text and binary) for the credential — exact + prefix +
-// base64 — and count prefixHits into cleanliness. A hit means bytes already hit disk; fail loud so the
-// operator quarantines. Binaries are base64-probed too (a key could be embedded in an image/blob).
+// (2)(C) scan EVERY file under the pilot archive (text AND binary) for the credential — exact key bytes on
+// the raw Buffer + prefix + base64 (on both text and base64-of-bytes). prefixHits counts into cleanliness.
+// A hit means credential bytes already reached disk; the caller atomically quarantines and fails nonzero.
 function finalArchiveScan(dir, credPath) {
   let key = null
   try { key = readCredential(credPath) } catch { return { scanned: 0, clean: false, note: 'credential unreadable — cannot certify archive clean' } }
+  const keyBuf = Buffer.from(key)
   const b64 = Buffer.from(key).toString('base64')
   let scanned = 0, keyHits = 0, prefixHits = 0, b64Hits = 0
   const hitFiles = []
@@ -411,9 +436,12 @@ function finalArchiveScan(dir, credPath) {
     scanned++
     const asText = buf.toString('utf8'), asB64 = buf.toString('base64')
     const s = secretScan(asText, key)
-    const bh = (asText.split(b64).length - 1) + (asB64.includes(b64) ? 1 : 0)
-    if (s.keyHits || s.b64Hits || bh) hitFiles.push(rel)
-    keyHits += s.keyHits; prefixHits += s.prefixHits; b64Hits += s.b64Hits + bh
+    const rawExact = buf.includes(keyBuf) ? 1 : 0            // exact key bytes in the raw buffer
+    const bh = (asB64.includes(b64) ? 1 : 0)                  // key's base64 embedded in the file's bytes
+    const fileKeyHits = s.keyHits + rawExact
+    const fileB64Hits = s.b64Hits + bh
+    if (fileKeyHits || fileB64Hits || s.prefixHits) hitFiles.push(rel)
+    keyHits += fileKeyHits; prefixHits += s.prefixHits; b64Hits += fileB64Hits
   }
   return { scanned, keyHits, prefixHits, b64Hits, clean: keyHits === 0 && b64Hits === 0 && prefixHits === 0, hitFiles: hitFiles.slice(0, 20) }
 }

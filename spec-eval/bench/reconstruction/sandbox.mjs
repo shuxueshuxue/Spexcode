@@ -236,7 +236,7 @@ export async function launchAgent(opts) {
     const keyHits = streamScan.keyHits + wsScanKeyHits
     const b64Hits = streamScan.b64Hits + wsScanB64Hits
     const prefixHits = streamScan.prefixHits + wsScanPrefixHits
-    const secretClean = keyHits === 0 && b64Hits === 0
+    const secretClean = keyHits === 0 && b64Hits === 0 && prefixHits === 0   // (2) prefixHits also gates
 
     writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
     writeFileSync(join(archiveDir, 'transcript.stream-json'), redact(rawOut))

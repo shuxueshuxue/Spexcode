@@ -30,12 +30,14 @@
       "provenance": "mobile-ui governs the shared App.jsx; the earlier focus-panel episodes were excluded (new-sibling-module dep / non-governed FocusPanel.jsx source). db80b33d changes ONLY App.jsx among source — scope-self-contained. It is an async board-poll race, so its honest acceptance is a REAL browser/DOM behavioural test.",
       "request": "In the dashboard's root App component, the board is refreshed both by a periodic poll (every few seconds) and on demand (after actions like closing or renaming a session). Because several board fetches can be in flight at once and resolve OUT OF ORDER, an older fetch — carrying a stale backend snapshot from before an action — can land last and overwrite fresher state: e.g. a just-closed session flickers back until the next poll. Fix the refresh so that only the MOST-RECENTLY-ISSUED fetch may update the board; a superseded (older-issued) response must be dropped, never applied. Change only the app component.",
       "acceptance": {
-        "scorer": "behavioral:browser-dom",
+        "scorer": "behavioral:browser-dom-board-poll-race",
         "assertions": [
-          "When two board refreshes overlap and the LATER-issued resolves first while the EARLIER-issued resolves last with stale data, the rendered board reflects the later-issued (fresh) result — the stale response is dropped.",
-          "A single normal refresh still updates the board."
+          "SINGLE-REFRESH (independent one-request driver): one normal board refresh updates the rendered board — its sessions appear. A never-updates implementation fails this.",
+          "RACE latest-issued-wins: when two refreshes overlap and the LATER-issued resolves first while the EARLIER-issued resolves last with stale data, the rendered board reflects the later-issued (fresh) result.",
+          "RACE stale-dropped: the superseded (older-issued) response is NOT applied — the stale session does not appear."
         ],
-        "status": "SCORER-NOT-YET-IMPLEMENTED — a real browser/DOM harness for this async race is required (YATU; regex is not admissible as the main outcome). Until that harness exists and its positive/negative controls pass rc0, mobile-ui is GATED OUT of the paid leaf phase as a declared blind spot; only spec-lint runs paid arms."
+        "drivers": "the SINGLE-REFRESH assertion is measured by its OWN one-request driver (mount reload only, resolve once); the two RACE assertions come from the race driver. The single result of the race is not triple-counted.",
+        "sandbox": "IMPLEMENTED — esbuild bundle + headless chromium run inside docker --network none (produced/bundle read-only, only profile/tmp writable, no HOME/checkout mount); network additionally cut in-process via CDP. Positive control (post db80b33d) passes; negative controls: pre-state 3f07397f (no seq-guard → stale wins) AND a never-updates stub both REJECTED. Discrimination proven by pilot check (rc0) before any paid run."
       }
     }
   }

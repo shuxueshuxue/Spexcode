@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from './avatar.jsx'
-import { STATUS, GLYPH } from './specMeta.js'
+import { STATUS } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR, STATUS_GLYPH } from './session.js'
@@ -100,29 +100,36 @@ const timeOf = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', mi
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
 
+// a poll answer is usually the SAME history — keep the old array identity then, so nothing downstream
+// (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
+const sameEvents = (a, b) => a != null && a.length === b.length
+  && (a.length === 0 || JSON.stringify(a[a.length - 1]) === JSON.stringify(b[b.length - 1]))
+
 // @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail. Without a pane to
 // read, the persisted timeline IS the interaction record: every authored status transition (with the full
 // declaration note — the agent's reply) and every delivered prompt, timestamped, oldest first, with the
 // composer docked below. Freshness: an 8s poll while open, plus an immediate refetch whenever the board push
 // moves this session's status/note (the board stream is already live in App), plus one after every send.
-function MobileSessionDetail({ s, sessions, byId, goToNode, onBack }) {
+function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
-  const ops = s.ops || []
-  const [tab, setTab] = useState('chat')   // 'chat' | 'changes'
-  useEffect(() => { setTab('chat') }, [s.id])
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const scrollRef = useRef(null)
+  const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
-  const load = useCallback(() => loadSessionTimeline(s.id).then((d) => { if (d) setEvents(d.events) }), [s.id])
-  useEffect(() => { setEvents(null); setDetail(null); load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
+  const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
+    if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
+  }), [s.id])
+  useEffect(() => { setEvents(null); setDetail(null); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
   useEffect(() => { const iv = setInterval(load, 8000); return () => clearInterval(iv) }, [load])
   useEffect(() => { load() }, [s.status, s.note, load])
-  // keep the conversation pinned to its newest entry, like any chat surface
-  useEffect(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }, [events, tab])
+  // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
+  // the bottom — a reader parked up in history is never yanked down by a poll.
+  const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
+  useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
 
   const send = async () => {
     const text = draft.trim()
@@ -186,55 +193,31 @@ function MobileSessionDetail({ s, sessions, byId, goToNode, onBack }) {
           </span>
         </div>
       </div>
-      <div className="m-tabs">
-        <button className={tab === 'chat' ? 'm-tab on' : 'm-tab'} onClick={() => setTab('chat')}>{t('mobile.timelineTab')}</button>
-        <button className={tab === 'changes' ? 'm-tab on' : 'm-tab'} onClick={() => setTab('changes')}>{t('mobile.changing', { n: ops.length })}</button>
+      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
+        {detail?.prompt && (
+          <details className="m-ev m-ev-prompt">
+            <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
+            <div className="m-ev-text">{detail.prompt}</div>
+          </details>
+        )}
+        {events === null
+          ? <div className="m-empty">{t('hud.loading')}</div>
+          : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
       </div>
-
-      {tab === 'changes' ? (
-        <div className="m-sess-changes">
-          {ops.length === 0
-            ? <div className="m-empty">{t('mobile.noChanges')}</div>
-            : ops.map((op, i) => {
-                const n = byId[op.nodeId]
-                return (
-                  <button key={i} className="m-row" disabled={!n} onClick={() => n && goToNode(op.nodeId)}>
-                    <span className={`ov-mark ov-${op.op}`}>{GLYPH[op.op] || '•'}</span>
-                    <span className="m-row-title">{n ? n.title : op.nodeId}</span>
-                    {n && <span className="m-row-chev">›</span>}
-                  </button>
-                )
-              })}
+      {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
+      {sendErr && <div className="m-senderr">{sendErr}</div>}
+      <div className="m-composer">
+        <div className="m-composer-line">
+          <textarea
+            className="m-input"
+            rows={1}
+            placeholder={t('mobile.inputPlaceholder')}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
         </div>
-      ) : (
-        <>
-          <div className="m-timeline" ref={scrollRef}>
-            {detail?.prompt && (
-              <details className="m-ev m-ev-prompt">
-                <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-                <div className="m-ev-text">{detail.prompt}</div>
-              </details>
-            )}
-            {events === null
-              ? <div className="m-empty">{t('hud.loading')}</div>
-              : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-          </div>
-          {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
-          {sendErr && <div className="m-senderr">{sendErr}</div>}
-          <div className="m-composer">
-            <div className="m-composer-line">
-              <textarea
-                className="m-input"
-                rows={1}
-                placeholder={t('mobile.inputPlaceholder')}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-              <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
-            </div>
-          </div>
-        </>
-      )}
+      </div>
     </div>
   )
 }
@@ -242,12 +225,12 @@ function MobileSessionDetail({ s, sessions, byId, goToNode, onBack }) {
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
 // with fold pods (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
 // beyond the touch-sized wrapper row.
-function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
+function MobileSessions({ sessions, openId, setOpenId }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
-  if (open) return <MobileSessionDetail s={open} sessions={sessions} byId={byId} goToNode={goToNode} onBack={() => setOpenId(null)} />
+  if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
   if (!sessions.length) return <div className="m-empty big">{t('mobile.noSessions')}</div>
   return (
     <div className="m-sesslist">
@@ -277,13 +260,6 @@ export default function MobileApp({ specs, sessions }) {
     specs.forEach((s) => { if (s.parent) (m[s.parent] ??= []).push(s) })
     return (id) => m[id] || []
   }, [specs])
-  // the spine root→id, used to set the breadcrumb when jumping to an arbitrary node (a session's changed node).
-  const spineOf = useMemo(() => (id) => {
-    const out = []
-    for (let cur = byId[id]; cur; cur = cur.parent ? byId[cur.parent] : null) out.unshift(cur.id)
-    return out
-  }, [byId])
-
   const [tab, setTab] = useState('specs')
   const [path, setPath] = useState(() => (root ? [root.id] : []))
   const [openSessionId, setOpenSessionId] = useState(null)
@@ -295,7 +271,6 @@ export default function MobileApp({ specs, sessions }) {
   const cur = curId ? byId[curId] : null
 
   const pushChild = (id) => setPath((p) => [...p.filter((x) => byId[x]), id])
-  const goToNode = (id) => { setPath(spineOf(id)); setOpenSessionId(null); setTab('specs') }
 
   // no top bar: the breadcrumb already navigates the spec drill-down upward, and the session detail
   // carries its own back control — a title row bought nothing but a lost content line.
@@ -320,7 +295,7 @@ export default function MobileApp({ specs, sessions }) {
             {cur && <MobileNode key={cur.id} node={cur} childrenOf={childrenOf} sessions={sessions} onOpenChild={pushChild} />}
           </div>
         ) : (
-          <MobileSessions sessions={sessions} openId={openSessionId} setOpenId={setOpenSessionId} byId={byId} goToNode={goToNode} />
+          <MobileSessions sessions={sessions} openId={openSessionId} setOpenId={setOpenSessionId} />
         )}
       </main>
 

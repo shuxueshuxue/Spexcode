@@ -1478,7 +1478,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* NO horizontal scrolling anywhere in the phone shell: a thumb surface scrolls one axis. Every mobile
    scroller is clamped to vertical, and anything that would overflow sideways (code blocks, long paths,
    diff lines in the reused desktop panes) WRAPS instead — the panes are for reading, not measuring. */
-.m-app .m-timeline, .m-app .m-children, .m-app .m-sesslist, .m-app .m-sess-changes, .m-app .m-sessdetail,
+.m-app .m-timeline, .m-app .m-children, .m-app .m-sesslist, .m-app .m-sessdetail,
 .m-app .m-pane-host .pane-doc, .m-app .m-pane-host .pane-hist, .m-app .m-pane-host .pane-issues,
 .m-app .m-pane-host .pane-eval, .m-app .m-pane-host .pane-edit { overflow-x: hidden; }
 .m-app pre, .m-app code, .m-app .diff-line, .m-app .hist-diff pre {
@@ -1606,8 +1606,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-sess-status { font-size: 12px; color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
-.m-sess-changes { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
-.m-sessdetail .ov-mark { flex: none; }
 
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
    below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */

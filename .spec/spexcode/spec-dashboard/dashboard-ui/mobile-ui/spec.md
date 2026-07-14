@@ -48,10 +48,14 @@ The two planes, made native to touch:
   (you / the sending session) — and a docked composer. Every dispatch from this surface carries
   `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
   asking for the reply there is the surface's fixed property, never a per-message option and never
-  a visible control (an earlier toggle chip read as unexplained noise and was deleted). A changes
-  tab keeps the node cross-over (tap a changed node → Specs,
-  focused there). Offline shows an honest can't-deliver hint; a failed send fails loud, keeping
-  the draft.
+  a visible control (an earlier toggle chip read as unexplained noise and was deleted). The detail
+  is deliberately tab-less — header, timeline, composer, nothing else: changed-nodes review is the
+  desktop cockpit's job (an earlier changes tab spent a whole line labelling a list a phone reader
+  never used), so every line the phone has goes to the conversation. The scroller is chat-shaped
+  but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
+  reader is already at the bottom — a reader parked up in history is never yanked down by the
+  poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
+  Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
 
 It answers "what does the tree say", "what are my agents doing", and now "talk to them" — from a
 phone. Merge/close and the live pane stay with the desktop board: acting on proposals is the

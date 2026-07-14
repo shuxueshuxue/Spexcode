@@ -133,13 +133,21 @@ export interface Harness {
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
-  // control socket — OPTIMISTIC-after-liveness (loud failure when the socket is missing/dead or the write can't
-  // flush; once the reply line flushes to a live socket it returns ok, without waiting for an application ack —
-  // see replyViaSocket). codex: JSON-RPC on the same app-server WebSocket the
+  // control socket — an ATOMIC reply+repaint chunk whose `repaint-done` proves the reply was PARSED; a close
+  // before it proves a concurrent connect kicked the chunk (the daemon is single-connection) → resend; a wall
+  // expiry on a still-open connection is a busy-not-lost agent → optimistic ok (see replyViaSocket). codex:
+  // JSON-RPC on the same app-server WebSocket the
   // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
+  // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
+  // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
+  // BEFORE delivering; absent on harnesses with no such state (codex delivery ignores the pane). claude: the
+  // TUI's sessions panel ("← for agents") enqueues an injected reply to the panel context and never drains it
+  // — verified live: parsed + enqueued, no dequeue, no turn, daemon silent.
+  deliveryBlockedBy?(paneText: string): string | null
   // --- materialize: clean (the inverse of write — [[harness-select]] prunes a deselected harness) ---
   // clean is the EXACT inverse of materialize's per-harness write: SURGICALLY remove ONLY SpexCode's own
   // artifacts — the managed contract block (sentinels), the generated shim file, the trust block, and the
@@ -161,11 +169,11 @@ export interface Harness {
 }
 
 // a prompt-dispatch outcome. ok=true means delivery is confirmed at the layer that harness proves it: claude at
-// the TRANSPORT/liveness layer (the reply line flushed to a live rendezvous socket — see replyViaSocket for why
-// it is OPTIMISTIC-after-liveness, not a round-trip ack); codex at the application layer (the app-server accepted
-// `turn/steer`/`turn/start`). `error` carries a human-readable reason that propagates to the API route (non-2xx)
-// and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts re-exports it for
-// its existing importers.
+// the DAEMON-PARSE layer (the atomic reply+repaint chunk answered `repaint-done`, or the wall expired on a
+// still-open connection — busy, not lost; see replyViaSocket); codex at the application layer (the app-server
+// accepted `turn/steer`/`turn/start`). `error` carries a human-readable reason that propagates to the API route
+// (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
+// re-exports it for its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
 // the on-demand surface artifacts a materialize pass wrote, by node NAME — so clean() knows EXACTLY which
@@ -252,50 +260,84 @@ function shQuote(s: string): string {
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
 
-// @@@ replyViaSocket - OPTIMISTIC-after-liveness delivery: connect to the LIVE rendezvous socket and WRITE the
-// `{type:reply}\n` line; once that line FLUSHES to the socket with no immediate transport error, the reply is on
-// the wire and claude submits it the moment it yields the event loop — so we return ok:true right there. We do
-// NOT wait for an application-level acceptance ack. The old code wrote a `{type:repaint}` probe after the reply
-// and waited up to 2500ms for a `{type:repaint-done}` to CONFIRM the reply was processed; the ordering barrier is
-// sound one-way (repaint-done ⟹ delivered) but its ABSENCE is NOT proof of non-delivery — a mid-turn/BUSY claude
-// can't answer the probe within the wall, so a message that actually landed reported a COMMON, misleading false
-// failure. The delivery confirmation therefore lives at the TRANSPORT/liveness layer, not the application layer:
-// deliverViaRendezvous already gates on the socket's existence (liveness), and here the FREE, INSTANT transport
-// signals — a connect that throws, a socket 'error' (ECONNREFUSED / EPIPE), or a 'close' BEFORE the write flushes —
-// are still reported as real failures (they cost no waiting). What we knowingly give up is detection of the narrow
-// alive-but-wedged / reply-rejected / shutting-down cases: a rare silent drop, recoverable because the supervisor
-// sees the worker never transition. That tradeoff is the deliberate contract now — see [[harness-adapter]].
-// Never throws.
-function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
+// @@@ replyViaSocket - ATOMIC parse-confirmed delivery. The daemon is SINGLE-CONNECTION: a new connect
+// `destroy()`s the previous socket, discarding any received-but-not-yet-parsed line with it — and our own
+// `rendezvousListening` liveness probe IS such a connect, fired for every session on every board snapshot. So
+// the previous optimistic write (return ok once the reply line flushed) LOST prompts whenever a probe landed in
+// the write→parse window, a window that widens exactly when claude is busy mid-turn (field: dashboard messages
+// recorded `sent` with no trace in the claude transcript; measured 2/10 lost under a 20ms probe hammer). The
+// daemon parses a chunk's complete lines in ONE synchronous loop, so writing `{type:reply}` + `{type:repaint}`
+// as ONE chunk makes the pair indivisible — a kick loses BOTH or NEITHER — and the outcome decidable from this
+// connection alone:
+//   `repaint-done` arrives  → the reply line before it was parsed (in-order barrier) → ok, CONFIRMED.
+//   'close' before it       → the chunk was never parsed (kicked by a concurrent connect) → resolve kicked:true
+//                             so deliverViaRendezvous RESENDS — a proven loss, so the retry cannot duplicate.
+//   wall expires, conn open → a busy event loop is DELAYING, not losing (the 2500ms-wall lesson: ack absence is
+//                             NOT non-delivery) → ok, OPTIMISTIC — never a false failure on a busy worker.
+//   `reply-rejected`/`auth-rejected`/`shutting-down` → loud failure, not retried.
+// Other daemon lines (heartbeat, state patches) are ignored. Never throws.
+type ReplyOutcome = DispatchResult & { kicked?: boolean }
+function replyViaSocket(sock: string, text: string, wallMs = 10_000): Promise<ReplyOutcome> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection>
-    const done = (r: DispatchResult) => {
+    const done = (r: ReplyOutcome) => {
       if (settled) return
       settled = true
+      clearTimeout(wall)
       try { c?.destroy() } catch { /* */ }
       resolve(r)
     }
+    const wall = setTimeout(() => done({ ok: true }), wallMs)
     try {
       c = createConnection({ path: sock })
     } catch (e) {
       done({ ok: false, error: `rendezvous socket connect threw: ${String(e)}` })
       return
     }
-    c.on('error', (e: NodeJS.ErrnoException) => done({ ok: false, error: `rendezvous socket connect failed: ${e?.code || String(e)}` }))
-    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the prompt was written' }))
-    // write the reply line; the write callback fires once it flushes to the live socket → optimistic ok. An
-    // immediate transport 'error'/'close' beats the callback and reports the real failure (done is idempotent).
-    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n', () => done({ ok: true })))
+    // ECONNRESET/EPIPE are the KICK surfacing as an error: the daemon destroy()s the previous connection the
+    // moment a new one connects, and destroying a socket with OUR chunk still unread raises RST — whereas a
+    // parsed chunk answers repaint-done (readable even after a later close) before any clean FIN. So both codes
+    // PROVE the chunk was never parsed → retryable, same as the clean pre-parse close. ECONNREFUSED/ENOENT
+    // (daemon gone) stay loud.
+    c.on('error', (e: NodeJS.ErrnoException) => {
+      const code = e?.code || String(e)
+      const kicked = code === 'ECONNRESET' || code === 'EPIPE'
+      done({ ok: false, ...(kicked ? { kicked } : {}), error: `rendezvous socket error: ${code} — prompt NOT delivered` })
+    })
+    c.on('close', () => done({ ok: false, kicked: true, error: 'rendezvous connection was closed before the daemon parsed the prompt (kicked by a concurrent connect)' }))
+    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n' + JSON.stringify({ type: 'repaint' }) + '\n'))
+    let buf = ''
+    c.on('data', (d) => {
+      buf += d.toString('utf8')
+      let nl
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl)
+        buf = buf.slice(nl + 1)
+        let type = ''
+        try { type = (JSON.parse(line) as { type?: string })?.type ?? '' } catch { continue }
+        if (type === 'repaint-done') return done({ ok: true })
+        if (type === 'reply-rejected' || type === 'auth-rejected') return done({ ok: false, error: `rendezvous daemon rejected the prompt (${type}) — prompt NOT delivered` })
+        if (type === 'shutting-down') return done({ ok: false, error: 'agent is shutting down — prompt NOT delivered' })
+      }
+    })
   })
 }
 // claude's deliver: the pre-write LIVENESS gate — fail loud BEFORE attempting the socket if it isn't there (a
-// clearer message than a raw connect error, and the delivery's confirmation layer: socket present = agent alive).
-// Then inject the reply optimistically via replyViaSocket (no round-trip ack).
-function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult> {
+// clearer message than a raw connect error, and the delivery's confirmation layer: socket present = agent
+// alive). Then the atomic parse-confirmed write; a KICKED outcome is a proven whole-chunk loss, so it resends
+// (bounded attempts + jitter so re-collision with the probe cadence is unlikely); exhausted retries fail loud.
+const DELIVER_ATTEMPTS = 3
+export async function deliverViaRendezvous(id: string, text: string, wallMs?: number): Promise<DispatchResult> {
   const sock = rvSock(id)
-  if (!existsSync(sock)) return Promise.resolve({ ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` })
-  return replyViaSocket(sock, text)
+  if (!existsSync(sock)) return { ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` }
+  let last: ReplyOutcome = { ok: false, error: 'not attempted' }
+  for (let attempt = 1; attempt <= DELIVER_ATTEMPTS; attempt++) {
+    last = await replyViaSocket(sock, text, wallMs)
+    if (last.ok || !last.kicked) return { ok: last.ok, ...(last.error ? { error: last.error } : {}) }
+    await new Promise((r) => setTimeout(r, 60 + Math.random() * 140))
+  }
+  return { ok: false, error: `rendezvous delivery was kicked by concurrent connects ${DELIVER_ATTEMPTS}× — prompt NOT delivered, retry the send` }
 }
 
 type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
@@ -997,6 +1039,15 @@ export const claudeHarness: Harness = {
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  // the TUI's sessions panel ("← for agents"): a reply injected here is parsed + enqueued to the PANEL context
+  // and never drained (verified live: `queue-operation: enqueue` with no dequeue, no turn, daemon silent), so
+  // the parse-confirmed delivery above would still report a false success into it. Matched on the panel's own
+  // strings — the new-session composer placeholder, or its footer key hints together (either alone could drift
+  // across claude versions; requiring the footer PAIR keeps a prose false-positive unlikely).
+  deliveryBlockedBy: (paneText) =>
+    paneText.includes('describe a task for a new session') || (paneText.includes('enter to return') && paneText.includes('space to reply'))
+      ? 'the claude TUI is focused on its sessions panel ("← for agents"), which silently swallows injected prompts — press Enter in the session terminal to return to the composer, then resend'
+      : null,
   resumeArg: (rec) => `--resume ${rec.session}`,
 }
 

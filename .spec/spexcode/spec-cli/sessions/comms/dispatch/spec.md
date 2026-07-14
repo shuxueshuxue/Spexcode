@@ -26,13 +26,22 @@ control never reaches a Claude Code session outside the product. Writing one `{"
 line injects the text and submits it deterministically, so multi-line prompts and Enters can't be
 corrupted the way `tmux send-keys` could.
 
-`sendText` is **socket-only with no send-keys fallback** and confirms the agent actually **accepted** the
-prompt, not mere write-success. The daemon acks no accepted reply, so acceptance is an **in-order
-round-trip**: it writes the `reply` line then a `repaint` line; the daemon handles lines strictly in order,
-so a `repaint-done` with no preceding `reply-rejected` proves the reply was taken (`repaint` is auth-exempt,
-a reliable probe even if a future daemon gates `reply`). A missing/socketless session, a connect error, a
-`reply-rejected`/`shutting-down`, or a timeout all return a **loud `DispatchResult {ok,error}`** that
-propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
+`sendText` is **socket-only with no send-keys fallback** and confirms the prompt was **parsed by the daemon**,
+not merely written. Mere write-success lies, because claude's rendezvous daemon keeps **ONE connection** and
+destroys the previous socket on every new connect — discarding any received-but-unparsed line with it — and
+our own liveness probes ARE such connects, so a probe landing in the write→parse window silently killed a
+"successfully sent" prompt (the field incident: dashboard messages recorded `sent` with no trace in the
+claude transcript). So delivery writes the `reply` line and a `repaint` probe line as **one atomic chunk**
+(the daemon parses a chunk's lines in one synchronous loop, so a kick can only lose both or neither), then
+reads its own connection: `repaint-done` **proves the reply was parsed** (in-order barrier); the connection
+**closing before it** proves the chunk was never parsed (kicked) → **reconnect and resend**, bounded retries;
+the **wall expiring with the connection still open** means a busy event loop is delaying, not losing → report
+ok optimistically, never a false failure on a live-but-busy agent. Before any write, the pane is consulted:
+claude's **sessions panel** ("← for agents") swallows parsed replies without a trace (enqueued, never
+dequeued, daemon silent), so a send into that pane state is **refused loudly** with the recovery named
+(press Enter in the terminal to return), never absorbed. A missing/socketless session, a connect error, a
+`reply-rejected`/`shutting-down`, or exhausted kick-retries all return a **loud `DispatchResult {ok,error}`**
+that propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
 **Merge is a dispatch, not a script.** `mergeSession` carries no `git merge` logic: it reopens the
 session (clears the proposal → active, `--resume`s via `reopen` if tmux died — which waits for the

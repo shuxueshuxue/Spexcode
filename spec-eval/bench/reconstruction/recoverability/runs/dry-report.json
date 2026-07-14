@@ -1,7 +1,7 @@
 {
   "v": 1,
   "protocol": "docs/content-recoverability.md",
-  "protocolFreezeSha256": "4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7",
+  "protocolFreezeSha256": "92b95ba5a3097a84eeec068adcc229624b695d9ad732ae03a1fec13827ff1c32",
   "currentState": {
     "effectiveModuleR0": 0,
     "paidRuns": 0,
@@ -74,6 +74,11 @@
               "clusters": 3,
               "units": 15,
               "status": "secondary-only"
+            },
+            "research-evidence": {
+              "clusters": 2,
+              "units": 8,
+              "status": "insufficient"
             }
           }
         },
@@ -168,6 +173,11 @@
               "clusters": 3,
               "units": 15,
               "status": "secondary-only"
+            },
+            "research-evidence": {
+              "clusters": 2,
+              "units": 8,
+              "status": "insufficient"
             }
           }
         },

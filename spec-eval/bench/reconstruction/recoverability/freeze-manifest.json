@@ -4,7 +4,7 @@
   "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
   "cEval": "5723eaca1ba52eb60d28b818ddb4f77d758af01a",
   "seed": "e54cccbec33bc1a1fccb557076013b72ff3ec35457e4eeaf6b84941b64c318a8",
-  "protocolFreezeSha256": "4c1fc91d914d061df19cfbff076aae0e9f281a2f84fe804dd6c5b21beb164aa7",
+  "protocolFreezeSha256": "92b95ba5a3097a84eeec068adcc229624b695d9ad732ae03a1fec13827ff1c32",
   "assets": [
     {
       "path": ".spec/spexcode/spec-eval/content-recoverability/eval.md",
@@ -15,14 +15,14 @@
     {
       "path": ".spec/spexcode/spec-eval/content-recoverability/spec.md",
       "role": "manual-protocol-input",
-      "bytes": 3997,
-      "sha256": "5dfae6aae1eb66d5851224ea55355a8c8be9878f024a17dddb8882b4a0d05ae9"
+      "bytes": 4375,
+      "sha256": "108619a95c4081f69efa763f500086958c4df9f8767498798f139528bb73e733"
     },
     {
       "path": "docs/content-recoverability.md",
       "role": "manual-protocol-input",
-      "bytes": 18990,
-      "sha256": "f04e1d1537d70c2e7aac06c39d41936014f2f78a61eec1b6ebfe8160d4a3ca92"
+      "bytes": 19803,
+      "sha256": "dad0d7068a70bf15a084081f1a9529a87ba87a05ddcadee001d3c39102abcf4e"
     },
     {
       "path": "docs/spec-reconstruction-bench.md",
@@ -45,8 +45,8 @@
     {
       "path": "spec-eval/bench/reconstruction/recoverability/control-plan.json",
       "role": "deterministic-generated-output",
-      "bytes": 21086,
-      "sha256": "66c603ee0ab389716732e7c36f4eebfa1323810fa2def0b021cb155095ce8444"
+      "bytes": 21785,
+      "sha256": "497fc40cbcd1f9de3527f49fde6d1cdfe1c030636c5605d1264a847e3df670dc"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/frame.json",
@@ -63,8 +63,8 @@
     {
       "path": "spec-eval/bench/reconstruction/recoverability/rubric.md",
       "role": "manual-protocol-input",
-      "bytes": 3007,
-      "sha256": "731710643e64452f21471849cd6477586ce9d423b7f6792d30c32fae800c39ff"
+      "bytes": 3719,
+      "sha256": "70c8aac7fa3fd1ec9c754b40cf7a18a8b6bcc9db666c32376fbd312a1f6ff492"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/run-state.json",
@@ -75,32 +75,32 @@
     {
       "path": "spec-eval/bench/reconstruction/recoverability/run.mjs",
       "role": "manual-protocol-input",
-      "bytes": 60656,
-      "sha256": "d406d1608b515e1dcc7b4121ec433ea4dcb7f9c990ec57a28c604bf0ede1b92f"
+      "bytes": 63139,
+      "sha256": "d23fbe28385bd80a12626701350cdff175d8d07f77cc27539c3d0d6f56855298"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/schema.json",
       "role": "manual-protocol-input",
-      "bytes": 4060,
-      "sha256": "1cd6ed57b276759def710f381710324a1e4192fb86c4786af5f0d48f37a49d98"
+      "bytes": 4656,
+      "sha256": "6259170e87f46e942a125d27ec58f6264476570855e9d281df4911ae3f9d7d68"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/segmentation-audit.json",
       "role": "deterministic-generated-output",
-      "bytes": 44249,
-      "sha256": "0da589372f72dbb4514781a23dbc2f6527b1ef342d682a3ee9c6d8db3128517d"
+      "bytes": 44814,
+      "sha256": "f494e632fab61a6f1a1cd05cc4d5b0b3f560f6457622ca4799467eae7b43c9ba"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/segmentation-audit.md",
       "role": "manual-protocol-input",
-      "bytes": 2886,
-      "sha256": "d968e99d6b4abc6ed3b72d7dfe56419788c4eac58f419afbd2a04252216cdd7c"
+      "bytes": 3286,
+      "sha256": "e44f94d2a3ee11f7e514ceb41435db89ae8bd333f70b42c64ce8fcb58ecae41e"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/taxonomy.json",
       "role": "manual-protocol-input",
-      "bytes": 2394,
-      "sha256": "d622775e7bdbb326ac8408ff4159e66250e59c312566929326443e93acc36ce8"
+      "bytes": 2811,
+      "sha256": "c9e43cc9e69a635b836520df6f892046f8e96ad8211f046ef53287bac14454fa"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/tree-only-ablation.json",
@@ -111,8 +111,8 @@
     {
       "path": "spec-eval/bench/reconstruction/recoverability/unit-card.template.md",
       "role": "manual-protocol-input",
-      "bytes": 3217,
-      "sha256": "6a039226eade81b95651551a71497974963e16b2fa9f516643ff9073d6e3e71b"
+      "bytes": 3535,
+      "sha256": "eddeceb8108baa73724f8341b45408d0a2a999a8b44769956b1167009b918e76"
     },
     {
       "path": "spec-eval/bench/reconstruction/recoverability/units-skeleton.json",

@@ -9,7 +9,9 @@ independently; do not rank candidates against one another.
 
 - **full** — the candidate completely carries the same behavior, boundary, object, and material qualifier.
   For structural units it must also put the responsibility or contract on the correct anonymous component
-  and preserve the stated parent/child or ownership relation. Different wording and organization do not hurt.
+  and preserve the stated parent/child or ownership relation. For research-evidence units it must preserve
+  the learned result and its material scope, not merely mention the method. Different wording and organization
+  do not hurt.
 - **partial** — the object or behavior is present but a material qualifier, direction, responsibility edge,
   non-responsibility, or cross-leaf boundary is missing or weakened.
 - **absent** — the candidate does not carry the statement.
@@ -18,6 +20,15 @@ independently; do not rank candidates against one another.
 Only `full` counts in primary recoverability. `full + partial` is a secondary lenient diagnostic;
 `contradicted` is reported separately as a bad signal. When uncertain, choose the more conservative verdict:
 partial over full, absent over partial. A note may explain ambiguity but never replaces a verdict.
+
+## Research-evidence boundary
+
+Research evidence is a measured or systematically observed fact/conclusion: an experiment result, benchmark
+finding, comparison, or frozen observation. Recovering only the experiment procedure or evaluator is at most
+partial; recovering a design choice without the evidence is rationale, not recovery of the research unit.
+A narrative of a failure event is incident content even when it motivated later research. Category labels
+remain hidden from judges, but these semantic boundaries determine whether the anonymous candidate carries
+the whole statement.
 
 ## Structural and control discipline
 

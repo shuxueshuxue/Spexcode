@@ -39,6 +39,10 @@ but the allowed C0 artifacts neither support nor contradict it. S means C0 behav
 that it was stale. Main recoverability uses only adjudicated A. B above 20% full recovery triggers a
 contamination audit; recovered S is a bad signal, never a success.
 
+`research-evidence` is a normal primary category for a frozen experiment, benchmark, measurement,
+comparison, or systematic-observation result/conclusion. It is not a design reason, operating procedure, or
+incident narrative. If sparse it remains a named `insufficient` row; annotators never fold it into a neighbor.
+
 `rewrite-map.json` is generated before labels. It replaces legacy yatsu-era names with neutral behavioral
 phrases, preserves a raw hash to rewrite mapping, forbids residual legacy tokens, and checks that two distinct
 raw units do not collapse to one normalized statement. Any collision requires a semantic human rewrite and

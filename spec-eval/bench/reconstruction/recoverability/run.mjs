@@ -78,6 +78,17 @@ const RULES = {
   fragmentAttachBelowChars: 24,
   segmenter: SEGMENTER,
 }
+const RESEARCH_CATEGORY = 'research-evidence'
+const REQUIRED_TAXONOMY_PRECEDENCE = [
+  'historical-incident',
+  RESEARCH_CATEGORY,
+  'design-rationale',
+  'ownership-topology',
+  'responsibility-boundary',
+  'constraint-invariant',
+  'operational-mechanism',
+  'behavioral-contract',
+]
 const LEAF_CALIBRATION = [
   'spexcode/spec-cli/source-of-truth/spec-lint',
   'spexcode/spec-dashboard/dashboard-ui/mobile-ui',
@@ -558,7 +569,7 @@ function unitGrainFlags(unit) {
   return flags
 }
 
-function computeSegmentationAudit(reader, frame, skeleton, controls) {
+function computeSegmentationAudit(reader, frame, skeleton, controls, taxonomy) {
   const devPool = frame.taxonomyDevPool.map(({ relDir }) => {
     const raw = reader.show(`.spec/${relDir}/spec.md`)
     if (raw === null) throw new Error(`missing dev-pool spec: ${relDir}`)
@@ -587,7 +598,7 @@ function computeSegmentationAudit(reader, frame, skeleton, controls) {
   const realUnits = skeleton.clusters.reduce((sum, cluster) => sum + cluster.unitCount, 0)
   const fabricatedUnits = Object.values(controls.fabricatedByScale).reduce((sum, row) => sum + (row.fabricatedCount ?? 0), 0)
   return {
-    v: 1,
+    v: 2,
     protocol: 'docs/content-recoverability.md',
     c0: C0,
     segmenter: SEGMENTER,
@@ -597,6 +608,15 @@ function computeSegmentationAudit(reader, frame, skeleton, controls) {
       devPoolFailures: devFlags,
       sampleFailures: sampleFlags,
       passed: devFlags.length === 0 && sampleFlags.length === 0,
+    },
+    categoryBoundaryControl: {
+      category: RESEARCH_CATEGORY,
+      primaryEligible: taxonomy.categories.find((category) => category.id === RESEARCH_CATEGORY)?.primaryEligible ?? null,
+      precedenceAfter: 'historical-incident',
+      precedenceBefore: 'design-rationale',
+      definition: 'Frozen experiment, benchmark, measurement, comparison, or systematic-observation result/conclusion; distinct from contract, rationale, mechanism, and incident.',
+      sampleLabelsAssigned: 0,
+      sparseFixture: { scale: 'module', clusters: 2, units: 8, expectedStatus: 'insufficient', rateForbidden: true },
     },
     moduleCounts,
     leafCounts,
@@ -697,7 +717,7 @@ function allocateFabricated(clusters) {
   return { realUnits, fabricatedCount: target.count, rate: target.rate, allocations: new Map(rows.map((row) => [row.cluster, row.count])) }
 }
 
-function computeControls(frame, skeleton) {
+function computeControls(frame, skeleton, taxonomy) {
   const moduleClusters = skeleton.clusters.filter((cluster) => cluster.scale === 'module')
   const leafClusters = skeleton.clusters.filter((cluster) => cluster.scale === 'leaf')
   const byScale = {
@@ -733,7 +753,7 @@ function computeControls(frame, skeleton) {
     }
   })
   return {
-    v: 1,
+    v: 2,
     protocol: 'docs/content-recoverability.md',
     seed: SEED,
     frozenBeforeR0: true,
@@ -745,6 +765,15 @@ function computeControls(frame, skeleton) {
       latentRecoveryAuditAbove: RULES.latentRecoveryAuditAbove,
       treeOnlyTriggerAt: RULES.treeOnlyTriggerAt,
       styleIdentityTriggerAbove: RULES.styleIdentityTriggerAbove,
+    },
+    categoryControls: {
+      requiredPrecedence: REQUIRED_TAXONOMY_PRECEDENCE,
+      researchEvidence: {
+        category: RESEARCH_CATEGORY,
+        primaryEligible: taxonomy.categories.find((category) => category.id === RESEARCH_CATEGORY)?.primaryEligible ?? null,
+        cannotFoldInto: ['design-rationale', 'operational-mechanism', 'historical-incident'],
+        sparseFixture: { scale: 'module', clusters: 2, units: 8, expectedStatus: 'insufficient', rateForbidden: true },
+      },
     },
     fabricatedByScale: Object.fromEntries(Object.entries(byScale).map(([scale, row]) => [scale, {
       realUnits: row.realUnits,
@@ -820,12 +849,18 @@ function buildFrozen() {
   const frame = computeFrame(frameReader)
   const skeletonReader = makeC0Reader()
   const skeleton = computeSkeleton(skeletonReader, frame)
+  const taxonomy = jsonRepo('spec-eval/bench/reconstruction/recoverability/taxonomy.json')
+  const schema = jsonRepo('spec-eval/bench/reconstruction/recoverability/schema.json')
   const rewrites = computeRewrites(skeleton)
-  const controls = computeControls(frame, skeleton)
-  const segmentationAudit = computeSegmentationAudit(makeC0Reader(), frame, skeleton, controls)
+  const controls = computeControls(frame, skeleton, taxonomy)
+  const segmentationAudit = computeSegmentationAudit(makeC0Reader(), frame, skeleton, controls, taxonomy)
   const treeOnly = computeTreeOnly(frame)
   const state = computeState(frame)
   const violations = []
+  const researchCategory = taxonomy.categories.find((category) => category.id === RESEARCH_CATEGORY)
+  if (!researchCategory?.primaryEligible) violations.push('taxonomy must include primary research-evidence')
+  if (JSON.stringify(taxonomy.assignmentPrecedence) !== JSON.stringify(REQUIRED_TAXONOMY_PRECEDENCE)) violations.push('taxonomy precedence must keep research-evidence after incident and before rationale')
+  if (!schema.taxonomy?.primaryCategories?.includes(RESEARCH_CATEGORY) || schema.taxonomy?.secondaryOnlyCategories?.includes(RESEARCH_CATEGORY)) violations.push('schema must expose research-evidence as a primary category')
   if (!frame.modulePrimaryGo) violations.push(`module-primary NO-GO: eligible=${frame.eligibleModules}, overlaps=${frame.overlapViolations.length}`)
   if (!frame.laterPilotBudget.budgetWithinFrozenSurface) violations.push(`later module budget must be 5-6, got ${frame.eligibleModules}`)
   if (frame.leafCalibration.length !== RULES.leafCalibrationCount || frame.leafCalibration.some((leaf) => !leaf.existsAtC0)) violations.push('leaf calibration frame is incomplete')
@@ -1086,6 +1121,8 @@ function aggregateFixture(includeForbidden = false) {
   add('m3', 'module', 'behavioral-contract', 6, 5)
   add('m1', 'module', 'design-rationale', 5, 2)
   add('m2', 'module', 'design-rationale', 5, 3)
+  add('m1', 'module', RESEARCH_CATEGORY, 4, 2)
+  add('m2', 'module', RESEARCH_CATEGORY, 4, 3)
   add('m1', 'module', 'historical-incident', 5, 3)
   add('m2', 'module', 'historical-incident', 5, 2)
   add('m3', 'module', 'historical-incident', 5, 4)
@@ -1186,9 +1223,10 @@ function evaluateDryFixture(kind) {
   if (metrics.looCategoryOrderReversal) failures.push('loo-category-order')
   if (forbiddenAggregationKeys(aggregate).length) failures.push('aggregation-shape')
   const insufficient = aggregate.scales.module.categories['design-rationale']
+  const research = aggregate.scales.module.categories[RESEARCH_CATEGORY]
   const leaf = aggregate.scales.leaf.categories['behavioral-contract']
   const historical = aggregate.scales.module.categories['historical-incident']
-  if (insufficient.status !== 'insufficient' || 'rate' in insufficient || leaf.status !== 'insufficient' || historical.status !== 'secondary-only') failures.push('aggregation-shape')
+  if (insufficient.status !== 'insufficient' || 'rate' in insufficient || research.status !== 'insufficient' || 'rate' in research || leaf.status !== 'insufficient' || historical.status !== 'secondary-only') failures.push('aggregation-shape')
   return { kind, admitted: failures.length === 0, failures: [...new Set(failures)], packetFailures, metrics, aggregate }
 }
 

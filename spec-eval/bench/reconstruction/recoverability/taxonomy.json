@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "protocol": "docs/content-recoverability.md",
   "development": {
     "source": "frame.json#taxonomyDevPool",
@@ -9,6 +9,7 @@
   },
   "assignmentPrecedence": [
     "historical-incident",
+    "research-evidence",
     "design-rationale",
     "ownership-topology",
     "responsibility-boundary",
@@ -31,6 +32,11 @@
       "id": "ownership-topology",
       "primaryEligible": true,
       "definition": "Parent/child structure, routing, file or capability ownership, and which component sits where in the module graph."
+    },
+    {
+      "id": "research-evidence",
+      "primaryEligible": true,
+      "definition": "A frozen fact or conclusion learned from an experiment, benchmark, measurement, comparison, or systematic observation. The learned result and its scope are the content; this is not an outward contract, a reason for choosing a design, an execution procedure, or a narrative of a past incident."
     },
     {
       "id": "design-rationale",

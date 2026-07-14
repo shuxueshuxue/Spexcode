@@ -58,6 +58,23 @@ scenarios:
       one refetch, and sub-second push freshness RESUMES. Without the watchdog the dead stream is never
       detected (no FIN, no error event — auto-reconnect never fires) and the board silently degrades to
       15s poll-only freshness FOREVER: the permanent half-alive mode this scenario exists to forbid.
+  - name: stale-chunk-recovery
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/App.jsx, spec-cli/src/gateway.ts]
+    description: >-
+      Serve the BUILT dashboard through the gateway (`spex serve ui` over a live backend). Load it in a
+      real browser and stay on the graph page. Rebuild the dist with a source change so the hashed chunk
+      names rotate (the deploy-on-merge flow), then — without reloading — click a lazily-loaded page
+      (Issues). The running page's index.html still references the OLD chunk hash, which the new dist no
+      longer contains.
+    expected: >-
+      The stale chunk request never strands the page: the gateway answers a missing hashed-asset path with
+      404 (never the index.html SPA fallback — an HTML body under a .js request trips the browser's strict
+      module-MIME check and masks the miss), the shell catches the failed chunk load (vite:preloadError)
+      and reloads once to pick up the fresh index.html, and the clicked page then renders on the routed
+      hash. Zero loss = a dist rebuild under a live tab costs one automatic reload, never a dead
+      "Failed to fetch dynamically imported module" click; a failure that persists right after that reload
+      surfaces as an error instead of a reload loop.
 ---
 # dashboard-shell — measurement
 

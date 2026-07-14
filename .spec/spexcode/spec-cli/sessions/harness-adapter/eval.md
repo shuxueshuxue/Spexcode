@@ -63,6 +63,43 @@ scenarios:
       prior conversation is present and `harness_session_id` is unchanged — the SAME conversation, matching
       claude's `--resume`, not a fresh thread.
     code: spec-cli/src/harness.ts
+  - name: claude-delivery-survives-probe-race
+    tags: [backend-api]
+    description: >-
+      Against a REAL claude session on its rendezvous socket (a live reclaude with CLAUDE_BG_BACKEND=daemon,
+      driven busy mid-turn so its event loop lags), run a liveness-probe hammer (the rendezvousListening
+      pattern: connect + immediate close, every ~20ms) and, while it runs, deliver N prompts through the real
+      product surface (`spex session send` → POST /input → sendText → the claude adapter's deliver). Then read
+      the claude transcript's queue-operation log and count which prompts actually entered claude's input
+      pipeline.
+    expected: >-
+      Every prompt that `sendText` confirms (`sent`) is present in the transcript (enqueued and eventually
+      submitted); a delivery the daemon never parsed is reported as a loud failure or retried until parsed —
+      never a false success. The failure this locks: claude's rendezvous daemon keeps ONE connection and
+      destroys the previous socket on every new connect, discarding any received-but-unparsed line — so a
+      liveness probe landing in the write→parse window silently killed the prompt while the optimistic
+      write-flush confirmation reported ok (measured: 2/10 real sends lost under a 20ms hammer, 40/40 in the
+      tight-race isolation; the field incident was session 430b487e's two dashboard messages recorded `sent`
+      with no trace in the claude transcript). The fix's proof is the same rig reading 0 lost: the reply and a
+      repaint probe go out in ONE atomic chunk (parsed in one synchronous line-loop, so a kick can only lose
+      both), `repaint-done` on the delivery connection = parsed-proof, a close before it = proven loss →
+      reconnect and resend, wall expiry with the connection still open = optimistic ok (busy ≠ lost).
+    code: spec-cli/src/harness.ts
+  - name: claude-delivery-refuses-sessions-panel
+    tags: [backend-api]
+    description: >-
+      With a REAL claude session IDLE and its TUI focus moved to the sessions/agents panel (← from the
+      composer — the "← for agents" screen), deliver a prompt through the real send surface. Compare against
+      the same send with the TUI on the normal composer.
+    expected: >-
+      The panel state is detected from the live pane (the claude adapter's pane predicate) and the send FAILS
+      LOUD with a reason naming the panel and the recovery (press Enter in the terminal to return), so the
+      dashboard/CLI user sees undelivered instead of nothing; the composer-state send still lands. The failure
+      this locks: a reply injected while the panel has focus is parsed and enqueued by the daemon (transcript
+      shows `enqueue`) but NEVER dequeued — no turn, no pane trace, and the daemon emits nothing, so no
+      transport-layer confirmation can catch it; only the pane state can. Silent-swallow here is claude's own
+      bug, but the adapter must not report a false success into it.
+    code: spec-cli/src/harness.ts
   - name: codex-liveness-reflects-live-tui-not-sock
     tags: [backend-api]
     description: >-

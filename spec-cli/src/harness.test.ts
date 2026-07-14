@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -450,4 +450,111 @@ test('writeCodexTrust strips ALL prior trust for the project (bare + old-format)
   } finally {
     process.env = orig
   }
+})
+
+// A fake rendezvous daemon replicating the REAL one's load-bearing semantics (extracted from the claude
+// binary): ONE connection at a time — a new connect destroys the previous socket, discarding its unparsed
+// buffer — and a synchronous line loop that answers `repaint` with `repaint-done` (the in-order parse barrier
+// deliver leans on). `kickFirst` simulates a liveness probe landing in the write→parse window: the first
+// delivery connection is destroyed with its chunk unread.
+function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean; reject?: boolean } = {}) {
+  const replies: string[] = []
+  let conns = 0
+  let prev: import('node:net').Socket | undefined
+  const srv = createServer((c) => {
+    conns++
+    prev?.destroy()
+    prev = c
+    c.on('error', () => {})
+    if (opts.kickFirst && conns === 1) { setTimeout(() => c.destroy(), 20); return }
+    if (opts.silent) return
+    let buf = ''
+    c.on('data', (d) => {
+      buf += d.toString('utf8')
+      let nl
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl)
+        buf = buf.slice(nl + 1)
+        const m = JSON.parse(line) as { type?: string; text?: string }
+        if (opts.reject) { c.write('{"type":"reply-rejected"}\n'); continue }
+        if (m.type === 'reply') replies.push(m.text ?? '')
+        if (m.type === 'repaint') c.write('{"type":"repaint-done"}\n')
+      }
+    })
+  })
+  return {
+    replies,
+    connCount: () => conns,
+    listen: () => new Promise<void>((res) => srv.listen(rvSock(id), () => res())),
+    // destroy the lingering last connection first: a silent daemon never reads, so its server-side socket
+    // outlives the client's destroy and srv.close() would wait on it forever.
+    close: () => new Promise<void>((res) => { prev?.destroy(); srv.close(() => res()) }),
+  }
+}
+
+test('deliverViaRendezvous: repaint-done confirms the parse — ok, one reply, one connection', async () => {
+  const id = `unit-rvd-ok-${process.pid}-${Date.now()}`
+  const d = fakeRvDaemon(id)
+  await d.listen()
+  try {
+    const r = await deliverViaRendezvous(id, 'hello 多行\nsecond line')
+    assert.equal(r.ok, true)
+    assert.deepEqual(d.replies, ['hello 多行\nsecond line'])
+    assert.equal(d.connCount(), 1)
+  } finally { await d.close() }
+})
+
+test('deliverViaRendezvous: a kicked connection (probe race) is a PROVEN whole-chunk loss — resends, lands exactly once', async () => {
+  const id = `unit-rvd-kick-${process.pid}-${Date.now()}`
+  const d = fakeRvDaemon(id, { kickFirst: true })
+  await d.listen()
+  try {
+    const r = await deliverViaRendezvous(id, 'survives the kick')
+    assert.equal(r.ok, true, JSON.stringify(r))
+    // the whole point: the prompt lands EXACTLY once — the retry cannot duplicate because the kick proved
+    // the atomic chunk was never parsed (the old optimistic write returned ok:true here and the prompt vanished)
+    assert.deepEqual(d.replies, ['survives the kick'])
+    assert.ok(d.connCount() >= 2, `expected a resend, got ${d.connCount()} connection(s)`)
+  } finally { await d.close() }
+})
+
+test('deliverViaRendezvous: a silent-but-open daemon is BUSY, not lost — wall expiry reports optimistic ok, no retry storm', async () => {
+  const id = `unit-rvd-wall-${process.pid}-${Date.now()}`
+  const d = fakeRvDaemon(id, { silent: true })
+  await d.listen()
+  try {
+    const r = await deliverViaRendezvous(id, 'busy claude', 250)
+    assert.equal(r.ok, true)
+    assert.equal(d.connCount(), 1, 'wall expiry is ok, never a kick retry')
+  } finally { await d.close() }
+})
+
+test('deliverViaRendezvous: reply-rejected fails LOUD and is not retried', async () => {
+  const id = `unit-rvd-rej-${process.pid}-${Date.now()}`
+  const d = fakeRvDaemon(id, { reject: true })
+  await d.listen()
+  try {
+    const r = await deliverViaRendezvous(id, 'gated')
+    assert.equal(r.ok, false)
+    assert.match(r.error ?? '', /rejected/)
+    assert.equal(d.connCount(), 1)
+  } finally { await d.close() }
+})
+
+test('deliverViaRendezvous: no socket at all fails loud before any connect', async () => {
+  const r = await deliverViaRendezvous(`unit-rvd-none-${process.pid}-${Date.now()}`, 'nobody home')
+  assert.equal(r.ok, false)
+  assert.match(r.error ?? '', /no rendezvous control socket/)
+})
+
+test('claude deliveryBlockedBy: the sessions panel refuses with the recovery named; a composer pane passes', () => {
+  const guard = claudeHarness.deliveryBlockedBy
+  assert.ok(guard, 'claude carries the pane guard')
+  // the panel's two signatures — the new-session composer placeholder, and the footer hint PAIR
+  assert.match(guard('Needs input\n❯ describe a task for a new session\n') ?? '', /sessions panel/)
+  assert.match(guard('⏵⏵ bypass permissions · enter to return · space to reply · ctrl+x to delete') ?? '', /press Enter/)
+  // a normal composer (even mentioning agents in the footer) is NOT the panel
+  assert.equal(guard('❯ draft text here\n  -- INSERT -- ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents'), null)
+  // a footer hint ALONE (one string, not the pair) is not enough to refuse
+  assert.equal(guard('some prose that says enter to return somewhere'), null)
 })

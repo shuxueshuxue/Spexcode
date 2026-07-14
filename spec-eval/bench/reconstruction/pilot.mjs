@@ -16,7 +16,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { launchAgent, secretScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
+import { launchAgent, secretScan, rawByteScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, ENDPOINT_PATH, MODEL } from './sandbox.mjs'
 import { scoreSpecLint, scoreControls } from './scorer.mjs'
 import { scoreMobileUi, scoreControlsMobile } from './browser-scorer.mjs'
 
@@ -437,24 +437,19 @@ export async function leafPhase({ credPath }) {
 function finalArchiveScan(dir, credPath) {
   let key = null
   try { key = readCredential(credPath) } catch { return { scanned: 0, clean: false, note: 'credential unreadable — cannot certify archive clean' } }
-  const keyBuf = Buffer.from(key)
-  const b64 = Buffer.from(key).toString('base64')
-  let scanned = 0, keyHits = 0, prefixHits = 0, b64Hits = 0
+  let scanned = 0, keyHits = 0, prefixHits = 0, b64Hits = 0, diagUtf8Hits = 0
   const hitFiles = []
   for (const rel of walkRel(dir)) {
     const abs = join(dir, rel)
     let buf = null; try { buf = readFileSync(abs) } catch { continue }
     scanned++
-    const asText = buf.toString('utf8'), asB64 = buf.toString('base64')
-    const s = secretScan(asText, key)
-    const rawExact = buf.includes(keyBuf) ? 1 : 0            // exact key bytes in the raw buffer
-    const bh = (asB64.includes(b64) ? 1 : 0)                  // key's base64 embedded in the file's bytes
-    const fileKeyHits = s.keyHits + rawExact
-    const fileB64Hits = s.b64Hits + bh
-    if (fileKeyHits || fileB64Hits || s.prefixHits) hitFiles.push(rel)
-    keyHits += fileKeyHits; prefixHits += s.prefixHits; b64Hits += fileB64Hits
+    const raw = rawByteScan(buf, key)                 // AUTHORITATIVE raw-byte gate
+    const diag = secretScan(buf.toString('utf8'), key) // additional diagnostic only
+    if (raw.keyHits || raw.prefixHits || raw.b64Hits) hitFiles.push(rel)
+    keyHits += raw.keyHits; prefixHits += raw.prefixHits; b64Hits += raw.b64Hits
+    diagUtf8Hits += diag.keyHits + diag.b64Hits
   }
-  return { scanned, keyHits, prefixHits, b64Hits, clean: keyHits === 0 && b64Hits === 0 && prefixHits === 0, hitFiles: hitFiles.slice(0, 20) }
+  return { scanned, keyHits, prefixHits, b64Hits, diagUtf8Hits, clean: keyHits === 0 && b64Hits === 0 && prefixHits === 0, hitFiles: hitFiles.slice(0, 20) }
 }
 
 // ---- CLI ----

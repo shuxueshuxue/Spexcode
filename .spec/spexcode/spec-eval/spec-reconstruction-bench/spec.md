@@ -12,9 +12,11 @@ related:
   - spec-eval/bench/reconstruction/usage.mjs
   - spec-eval/bench/reconstruction/scorer.mjs
   - spec-eval/bench/reconstruction/browser-scorer.mjs
+  - spec-eval/bench/reconstruction/browser-incontainer.mjs
   - spec-eval/bench/reconstruction/codex-adapter.mjs
   - spec-eval/bench/reconstruction/usage.selftest.mjs
   - spec-eval/bench/reconstruction/scorer.selftest.mjs
+  - spec-eval/bench/reconstruction/scan.selftest.mjs
   - spec-eval/bench/reconstruction/codex.selftest.mjs
   - spec-eval/bench/reconstruction/targets.json
   - spec-eval/bench/reconstruction/episodes.json

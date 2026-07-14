@@ -53,6 +53,17 @@ export function walkFiles(dir, base = dir) {
 }
 const readTextSafe = (abs) => { try { const b = readFileSync(abs); return b.subarray(0, 4096).includes(0) ? null : b.toString('utf8') } catch { return null } }
 
+// RAW-BYTE scan: count occurrences of the credential's exact / prefix / base64-literal bytes directly in a
+// Buffer (Buffer.includes on Buffer needles) — encoding-independent and the AUTHORITATIVE archive gate.
+// A UTF-8 secretScan is only an additional diagnostic, never the raw-byte gate.
+export function rawByteScan(buf, key) {
+  const count = (needle) => { let n = 0, i = 0; while ((i = buf.indexOf(needle, i)) !== -1) { n++; i += needle.length } return n }
+  const keyBuf = Buffer.from(key)
+  const prefixBuf = Buffer.from(key.slice(0, 6))
+  const b64Buf = Buffer.from(Buffer.from(key).toString('base64'))
+  return { keyHits: count(keyBuf), prefixHits: prefixBuf.length >= 4 ? count(prefixBuf) : 0, b64Hits: count(b64Buf) }
+}
+
 // PINNED provenance (computed once): docker image id, claude version + package digest, runner commit.
 // So the trace records exactly which image/binary/commit produced it — not operator memory.
 let PROVENANCE = null

@@ -128,11 +128,21 @@ export function recordSent(id: string, text: string, from: string | null, replyV
 
 // the read surface behind GET /api/sessions/:id/timeline: the last `limit` events, oldest first, each
 // status event carrying its composed display word. null = no such session (the route 404s).
+// Adjacent status lines with identical (status, proposal, note) fold into their first: TWO serve processes
+// observing one store (a throwaway worktree/eval serve beside the live one) each keep their own lastSeen,
+// so a single record move can append twice — cross-process write locking isn't worth buying, so the log
+// stays best-effort append-only and the read is where duplicates die, same stance as the board.
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
   let raw: ReturnType<typeof readAliasedRawRecord>
   try { raw = readAliasedRawRecord(id) } catch { return null }
   if (!raw || !raw.governed) return null
-  const evs = readEvents(id)
-  const tail = evs.slice(Math.max(0, evs.length - Math.max(1, limit)))
+  const folded: TimelineEvent[] = []
+  for (const e of readEvents(id)) {
+    const prev = folded[folded.length - 1]
+    if (e.kind === 'status' && prev?.kind === 'status' && prev.status === e.status
+      && (prev.proposal ?? null) === (e.proposal ?? null) && (prev.note ?? null) === (e.note ?? null)) continue
+    folded.push(e)
+  }
+  const tail = folded.slice(Math.max(0, folded.length - Math.max(1, limit)))
   return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: displayOf(e) } : e)) }
 }

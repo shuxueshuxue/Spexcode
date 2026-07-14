@@ -14,6 +14,18 @@ scenarios:
       appears like any other (the observer covers writers the TS layer never sees). After a backend restart
       the endpoint returns the SAME events — no duplicate genesis lines (the recorder re-seeds from the
       persisted tail). An unknown id answers 404.
+  - name: duplicate-append-fold
+    tags: [backend-api]
+    description: >
+      Seed an ISOLATED store (SPEXCODE_HOME) with a governed session whose timeline.ndjson carries
+      ADJACENT IDENTICAL status lines — the shape two serve processes observing ONE store append (a
+      throwaway eval/worktree serve beside the live one: each keeps its own lastSeen, so one record
+      move lands twice). GET /api/sessions/:id/timeline against a throwaway serve on that store.
+    expected: |
+      The read surface folds each run of adjacent status events with identical (status, proposal,
+      note) into its first line: the response never shows the same status word twice in a row with
+      the same note. Genuinely distinct neighbours (same word, different note) and sent events are
+      untouched; the kept events' order and timestamps are unchanged.
 ---
 
 # session-timeline — yatsu

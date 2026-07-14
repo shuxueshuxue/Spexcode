@@ -159,32 +159,51 @@ async function sandboxNetProbe() {
 }
 
 // ---- minimal model-verification gate, THROUGH the registry row (never a direct harness call) ----
-// Writes a NORMALIZED verify.json (unified contract fields + executor identity + provenance) that the
-// phase's admittance gate reads — one shape for glm/codex/fake, so the gate never learns the harness.
-export async function verifyModel({ credPath, executor = null, fakeKind = 'good', outDir = join(RUNS, 'pilot') }) {
+// Writes a NORMALIZED verify.json (unified contract fields + executor identity + provenance + the exact
+// archive path) that the phase's admittance gate reads — one shape for glm/codex/fake.
+// (2) EVERY gate attempt gets a UNIQUE fresh archive `verify-model-<executor>-<stamp>` — the legacy
+// runs/pilot/verify-model (the GLM 429 failure artifact) is never reused, deleted, or mixed with another
+// provider's files; an existing target is fail-loud. The gate-ledger append records the exact archive.
+// (1) `reviewerGo` is the ONE-SHOT reviewer authorization: only the verify path accepts it from the CLI;
+// the phase never takes it from a flag — it derives launch authorization from an admitted verify.
+let VERIFY_SEQ = 0
+export async function verifyModel({ credPath, executor = null, fakeKind = 'good', reviewerGo = false, outDir = join(RUNS, 'pilot') }) {
   const row = executorRow(executor ?? activeExecutorName())
-  const archiveDir = join(outDir, 'verify-model')
+  const stamp = `${nowIso().replace(/[-:.]/g, '')}-${process.pid}-${++VERIFY_SEQ}`
+  const archiveDir = join(outDir, `verify-model-${row.name}-${stamp}`)
+  if (existsSync(archiveDir)) throw new Error(`FATAL: gate archive ${archiveDir} already exists — one gate attempt, one fresh directory`)
+  mkdirSync(archiveDir, { recursive: true })
   const snap = execFileSync('mktemp', ['-d'], { encoding: 'utf8' }).trim()
   writeFileSync(join(snap, 'README.txt'), 'model verification probe workspace\n')
   try {
     const r = await row.launch({
-      runId: 'verify-model', snapshotDir: snap,
+      runId: `verify-model-${stamp}`, snapshotDir: snap,
       prompt: 'Reply with exactly the two characters: ok', writeSubdir: '.',
-      credPath, timeoutMs: 5 * 60_000, archiveDir, upstreamCommit: null, fakeKind,
+      credPath, timeoutMs: 5 * 60_000, archiveDir, upstreamCommit: null, fakeKind, reviewerGo,
     })
     const verify = {
-      at: nowIso(), executor: row.name, pin: row.pin,
+      at: nowIso(), executor: row.name, pin: row.pin, archiveDir,
       ok: r.ok, exitCode: r.exitCode, timedOut: r.timedOut, modelClean: r.modelClean,
       realCompletion: r.realCompletion, accountingValid: r.accountingValid, apiError: r.apiError,
       secretClean: r.secretClean, observedModels: r.trace?.model?.observedSet ?? null,
       provenance: r.trace?.provenance ?? null,
     }
-    mkdirSync(archiveDir, { recursive: true })
     writeFileSync(join(archiveDir, 'verify.json'), JSON.stringify(verify, null, 2) + '\n')
+    // gate ledger: every attempt on record, pointing at its exact archive — an append failure is FATAL
+    appendFileSync(join(outDir, 'gate-ledger.ndjson'), JSON.stringify({ at: nowIso(), action: 'verify-model', executor: row.name, archiveDir, ok: r.ok }) + '\n')
     return { ...r, verify }
   } finally {
     try { rmSync(snap, { recursive: true, force: true }) } catch {}
   }
+}
+
+// the newest UNIQUE gate archive for THIS executor (provider-scoped glob — other providers' gates and
+// the legacy verify-model GLM artifact are invisible here, preserved untouched).
+export function latestVerify(executorName, outDir = join(RUNS, 'pilot')) {
+  if (!existsSync(outDir)) return null
+  const dirs = readdirSync(outDir).filter((d) => d.startsWith(`verify-model-${executorName}-`)).sort()
+  if (!dirs.length) return null
+  try { return JSON.parse(readFileSync(join(outDir, dirs.at(-1), 'verify.json'), 'utf8')) } catch { return null }
 }
 
 // the phase's verify-admittance predicate — PURE and harness-agnostic, exported so the no-model fake-row
@@ -288,7 +307,7 @@ function scopeAnalysis(preSnapDir, workDir, governed) {
 
 // ---- leaf phase (order-balanced blocks): recon is per UNIQUE leaf; arms run per BLOCK in the block's
 // frozen rotation. A repeat block reuses its leaf's cached recon + bundles (recon spent once). ----
-export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row) {
+export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row, launchAuth) {
   const id = leaf.id
   // (H) guard on the FIRST line of the exported entry — a direct call (bypassing leafPhase enforcement)
   // must not spend money on a leaf with no real behavioural scorer.
@@ -296,6 +315,7 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row)
   if (!abort || typeof abort !== 'object') throw new Error('reconLeaf refused: missing shared abort state — call via leafPhase')
   if (!stageDir) throw new Error('reconLeaf refused: missing stageDir — all phase output goes through the staging tree')
   if (!row?.launch) throw new Error('reconLeaf refused: missing executor row — every launch goes through the pinned registry row')
+  if (launchAuth?.reviewerGo !== true) throw new Error('reconLeaf refused: no admitted-verify capability — the phase grants launch authorization only after verifyAdmitted passes')
   const card = cards.leaves[leaf.relDir]
   if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
   const base = join(stageDir, 'leaf', id)
@@ -309,7 +329,7 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row)
   // 2. R0 reconstruction (isolated, through the pinned registry row)
   guardAbort(abort, `recon-${id}`)
   const recon = await row.launch({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: readFileSync(join(genDir, 'PROMPT.md'), 'utf8'),
-    writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: join(base, 'recon'), upstreamCommit: upstream })
+    writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: join(base, 'recon'), upstreamCommit: upstream, reviewerGo: launchAuth.reviewerGo })
   enforceRunGates(abort, `recon-${id}`, recon)
   // 3. R0 required-file + schema gate; empty/failed R0 is a HARD STOP, never a silent N0
   const reconPath = join(recon.workDir, '.spec-recon', leaf.relDir, 'spec.md')
@@ -333,11 +353,12 @@ export async function reconLeaf(leaf, cards, c0, credPath, abort, stageDir, row)
 
 // run ONE order-balanced block: the arms in block.armOrder against the frozen future task, using the
 // leaf's cached recon bundles. Archived under leaf/<id>/block-<n>/arm-<arm> (disambiguates a repeat).
-export async function runBlock(block, leaf, ctx, credPath, abort, stageDir, row) {
+export async function runBlock(block, leaf, ctx, credPath, abort, stageDir, row, launchAuth) {
   if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runBlock refused: leaf ${block.leafId} has no behavioural scorer`)
   if (!abort || typeof abort !== 'object') throw new Error('runBlock refused: missing shared abort state')
   if (!stageDir) throw new Error('runBlock refused: missing stageDir — all phase output goes through the staging tree')
   if (!row?.launch) throw new Error('runBlock refused: missing executor row — every launch goes through the pinned registry row')
+  if (launchAuth?.reviewerGo !== true) throw new Error('runBlock refused: no admitted-verify capability — the phase grants launch authorization only after verifyAdmitted passes')
   const { card, bundles, upstream } = ctx
   const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
   const bdir = join(stageDir, 'leaf', block.leafId, `block-${block.block}`)
@@ -355,7 +376,7 @@ export async function runBlock(block, leaf, ctx, credPath, abort, stageDir, row)
     const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
     if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${block.leafId}#${block.block}/${arm} exec snapshot invalid`)
     const run = await row.launch({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
-      writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream })
+      writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream, reviewerGo: launchAuth.reviewerGo })
     enforceRunGates(abort, `${block.leafId}#${block.block}-${arm}`, run)
     const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
     const score = await scoreArm(block.leafId, run.workDir, card)
@@ -427,12 +448,15 @@ export async function leafPhase({ credPath, executor = null }) {
   E('preflight-binding-agrees', bindingAgrees(preflight?.binding), 'preflight.json binding (runner/image/claude/tasksSha/cardsSha/endpoint/model) disagrees with now')
   E('check-green', !!check && check.checks?.every((c) => c.ok), check ? 'pilot check on record' : 'check.json missing — run `pilot check`')
   E('check-provenance-agrees', !!check && check.provenance?.runnerCommit === prov.runnerCommit && check.provenance?.dockerImageId === prov.dockerImageId && check.provenance?.claudePkgDigest === prov.claudePkgDigest, 'pilot check ran on a different runner/image/claude than now')
-  // (A) the NORMALIZED verify.json must exist, PASS every hard gate, be from THIS batch's pinned
-  // executor, and bind to the same runner commit / immutable image — via the same pure predicate the
-  // no-model fake-row E2E exercises (verifyAdmitted).
-  const verify = readJson(join(RUNS, 'pilot', 'verify-model', 'verify.json'))
+  // (A) the newest provider-scoped gate archive's verify.json must exist, PASS every hard gate, be from
+  // THIS batch's pinned executor, and bind to the same runner commit / immutable image — via the same
+  // pure predicate the no-model fake-row E2E exercises (verifyAdmitted).
+  const verify = latestVerify(row.name)
   const vAdmit = verifyAdmitted(verify, { executor: row.name, prov })
-  E('verify-model-admitted', vAdmit.ok, vAdmit.ok ? `executor=${verify.executor} all hard gates + provenance bound` : vAdmit.why.join('; '))
+  E('verify-model-admitted', vAdmit.ok, vAdmit.ok ? `executor=${verify.executor} archive=${verify.archiveDir} all hard gates + provenance bound` : vAdmit.why.join('; '))
+  // (1) launch authorization exists ONLY as a capability DERIVED from the admitted verify — the phase
+  // accepts no reviewer flag; execution reaches this line only when the E gate above passed.
+  const launchAuth = { reviewerGo: vAdmit.ok === true }
   // scorer controls must discriminate BEFORE paid runs (positive pass, negative rejected) — both leaves
   const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
   const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
@@ -464,14 +488,14 @@ export async function leafPhase({ credPath, executor = null }) {
   // recon is spent ONCE per unique leaf; blocks (incl the repeat) reuse the cached recon/bundles.
   const reconCtx = {}, results = [], failures = []
   const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
-  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE, row)))
+  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort, STAGE, row, launchAuth)))
   reconSettled.forEach((s, i) => { if (s.status === 'fulfilled') reconCtx[uniqueLeafIds[i]] = s.value; else failures.push({ stage: 'recon', leaf: uniqueLeafIds[i], error: String(s.reason?.message ?? s.reason) }) })
   // run the 3 order-balanced blocks concurrently; shared abort halts new launches after any hard failure
   const blockSettled = await Promise.allSettled(blocks.map((b) => {
     const leaf = tasks.leaves.find((l) => l.id === b.leafId)
     const ctx = reconCtx[b.leafId]
     if (!ctx) return Promise.reject(new Error(`block ${b.block}: recon for ${b.leafId} unavailable (recon failed/aborted)`))
-    return runBlock(b, leaf, ctx, credPath, abort, STAGE, row)
+    return runBlock(b, leaf, ctx, credPath, abort, STAGE, row, launchAuth)
   }))
   blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
   const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
@@ -537,15 +561,20 @@ if (sub === 'preflight') {
   console.log(`report: spec-eval/bench/reconstruction/runs/pilot/preflight.json`)
   process.exit(report.allOk ? 0 : 1)
 } else if (sub === 'verify-model') {
-  // --executor <glm|codex|fake>; default = the decision ledger's activeProvider (never a guess)
-  const r = await verifyModel({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null) })
+  // --executor <glm|codex|fake>; default = the decision ledger's activeProvider (never a guess).
+  // --reviewer-go is the ONE-SHOT reviewer authorization — ONLY this subcommand accepts it, and without
+  // it a Codex gate refuses BEFORE any auth read or network touch.
+  const r = await verifyModel({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null), reviewerGo: argv.includes('--reviewer-go') })
   console.log(`verify-model[${r.verify.executor}]: ok=${r.ok} exit=${r.exitCode} timedOut=${r.timedOut} modelClean=${r.modelClean} realCompletion=${r.realCompletion} secretClean=${r.secretClean}`)
+  console.log(`  gate archive (unique per attempt): ${r.verify.archiveDir}`)
   console.log(`  observed model set: ${JSON.stringify(r.verify.observedModels)} (pin ${JSON.stringify(r.verify.pin)})`)
   if (r.apiError) console.log(`  API error: ${r.apiError}`)
   console.log(`  usage: ${JSON.stringify(r.usage)} duration=${r.durationMs}ms`)
   console.log(`  archive: ${r.archiveDir} (normalized verify.json alongside)`)
   process.exit(r.ok ? 0 : 1)
 } else if (sub === 'phase') {
+  // the phase NEVER takes reviewer authorization from a flag — it derives it from an admitted verify
+  if (argv.includes('--reviewer-go')) { console.error('pilot phase does not accept --reviewer-go: launch authorization is the admitted-verify capability (verifyAdmitted), never a flag'); process.exit(2) }
   const scale = opt('--scale', 'leaf')
   if (scale !== 'leaf') { console.error(`only --scale leaf implemented in this stage (got ${scale})`); process.exit(2) }
   const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT), executor: opt('--executor', null) })

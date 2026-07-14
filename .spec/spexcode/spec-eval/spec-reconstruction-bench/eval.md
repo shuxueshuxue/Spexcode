@@ -50,7 +50,10 @@ scenarios:
       harness——race 用 poll 页、single-refresh 用独立 no-poll 页断言恰 1 个 in-flight——正控=committed
       post-episode App.jsx 3/3，unchanged pre-state 与 never-updates 伪实现两个负控均被拒）、
       registry-fake-e2e（fake executor row 以统一 runner contract 走真实 verifyModel→verify.json→
-      verifyAdmitted 门：admit/混 executor 拒/provenance 失配拒/失败 verify 拒）、codex-auth-binding
+      verifyAdmitted 门：admit/混 executor 拒/provenance 失配拒/失败 verify 拒；每次 gate 唯一新档 +
+      gate-ledger 指向 exact archive + latestVerify 按 provider 取最新；--reviewer-go 只被 verify 接受
+      且传达 row，codex 无 GO 在 auth 前拒，phase CLI 拒收该 flag；codex scratch dead-pid sweep/
+      零残留断言/rm 失败 fail-loud 亦入 codex selftest）、codex-auth-binding
       （network-none 容器内真实 codex CLI 对 loopback 假 Responses endpoint：Authorization 恰为 TOML
       env_key 声明注入的 dummy key、body model==gpt-5.5、path=/v1/responses）、
       frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配

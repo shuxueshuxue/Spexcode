@@ -3,8 +3,11 @@
 // verifyAdmitted predicate — proving the wiring before any paid call.
 //   run: node --import tsx spec-eval/bench/reconstruction/registry.selftest.mjs   (exit 0 = pass)
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
+const HERE = dirname(fileURLToPath(import.meta.url))
 import { EXECUTOR_REGISTRY, executorRow, activeExecutorName, FAKE_PIN } from './registry.mjs'
 import { verifyModel, verifyAdmitted } from './pilot.mjs'
 import { provenanceRecord } from './sandbox.mjs'
@@ -32,21 +35,44 @@ try {
 
   // verify→gate E2E: verifyModel (the real writer) → verify.json → verifyAdmitted (the real gate)
   const prov = provenanceRecord()
-  await verifyModel({ credPath: '/nonexistent', executor: 'fake', outDir: join(tmp, 'out-good') })
-  const vGood = JSON.parse(readFileSync(join(tmp, 'out-good', 'verify-model', 'verify.json'), 'utf8'))
-  check('verify-json-normalized', vGood.executor === 'fake' && vGood.ok === true && vGood.pin.model === FAKE_PIN.model && !!vGood.provenance)
+  const rGood = await verifyModel({ credPath: '/nonexistent', executor: 'fake', outDir: join(tmp, 'out-good') })
+  const vGood = rGood.verify
+  check('verify-json-normalized', vGood.executor === 'fake' && vGood.ok === true && vGood.pin.model === FAKE_PIN.model && !!vGood.provenance && !!vGood.archiveDir)
   check('gate-admits-matching-verify', verifyAdmitted(vGood, { executor: 'fake', prov }).ok === true)
   const mix = verifyAdmitted(vGood, { executor: 'codex', prov })
   check('gate-rejects-executor-mix', mix.ok === false && mix.why.some((w) => /no mixing/.test(w)))
   check('gate-rejects-missing-verify', verifyAdmitted(null, { executor: 'fake' }).ok === false)
   check('gate-rejects-provenance-mismatch', verifyAdmitted(vGood, { executor: 'fake', prov: { ...prov, runnerCommit: 'other' } }).ok === false)
 
-  await verifyModel({ credPath: '/nonexistent', executor: 'fake', fakeKind: 'bad-model', outDir: join(tmp, 'out-bad') })
-  const vBad = JSON.parse(readFileSync(join(tmp, 'out-bad', 'verify-model', 'verify.json'), 'utf8'))
-  check('gate-rejects-failed-verify', verifyAdmitted(vBad, { executor: 'fake', prov }).ok === false)
-  await verifyModel({ credPath: '/nonexistent', executor: 'fake', fakeKind: 'no-completion', outDir: join(tmp, 'out-nc') })
-  const vNc = JSON.parse(readFileSync(join(tmp, 'out-nc', 'verify-model', 'verify.json'), 'utf8'))
-  check('gate-rejects-no-completion', verifyAdmitted(vNc, { executor: 'fake', prov }).ok === false)
+  const rBad = await verifyModel({ credPath: '/nonexistent', executor: 'fake', fakeKind: 'bad-model', outDir: join(tmp, 'out-bad') })
+  check('gate-rejects-failed-verify', verifyAdmitted(rBad.verify, { executor: 'fake', prov }).ok === false)
+  const rNc = await verifyModel({ credPath: '/nonexistent', executor: 'fake', fakeKind: 'no-completion', outDir: join(tmp, 'out-nc') })
+  check('gate-rejects-no-completion', verifyAdmitted(rNc.verify, { executor: 'fake', prov }).ok === false)
+
+  // (2) UNIQUE gate archives: every attempt gets a fresh verify-model-<executor>-<stamp> dir; verify.json
+  // names its exact archive; the gate-ledger points at it; latestVerify resolves the newest per executor.
+  const outU = join(tmp, 'out-unique')
+  const u1 = await verifyModel({ credPath: '/nonexistent', executor: 'fake', outDir: outU })
+  const u2 = await verifyModel({ credPath: '/nonexistent', executor: 'fake', outDir: outU })
+  check('gate-archive-unique-per-attempt', u1.verify.archiveDir !== u2.verify.archiveDir && existsSync(u1.verify.archiveDir) && existsSync(u2.verify.archiveDir))
+  check('verify-json-names-exact-archive', u2.verify.archiveDir.includes('verify-model-fake-') && JSON.parse(readFileSync(join(u2.verify.archiveDir, 'verify.json'), 'utf8')).archiveDir === u2.verify.archiveDir)
+  const ledgerRows = readFileSync(join(outU, 'gate-ledger.ndjson'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  check('gate-ledger-points-at-archives', ledgerRows.length === 2 && ledgerRows[0].archiveDir === u1.verify.archiveDir && ledgerRows[1].archiveDir === u2.verify.archiveDir && ledgerRows.every((r) => r.executor === 'fake'))
+  const { latestVerify } = await import('./pilot.mjs')
+  check('latest-verify-provider-scoped-newest', latestVerify('fake', outU)?.archiveDir === u2.verify.archiveDir && latestVerify('codex', outU) === null)
+
+  // (1) one-shot reviewer authorization: the flag reaches the row only via verifyModel; a Codex gate
+  // WITHOUT it refuses before any auth read or network touch; the flag propagates when given.
+  let codexBlocked = null
+  try { await verifyModel({ credPath: '/nonexistent', executor: 'codex', outDir: join(tmp, 'out-codex') }) } catch (e) { codexBlocked = String(e.message) }
+  check('codex-verify-without-go-refuses-pre-auth', !!codexBlocked && /BLOCKED/.test(codexBlocked), codexBlocked ?? 'did not throw')
+  const rGo = await verifyModel({ credPath: '/nonexistent', executor: 'fake', reviewerGo: true, outDir: join(tmp, 'out-go') })
+  const rNoGo = await verifyModel({ credPath: '/nonexistent', executor: 'fake', outDir: join(tmp, 'out-nogo') })
+  check('reviewer-go-propagates-to-row', rGo.trace.reviewerGoReceived === true && rNoGo.trace.reviewerGoReceived === false)
+  // the phase CLI refuses the flag outright (authorization is the admitted-verify capability, never a flag)
+  let phaseRc = 0
+  try { execFileSync(process.execPath, [join(HERE, 'pilot.mjs'), 'phase', '--reviewer-go'], { encoding: 'utf8', stdio: 'pipe' }) } catch (e) { phaseRc = e.status }
+  check('phase-cli-rejects-reviewer-go-flag', phaseRc === 2, `rc=${phaseRc}`)
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }

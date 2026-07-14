@@ -42,6 +42,7 @@ async function launchFake(opts) {
   const exitCode = bad('nonzero-exit') ? 3 : 0
   const trace = {
     v: 1, runId, adapter: 'fake', started: new Date().toISOString(), ended: new Date().toISOString(), durationMs: Date.now() - t0,
+    reviewerGoReceived: opts?.reviewerGo === true,   // records flag/capability propagation for the E2E
     exitCode, timedOut: false, httpStatuses: [200], requestIds: ['req_fake_e2e'], threadIds: ['th_fake_e2e'],
     model: { observedSet: [modelClean ? FAKE_PIN.model : 'imposter-model'], expected: FAKE_PIN.model, clean: modelClean, realCompletion },
     usage: { input: 10, output: realCompletion ? 5 : 0, cached: 0, reasoning: 0 },

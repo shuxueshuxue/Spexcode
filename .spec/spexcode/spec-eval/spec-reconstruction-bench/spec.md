@@ -114,7 +114,13 @@ if(codex)）：verify-model、R0 重建与 O0/R0/N0 全部 arm 都从同一 regi
 realCompletion/accountingValid/apiError/secretClean/trace/workDir/usage/duration），enforceRunGates 只读
 contract、不知 harness；verify 落**归一化 verify.json**，phase 用同一纯谓词 verifyAdmitted 验 executor
 身份+全部硬门+provenance 绑定，batch 单 executor 绝不混；**fake row** 以同一 contract/同一 gate 代码做
-no-model 端到端（verify→phase gate），付费前先证接线。GLM 行 429 挂起期间，Codex 行为已批准替代——
+no-model 端到端（verify→phase gate），付费前先证接线。reviewer 授权是**一次性 `--reviewer-go`**：只有
+verify-model 子命令接受并传给 row，无 GO 的 Codex gate 在读 auth/触网**之前**拒；phase 不收该 flag——
+recon/arms 的启动授权只能是 verifyAdmitted 通过后 phase 内部派生的 admitted-verify capability。每次
+gate 一个**唯一新档**（verify-model-<executor>-<stamp>，目标已存在即 fail-loud），旧 GLM 429 verify 档
+原样保留、不同 provider 永不混档，verify.json 与 gate-ledger 指向 exact archive。codex scratch 前缀含
+pid：launch 前只清 dead-pid 遗留（清除失败即 FATAL），finally 删 scratch 不许 catch、删后断言不存在且
+当前 pid 零残留；codex.env 0600 只经 --env-file，不进 argv/trace/archive。GLM 行 429 挂起期间，Codex 行为已批准替代——
 每 attempt mode0700 HOME/CODEX_HOME/CODEX_SQLITE_HOME、env -i allowlist、结构化 argv、外层 no-network
 容器、临时 config.toml provider row **显式 env_key 声明 auth 绑定**（无外网 loopback+dummy-key YATU
 probe 证明 CLI 真按声明发 Bearer 与 pinned model）、auth 仅 per-run

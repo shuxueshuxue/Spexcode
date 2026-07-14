@@ -4,8 +4,12 @@
 // terminal, strict non-empty agent_message, integer usage) / the transport seam (verifyTransportTrace,
 // pin = sub2api/gpt-5.5, no caller evidence path EXISTS) / cleanup / secret scan — WITHOUT any network
 // or model call. The REAL launch refuses without reviewer GO.
-import { buildCodexArgv, buildCodexEnv, codexConfigToml, parseCodexJsonl, verifyTransportTrace, fakeCodexLines, fakeTransportTrace, fakeCodexAttempt, launchCodex, CODEX_ENV_ALLOW, CODEX_PROVIDER } from './codex-adapter.mjs'
+import { buildCodexArgv, buildCodexEnv, codexConfigToml, parseCodexJsonl, verifyTransportTrace, fakeCodexLines, fakeTransportTrace, fakeCodexAttempt, launchCodex, sweepStaleCodexScratch, assertZeroCodexResidue, CODEX_ENV_ALLOW, CODEX_PROVIDER } from './codex-adapter.mjs'
 import { rawByteScan } from './sandbox.mjs'
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 let failed = 0
 const check = (name, cond, detail = '') => { if (!cond) { failed++; console.log(`  ✗ ${name} ${detail}`) } else console.log(`  ✓ ${name}`) }
@@ -73,6 +77,32 @@ check('attempt-secret-scan-catches-leak', leaky.secretScanResult && leaky.secret
 // REAL launch refuses without reviewer GO, and the pin cannot be overridden by a caller
 let g1 = false; try { await launchCodex({}) } catch { g1 = true } check('launchCodex-blocked-no-go', g1)
 let g2 = false; try { await launchCodex({ provider: { model: 'gpt-5.5', providerName: 'sub2api' } }) } catch { g2 = true } check('launchCodex-blocked-without-reviewerGo', g2)
+
+// (3) credential-residue discipline: dead-pid sweep, live-pid preservation, zero-residue assertion,
+// and FAIL-LOUD on an unremovable stale dir — all against an injected tmpRoot, no launch needed.
+const fakeRoot = mkdtempSync(join(tmpdir(), 'srb-residue-test-'))
+const deadPid = Number(execFileSync('bash', ['-c', 'echo $$'], { encoding: 'utf8' }).trim())   // that bash has exited
+const deadDir = join(fakeRoot, `srb-codex-${deadPid}-stale`)
+const liveDir = join(fakeRoot, `srb-codex-${process.pid}-live`)
+mkdirSync(deadDir); writeFileSync(join(deadDir, 'codex.env'), 'OPENAI_API_KEY=leftover')
+mkdirSync(liveDir)
+const sweep = sweepStaleCodexScratch({ tmpRoot: fakeRoot })
+check('sweep-removes-dead-pid-scratch', !existsSync(deadDir) && sweep.swept.includes(deadDir), JSON.stringify(sweep))
+check('sweep-keeps-live-pid-scratch', existsSync(liveDir) && sweep.kept.includes(liveDir))
+let zr = false; try { assertZeroCodexResidue({ tmpRoot: fakeRoot }) } catch { zr = true }
+check('zero-residue-detects-current-pid-leftover', zr)
+rmSync(liveDir, { recursive: true })
+let zrClean = true; try { assertZeroCodexResidue({ tmpRoot: fakeRoot }) } catch { zrClean = false }
+check('zero-residue-passes-when-clean', zrClean)
+// unremovable stale dir → sweep must THROW (never a silent skip past credential bytes)
+const lockedDir = join(fakeRoot, `srb-codex-${deadPid}-locked`)
+mkdirSync(join(lockedDir, 'inner'), { recursive: true }); writeFileSync(join(lockedDir, 'inner', 'k'), 'x')
+chmodSync(lockedDir, 0o555)
+let sweepThrew = false
+try { sweepStaleCodexScratch({ tmpRoot: fakeRoot }) } catch { sweepThrew = true }
+chmodSync(lockedDir, 0o755)
+check('sweep-rm-failure-fail-loud', sweepThrew)
+rmSync(fakeRoot, { recursive: true, force: true })
 
 console.log(failed ? `\nCODEX SELFTEST FAILED (${failed})` : '\ncodex selftest ✓ all pass (no model call; real gate blocked)')
 process.exit(failed ? 1 : 0)

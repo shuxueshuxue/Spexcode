@@ -14,7 +14,7 @@
 //   • launchCodex — the full isolated launch (per-run 0700 HOME/CODEX_HOME/CODEX_SQLITE_HOME, env
 //     allowlist, structured argv, docker --network none, ssh-tunnel + unix-socket trace proxy as the only
 //     egress). COMPLETE code, but hard-gated: unreachable until reviewerGo:true after a reviewer GO.
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, renameSync, cpSync, appendFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, renameSync, cpSync, appendFileSync, readdirSync } from 'node:fs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -166,6 +166,31 @@ export function codexProvenance() {
   return CODEX_PROVENANCE
 }
 
+// (3) credential-residue discipline. Per-run scratch is `srb-codex-<pid>-*`: at launch start we sweep
+// ONLY dead-pid leftovers (a crashed earlier run's scratch — the one way key bytes could persist),
+// never a live sibling's dir; any sweep removal failure THROWS. After a run, cleanup deletes the
+// scratch fail-loud (no catch), asserts it is gone, and asserts the current pid has ZERO residue.
+export function sweepStaleCodexScratch({ tmpRoot = tmpdir() } = {}) {
+  const swept = [], kept = []
+  for (const name of readdirSync(tmpRoot)) {
+    const m = name.match(/^srb-codex-(\d+)-/)
+    if (!m) continue
+    const pid = Number(m[1])
+    let alive = true
+    try { process.kill(pid, 0) } catch (e) { alive = e.code === 'EPERM' }   // EPERM = exists but not ours
+    const p = join(tmpRoot, name)
+    if (alive) { kept.push(p); continue }
+    rmSync(p, { recursive: true, force: true })                             // a failure here THROWS
+    if (existsSync(p)) throw new Error(`FATAL: stale codex scratch ${p} survived removal — credential residue risk`)
+    swept.push(p)
+  }
+  return { swept, kept }
+}
+export function assertZeroCodexResidue({ tmpRoot = tmpdir(), pid = process.pid } = {}) {
+  const left = readdirSync(tmpRoot).filter((n) => n.startsWith(`srb-codex-${pid}-`))
+  if (left.length) throw new Error(`FATAL: codex scratch residue for live pid ${pid}: ${left.join(', ')} — credential bytes may remain on disk`)
+}
+
 export async function launchCodex(opts) {
   const { reviewerGo, provider, prompt, snapshotDir, archiveDir, runId = 'codex-run' } = opts ?? {}
   const timeoutMs = opts?.timeoutMs ?? 20 * 60_000
@@ -194,7 +219,9 @@ export async function launchCodex(opts) {
     bridge: pinMountDigest('codex:bridge-driver', join(HERE, 'bridge.mjs')),
   }
   const http = await import('node:http')
-  const scratch = mkdtempSync(join(tmpdir(), 'srb-codex-run-')); chmodSync(scratch, 0o700)
+  // sweep dead-pid leftovers BEFORE creating this run's scratch; live siblings are untouched
+  sweepStaleCodexScratch()
+  const scratch = mkdtempSync(join(tmpdir(), `srb-codex-${process.pid}-`)); chmodSync(scratch, 0o700)
   const home = join(scratch, 'home'), codexHome = join(scratch, 'codex'), sqliteHome = join(scratch, 'sqlite'), workDir = join(scratch, 'work')
   for (const d of [home, codexHome, sqliteHome, workDir]) { mkdirSync(d, { recursive: true }); chmodSync(d, 0o700) }
   const sockPath = join(scratch, 'codex.sock')
@@ -203,12 +230,16 @@ export async function launchCodex(opts) {
   const containerName = `srb-${runId}`.replace(/[^a-zA-Z0-9_.-]/g, '-')
   let ssh = null, proxy = null, docker = null, killer = null, timedOut = false
   const cleanup = () => {
+    // process teardown is best-effort; the SCRATCH DELETION is not — it holds credential bytes, so an
+    // rm failure or any leftover is FATAL (no catch), and the pid must end with zero residue.
     try { if (killer) clearTimeout(killer) } catch {}
     try { execFileSync('docker', ['rm', '-f', containerName], { stdio: 'ignore' }) } catch {}
     try { if (docker && !docker.killed) docker.kill('SIGKILL') } catch {}
     try { if (proxy) proxy.close() } catch {}
     try { if (ssh && !ssh.killed) ssh.kill('SIGKILL') } catch {}
-    try { rmSync(scratch, { recursive: true, force: true }) } catch {}
+    rmSync(scratch, { recursive: true, force: true })
+    if (existsSync(scratch)) throw new Error(`FATAL: codex scratch ${scratch} survived removal — credential residue`)
+    assertZeroCodexResidue()
   }
   try {
     // 1. relay key: read-only, call-time only; injected ONLY via the DECLARED env_key variable in a 0600

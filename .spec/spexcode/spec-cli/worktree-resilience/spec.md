@@ -5,7 +5,7 @@ session: db617645-24cd-4700-a53a-94d901127843
 hue: 20
 desc: A worktree's existence is definitive, never contingent on a flaky detail read — the board lists every worktree that exists and the backend never dies on one that vanishes.
 code:
-  - spec-cli/src/resilience.ts
+  - spec-cli/src/resilience.ts#guardWorktree
 ---
 # worktree-resilience
 

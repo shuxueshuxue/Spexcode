@@ -4,7 +4,7 @@ status: active
 hue: 15
 desc: spex survives its own source being mid-merge — every entry funnels through the launcher, which degrades to one actionable line + exit 75 instead of an esbuild stacktrace.
 code:
-  - spec-cli/bin/spex.mjs
+  - spec-cli/bin/spex.mjs#conflicted
 related:
   - spec-cli/src/materialize.ts
   - spec-cli/src/harness.ts

@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The live terminal's socket reopens itself after a genuine drop (a backend restart), loudly — so a pane never needs a manual refresh.
 code:
-  - spec-dashboard/src/resilientSocket.js
+  - spec-dashboard/src/resilientSocket.js#createResilientSocket
 related:
   - spec-dashboard/src/SessionTerm.jsx
 ---

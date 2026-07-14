@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The forge-side resident cache — the deterministic incremental-view-maintenance core — a delta-fed cache that keeps node → { issues, prs } fresh without a cold full pull, with reconcile as the source of truth. Sources (poll, webhook) are interchangeable and deferred.
 code:
-  - spec-forge/src/cache.ts
+  - spec-forge/src/cache.ts#ForgeCache
 related:
   - spec-forge/src/cache.test.ts
 ---

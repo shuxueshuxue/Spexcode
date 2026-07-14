@@ -4,7 +4,7 @@ status: active
 hue: 210
 desc: The app's one themed tooltip — a singleton data-tip bubble (hover + keyboard focus, delayed, edge-flipping) replacing native title= on the dashboard's controls.
 code:
-  - spec-dashboard/src/Tooltip.jsx
+  - spec-dashboard/src/Tooltip.jsx#TooltipLayer
 ---
 # tooltip
 

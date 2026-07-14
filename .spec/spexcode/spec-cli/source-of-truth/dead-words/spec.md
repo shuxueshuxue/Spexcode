@@ -4,7 +4,7 @@ status: active
 hue: 15
 desc: The vocabulary backstop — a CI grep gate keeping the v0.3.0 renames' retired words (yatsu · reading · board · proof · blob · scan · reopen · rawkey · loss-signal) off every product surface; prose stays exempt.
 code:
-  - scripts/dead-words.mjs
+  - scripts/dead-words.mjs#main
 related:
   - .github/workflows/ci.yml
 ---

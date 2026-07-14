@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: The lexical floor of spec retrieval — `spex search <query>` ranks spec NODES by term overlap and returns {id,title,path,score,snippet}, the one return two consumers reuse.
 code:
-  - spec-cli/src/search.ts
+  - spec-cli/src/search.ts#searchSpecs
 related:
   - spec-cli/src/cli.ts
   - spec-cli/src/search.bench.mjs

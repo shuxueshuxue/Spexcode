@@ -5,7 +5,7 @@ session: sess-merge
 hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
-  - spec-cli/src/layout.ts
+  - spec-cli/src/layout.ts#resolveLayout
 related:
   - spec-cli/src/layout-session-id.test.ts
   - spexcode.json

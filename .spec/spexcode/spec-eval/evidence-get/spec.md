@@ -4,7 +4,7 @@ status: active
 hue: 140
 desc: "`spex evidence get <hash> [-o <file>]` — evidence put's symmetric read: hash in, bytes out; local cache first, backend endpoint on a miss, both gone → fail loud naming each path."
 code:
-  - spec-eval/src/cli.ts
+  - spec-eval/src/cli.ts#blobGet
 related:
   - spec-cli/src/cli.ts
   - spec-cli/src/help.ts

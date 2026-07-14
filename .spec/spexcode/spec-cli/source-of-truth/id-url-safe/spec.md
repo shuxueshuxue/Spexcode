@@ -5,7 +5,7 @@ session: 35b68fb6-7f4f-43a1-97a5-0823fae8a834
 hue: 210
 desc: A node id is a URL-safe single token — guaranteed at the mint, resolved one way everywhere.
 code:
-  - spec-cli/src/specs.ts
+  - spec-cli/src/specs.ts#mintIds
 related:
   - spec-dashboard/src/data.js
   - spec-eval/src/scenarios.ts

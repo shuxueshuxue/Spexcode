@@ -4,7 +4,7 @@ status: active
 hue: 140
 desc: The scoreboard slice of spec-eval — eval.md scenarios (how to measure loss), the readings sidecar with verdicts, freshness (ancestry code axis + stored scenario-contract hash), add/ls/scenario ls/lint/retract/clean, and a content-addressed evidence cache. eval runs nothing; the agent measures.
 code:
-  - spec-eval/src/scenarios.ts
+  - spec-eval/src/scenarios.ts#scenarioHash
 related:
   - spec-cli/src/cli.ts
   - spec-eval/src/cli.ts

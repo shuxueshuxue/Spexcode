@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: The git-native anchors of the footprint — pre-commit runs an UNCONDITIONAL materialize + staged-index repair (strip leaked blocks in place, evict HEAD-untracked artifacts; never reject), post-checkout/post-merge re-materialize; no harness event ever triggers a materialize.
 code:
-  - spec-cli/src/commit-surgery.ts
+  - spec-cli/src/commit-surgery.ts#commitSurgery
 related:
   - spec-cli/templates/hooks/pre-commit
   - spec-cli/templates/hooks/post-checkout

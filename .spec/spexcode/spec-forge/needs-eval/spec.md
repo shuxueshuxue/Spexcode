@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: The forge half of the measurement-layer lint — recognizes OPEN issues flagged needs-eval (a label or a Spec:-style body line), resolves each to its node via the existing link sources, and exposes node → evaluation-pending. Read-only.
 code:
-  - spec-forge/src/needs-eval.ts
+  - spec-forge/src/needs-eval.ts#resolveEvalPending
 related:
   - spec-forge/src/cli.ts
 ---

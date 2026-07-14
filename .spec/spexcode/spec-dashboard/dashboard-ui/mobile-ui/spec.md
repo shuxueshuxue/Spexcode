@@ -3,11 +3,12 @@ title: mobile-ui
 status: active
 session: e335f3af-0695-488c-b12e-5fd1299e8b6a
 hue: 210
-desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a sessions tab, reusing the same polled data and the same node panes, because the desktop graph's pan/zoom/keyboard model can't be driven by a thumb.
+desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a TERMINAL-FREE session surface (the persisted timeline as the conversation, a composer that asks for note replies), reusing the same polled data, the same API routes, and the same panes as the desktop.
 code:
   - spec-dashboard/src/MobileApp.jsx
 related:
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/useIsMobile.js
 ---
@@ -20,20 +21,39 @@ query, reactive so a rotate or resize flips it with no reload); both faces read 
 board, so nothing about the data or the backend forks. The phone face is its **own lazy chunk**
 ([[dashboard-shell]]): a phone downloads none of the desktop's graph/terminal/annotator libraries.
 
-The phone keeps the same two planes the desktop shows, made native to touch:
+**Not a degraded desktop — a different interaction mode: the terminal-free mode.** The desktop's
+session surface is a live pane; the phone deliberately mounts none. What replaces it is the
+persisted **[[session-timeline]]**: without a pane, the agent's declaration notes ARE its replies,
+and the timeline of status transitions + delivered prompts IS the conversation. The mode is
+phone-first but not phone-bound — any surface could opt into it later.
+
+**One API, never its own.** Every read/write the phone makes is a route the desktop already
+uses, through the shared `data.js` helpers: the pushed/polled board for both planes, the
+`/api/specs/:id/*` panes (content/history/issues/evals — the SAME React pane components, no second
+markdown or diff renderer), `/api/sessions/:id` + `/timeline` for the conversation, and the ONE
+`/api/sessions/:id/input` route for sending. The sole phone-flavored bit rides that same route as
+a flag (`replyVia:"note"`), and even its phrase lives server-side ([[session-timeline]]).
+
+The two planes, made native to touch:
 
 - **Specs** — the graph becomes a drill-down. A breadcrumb names where you are; tapping a row
   descends into that node. Each node screen is a compact header over the SAME reading panes the
-  desktop popup renders (spec, history, issues, edit) — there is no second markdown or diff
-  renderer. A branch opens to its children first; a leaf opens to its spec.
-- **Sessions** — the live workers, drawn with the same session face as every other surface.
-  Opening one shows its status, its rolling activity, and the nodes it is changing; tapping a
-  changed node crosses back into Specs focused there.
+  desktop popup renders. A branch opens to its children first; a leaf opens to its spec.
+- **Sessions** — the list IS the desktop console's list: the same zone partition, the same nesting
+  forest with fold rails/pods, and the ONE shared avatar-less SessionRow face (colour-coded status
+  glyph + live headline) — no mobile-only variant, no second implementation; only the wrapper row
+  is touch-sized. Opening one is the terminal-free conversation: a header (current status +
+  liveness are the board row's, present-tense), the timeline — day-separated, each status event a
+  colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
+  (you / the sending session) — and a docked composer. The composer's note-reply chip (default ON)
+  marks the dispatch `replyVia:"note"`, so the agent is told to put its complete answer where this
+  surface can read it. A changes tab keeps the node cross-over (tap a changed node → Specs,
+  focused there). Offline shows an honest can't-deliver hint; a failed send fails loud, keeping
+  the draft.
 
-It is **read-first**: it answers "what does the tree say" and "what are my agents doing" from a
-phone. Authoring work and streaming a session's live console (terminal sizing and text input on
-a phone are their own problem) stay with the desktop board — a deliberate scope line, not an
-oversight.
+It answers "what does the tree say", "what are my agents doing", and now "talk to them" — from a
+phone. Merge/close and the live pane stay with the desktop board: acting on proposals is the
+manager cockpit's job, a deliberate scope line.
 
 This node's slice of the shared `styles.css` is the narrow-viewport mobile face; classes other surfaces
 add there — most recently the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score

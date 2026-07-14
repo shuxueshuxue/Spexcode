@@ -16,6 +16,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
@@ -406,6 +407,14 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
+// the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
+// FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
+// the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.
+app.get('/api/sessions/:id/timeline', (c) => {
+  const limit = Number(c.req.query('limit'))
+  const r = readTimeline(c.req.param('id'), Number.isFinite(limit) && limit > 0 ? limit : undefined)
+  return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
 // the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.
@@ -477,8 +486,10 @@ app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   if (body?.kind === 'text') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
-    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
+    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
+    // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
+    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined,
+      body?.replyVia === 'note' ? { replyVia: 'note' } : {})
     return c.json(r, r.ok ? 200 : 502)
   }
   if (body?.kind === 'keys') {
@@ -533,6 +544,7 @@ installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
 superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
+superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
 // graceful drain (the other half of zero-downtime reload, supervise.ts): on SIGTERM stop accepting new

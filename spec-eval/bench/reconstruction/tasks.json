@@ -1,0 +1,59 @@
+{
+  "v": 1,
+  "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
+  "cEval": "5723eaca1ba52eb60d28b818ddb4f77d758af01a",
+  "protocol": "docs/spec-reconstruction-bench.md",
+  "cards": "task-cards.json",
+  "leaves": [
+    {
+      "stratum": "spec-cli",
+      "relDir": "spexcode/spec-cli/source-of-truth/spec-lint",
+      "id": "spec-lint",
+      "leafCode": [
+        "spec-cli/src/lint.ts",
+        "spexcode.json"
+      ],
+      "candidateCount": 15,
+      "excluded": [],
+      "episode": {
+        "sha": "3f07397f67f5ab773fb6cbd2fe3464312ce41273",
+        "date": "2026-06-24T14:32:38+00:00",
+        "subject": "merge node/In-the-process-of-running-my-agent-d35e: spec(governed-related): mark the hub migration done (21 hubs → single owners; hub warning 0)",
+        "files": 47,
+        "changedLeafFiles": [
+          "spec-cli/src/lint.ts"
+        ]
+      },
+      "preState": "fa18935a0c07740d0912fe29bc70a803a8303ef0"
+    },
+    {
+      "stratum": "spec-dashboard",
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/mobile-ui",
+      "id": "mobile-ui",
+      "leafCode": [
+        "spec-dashboard/src/App.jsx",
+        "spec-dashboard/src/MobileApp.jsx",
+        "spec-dashboard/src/useIsMobile.js",
+        "spec-dashboard/src/styles.css"
+      ],
+      "candidateCount": 134,
+      "excluded": [
+        {
+          "episodeSha": "171b7cf0e7f26aa3746a05c1f6c4c8bf7d689355",
+          "reason": "depends-on-new-sibling-module: ./FocusPanel.jsx"
+        }
+      ],
+      "episode": {
+        "sha": "f308cded6bdf92be4c114dd889dc8468a11218ca",
+        "date": "2026-06-24T02:33:54+00:00",
+        "subject": "merge node/Scenario-34c0: yatsu(board-stats,node-graph): re-measure after the focus-panel styles.css touch Session: 34c047f2-d618-435a-8c21-2eb71307feb0",
+        "files": 9,
+        "changedLeafFiles": [
+          "spec-dashboard/src/App.jsx",
+          "spec-dashboard/src/styles.css"
+        ]
+      },
+      "preState": "171b7cf0e7f26aa3746a05c1f6c4c8bf7d689355"
+    }
+  ]
+}

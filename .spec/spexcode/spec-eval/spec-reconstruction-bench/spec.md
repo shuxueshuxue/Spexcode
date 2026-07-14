@@ -2,12 +2,17 @@
 title: spec-reconstruction-bench
 status: active
 hue: 170
-desc: 自然演化 spec vs 代码重建 spec 的信息价值 benchmark —— historical time-split（C0 快照三匿名臂 O0/R0/N0），三尺度三 estimand 分开预注册，主指标是前向真实任务效用；本版交付 dry-oracle（快照/泄漏/canary/选题/episode frame 全部冻结与门禁），付费 pilot 等人批。
+desc: 自然演化 spec vs 代码重建 spec 的信息价值 benchmark —— historical time-split（C0 快照三匿名臂 O0/R0/N0），三尺度三 estimand 分开预注册，主指标是前向真实任务效用；dry-oracle（快照/泄漏/canary/选题/episode/task frame 全冻结与门禁）+ phase-aware 付费 pilot runner（隔离 Claude Code/GLM-5.2 executor，阶段只改调度不改冻结选题），leaf 阶段已实现。
 code:
   - spec-eval/bench/reconstruction/run.ts
 related:
+  - spec-eval/bench/reconstruction/pilot.mjs
+  - spec-eval/bench/reconstruction/sandbox.mjs
+  - spec-eval/bench/reconstruction/bridge.mjs
   - spec-eval/bench/reconstruction/targets.json
   - spec-eval/bench/reconstruction/episodes.json
+  - spec-eval/bench/reconstruction/tasks.json
+  - spec-eval/bench/reconstruction/task-cards.json
   - spec-eval/bench/reconstruction/adversarial-critique.md
   - docs/spec-reconstruction-bench.md
 ---
@@ -42,20 +47,30 @@ bench 冻结数据、插件种子模板、spec 种子脚本——后两项正是
 正文抽 shingle 全量扫描（非代码文件命中=违规，代码内回声只记录）；future-leak canary 用窗口
 added-lines 扫快照与 prompt（只门禁 generation，不管评测期任务 prompt）；污染 canary 成对——
 clean 快照零 plant，leak-positive twin 故意开放禁面并植入唯一错误需求，门必须报警才算有检测力。
-重建 agent 用隔离的 Claude Code + GLM-5.2 launcher、fresh HOME/config、无网络、只读挂载，
-open-path manifest 归档。
+重建 agent 用隔离的 Claude Code + GLM-5.2（已批准 BigModel Anthropic endpoint）、fresh HOME/独立
+CLAUDE_CONFIG_DIR、无网络、只读挂载，open-path manifest 归档。隔离靠 docker `--network none`（真
+netns；本机 unprivileged userns 被 apparmor 限死，bwrap 不可用）+ `--add-host` 把 endpoint 钉到
+loopback + 容器内→unix socket→host bridge→endpoint:443 的唯一审计出口；凭证只经 0600 env-file 注入，
+不进 argv/prompt/trace/仓库；每个 stream-json 事件的 model 逐条核验，观测 model 集合必须 =={glm-5.2}，
+否则整批作废。
 
 ## 冻结资产与阶段门
 
-选题与任务框都是确定性冻结、可复验（`select --check` / `episodes --check` 字节级重现）：
-`targets.json`（C_eval→日历日规则导出 C0=038dce1f；2 leaf + 2 size-matched module + 1 whole）、
-`episodes.json`（798 个 first-parent semantic episodes，482 eligible，排除理由全记录；epoch 按
-yatsu→eval 迁移切 pre/migration/post，**primary horizon = 430 条 pre-migration**，跨 epoch 不
-pooled）。本版本只交付 **dry-oracle**（`npx tsx spec-eval/bench/reconstruction/run.ts dry`——快照、
-门禁、twin、双跑确定性，全绿 exit 0，不启动任何 agent、不触网、不下臂结论）；付费 pilot
-（6 tasks × 3 臂 + 2 controls × 3 尺度 = 24 runs）与 fact/decision cards 冻结是下一阶段，
-**没有人工批准预算不得启动**。C0=038dce1f 只支撑 protocol pilot；confirmatory 结论至少需要第二个
-外生 C0 复跑。
+选题、任务框都是确定性冻结、可复验（`select --check` / `episodes --check` / `tasks --check` 字节级
+重现）：`targets.json`（C_eval→日历日规则导出 C0=038dce1f；2 leaf + 2 size-matched module + 1 whole）、
+`episodes.json`（798 first-parent semantic episodes，482 eligible，**primary horizon = 430 pre-migration**）、
+`tasks.json`（每 leaf 取 first-parent 序**最早可回放** eligible episode——机械 replay 检查排除依赖同
+episode 新建兄弟模块的候选，reason 冻结在 `excluded[]`，绝不按 arm 结果挑）+ `task-cards.json`（读任何
+O0 前、只据 episode 代码 diff 冻结的 sanitized 行为化 request + hidden acceptance）。
+
+`run.ts dry` 仍是无 agent/无网络的快照+门禁+twin 面。付费 pilot 是 **phase-aware runner**（`run.ts pilot
+preflight | verify-model | phase --scale leaf`）：**阶段只改调度，不改冻结的 O0/R0/N0、知识预算、泄漏门、
+future task、评分口径**。preflight 无模型调用即落 gate 摘要（frames/dry/凭证 mode/endpoint 可达/沙盒三阴
+性+贯通/零残留/secret-scan 检测力），全绿方可自动继续；leaf 阶段并行重建两 leaf 的 R0，再对每 leaf 跑
+同一冻结 future task 的 O0/R0/N0 executor（臂只差中性投影 bundle，N0 空），逐 run 归档 prompt/config/
+manifest/trace/workspace/scorer raw/上游 commit/token/duration 并 secret scan。任何泄漏、model 非
+glm-5.2、secret 命中、归档失败即停整批，失败行如实归档不补跑。C0=038dce1f 只支撑 protocol pilot；
+confirmatory 结论至少需第二个外生 C0 复跑。module/whole 阶段的调度是下一步（不改选题）。
 
 ## 规矩
 

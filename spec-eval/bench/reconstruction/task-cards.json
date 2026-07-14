@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "note": "Frozen sanitized future-task cards for the leaf pilot. Authored from the episode's CODE DIFF only (builder provenance) BEFORE any O0 (masked leaf spec body) was read. The executor prompt embeds ONLY the `request` here — never the episode sha/subject/commit-message/diff. `acceptance` is the hidden external-scorer contract (evaluated on the host, outside the sandbox, on the archived workspace). Change = re-registration (commit this file alongside tasks.json).",
+  "leaves": {
+    "spexcode/spec-cli/source-of-truth/spec-lint": {
+      "episode": "3f07397f67f5ab773fb6cbd2fe3464312ce41273",
+      "preState": "fa18935a0c07740d0912fe29bc70a803a8303ef0",
+      "governedFile": "spec-cli/src/lint.ts",
+      "provenance": "leaf-governed change is self-contained (imports ./git, ./specs resolve at preState); the episode merge also carried unrelated spec migrations, which are NOT part of the task.",
+      "request": "This project's spec-governance linter checks a tree of spec nodes against the source files they claim. Each node declares files it OWNS via a `code:` list and files it merely REFERENCES via a `related:` list. Two gaps need fixing in the linter:\n\n1. Coverage & integrity of `related:`. A source file that is referenced only through some node's `related:` list (never in any `code:`) is still falsely reported by the coverage check as \"no spec governs\" it. Treat a file as covered if ANY node lists it under `code:` OR `related:`. Additionally, validate `related:` paths the same way `code:` paths are validated: a `related:` entry pointing at a file that does not exist must be reported as an integrity error naming the node and the missing path.\n\n2. Shared-owner (\"hub\") signal. When the SAME file appears in the `code:` list of two or more nodes, it has no single owner, so per-file attribution (drift/freshness) cannot pin it to one node. The linter currently gives no signal for this. Add ONE summary warning (never one-per-file) that reports how many files are governed by ≥2 nodes, names the worst offenders (highest owner count first), and states the remedy: give each such file exactly one owner in `code:` and let the other nodes reference it via `related:`.\n\nMake these changes in the linter source. Do not change the shape of unrelated rules.",
+      "acceptance": {
+        "assertions": [
+          "A file listed only under some node's related: no longer produces a coverage 'no spec governs' warning (related: now counts toward coverage).",
+          "A related: entry naming a nonexistent file produces an integrity-level error identifying the node and the missing path.",
+          "A file appearing in >=2 nodes' code: lists triggers exactly ONE new summary warning (not one per file) carrying the count of such files and a remedy mentioning code: and related:.",
+          "Pre-existing rules (living, coverage for code:-governed files, id-format, mention) keep their prior behaviour."
+        ],
+        "scorer": "behavioral: run the executor's produced lint.ts against synthetic .spec fixtures on the host (outside the sandbox) and observe the three behaviours; structural fallback greps the produced source for the related-coverage union, the related integrity check, and the single hub summary warning."
+      }
+    },
+    "spexcode/spec-dashboard/dashboard-ui/mobile-ui": {
+      "episode": "f308cded",
+      "preState": "171b7cf0e7f26aa3746a05c1f6c4c8bf7d689355",
+      "governedFiles": ["spec-dashboard/src/App.jsx", "spec-dashboard/src/styles.css"],
+      "provenance": "mobile-ui governs the shared App.jsx and styles.css, so its earliest REPLAYABLE eligible episode is a focus-panel refinement, not a mobile-specific change (the earlier focus-panel-introducing episode was excluded: it created ./FocusPanel.jsx in-episode). This is honest provenance, not a result-pick; the task is a real forward change to the governed files.",
+      "request": "In this spec dashboard's left-hand focus panel, each row lists a scenario belonging to the focused node: its name and the full text of its expected behaviour, shown as static content. Improve the panel so the always-on glance becomes an entry point into the full detail:\n\n1. Make each scenario row an interactive control (a button that reads as a row, not a default-styled button): activating it opens the focused node's detail popup on its eval pane (the reading-timeline view). Wire this through a handler on the panel that selects the eval pane and shows the detail overlay.\n\n2. The expected-behaviour text in a row should be a short preview clamped to two lines (the full prose lives one click away in the eval pane).\n\nMake these changes to the dashboard app component and its stylesheet. Keep the panel's existing layout and other rows unchanged.",
+      "acceptance": {
+        "assertions": [
+          "The app component defines a handler that selects the eval pane and opens the detail overlay, and passes it into the focus panel (e.g. an onOpenEval-style prop).",
+          "The scenario row style is reset to read as a row while being a clickable control (button chrome reset, hover affordance, cursor pointer).",
+          "The expected-behaviour preview is clamped to two lines (line-clamp / max two lines).",
+          "No unrelated panel structure or other selectors are removed."
+        ],
+        "scorer": "structural: inspect the executor's produced App.jsx and styles.css on the host for the eval-pane handler + prop wiring, the button-reset clickable .fp-scenario row, and the two-line clamp on the expected preview (running the full React dashboard is out of scope for the CLI pilot scorer; recorded as a limitation)."
+      }
+    }
+  }
+}

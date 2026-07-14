@@ -29,6 +29,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
 const TARGETS_PATH = join(HERE, 'targets.json')
 const EPISODES_PATH = join(HERE, 'episodes.json')
+const TASKS_PATH = join(HERE, 'tasks.json')
 const RUNS_DIR = join(HERE, 'runs')
 
 // ---- pre-registered rules (change = re-registration, declare in the commit reason) ----
@@ -252,6 +253,114 @@ function computeEpisodes(c0: string, cEval: string) {
   }
 }
 
+// ---- future-task selection (deterministic, per leaf) ----
+// Reuses the SAME window/eligibility/epoch logic as computeEpisodes (kept as an independent walk so the
+// frozen episodes.json byte-reproduction is never at risk), then picks, per leaf, ONE eligible
+// pre-migration episode that actually touched that leaf's governed code — the leaf's frozen future task.
+// The pre-state is the episode's first parent (the mainline commit an executor would start from). The
+// sanitized behavioral request + hidden acceptance are authored, frozen assets in task-cards.json; this
+// selection never reads O0 (the masked leaf body), only the episode's real code diff.
+function eligiblePreMigrationEpisodes(c0: string, cEval: string) {
+  const raw = git(['log', '--first-parent', '--reverse', '-M', '--name-status',
+    '--format=%x01%H%x02%P%x02%cI%x02%s', `${c0}..${cEval}`])
+  const eps = raw.split('\x01').filter((b) => b.trim()).map((b) => {
+    const nl = b.indexOf('\n')
+    const head = (nl >= 0 ? b.slice(0, nl) : b).split('\x02')
+    const changes = (nl >= 0 ? b.slice(nl + 1) : '').split('\n').filter((l) => /^[A-Z]/.test(l))
+      .map((l) => { const t = l.split('\t'); return { status: t[0], path: t[t.length - 1] } })
+    return { sha: head[0], parents: head[1].split(' '), date: head[2], subject: head[3].slice(0, RULES.subjectCap), changes }
+  })
+  const marker = RULES.migrationMarker
+  let boundary = -1
+  if (isAncestor(marker, cEval) && !isAncestor(marker, c0)) {
+    let lo = 0, hi = eps.length - 1
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (isAncestor(marker, eps[mid].sha)) hi = mid; else lo = mid + 1 }
+    boundary = lo
+  }
+  return eps.map((e, i) => {
+    const paths = e.changes.map((c) => c.path)
+    const all = (f: (p: string) => boolean) => paths.length > 0 && paths.every(f)
+    let excl: string | null = null
+    if (paths.length === 0) excl = 'empty'
+    else if (all((p) => /\.ndjson$/.test(p))) excl = 'measure-only'
+    else if (all((p) => p.startsWith('.spec/'))) excl = 'spec-only'
+    else if (e.changes.every((c) => c.status === 'R100')) excl = 'rename-only'
+    else if (all((p) => /(^|\/)package(-lock)?\.json$/.test(p))) excl = 'dependency-only'
+    else if (/^Revert\b/.test(e.subject)) excl = 'revert'
+    const epoch = boundary < 0 ? (isAncestor(marker, c0) ? 'post-migration' : 'pre-migration')
+      : i < boundary ? 'pre-migration' : i === boundary ? 'migration' : 'post-migration'
+    return { ...e, paths, epoch, eligible: !excl }
+  }).filter((e) => e.eligible && e.epoch === 'pre-migration')
+}
+
+function computeTasks(cEval: string) {
+  const sel = JSON.parse(readFileSync(TARGETS_PATH, 'utf8'))
+  const { c0 } = sel
+  const pool = eligiblePreMigrationEpisodes(c0, cEval)   // already first-parent ASCENDING (git --reverse)
+  // manual escape-hatch exclusions (things the mechanical check below can't see); default empty.
+  const exclPath = join(HERE, 'task-exclusions.json')
+  const manual: { relDir: string; episodeSha: string; reason: string }[] = existsSync(exclPath) ? JSON.parse(readFileSync(exclPath, 'utf8')) : []
+  const leaves = sel.leaf.map((leaf: any) => {
+    const code: string[] = leaf.code
+    const manualShas = new Set(manual.filter((x) => x.relDir === leaf.relDir).map((x) => x.episodeSha))
+    const cands = pool.filter((e) => e.paths.some((p) => code.includes(p)))
+    // Earliest replayable candidate. The MECHANICAL replay check (result-independent, run before any arm):
+    // the change to the leaf's governed files must not depend on a NEW sibling module created in the same
+    // episode — else a fresh executor at pre-state can't attempt the task without also authoring an
+    // unrelated module. Every skipped candidate freezes its reason inline (excluded[]), never result-picked.
+    const excluded: { episodeSha: string; reason: string }[] = []
+    let pick: any = null
+    for (const e of cands) {
+      if (manualShas.has(e.sha)) { excluded.push({ episodeSha: e.sha, reason: `manual: ${manual.find((x) => x.relDir === leaf.relDir && x.episodeSha === e.sha)!.reason}` }); continue }
+      const dep = newSiblingDep(e.sha, e.preState ?? git(['rev-parse', `${e.sha}^1`]).trim(), code)
+      if (dep.length) { excluded.push({ episodeSha: e.sha, reason: `depends-on-new-sibling-module: ${dep.join(', ')}` }); continue }
+      pick = e; break
+    }
+    if (!pick) throw new Error(`no replayable pre-migration episode for leaf ${leaf.id} (${excluded.length} excluded)`)
+    const preState = git(['rev-parse', `${pick.sha}^1`]).trim()
+    return {
+      stratum: leaf.stratum, relDir: leaf.relDir, id: leaf.id, leafCode: code,
+      candidateCount: cands.length, excluded,
+      episode: { sha: pick.sha, date: pick.date, subject: pick.subject, files: pick.paths.length,
+        changedLeafFiles: pick.paths.filter((p) => code.includes(p)).sort() },
+      preState,
+    }
+  })
+  return { v: 1, c0, cEval, protocol: 'docs/spec-reconstruction-bench.md', cards: 'task-cards.json', leaves }
+}
+
+// mechanical replay check: relative imports added to the leaf's governed files in this episode that
+// resolve to NO file at pre-state (i.e. a sibling module created in the same episode). Returns the
+// unresolved import specifiers; empty = replayable. Deterministic, never looks at arm results.
+const RESOLVE_EXT = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '/index.ts', '/index.tsx', '/index.js', '/index.jsx']
+function existsAt(commit: string, path: string): boolean {
+  try { execFileSync('git', ['cat-file', '-e', `${commit}:${path}`], { cwd: ROOT, stdio: 'ignore' }); return true } catch { return false }
+}
+function newSiblingDep(episodeSha: string, preState: string, leafCode: string[]): string[] {
+  const unresolved: string[] = []
+  for (const file of leafCode) {
+    if (!/\.[cm]?[tj]sx?$/.test(file)) continue
+    let content = ''
+    try { content = git(['show', `${episodeSha}:${file}`]) } catch { continue }
+    const dir = file.slice(0, file.lastIndexOf('/'))
+    for (const m of content.matchAll(/(?:import|export)[^'"]*from\s*['"](\.[^'"]+)['"]/g)) {
+      const spec = m[1]
+      // resolve relative to the importing file's dir, normalize ../ and ./
+      const parts = (dir + '/' + spec).split('/'); const norm: string[] = []
+      for (const p of parts) { if (p === '.' || p === '') continue; if (p === '..') norm.pop(); else norm.push(p) }
+      const base = norm.join('/')
+      // TS/ESM convention: an import specifier may carry a .js extension that resolves to a .ts source
+      // (./git.js → git.ts). Resolve against the STEM (specifier ext stripped) across the ext table,
+      // and also try the literal path.
+      const stem = base.replace(/\.(js|jsx|mjs|cjs|ts|tsx)$/, '')
+      const resolved = existsAt(preState, base) || RESOLVE_EXT.some((ext) => existsAt(preState, stem + ext))
+      if (!resolved) unresolved.push(spec)
+    }
+  }
+  return [...new Set(unresolved)]
+}
+
+
 // ---- snapshot ----
 function walk(dir: string, base = dir): { rel: string; symlink: boolean }[] {
   const out: { rel: string; symlink: boolean }[] = []
@@ -418,6 +527,50 @@ this scale is judged on root/package/module intent only.
 `
 }
 
+// ---- executor pre-state snapshot (paid-pilot forward-task stage) ----
+// Archives an arbitrary commit (an episode's pre-state), applies the SAME allowlist + forbidden strip as
+// the generation snapshot, and removes the ENTIRE .spec tree (no intervening spec leaks into the forward
+// task). Optionally injects one neutral-projection bundle at `.spec-context/<rel>` — the arm's ONLY spec
+// context (N0 = no bundle). No masked-shingle/future-canary gate here: the pre-state archive is
+// structurally free of the episode's own and later changes, and the forward task prompt may legitimately
+// carry new requirements (§4). The governed files MUST be present (else the task can't be attempted).
+export function buildExecSnapshot(commit: string, outDir: string, governed: string[], bundle?: { rel: string; text: string }) {
+  rmSync(outDir, { recursive: true, force: true })
+  const snap = join(outDir, 'snapshot')
+  mkdirSync(snap, { recursive: true })
+  const tar = join(outDir, 'pre.tar')
+  git(['archive', '--format=tar', '-o', tar, commit])
+  execFileSync('tar', ['-xf', tar, '-C', snap]); rmSync(tar)
+
+  // remove the ENTIRE .spec tree first (dir and all) so no intervening spec — not even empty dir names — leaks
+  rmSync(join(snap, '.spec'), { recursive: true, force: true })
+
+  const all = walk(snap)
+  const stripped: { path: string; reason: string }[] = []
+  for (const f of all) {
+    const fb = FORBIDDEN.find((x) => x.test(f.rel))
+    const reason = fb ? fb.reason : !allowlisted(f.rel) ? 'default-deny' : f.symlink ? 'symlink' : null
+    if (reason) { rmSync(join(snap, f.rel), { force: true }); stripped.push({ path: f.rel, reason }) }
+  }
+  if (bundle) {
+    const p = join(snap, '.spec-context', bundle.rel)
+    mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, bundle.text)
+  }
+  const missing = governed.filter((g) => !existsSync(join(snap, g)))
+  const remaining = walk(snap)
+  const manifest = {
+    v: 1, bench: 'spec-reconstruction-bench', stage: 'exec-snapshot', commit, governed,
+    files: remaining.length,
+    treeHash: sha256(remaining.map((f) => `${f.rel}\0${f.symlink ? 'symlink' : sha256(readFileSync(join(snap, f.rel)))}`).join('\n')),
+    strippedAllSpec: !remaining.some((f) => f.rel.startsWith('.spec/')),
+    bundleInjected: bundle ? `.spec-context/${bundle.rel}` : null,
+    governedPresent: missing.length === 0, missingGoverned: missing,
+    stripped: { count: stripped.length, byReason: stripped.reduce((o: any, s) => { o[s.reason] = (o[s.reason] ?? 0) + 1; return o }, {}) },
+  }
+  writeFileSync(join(outDir, 'exec-manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+  return manifest
+}
+
 // ---- gates ----
 type Gate = { name: string; ok: boolean; detail: string }
 function gatesFor(scale: Scale, targetRelDir: string | null, outDir: string, m: any, m2: any | null): Gate[] {
@@ -449,6 +602,16 @@ function gatesFor(scale: Scale, targetRelDir: string | null, outDir: string, m: 
 }
 
 // ---- commands ----
+function cmdTasks(write: boolean, sel: any) {
+  const tasks = computeTasks(sel.cEval)
+  const rendered = JSON.stringify(tasks, null, 2) + '\n'
+  if (write) { writeFileSync(TASKS_PATH, rendered); console.log(`tasks.json written: ${tasks.leaves.length} leaf future tasks (${tasks.leaves.map((l: any) => `${l.id}→${l.episode.sha.slice(0, 8)}`).join(', ')})`); return tasks }
+  if (!existsSync(TASKS_PATH)) { console.error('tasks.json missing — run tasks --write first'); process.exit(1) }
+  if (readFileSync(TASKS_PATH, 'utf8') !== rendered) { console.error('TASK FRAME MISMATCH: committed tasks.json does not reproduce'); process.exit(1) }
+  console.log(`task-frame-frozen ✓  ${tasks.leaves.length} leaf future tasks: ${tasks.leaves.map((l: any) => `${l.id}→${l.episode.sha.slice(0, 8)} (${l.candidateCount} cands, preState ${l.preState.slice(0, 8)})`).join('; ')}`)
+  return tasks
+}
+
 function cmdSelect(write: boolean) {
   const cEval = existsSync(TARGETS_PATH) ? JSON.parse(readFileSync(TARGETS_PATH, 'utf8')).cEval : git(['merge-base', 'HEAD', 'main']).trim()
   const sel = computeSelection(cEval)
@@ -520,6 +683,7 @@ const flag = (n: string) => argv.includes(n)
 const opt = (n: string) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined }
 if (cmd === 'select') cmdSelect(flag('--write'))
 else if (cmd === 'episodes') cmdEpisodes(flag('--write'), JSON.parse(readFileSync(TARGETS_PATH, 'utf8')))
+else if (cmd === 'tasks') cmdTasks(flag('--write'), JSON.parse(readFileSync(TARGETS_PATH, 'utf8')))
 else if (cmd === 'snapshot') {
   const sel = JSON.parse(readFileSync(TARGETS_PATH, 'utf8'))
   const scale = opt('--scale') as Scale
@@ -528,5 +692,17 @@ else if (cmd === 'snapshot') {
   const out = opt('--out') ?? join(RUNS_DIR, `${scale}-${target ? target.split('/').pop() : 'all'}`)
   const m = buildSnapshot(sel, scale, target, out, budget)
   console.log(JSON.stringify({ out: relative(ROOT, out), files: m.files, treeHash: m.treeHash, violations: m.leakage.violations.length, canaryHits: m.canary.hits.length }, null, 2))
+} else if (cmd === 'exec-snapshot') {
+  const commit = opt('--commit')!
+  const out = opt('--out')!
+  const governed = (opt('--governed') ?? '').split(',').filter(Boolean)
+  const bundleRel = opt('--bundle-rel'); const bundleFile = opt('--bundle-file')
+  const bundle = bundleRel && bundleFile ? { rel: bundleRel, text: readFileSync(bundleFile, 'utf8') } : undefined
+  const m = buildExecSnapshot(commit, out, governed, bundle)
+  console.log(JSON.stringify({ out: relative(ROOT, out), files: m.files, treeHash: m.treeHash, strippedAllSpec: m.strippedAllSpec, governedPresent: m.governedPresent, bundle: m.bundleInjected }, null, 2))
 } else if (cmd === 'dry') cmdDry()
-else { console.error('usage: run.ts [dry | select --check|--write | episodes --check|--write | snapshot --scale leaf|module|whole [--target <relDir>] [--budget tracked-repo|code-only] [--out <dir>]]'); process.exit(1) }
+else if (cmd === 'pilot') {
+  // paid pilot orchestration lives in pilot.mjs (isolated executor + preflight + phase schedules).
+  // Phases only change scheduling — the frozen selection/episodes/gates above are reused unchanged.
+  await import('./pilot.mjs')
+} else { console.error('usage: run.ts [dry | select --check|--write | episodes --check|--write | snapshot --scale leaf|module|whole [--target <relDir>] [--budget tracked-repo|code-only] [--out <dir>] | pilot preflight|verify-model]'); process.exit(1) }

@@ -16,24 +16,40 @@ scenarios:
     tags: [cli]
   - name: frames-frozen
     description: >
-      同 pipefail 纪律分别运行 run.ts select --check 与 run.ts episodes --check，捕获各自 exit code
-      与输出。
+      同 pipefail 纪律分别运行 run.ts select --check、run.ts episodes --check 与 run.ts tasks --check，
+      捕获各自 exit code 与输出。
     expected: >
-      两者 exit 0：selection-frozen ✓ 报 c0=038dce1f、cEval=5723eaca、2 leaves、size-matched module
+      三者 exit 0：selection-frozen ✓ 报 c0=038dce1f、cEval=5723eaca、2 leaves、size-matched module
       pair（comms, lifecycle，Δ=1）与 whole；episode-frame-frozen ✓ 报 798 episodes
-      （699 pre / 1 migration / 98 post）、482 eligible、primary horizon 430——即提交在案的
-      targets.json 与 episodes.json 从各自 pinned 输入字节级重现，任何不重现立刻非零退出。
+      （699 pre / 1 migration / 98 post）、482 eligible、primary horizon 430；task-frame-frozen ✓ 报
+      2 leaf future tasks（spec-lint→3f07397f preState fa18935a、mobile-ui→f308cded preState 171b7cf0），
+      即每 leaf 取 first-parent 序最早可回放 eligible episode（机械 replay 排除依赖同 episode 新建兄弟
+      模块的候选）——三个冻结文件从各自 pinned 输入字节级重现，任何不重现立刻非零退出。
+    tags: [cli]
+  - name: pilot-preflight-gates
+    description: >
+      【付费 pilot 前置，无模型调用】从仓库根运行 run.ts pilot preflight，捕获 exit code 与
+      runs/pilot/preflight.json。
+    expected: >
+      exit 0，9 门全绿：frames-frozen、dry-oracle、credential-file（mode=600，只记 keyLen+sha256 前缀，
+      不记值）、endpoint-reachable（TLS verify=0，无消息体）、egress-bridge-reaches（经沙盒 bridge 到
+      endpoint 得 HTTP 状态）、egress-direct-blocked（直连 IP ENETUNREACH）、egress-dns-blocked（外域
+      DNS EAI_AGAIN）、zero-residue（探针后 0 bridge/0 container）、secret-scan-power（植入命中=1、干净=0）；
+      preflight.json 另记 historicalPreflightFailures（bwrap userns 被 apparmor 挡、误读全局 wrapper 的
+      provider 越界），不进有效 run 分母。
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
-      【预注册，等人批预算后才测】按 protocol §launch：对 5 个冻结目标（2 leaf、2 module、1 whole）
-      各跑一次隔离重建（Claude Code + GLM-5.2 launcher，fresh HOME/CLAUDE_CONFIG_DIR，无网络，
-      快照只读挂载），产出 .spec-recon 树与 open-path manifest，全部工件带 manifest 归档为本节点
-      eval 证据。
+      【付费，等人批预算+preflight 全绿后才测】run.ts pilot phase --scale leaf：并行重建两个冻结 leaf
+      （spec-lint、mobile-ui）的 R0（隔离 Claude Code + GLM-5.2 via BigModel endpoint，fresh HOME/独立
+      CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口，快照只读、.spec-recon 可写），
+      再对每 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（臂只差中性投影 bundle）。
     expected: >
-      5 次 R0 全部产出结构合法的 .spec-recon（节点=目录+spec.md，whole ≤3 层）；每次 run 的归档含
-      snapshot manifest、PROMPT、agent transcript、open-path manifest；clean 快照 plant 零复述；
-      transcript 无网络访问痕迹；失败 run 同样带 manifest 归档并如实记 fail。
+      两 leaf 的 R0 产出结构合法的 .spec-recon（节点=目录+spec.md）；每 run 归档含 snapshot manifest、
+      PROMPT、transcript、trace.json（endpoint hostname、bridge 连接数、逐事件 model 集合、token、
+      duration、open-path/mount 清单、secret-scan 命中数）、workspace、scorer raw；clean 快照 plant 零
+      复述、R0 对 masked O0 无异常 shingle overlap；每个 run 观测 model 集合 =={glm-5.2}，否则整批停；
+      失败 run 同样带 sanitized 归档并如实记 fail（无 raw stderr、无 key/env/完整 process dump 入档）。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

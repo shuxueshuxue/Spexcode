@@ -26,7 +26,12 @@ if [ -z "$sid" ] && [ -n "${CODEX_THREAD_ID:-}" ]; then # codex: alias the threa
     if [ -e "$rd/sessions/$CODEX_THREAD_ID/session.json" ]; then
       sid="$CODEX_THREAD_ID"                             # a governed record keyed by the thread id (rare/direct)
     else                                                 # else the record that captured it as harness_session_id
-      hit=$(grep -lF "\"harness_session_id\": \"$CODEX_THREAD_ID\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1)
+      # @@@ unmatched-is-noop - grep's no-match (exit 1) and an absent sessions glob (exit 2) are the
+      # NOT-GOVERNED case, not an error: any repo inherits a foreign CODEX_THREAD_ID from a codex session's
+      # shell, and under `set -euo pipefail` a bare grep|head assignment would abort the hook — and the
+      # commit — before the intended `[ -z "$sid" ] && exit 0` no-op. Genuine errors past this lookup
+      # (interpret-trailers etc.) still fail loud via set -e.
+      hit=$(grep -lF "\"harness_session_id\": \"$CODEX_THREAD_ID\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1) || hit=""
       [ -n "$hit" ] && sid=$(basename "$(dirname "$hit")")
     fi
   fi

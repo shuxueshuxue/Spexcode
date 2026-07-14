@@ -140,6 +140,25 @@ scenarios:
       codex binds fine in any OWNED subdirectory (the control), so the fix belongs to the path derivation, not
       the host.
     code: spec-cli/src/harness.ts
+  - name: session-stamp-unmatched-thread-id-is-clean-noop
+    tags: [backend-api]
+    code: spec-cli/templates/hooks/prepare-commit-msg
+    description: >-
+      In an initialized ordinary repo with the session-stamp hook installed, whose environment inherits a
+      NONEMPTY CODEX_THREAD_ID matching no session record in that repo's project store (both store shapes:
+      no sessions dir at all, and a store whose records all carry a different `harness_session_id`), run
+      `git commit` — including `--no-verify`, which does NOT skip prepare-commit-msg. Controls on the same
+      rig: a thread id that IS a record's `harness_session_id`, a Claude commit with CLAUDE_CODE_SESSION_ID,
+      and a message already carrying a Session: trailer.
+    expected: >-
+      The unmatched lookup is a clean NO-OP: the commit succeeds and its message carries NO Session trailer —
+      not an empty one, not the foreign thread id. The matched control stamps the resolved RECORD id via the
+      alias, the Claude control stamps its exported id, the pre-trailered message is left alone, and a genuine
+      hook error still fails loud. The failure this locks: the alias `grep|head` ran bare under
+      `set -euo pipefail`, so a no-match aborted the hook before its intended no-op exit — EVERY `git commit`
+      in ANY repo with the hook installed exited 1 with no message whenever the shell inherited a foreign
+      codex thread id (e.g. any command a codex session spawns in an unrelated repo), a silent total commit
+      outage.
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-

@@ -12,6 +12,7 @@ related:
   - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
+  - spec-cli/src/session-stamp.test.ts
 ---
 
 # harness-adapter
@@ -280,7 +281,11 @@ interactive-CLI path share one precedence rule. The **commit-attribution** hook 
 `Session:` trailer) is a THIRD consumer of this same rule: a codex worker's `git commit` runs in the shared
 app-server shell (contaminated `SPEXCODE_SESSION_ID`) but carries the acting `CODEX_THREAD_ID`, so the hook
 resolves the RECORD id through the SAME `harness_session_id` alias grep AT COMMIT TIME (the record is swept on
-close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. The stamp
+close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. An
+UNMATCHED thread id is the ordinary case, not an error — every repo on the box inherits a foreign
+`CODEX_THREAD_ID` from a codex session's shell — so a lookup that finds no record (or no store at all) is a
+clean no-op: the commit proceeds unstamped, with no empty and no foreign `Session:` trailer, and the hook's
+fail-loud stance is reserved for genuine errors past the lookup. The stamp
 lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an
 appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
 ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead. Claude is

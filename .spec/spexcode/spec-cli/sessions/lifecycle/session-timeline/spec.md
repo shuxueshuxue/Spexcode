@@ -40,7 +40,10 @@ from the board row. The timeline dies with the session record (close sweeps the 
 
 Read surface: `GET /api/sessions/:id/timeline` — the tail (default 500), oldest first, each status event
 carrying its composed display word (awaiting→its proposal's label, active→working: the same vocabulary
-every other surface speaks). Write surface for the terminal-free sender: the one input route accepts
+every other surface speaks). The read FOLDS adjacent status lines with identical (status, proposal, note)
+into their first: two serve processes observing one store (a throwaway worktree/eval serve beside the live
+one) each keep their own last-seen and can append a single record move twice — the log stays best-effort
+append-only and duplicates die at read time, the same read-aggregation stance as the board. Write surface for the terminal-free sender: the one input route accepts
 `replyVia:"note"`, and the server appends `withNoteReplyHint` to the delivery — the insert that tells the
 agent its reader can only see declaration notes, so the complete reply belongs in `--note`. The phrase
 lives server-side, beside withSenderHint, so every surface (desktop later, too) opts in with the same flag.

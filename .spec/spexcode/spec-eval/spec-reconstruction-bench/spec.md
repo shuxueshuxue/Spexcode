@@ -11,6 +11,7 @@ related:
   - spec-eval/bench/reconstruction/bridge.mjs
   - spec-eval/bench/reconstruction/usage.mjs
   - spec-eval/bench/reconstruction/scorer.mjs
+  - spec-eval/bench/reconstruction/browser-scorer.mjs
   - spec-eval/bench/reconstruction/usage.selftest.mjs
   - spec-eval/bench/reconstruction/scorer.selftest.mjs
   - spec-eval/bench/reconstruction/targets.json
@@ -78,12 +79,17 @@ stratum）。
 pilot 是 **phase-aware runner**（`run.ts pilot preflight | verify-model | phase --scale leaf`）：**阶段只
 改调度，不改冻结的 O0/R0/N0、知识预算、泄漏门、future task、评分口径**。leaf 阶段每 arm 入表前硬门
 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean+R0 required-file&schema（空/
-失败 R0 绝不静默变 N0）；主 outcome 由**工作区外真实行为测试**产出（spec-lint：合成 git fixture 实跑
-产出的 lint，正负对照证明能拒绝未改 pre-state；无真实行为 scorer 的 leaf——如 mobile-ui 的异步竞态需
-真浏览器 YATU——**gate 出付费阶段记为盲区**，不以 regex 充主分）；首个 hard failure 经共享 abort 停发
-新 arm、只让在途收尾归档，不补跑。逐 run 归档 prompt/config/manifest/trace/workspace/scorer raw/scope
-（pre/post diff 含删除）/上游 commit/token/duration。C0=038dce1f 只支撑 protocol pilot；confirmatory
-结论至少需第二个外生 C0 复跑。module/whole 阶段的调度是下一步（不改选题）。
+失败 R0 绝不静默变 N0）；**两个 leaf 都须有真实行为 scorer 才跑**（单 leaf 固定序不可比）。主 outcome 由
+**工作区外真实行为测试**产出，且**产出代码永不在 host 直跑**：spec-lint 在 `docker --network none` 内跑
+产出的 lint（合成 git fixture，produced source 只读、fixture 唯一可写），mobile-ui 用无头 chromium 跑产出
+App.jsx（CDP `Network offline` 断网沙盒；浏览器 JS 无宿主 fs）驱动 board-poll 竞态；两者正负 control 证明
+能拒未改 pre-state（付费前 `pilot check` rc0）。归档全部 raw+二进制 bytes 做 exact/prefix/base64 全零 secret
+scan（prefixHits 也计）；首个 hard failure 经共享 abort 停发新 arm、只让在途收尾归档，不补跑。phase 前置
+绑定同一 runnerCommit/imageID/claudeDigest/endpoint/model：读 preflight.json/check.json/verify-model
+trace，verify 须 ok+exit0+realCompletion+accounting-valid+model{glm-5.2}+secret-clean 才放行（429 verify
+不 admit）。逐 run 归档 prompt/config/manifest/trace/workspace/scorer raw/scope（pre/post diff 含删除）/
+上游 commit/token/session set。C0=038dce1f 只支撑 protocol pilot；confirmatory 结论至少需第二个外生 C0
+复跑。module/whole 阶段的调度是下一步（不改选题）。
 
 ## 规矩
 

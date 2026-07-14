@@ -101,6 +101,11 @@ export async function launchAgent(opts) {
   const started = nowIso()
   const t0 = Date.now()
   const provenance = provenanceRecord()
+  // (F) run by IMMUTABLE image ID (not the mutable tag), and RE-VERIFY the Claude package digest on every
+  // launch — a swapped tag or a mutated binary since provenance was pinned is fail-loud.
+  if (!provenance.dockerImageId) throw new Error('sandbox: docker image id unresolved — cannot pin an immutable image')
+  const liveClaudeDigest = (() => { try { return sha256(readFileSync(join(CLAUDE_PKG, 'package.json')) + '::' + sha256(readFileSync(join(CLAUDE_PKG, 'bin', 'claude.exe')))).slice(0, 16) } catch { return null } })()
+  if (liveClaudeDigest !== provenance.claudePkgDigest) throw new Error(`sandbox: Claude package digest changed since pin (${liveClaudeDigest} != ${provenance.claudePkgDigest}) — refusing to launch`)
 
   // per-run scratch (socket + env-file live here, 0700)
   const scratch = mkdtempSync(join(tmpdir(), 'srb-run-'))
@@ -182,7 +187,7 @@ export async function launchAgent(opts) {
       '-v', `${workDir}:/work`,                   // writable workspace (agent output)
       '-v', `${sockPath}:/run/glm.sock`,          // bridge socket
       '--tmpfs', '/agent:exec,uid=1000,gid=1000,mode=0700',
-      DOCKER_IMAGE, 'bash', '-c', inner,
+      provenance.dockerImageId, 'bash', '-c', inner,   // (F) immutable image ID, not the mutable tag
     ]
 
     docker = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] })

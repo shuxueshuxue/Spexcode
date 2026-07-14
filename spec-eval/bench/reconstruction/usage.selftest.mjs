@@ -56,5 +56,19 @@ check('modelClean false when no real response', d.modelClean === false, JSON.str
 check('apiError surfaced', typeof d.apiError === 'string' && /429/.test(d.apiError), String(d.apiError))
 check('<synthetic> excluded from apiModels', !d.apiModels.includes('<synthetic>'))
 
+// (G) a usage-bearing assistant event WITHOUT a message.id => accounting-invalid
+const streamE = [
+  { type: 'assistant', message: { role: 'assistant', model: 'glm-5.2', usage: { input_tokens: 5, output_tokens: 2 } } }, // no id!
+]
+const e = aggregateStream(streamE, 'glm-5.2')
+check('usage-without-id is accounting-invalid', e.accountingValid === false && e.anomalies.some((a) => a.field === '__id'), JSON.stringify(e.anomalies))
+// (G) a NO-usage assistant model event still contributes to model provenance collection
+const streamF = [
+  { type: 'assistant', message: { id: 'm9', role: 'assistant', model: 'glm-5.2' } }, // model event, no usage
+  { type: 'assistant', message: { id: 'm9', role: 'assistant', model: 'glm-5.2', usage: { output_tokens: 3 } } },
+]
+const fAgg = aggregateStream(streamF, 'glm-5.2')
+check('no-usage assistant model collected', fAgg.apiModels.includes('glm-5.2') && fAgg.modelClean === true)
+
 console.log(failed ? `\nUSAGE SELFTEST FAILED (${failed})` : '\nusage selftest ✓ all pass')
 process.exit(failed ? 1 : 0)

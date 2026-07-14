@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { launchAgent, secretScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, MODEL } from './sandbox.mjs'
 import { scoreSpecLint, scoreControls } from './scorer.mjs'
+import { scoreMobileUi, scoreControlsMobile } from './browser-scorer.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 const ROOT = join(HERE, '../../..')
@@ -190,9 +191,10 @@ function neutralProjection(specMd, relDir) {
 // (scorer.mjs). mobile-ui: its acceptance is an async DOM race → needs a real browser harness (YATU),
 // NOT YET IMPLEMENTED, so that leaf is GATED OUT of the paid phase (declared blind) rather than scored
 // by regex. A leaf with no implemented behavioural scorer never runs paid arms.
-const SCORER_IMPLEMENTED = new Set(['spec-lint'])
-function scoreArm(leafId, workspaceDir, card) {
-  if (leafId === 'spec-lint') return scoreSpecLint(join(workspaceDir, 'spec-cli/src'))
+const SCORER_IMPLEMENTED = new Set(['spec-lint', 'mobile-ui'])
+async function scoreArm(leafId, workspaceDir, card) {
+  if (leafId === 'spec-lint') return scoreSpecLint(join(workspaceDir, 'spec-cli/src'))       // sandboxed lint fixture-run
+  if (leafId === 'mobile-ui') return await scoreMobileUi(workspaceDir)                         // headless-chromium DOM race, no-network
   throw new Error(`no behavioural scorer implemented for leaf ${leafId}`)
 }
 
@@ -241,6 +243,10 @@ function scopeAnalysis(preSnapDir, workDir, governed) {
 // ---- leaf phase: R0 recon + counterbalanced O0/R0/N0 arms per leaf (arms share ONE frozen future task) ----
 export async function runLeaf(leaf, cards, c0, credPath, abort) {
   const id = leaf.id
+  // (H) guard on the FIRST line of the exported entry — a direct runLeaf() call (bypassing the CLI /
+  // leafPhase enforcement) must not spend money on a leaf with no real behavioural scorer.
+  if (!SCORER_IMPLEMENTED.has(id)) throw new Error(`runLeaf refused: leaf ${id} has no implemented behavioural scorer (gated blind) — no paid launch`)
+  if (!abort || typeof abort !== 'object') throw new Error('runLeaf refused: missing shared abort state — call via leafPhase')
   const card = cards.leaves[leaf.relDir]
   if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
   const base = join(RUNS, 'pilot', 'leaf', id)
@@ -298,7 +304,7 @@ export async function runLeaf(leaf, cards, c0, credPath, abort) {
       writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream })
     enforceRunGates(abort, `${id}-${arm}`, run)
     const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
-    const score = scoreArm(id, run.workDir, card)
+    const score = await scoreArm(id, run.workDir, card)
     writeFileSync(join(armBase, 'score.json'), JSON.stringify({ arm, score, scope }, null, 2) + '\n')
     arms[arm] = { archive: armBase, trace: run.trace, scopeViolations: scope.violations.length, score: { scorer: score.scorer, passed: score.passed, total: score.total, checks: score.checks } }
   }
@@ -335,35 +341,81 @@ export async function leafPhase({ credPath }) {
   const cards = JSON.parse(readFileSync(join(HERE, 'task-cards.json'), 'utf8'))
   const abort = { stopped: false, reason: null }
 
-  // (6) phase enforcement — bind to the exact frozen inputs + committed runner/image, not operator memory:
+  // (6) phase enforcement — bind to the exact frozen inputs + committed runner/image + the prior-stage
+  // traces, not operator memory. (A) preflight.json, check.json and the verify-model trace must ALL exist,
+  // pass, and agree on the SAME runnerCommit/imageID/claudeDigest/endpoint/model.
   const enforce = []
   const E = (name, ok, detail) => { enforce.push({ name, ok, detail }); if (!ok) stopBatch(abort, `phase-enforcement ${name}: ${detail}`) }
+  const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return null } }
+  const prov = provenanceRecord()
   try { runTs(['tasks', '--check']); E('tasks-frozen', true, 'tasks --check rc0') } catch (e) { E('tasks-frozen', false, 'tasks --check non-zero') }
   const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))
   E('cards-hash', cardsSha === tasks.cardsSha256, `cards sha ${cardsSha.slice(0, 12)} vs pinned ${String(tasks.cardsSha256).slice(0, 12)}`)
-  const prov = provenanceRecord()
   E('runner-committed', prov.runnerDirty === false, `runner working tree dirty=${prov.runnerDirty} — commit before paid runs`)
   E('docker-image-pinned', !!prov.dockerImageId, `image ${prov.dockerImage} id=${String(prov.dockerImageId).slice(0, 16)}`)
   E('claude-pinned', !!prov.claudeVersion && !!prov.claudePkgDigest, `claude ${prov.claudeVersion} digest ${prov.claudePkgDigest}`)
-  // scorer controls must discriminate BEFORE paid runs (positive pass, negative rejected)
+  // (A) prior stages present + agree on provenance
+  const preflight = readJson(join(RUNS, 'pilot', 'preflight.json'))
+  const check = readJson(join(RUNS, 'pilot', 'check.json'))
+  E('preflight-green', !!preflight && preflight.allOk === true, preflight ? `preflight allOk=${preflight.allOk}` : 'preflight.json missing — run `pilot preflight`')
+  E('check-green', !!check && check.checks?.every((c) => c.ok), check ? 'pilot check on record' : 'check.json missing — run `pilot check`')
+  E('check-provenance-agrees', !!check && check.provenance?.runnerCommit === prov.runnerCommit && check.provenance?.dockerImageId === prov.dockerImageId && check.provenance?.claudePkgDigest === prov.claudePkgDigest, 'pilot check ran on a different runner/image/claude than now')
+  // (A) the verify-model trace must exist and PASS every hard gate on the same provenance
+  const vtrace = readJson(join(RUNS, 'pilot', 'verify-model', 'trace.json'))
+  const vOk = !!vtrace && vtrace.exitCode === 0 && !vtrace.timedOut && vtrace.model?.clean === true && vtrace.model?.realCompletion === true && vtrace.accounting?.valid === true && !vtrace.apiError && vtrace.secretScan?.clean === true
+  const vProvOk = !!vtrace && vtrace.provenance?.runnerCommit === prov.runnerCommit && vtrace.provenance?.dockerImageId === prov.dockerImageId && vtrace.provenance?.claudePkgDigest === prov.claudePkgDigest && vtrace.endpointHost === ENDPOINT_HOST
+  E('verify-model-admitted', vOk && vProvOk, vtrace ? `verify ok=${vOk} provenanceAgrees=${vProvOk} (a 429/rate-limited verify is NOT admissible)` : 'verify-model trace.json missing — run a VALID `pilot verify-model` first')
+  // scorer controls must discriminate BEFORE paid runs (positive pass, negative rejected) — both leaves
   const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
+  const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
   if (specLintLeaf) {
     const ctl = scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)
-    writeFileSync(join(RUNS, 'pilot', 'scorer-controls.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
-    E('scorer-controls-discriminate', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
+    writeFileSync(join(RUNS, 'pilot', 'scorer-controls-spec-lint.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
+    E('scorer-controls-spec-lint', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
+  }
+  if (mobileLeaf) {
+    const ctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState)
+    writeFileSync(join(RUNS, 'pilot', 'scorer-controls-mobile.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
+    E('scorer-controls-mobile', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
   }
 
   // gate: only leaves whose behavioural scorer is implemented run paid arms; others are declared blind
   const runnable = tasks.leaves.filter((l) => SCORER_IMPLEMENTED.has(l.id))
   const gatedOut = tasks.leaves.filter((l) => !SCORER_IMPLEMENTED.has(l.id)).map((l) => ({ leaf: l.id, reason: cards.leaves[l.relDir]?.acceptance?.status ?? 'no behavioural scorer implemented — declared blind spot' }))
+  // (E) both leaves must be runnable — a single leaf with a fixed arm order is not a progressive comparison
+  E('both-leaves-runnable', runnable.length === tasks.leaves.length && tasks.leaves.length >= 2, `${runnable.length}/${tasks.leaves.length} leaves runnable — the phase promises a two-leaf progressive comparison`)
 
   // leaf targets run concurrently; a hard failure in one sets shared abort so the other stops launching new arms
   const results = [], failures = []
   const settled = await Promise.allSettled(runnable.map((leaf) => runLeaf(leaf, cards, tasks.c0, credPath, abort)))
   settled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ leaf: runnable[i].id, error: String(s.reason?.message ?? s.reason) }))
-  const report = { v: 2, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, results, failures }
+  // (C) final archive scan — every byte to be kept (incl binaries) across the whole pilot archive
+  const finalScan = finalArchiveScan(join(RUNS, 'pilot'), credPath)
+  const report = { v: 3, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, finalArchiveScan: finalScan, results, failures }
   writeFileSync(join(RUNS, 'pilot', 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   return report
+}
+
+// (C) scan EVERY file under the pilot archive (text and binary) for the credential — exact + prefix +
+// base64 — and count prefixHits into cleanliness. A hit means bytes already hit disk; fail loud so the
+// operator quarantines. Binaries are base64-probed too (a key could be embedded in an image/blob).
+function finalArchiveScan(dir, credPath) {
+  let key = null
+  try { key = readCredential(credPath) } catch { return { scanned: 0, clean: false, note: 'credential unreadable — cannot certify archive clean' } }
+  const b64 = Buffer.from(key).toString('base64')
+  let scanned = 0, keyHits = 0, prefixHits = 0, b64Hits = 0
+  const hitFiles = []
+  for (const rel of walkRel(dir)) {
+    const abs = join(dir, rel)
+    let buf = null; try { buf = readFileSync(abs) } catch { continue }
+    scanned++
+    const asText = buf.toString('utf8'), asB64 = buf.toString('base64')
+    const s = secretScan(asText, key)
+    const bh = (asText.split(b64).length - 1) + (asB64.includes(b64) ? 1 : 0)
+    if (s.keyHits || s.b64Hits || bh) hitFiles.push(rel)
+    keyHits += s.keyHits; prefixHits += s.prefixHits; b64Hits += s.b64Hits + bh
+  }
+  return { scanned, keyHits, prefixHits, b64Hits, clean: keyHits === 0 && b64Hits === 0 && prefixHits === 0, hitFiles: hitFiles.slice(0, 20) }
 }
 
 // ---- CLI ----
@@ -409,7 +461,11 @@ if (sub === 'preflight') {
   const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
   const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
   const ctl = specLintLeaf ? tryRun('ctl', () => scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)) : { discriminates: false }
-  K('scorer-controls-discriminate', !!ctl.discriminates, ctl.discriminates ? `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total} (pre-state rejected)` : `FAILED ${ctl.__err ?? 'no discrimination'}`)
+  K('scorer-controls-spec-lint', !!ctl.discriminates, ctl.discriminates ? `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total} (pre-state rejected, sandboxed)` : `FAILED ${ctl.__err ?? 'no discrimination'}`)
+  const mobileLeaf = tasks.leaves.find((l) => l.id === 'mobile-ui')
+  let mctl = { discriminates: false }
+  if (mobileLeaf) { try { mctl = await scoreControlsMobile(ROOT, mobileLeaf.episode.sha, mobileLeaf.preState) } catch (e) { mctl = { __err: String(e.message ?? e) } } }
+  K('scorer-controls-mobile', !!mctl.discriminates, mctl.discriminates ? `positive ${mctl.positive.passed}/${mctl.positive.total}, negative ${mctl.negative.passed}/${mctl.negative.total} (browser/DOM, pre-state rejected)` : `FAILED ${mctl.__err ?? 'no discrimination'}`)
   for (const c of ['select', 'episodes', 'tasks']) { const r = tryRun(c, () => runTs([c, '--check'])); K(`frame-${c}`, !r.__err, r.__err ? `FAILED ${r.__err}` : 'byte-identical') }
   const dry = tryRun('dry', () => runTs(['dry'])); K('dry-oracle', !dry.__err, dry.__err ? `FAILED ${dry.__err}` : 'all gates + twin')
   const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))

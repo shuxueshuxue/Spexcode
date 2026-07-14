@@ -29,10 +29,14 @@ export function aggregateStream(events, expectedModel) {
       const txt = JSON.stringify(msg && msg.content != null ? msg.content : '').match(/API Error[^"\\]*/)?.[0]
       if (txt && !apiError) apiError = txt.slice(0, 200)
     }
-    const isAssistant = msg && msg.role === 'assistant' && msg.usage && typeof msg.usage === 'object'
+    const isAssistant = msg && msg.role === 'assistant'
     if (!isAssistant) continue
+    // (G) collect model from EVERY assistant response (not only usage-bearing ones)
     if (model && model !== '<synthetic>') apiModels.add(model)
-    const id = typeof msg.id === 'string' && msg.id ? msg.id : `noid-${idx}`
+    if (!(msg.usage && typeof msg.usage === 'object')) continue
+    // (G) a usage-bearing assistant event with NO message.id cannot be grouped/deduped → accounting-invalid
+    const id = typeof msg.id === 'string' && msg.id ? msg.id : null
+    if (!id) { anomalies.push({ id: null, field: '__id', reason: 'usage-bearing assistant event has no message.id' }); continue }
     const rec = perMsg.get(id) ?? {}
     for (const f of USAGE_FIELDS) {
       const v = msg.usage[f]

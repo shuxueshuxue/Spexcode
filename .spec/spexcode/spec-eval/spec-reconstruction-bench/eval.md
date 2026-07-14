@@ -50,19 +50,20 @@ scenarios:
     tags: [cli]
   - name: pilot-reconstruction-run
     description: >
-      【付费，等人批预算+preflight/pilot check 全绿后才测】run.ts pilot phase --scale leaf：对有真实行为
-      scorer 的 leaf（spec-lint）重建 R0（隔离 Claude Code + GLM-5.2 via BigModel endpoint，fresh HOME/独立
-      CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口，快照只读、.spec-recon 可写），
-      再对该 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（counterbalanced 顺序，臂只差中性投影 bundle）。
-      无真实行为 scorer 的 leaf（mobile-ui 异步竞态需真浏览器 YATU）gate 出付费阶段记为盲区。
+      【付费，等人批预算 + preflight/pilot check 全绿 + 有效 verify-model 后才测】run.ts pilot phase
+      --scale leaf：两个 leaf（spec-lint、mobile-ui）各重建 R0（隔离 Claude Code + GLM-5.2 via BigModel
+      endpoint，fresh HOME/独立 CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口），
+      再对每 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（counterbalanced 顺序，臂只差中性投影 bundle）。
     expected: >
-      spec-lint 的 R0 产出结构合法的 .spec-recon（frontmatter + 非空 body，required-file&schema 门通过）；
-      每 arm 入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean 全过，否则
-      共享 abort 停整批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出（合成 git
-      fixture 实跑产出 lint，观察 tracked-only 覆盖 + testGlobs 排除），scope 用 pre/post diff（含删除）；
-      每 run 归档 trace（endpoint host、HTTP status/request-id、session id 集、逐字段 token、provenance、
-      mount audit、secret-scan 命中数）+ workspace + scorer raw；clean 快照 plant 零复述、R0 对 masked O0
-      零 verbatim shingle overlap；失败/gated leaf 如实归档、无 raw stderr/key/env/完整 process dump 入档。
+      两 leaf 的 R0 产出结构合法 .spec-recon（frontmatter + 非空 body，required-file&schema 门过）；每 arm
+      入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean 全过，否则共享
+      abort 停批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
+      spec-lint 在 docker --network none 内跑产出 lint（合成 git fixture，tracked-only 覆盖 + testGlobs），
+      mobile-ui 用无头 chromium + CDP Network offline 跑产出 App.jsx 驱动 board-poll 竞态（latest-issued 赢、
+      stale 丢）；两者正负 control 均判别（pilot check rc0）；scope 用 pre/post diff（含删除）；每 run 归档
+      trace（endpoint host、HTTP status/request-id、session set、逐字段 token、provenance image-id/claude-
+      digest、mount audit、secret-scan 命中）+ workspace + scorer raw；最终全档 raw+二进制 secret scan
+      （exact/prefix/base64）零命中；失败/gated leaf 如实归档，无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

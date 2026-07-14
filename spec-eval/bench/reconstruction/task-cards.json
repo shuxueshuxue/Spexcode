@@ -6,8 +6,8 @@
       "episode": "185f52b1",
       "preState": "a02fe430",
       "governedFiles": ["spec-cli/src/lint.ts", "spexcode.json"],
-      "abcStratum": "B",
-      "abcRationale": "Pre-state lint.ts shows an fs-walk with a hardcoded SKIP_DIRS and a governedRoots config; a maintainer could see the fs-walk is coarse, but the specific move to git-tracked enumeration + a testGlobs exclusion is a governance-policy choice not forced by the artifact alone — original-only latent, not artifact-identifiable. Classified from artifacts, not O0.",
+      "abcStratum": "C",
+      "abcRationale": "The C0-era artifacts contain no hint of a git-tracked-enumeration or testGlobs intent — the pre-state lint does an fs-walk with a hardcoded skip list and there is nothing in the snapshot that DEMANDS the change. By the frozen A/B/C definition (A=artifact-identifiable, B=original-only latent, C=truly-new) this is a NEW REQUIREMENT: C. Consequence — this task can only measure NEW-REQUIREMENT practical utility across the arms; it does NOT test reconstruction fidelity (there is no C0 artifact truth to reconstruct). Classified from artifacts, never from O0.",
       "provenance": "leaf-governed change is scope-self-contained (only lint.ts + spexcode.json among source changed) and replayable (imports ./git, ./specs resolve at preState).",
       "request": "This project's spec-governance linter has a coverage check that flags source files under the configured governedRoots which no spec node claims. It currently enumerates candidate source files by WALKING THE FILESYSTEM under each governed root, skipping a small hardcoded set of directories. Two problems: (1) an fs walk under a broad root (e.g. \".\") pulls in untracked files, build output, and nested/linked worktrees that aren't real product source; (2) test files get enumerated and demanded to be governed, even though tests aren't governed product.\n\nChange the coverage enumeration so that: it draws source from GIT-TRACKED files only (so untracked files, gitignored build output, and nested/linked worktrees are naturally excluded and a governedRoots of \".\" becomes safe with no hand-maintained skip list); and files matching a configurable set of test globs (default \"**/*.test.*\") are excluded from coverage. Keep flagging tracked, non-test, ungoverned source files exactly as before. Make the change in the linter source and its config defaults.",
       "acceptance": {
@@ -17,7 +17,8 @@
           "A file matching the default test glob (**/*.test.*) is NOT reported by coverage.",
           "A tracked, non-test, ungoverned source file IS still reported by coverage (the rule still fires)."
         ],
-        "controls": "positive = the real post-episode lint.ts (must pass all); negative = the pre-state fs-walk lint.ts (must be REJECTED — it flags the untracked + test file). Discrimination proven by scorer.selftest.mjs (rc0) before any paid run."
+        "controls": "positive = the real post-episode lint.ts (must pass all); negative = the pre-state fs-walk lint.ts (must be REJECTED — it flags the untracked + test file). Discrimination proven by scorer.selftest.mjs (rc0) before any paid run.",
+        "boundedScope": "(I) These three assertions probe the governed behaviour bounded to lint.ts + spexcode.json; they do NOT exhaustively cover every downstream lint rule interaction. Honest limitation, not a completeness claim. The task's governed set includes the non-source artifact spexcode.json (config), which the scope check treats as a required governed artifact."
       }
     },
     "spexcode/spec-dashboard/dashboard-ui/mobile-ui": {

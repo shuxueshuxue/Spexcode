@@ -19,9 +19,20 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const NODE = process.execPath
-const TSX_BIN = join(dirname(fileURLToPath(import.meta.url)), '../../..', 'node_modules/.bin/tsx')
 const HERE = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(HERE, '../../..')          // repo root — where tsx's own deps resolve from
+const ROOT = join(HERE, '../../..')
+// (B) the produced lint.ts is UNTRUSTED agent code — never run it on the host. Execute it inside
+// `docker --network none` (no egress), with node+git+tsx from a pinned image, the produced source
+// mounted READ-ONLY, and only the throwaway fixture writable. This image has git 2.39 + node 24 + we
+// mount tsx from node_modules. Resolved to an immutable image ID at first use.
+const SANDBOX_IMAGE = 'adopter-a-registry.tencentcloudcr.com/sandbox/adopter-a-e2e:lean'
+let SANDBOX_IMAGE_ID = null
+function sandboxImageId() {
+  if (SANDBOX_IMAGE_ID) return SANDBOX_IMAGE_ID
+  SANDBOX_IMAGE_ID = execFileSync('docker', ['image', 'inspect', SANDBOX_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
+  return SANDBOX_IMAGE_ID
+}
+const NM = (() => { try { return execFileSync('readlink', ['-f', join(ROOT, 'node_modules')], { encoding: 'utf8' }).trim() } catch { return join(ROOT, 'node_modules') } })()
 
 // build a throwaway git repo exercising tracked/untracked/test/governed source + a couple .spec nodes
 function buildFixture() {
@@ -36,25 +47,28 @@ function buildFixture() {
   w('.spec/root/governed-node/spec.md', '---\ntitle: governed\ndesc: governs governed.ts\ncode:\n  - src/governed.ts\n---\nGoverns the governed source file; a real contract body for the fixture node.\n')
   const g = (args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'pipe' })
   g(['init', '-q']); g(['config', 'user.email', 'srb@example.com']); g(['config', 'user.name', 'srb'])
-  // stage everything EXCEPT the untracked file
-  g(['add', 'spexcode.json', 'src/governed.ts', 'src/ungoverned.ts', 'src/thing.test.ts', '.spec'])
+  g(['add', 'spexcode.json', 'src/governed.ts', 'src/ungoverned.ts', 'src/thing.test.ts', '.spec'])  // NOT untracked.ts
   g(['commit', '-q', '-m', 'fixture', '--no-verify'])
   return dir
 }
 
-// run a given lint.ts (with its sibling git.ts/specs.ts) against the fixture cwd; return coverage findings.
-// The tsx binary resolves its own deps from ROOT/node_modules regardless of cwd, so we run with
-// cwd=fixture — repoRoot()/loadSpecs then resolve the FIXTURE tree (not the real repo).
+// run a given lint.ts (with its sibling git.ts/specs.ts) against the fixture, INSIDE a no-network
+// container. produced source is ro at /opt/lint; the fixture (a throwaway git repo) is the only writable
+// mount at /work; tsx resolves from the mounted node_modules via NODE_PATH. Returns coverage findings.
 function runLint(lintDir, fixtureDir) {
-  const driver = join(fixtureDir, '.srb-driver.mjs')
-  writeFileSync(driver, `
-import { specLint } from ${JSON.stringify(join(lintDir, 'lint.ts'))}
+  writeFileSync(join(fixtureDir, '.srb-driver.mjs'), `
+import { specLint } from '/opt/lint/lint.ts'
 const findings = await specLint()
-process.stdout.write(JSON.stringify(findings))
+process.stdout.write('SRBJSON:' + JSON.stringify(findings))
 `)
-  const out = execFileSync(TSX_BIN, [driver], { cwd: fixtureDir, encoding: 'utf8', timeout: 60_000 })
-  rmSync(driver, { force: true })
-  return JSON.parse(out)
+  const out = execFileSync('timeout', ['90', 'docker', 'run', '--rm', '--network', 'none',
+    '--user', '1000:1000', '-e', 'HOME=/tmp',
+    '-v', `${lintDir}:/opt/lint:ro`, '-v', `${fixtureDir}:/work`, '-v', `${NM}:/work/node_modules:ro`,
+    '-w', '/work', sandboxImageId(), 'node', '--import', 'tsx', '/work/.srb-driver.mjs'],
+    { encoding: 'utf8', timeout: 120_000 })
+  const line = out.split('\n').find((l) => l.startsWith('SRBJSON:'))
+  if (!line) throw new Error('sandboxed lint produced no findings JSON: ' + out.slice(-200))
+  return JSON.parse(line.slice('SRBJSON:'.length))
 }
 
 // score a produced spec-cli/src tree (the arm's workspace) behaviourally

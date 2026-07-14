@@ -18,6 +18,12 @@
 //   B   anchor-hit (current)       — blocks iff the commit's hunks intersect the anchored unit,
 //                                    extracted from the file AS OF that commit (spec-cli/src/anchors.ts);
 //                                    an unanchored node NEVER blocks (the shipped semantics)
+//   Bm  multi-anchor roster        — blocks iff the hunks intersect ANY selector of the node's frozen
+//                                    blinded multi-anchor annotation (drift-multi-anchors.json, 1–3
+//                                    named units, selector 0 = the seed anchor), each selector judged
+//                                    by the SAME product engine; unanchored nodes never block, like B.
+//                                    A BENCH policy, not shipped product behavior — its score is the
+//                                    evidence for or against shipping it.
 //   B'  anchor-hit, unanchored=always — same on anchored nodes; an unanchored node's every event blocks
 // Every non-blocked drift event still surfaces as the product's advisory drift WARN, so each event
 // lands in exactly one action channel per policy: block or warn (silent is structurally empty —
@@ -46,6 +52,10 @@ const BENCH = join(ROOT, 'spec-eval/bench')
 const git = (args: string[]) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
 
 const roster: { node: string; codePath: string; anchor: string | null }[] = JSON.parse(readFileSync(join(BENCH, 'drift-anchors.json'), 'utf8'))
+const MULTI_REL = 'spec-eval/bench/drift-multi-anchors.json'
+const multiRaw = readFileSync(join(BENCH, 'drift-multi-anchors.json'), 'utf8')
+const multiRoster: { frozenAt: string; entries: { node: string; codePath: string; selectors: { symbol: string }[] }[] } = JSON.parse(multiRaw)
+const multiSelectorsOf = new Map(multiRoster.entries.map((e) => [e.node, e.selectors.map((s) => s.symbol)]))
 const truth: { pop: Record<string, number>; rows: { id: string; cell: string; specTouched: boolean; truth: boolean }[] } = JSON.parse(readFileSync(join(BENCH, 'drift-truth.json'), 'utf8'))
 
 const x = tsAstExtractor(ROOT)
@@ -69,7 +79,8 @@ for (const line of git(['log', '--format=%H\x01%ct\x01%(trailers:key=Session,val
   const [h, ts, s] = line.split('\x01')
   if (h) meta.set(h, { ts: +ts, session: s?.split(',')[0]?.trim() || null })
 }
-const headTs = meta.get(git(['rev-parse', 'HEAD']).trim())?.ts ?? 0
+const HEAD_SHA = git(['rev-parse', 'HEAD']).trim()
+const headTs = meta.get(HEAD_SHA)?.ts ?? 0
 // Spec-OK ack commits per node (the ack is an episode resolution: the human declared the spec still valid)
 const acksOf = new Map<string, { sha: string; ts: number }[]>()
 for (const line of git(['log', '--format=%H\x01%ct\x01%(trailers:key=Spec-OK,valueonly,separator=%x2C)', 'HEAD']).split('\n')) {
@@ -93,6 +104,7 @@ const isAnc = (a: string, b: string): boolean => { // a is ancestor of (or equal
 
 type Ev = {
   id: string; node: string; sha: string; anchored: boolean; specTouched: boolean; anchorHit: boolean
+  multiHit: boolean; hitSyms: string[]
   idx: number; winStart: string; winClose: string | null; winSpecPath: string
 }
 const events: Ev[] = []
@@ -117,13 +129,22 @@ for (const r of roster) {
     let win: string[] = []
     try { win = git(['rev-list', '--reverse', '--no-merges', `${versions[i].sha}..${to}`, '--', r.codePath]).trim().split('\n').filter(Boolean) } catch { continue }
     if (!win.length) continue
-    const hits = r.anchor ? new Set((await anchorHitCommits(ROOT, win, r.codePath, r.anchor, x)).map((h) => h.commit)) : new Set<string>()
+    // one hit set PER selector, each through the same product engine (units extracted as of each
+    // commit): the seed selector's set IS B's signal; the union over the frozen blinded multi-anchor
+    // roster (selector 0 = the seed, so union ⊇ seed) is Bm's — and per-selector sets let every
+    // B→Bm flip be attributed to the selector(s) that fired.
+    const selHits = new Map<string, Set<string>>()
+    if (r.anchor) for (const sym of multiSelectorsOf.get(r.node) ?? [r.anchor])
+      selHits.set(sym, new Set((await anchorHitCommits(ROOT, win, r.codePath, sym, x)).map((h) => h.commit)))
+    const hits = (r.anchor && selHits.get(r.anchor)) || new Set<string>()
     win.forEach((c, k) => {
       const id = `${r.node}@${c.slice(0, 8)}`
       if (seen.has(id)) return
       seen.add(id)
+      const hitSyms = [...selHits.entries()].filter(([, s]) => s.has(c)).map(([sym]) => sym)
       events.push({
-        id, node: r.node, sha: c, anchored: !!r.anchor, specTouched: vset.has(c), anchorHit: hits.has(c), idx: k + 1,
+        id, node: r.node, sha: c, anchored: !!r.anchor, specTouched: vset.has(c), anchorHit: hits.has(c),
+        multiHit: hitSyms.length > 0, hitSyms, idx: k + 1,
         winStart: versions[i].sha, winClose: i + 1 < versions.length ? versions[i + 1].sha : null, winSpecPath: versions[i].path,
       })
     })
@@ -137,12 +158,13 @@ console.log('    and NOT a causal claim about gate effects — see docs/drift-an
 
 // ---- behavioral sub-track (full population, live) ----
 const bB = (e: Ev) => e.anchorHit
+const bBm = (e: Ev) => e.multiHit
 const bBp = (e: Ev) => (e.anchored ? e.anchorHit : true)
 const neg = events.filter((e) => !e.specTouched), pos = events.filter((e) => e.specTouched)
 const pct = (a: number, b: number) => ((100 * a) / b).toFixed(1) + '%'
 console.log('\nbehavioral sub-track (label = commit also versioned the spec):')
-console.log(`  code-only events blocked   A1 100.0% · A3 ${pct(neg.filter((e) => e.idx >= 3).length, neg.length)} · B ${pct(neg.filter(bB).length, neg.length)} · B' ${pct(neg.filter(bBp).length, neg.length)}   (n=${neg.length})`)
-console.log(`  fused events caught        A1 100.0% · A3 ${pct(pos.filter((e) => e.idx >= 3).length, pos.length)} · B ${pct(pos.filter(bB).length, pos.length)} · B' ${pct(pos.filter(bBp).length, pos.length)}   (n=${pos.length})`)
+console.log(`  code-only events blocked   A1 100.0% · A3 ${pct(neg.filter((e) => e.idx >= 3).length, neg.length)} · B ${pct(neg.filter(bB).length, neg.length)} · Bm ${pct(neg.filter(bBm).length, neg.length)} · B' ${pct(neg.filter(bBp).length, neg.length)}   (n=${neg.length})`)
+console.log(`  fused events caught        A1 100.0% · A3 ${pct(pos.filter((e) => e.idx >= 3).length, pos.length)} · B ${pct(pos.filter(bB).length, pos.length)} · Bm ${pct(pos.filter(bBm).length, pos.length)} · B' ${pct(pos.filter(bBp).length, pos.length)}   (n=${pos.length})`)
 
 // ---- LLM-truth sub-track (frozen sample, frozen stratum weights) ----
 const byId = new Map(events.map((e) => [e.id, e]))
@@ -155,6 +177,7 @@ const POLICIES: { key: string; name: string; blocks: (e: Ev) => boolean }[] = [
   { key: 'A1', name: 'A1 one-drift-blocks     ', blocks: () => true },
   { key: 'A3', name: 'A3 count>=3 (retired)   ', blocks: (e) => e.idx >= 3 },
   { key: 'B', name: 'B  anchor-hit (current) ', blocks: bB },
+  { key: 'Bm', name: 'Bm multi-anchor roster  ', blocks: bBm },
   { key: 'Bp', name: "B' anchor-hit+un=always ", blocks: bBp },
 ]
 function prOf(rows: typeof joined, blocks: (e: Ev) => boolean) {
@@ -172,13 +195,16 @@ for (const pol of POLICIES) {
   metrics[pol.key] = { p: +(tp / (tp + fp)).toFixed(4), r: +(tp / (tp + fn)).toFixed(4) }
   console.log(`  ${pol.name}  blocks ${pct(tp + fp, W)} · precision ${pct(tp, tp + fp)} · recall ${pct(tp, tp + fn)} · false blocks ${fp.toFixed(0)}/${(fp + tn).toFixed(0)}`)
 }
-// anchored-only subtable (the report's original main table — comparability with round 1)
+// anchored-only subtable (the report's original main table — comparability with round 1; Bm scored
+// on the same domain so the hand-curated roster lands beside B and the report's automatic B2/B3)
 {
   const sub = joined.filter((t) => byId.get(t.id)!.anchored)
   const subW = sub.reduce((a, t) => a + w(t), 0)
-  const { tp, fp, fn, tn } = prOf(sub, bB)
-  metrics.B_anchored = { p: +(tp / (tp + fp)).toFixed(4), r: +(tp / (tp + fn)).toFixed(4) }
-  console.log(`  (anchored-only B: blocks ${pct(tp + fp, subW)} · precision ${pct(tp, tp + fp)} · recall ${pct(tp, tp + fn)} · false blocks ${fp.toFixed(0)}/${(fp + tn).toFixed(0)})`)
+  for (const [key, label, blocks] of [['B_anchored', 'B ', bB], ['Bm_anchored', 'Bm', bBm]] as const) {
+    const { tp, fp, fn, tn } = prOf(sub, blocks)
+    metrics[key] = { p: +(tp / (tp + fp)).toFixed(4), r: +(tp / (tp + fn)).toFixed(4) }
+    console.log(`  (anchored-only ${label}: blocks ${pct(tp + fp, subW)} · precision ${pct(tp, tp + fp)} · recall ${pct(tp, tp + fn)} · false blocks ${fp.toFixed(0)}/${(fp + tn).toFixed(0)})`)
+  }
 }
 
 // ---- action channels: block / warn / silent per policy on the same frozen truth ----
@@ -205,6 +231,30 @@ for (const pol of POLICIES) {
 }
 console.log('  (warn-capture = share of TRUE contract changes relegated to the advisory channel — the')
 console.log('   cost B pays for its low block rate; blockP is the tables’ precision, repeated for contrast)')
+
+// ---- B → Bm attribution: every judged flip named by node and selector ----
+// Selector 0 of every roster entry IS the seed anchor, so Bm's block set is a superset of B's
+// (gated below) and the only possible flip is warn→block: truth=true = an FN converted to TP,
+// truth=false = a new FP. Bm's remaining FNs are listed too — no selector fired on those, so they
+// attribute to a node, not a selector. Y1 localizer accounting only; no causal reading.
+{
+  const flips = joined.filter((t) => { const e = byId.get(t.id)!; return e.multiHit && !e.anchorHit })
+  const newTP = flips.filter((t) => t.truth), newFP = flips.filter((t) => !t.truth)
+  const wsum = (rows: typeof joined) => rows.reduce((a, t) => a + w(t), 0)
+  console.log(`\nB → Bm attribution on frozen truth (flips = events blocked by Bm but not B):`)
+  console.log(`  new TP (FN→block, true contract changes newly caught): ${newTP.length} judged rows, weighted ${wsum(newTP).toFixed(1)}`)
+  for (const t of newTP.sort((a, b) => a.id.localeCompare(b.id))) console.log(`    + ${t.id.padEnd(32)} via #${byId.get(t.id)!.hitSyms.join(' #')}`)
+  console.log(`  new FP (warn→block, contract-irrelevant edits newly blocked): ${newFP.length} judged rows, weighted ${wsum(newFP).toFixed(1)}`)
+  for (const t of newFP.sort((a, b) => a.id.localeCompare(b.id))) console.log(`    - ${t.id.padEnd(32)} via #${byId.get(t.id)!.hitSyms.join(' #')}`)
+  const fnAnch = joined.filter((t) => t.truth && byId.get(t.id)!.anchored && !byId.get(t.id)!.multiHit)
+  const fnUn = joined.filter((t) => t.truth && !byId.get(t.id)!.anchored)
+  console.log(`  remaining Bm FN, anchored domain (no selector fired): ${fnAnch.length} judged rows, weighted ${wsum(fnAnch).toFixed(1)}`)
+  for (const t of fnAnch.sort((a, b) => a.id.localeCompare(b.id))) console.log(`    · ${t.id}`)
+  const byNode = new Map<string, number>()
+  for (const t of fnUn) byNode.set(byId.get(t.id)!.node, (byNode.get(byId.get(t.id)!.node) ?? 0) + 1)
+  console.log(`  remaining Bm FN, unanchored nodes (advisory-by-design under B and Bm alike): ${fnUn.length} judged rows, weighted ${wsum(fnUn).toFixed(1)}`)
+  console.log(`    ${[...byNode.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n, c]) => `${n} ×${c}`).join(' · ')}`)
+}
 
 // ---- staleness episodes (Y2 groundwork): deterministic regroup of LABELED events ----
 // Episode = onset (first KNOWN-true contract-touching, non-fused commit in a window) .. resolution
@@ -361,6 +411,24 @@ let failed = false
 const gate = (ok: boolean, msg: string) => { console.log(`  ${ok ? '✓' : '✗'} ${msg}`); if (!ok) failed = true }
 gate(joined.length === truth.rows.length, `all judged rows matched (${joined.length}/${truth.rows.length})`)
 gate(channelPartitionOk, 'action channels partition every judged event (block+warn+silent = judged, per policy)')
+gate(events.every((e) => !e.anchorHit || e.multiHit), 'Bm ⊇ B: every single-anchor block is a multi-anchor block (selector 0 = seed; no new FN possible)')
+// multi-anchor roster immutability + provenance: the blinded annotation must be the committed bytes,
+// committed exactly once (a legitimate re-annotation must change this gate and say why), in a commit
+// that carried no truth/baseline/report file and that predates the scoring HEAD — machine-checked so
+// "annotated before truth was revealed" stays a property, not a story.
+{
+  let headBlob: string | null = null
+  try { headBlob = git(['show', `HEAD:${MULTI_REL}`]) } catch { /* gate below fails */ }
+  gate(headBlob === multiRaw, 'multi-anchor roster: working tree byte-identical to HEAD (scoring reads the committed annotation)')
+  const rosterCommits = git(['log', '--follow', '--format=%H', '--', MULTI_REL]).trim().split('\n').filter(Boolean)
+  gate(rosterCommits.length === 1, `multi-anchor roster: exactly one content commit ever (saw ${rosterCommits.length}) — immutable since annotation`)
+  const annot = rosterCommits[rosterCommits.length - 1] ?? ''
+  const annotFiles = annot ? git(['show', '--name-only', '--format=', annot]).trim().split('\n') : []
+  gate(!!annot && !annotFiles.some((f) => /drift-truth\.json|drift-baseline\.json|human-audit-queue\.json|pressure-audit-queue\.json/.test(f)),
+    'multi-anchor roster: annotation commit touched no frozen label artifact (truth/baseline/queues — blind provenance)')
+  gate(!!annot && annot !== HEAD_SHA && isAnc(annot, HEAD_SHA) && isAnc(multiRoster.frozenAt, annot),
+    `multi-anchor roster: frozenAt ${multiRoster.frozenAt.slice(0, 8)} ⊑ annotation ${annot.slice(0, 8)} ⊏ HEAD (annotation predates scoring)`)
+}
 gate(auditOk, 'audit queue deterministic + blinded')
 gate(winWithEpisode + winNoEpisode + winGapped >= winKeys.length, 'every judged window classified (episode / no-episode / unresolvable)')
 for (const g of pressure.gates) gate(g.ok, g.msg)
@@ -377,8 +445,9 @@ if (process.argv.includes('--update-baseline')) {
   const base = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
   const drifts: string[] = []
   const cmp = (path: string, a: any, b: any) => {
-    if (a === null || b === null) { if (a !== b) drifts.push(`${path}: ${a} -> ${b}`); return }
-    if (typeof a === 'number') { if (Math.abs(a - (b ?? NaN)) > 1e-9) drifts.push(`${path}: ${a} -> ${b}`); return }
+    // null/undefined asymmetry IS drift — a policy added or dropped must trip the gate, not slide past it
+    if (a == null || b == null) { if (a !== b) drifts.push(`${path}: ${a} -> ${b === undefined ? b : JSON.stringify(b)}`); return }
+    if (typeof a === 'number') { if (Math.abs(a - (typeof b === 'number' ? b : NaN)) > 1e-9) drifts.push(`${path}: ${a} -> ${b}`); return }
     for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) cmp(`${path}.${k}`, a?.[k], b?.[k])
   }
   cmp('llmTruth', base.llmTruth, current.llmTruth)

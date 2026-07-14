@@ -449,8 +449,6 @@ export default {
     noEvents: '暂无记录 —— 状态变化和消息会出现在这里',
     asked: '初始任务',
     you: '我',
-    noteReply: '↩ 用 note 完整回复',
-    noteReplyHint: '要求 agent 把完整回复写进状态声明的 note —— 无终端客户端唯一能读到的文字',
     inputPlaceholder: '给 agent 发消息…',
     send: '发送',
     sendFailed: '未送达 —— agent 可能已离线',

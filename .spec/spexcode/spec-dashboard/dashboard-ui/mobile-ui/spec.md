@@ -45,9 +45,11 @@ The two planes, made native to touch:
   is touch-sized. Opening one is the terminal-free conversation: a header (current status +
   liveness are the board row's, present-tense), the timeline — day-separated, each status event a
   colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
-  (you / the sending session) — and a docked composer. The composer's note-reply chip (default ON)
-  marks the dispatch `replyVia:"note"`, so the agent is told to put its complete answer where this
-  surface can read it. A changes tab keeps the node cross-over (tap a changed node → Specs,
+  (you / the sending session) — and a docked composer. Every dispatch from this surface carries
+  `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
+  asking for the reply there is the surface's fixed property, never a per-message option and never
+  a visible control (an earlier toggle chip read as unexplained noise and was deleted). A changes
+  tab keeps the node cross-over (tap a changed node → Specs,
   focused there). Offline shows an honest can't-deliver hint; a failed send fails loud, keeping
   the draft.
 

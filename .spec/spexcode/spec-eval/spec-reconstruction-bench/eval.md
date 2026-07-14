@@ -53,7 +53,8 @@ scenarios:
       verifyAdmitted 门：admit/混 executor 拒/provenance 失配拒/失败 verify 拒；每次 gate 唯一新档 +
       gate-ledger 指向 exact archive + latestVerify 按 provider 取最新；--reviewer-go 只被 verify 接受
       且传达 row，codex 无 GO 在 auth 前拒，phase CLI 拒收该 flag；codex scratch dead-pid sweep/
-      零残留断言/rm 失败 fail-loud 亦入 codex selftest）、codex-auth-binding
+      零残留断言/rm 失败 fail-loud 亦入 codex selftest；serial-first scheduler 回归——冻结展平序、
+      maxInFlight==1、首失败停后续 skipped 入档、每 launch 后 pid 零残留）、codex-auth-binding
       （network-none 容器内真实 codex CLI 对 loopback 假 Responses endpoint：Authorization 恰为 TOML
       env_key 声明注入的 dummy key、body model==gpt-5.5、path=/v1/responses）、
       frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards sha 匹配
@@ -74,8 +75,9 @@ scenarios:
     expected: >
       两 leaf 的 R0 产出结构合法 .spec-recon（frontmatter + 非空 body，required-file&schema 门过）；每 arm
       入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model==active-adapter-pin（GLM=glm-5.2 /
-      Codex=gpt-5.5，expected 来自 adapter 常量非参数）+secret-clean 全过，否则共享
-      abort 停批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
+      Codex=gpt-5.5，expected 来自 adapter 常量非参数）+secret-clean 全过；全部 launch 全局串行
+      （concurrency=1，冻结 rotation 展平成确定 schedule 入 report，recon 先行、arms 按轮转位交错），
+      首个 hard failure 停全部后续、skipped 如实入档、不补跑；主 outcome 由工作区外真实行为测试产出且产出代码不在 host 直跑——
       spec-lint 在 docker --network none 内跑产出 lint（合成 git fixture，tracked-only 覆盖 + testGlobs），
       mobile-ui 用无头 chromium + CDP Network offline 跑产出 App.jsx 驱动 board-poll 竞态（latest-issued 赢、
       stale 丢）+ 独立 no-poll 页的 single-refresh；两者正负 control 均判别（pilot check rc0）；scope 用

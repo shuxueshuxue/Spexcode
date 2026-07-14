@@ -1,10 +1,12 @@
 {
-  "v": 2,
+  "v": 3,
   "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
   "cEval": "5723eaca1ba52eb60d28b818ddb4f77d758af01a",
   "protocol": "docs/spec-reconstruction-bench.md",
   "cards": "task-cards.json",
   "cardsSha256": "e534f2b021f47d1bd10f5ffe8e91a9d1dd0084c518f8c7fa1262a58d8547b068",
+  "orderBalanced": true,
+  "significanceClaim": false,
   "leaves": [
     {
       "stratum": "spec-cli",
@@ -104,6 +106,41 @@
         ]
       },
       "preState": "3f07397f67f5ab773fb6cbd2fe3464312ce41273"
+    }
+  ],
+  "blocks": [
+    {
+      "block": 0,
+      "leafId": "spec-lint",
+      "relDir": "spexcode/spec-cli/source-of-truth/spec-lint",
+      "armOrder": [
+        "O0",
+        "R0",
+        "N0"
+      ],
+      "repeat": false
+    },
+    {
+      "block": 1,
+      "leafId": "mobile-ui",
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/mobile-ui",
+      "armOrder": [
+        "R0",
+        "N0",
+        "O0"
+      ],
+      "repeat": false
+    },
+    {
+      "block": 2,
+      "leafId": "mobile-ui",
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/mobile-ui",
+      "armOrder": [
+        "N0",
+        "O0",
+        "R0"
+      ],
+      "repeat": true
     }
   ]
 }

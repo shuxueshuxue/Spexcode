@@ -340,7 +340,18 @@ function computeTasks(cEval: string) {
   // fails if the cards change without re-registration. Two-pass on first authoring (null until cards land).
   const cardsPath = join(HERE, 'task-cards.json')
   const cardsSha256 = existsSync(cardsPath) ? sha256(readFileSync(cardsPath)) : null
-  return { v: 2, c0, cEval, protocol: 'docs/spec-reconstruction-bench.md', cards: 'task-cards.json', cardsSha256, leaves }
+  // (6) order-balanced schedule: 2 leaves give only 2 blocks, which cannot balance an arm across all 3
+  // positions. Freeze a THIRD block — a REPEAT of a mechanically pre-registered target (the first leaf in
+  // id order) — carrying the third rotation, so across the 3 blocks each arm sits in each position exactly
+  // once (a Latin square). This is an ORDER-BALANCED pilot only; it makes NO significance claim.
+  const ROT = [['O0', 'R0', 'N0'], ['R0', 'N0', 'O0'], ['N0', 'O0', 'R0']]
+  const repeatTarget = [...leaves].sort((a: any, b: any) => (a.id < b.id ? -1 : 1))[0]   // deterministic pre-registration
+  const blocks = [
+    { block: 0, leafId: leaves[0].id, relDir: leaves[0].relDir, armOrder: ROT[0], repeat: false },
+    { block: 1, leafId: leaves[1].id, relDir: leaves[1].relDir, armOrder: ROT[1], repeat: false },
+    { block: 2, leafId: repeatTarget.id, relDir: repeatTarget.relDir, armOrder: ROT[2], repeat: true },
+  ]
+  return { v: 3, c0, cEval, protocol: 'docs/spec-reconstruction-bench.md', cards: 'task-cards.json', cardsSha256, orderBalanced: true, significanceClaim: false, leaves, blocks }
 }
 
 // mechanical replay check: relative imports added to the leaf's governed files in this episode that

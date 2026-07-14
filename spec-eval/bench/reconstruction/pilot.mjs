@@ -251,41 +251,35 @@ function scopeAnalysis(preSnapDir, workDir, governed) {
   return { allowedGoverned: governed, changedFiles: changed, deletedFiles: deleted, violations }
 }
 
-// ---- leaf phase: R0 recon + counterbalanced O0/R0/N0 arms per leaf (arms share ONE frozen future task) ----
-export async function runLeaf(leaf, cards, c0, credPath, abort) {
+// ---- leaf phase (order-balanced blocks): recon is per UNIQUE leaf; arms run per BLOCK in the block's
+// frozen rotation. A repeat block reuses its leaf's cached recon + bundles (recon spent once). ----
+export async function reconLeaf(leaf, cards, c0, credPath, abort) {
   const id = leaf.id
-  // (H) guard on the FIRST line of the exported entry — a direct runLeaf() call (bypassing the CLI /
-  // leafPhase enforcement) must not spend money on a leaf with no real behavioural scorer.
-  if (!SCORER_IMPLEMENTED.has(id)) throw new Error(`runLeaf refused: leaf ${id} has no implemented behavioural scorer (gated blind) — no paid launch`)
-  if (!abort || typeof abort !== 'object') throw new Error('runLeaf refused: missing shared abort state — call via leafPhase')
+  // (H) guard on the FIRST line of the exported entry — a direct call (bypassing leafPhase enforcement)
+  // must not spend money on a leaf with no real behavioural scorer.
+  if (!SCORER_IMPLEMENTED.has(id)) throw new Error(`reconLeaf refused: leaf ${id} has no implemented behavioural scorer (gated blind) — no paid launch`)
+  if (!abort || typeof abort !== 'object') throw new Error('reconLeaf refused: missing shared abort state — call via leafPhase')
   const card = cards.leaves[leaf.relDir]
   if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
   const base = join(RUNS, 'pilot', 'leaf', id)
   mkdirSync(base, { recursive: true })
   const upstream = upstreamHead()
-  const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
-
-  // 1. R0 generation snapshot (C0, leaf-masked) — reuse run.ts snapshot machinery (subprocess)
+  // 1. R0 generation snapshot (C0, leaf-masked)
   const genDir = join(base, 'gen-snapshot')
   runTs(['snapshot', '--scale', 'leaf', '--target', leaf.relDir, '--out', genDir])
   const genManifest = JSON.parse(readFileSync(join(genDir, 'manifest.json'), 'utf8'))
   if (genManifest.leakage.violations.length || genManifest.canary.hits.length) stopBatch(abort, `${id} generation snapshot leakage/canary hits`)
-  const genPrompt = readFileSync(join(genDir, 'PROMPT.md'), 'utf8')
-
-  // 2. R0 reconstruction (isolated, GLM-5.2)
+  // 2. R0 reconstruction (isolated)
   guardAbort(abort, `recon-${id}`)
-  const recon = await launchAgent({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: genPrompt,
+  const recon = await launchAgent({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: readFileSync(join(genDir, 'PROMPT.md'), 'utf8'),
     writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: join(base, 'recon'), upstreamCommit: upstream })
   enforceRunGates(abort, `recon-${id}`, recon)
-
-  // 3. R0 REQUIRED file + schema gate (4): a valid recon MUST have written .spec-recon/<relDir>/spec.md
-  // with frontmatter + a non-trivial body. An empty/failed R0 is a HARD STOP — never silently an N0.
+  // 3. R0 required-file + schema gate; empty/failed R0 is a HARD STOP, never a silent N0
   const reconPath = join(recon.workDir, '.spec-recon', leaf.relDir, 'spec.md')
   const reconMd = existsSync(reconPath) ? readFileSync(reconPath, 'utf8') : ''
   const hasFrontmatter = /^---\n[\s\S]*?\n---\n/.test(reconMd)
   const bodyChars = reconMd.replace(/^---\n[\s\S]*?\n---\n/, '').trim().length
   const reconValid = hasFrontmatter && bodyChars >= 200
-  // post-R0 leak/plant audit
   const o0Md = execFileSync('git', ['-C', ROOT, 'show', `${c0}:.spec/${leaf.relDir}/spec.md`], { encoding: 'utf8' })
   const o0Shingles = [...new Set(o0Md.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l.length >= 40))]
   const overlap = o0Shingles.filter((s) => reconMd.replace(/\s+/g, ' ').includes(s))
@@ -294,15 +288,25 @@ export async function runLeaf(leaf, cards, c0, credPath, abort) {
   if (plantIn) stopBatch(abort, `${id} R0 output contains the paired-canary plant`)
   if (overlap.length > 0) stopBatch(abort, `${id} R0 output has ${overlap.length} verbatim O0 shingle(s) — possible leak/memorisation`)
   if (!reconValid) stopBatch(abort, `${id} R0 invalid (frontmatter=${hasFrontmatter} bodyChars=${bodyChars}) — required .spec-recon file missing/thin; NOT downgraded to N0`)
-
-  // 4. neutral bundles (O0 from C0 masked body; R0 from recon; N0 = none)
   const bundles = { O0: neutralProjection(o0Md, leaf.relDir), R0: neutralProjection(reconMd, leaf.relDir), N0: null }
+  return { leaf: id, relDir: leaf.relDir, card, upstream,
+    recon: { valid: reconValid, bodyChars, o0Overlap: overlap.length, model: recon.trace.model.observedSet, sessionIds: recon.trace.sessionIds, tokens: recon.trace.tokens, durationMs: recon.trace.durationMs, archive: join(base, 'recon') },
+    bundles }
+}
 
-  // 5. counterbalanced arm order (11) — frozen per target in tasks.json (never fixed O0→R0→N0)
+// run ONE order-balanced block: the arms in block.armOrder against the frozen future task, using the
+// leaf's cached recon bundles. Archived under leaf/<id>/block-<n>/arm-<arm> (disambiguates a repeat).
+export async function runBlock(block, leaf, ctx, credPath, abort) {
+  if (!SCORER_IMPLEMENTED.has(block.leafId)) throw new Error(`runBlock refused: leaf ${block.leafId} has no behavioural scorer`)
+  if (!abort || typeof abort !== 'object') throw new Error('runBlock refused: missing shared abort state')
+  const { card, bundles, upstream } = ctx
+  const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
+  const bdir = join(RUNS, 'pilot', 'leaf', block.leafId, `block-${block.block}`)
+  mkdirSync(bdir, { recursive: true })
   const arms = {}
-  for (const arm of leaf.armOrder) {
-    guardAbort(abort, `${id}-${arm}`)
-    const armBase = join(base, `arm-${arm}`)
+  for (const arm of block.armOrder) {
+    guardAbort(abort, `${block.leafId}#${block.block}-${arm}`)
+    const armBase = join(bdir, `arm-${arm}`)
     const execDir = join(armBase, 'exec-snapshot')
     const bundleText = bundles[arm]
     mkdirSync(armBase, { recursive: true })
@@ -310,21 +314,16 @@ export async function runLeaf(leaf, cards, c0, credPath, abort) {
     if (bundleText) writeFileSync(join(armBase, 'bundle.md'), bundleText)
     runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', governed.join(','), '--out', execDir, ...bundleArgs])
     const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
-    if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${id}/${arm} exec snapshot invalid (strippedAllSpec=${execManifest.strippedAllSpec} governedPresent=${execManifest.governedPresent})`)
-    const run = await launchAgent({ runId: `${id}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
+    if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${block.leafId}#${block.block}/${arm} exec snapshot invalid`)
+    const run = await launchAgent({ runId: `${block.leafId}-b${block.block}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
       writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream })
-    enforceRunGates(abort, `${id}-${arm}`, run)
+    enforceRunGates(abort, `${block.leafId}#${block.block}-${arm}`, run)
     const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
-    const score = await scoreArm(id, run.workDir, card)
-    writeFileSync(join(armBase, 'score.json'), JSON.stringify({ arm, score, scope }, null, 2) + '\n')
+    const score = await scoreArm(block.leafId, run.workDir, card)
+    writeFileSync(join(armBase, 'score.json'), JSON.stringify({ block: block.block, arm, score, scope }, null, 2) + '\n')
     arms[arm] = { archive: armBase, trace: run.trace, scopeViolations: scope.violations.length, score: { scorer: score.scorer, passed: score.passed, total: score.total, checks: score.checks } }
   }
-
-  return {
-    leaf: id, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState, armOrder: leaf.armOrder,
-    recon: { valid: reconValid, bodyChars, o0Overlap: overlap.length, model: recon.trace.model.observedSet, sessionIds: recon.trace.sessionIds, tokens: recon.trace.tokens, durationMs: recon.trace.durationMs, archive: join(base, 'recon') },
-    arms, upstream,
-  }
+  return { block: block.block, leaf: block.leafId, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState, armOrder: block.armOrder, repeat: block.repeat, arms }
 }
 
 function execPrompt(request) {
@@ -400,14 +399,26 @@ export async function leafPhase({ credPath }) {
   const gatedOut = tasks.leaves.filter((l) => !SCORER_IMPLEMENTED.has(l.id)).map((l) => ({ leaf: l.id, reason: cards.leaves[l.relDir]?.acceptance?.status ?? 'no behavioural scorer implemented — declared blind spot' }))
   // (E) both leaves must be runnable — a single leaf with a fixed arm order is not a progressive comparison
   E('both-leaves-runnable', runnable.length === tasks.leaves.length && tasks.leaves.length >= 2, `${runnable.length}/${tasks.leaves.length} leaves runnable — the phase promises a two-leaf progressive comparison`)
+  const blocks = tasks.blocks ?? []
+  E('order-balanced-blocks', blocks.length === 3, `${blocks.length} frozen blocks (need 3 for a Latin-square order-balanced pilot)`)
 
-  // leaf targets run concurrently; a hard failure in one sets shared abort so the other stops launching new arms
-  const results = [], failures = []
-  const settled = await Promise.allSettled(runnable.map((leaf) => runLeaf(leaf, cards, tasks.c0, credPath, abort)))
-  settled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ leaf: runnable[i].id, error: String(s.reason?.message ?? s.reason) }))
+  // recon is spent ONCE per unique leaf; blocks (incl the repeat) reuse the cached recon/bundles.
+  const reconCtx = {}, results = [], failures = []
+  const uniqueLeafIds = [...new Set(blocks.map((b) => b.leafId))]
+  const reconSettled = await Promise.allSettled(uniqueLeafIds.map((lid) => reconLeaf(tasks.leaves.find((l) => l.id === lid), cards, tasks.c0, credPath, abort)))
+  reconSettled.forEach((s, i) => { if (s.status === 'fulfilled') reconCtx[uniqueLeafIds[i]] = s.value; else failures.push({ stage: 'recon', leaf: uniqueLeafIds[i], error: String(s.reason?.message ?? s.reason) }) })
+  // run the 3 order-balanced blocks concurrently; shared abort halts new launches after any hard failure
+  const blockSettled = await Promise.allSettled(blocks.map((b) => {
+    const leaf = tasks.leaves.find((l) => l.id === b.leafId)
+    const ctx = reconCtx[b.leafId]
+    if (!ctx) return Promise.reject(new Error(`block ${b.block}: recon for ${b.leafId} unavailable (recon failed/aborted)`))
+    return runBlock(b, leaf, ctx, credPath, abort)
+  }))
+  blockSettled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ stage: 'block', block: blocks[i].block, leaf: blocks[i].leafId, error: String(s.reason?.message ?? s.reason) }))
+  const recon = Object.fromEntries(Object.entries(reconCtx).map(([k, v]) => [k, v.recon]))
   // (2) write the report FIRST, then scan EVERY byte in the archive INCLUDING the report itself; on any
   // hit, atomically quarantine the whole archive and fail nonzero — the scan result gates the rc.
-  const report = { v: 3, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, results, failures }
+  const report = { v: 4, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, orderBalanced: true, significanceClaim: false, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, recon, blocks: results, failures }
   writeFileSync(join(RUNS, 'pilot', 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   const finalScan = finalArchiveScan(join(RUNS, 'pilot'), credPath)
   writeFileSync(join(RUNS, 'pilot', 'final-scan.json'), JSON.stringify({ at: nowIso(), ...finalScan }, null, 2) + '\n')
@@ -469,14 +480,15 @@ if (sub === 'preflight') {
   const scale = opt('--scale', 'leaf')
   if (scale !== 'leaf') { console.error(`only --scale leaf implemented in this stage (got ${scale})`); process.exit(2) }
   const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT) })
-  console.log(`\nleaf phase: ${report.results.length} leaves complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out (blind), aborted=${report.aborted}`)
+  console.log(`\nleaf phase: ${report.blocks.length} blocks complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out, aborted=${report.aborted} (order-balanced pilot, no significance claim)`)
   for (const g of report.gatedOut) console.log(`  GATED [${g.leaf}]: ${g.reason}`)
-  for (const r of report.results) {
-    console.log(`  [${r.leaf}] episode=${r.episode.slice(0, 8)} preState=${r.preState.slice(0, 8)} armOrder=${JSON.stringify(r.armOrder)} recon valid=${r.recon.valid} bodyChars=${r.recon.bodyChars} o0Overlap=${r.recon.o0Overlap} model=${JSON.stringify(r.recon.model)}`)
-    for (const a of r.armOrder) console.log(`    ${a}: model=${JSON.stringify(r.arms[a].trace.model.observedSet)} sessions=${r.arms[a].trace.sessionIds.length} score=${r.arms[a].score.passed}/${r.arms[a].score.total} scope-violations=${r.arms[a].scopeViolations} in/cacheR/out=${r.arms[a].trace.tokens.input}/${r.arms[a].trace.tokens.cacheRead}/${r.arms[a].trace.tokens.output} ${r.arms[a].trace.durationMs}ms`)
+  for (const [lid, rc] of Object.entries(report.recon ?? {})) console.log(`  recon[${lid}] valid=${rc.valid} bodyChars=${rc.bodyChars} o0Overlap=${rc.o0Overlap} model=${JSON.stringify(rc.model)} sessions=${rc.sessionIds?.length}`)
+  for (const b of report.blocks) {
+    console.log(`  block ${b.block} [${b.leaf}${b.repeat ? ' REPEAT' : ''}] armOrder=${JSON.stringify(b.armOrder)}`)
+    for (const a of b.armOrder) console.log(`    ${a}: model=${JSON.stringify(b.arms[a].trace.model.observedSet)} score=${b.arms[a].score.passed}/${b.arms[a].score.total} scope-viol=${b.arms[a].scopeViolations} in/out=${b.arms[a].trace.tokens.input}/${b.arms[a].trace.tokens.output}`)
   }
-  for (const f of report.failures) console.log(`  BATCH-STOP [${f.leaf}]: ${f.error}`)
-  process.exit(report.failures.length || report.aborted ? 1 : 0)
+  for (const f of report.failures) console.log(`  STOP [${f.stage ?? ''} ${f.leaf ?? ''}${f.block != null ? '#' + f.block : ''}]: ${f.error}`)
+  process.exit(report.failures.length || report.aborted || (report.finalArchiveScan && !report.finalArchiveScan.clean) ? 1 : 0)
 } else if (sub === 'check') {
   // NO-MODEL regression + control suite — must pass rc0 BEFORE any paid run. Runs every gate that
   // needs no paid call: usage aggregation regression, scorer positive/negative controls, frozen frames,

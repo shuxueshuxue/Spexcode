@@ -9,6 +9,10 @@ related:
   - spec-eval/bench/reconstruction/pilot.mjs
   - spec-eval/bench/reconstruction/sandbox.mjs
   - spec-eval/bench/reconstruction/bridge.mjs
+  - spec-eval/bench/reconstruction/usage.mjs
+  - spec-eval/bench/reconstruction/scorer.mjs
+  - spec-eval/bench/reconstruction/usage.selftest.mjs
+  - spec-eval/bench/reconstruction/scorer.selftest.mjs
   - spec-eval/bench/reconstruction/targets.json
   - spec-eval/bench/reconstruction/episodes.json
   - spec-eval/bench/reconstruction/tasks.json
@@ -48,29 +52,38 @@ bench 冻结数据、插件种子模板、spec 种子脚本——后两项正是
 added-lines 扫快照与 prompt（只门禁 generation，不管评测期任务 prompt）；污染 canary 成对——
 clean 快照零 plant，leak-positive twin 故意开放禁面并植入唯一错误需求，门必须报警才算有检测力。
 重建 agent 用隔离的 Claude Code + GLM-5.2（已批准 BigModel Anthropic endpoint）、fresh HOME/独立
-CLAUDE_CONFIG_DIR、无网络、只读挂载，open-path manifest 归档。隔离靠 docker `--network none`（真
-netns；本机 unprivileged userns 被 apparmor 限死，bwrap 不可用）+ `--add-host` 把 endpoint 钉到
-loopback + 容器内→unix socket→host bridge→endpoint:443 的唯一审计出口；凭证只经 0600 env-file 注入，
-不进 argv/prompt/trace/仓库；每个 stream-json 事件的 model 逐条核验，观测 model 集合必须 =={glm-5.2}，
-否则整批作废。
+CLAUDE_CONFIG_DIR、无网络、只读挂载。隔离靠 docker `--network none`（真 netns；本机 unprivileged
+userns 被 apparmor 限死，bwrap 不可用）+ `--add-host` 把 endpoint 钉到 loopback + 容器内→unix
+socket→host bridge→endpoint:443 的唯一审计出口；凭证只经 0600 env-file 注入，不进 argv/prompt/
+trace/仓库；归档前对 workspace + 全部拟归档 bytes 做 exact/prefix/base64 secret scan，命中即
+quarantine 整份工件并停批。stream-json 逐 message-id 按字段单调聚合 usage（cumulative snapshot 不
+双计，出现更小值即 accounting-invalid 停批），逐事件核验真实 endpoint model，观测集合必须 =={glm-5.2}
+（`<synthetic>` 是本地 error 伪 model，单列不计入），provenance（docker image id、claude 版本+包
+digest、runner commit）钉进 trace；mount 集合诚实命名 mount audit，不冒充 open-path log。
 
 ## 冻结资产与阶段门
 
 选题、任务框都是确定性冻结、可复验（`select --check` / `episodes --check` / `tasks --check` 字节级
 重现）：`targets.json`（C_eval→日历日规则导出 C0=038dce1f；2 leaf + 2 size-matched module + 1 whole）、
 `episodes.json`（798 first-parent semantic episodes，482 eligible，**primary horizon = 430 pre-migration**）、
-`tasks.json`（每 leaf 取 first-parent 序**最早可回放** eligible episode——机械 replay 检查排除依赖同
-episode 新建兄弟模块的候选，reason 冻结在 `excluded[]`，绝不按 arm 结果挑）+ `task-cards.json`（读任何
-O0 前、只据 episode 代码 diff 冻结的 sanitized 行为化 request + hidden acceptance）。
+`tasks.json`（每 leaf 取 first-parent 序**最早可回放且作用域自洽** eligible episode——两道机械、
+结果无关的排除：依赖同 episode 新建兄弟模块（replay），或改动任何非治理 SOURCE 文件（scope-self-
+containment，含增删改，防治理外真实改动被算 scope violation），reason 冻结在 `excluded[]`，绝不按 arm
+结果挑；另冻结每 target 的 **counterbalanced arm 顺序**与 `cardsSha256`）+ `task-cards.json`（读任何 O0
+前、只据 episode 代码 diff 冻结的 sanitized 行为化 request + hidden acceptance + A/B/C identifiability
+stratum）。
 
-`run.ts dry` 仍是无 agent/无网络的快照+门禁+twin 面。付费 pilot 是 **phase-aware runner**（`run.ts pilot
-preflight | verify-model | phase --scale leaf`）：**阶段只改调度，不改冻结的 O0/R0/N0、知识预算、泄漏门、
-future task、评分口径**。preflight 无模型调用即落 gate 摘要（frames/dry/凭证 mode/endpoint 可达/沙盒三阴
-性+贯通/零残留/secret-scan 检测力），全绿方可自动继续；leaf 阶段并行重建两 leaf 的 R0，再对每 leaf 跑
-同一冻结 future task 的 O0/R0/N0 executor（臂只差中性投影 bundle，N0 空），逐 run 归档 prompt/config/
-manifest/trace/workspace/scorer raw/上游 commit/token/duration 并 secret scan。任何泄漏、model 非
-glm-5.2、secret 命中、归档失败即停整批，失败行如实归档不补跑。C0=038dce1f 只支撑 protocol pilot；
-confirmatory 结论至少需第二个外生 C0 复跑。module/whole 阶段的调度是下一步（不改选题）。
+`run.ts dry` 仍是无 agent/无网络的快照+门禁+twin 面；`pilot check` 是**付费前必过 rc0** 的无模型回归+
+正负对照套件（usage 聚合回归、scorer 正负 control 判别、frames、dry、cards-hash、provenance）。付费
+pilot 是 **phase-aware runner**（`run.ts pilot preflight | verify-model | phase --scale leaf`）：**阶段只
+改调度，不改冻结的 O0/R0/N0、知识预算、泄漏门、future task、评分口径**。leaf 阶段每 arm 入表前硬门
+r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean+R0 required-file&schema（空/
+失败 R0 绝不静默变 N0）；主 outcome 由**工作区外真实行为测试**产出（spec-lint：合成 git fixture 实跑
+产出的 lint，正负对照证明能拒绝未改 pre-state；无真实行为 scorer 的 leaf——如 mobile-ui 的异步竞态需
+真浏览器 YATU——**gate 出付费阶段记为盲区**，不以 regex 充主分）；首个 hard failure 经共享 abort 停发
+新 arm、只让在途收尾归档，不补跑。逐 run 归档 prompt/config/manifest/trace/workspace/scorer raw/scope
+（pre/post diff 含删除）/上游 commit/token/duration。C0=038dce1f 只支撑 protocol pilot；confirmatory
+结论至少需第二个外生 C0 复跑。module/whole 阶段的调度是下一步（不改选题）。
 
 ## 规矩
 

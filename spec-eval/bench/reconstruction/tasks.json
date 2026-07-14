@@ -1,9 +1,10 @@
 {
-  "v": 1,
+  "v": 2,
   "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
   "cEval": "5723eaca1ba52eb60d28b818ddb4f77d758af01a",
   "protocol": "docs/spec-reconstruction-bench.md",
   "cards": "task-cards.json",
+  "cardsSha256": "2bd425dc2797efd025ef838ea237efb826be15b9f56152eacd9f89df5d7d27a0",
   "leaves": [
     {
       "stratum": "spec-cli",
@@ -14,17 +15,43 @@
         "spexcode.json"
       ],
       "candidateCount": 15,
-      "excluded": [],
+      "excluded": [
+        {
+          "episodeSha": "3f07397f67f5ab773fb6cbd2fe3464312ce41273",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-cli/src/cli.ts, spec-cli/src/sessions.ts, spec-cli/src/specs.ts, spec-yatsu/src/cli.ts"
+        },
+        {
+          "episodeSha": "2dd7d4ae1d770dd1e5723bcd7ae2a1ed7f0cffee",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-cli/src/cli.ts, spec-cli/src/guide.ts, spec-cli/src/specs.ts, spec-yatsu/src/cli.ts, spec-yatsu/src/proof.ts, spec-yatsu/src/yatsu.ts"
+        },
+        {
+          "episodeSha": "6b46b688fdd7583181091ae9cc563e73c40b6ae3",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-cli/src/layout.ts, spec-cli/src/sessions.ts"
+        },
+        {
+          "episodeSha": "45a2194d3f0a27de63ad7d58032f3783364c85aa",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-cli/src/board.ts, spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/git.test.ts, spec-cli/src/git.ts, spec-cli/src/guide.ts +60"
+        }
+      ],
+      "armOrder": [
+        "O0",
+        "R0",
+        "N0"
+      ],
       "episode": {
-        "sha": "3f07397f67f5ab773fb6cbd2fe3464312ce41273",
-        "date": "2026-06-24T14:32:38+00:00",
-        "subject": "merge node/In-the-process-of-running-my-agent-d35e: spec(governed-related): mark the hub migration done (21 hubs → single owners; hub warning 0)",
-        "files": 47,
-        "changedLeafFiles": [
+        "sha": "185f52b1992a67998114ceed50975eccc40f8dd5",
+        "date": "2026-06-28T16:18:54+00:00",
+        "subject": "merge node/Sp-2a2a: v0.1.5 — git-tracked coverage makes governedRoots '.' safe; testGlobs; dogfood backfill",
+        "files": 6,
+        "changedSource": [
           "spec-cli/src/lint.ts"
+        ],
+        "changedLeafFiles": [
+          "spec-cli/src/lint.ts",
+          "spexcode.json"
         ]
       },
-      "preState": "fa18935a0c07740d0912fe29bc70a803a8303ef0"
+      "preState": "a02fe430904ec72faa520ac533aea2b2f7ca36e3"
     },
     {
       "stratum": "spec-dashboard",
@@ -41,19 +68,42 @@
         {
           "episodeSha": "171b7cf0e7f26aa3746a05c1f6c4c8bf7d689355",
           "reason": "depends-on-new-sibling-module: ./FocusPanel.jsx"
+        },
+        {
+          "episodeSha": "f308cded6bdf92be4c114dd889dc8468a11218ca",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/i18n/en.js, spec-dashboard/src/i18n/zh.js"
+        },
+        {
+          "episodeSha": "5ecdc2da77736abcb8fef8db0e48400d7528d196",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/SessionWindow.jsx, spec-dashboard/src/SpecNode.jsx, spec-dashboard/src/i18n/en.js, spec-dashboard/src/i18n/zh.js"
+        },
+        {
+          "episodeSha": "7d2cfd1b82d14d9a0d5f39bacefff8b97311254b",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-dashboard/src/Legend.jsx, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/i18n/en.js, spec-dashboard/src/i18n/zh.js"
+        },
+        {
+          "episodeSha": "9e1f606ceb46955de22c66212cc83dcc08c16017",
+          "reason": "scope-not-self-contained: non-governed source changed: spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/i18n/en.js, spec-dashboard/src/i18n/zh.js"
         }
       ],
+      "armOrder": [
+        "R0",
+        "N0",
+        "O0"
+      ],
       "episode": {
-        "sha": "f308cded6bdf92be4c114dd889dc8468a11218ca",
-        "date": "2026-06-24T02:33:54+00:00",
-        "subject": "merge node/Scenario-34c0: yatsu(board-stats,node-graph): re-measure after the focus-panel styles.css touch Session: 34c047f2-d618-435a-8c21-2eb71307feb0",
-        "files": 9,
+        "sha": "db80b33d0018afba77c9caf9c1cf8234d34e876e",
+        "date": "2026-06-24T15:00:11+00:00",
+        "subject": "merge node/sometimes-after-my-close-of-one-session-a970: fix(dashboard-shell): freshest-issued board poll wins — a closed session can't flicker back Session: a9",
+        "files": 3,
+        "changedSource": [
+          "spec-dashboard/src/App.jsx"
+        ],
         "changedLeafFiles": [
-          "spec-dashboard/src/App.jsx",
-          "spec-dashboard/src/styles.css"
+          "spec-dashboard/src/App.jsx"
         ]
       },
-      "preState": "171b7cf0e7f26aa3746a05c1f6c4c8bf7d689355"
+      "preState": "3f07397f67f5ab773fb6cbd2fe3464312ce41273"
     }
   ]
 }

@@ -38,18 +38,31 @@ scenarios:
       preflight.json 另记 historicalPreflightFailures（bwrap userns 被 apparmor 挡、误读全局 wrapper 的
       provider 越界），不进有效 run 分母。
     tags: [cli]
+  - name: pilot-check-suite
+    description: >
+      从仓库根运行 run.ts pilot check，捕获 exit code 与 runs/pilot/check.json。付费前必过的无模型
+      回归+正负对照套件。
+    expected: >
+      exit 0：usage-aggregation-regression（cumulative snapshot 不双计、非单调 fail-loud、缺失字段保留
+      前值）、scorer-controls-discriminate（spec-lint 行为 scorer 正控 3/3 通过、负控=pre-state fs-walk
+      lint 被拒 1/3）、frame-select/episodes/tasks 字节重现、dry-oracle、cards-hash-binding（task-cards
+      sha 匹配 tasks.json pin）、provenance-pinned（docker image id + claude 版本/包 digest 记录）全绿。
+    tags: [cli]
   - name: pilot-reconstruction-run
     description: >
-      【付费，等人批预算+preflight 全绿后才测】run.ts pilot phase --scale leaf：并行重建两个冻结 leaf
-      （spec-lint、mobile-ui）的 R0（隔离 Claude Code + GLM-5.2 via BigModel endpoint，fresh HOME/独立
+      【付费，等人批预算+preflight/pilot check 全绿后才测】run.ts pilot phase --scale leaf：对有真实行为
+      scorer 的 leaf（spec-lint）重建 R0（隔离 Claude Code + GLM-5.2 via BigModel endpoint，fresh HOME/独立
       CLAUDE_CONFIG_DIR，docker --network none + unix-socket bridge 唯一出口，快照只读、.spec-recon 可写），
-      再对每 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（臂只差中性投影 bundle）。
+      再对该 leaf 跑同一冻结 future task 的 O0/R0/N0 executor（counterbalanced 顺序，臂只差中性投影 bundle）。
+      无真实行为 scorer 的 leaf（mobile-ui 异步竞态需真浏览器 YATU）gate 出付费阶段记为盲区。
     expected: >
-      两 leaf 的 R0 产出结构合法的 .spec-recon（节点=目录+spec.md）；每 run 归档含 snapshot manifest、
-      PROMPT、transcript、trace.json（endpoint hostname、bridge 连接数、逐事件 model 集合、token、
-      duration、open-path/mount 清单、secret-scan 命中数）、workspace、scorer raw；clean 快照 plant 零
-      复述、R0 对 masked O0 无异常 shingle overlap；每个 run 观测 model 集合 =={glm-5.2}，否则整批停；
-      失败 run 同样带 sanitized 归档并如实记 fail（无 raw stderr、无 key/env/完整 process dump 入档）。
+      spec-lint 的 R0 产出结构合法的 .spec-recon（frontmatter + 非空 body，required-file&schema 门通过）；
+      每 arm 入表前硬门 r.ok+exit0+realCompletion+accounting-valid+model=={glm-5.2}+secret-clean 全过，否则
+      共享 abort 停整批、只让在途收尾归档、不补跑；主 outcome 由工作区外真实行为测试产出（合成 git
+      fixture 实跑产出 lint，观察 tracked-only 覆盖 + testGlobs 排除），scope 用 pre/post diff（含删除）；
+      每 run 归档 trace（endpoint host、HTTP status/request-id、session id 集、逐字段 token、provenance、
+      mount audit、secret-scan 命中数）+ workspace + scorer raw；clean 快照 plant 零复述、R0 对 masked O0
+      零 verbatim shingle overlap；失败/gated leaf 如实归档、无 raw stderr/key/env/完整 process dump 入档。
     tags: [cli]
   - name: blind-forward-scoring
     description: >

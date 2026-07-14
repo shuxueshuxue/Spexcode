@@ -21,10 +21,11 @@
 // Every run is bounded by a hard wall timeout; a finally block kills the bridge, force-removes the
 // container, and deletes the socket/tmp. Timeout is archived as a failed run, never silently retried.
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync, readFileSync, mkdtempSync, existsSync, chmodSync, cpSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, readFileSync, mkdtempSync, existsSync, chmodSync, cpSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
+import { aggregateStream } from './usage.mjs'
 
 // ---- fixed constants (never taken from argv/env) ----
 export const ENDPOINT_HOST = 'open.bigmodel.cn'
@@ -39,6 +40,34 @@ const HERE = new URL('.', import.meta.url).pathname
 
 const sha256 = (b) => createHash('sha256').update(b).digest('hex')
 const nowIso = () => new Date().toISOString()
+
+// recursive relative file list + safe text read — for the archive-wide secret scan of a workspace copy
+export function walkFiles(dir, base = dir) {
+  const out = []
+  for (const e of (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : [])) {
+    const p = join(dir, e.name)
+    if (e.isDirectory() && !e.isSymbolicLink()) out.push(...walkFiles(p, base))
+    else if (e.isFile()) out.push(p.slice(base.length + 1))
+  }
+  return out
+}
+const readTextSafe = (abs) => { try { const b = readFileSync(abs); return b.subarray(0, 4096).includes(0) ? null : b.toString('utf8') } catch { return null } }
+
+// PINNED provenance (computed once): docker image id, claude version + package digest, runner commit.
+// So the trace records exactly which image/binary/commit produced it — not operator memory.
+let PROVENANCE = null
+export function provenanceRecord() {
+  if (PROVENANCE) return PROVENANCE
+  const safe = (fn, d = null) => { try { return fn() } catch { return d } }
+  const imageId = safe(() => execFileSync('docker', ['image', 'inspect', DOCKER_IMAGE, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim())
+  const claudeVersion = safe(() => JSON.parse(readFileSync(join(CLAUDE_PKG, 'package.json'), 'utf8')).version)
+  const claudePkgDigest = safe(() => sha256(readFileSync(join(CLAUDE_PKG, 'package.json')) + '::' + sha256(readFileSync(join(CLAUDE_PKG, 'bin', 'claude.exe')))).slice(0, 16))
+  const nodeDigest = safe(() => sha256(readFileSync(join(NODE_DIST, 'bin', 'node')).subarray(0, 1 << 20)).slice(0, 16))
+  const runnerCommit = safe(() => execFileSync('git', ['-C', HERE, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim())
+  const runnerDirty = safe(() => execFileSync('git', ['-C', HERE, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().length > 0)
+  PROVENANCE = { dockerImage: DOCKER_IMAGE, dockerImageId: imageId, claudeVersion, claudePkgDigest, nodeDigest, runnerCommit, runnerDirty, endpointHost: ENDPOINT_HOST, model: MODEL }
+  return PROVENANCE
+}
 
 // Read the approved credential file (0600, key-only) at RUNTIME; return the value in-memory only.
 // Never logged, never returned to callers, never written to any archived artifact.
@@ -71,6 +100,7 @@ export async function launchAgent(opts) {
   mkdirSync(archiveDir, { recursive: true })
   const started = nowIso()
   const t0 = Date.now()
+  const provenance = provenanceRecord()
 
   // per-run scratch (socket + env-file live here, 0700)
   const scratch = mkdtempSync(join(tmpdir(), 'srb-run-'))
@@ -169,72 +199,82 @@ export async function launchAgent(opts) {
     const rawErr = stderrBuf.join('')
     const bridgeConns = bridgeLog.join('').split('\n').filter((l) => /conn#/.test(l)).length
 
-    // parse stream-json: separate REAL endpoint models from Claude Code's local `<synthetic>` marker
-    // (used for locally-generated content — API-error/interrupt messages, NOT a model the endpoint served).
-    // The {glm-5.2} verification applies to real endpoint responses; a real completion needs tokens>0.
+    // parse stream-json into events, then aggregate via the tested accounting unit (usage.mjs):
+    // per-message-id terminal usage summed across ids (no cumulative double-count), model provenance,
+    // API-error extraction. A non-monotonic usage decrease => accountingValid=false => fail-loud.
     const events = []
     for (const line of rawOut.split('\n')) {
       const s = line.trim(); if (!s.startsWith('{')) continue
       try { events.push(JSON.parse(s)) } catch {}
     }
-    const apiModelSet = new Set()      // models from real endpoint responses (excludes <synthetic>)
-    const allModelSet = new Set()      // everything seen, for the trace
-    let inTok = 0, cacheReadTok = 0, outTok = 0, msgCount = 0, realCompletion = false, apiError = null
-    for (const e of events) {
-      const msg = e.message ?? e
-      const model = msg && msg.model
-      if (model) { allModelSet.add(model); if (model !== '<synthetic>') apiModelSet.add(model) }
-      const u = msg?.usage
-      if (u) { msgCount++; inTok += u.input_tokens ?? 0; cacheReadTok += u.cache_read_input_tokens ?? 0; outTok += u.output_tokens ?? 0 }
-      if (u && (u.output_tokens ?? 0) > 0 && model === MODEL) realCompletion = true
-      // surface an API error (e.g. a 429 rate limit) from the synthetic error message
-      if (model === '<synthetic>' || e.subtype === 'api_error') {
-        const txt = JSON.stringify(msg?.content ?? '').match(/API Error[^"]*/)?.[0]
-        if (txt) apiError = txt.slice(0, 200)
-      }
-    }
-    // model provenance is clean iff every REAL endpoint response was glm-5.2 (and at least one occurred)
-    const modelClean = apiModelSet.size >= 1 && [...apiModelSet].every((m) => m === MODEL)
+    const agg = aggregateStream(events, MODEL)
+    const sessionIds = [...new Set(events.map((e) => e && (e.session_id ?? (e.message && e.message.session_id))).filter(Boolean))]
+    const requestIds = [...new Set(events.flatMap((e) => {
+      const j = JSON.stringify(e); const m = j.match(/"request_id"\s*:\s*"([^"]+)"/); return m ? [m[1]] : []
+    }))]
+    const httpStatus = agg.apiError ? (agg.apiError.match(/\((\d{3})\)/)?.[1] ?? null) : (agg.realCompletion ? 200 : null)
 
-    // secret scan across the raw transcript/stderr/prompt BEFORE archiving anything
-    const scanBlob = rawOut + '\n' + rawErr + '\n' + prompt
-    const scan = secretScan(scanBlob, key)
-    const secretClean = scan.keyHits === 0 && scan.b64Hits === 0
-    // redactor: mask any credential occurrence (defence-in-depth) before bytes hit disk
+    // secret scan + redactor across EVERYTHING to be archived: transcript, stderr, prompt AND every file
+    // in the writable workspace copy. Any exact/prefix/base64 hit => quarantine the whole archive + fail.
     const b64 = Buffer.from(key).toString('base64')
     const redact = (s) => s.split(key).join('«REDACTED-KEY»').split(b64).join('«REDACTED-KEY-B64»')
-
-    // archive: prompt, transcript (redacted), sanitized stderr summary, workspace, trace
     const workOut = join(archiveDir, 'workspace')
     rmSync(workOut, { recursive: true, force: true })
     if (existsSync(workDir)) cpSync(workDir, workOut, { recursive: true })
-    writeFileSync(join(archiveDir, 'PROMPT.md'), prompt)
+    // scan the workspace files (bytes that would be archived) in addition to transcript/stderr/prompt
+    let wsScanKeyHits = 0, wsScanB64Hits = 0, wsScanPrefixHits = 0
+    for (const rel of walkFiles(workOut)) {
+      const t = readTextSafe(join(workOut, rel)); if (t === null) continue
+      const s = secretScan(t, key); wsScanKeyHits += s.keyHits; wsScanB64Hits += s.b64Hits; wsScanPrefixHits += s.prefixHits
+    }
+    const streamScan = secretScan(rawOut + '\n' + rawErr + '\n' + prompt, key)
+    const keyHits = streamScan.keyHits + wsScanKeyHits
+    const b64Hits = streamScan.b64Hits + wsScanB64Hits
+    const prefixHits = streamScan.prefixHits + wsScanPrefixHits
+    const secretClean = keyHits === 0 && b64Hits === 0
+
+    writeFileSync(join(archiveDir, 'PROMPT.md'), redact(prompt))
     writeFileSync(join(archiveDir, 'transcript.stream-json'), redact(rawOut))
-    // NO raw stderr dump — only a redacted, capped summary (last 40 non-empty lines)
     const errSummary = redact(rawErr).split('\n').filter((l) => l.trim()).slice(-40).join('\n')
     if (errSummary) writeFileSync(join(archiveDir, 'stderr.summary.txt'), errSummary + '\n')
 
-    // trace: ONLY endpoint hostname, status/request-id/model/token — no header/env/key
+    const accountingValid = agg.accountingValid
+    const modelClean = agg.modelClean
+    const realCompletion = agg.realCompletion
+    const apiError = agg.apiError
+
+    // trace: ONLY endpoint hostname, HTTP status / request-id / session-id / model / token — no header/env/key.
+    // Provenance is PINNED (not operator memory): docker image id, claude version+package digest, runner commit.
     const trace = {
-      v: 1, runId, started, ended: nowIso(), durationMs: Date.now() - t0,
+      v: 2, runId, started, ended: nowIso(), durationMs: Date.now() - t0,
       endpointHost: ENDPOINT_HOST, bridgeConnections: bridgeConns,
+      httpStatus, requestIds, sessionIds,
       exitCode: exit, timedOut,
-      model: { observedSet: [...apiModelSet], allSeen: [...allModelSet], expected: MODEL, clean: modelClean, realCompletion },
+      model: { observedSet: agg.apiModels, allSeen: agg.allModels, expected: MODEL, clean: modelClean, realCompletion },
       apiError,
-      tokens: { messages: msgCount, input: inTok, cacheRead: cacheReadTok, output: outTok },
+      tokens: { messages: agg.messages, messageIds: agg.messageIds, input: agg.totals.input_tokens, cacheRead: agg.totals.cache_read_input_tokens, cacheCreate: agg.totals.cache_creation_input_tokens, output: agg.totals.output_tokens },
+      accounting: { valid: accountingValid, anomalies: agg.anomalies, resultUsageDiagnostic: agg.resultUsage },
+      provenance,
       upstreamCommit: upstreamCommit ?? null,
-      openPathManifest: {
-        note: 'docker mount set is the sandbox audit (nothing outside is visible to the agent)',
+      mountAudit: {
+        note: 'the docker mount set is the sandbox confinement — nothing outside these mounts is visible to the agent. This is a MOUNT AUDIT, not a per-syscall open-path log.',
         readOnly: ['/opt/node', '/opt/claude', '/assets/bridge.mjs', '/assets/PROMPT.md', '/run/glm.sock'],
         writable: ['/work', '/agent (tmpfs)', '/tmp (tmpfs)'],
         egress: `unix:/run/glm.sock → host bridge → ${ENDPOINT_HOST}:${ENDPOINT_PORT} (TLS end-to-end)`,
       },
-      secretScan: { keyHits: scan.keyHits, prefixHits: scan.prefixHits, b64Hits: scan.b64Hits, keySha256Prefix: scan.keySha256.slice(0, 12), clean: secretClean },
+      secretScan: { keyHits, prefixHits, b64Hits, keySha256Prefix: streamScan.keySha256.slice(0, 12), scannedWorkspace: true, clean: secretClean },
     }
     writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify(trace, null, 2) + '\n')
 
-    const ok = exit === 0 && !timedOut && modelClean && secretClean && realCompletion && !apiError
-    return { ok, trace, timedOut, modelClean, secretClean, realCompletion, apiError, exitCode: exit, archiveDir, workDir: workOut }
+    // quarantine: if a credential leaked into any archived bytes, move the whole archive aside and fail loud
+    if (!secretClean) {
+      const q = archiveDir + '.QUARANTINE'
+      try { rmSync(q, { recursive: true, force: true }); execFileSync('mv', [archiveDir, q]) } catch {}
+      return { ok: false, trace, timedOut, modelClean, secretClean: false, realCompletion, apiError, accountingValid, exitCode: exit, archiveDir: q, workDir: null, quarantined: true }
+    }
+
+    const ok = exit === 0 && !timedOut && modelClean && secretClean && realCompletion && accountingValid && !apiError
+    return { ok, trace, timedOut, modelClean, secretClean, realCompletion, apiError, accountingValid, exitCode: exit, archiveDir, workDir: workOut }
   } finally {
     cleanup()
   }

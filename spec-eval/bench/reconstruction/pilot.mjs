@@ -16,7 +16,8 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, cpSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { launchAgent, secretScan, readCredential, ENDPOINT_HOST, ENDPOINT_PORT, MODEL } from './sandbox.mjs'
+import { launchAgent, secretScan, readCredential, provenanceRecord, ENDPOINT_HOST, ENDPOINT_PORT, MODEL } from './sandbox.mjs'
+import { scoreSpecLint, scoreControls } from './scorer.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 const ROOT = join(HERE, '../../..')
@@ -184,100 +185,127 @@ function neutralProjection(specMd, relDir) {
   return `area: ${relDir}\ntitle: ${grab('title')}\nintent: ${grab('desc')}\nowns: ${code.join(', ')}\n\n${body}\n`
 }
 
-// external acceptance scorer (runs on the HOST, outside the sandbox, over the archived workspace).
-// Structural for the pilot (honestly labelled); raw per-assertion output archived. Never a win/loss verdict.
-function scoreLeaf(leafId, workspaceDir, card) {
-  const read = (rel) => { try { return readFileSync(join(workspaceDir, rel), 'utf8') } catch { return '' } }
-  const checks = []
-  const C = (name, ok, evidence) => checks.push({ name, ok, evidence: evidence.slice(0, 200) })
-  if (leafId === 'spec-lint') {
-    const src = read('spec-cli/src/lint.ts')
-    C('related-counts-coverage', /related/.test(src) && /(claimed|covered|owners)\b/.test(src) && /related/.test(src.split('coverage')[0] ?? src) || /for\s*\(.*related/.test(src), src.match(/.*related.*/)?.[0] ?? 'no related mention')
-    C('related-integrity', /related/.test(src) && /integrity/.test(src) && /missing/i.test(src), src.match(/.*related.*missing.*/i)?.[0] ?? 'no related integrity check')
-    C('hub-summary-single', /(hub|>=\s*2|governed by (two|>=2|2\+))/i.test(src) && /length/.test(src), src.match(/.*hub.*/i)?.[0] ?? 'no hub summary')
-    C('nonempty-change', src.length > 0, `lint.ts ${src.length} chars`)
-  } else if (leafId === 'mobile-ui') {
-    const app = read('spec-dashboard/src/App.jsx'); const css = read('spec-dashboard/src/styles.css')
-    C('eval-pane-handler', /setPane\(['"]eval['"]\)/.test(app) || /'eval'/.test(app) && /overlay|Overlay/.test(app), app.match(/.*eval.*/)?.[0] ?? 'no eval-pane handler')
-    C('handler-wired-to-panel', /onOpen\w*=\{/.test(app) || /FocusPanel[^>]*on\w+=/.test(app), app.match(/FocusPanel[^>]*/)?.[0] ?? 'no panel prop wiring')
-    C('scenario-row-button', /\.fp-scenario\s*\{[^}]*(border:\s*none|background:\s*none|cursor:\s*pointer)/s.test(css), (css.match(/\.fp-scenario\s*\{[^}]*\}/s)?.[0] ?? 'no .fp-scenario').slice(0, 200))
-    C('expected-clamp', /line-clamp|-webkit-line-clamp/.test(css), css.match(/.*line-clamp.*/)?.[0] ?? 'no clamp')
+// ---- real external acceptance scorer (host, outside sandbox). Behavioural, never regex-as-main. ----
+// spec-lint: run the produced lint.ts against a synthetic git fixture and OBSERVE coverage behaviour
+// (scorer.mjs). mobile-ui: its acceptance is an async DOM race → needs a real browser harness (YATU),
+// NOT YET IMPLEMENTED, so that leaf is GATED OUT of the paid phase (declared blind) rather than scored
+// by regex. A leaf with no implemented behavioural scorer never runs paid arms.
+const SCORER_IMPLEMENTED = new Set(['spec-lint'])
+function scoreArm(leafId, workspaceDir, card) {
+  if (leafId === 'spec-lint') return scoreSpecLint(join(workspaceDir, 'spec-cli/src'))
+  throw new Error(`no behavioural scorer implemented for leaf ${leafId}`)
+}
+
+// ---- batch abort (shared) — after the first hard failure, NO new launch; in-flight calls finish & archive ----
+class BatchStop extends Error {}
+function guardAbort(abort, label) { if (abort.stopped) throw new BatchStop(`${label}: batch already stopped — ${abort.reason}`) }
+function stopBatch(abort, msg) { if (!abort.stopped) { abort.stopped = true; abort.reason = msg }; throw new BatchStop(msg) }
+
+// every per-run hard gate; any failure stops the whole batch (no silent downgrade, no retry).
+function enforceRunGates(abort, label, r) {
+  if (r.quarantined) stopBatch(abort, `${label} QUARANTINED — credential material in archived bytes`)
+  if (r.timedOut) stopBatch(abort, `${label} timed out (${r.trace?.durationMs}ms) — archived, no retry`)
+  if (!r.accountingValid) stopBatch(abort, `${label} accounting-invalid — non-monotonic usage: ${JSON.stringify(r.trace?.accounting?.anomalies)}`)
+  if (r.apiError) stopBatch(abort, `${label} upstream API error — ${r.apiError} — archived, NOT retried`)
+  if (!r.modelClean) stopBatch(abort, `${label} real endpoint model ${JSON.stringify(r.trace?.model?.observedSet)} != {${MODEL}}`)
+  if (!r.secretClean) stopBatch(abort, `${label} secret scan hit in archived bytes`)
+  if (!r.realCompletion) stopBatch(abort, `${label} no real ${MODEL} completion (0 output tokens)`)
+  if (r.exitCode !== 0) stopBatch(abort, `${label} exitCode=${r.exitCode}`)
+  if (!existsSync(join(r.archiveDir, 'trace.json'))) stopBatch(abort, `${label} archive trace.json missing`)
+}
+
+// ---- scope analysis via pre/post diff INCLUDING deletions; archive allowed + violation exact paths ----
+function walkRel(dir, base = dir, acc = []) {
+  for (const e of readdirSyncSafe(dir)) {
+    const abs = join(dir, e)
+    const st = statSafe(abs)
+    if (st?.isDirectory()) { if (e !== '.git') walkRel(abs, base, acc) }
+    else if (st?.isFile()) acc.push(abs.slice(base.length + 1))
   }
-  return { leafId, scorer: card.acceptance.scorer, checks, passed: checks.filter((c) => c.ok).length, total: checks.length }
+  return acc
+}
+function scopeAnalysis(preSnapDir, workDir, governed) {
+  const gov = new Set(governed)
+  const post = workDir && existsSync(workDir) ? walkRel(workDir) : []
+  const pre = existsSync(preSnapDir) ? walkRel(preSnapDir) : []
+  const postSet = new Set(post)
+  const changed = post.filter((rel) => { const a = readFileSafe(join(preSnapDir, rel)); const b = readFileSafe(join(workDir, rel)); return a === null || a !== b })
+  const deleted = pre.filter((rel) => !postSet.has(rel))
+  const violations = [
+    ...changed.filter((r) => !gov.has(r)).map((r) => ({ path: r, kind: 'changed-outside-governed' })),
+    ...deleted.filter((r) => !gov.has(r)).map((r) => ({ path: r, kind: 'deleted-outside-governed' })),
+  ]
+  return { allowedGoverned: governed, changedFiles: changed, deletedFiles: deleted, violations }
 }
 
-// hard fail-loud: any leak / model!=glm-5.2 / secret hit / archive-manifest failure aborts the WHOLE batch.
-function enforceRunGates(label, r) {
-  if (r.timedOut) throw new Error(`BATCH-STOP: ${label} timed out (${r.trace?.durationMs}ms) — archived as failure, no silent retry`)
-  if (!r.modelClean) throw new Error(`BATCH-STOP: ${label} real endpoint model set ${JSON.stringify(r.trace?.model?.observedSet)} != {${MODEL}}`)
-  if (!r.secretClean) throw new Error(`BATCH-STOP: ${label} secret scan found credential material in archived bytes`)
-  if (!existsSync(join(r.archiveDir, 'trace.json'))) throw new Error(`BATCH-STOP: ${label} archive manifest (trace.json) missing`)
-  if (r.apiError) throw new Error(`BATCH-STOP: ${label} upstream API error — ${r.apiError} — archived as failure, NOT retried (avoids hammering a rate-limited account)`)
-  if (!r.realCompletion) throw new Error(`BATCH-STOP: ${label} produced no real ${MODEL} completion (0 output tokens) — archived as failure`)
-}
-
-// ---- leaf phase: R0 recon + O0/R0/N0 executor arms per leaf (arms share ONE frozen future task) ----
-export async function runLeaf(leaf, cards, c0, credPath) {
+// ---- leaf phase: R0 recon + counterbalanced O0/R0/N0 arms per leaf (arms share ONE frozen future task) ----
+export async function runLeaf(leaf, cards, c0, credPath, abort) {
   const id = leaf.id
   const card = cards.leaves[leaf.relDir]
-  if (!card) throw new Error(`no task card for leaf ${leaf.relDir}`)
+  if (!card) stopBatch(abort, `no task card for leaf ${leaf.relDir}`)
   const base = join(RUNS, 'pilot', 'leaf', id)
   mkdirSync(base, { recursive: true })
   const upstream = upstreamHead()
+  const governed = card.governedFiles ?? (card.governedFile ? [card.governedFile] : [])
 
   // 1. R0 generation snapshot (C0, leaf-masked) — reuse run.ts snapshot machinery (subprocess)
   const genDir = join(base, 'gen-snapshot')
   runTs(['snapshot', '--scale', 'leaf', '--target', leaf.relDir, '--out', genDir])
   const genManifest = JSON.parse(readFileSync(join(genDir, 'manifest.json'), 'utf8'))
-  if (genManifest.leakage.violations.length || genManifest.canary.hits.length) throw new Error(`BATCH-STOP: ${id} generation snapshot has leakage/canary hits`)
+  if (genManifest.leakage.violations.length || genManifest.canary.hits.length) stopBatch(abort, `${id} generation snapshot leakage/canary hits`)
   const genPrompt = readFileSync(join(genDir, 'PROMPT.md'), 'utf8')
 
   // 2. R0 reconstruction (isolated, GLM-5.2)
+  guardAbort(abort, `recon-${id}`)
   const recon = await launchAgent({ runId: `recon-${id}`, snapshotDir: join(genDir, 'snapshot'), prompt: genPrompt,
     writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: join(base, 'recon'), upstreamCommit: upstream })
-  enforceRunGates(`recon-${id}`, recon)
+  enforceRunGates(abort, `recon-${id}`, recon)
 
-  // 3. post-R0 leak/plant audit: masked O0 shingles must not appear verbatim in R0 output
-  const o0Md = execFileSync('git', ['-C', ROOT, 'show', `${c0}:.spec/${leaf.relDir}/spec.md`], { encoding: 'utf8' })
-  const reconPath = join(recon.workDir ?? join(base, 'recon', 'workspace'), '.spec-recon', leaf.relDir, 'spec.md')
+  // 3. R0 REQUIRED file + schema gate (4): a valid recon MUST have written .spec-recon/<relDir>/spec.md
+  // with frontmatter + a non-trivial body. An empty/failed R0 is a HARD STOP — never silently an N0.
+  const reconPath = join(recon.workDir, '.spec-recon', leaf.relDir, 'spec.md')
   const reconMd = existsSync(reconPath) ? readFileSync(reconPath, 'utf8') : ''
+  const hasFrontmatter = /^---\n[\s\S]*?\n---\n/.test(reconMd)
+  const bodyChars = reconMd.replace(/^---\n[\s\S]*?\n---\n/, '').trim().length
+  const reconValid = hasFrontmatter && bodyChars >= 200
+  // post-R0 leak/plant audit
+  const o0Md = execFileSync('git', ['-C', ROOT, 'show', `${c0}:.spec/${leaf.relDir}/spec.md`], { encoding: 'utf8' })
   const o0Shingles = [...new Set(o0Md.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l.length >= 40))]
   const overlap = o0Shingles.filter((s) => reconMd.replace(/\s+/g, ' ').includes(s))
   const plantIn = reconMd.includes('SRB-LEAK-CANARY')
-  if (plantIn) throw new Error(`BATCH-STOP: ${id} R0 output contains the paired-canary plant`)
-  const reconValid = reconMd.trim().length > 0
-  writeFileSync(join(base, 'recon', 'r0-audit.json'), JSON.stringify({ reconValid, reconChars: reconMd.length, o0ShingleOverlap: overlap.length, overlapSample: overlap.slice(0, 5), plantDetected: plantIn }, null, 2) + '\n')
+  writeFileSync(join(base, 'recon', 'r0-audit.json'), JSON.stringify({ reconValid, hasFrontmatter, bodyChars, requiredFile: `.spec-recon/${leaf.relDir}/spec.md`, o0ShingleOverlap: overlap.length, overlapSample: overlap.slice(0, 5), plantDetected: plantIn }, null, 2) + '\n')
+  if (plantIn) stopBatch(abort, `${id} R0 output contains the paired-canary plant`)
+  if (overlap.length > 0) stopBatch(abort, `${id} R0 output has ${overlap.length} verbatim O0 shingle(s) — possible leak/memorisation`)
+  if (!reconValid) stopBatch(abort, `${id} R0 invalid (frontmatter=${hasFrontmatter} bodyChars=${bodyChars}) — required .spec-recon file missing/thin; NOT downgraded to N0`)
 
   // 4. neutral bundles (O0 from C0 masked body; R0 from recon; N0 = none)
-  const bundles = { O0: neutralProjection(o0Md, leaf.relDir), R0: reconValid ? neutralProjection(reconMd, leaf.relDir) : '', N0: null }
+  const bundles = { O0: neutralProjection(o0Md, leaf.relDir), R0: neutralProjection(reconMd, leaf.relDir), N0: null }
 
-  // 5. O0/R0/N0 executor arms on the SAME frozen future task (arms differ only in injected bundle)
+  // 5. counterbalanced arm order (11) — frozen per target in tasks.json (never fixed O0→R0→N0)
   const arms = {}
-  for (const arm of ['O0', 'R0', 'N0']) {
+  for (const arm of leaf.armOrder) {
+    guardAbort(abort, `${id}-${arm}`)
     const armBase = join(base, `arm-${arm}`)
     const execDir = join(armBase, 'exec-snapshot')
     const bundleText = bundles[arm]
+    mkdirSync(armBase, { recursive: true })
     const bundleArgs = bundleText ? ['--bundle-rel', `${leaf.relDir}/BUNDLE.md`, '--bundle-file', join(armBase, 'bundle.md')] : []
-    if (bundleText) { mkdirSync(armBase, { recursive: true }); writeFileSync(join(armBase, 'bundle.md'), bundleText) }
-    runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', card.governedFile ?? (card.governedFiles ?? []).join(','), '--out', execDir, ...bundleArgs])
+    if (bundleText) writeFileSync(join(armBase, 'bundle.md'), bundleText)
+    runTs(['exec-snapshot', '--commit', leaf.preState, '--governed', governed.join(','), '--out', execDir, ...bundleArgs])
     const execManifest = JSON.parse(readFileSync(join(execDir, 'exec-manifest.json'), 'utf8'))
-    if (!execManifest.strippedAllSpec || !execManifest.governedPresent) throw new Error(`BATCH-STOP: ${id}/${arm} exec snapshot invalid (strippedAllSpec=${execManifest.strippedAllSpec} governedPresent=${execManifest.governedPresent})`)
-    const prompt = execPrompt(card.request)
-    const run = await launchAgent({ runId: `${id}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt,
+    if (!execManifest.strippedAllSpec || !execManifest.governedPresent) stopBatch(abort, `${id}/${arm} exec snapshot invalid (strippedAllSpec=${execManifest.strippedAllSpec} governedPresent=${execManifest.governedPresent})`)
+    const run = await launchAgent({ runId: `${id}-${arm}`, snapshotDir: join(execDir, 'snapshot'), prompt: execPrompt(card.request),
       writeSubdir: '.', credPath, timeoutMs: 20 * 60_000, archiveDir: armBase, upstreamCommit: upstream })
-    enforceRunGates(`${id}-${arm}`, run)
-    // scope violations: files changed outside the governed set
-    const governed = card.governedFile ? [card.governedFile] : (card.governedFiles ?? [])
-    const preSnap = join(execDir, 'snapshot')
-    const scope = scopeViolations(preSnap, run.workDir, governed)
-    const score = scoreLeaf(id, run.workDir, card)
-    writeFileSync(join(armBase, 'score.json'), JSON.stringify({ arm, score, scopeViolations: scope }, null, 2) + '\n')
-    arms[arm] = { archive: armBase, trace: run.trace, scopeViolations: scope.length, score: { passed: score.passed, total: score.total } }
+    enforceRunGates(abort, `${id}-${arm}`, run)
+    const scope = scopeAnalysis(join(execDir, 'snapshot'), run.workDir, governed)
+    const score = scoreArm(id, run.workDir, card)
+    writeFileSync(join(armBase, 'score.json'), JSON.stringify({ arm, score, scope }, null, 2) + '\n')
+    arms[arm] = { archive: armBase, trace: run.trace, scopeViolations: scope.violations.length, score: { scorer: score.scorer, passed: score.passed, total: score.total, checks: score.checks } }
   }
 
   return {
-    leaf: id, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState,
-    recon: { valid: reconValid, chars: reconMd.length, o0Overlap: overlap.length, model: recon.trace.model.observedSet, tokens: recon.trace.tokens, durationMs: recon.trace.durationMs, archive: join(base, 'recon') },
+    leaf: id, relDir: leaf.relDir, episode: leaf.episode.sha, preState: leaf.preState, armOrder: leaf.armOrder,
+    recon: { valid: reconValid, bodyChars, o0Overlap: overlap.length, model: recon.trace.model.observedSet, sessionIds: recon.trace.sessionIds, tokens: recon.trace.tokens, durationMs: recon.trace.durationMs, archive: join(base, 'recon') },
     arms, upstream,
   }
 }
@@ -298,37 +326,42 @@ ${request}
 `
 }
 
-function scopeViolations(preSnapDir, workDir, governed) {
-  // files whose bytes differ from the pre-state snapshot but are NOT in the governed set
-  const out = []
-  const walk = (dir, base) => {
-    for (const e of readdirSyncSafe(dir)) {
-      const abs = join(dir, e), rel = abs.slice(base.length + 1)
-      if (statSafe(abs)?.isDirectory()) { if (e !== '.git') walk(abs, base) }
-      else {
-        if (governed.includes(rel)) continue
-        const pre = join(preSnapDir, rel)
-        const a = existsSync(pre) ? readFileSafe(pre) : null
-        const b = readFileSafe(abs)
-        if (a === null || a !== b) out.push(rel)
-      }
-    }
-  }
-  if (workDir && existsSync(workDir)) walk(workDir, workDir)
-  return out
-}
-const readdirSyncSafe = (d) => { try { return readdirSync(d) } catch { return [] } }
+const readdirSyncSafe = (d) => { try { return readdirSync(d, { withFileTypes: true }).map((e) => e.name) } catch { return [] } }
 const statSafe = (p) => { try { return statSync(p) } catch { return null } }
 const readFileSafe = (p) => { try { return readFileSync(p, 'utf8') } catch { return null } }
 
 export async function leafPhase({ credPath }) {
   const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
   const cards = JSON.parse(readFileSync(join(HERE, 'task-cards.json'), 'utf8'))
-  // the two leaf targets run in parallel; within a leaf the three arms are sequential (shared frozen task)
-  const settled = await Promise.allSettled(tasks.leaves.map((leaf) => runLeaf(leaf, cards, tasks.c0, credPath)))
+  const abort = { stopped: false, reason: null }
+
+  // (6) phase enforcement — bind to the exact frozen inputs + committed runner/image, not operator memory:
+  const enforce = []
+  const E = (name, ok, detail) => { enforce.push({ name, ok, detail }); if (!ok) stopBatch(abort, `phase-enforcement ${name}: ${detail}`) }
+  try { runTs(['tasks', '--check']); E('tasks-frozen', true, 'tasks --check rc0') } catch (e) { E('tasks-frozen', false, 'tasks --check non-zero') }
+  const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))
+  E('cards-hash', cardsSha === tasks.cardsSha256, `cards sha ${cardsSha.slice(0, 12)} vs pinned ${String(tasks.cardsSha256).slice(0, 12)}`)
+  const prov = provenanceRecord()
+  E('runner-committed', prov.runnerDirty === false, `runner working tree dirty=${prov.runnerDirty} — commit before paid runs`)
+  E('docker-image-pinned', !!prov.dockerImageId, `image ${prov.dockerImage} id=${String(prov.dockerImageId).slice(0, 16)}`)
+  E('claude-pinned', !!prov.claudeVersion && !!prov.claudePkgDigest, `claude ${prov.claudeVersion} digest ${prov.claudePkgDigest}`)
+  // scorer controls must discriminate BEFORE paid runs (positive pass, negative rejected)
+  const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
+  if (specLintLeaf) {
+    const ctl = scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)
+    writeFileSync(join(RUNS, 'pilot', 'scorer-controls.json'), JSON.stringify({ at: nowIso(), ...ctl }, null, 2) + '\n')
+    E('scorer-controls-discriminate', ctl.discriminates, `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total}`)
+  }
+
+  // gate: only leaves whose behavioural scorer is implemented run paid arms; others are declared blind
+  const runnable = tasks.leaves.filter((l) => SCORER_IMPLEMENTED.has(l.id))
+  const gatedOut = tasks.leaves.filter((l) => !SCORER_IMPLEMENTED.has(l.id)).map((l) => ({ leaf: l.id, reason: cards.leaves[l.relDir]?.acceptance?.status ?? 'no behavioural scorer implemented — declared blind spot' }))
+
+  // leaf targets run concurrently; a hard failure in one sets shared abort so the other stops launching new arms
   const results = [], failures = []
-  settled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ leaf: tasks.leaves[i].id, error: String(s.reason?.message ?? s.reason) }))
-  const report = { v: 1, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, results, failures }
+  const settled = await Promise.allSettled(runnable.map((leaf) => runLeaf(leaf, cards, tasks.c0, credPath, abort)))
+  settled.forEach((s, i) => s.status === 'fulfilled' ? results.push(s.value) : failures.push({ leaf: runnable[i].id, error: String(s.reason?.message ?? s.reason) }))
+  const report = { v: 2, at: nowIso(), phase: 'leaf', c0: tasks.c0, cEval: tasks.cEval, provenance: prov, enforcement: enforce, gatedOut, aborted: abort.stopped, abortReason: abort.reason, results, failures }
   writeFileSync(join(RUNS, 'pilot', 'leaf-report.json'), JSON.stringify(report, null, 2) + '\n')
   return report
 }
@@ -356,14 +389,39 @@ if (sub === 'preflight') {
   const scale = opt('--scale', 'leaf')
   if (scale !== 'leaf') { console.error(`only --scale leaf implemented in this stage (got ${scale})`); process.exit(2) }
   const report = await leafPhase({ credPath: opt('--cred', CRED_DEFAULT) })
-  console.log(`\nleaf phase: ${report.results.length} leaves complete, ${report.failures.length} failed`)
+  console.log(`\nleaf phase: ${report.results.length} leaves complete, ${report.failures.length} failed, ${report.gatedOut.length} gated-out (blind), aborted=${report.aborted}`)
+  for (const g of report.gatedOut) console.log(`  GATED [${g.leaf}]: ${g.reason}`)
   for (const r of report.results) {
-    console.log(`  [${r.leaf}] recon valid=${r.recon.valid} chars=${r.recon.chars} o0Overlap=${r.recon.o0Overlap} model=${JSON.stringify(r.recon.model)}`)
-    for (const a of ['O0', 'R0', 'N0']) console.log(`    ${a}: model=${JSON.stringify(r.arms[a].trace.model.observedSet)} score=${r.arms[a].score.passed}/${r.arms[a].score.total} scope-violations=${r.arms[a].scopeViolations} in/out=${r.arms[a].trace.tokens.input}/${r.arms[a].trace.tokens.output} ${r.arms[a].trace.durationMs}ms`)
+    console.log(`  [${r.leaf}] episode=${r.episode.slice(0, 8)} preState=${r.preState.slice(0, 8)} armOrder=${JSON.stringify(r.armOrder)} recon valid=${r.recon.valid} bodyChars=${r.recon.bodyChars} o0Overlap=${r.recon.o0Overlap} model=${JSON.stringify(r.recon.model)}`)
+    for (const a of r.armOrder) console.log(`    ${a}: model=${JSON.stringify(r.arms[a].trace.model.observedSet)} sessions=${r.arms[a].trace.sessionIds.length} score=${r.arms[a].score.passed}/${r.arms[a].score.total} scope-violations=${r.arms[a].scopeViolations} in/cacheR/out=${r.arms[a].trace.tokens.input}/${r.arms[a].trace.tokens.cacheRead}/${r.arms[a].trace.tokens.output} ${r.arms[a].trace.durationMs}ms`)
   }
   for (const f of report.failures) console.log(`  BATCH-STOP [${f.leaf}]: ${f.error}`)
-  process.exit(report.failures.length ? 1 : 0)
+  process.exit(report.failures.length || report.aborted ? 1 : 0)
+} else if (sub === 'check') {
+  // NO-MODEL regression + control suite — must pass rc0 BEFORE any paid run. Runs every gate that
+  // needs no paid call: usage aggregation regression, scorer positive/negative controls, frozen frames,
+  // dry-oracle, cards-hash binding, provenance pinning (image/claude). Runner-dirty is reported, not failed.
+  const checks = []
+  const K = (name, ok, detail) => { checks.push({ name, ok, detail }); console.log(`  ${ok ? '✓' : '✗'} ${name} — ${detail}`) }
+  const tryRun = (label, fn) => { try { return fn() } catch (e) { return { __err: String(e.status ?? e.message ?? e) } } }
+  const usage = tryRun('usage', () => execFileSync(TSX_NODE, [join(HERE, 'usage.selftest.mjs')], { cwd: ROOT, encoding: 'utf8' }))
+  K('usage-aggregation-regression', !usage.__err, usage.__err ? `FAILED ${usage.__err}` : 'no double-count, monotonic fail-loud, missing-field keeps prior')
+  const tasks = JSON.parse(readFileSync(join(HERE, 'tasks.json'), 'utf8'))
+  const specLintLeaf = tasks.leaves.find((l) => l.id === 'spec-lint')
+  const ctl = specLintLeaf ? tryRun('ctl', () => scoreControls(ROOT, specLintLeaf.episode.sha, specLintLeaf.preState)) : { discriminates: false }
+  K('scorer-controls-discriminate', !!ctl.discriminates, ctl.discriminates ? `positive ${ctl.positive.passed}/${ctl.positive.total}, negative ${ctl.negative.passed}/${ctl.negative.total} (pre-state rejected)` : `FAILED ${ctl.__err ?? 'no discrimination'}`)
+  for (const c of ['select', 'episodes', 'tasks']) { const r = tryRun(c, () => runTs([c, '--check'])); K(`frame-${c}`, !r.__err, r.__err ? `FAILED ${r.__err}` : 'byte-identical') }
+  const dry = tryRun('dry', () => runTs(['dry'])); K('dry-oracle', !dry.__err, dry.__err ? `FAILED ${dry.__err}` : 'all gates + twin')
+  const cardsSha = sha256(readFileSync(join(HERE, 'task-cards.json')))
+  K('cards-hash-binding', cardsSha === tasks.cardsSha256, `cards ${cardsSha.slice(0, 12)} vs pinned ${String(tasks.cardsSha256).slice(0, 12)}`)
+  const prov = provenanceRecord()
+  K('provenance-pinned', !!prov.dockerImageId && !!prov.claudeVersion && !!prov.claudePkgDigest, `image=${String(prov.dockerImageId).slice(0, 19)} claude=${prov.claudeVersion} digest=${prov.claudePkgDigest} runnerDirty=${prov.runnerDirty} (dirty is informational here; the paid phase HARD-gates on committed)`)
+  mkdirSync(join(RUNS, 'pilot'), { recursive: true })
+  writeFileSync(join(RUNS, 'pilot', 'check.json'), JSON.stringify({ at: nowIso(), checks, provenance: prov }, null, 2) + '\n')
+  const hardOk = checks.filter((c) => c.name !== 'provenance-pinned' || c.ok).every((c) => c.ok)
+  console.log(hardOk ? '\npilot check ✓ all no-model regressions + controls pass' : '\npilot check ✗ FAILED')
+  process.exit(hardOk ? 0 : 1)
 } else if (sub) {
-  console.error(`unknown pilot subcommand: ${sub} (preflight | verify-model | phase --scale leaf)`)
+  console.error(`unknown pilot subcommand: ${sub} (check | preflight | verify-model | phase --scale leaf)`)
   process.exit(2)
 }

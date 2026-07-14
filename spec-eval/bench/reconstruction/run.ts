@@ -297,36 +297,50 @@ function computeTasks(cEval: string) {
   const sel = JSON.parse(readFileSync(TARGETS_PATH, 'utf8'))
   const { c0 } = sel
   const pool = eligiblePreMigrationEpisodes(c0, cEval)   // already first-parent ASCENDING (git --reverse)
-  // manual escape-hatch exclusions (things the mechanical check below can't see); default empty.
+  // manual escape-hatch exclusions (things the mechanical checks below can't see); default empty.
   const exclPath = join(HERE, 'task-exclusions.json')
   const manual: { relDir: string; episodeSha: string; reason: string }[] = existsSync(exclPath) ? JSON.parse(readFileSync(exclPath, 'utf8')) : []
-  const leaves = sel.leaf.map((leaf: any) => {
+  // counterbalanced arm schedule (§11): the three arms must NOT always run O0→R0→N0 — a fixed order
+  // confounds arm with sequence (rate-limit/time-of-day drift). Freeze a per-leaf rotation by index.
+  const ARMS = ['O0', 'R0', 'N0']
+  const armOrderFor = (i: number) => ARMS.map((_, k) => ARMS[(k + i) % ARMS.length])
+  const leaves = sel.leaf.map((leaf: any, i: number) => {
     const code: string[] = leaf.code
     const manualShas = new Set(manual.filter((x) => x.relDir === leaf.relDir).map((x) => x.episodeSha))
     const cands = pool.filter((e) => e.paths.some((p) => code.includes(p)))
-    // Earliest replayable candidate. The MECHANICAL replay check (result-independent, run before any arm):
-    // the change to the leaf's governed files must not depend on a NEW sibling module created in the same
-    // episode — else a fresh executor at pre-state can't attempt the task without also authoring an
-    // unrelated module. Every skipped candidate freezes its reason inline (excluded[]), never result-picked.
+    // Earliest candidate passing BOTH mechanical, result-independent checks (run before any arm):
+    //  (a) replay: the governed-file change must not depend on a NEW sibling module created in the same
+    //      episode (else a fresh executor at pre-state can't attempt it without authoring that module);
+    //  (b) scope-self-containment: the episode must not change NON-governed SOURCE files (added/modified/
+    //      deleted) — else the episode's real subject lives outside the governed set, a faithful impl would
+    //      look like a scope violation, and a regex scorer could reward a wrong impl. Reasons frozen inline.
     const excluded: { episodeSha: string; reason: string }[] = []
     let pick: any = null
     for (const e of cands) {
       if (manualShas.has(e.sha)) { excluded.push({ episodeSha: e.sha, reason: `manual: ${manual.find((x) => x.relDir === leaf.relDir && x.episodeSha === e.sha)!.reason}` }); continue }
-      const dep = newSiblingDep(e.sha, e.preState ?? git(['rev-parse', `${e.sha}^1`]).trim(), code)
+      const preState = git(['rev-parse', `${e.sha}^1`]).trim()
+      const dep = newSiblingDep(e.sha, preState, code)
       if (dep.length) { excluded.push({ episodeSha: e.sha, reason: `depends-on-new-sibling-module: ${dep.join(', ')}` }); continue }
+      const nonGov = e.paths.filter((p: string) => SOURCE_EXT.has(extOf(p)) && !code.includes(p))
+      if (nonGov.length) { excluded.push({ episodeSha: e.sha, reason: `scope-not-self-contained: non-governed source changed: ${nonGov.slice(0, 6).join(', ')}${nonGov.length > 6 ? ` +${nonGov.length - 6}` : ''}` }); continue }
       pick = e; break
     }
-    if (!pick) throw new Error(`no replayable pre-migration episode for leaf ${leaf.id} (${excluded.length} excluded)`)
+    if (!pick) throw new Error(`no replayable & scope-self-contained pre-migration episode for leaf ${leaf.id} (${excluded.length} excluded)`)
     const preState = git(['rev-parse', `${pick.sha}^1`]).trim()
     return {
       stratum: leaf.stratum, relDir: leaf.relDir, id: leaf.id, leafCode: code,
-      candidateCount: cands.length, excluded,
+      candidateCount: cands.length, excluded, armOrder: armOrderFor(i),
       episode: { sha: pick.sha, date: pick.date, subject: pick.subject, files: pick.paths.length,
-        changedLeafFiles: pick.paths.filter((p) => code.includes(p)).sort() },
+        changedSource: pick.paths.filter((p: string) => SOURCE_EXT.has(extOf(p))).sort(),
+        changedLeafFiles: pick.paths.filter((p: string) => code.includes(p)).sort() },
       preState,
     }
   })
-  return { v: 1, c0, cEval, protocol: 'docs/spec-reconstruction-bench.md', cards: 'task-cards.json', leaves }
+  // bind the authored task cards to this freeze: hash the cards file (if present) so `tasks --check`
+  // fails if the cards change without re-registration. Two-pass on first authoring (null until cards land).
+  const cardsPath = join(HERE, 'task-cards.json')
+  const cardsSha256 = existsSync(cardsPath) ? sha256(readFileSync(cardsPath)) : null
+  return { v: 2, c0, cEval, protocol: 'docs/spec-reconstruction-bench.md', cards: 'task-cards.json', cardsSha256, leaves }
 }
 
 // mechanical replay check: relative imports added to the leaf's governed files in this episode that

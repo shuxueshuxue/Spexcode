@@ -209,9 +209,11 @@ function scoreLeaf(leafId, workspaceDir, card) {
 // hard fail-loud: any leak / model!=glm-5.2 / secret hit / archive-manifest failure aborts the WHOLE batch.
 function enforceRunGates(label, r) {
   if (r.timedOut) throw new Error(`BATCH-STOP: ${label} timed out (${r.trace?.durationMs}ms) — archived as failure, no silent retry`)
-  if (!r.modelClean) throw new Error(`BATCH-STOP: ${label} observed model set ${JSON.stringify(r.trace?.model?.observedSet)} != {${MODEL}}`)
+  if (!r.modelClean) throw new Error(`BATCH-STOP: ${label} real endpoint model set ${JSON.stringify(r.trace?.model?.observedSet)} != {${MODEL}}`)
   if (!r.secretClean) throw new Error(`BATCH-STOP: ${label} secret scan found credential material in archived bytes`)
   if (!existsSync(join(r.archiveDir, 'trace.json'))) throw new Error(`BATCH-STOP: ${label} archive manifest (trace.json) missing`)
+  if (r.apiError) throw new Error(`BATCH-STOP: ${label} upstream API error — ${r.apiError} — archived as failure, NOT retried (avoids hammering a rate-limited account)`)
+  if (!r.realCompletion) throw new Error(`BATCH-STOP: ${label} produced no real ${MODEL} completion (0 output tokens) — archived as failure`)
 }
 
 // ---- leaf phase: R0 recon + O0/R0/N0 executor arms per leaf (arms share ONE frozen future task) ----
@@ -344,8 +346,9 @@ if (sub === 'preflight') {
   process.exit(report.allOk ? 0 : 1)
 } else if (sub === 'verify-model') {
   const r = await verifyModel({ credPath: opt('--cred', CRED_DEFAULT) })
-  console.log(`verify-model: ok=${r.ok} exit=${r.exitCode} timedOut=${r.timedOut} modelClean=${r.modelClean} secretClean=${r.secretClean}`)
-  console.log(`  observed model set: ${JSON.stringify(r.trace.model.observedSet)} (expected ${MODEL})`)
+  console.log(`verify-model: ok=${r.ok} exit=${r.exitCode} timedOut=${r.timedOut} modelClean=${r.modelClean} realCompletion=${r.realCompletion} secretClean=${r.secretClean}`)
+  console.log(`  real endpoint model set: ${JSON.stringify(r.trace.model.observedSet)} (all seen incl local: ${JSON.stringify(r.trace.model.allSeen)}; expected ${MODEL})`)
+  if (r.apiError) console.log(`  API error: ${r.apiError}`)
   console.log(`  tokens: in=${r.trace.tokens.input} cacheRead=${r.trace.tokens.cacheRead} out=${r.trace.tokens.output} duration=${r.trace.durationMs}ms`)
   console.log(`  archive: ${r.archiveDir}`)
   process.exit(r.ok ? 0 : 1)

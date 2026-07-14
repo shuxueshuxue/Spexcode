@@ -169,22 +169,32 @@ export async function launchAgent(opts) {
     const rawErr = stderrBuf.join('')
     const bridgeConns = bridgeLog.join('').split('\n').filter((l) => /conn#/.test(l)).length
 
-    // parse stream-json: collect model set + token totals, per assistant message
+    // parse stream-json: separate REAL endpoint models from Claude Code's local `<synthetic>` marker
+    // (used for locally-generated content — API-error/interrupt messages, NOT a model the endpoint served).
+    // The {glm-5.2} verification applies to real endpoint responses; a real completion needs tokens>0.
     const events = []
     for (const line of rawOut.split('\n')) {
       const s = line.trim(); if (!s.startsWith('{')) continue
       try { events.push(JSON.parse(s)) } catch {}
     }
-    const modelSet = new Set()
-    let inTok = 0, cacheReadTok = 0, outTok = 0, msgCount = 0, assistantText = ''
+    const apiModelSet = new Set()      // models from real endpoint responses (excludes <synthetic>)
+    const allModelSet = new Set()      // everything seen, for the trace
+    let inTok = 0, cacheReadTok = 0, outTok = 0, msgCount = 0, realCompletion = false, apiError = null
     for (const e of events) {
       const msg = e.message ?? e
-      if (msg && msg.model) modelSet.add(msg.model)
+      const model = msg && msg.model
+      if (model) { allModelSet.add(model); if (model !== '<synthetic>') apiModelSet.add(model) }
       const u = msg?.usage
       if (u) { msgCount++; inTok += u.input_tokens ?? 0; cacheReadTok += u.cache_read_input_tokens ?? 0; outTok += u.output_tokens ?? 0 }
-      if (e.type === 'result' && typeof e.result === 'string') assistantText += e.result
+      if (u && (u.output_tokens ?? 0) > 0 && model === MODEL) realCompletion = true
+      // surface an API error (e.g. a 429 rate limit) from the synthetic error message
+      if (model === '<synthetic>' || e.subtype === 'api_error') {
+        const txt = JSON.stringify(msg?.content ?? '').match(/API Error[^"]*/)?.[0]
+        if (txt) apiError = txt.slice(0, 200)
+      }
     }
-    const modelClean = modelSet.size === 1 && modelSet.has(MODEL)
+    // model provenance is clean iff every REAL endpoint response was glm-5.2 (and at least one occurred)
+    const modelClean = apiModelSet.size >= 1 && [...apiModelSet].every((m) => m === MODEL)
 
     // secret scan across the raw transcript/stderr/prompt BEFORE archiving anything
     const scanBlob = rawOut + '\n' + rawErr + '\n' + prompt
@@ -209,7 +219,8 @@ export async function launchAgent(opts) {
       v: 1, runId, started, ended: nowIso(), durationMs: Date.now() - t0,
       endpointHost: ENDPOINT_HOST, bridgeConnections: bridgeConns,
       exitCode: exit, timedOut,
-      model: { observedSet: [...modelSet], expected: MODEL, clean: modelClean },
+      model: { observedSet: [...apiModelSet], allSeen: [...allModelSet], expected: MODEL, clean: modelClean, realCompletion },
+      apiError,
       tokens: { messages: msgCount, input: inTok, cacheRead: cacheReadTok, output: outTok },
       upstreamCommit: upstreamCommit ?? null,
       openPathManifest: {
@@ -222,8 +233,8 @@ export async function launchAgent(opts) {
     }
     writeFileSync(join(archiveDir, 'trace.json'), JSON.stringify(trace, null, 2) + '\n')
 
-    const ok = exit === 0 && !timedOut && modelClean && secretClean
-    return { ok, trace, timedOut, modelClean, secretClean, exitCode: exit, archiveDir, workDir: workOut, assistantText }
+    const ok = exit === 0 && !timedOut && modelClean && secretClean && realCompletion && !apiError
+    return { ok, trace, timedOut, modelClean, secretClean, realCompletion, apiError, exitCode: exit, archiveDir, workDir: workOut }
   } finally {
     cleanup()
   }

@@ -108,5 +108,6 @@ scenarios:
 transcript 证据（`--result`）与 expected 逐条比对后填 reading。dry-oracle-gates、frames-frozen、
 pilot-check-suite 是无凭证无网络可随时重测的面；pilot-preflight-gates 重测需要凭证文件与 endpoint
 探测（provider 触碰），在禁触 provider 的阶段它如实保持 stale，与付费门同批人批后重测；
-pilot-reconstruction-run 与 blind-forward-scoring 是付费 pilot 的预注册合同——在预算获人工批准并执行
-之前，它们保持 missing（unmeasured），这个空缺本身就是诚实的盲区记录，不许用推理或代跑填充。
+pilot-reconstruction-run 已在人批预算下实测（Codex/gpt-5.5 串行全轨迹，见 reading 与
+runs/pilot/phase-leaf 档案）；blind-forward-scoring 仍是预注册合同——在人批并执行之前保持
+missing（unmeasured），这个空缺本身就是诚实的盲区记录，不许用推理或代跑填充。

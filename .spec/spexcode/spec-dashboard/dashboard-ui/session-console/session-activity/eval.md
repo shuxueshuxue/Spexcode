@@ -20,8 +20,8 @@ scenarios:
       A live working session's row is ONE compact line whose headline is its tmux self-summary — the agent's
       own description of what it is doing now, having overridden the launch-prompt placeholder it started
       with; the status rides that same line as a colour-coded glyph (`STATUS_GLYPH`/`STATUS_COLOR`, the exact
-      word on the hover title) with the op tally beside it — no second status row on either desktop list (the
-      two-row face is mobile's alone). A not-yet-live row shows the prompt placeholder as its headline, same
+      word on the hover title) with the op tally beside it — no second status row on ANY list (the old
+      two-row face is deleted outright). A not-yet-live row shows the prompt placeholder as its headline, same
       single line. A just-booting row keeps that placeholder until the agent's glyph-led summary lands — it
       never flashes the host name or a bare `Claude Code` splash in between. The headline is the worker's own
       pane title (or, when present, a human rename), never a bare derived label or tmux default while the

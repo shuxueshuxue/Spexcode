@@ -654,7 +654,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: flex; align-items: center; column-gap: 7px;
   font-size: 10px; line-height: 1.3; opacity: .9; overflow: hidden;
 }
-.sess-status { color: var(--muted); flex: none; }   /* colour overridden inline by STATUS_COLOR */
 .sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
@@ -1572,27 +1571,77 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   font-size: 10px; line-height: 16px; text-align: center;
 }
 
-/* sessions list — reuses the SAME SessionRow face the desktop draws (row 1: avatar · headline; row 2: status · ops). */
+/* sessions list — the SAME one-line SessionRow face + fold rails the desktop console renders; only the
+   wrapper row is touch-sized. The .sess-meta override mirrors .si-item's (resting one-line: meta pinned right). */
 .m-sesslist { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .m-sess-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%;
-  padding: 12px 14px; text-align: left; cursor: pointer;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; width: 100%;
+  padding: 12px 14px; text-align: left; cursor: pointer; font-size: 14px; color: var(--ink2);
   background: var(--paper); border: none; border-bottom: 1px solid var(--line); font-family: var(--mono);
 }
 .m-sess-row:active { background: var(--panel); }
 .m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-sess-row .sess-meta { font-size: 11px; line-height: 1.4; }
+.m-sess-row .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; font-size: 12px; }
+.m-sess-row .sess-glyph { font-size: 13px; width: 14px; }
 .m-sess-row .sess-ops { color: var(--muted); }   /* mobile keeps the tally muted, not the overlay hue */
 
-/* session detail — identity, the worker's rolling activity, and the nodes it's changing (tap to cross over). */
+/* zone headers on the mobile session list — same partition every desktop list draws ([[session-console]]). */
+.m-zone { padding: 10px 14px 4px; font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+
+/* session detail — the terminal-free conversation ([[session-timeline]]): identity card, then the
+   timeline (status transitions with full notes + delivered prompts) over a docked composer. */
 .m-sessdetail { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
-.m-sess-card { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid var(--line); }
+.m-sessdetail.chat { display: flex; flex-direction: column; overflow: hidden; }
+.m-sess-card { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .m-sess-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); }
+.m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-sess-status { font-size: 12px; color: var(--muted); }
-.m-sess-activity { padding: 10px 14px; color: var(--ink); font-size: 13px; line-height: 1.5; background: var(--panel); border-bottom: 1px solid var(--line); }
-.m-sess-section { padding: 12px 14px 6px; font-size: 11px; font-weight: 700; letter-spacing: .4px; color: var(--muted); text-transform: uppercase; }
+.m-sess-id8 { color: var(--muted); }
+.m-sess-changes { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .m-sessdetail .ov-mark { flex: none; }
+
+/* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
+   below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
+.m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
+.m-day { text-align: center; margin: 10px 0 6px; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+.m-ev { margin: 8px 0; }
+.m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: 12px; }
+.m-ev-glyph { flex: none; }
+.m-ev-word { font-weight: 700; }
+.m-ev-time { margin-left: auto; flex: none; font-size: 10px; color: var(--muted); }
+.m-ev-note {
+  margin: 4px 0 0 14px; padding: 8px 10px; font-size: 13px; line-height: 1.55; color: var(--ink2);
+  white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
+}
+.m-ev-sent .m-ev-from { font-weight: 700; color: var(--blue); }
+.m-ev-text {
+  margin: 4px 0 0 14px; padding: 8px 10px; font-size: 13px; line-height: 1.55; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--blue) 7%, var(--paper));
+  border-left: 2px solid color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: 0 6px 6px 0;
+}
+.m-ev-prompt summary { font-family: var(--mono); font-size: 12px; color: var(--muted); cursor: pointer; }
+
+/* the docked composer — textarea + send, with the note-reply chip above (the terminal-free default ON). */
+.m-offline, .m-senderr { flex: none; padding: 6px 14px; font-size: 12px; }
+.m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+.m-senderr { color: var(--red); }
+.m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.m-chip {
+  font-family: var(--mono); font-size: 11px; color: var(--muted); background: none;
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; margin-bottom: 6px;
+}
+.m-chip.on { color: var(--blue); border-color: var(--blue); }
+.m-composer-line { display: flex; align-items: flex-end; gap: 8px; }
+.m-input {
+  flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: 14px;
+  color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;
+}
+.m-input:focus { border-color: var(--blue); }
+.m-send {
+  flex: none; height: 38px; padding: 0 16px; font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--paper); background: var(--blue); border: none; border-radius: 8px; cursor: pointer;
+}
+.m-send:disabled { opacity: .45; cursor: default; }
 
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }

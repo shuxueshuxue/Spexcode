@@ -140,6 +140,39 @@ export function faviconHref(icon) {
   return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${icon}</text></svg>`)
 }
 
+// the ONE way to build a `/api/sessions/:id/*` URL — the session-side twin of specUrl, same invariant:
+// the id is the sole encoded segment, fixed route words append verbatim.
+export const sessionUrl = (id, ...parts) =>
+  `/api/sessions/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
+
+// a session's persisted interaction history ([[session-timeline]]): authored status transitions (full note
+// text) + delivered prompts, oldest first — what the terminal-free face renders as the conversation.
+// null on 404/failure (the caller keeps its last-known list; the poll retries).
+export async function loadSessionTimeline(id) {
+  const res = await apiFetch(sessionUrl(id, 'timeline'), { cache: 'no-store' })
+  if (!res.ok) return null
+  return res.json()
+}
+
+// the session record detail (full originating prompt on top of the board row) behind /api/sessions/:id.
+export async function loadSessionDetail(id) {
+  const res = await apiFetch(sessionUrl(id))
+  if (!res.ok) return null
+  return res.json()
+}
+
+// dispatch a prompt to a session through the ONE input route every surface shares ([[dispatch]]).
+// `replyVia:'note'` marks a terminal-free sender: the SERVER appends the note-reply insert
+// ([[session-timeline]]), so the phrase lives in one place. Returns { ok, error? }.
+export async function sendSessionText(id, text, { replyVia } = {}) {
+  const res = await apiFetch(sessionUrl(id, 'input'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'text', text, ...(replyVia ? { replyVia } : {}) }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok && body?.ok !== false, error: body?.error }
+}
+
 // the command presets (plugin nodes with `surface: command`) the backend serves at /api/plugins.
 export async function loadPlugins() {
   const res = await apiFetch('/api/plugins')

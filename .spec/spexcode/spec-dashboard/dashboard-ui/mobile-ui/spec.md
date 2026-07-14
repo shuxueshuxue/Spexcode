@@ -9,6 +9,7 @@ code:
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/useIsMobile.js
 ---
@@ -56,10 +57,21 @@ The two planes, made native to touch:
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
+- **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
+  tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out
+  of the desktop console for exactly this reuse): the `/preset [[node]]…` grammar composition, the
+  launcher fetch + default resolution + the per-browser remembered pick (one localStorage key, so
+  phone and desktop agree), and the one `POST /api/sessions`. Only the chrome is phone-shaped —
+  textarea, native launcher `<select>`, one launch button. Where the desktop box fires in the
+  background and stays type-ready, the phone AWAITS the create with a busy button: the wait is
+  honest (worktree+agent take seconds) and busy-gating doubles as the double-tap guard a touch
+  surface needs. Success returns to the list, where the new row lands on the next board push; a
+  failed create keeps the draft and fails loud. The draft itself lives above the plane, so a peek
+  at the specs tab never loses a half-typed prompt.
 
-It answers "what does the tree say", "what are my agents doing", and now "talk to them" — from a
-phone. Merge/close and the live pane stay with the desktop board: acting on proposals is the
-manager cockpit's job, a deliberate scope line.
+It answers "what does the tree say", "what are my agents doing", "talk to them", and now "start
+one" — from a phone. Merge/close and the live pane stay with the desktop board: acting on
+proposals is the manager cockpit's job, a deliberate scope line.
 
 This node's slice of the shared `styles.css` is the narrow-viewport mobile face; classes other surfaces
 add there — most recently the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score

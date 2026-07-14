@@ -5,6 +5,7 @@ import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, pane
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
+import { composeLaunch, createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { useT } from './i18n/index.jsx'
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
@@ -222,18 +223,77 @@ function MobileSessionDetail({ s, sessions, onBack }) {
   )
 }
 
+// @@@ the phone's create entry — the desktop New Session tab's touch twin, all substance shared: the SAME
+// launch path (./launch.js — composeLaunch grammar, launcher fetch + default resolution + the remembered
+// per-browser pick, the one POST /api/sessions). Only the chrome is phone-shaped: a full-screen composer
+// (textarea + native launcher <select> + one launch button). Unlike the desktop's fire-in-the-background
+// box (type-ready for the next launch at once), the phone AWAITS the create — the button reads busy while
+// the backend builds worktree+branch+agent (seconds) — because busy-gating is also the double-tap guard a
+// touch surface needs; success returns to the list, where the new session lands on the next board push.
+function MobileNewSession({ specs, draft, setDraft, onBack, onLaunched }) {
+  const t = useT()
+  const { launchers, launcher, pickLauncher } = useLaunchers()
+  const presets = useCommandPresets()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const launch = async () => {
+    const raw = draft.trim()
+    if (!raw || busy) return
+    setBusy(true); setErr(null)
+    const r = await createSession(composeLaunch(raw, presets, specs), launcher)
+    setBusy(false)
+    if (r.ok) { setDraft(''); onLaunched() }
+    else setErr(r.error || t('mobile.launchFailed'))   // fail loud, keep the draft — same rule as the send composer
+  }
+  return (
+    <div className="m-sessdetail m-new">
+      <div className="m-sess-card">
+        <button className="m-sess-back" onClick={onBack} aria-label={t('mobile.back')}>‹</button>
+        <div className="m-sess-meta">
+          <span className="m-sess-name">{t('mobile.newSession')}</span>
+        </div>
+      </div>
+      <div className="m-new-body">
+        <textarea
+          className="m-input m-new-input"
+          rows={5}
+          placeholder={t('mobile.newPlaceholder')}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        {launchers.length > 0 && (
+          <label className="m-new-launcher">
+            <span className="m-new-launcher-label">{t('session.launcherLabel')}</span>
+            <select className="m-new-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)}>
+              {launchers.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+            </select>
+          </label>
+        )}
+        {err && <div className="m-senderr">{err}</div>}
+        <button className="m-send m-new-go" disabled={!draft.trim() || busy} onClick={launch}>
+          {busy ? t('mobile.launching') : t('mobile.launch')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
 // with fold pods (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
-// beyond the touch-sized wrapper row.
-function MobileSessions({ sessions, openId, setOpenId }) {
+// beyond the touch-sized wrapper row and the create entry above the list (its own screen, MobileNewSession).
+function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  if (creating) return <MobileNewSession specs={specs} draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
   if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
-  if (!sessions.length) return <div className="m-empty big">{t('mobile.noSessions')}</div>
   return (
     <div className="m-sesslist">
+      <button className="m-new-btn" onClick={() => setCreating(true)}>
+        <span className="m-new-btn-plus">＋</span>{t('mobile.newSession')}
+      </button>
+      {!sessions.length && <div className="m-empty big">{t('mobile.noSessions')}</div>}
       {forest.map((it) => {
         if (it.type === 'zone') return <div className="m-zone" key={`z-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
         const s = it.s
@@ -263,6 +323,11 @@ export default function MobileApp({ specs, sessions }) {
   const [tab, setTab] = useState('specs')
   const [path, setPath] = useState(() => (root ? [root.id] : []))
   const [openSessionId, setOpenSessionId] = useState(null)
+  // the create composer's open flag + draft live HERE, not in the sessions plane — the plane unmounts on a
+  // bottom-tab flip, and a half-typed launch prompt must survive a peek at the specs tab (the phone twin of
+  // the desktop's per-tab draft cache).
+  const [creating, setCreating] = useState(false)
+  const [newDraft, setNewDraft] = useState('')
 
   // the 4s board poll can retire a node out from under us (merged/deleted); drop any breadcrumb id the
   // latest tree no longer has, and fall back to root, so a stale focus never blanks the screen.
@@ -295,7 +360,8 @@ export default function MobileApp({ specs, sessions }) {
             {cur && <MobileNode key={cur.id} node={cur} childrenOf={childrenOf} sessions={sessions} onOpenChild={pushChild} />}
           </div>
         ) : (
-          <MobileSessions sessions={sessions} openId={openSessionId} setOpenId={setOpenSessionId} />
+          <MobileSessions specs={specs} sessions={sessions} openId={openSessionId} setOpenId={setOpenSessionId}
+            creating={creating} setCreating={setCreating} newDraft={newDraft} setNewDraft={setNewDraft} />
         )}
       </main>
 

@@ -43,6 +43,21 @@ scenarios:
       entries, chat style. The detail is the bare conversation — header, timeline, composer, no
       tab row above the timeline (changed-nodes review is desktop scope) — so the freed line goes
       to the conversation itself.
+  - name: create-session-entry
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport (≤ 640px), open the Sessions tab. Above the session list sits the create
+      row — tap it: a full-screen composer opens (back chevron, prompt textarea, native launcher
+      select, one launch button). Verify the select lists the SAME launcher profiles /api/settings
+      serves and pre-selects the same default the desktop New tab would. Type a task, tap launch,
+      and wait through the button's busy state. Record the whole interaction as a video.
+    expected: |
+      The composer is the desktop New Session tab's touch twin with all substance shared (the one
+      launch path launch.js: /preset grammar, launcher fetch + default resolution + the per-browser
+      remembered pick, the one POST /api/sessions). The launch button reads busy while the backend
+      builds worktree+agent (the double-tap guard), then the surface returns to the sessions list
+      where the NEW session's row — the shared SessionRow face — appears within one board push. A
+      failed create keeps the draft and shows a loud error in the composer.
   - name: sessions-tab-status-colour
     tags: [frontend-e2e, mobile]
     description: >

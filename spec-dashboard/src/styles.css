@@ -1648,6 +1648,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
 
+/* the create entry ([[mobile-ui]]) — a touch-sized row above the session list, and the full-screen
+   composer it opens (the desktop New Session tab's phone twin; the substance is the shared launch path). */
+.m-new-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 14px;
+  font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue); text-align: left;
+  background: var(--paper); border: none; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.m-new-btn:active { background: var(--panel); }
+.m-new-btn-plus { flex: none; font-size: 16px; line-height: 1; }
+.m-new-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.m-new-input { min-height: 120px; }
+.m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.m-new-launcher-select {
+  flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--mono); font-size: 14px;
+  color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+}
+.m-new .m-senderr { padding: 0; }
+.m-new-go { height: 42px; }
+
 /* @@@ eval tab - the node's evaluation timeline (see [[eval-tab]]). Each reading is an expandable
    card: a header (scenario + freshness badge mirroring code-drift + evaluator/sha/time), then the captured
    pixels on expand. Same scroller shape as the other popup panes (.ov-body is overflow:hidden; the pane

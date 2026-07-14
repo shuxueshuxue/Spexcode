@@ -1,0 +1,1089 @@
+{
+  "v": 2,
+  "protocol": "docs/content-recoverability.md",
+  "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
+  "segmenter": "seg-v2",
+  "validationSurface": "deterministic non-sample, non-sample-ancestor taxonomy dev pool",
+  "mechanicalGate": {
+    "forbidden": [
+      "under-20-chars",
+      "over-600-chars",
+      "heading",
+      "raw-table-row",
+      "dependent-start"
+    ],
+    "devPoolFailures": [],
+    "sampleFailures": [],
+    "passed": true
+  },
+  "categoryBoundaryControl": {
+    "category": "research-evidence",
+    "primaryEligible": true,
+    "precedenceAfter": "historical-incident",
+    "precedenceBefore": "design-rationale",
+    "definition": "Frozen experiment, benchmark, measurement, comparison, or systematic-observation result/conclusion; distinct from contract, rationale, mechanism, and incident.",
+    "sampleLabelsAssigned": 0,
+    "sparseFixture": {
+      "scale": "module",
+      "clusters": 2,
+      "units": 8,
+      "expectedStatus": "insufficient",
+      "rateForbidden": true
+    }
+  },
+  "moduleCounts": [
+    {
+      "cluster": "spexcode/spec-cli/sessions/comms",
+      "units": 100,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "within-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-cli/sessions/injected-context",
+      "units": 34,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "below-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-cli/sessions/lifecycle",
+      "units": 73,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "within-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-cli/source-of-truth",
+      "units": 166,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "above-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-forge",
+      "units": 122,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "above-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-yatsu",
+      "units": 125,
+      "suggestedRange": [
+        60,
+        120
+      ],
+      "diagnostic": "above-suggested"
+    }
+  ],
+  "leafCounts": [
+    {
+      "cluster": "spexcode/spec-cli/source-of-truth/spec-lint",
+      "units": 26,
+      "suggestedRange": [
+        20,
+        30
+      ],
+      "diagnostic": "within-suggested"
+    },
+    {
+      "cluster": "spexcode/spec-dashboard/dashboard-ui/mobile-ui",
+      "units": 13,
+      "suggestedRange": [
+        20,
+        30
+      ],
+      "diagnostic": "below-suggested"
+    }
+  ],
+  "annotationBudget": {
+    "realUnitCards": 659,
+    "independentRealLabels": 1318,
+    "fabricatedUnits": 95,
+    "independentFabricatedVerifications": 190,
+    "minimumIndependentDecisionsBeforeAdjudication": 1508,
+    "possibleAdjudications": 659,
+    "unitSampling": 0
+  },
+  "devPool": [
+    {
+      "relDir": "spexcode/spec-cli/sessions/remote-client",
+      "unitCount": 19,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 89,
+          "text": "A session's live state lives where its tmux and worktrees are — on the backend's machine.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 204,
+          "text": "So the `spex` CLI must not read or drive sessions in its own process: a manager on one machine should monitor and drive an agent on another, and there must be exactly **one** actor on a given tmux socket.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 199,
+          "text": "The CLI's **read and control** verbs are therefore thin clients of the running backend, the same way the dashboard is — the backend is the single broker, and which machine you point at is just a URL.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 191,
+          "text": "The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `review`, `merge`, `reopen`, `close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default).",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 334,
+          "text": "They hold **no** in-process tmux/git path, so the backend is the **single actor** on the tmux socket and the single source of derived state, and pointing `SPEXCODE_API_URL` at another machine's backend monitors and drives THAT machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 145,
+          "text": "`watch`/`wait` take the board **source** as a required argument (the backend client), so a poll can never silently read a local board by default.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 51,
+          "text": "**Every command speaks the same selector grammar.**",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 131,
+          "text": "A caller names a session by full id, id-prefix, node, or branch — and not just the list verbs: the **control** verbs accept it too.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 219,
+          "text": "The backend matches `/…/:id` EXACTLY, so `resolveClientSession` resolves a selector against the live board (the [[session-selectors]] matcher over `clientListSessions`) and the verb then calls with the resolved FULL id.",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 134,
+          "text": "A non-match is loud and precise — `none` → no such session, `ambiguous` → the candidate ids — never a silent miss against the backend.",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 49,
+          "text": "The split is load-bearing and is the whole point.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 253,
+          "text": "State **producers** stay **local**: `done`/`ask`/`park`/ `idle` and the lifecycle hooks write the cwd worktree's `.session` (see [[state]]) — that file is HOW the backend learns state, so an agent must be able to declare its own even with no backend up.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 112,
+          "text": "**Launch** (`spex new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]).",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 58,
+          "text": "Only the verbs that observe or drive live tmux route here.",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 37,
+          "text": "**One availability rule, FAIL LOUD.**",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 266,
+          "text": "Unlike a best-effort telemetry POST, an unreachable backend throws a clear `no backend reachable at <url>` and a non-zero exit — never a silent fall back to a local in-process path, because that fallback is exactly what would re-create two actors on one tmux socket.",
+          "flags": []
+        },
+        {
+          "ordinal": 16,
+          "chars": 150,
+          "text": "`watch` warns once and keeps streaming (a backend blip must not read as \"all sessions fine\"); `wait` fails loud rather than reporting a false timeout.",
+          "flags": []
+        },
+        {
+          "ordinal": 17,
+          "chars": 42,
+          "text": "**Failure stays distinct from emptiness.**",
+          "flags": []
+        },
+        {
+          "ordinal": 18,
+          "chars": 313,
+          "text": "A monitoring read must let a manager tell \"I couldn't read\" from \"the screen is blank\": `capture` returns a genuinely empty pane as success, but maps unknown-session, offline (no live pane), and a capture error to distinct non-zero outcomes — a blank screen that exits 0 is never confused with a read that failed.",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/session-graph",
+      "unitCount": 24,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 63,
+          "text": "Sessions are not only spec-editors — they **watch each other**.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 140,
+          "text": "Show them as a **directed monitor network**: each session a node, each *live monitor* (agent A running `spex watch B`) a directed arrow A→B.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 115,
+          "text": "The view is **experimental and isolated** — it must drop in without disturbing the spec board or any existing view.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 326,
+          "text": "It lives as a tab **inside the session console** ([[session-console]]): the **\"View Session Relationship\"** view, reached by its icon button (paired with `＋ New Session` in the console's top button row) or — from the spec board — the small floating network button / the `t` key, both of which open the console **on this tab**.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 126,
+          "text": "The arrows are **observational** — they reflect who is watching whom right now and appear/disappear as watches start and stop.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 112,
+          "text": "The one human gesture is **asking**: dragging A→B does not draw a stored edge, it **asks agent A to monitor B**.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 160,
+          "text": "Clicking a node **opens that session's console** — which, since the graph and the consoles are sibling tabs of one board, simply switches to that session's tab.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 224,
+          "text": "Isolation is the governing principle: the view runs in its **own** ReactFlow context (separate camera, selection, store), so even sitting in the console's content pane it cannot disturb the spec board or any other ReactFlow.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 203,
+          "text": "Its **nodes are the shared preloaded session list** the console already holds (the same `sessions` every surface reads); only the **edges** are its own poll (`GET /api/sessions/graph`, see [[sessions]]).",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 238,
+          "text": "So it **fills the pane** and opens **instant and already framed** — the nodes are there on the first render, never a cold fetch to block behind, so `fitView` centres the web in that same paint, not an empty screen panning in a beat later.",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 132,
+          "text": "The **console owns the arrows and Esc** ([[keyboard-nav]], [[session-console]]); what is **left** to this view is the in-graph walk.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 188,
+          "text": "You reach the tab from an **empty** New Session with **→** and leave it with **←** (a horizontal axis off New, the twin of the vertical session list) — the other arrows are **inert** here.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 57,
+          "text": "Esc closes the view's `?` legend first, else the console.",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 244,
+          "text": "So the graph's cursor is **vim-only**: **hjkl** move it to the nearest node inside a 45° cone in that direction (the camera following), and **⏎** opens the focused session — the twin of a click, which **switches to that session's console tab**.",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 197,
+          "text": "The view's own keys keep the board's discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its keymap and edge vocabulary, instead of a standing wall of text.",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 193,
+          "text": "Each node is a session, drawn with the **same** seed-to-hue colour and avatar the rest of the dashboard keys off its session id ([[node-graph]]), so a face here matches that session everywhere.",
+          "flags": []
+        },
+        {
+          "ordinal": 16,
+          "chars": 120,
+          "text": "Layout is a **network**, not a tree: sessions sit on a radial ring so the directed edges read as a web of relationships.",
+          "flags": []
+        },
+        {
+          "ordinal": 17,
+          "chars": 275,
+          "text": "The edges are **derived from live watches, never user-drawn** (see [[sessions]]): the view only **polls**, so a watch starting or stopping makes its arrow appear or vanish on its own, each drawn in the **watcher's** hue; a global (`--all`) watcher shows arrows to every node.",
+          "flags": []
+        },
+        {
+          "ordinal": 18,
+          "chars": 153,
+          "text": "The backend derives edges only between live sessions, so closing a session removes its node and arrows together — the graph never shows a dangling arrow.",
+          "flags": []
+        },
+        {
+          "ordinal": 19,
+          "chars": 55,
+          "text": "Asking is the exception, faithful to the no-store rule.",
+          "flags": []
+        },
+        {
+          "ordinal": 20,
+          "chars": 170,
+          "text": "Dragging A→B **dispatches a prompt to agent A** (over the same `/keys` channel the console uses) telling it to monitor B (`spex watch B`); **no subscription is written**.",
+          "flags": []
+        },
+        {
+          "ordinal": 21,
+          "chars": 267,
+          "text": "The gesture must never fail for a reason the user can't see: on a ring nodes face arbitrary directions, so any anchor connects to any other and only the drag's **direction** carries meaning — the node the drag **started on is the watcher**, the other end the watched.",
+          "flags": []
+        },
+        {
+          "ordinal": 22,
+          "chars": 341,
+          "text": "To feel acknowledged at once, the moment the drag completes an **optimistic pending edge** (dashed, in A's hue) appears with a brief **toast**; that edge is provisional and **firms up to a solid live arrow** only once A's real `spex watch` registration arrives on the next poll (a pending edge is superseded by its live twin, never doubled).",
+          "flags": []
+        },
+        {
+          "ordinal": 23,
+          "chars": 21,
+          "text": "Nodes stay draggable.",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/config",
+      "unitCount": 9,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 139,
+          "text": "`config/` holds the **spec of the config system** — how SpexCode's reflexive, skill-shaped config nodes work, *not* the plugins themselves.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 195,
+          "text": "A config node is a folder where the folder *is* the unit (a `spec.md` plus optional helper scripts/assets); it defines a tool behavior, and **where it plugs in is a `surface` frontmatter field**:",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 52,
+          "text": "`surface: slash` — exposed as a new-session command.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 53,
+          "text": "`surface: system` — appended to agent system prompts.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 68,
+          "text": "The field-driven routing rule is specified by the [[surface]] child.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 173,
+          "text": "The **instances** — the DIY dev-flow plugins this product ships — live in the sibling [[.config]] tree, and that is what `/api/config` and the launcher's system gather read.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 103,
+          "text": "So: **config = the spec of the config system; .config = the instance where the dev-flow plugins live.**",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 138,
+          "text": "These nodes are reflexive: SpexCode's own behavior is configured by spec nodes, managed through the same dogfood ritual as any other node.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 74,
+          "text": "Frontmatter: `title`, `status`, `desc`, and `surface` (the routing field).",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-cli/worktree-resilience",
+      "unitCount": 23,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 78,
+          "text": "The backend reads the set of worktrees live on every board and layout request.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 247,
+          "text": "A dispatched worker can finish, merge, and have its own worktree removed at any instant — so a read that just checked a path can find it gone a moment later, and concurrent merges hold git index/ref locks that make a per-worktree `git` read throw.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 28,
+          "text": "Two failures came from this.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 129,
+          "text": "First, the race crashed the whole server: a failed read threw, nothing caught it, the process exited and dropped the public port.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 249,
+          "text": "Second — subtler — the guard that fixed the crash *over-corrected*: it dropped a worktree on **any** read throw, so a momentary unreadable detail made a **live** worktree vanish from the board, and the watch feed then reported it falsely **closed**.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 36,
+          "text": "A read failure is not non-existence.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 53,
+          "text": "Existence must not be hostage to a flaky detail read.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 87,
+          "text": "Existence and details are **separate facts**, and the guard decides on existence alone.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 28,
+          "text": "**Existence is definitive.**",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 125,
+          "text": "A worktree listed by `git worktree list` whose directory is still on disk **exists**, no matter what reading its details did.",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 473,
+          "text": "So the per-read guard branches on the **directory**, never on the read outcome: directory gone → the worktree was genuinely removed → **omit** that row; directory still present but the detail read threw (a `.session` ENOENT race, or a `git diff`/`merge-base` hitting an index/ref lock under a concurrent merge) → a transient **detail** failure → serve a **degraded** row built from raw facts (path, branch, branch-derived node) plus the last-known value, **never** drop it.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 171,
+          "text": "Every place that walks the worktree set — the layout overlay and the session list — passes such a degraded fallback, so the board **always lists every existing worktree**.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 121,
+          "text": "A live session therefore never disappears from the board for a poll, which is what used to surface as a spurious removal.",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 29,
+          "text": "**Enumeration is fail-loud.**",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 114,
+          "text": "The worktree set is the board's existence truth, so a *failed enumeration* must never masquerade as an empty repo.",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 203,
+          "text": "`git worktree list` always lists at least the main worktree, so a git error or a zero-row parse is a failure, not \"every worktree vanished\": the enumerator **throws** rather than returning an empty list.",
+          "flags": []
+        },
+        {
+          "ordinal": 16,
+          "chars": 202,
+          "text": "The caller surfaces it — a layout request fails loudly, and the watch poll's own catch simply skips that tick with its prior state intact — instead of fabricating a mass removal from a momentary outage.",
+          "flags": []
+        },
+        {
+          "ordinal": 17,
+          "chars": 22,
+          "text": "**Last-resort guard.**",
+          "flags": []
+        },
+        {
+          "ordinal": 18,
+          "chars": 110,
+          "text": "The server and the supervisor each install a process-level net for anything the per-read layer didn't foresee.",
+          "flags": []
+        },
+        {
+          "ordinal": 19,
+          "chars": 104,
+          "text": "An uncaught exception or unhandled rejection is logged and the process keeps serving instead of exiting.",
+          "flags": []
+        },
+        {
+          "ordinal": 20,
+          "chars": 136,
+          "text": "The supervisor owns the public port, so its survival is what keeps the port — and the proxied frontend — alive across a transient fault.",
+          "flags": []
+        },
+        {
+          "ordinal": 21,
+          "chars": 140,
+          "text": "The contract is resilience, not blindness: every omit, every degraded row, and every caught crash is logged, so a genuine bug stays visible.",
+          "flags": []
+        },
+        {
+          "ordinal": 22,
+          "chars": 160,
+          "text": "The guard only changes the consequence of a transient fault from \"the backend dies\" or \"a live worktree is dropped\" to \"it is logged and the board stays whole\".",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/keyboard-nav",
+      "unitCount": 29,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 133,
+          "text": "Move through the spec tree by **relationship, not geometry** — the tree sits at fixed positions and never re-plots; the camera moves.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 305,
+          "text": "On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup, search, cycle in-flight edits, cross into / start a fresh session, open the session relationship graph (`t`), help, settings, new-child / delete chords.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 49,
+          "text": "A board-level Esc only releases a locked session.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 137,
+          "text": "Inside any popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Enter crosses, Esc closes.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 39,
+          "text": "**Move by relationship, not geometry.**",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 179,
+          "text": "Navigation walks the parent / child / column structure (see [[node-graph]]), never pixel distance: up/down within the focus column, left to the parent, right to the nearest child.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 223,
+          "text": "The one exception is a leaf's right key — with no child below it, it steps to the nearest node in the columns to its right, in grid cells (column and row gaps weigh equally) and only rightward, so the parent key walks back.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 51,
+          "text": "**The camera follows the keyboard, not the mouse.**",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 125,
+          "text": "Arrow nav flat-pans onto the new node at constant zoom, never zoom-to-fit; a click only moves the highlight, the board stays.",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 53,
+          "text": "**While the keyboard drives, the mouse steps aside.**",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 303,
+          "text": "A nav keystroke puts the board in *keyboard mode*: the cursor hides and the board takes no pointer events — suppression that reaches into React Flow's own node/edge layers, which otherwise re-enable pointers — so a still cursor can't fire a hover affordance (the issue popover, any future hover reveal).",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 71,
+          "text": "The focused node's own popover still shows — a focus reveal, not hover.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 72,
+          "text": "Only a real pointer move exits the mode, not a pan under a still cursor.",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 26,
+          "text": "**A modal owns the keys.**",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 149,
+          "text": "While any popup, help overlay, settings, search palette, or session interface is open it captures every key — nav never leaks to the board behind it.",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 119,
+          "text": "The board is a drill-down (see [[node-graph]]), so a node in a collapsed subtree is invisible until you walk its spine.",
+          "flags": []
+        },
+        {
+          "ordinal": 16,
+          "chars": 159,
+          "text": "**Slash-to-search** is the escape hatch, spanning **three planes at once** — spec nodes, live sessions, and node-bound issues — each row tagged with its plane.",
+          "flags": []
+        },
+        {
+          "ordinal": 17,
+          "chars": 187,
+          "text": "Picking **routes by kind**: a node or issue sets focus (an issue lands on its bound node) and expand-on-focus reveals and pans to it; a session jumps to its tab (see [[session-console]]).",
+          "flags": []
+        },
+        {
+          "ordinal": 18,
+          "chars": 216,
+          "text": "The **overlay-cycle** keys aim the same at *change* not name — cycling focus through the nodes a worktree is editing, wrapping; **scope follows the lock**: a locked session's changed nodes, else every in-flight edit.",
+          "flags": []
+        },
+        {
+          "ordinal": 19,
+          "chars": 90,
+          "text": "A node does **not** belong to a session; `node.session` is only a last-editor attribution.",
+          "flags": []
+        },
+        {
+          "ordinal": 20,
+          "chars": 89,
+          "text": "The live link is the overlay — the session(s) whose pending ops currently touch the node.",
+          "flags": []
+        },
+        {
+          "ordinal": 21,
+          "chars": 171,
+          "text": "**Enter** drives the node's agent by how many editors are live: one jumps in, none opens a New Session prefilled with the node mention, several open the interface to pick.",
+          "flags": []
+        },
+        {
+          "ordinal": 22,
+          "chars": 97,
+          "text": "The **fresh-session** key is its unconditional counterpart — always a *new* session on the focus.",
+          "flags": []
+        },
+        {
+          "ordinal": 23,
+          "chars": 180,
+          "text": "The new-child and delete **chords** are likewise node ops on the focus, never destructive on the live tree, each pre-seeding the New Session input with an `@`-directive to confirm.",
+          "flags": []
+        },
+        {
+          "ordinal": 24,
+          "chars": 129,
+          "text": "While a session is locked a top-center **lock banner** names the grip and points at the overlay-cycle keys (or says it has none).",
+          "flags": []
+        },
+        {
+          "ordinal": 25,
+          "chars": 79,
+          "text": "**Esc releases the lock**, firing only with no modal open and a session locked.",
+          "flags": []
+        },
+        {
+          "ordinal": 26,
+          "chars": 175,
+          "text": "The full keymap and the node's visual vocabulary live in **one** centered scrollable modal that help opens; vim/arrow keys glide its body and the node-info popup's pane alike.",
+          "flags": []
+        },
+        {
+          "ordinal": 27,
+          "chars": 262,
+          "text": "The governed files are `App.jsx` — the capture-phase keydown handler routing every key to navigation or the active modal, rendering [[node-graph]] but existing for the keyboard contract — and `cycle.js`, the `cycleNext` ring primitive [[board-stats]] also walks.",
+          "flags": []
+        },
+        {
+          "ordinal": 28,
+          "chars": 183,
+          "text": "Its only slice of the shared `styles.css` is the keyboard-mode pointer-suppression rules; the yatsu eval tab's `.eval-*` classes there are a sibling's churn, not keyboard-nav's drift.",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-cli/guide",
+      "unitCount": 13,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 79,
+          "text": "`spex guide` is SpexCode's **reference surface as a command**, not buried docs.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 67,
+          "text": "It serves two audiences from one verb, picked by an optional topic:",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 40,
+          "text": "**no topic → the human SETUP workflow.**",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 360,
+          "text": "The model it teaches is **install once, then let an agent drive** — one SpexCode checkout serves *every* project (the global `spex` CLI acts on whatever repo is cwd, the dashboard is a viewer pointed per project), so the human's only manual steps are the global install and pointing at a backend; authoring spec nodes and the dogfood ritual are an agent's job.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 170,
+          "text": "Each step names the real seam, not internals: **cwd** is the \"which repo\" knob, **`API_URL`** is the dashboard's endpoint seam, **`spexcode.json`** governs lint's layout.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 59,
+          "text": "**`spec` / `yatsu` → the agent-facing FILE-FORMAT manual.**",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 247,
+          "text": "The whole detail of the two authored artifacts — spec.md (frontmatter, body, the rules lint enforces) and yatsu.md (the scenario schema, how loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering it.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 99,
+          "text": "The always-on system prompt is the **clue** that the format exists; this manual carries the detail.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 79,
+          "text": "An unknown topic fails loud (names the real topics), never a silent setup dump.",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 376,
+          "text": "The narration is static help text (the spirit of `printHelp` and `spex init`'s next-steps), now living in its own `guide.ts` module rather than the shared `cli.ts` hub — *not* a planted `.spec` template the way [[spex-init]]'s contracts are, and *not* routed through the dashboard's i18n catalogs ([[settings]]), which translate the browser UI, not operator-facing CLI output.",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 88,
+          "text": "`guide` tells you the loop and the formats; [[spex-init]] performs the first step of it.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 120,
+          "text": "This node's stake in `cli.ts` is now a thin dispatch (`process.argv[3]` → `guideText`); the content lives in `guide.ts`.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 133,
+          "text": "`cli.ts` is the shared command hub every verb routes through, so a sibling verb's churn there is that feature's, not `guide`'s drift.",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/session-rename",
+      "unitCount": 19,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 122,
+          "text": "Sessions are labelled automatically — by the spec node they touch, or a few words of their launch prompt, or their branch.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 163,
+          "text": "That default is fine until a human needs to fix it: two sessions on the same node read alike, and a node-agnostic session wears an awkward prompt fragment forever.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 202,
+          "text": "Right-clicking a session row should open a small menu: **rename** lets a human give that session a name that sticks, and **close** offers the same worktree removal the header does, one right-click away.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 181,
+          "text": "A rename sets a session's **name** — a user-chosen display override kept distinct from the auto-derived title, so naming a session never fights or erases the launch-time derivation.",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 388,
+          "text": "The name sits at the **top** of the label precedence on every surface (`name` ▸ node ▸ title ▸ branch ▸ id): once set it wins over the node a session references, so the human's label is authoritative wherever the session is named — the top-right window, the [[session-graph]], the [[session-console]] tabs, and the CLI's `spex` listings — because they all read that one shared precedence.",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 138,
+          "text": "The name lives where the rest of a session's record lives: the worktree's `.session` file, written by the one backend that owns that file.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 127,
+          "text": "So a rename **persists** — it survives a backend restart and is read back like any other field, never held only in the browser.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 136,
+          "text": "A session in **any** state is renamable (queued, live, or offline), because the gesture edits the on-disk record, not the live terminal.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 338,
+          "text": "The gesture is a **right-click** on a session row **in the session board's left-hand session list** ([[session-console]]) — the interactive surface where a human manages sessions, not the read-only top-right glance ([[session-graph]]), which deliberately carries NO menu: a mutation belongs on the board, never on the at-a-glance summary.",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 54,
+          "text": "It opens a cursor-anchored pop-over (its own surface).",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 140,
+          "text": "Picking **rename** swaps the menu for a centred prompt (the shared modal chrome) prefilled with the current override and ready to type over.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 165,
+          "text": "Submitting hands the new name to the backend and asks the board to reload, so the new label appears on every surface at once rather than only where it was triggered.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 118,
+          "text": "A **blank** name is a **reset**, not an error: it clears the override and the session falls back to its derived label.",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 93,
+          "text": "Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent success.",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 326,
+          "text": "The menu's second item, **close**, runs the same human-only worktree removal as the header's close button, but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike that button it asks first (the confirm is the shared modal, its commit button styled as the destructive verb).",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 416,
+          "text": "Confirming POSTs the close and asks the board to reload, so the closed row drops off every surface at once; cancelling does nothing. Because both the pop-over and its prompt are opened **from** the board, each must render **above** it: a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable, so they live on the top layer — over the board's backdrop, never beneath it.",
+          "flags": []
+        },
+        {
+          "ordinal": 16,
+          "chars": 397,
+          "text": "The board also suppresses the OS context menu everywhere inside it (the terminal-app feel of [[session-console]]) via a native capture-phase `contextmenu` listener, and that suppression and this gesture **coexist**: the same right-click that kills the browser's menu on a row ALSO opens the rename pop-over (the row's own handler still fires), so blocking the OS menu never costs the human theirs.",
+          "flags": []
+        },
+        {
+          "ordinal": 17,
+          "chars": 184,
+          "text": "Right-clicking the list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed and the docked input keeps focus, never a stolen-focus gap.",
+          "flags": []
+        },
+        {
+          "ordinal": 18,
+          "chars": 297,
+          "text": "This node's slices of the shared files are the context-menu/rename-modal styling in `styles.css` and the rename route in `index.ts`; the yatsu eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in the measure-and-score reframe, are [[spec-yatsu]]'s churn, not session-rename's drift.",
+          "flags": []
+        }
+      ]
+    },
+    {
+      "relDir": "spexcode/spec-dashboard/dashboard-ui/session-activity",
+      "unitCount": 16,
+      "fencedBlocksExcluded": 0,
+      "units": [
+        {
+          "ordinal": 0,
+          "chars": 144,
+          "text": "Each worker already narrates itself: Claude Code keeps its terminal title set to a short summary of the task in front of it, updated every turn.",
+          "flags": []
+        },
+        {
+          "ordinal": 1,
+          "chars": 32,
+          "text": "That signal sits unused in tmux.",
+          "flags": []
+        },
+        {
+          "ordinal": 2,
+          "chars": 183,
+          "text": "Surface it on every session row so a glance answers **what is each agent doing right now**, not merely *which* session this is — the way a terminal tab renames itself to fit the work.",
+          "flags": []
+        },
+        {
+          "ordinal": 3,
+          "chars": 29,
+          "text": "**Capture (free, one call).**",
+          "flags": []
+        },
+        {
+          "ordinal": 4,
+          "chars": 145,
+          "text": "Claude Code sets its terminal title via an OSC escape; tmux records it as the **pane title** (never the window name — OSC titles don't touch it).",
+          "flags": []
+        },
+        {
+          "ordinal": 5,
+          "chars": 253,
+          "text": "Our worker runs one pane per session named with the session id, so `listSessions` reads every pane title in a single `list-panes` snapshot (`paneTitles`) — same shape and cost as the liveness snapshot — and hangs a cleaned summary on `Session.activity`.",
+          "flags": []
+        },
+        {
+          "ordinal": 6,
+          "chars": 152,
+          "text": "The leading status glyph (`✳` idle, braille spinner while working) is stripped: the dashboard draws its own status, and a frozen spinner frame is noise.",
+          "flags": []
+        },
+        {
+          "ordinal": 7,
+          "chars": 161,
+          "text": "Activity is **live and never persisted** — `null` for any session that isn't up (offline / starting / queued), so a dead or booting row never shows a stale line.",
+          "flags": []
+        },
+        {
+          "ordinal": 8,
+          "chars": 61,
+          "text": "A tmux hiccup drops the line for one tick, never the session.",
+          "flags": []
+        },
+        {
+          "ordinal": 9,
+          "chars": 26,
+          "text": "**Render (two-row face).**",
+          "flags": []
+        },
+        {
+          "ordinal": 10,
+          "chars": 73,
+          "text": "The shared session face ([[session-console]]'s `SessionRow`) is two rows.",
+          "flags": []
+        },
+        {
+          "ordinal": 11,
+          "chars": 127,
+          "text": "Row 1 is **identity** — avatar · name · status word (or 🔒) · op tally — the stable spatial anchor that keeps a session's slot.",
+          "flags": []
+        },
+        {
+          "ordinal": 12,
+          "chars": 283,
+          "text": "Row 2 is the **activity line**: the worker's own summary in a smaller, dimmer font that spans the **whole row width** — the face's flex row wraps and the line takes a full-width basis, so it drops below the avatar too — single-line with an ellipsis, omitted when there's no activity.",
+          "flags": []
+        },
+        {
+          "ordinal": 13,
+          "chars": 168,
+          "text": "Identity stays put while activity changes each turn, so the two never fight — the same separation the rename override keeps over the derived label ([[session-rename]]).",
+          "flags": []
+        },
+        {
+          "ordinal": 14,
+          "chars": 99,
+          "text": "The face is shared, so the top-right window and the Enter session tabs show the identical activity.",
+          "flags": []
+        },
+        {
+          "ordinal": 15,
+          "chars": 292,
+          "text": "This node's slice of the shared `styles.css` is the Row-2 activity line (the full-width, dimmer wrap); classes other surfaces add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score reframe — are those features' churn, not session-activity's drift.",
+          "flags": []
+        }
+      ]
+    }
+  ]
+}

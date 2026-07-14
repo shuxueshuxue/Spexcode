@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "protocol": "docs/content-recoverability.md",
+  "phase": "pre-registration",
+  "laterPilotBudget": {
+    "moduleReconstructions": 6,
+    "reusedLeafReconstructions": 2,
+    "budgetWithinFrozenSurface": true
+  },
+  "effectiveModuleR0": 0,
+  "moduleR0Generated": 0,
+  "moduleR0Read": 0,
+  "paidRunsStarted": 0,
+  "networkCallsMade": 0,
+  "archivedLeafR0ReadByRunner": false,
+  "treeOnlyAblationsGenerated": 6,
+  "treeOnlyModelCalls": 0,
+  "annotationFeasibilityApproved": false,
+  "annotationAssetsPresent": false,
+  "statement": "This runner has no model, network, or reconstruction command. Counts describe this protocol commit."
+}

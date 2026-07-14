@@ -98,12 +98,21 @@ an allowed repair.
 
 ## Taxonomy and legacy-language rewrite
 
-Before sample labels, the seven-category taxonomy is developed and frozen on a deterministic non-sample C0
+Before sample labels, the eight-category taxonomy is developed and frozen on a deterministic non-sample C0
 dev pool (eligible-module and leaf-calibration nodes, plus their ancestors, excluded). Each unit receives exactly one primary label
-using the precedence in `taxonomy.json`: historical incident, design rationale, ownership topology,
+using the precedence in `taxonomy.json`: historical incident, research evidence, design rationale, ownership topology,
 responsibility boundary, constraint invariant, operational mechanism, then behavioral contract. Secondary
 tags may aid audit but never enter primary aggregation. `historical-incident` remains secondary-only even if
 its cell later meets a numeric minimum.
+
+The original human estimand requires interface contracts, design rationale, incident retrospectives, and
+research notes to remain separately visible. `research-evidence` therefore owns frozen facts or conclusions
+learned from experiments, benchmarks, measurements, comparisons, or systematic observations. The learned
+result and its scope are load-bearing. A statement about why a design was chosen is `design-rationale`; how a
+procedure runs is `operational-mechanism`; what failed in a past event is `historical-incident`; outward
+behavior remains in the contract categories. Research evidence is primary-eligible and cannot be folded into
+a neighboring category. If it has fewer than 3 clusters or 15 A-supported units, its row remains present as
+`insufficient` with counts and no rate/CI.
 
 The two raw primary-category labels are retained. Cohen's kappa must be ≥0.6. One taxonomy clarification and
 complete blind relabel is allowed; if kappa remains below 0.6, the study is NO-GO. The revision rewrites the

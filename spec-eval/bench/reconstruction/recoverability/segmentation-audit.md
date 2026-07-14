@@ -19,6 +19,11 @@ provide component context for pronouns without exposing node ids. Mechanical che
 raw table rows, dependent-start fragments, units under 20 chars, or units over 600 chars; dev-pool lengths are
 21–473 chars.
 
+Taxonomy calibration now also freezes `research-evidence` as an independent primary destination for learned
+experimental/measurement facts and conclusions. No sample unit is classified in this pre-registration pass;
+the generated control records the boundary and a sparse 2-cluster/8-unit fixture that must remain
+`insufficient` without a rate instead of being absorbed into rationale or mechanism.
+
 Examples that set the boundary:
 
 - `A read failure is not non-existence.` is a complete invariant and remains one short unit.

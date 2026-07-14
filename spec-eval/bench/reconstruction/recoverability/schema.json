@@ -1,7 +1,13 @@
 {
-  "v": 1,
+  "v": 2,
   "protocol": "docs/content-recoverability.md",
   "closedWorld": true,
+  "taxonomy": {
+    "primaryCategories": ["behavioral-contract", "responsibility-boundary", "ownership-topology", "design-rationale", "research-evidence", "constraint-invariant", "operational-mechanism"],
+    "secondaryOnlyCategories": ["historical-incident"],
+    "researchEvidence": "Frozen experiment, benchmark, measurement, comparison, or systematic-observation result/conclusion; never fold into rationale, mechanism, or incident.",
+    "sparseRule": "research-evidence remains a named row; fewer than 3 clusters or 15 A-supported units reports insufficient counts with no rate or CI"
+  },
   "unitSkeleton": {
     "keys": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawText", "rawTextSha256", "chars"],
     "required": ["unitId", "cluster", "scale", "sourceNode", "subjectSlot", "ordinal", "rawText", "rawTextSha256", "chars"],

@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "protocol": "docs/content-recoverability.md",
   "c0": "038dce1f7e87b5ef3c8737daffb4fe929d1753a7",
   "segmenter": "seg-v2",
@@ -15,6 +15,21 @@
     "devPoolFailures": [],
     "sampleFailures": [],
     "passed": true
+  },
+  "categoryBoundaryControl": {
+    "category": "research-evidence",
+    "primaryEligible": true,
+    "precedenceAfter": "historical-incident",
+    "precedenceBefore": "design-rationale",
+    "definition": "Frozen experiment, benchmark, measurement, comparison, or systematic-observation result/conclusion; distinct from contract, rationale, mechanism, and incident.",
+    "sampleLabelsAssigned": 0,
+    "sparseFixture": {
+      "scale": "module",
+      "clusters": 2,
+      "units": 8,
+      "expectedStatus": "insufficient",
+      "rateForbidden": true
+    }
   },
   "moduleCounts": [
     {

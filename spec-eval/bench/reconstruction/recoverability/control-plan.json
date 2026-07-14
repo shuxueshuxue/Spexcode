@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "protocol": "docs/content-recoverability.md",
   "seed": "e54cccbec33bc1a1fccb557076013b72ff3ec35457e4eeaf6b84941b64c318a8",
   "frozenBeforeR0": true,
@@ -16,6 +16,34 @@
     "latentRecoveryAuditAbove": 0.2,
     "treeOnlyTriggerAt": 0.8,
     "styleIdentityTriggerAbove": 0.7
+  },
+  "categoryControls": {
+    "requiredPrecedence": [
+      "historical-incident",
+      "research-evidence",
+      "design-rationale",
+      "ownership-topology",
+      "responsibility-boundary",
+      "constraint-invariant",
+      "operational-mechanism",
+      "behavioral-contract"
+    ],
+    "researchEvidence": {
+      "category": "research-evidence",
+      "primaryEligible": true,
+      "cannotFoldInto": [
+        "design-rationale",
+        "operational-mechanism",
+        "historical-incident"
+      ],
+      "sparseFixture": {
+        "scale": "module",
+        "clusters": 2,
+        "units": 8,
+        "expectedStatus": "insufficient",
+        "rateForbidden": true
+      }
+    }
   },
   "fabricatedByScale": {
     "module": {

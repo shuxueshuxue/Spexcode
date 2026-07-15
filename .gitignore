@@ -44,9 +44,6 @@ harness-report-serve
 # worker-launcher path); readConfig() layers it over the committed spexcode.json. See portable-layout.
 spexcode.local.json
 
-# spec-reconstruction-bench dry/snapshot artifacts — archived via the evidence store, never committed
-spec-eval/bench/reconstruction/runs/
-
 # os / editor
 .DS_Store
 *.log

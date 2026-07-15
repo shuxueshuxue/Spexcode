@@ -52,6 +52,14 @@ tells every agent: changed a node that has an `eval.md`? re-measure it. The **st
 stale or missing score the way it surfaces code-drift, so the nudge lands in the flow, not on demand.
 Only nodes that declare a scenario are in scope — a node with no surface to measure simply has none.
 
+## Boundary — the generic layer lives here, concrete suites don't
+
+spec-eval carries only the **reusable measurement machinery**: the scenario schema, the filing/retract
+surface, freshness, and the evidence store. **Concrete benchmark suites** — frozen corpora, protocol
+frames, runners, scored baselines — are experiments that *consume* this layer; they are maintained
+externally and never land under the product tree. What earns a place in this package is a generic
+recording/framework boundary every project can reuse, never a specific suite's assets.
+
 ## What's next
 The **computer-use "stupid user"** is the agent's most thorough measuring hand — it just looks. **Backend
 eval** measures loss through real APIs ([[forge-cache]] reconcile waiting). Nothing in eval ever learns

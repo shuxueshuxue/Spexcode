@@ -86,7 +86,7 @@ const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.st
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function EventDetail({ entry, specs = [], sessions = [], onWrite, onOpenSession }) {
+export default function EventDetail({ entry, history: providedHistory, specs = [], sessions = [], onWrite, onOpenSession }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -115,11 +115,12 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
   const [selIdx, setSelIdx] = useState(null)     // index (into comments) of the explicitly-selected comment
 
-  // A/B history: this scenario's WHOLE reading history (newest-first), lazily fetched from the same
-  // /api/specs/:id/evals timeline the eval tab uses — the board only folds the LATEST reading per scenario
-  // ([[graph-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
-  // (0 = the latest, i.e. the `entry` the feed selected); `viewing` is the reading actually shown — the
-  // entry until history lands, then the picked reading.
+  // A/B history: this scenario's WHOLE reading history (newest-first). The SOURCE is HOME-provided so it shares
+  // each home's ROOT ([[event-detail]]): the session eval tab hands down its WORKTREE-rooted readings
+  // (`providedHistory`) — which always contain the un-merged in-session `entry` — while the Evals page passes
+  // none and we lazily fetch the node's /api/specs/:id/evals timeline (the board only folds the LATEST reading
+  // per scenario, [[graph-lean]]). `histIdx` indexes that list (0 = the latest, i.e. the `entry` the feed
+  // selected); `viewing` is the reading actually shown — the entry until history lands, then the picked reading.
   const [history, setHistory] = useState(null)
   const [histIdx, setHistIdx] = useState(0)
   const viewing = (history && history[histIdx]) || entry
@@ -134,10 +135,14 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   }, [])
 
   // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
-  // then refetch this scenario's slice of the node's timeline.
+  // then (re)source this scenario's history. When the home supplies it (the session tab's WORKTREE-rooted
+  // readings), use that directly — re-fetching the main-checkout /api/specs timeline there would MISS the
+  // un-merged in-session reading and strand the current video behind an older inherited one. The Evals page
+  // supplies none, so fetch this scenario's slice of the node's timeline as before.
   useEffect(() => {
     setDrag(null); setFlash(''); setEvents([]); setDraft(null)
     setHistIdx(0); setHistory(null)
+    if (providedHistory) { setHistory(providedHistory); return }
     let on = true
     fetch(specUrl(entry.node, 'evals'))
       .then((r) => (r.ok ? r.json() : null))
@@ -145,8 +150,10 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
       .catch(() => {})
     return () => { on = false }
     // entry.humanOk?.ts rides the deps so a just-landed sign-off ([[human-ok]]) refetches the history —
-    // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok.
-  }, [entry.node, entry.scenario, entry.ts, entry.blob, entry.humanOk?.ts])
+    // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok. On the
+    // session home the same refresh rides `providedHistory`: the host's onWrite reloads the model, handing down
+    // a fresh array, so an ok/remark still re-sources the walk.
+  }, [entry.node, entry.scenario, entry.ts, entry.blob, entry.humanOk?.ts, providedHistory])
 
   // flipping A/B changes the clip/stills under the pen — drop any in-progress mark or draft.
   useEffect(() => { setDrag(null); setDraft(null) }, [histIdx])

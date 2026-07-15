@@ -67,11 +67,23 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   const effSel = sel && visible.some((v) => v.key === sel) ? sel : visible[0]?.key ?? null
   const selEntry = visible.find((v) => v.key === effSel)
 
+  // the selected reading's WORKTREE-rooted A/B history (newest-first): the session model already carries EVERY
+  // reading per node ([[session-eval]] — rooted at this branch's worktree), so hand the detail this scenario's
+  // whole slice instead of letting EventDetail re-fetch the main-checkout /api/specs timeline, which lacks the
+  // session's un-merged in-session reading and would strand the current video behind an old inherited one.
+  // Memoized so the detail's history effect stays stable across board refreshes (re-runs only on model/selection
+  // change — and a refresh after an ok/remark correctly re-sources the walk).
+  const selHistory = useMemo(() => {
+    if (selEntry?.kind !== 'eval') return undefined
+    const n = model?.nodes.find((x) => x.id === selEntry.item.node)
+    return n ? n.evals.filter((e) => e.scenario === selEntry.item.scenario) : undefined
+  }, [model, selEntry])
+
   if (model === null) return <div className="fv-note">{t('common.loading')}</div>
   if (model === false) return <div className="fv-note">{t('sessionEval.none')}</div>
 
   const detail = selEntry?.kind === 'eval'
-    ? <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={loadModel} />
+    ? <EventDetail entry={selEntry.item} history={selHistory} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={loadModel} />
     : selEntry?.kind === 'blind'
       ? (
         <div className="an-detail">

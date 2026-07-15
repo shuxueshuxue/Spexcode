@@ -26,8 +26,8 @@ keeps today's advisory-only drift, forever.
 **Vocabulary.** An anchor names one top-level unit: a function, an arrow/const declaration (data
 too), a class, an enum, or a class method (`#Class.method`). A type/interface resolves but
 warns — anchoring a type is usually wrong. A `code:` entry may carry **any number of selectors, all on
-the same exact base file** — measured evidence: [[drift-replay-bench]]'s multi-anchor roster (its 1–3
-cap was annotation rubric, never product syntax — no selector-count cap exists).
+the same exact base file** — measured evidence: the drift-replay benchmark's multi-anchor roster (its
+1–3 cap was annotation rubric, never product syntax — no selector-count cap exists).
 Selectors are **OR**: a commit hitting any blocks, counted **once**, the diagnostic naming the hit
 selectors. One-govern counts **distinct base paths** — cross-file selectors stay an error,
 multiple specs pinning one file stay ordinary. One structured parser reads both relations, refusing

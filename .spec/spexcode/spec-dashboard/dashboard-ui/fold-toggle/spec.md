@@ -5,6 +5,7 @@ hue: 200
 desc: The ONE sidebar fold/unfold affordance — an Obsidian-style panel icon button (outlined panel, filled inner bar) shared by every master-list fold site — the eval/issues master-detail shells ([[evals-view]], [[issues-view]]) and the session console's Eval-tab list strip — so folding reads as one grammar, never three hand-drawn arrows.
 code:
   - spec-dashboard/src/FoldToggle.jsx#FoldToggle
+  - spec-dashboard/src/FoldToggle.jsx#FoldToggleIcon
 ---
 
 # fold-toggle

@@ -5,6 +5,7 @@ hue: 280
 desc: Declarative choice of WHICH harness targets `spex materialize` delivers into — spexcode.json's `harnesses` set (native ids, or one plugin), validated fail-loud, honored on every materialize leg, self-healing through the gate; deselecting a harness prunes its artifacts.
 code:
   - spec-cli/src/harness-select.ts#resolveHarnessTargets
+  - spec-cli/src/harness-select.ts#partitionHarnesses
 related:
   - spec-cli/src/harness-select.test.ts
   - spec-cli/src/materialize.test.ts

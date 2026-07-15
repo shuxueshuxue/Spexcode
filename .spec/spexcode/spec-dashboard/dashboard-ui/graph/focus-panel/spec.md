@@ -5,6 +5,7 @@ hue: 300
 desc: A right column showing the FOCUSED node's Issues and Scenarios together — their satisfaction status in one place — so the two stateful kinds of bound work share one surface instead of an issue popup on the node.
 code:
   - spec-dashboard/src/FocusPanel.jsx#FocusPanel
+  - spec-dashboard/src/FocusPanel.jsx#ScenarioRow
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/IssueCard.jsx

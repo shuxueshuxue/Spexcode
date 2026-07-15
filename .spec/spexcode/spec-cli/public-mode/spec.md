@@ -4,6 +4,8 @@ hue: 150
 desc: Expose the dashboard + API on a public IP behind one password and TLS — one command, no domain, no extra infrastructure.
 code:
   - spec-cli/src/gateway.ts#startGateway
+  - spec-cli/src/gateway.ts#resolvePublicConfig
+  - spec-cli/src/gateway.ts#serveDashboardLocal
 related:
   - spec-cli/src/supervise.ts
   - spec-cli/src/cli.ts

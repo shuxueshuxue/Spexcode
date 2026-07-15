@@ -5,6 +5,7 @@ hue: 160
 desc: `spex doctor` — diagnose (and, later, repair) how the SpexCode workflow reaches a self-launched agent, transparently and reversibly, across every harness.
 code:
   - spec-cli/src/doctor.ts#doctor
+  - spec-cli/src/doctor.ts#doubleDeliveryReport
 ---
 # doctor
 

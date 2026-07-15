@@ -7,12 +7,17 @@ import { mintIds } from '../../spec-cli/src/specs.js'
 export const EVAL_FILE = 'eval.md'
 export const SIDECAR_FILE = 'evals.ndjson'
 
+export type ScenarioTestReference = {
+  path: string
+  name?: string
+}
+
 export type Scenario = {
   name: string
   description: string
   expected: string
   tags?: string[]
-  test?: string
+  test?: ScenarioTestReference
   code?: string[]
   related?: string[]
 }
@@ -28,10 +33,19 @@ export type EvalNode = {
 const SCENARIO_KEYS = ['name', 'description', 'expected', 'tags', 'test', 'code', 'related'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
 const LIST_KEYS: readonly ScenarioKey[] = ['tags', 'code', 'related']
+const TEST_KEYS = ['path', 'name'] as const
+type TestKey = (typeof TEST_KEYS)[number]
+
+type RawTestObject = {
+  fields: Partial<Record<TestKey, string>>
+  unknownKeys: string[]
+  duplicateKeys: string[]
+  malformed: string[]
+}
 
 // a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
 // carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
-type RawItem = { fields: Partial<Record<ScenarioKey, string>>; unknownKeys: string[] }
+type RawItem = { fields: Partial<Record<ScenarioKey, string>>; testObject?: RawTestObject; unknownKeys: string[] }
 
 // tiny indentation parser for eval.md's frontmatter `scenarios:` block (no YAML dep), shared by parseScenarios and validateScenarios so they can't disagree; reports hasFrontmatter/hasKey so the validator can tell "none declared" from "malformed"
 function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[] } {
@@ -75,6 +89,32 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) return idx
   const key = f[1]
+  if (key === 'test') {
+    const raw = f[2].trim()
+    if (!raw) {
+      const parsed = emptyTestObject()
+      let childIndent = -1
+      let j = idx + 1
+      for (; j < lines.length; j++) {
+        const line = lines[j]
+        if (!line.trim()) continue
+        const indent = line.length - line.replace(/^\s+/, '').length
+        if (indent <= keyIndent) break
+        if (childIndent < 0) childIndent = indent
+        if (indent !== childIndent) {
+          parsed.malformed.push(`invalid nested test object entry \`${line.trim()}\``)
+          continue
+        }
+        assignTestField(parsed, line.trim())
+      }
+      cur.testObject = parsed
+      return j - 1
+    }
+    if (raw.startsWith('{') || raw.endsWith('}')) {
+      cur.testObject = parseFlowTestObject(raw)
+      return idx
+    }
+  }
   // a list field (`code:`/`related:`) may be a YAML block sequence (`- item` lines); the scalar reader can't see those, so collect them here into the comma form parseCodeList expects
   if ((LIST_KEYS as readonly string[]).includes(key) && f[2].trim() === '') {
     const items: string[] = []
@@ -118,6 +158,65 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
 
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
 
+const emptyTestObject = (): RawTestObject => ({ fields: {}, unknownKeys: [], duplicateKeys: [], malformed: [] })
+
+function testValue(raw: string, opaque = false): string {
+  const value = raw.trim()
+  const quoted = value.match(/^(["'])([\s\S]*)\1$/)
+  return quoted ? quoted[2] : opaque ? value : unquote(value)
+}
+
+function assignTestField(obj: RawTestObject, entry: string): void {
+  const f = entry.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
+  if (!f) { obj.malformed.push(`invalid test object entry \`${entry}\``); return }
+  const key = f[1]
+  if (!(TEST_KEYS as readonly string[]).includes(key)) { obj.unknownKeys.push(key); return }
+  if (key in obj.fields) obj.duplicateKeys.push(key)
+  obj.fields[key as TestKey] = testValue(f[2], key === 'name')
+}
+
+// A flow mapping is accepted beside the more readable block form. Split only on commas outside quotes so
+// an opaque case name such as "allows admin, user" survives byte-for-byte after YAML quote removal.
+function parseFlowTestObject(raw: string): RawTestObject {
+  const obj = emptyTestObject()
+  if (!raw.startsWith('{') || !raw.endsWith('}')) {
+    obj.malformed.push('`test` object must be a mapping with exactly `path` and `name`')
+    return obj
+  }
+  const body = raw.slice(1, -1).trim()
+  if (!body) return obj
+  const entries: string[] = []
+  let start = 0
+  let quote = ''
+  let escaped = false
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (quote) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue }
+    if (ch === ',') { entries.push(body.slice(start, i).trim()); start = i + 1 }
+  }
+  if (quote) obj.malformed.push('`test` object has an unterminated quoted value')
+  entries.push(body.slice(start).trim())
+  for (const entry of entries) assignTestField(obj, entry)
+  return obj
+}
+
+function normalizedTest(it: RawItem): ScenarioTestReference | undefined {
+  if (it.testObject) {
+    const path = it.testObject.fields.path
+    if (!path) return undefined
+    const name = it.testObject.fields.name
+    return { path, ...(name ? { name } : {}) }
+  }
+  const path = it.fields.test
+  return path ? { path } : undefined
+}
+
 // @@@scenario contract hash - the deterministic content hash of a scenario's SEMANTIC text, stamped on each
 // reading at filing time ([[eval-core]]'s scenario freshness axis). Hashes ONLY the measurement contract —
 // description (what to measure) + expected (what zero loss looks like) — never name/tags/test/code/related.
@@ -144,12 +243,13 @@ export function parseScenarios(src: string): Scenario[] {
       const tags = it.fields.tags ? parseCodeList(it.fields.tags) : []
       const code = it.fields.code ? parseCodeList(it.fields.code) : []
       const related = it.fields.related ? parseCodeList(it.fields.related) : []
+      const test = normalizedTest(it)
       return {
         name: it.fields.name ?? '',
         description: it.fields.description ?? '',
         expected: it.fields.expected ?? '',
         ...(tags.length ? { tags } : {}),
-        ...(it.fields.test ? { test: it.fields.test } : {}),
+        ...(test ? { test } : {}),
         ...(code.length ? { code } : {}),
         ...(related.length ? { related } : {}),
       }
@@ -161,7 +261,7 @@ export function parseScenarios(src: string): Scenario[] {
 // Every scenario needs ≥1 tag; each tag must be IN the library — an out-of-library tag is rejected LOUD with
 // the repair the user owns: pick an existing tag, or extend the library. An empty library (none configured)
 // disables only the membership check, never the ≥1-tag requirement.
-export function validateScenarios(src: string, tagLibrary: string[] = []): string[] {
+export function validateScenarios(src: string, tagLibrary: string[] = [], pathRoot?: string): string[] {
   const { hasFrontmatter, hasKey, items } = walkScenarios(src)
   if (!hasFrontmatter) return ['no frontmatter block — an eval.md must declare a `scenarios:` list']
   if (!hasKey) return ['frontmatter has no `scenarios:` key — declare at least one scenario']
@@ -183,6 +283,18 @@ export function validateScenarios(src: string, tagLibrary: string[] = []): strin
       }
     }
     for (const u of it.unknownKeys) errs.push(`${label}: unknown field \`${u}\` (allowed: ${SCENARIO_KEYS.join(', ')})`)
+    if (it.testObject) {
+      for (const u of it.testObject.unknownKeys) errs.push(`${label}: unknown \`test\` field \`${u}\` (allowed: ${TEST_KEYS.join(', ')})`)
+      for (const d of it.testObject.duplicateKeys) errs.push(`${label}: duplicate \`test.${d}\` field`)
+      for (const e of it.testObject.malformed) errs.push(`${label}: ${e}`)
+      for (const k of TEST_KEYS) if (!it.testObject.fields[k]?.length) errs.push(`${label}: \`test\` object missing required field \`${k}\``)
+    } else if ('test' in it.fields && !it.fields.test?.length) {
+      errs.push(`${label}: \`test\` scalar path must not be empty`)
+    }
+    const test = normalizedTest(it)
+    if (test && pathRoot && !existsSync(join(pathRoot, test.path))) {
+      errs.push(`${label}: \`test.path\` not found: ${test.path}`)
+    }
     if (it.fields.name) counts.set(it.fields.name, (counts.get(it.fields.name) ?? 0) + 1)
   })
   for (const [n, c] of counts) if (c > 1) errs.push(`duplicate scenario name '${n}' (${c}×) — names must be unique within an eval.md`)

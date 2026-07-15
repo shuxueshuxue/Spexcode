@@ -45,12 +45,12 @@ test('scenario axis: a tags-only edit records NO change-commit; an expected edit
     'the expected edit is a semantic change and must register')
 })
 
-test('scenario axis: test/code/related retunes are metadata too — no change-commit', async () => {
+test('scenario axis: scalar→case-specific test/code/related retunes are metadata too — no change-commit', async () => {
   const dir = repo()
   writeFileSync(join(dir, 'a.ts'), 'export {}\n')
   writeFileSync(join(dir, 'b.ts'), 'export {}\n')
-  const c1 = commitYatsu(dir, V1, 'add scenario')
-  commitYatsu(dir, scenario('    tags: [cli]\n    description: check the thing\n    expected: it works\n    test: a.ts\n    code: [a.ts]\n    related: [b.ts]\n'), 'retune coverage')
+  const c1 = commitYatsu(dir, scenario('    tags: [cli]\n    description: check the thing\n    expected: it works\n    test: a.ts\n'), 'add scenario with scalar test')
+  commitYatsu(dir, scenario('    tags: [cli]\n    description: check the thing\n    expected: it works\n    test: { path: a.ts, name: one concrete case }\n    code: [a.ts]\n    related: [b.ts]\n'), 'retune coverage')
   assert.deepEqual(scenarioChangeCommits(await scenarioIndex(dir, [YATSU]), YATSU, 's'), [c1])
 })
 

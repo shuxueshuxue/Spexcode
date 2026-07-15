@@ -29,13 +29,16 @@ test('retained readings are verbatim — every field survives, including video-o
   assert.strictEqual(out[0].timelineBlob, 'tl-456')
 })
 
-// The scenario fold is the opposite contract: a PROJECTION to {name, tags} — prose (description/expected)
-// and per-scenario code must NOT ride the board; they reach their viewers via /api/specs/lite and
-// /api/specs/:id/evals instead. Empty tags are omitted, not shipped as [].
-test('board scenarios are slim — name and tags only, no prose, no code', () => {
+// The scenario fold is the opposite contract: a PROJECTION to name/tags/test — prose
+// (description/expected) and per-scenario code must NOT ride the board. The normalized test reference is
+// small measurement metadata and must survive so a measuring hand can select one concrete case.
+test('board scenarios stay slim while preserving normalized test references', () => {
   const declared = [
-    { name: 'a', description: 'long prose', expected: 'longer prose', tags: ['frontend-e2e'], code: ['x.ts'] },
+    { name: 'a', description: 'long prose', expected: 'longer prose', tags: ['frontend-e2e'], test: { path: 'x.spec.ts', name: 'case a' }, code: ['x.ts'] },
     { name: 'b', description: 'd', expected: 'e' },
   ]
-  assert.deepStrictEqual(slimScenarios(declared), [{ name: 'a', tags: ['frontend-e2e'] }, { name: 'b' }])
+  assert.deepStrictEqual(slimScenarios(declared), [
+    { name: 'a', tags: ['frontend-e2e'], test: { path: 'x.spec.ts', name: 'case a' } },
+    { name: 'b' },
+  ])
 })

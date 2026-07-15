@@ -7,3 +7,6 @@ created: 2026-07-15T09:07:49.981Z
 ---
 
 (no detail given — materialize writes AGENTS.md into the main checkout but the spexcode-managed .git/info/exclude block lists only CLAUDE.md — AGENTS.md surfaces as untracked after every post-merge materialize until excluded by hand (manual exclude line added on ThinkPad main checkout 2026-07-15))
+
+<!-- reply: c9bed841-ca02-45b1-901d-95e65077ad08 @ 2026-07-15T09:10:16.765Z -->
+Stays open past this session: the product gap is unfixed — materialize still writes AGENTS.md without covering it in the spexcode-managed exclude block. This session only added a manual per-clone exclude line on the ThinkPad main checkout; every other clone/deployment will reproduce the untracked AGENTS.md after its next materialize until the managed block includes it.

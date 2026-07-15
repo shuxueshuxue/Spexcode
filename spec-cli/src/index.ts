@@ -65,15 +65,19 @@ app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 // the search corpus ([[graph-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
-// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a measurable
-// node's row here carries its declared scenarios' description/expected (+ per-scenario code) — one fetch
+// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags, test}), so a measurable
+// node's row here carries its declared scenarios' description/expected (+ test reference and per-scenario code) — one fetch
 // serves both the palette's scenario plane and the focus-panel preview.
 app.get('/api/specs/lite', (c) => {
   const scByNode = new Map(evalNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
   return c.json(loadSpecsLite().map((row) => {
     const sc = scByNode.get(row.id)
     return sc?.length
-      ? { ...row, scenarios: sc.map((s) => ({ name: s.name, description: s.description, expected: s.expected, ...(s.code?.length ? { code: s.code } : {}) })) }
+      ? { ...row, scenarios: sc.map((s) => ({
+          name: s.name, description: s.description, expected: s.expected,
+          ...(s.test ? { test: s.test } : {}),
+          ...(s.code?.length ? { code: s.code } : {}),
+        })) }
       : row
   }))
 })

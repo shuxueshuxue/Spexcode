@@ -27,12 +27,17 @@ prune the evidence — works end to end through the real `spex` surface, with no
 ## expanded spec
 
 A node declares its scenarios in a **eval.md** beside its spec.md (a frontmatter `scenarios:` list, each a
-**name** + **description** + **expected** zero-loss result + **tags**, plus OPTIONAL **test** (a co-located
-runnable file), **code** (the file this scenario GOVERNS, ideally one) and **related** (files it
+**name** + **description** + **expected** zero-loss result + **tags**, plus OPTIONAL **test** (either a
+co-located runnable-file path or strict `{ path, name }`, where `name` is an opaque concrete case inside
+that file), **code** (the file this scenario GOVERNS, ideally one) and **related** (files it
 references but does not own — they never stale it). A eval.md owns nothing; only its scenarios govern and
 relate — the [[governed-related]] model on the scenario axis. A scenario is a *target the agent measures
-however it likes*, not a script eval runs. The first four are required and the key set closed; a **strict
-validator** rejects a malformed eval.md LOUD — at `scan` and the pre-commit gate, never silently reshaped.
+however it likes*, not a script eval runs. Both test forms validate that `path` exists; the object key set
+is closed and `name` is preserved exactly, never parsed as WDIO, Playwright, or any other framework syntax.
+There is no executor or framework adapter here. The first four fields are required and the scenario key set
+is closed; a **strict validator** rejects a malformed eval.md LOUD — at `scan` and the pre-commit gate, never
+silently reshaped. Every read surface carries the normalized test reference through scan, graph, and scenario
+list JSON so callers see one stable shape regardless of how the author wrote the path-only shorthand.
 
 **Tags classify a scenario** so it can be filtered now and routed to the right driver later (a surface like
 `frontend-e2e`/`backend-api`/`cli`, a device like `desktop`/`mobile`). Each scenario carries **≥1 tag**, every
@@ -168,7 +173,7 @@ The surface mirrors the code-drift report:
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
   `--changed` scopes the per-node classes to the nodes the branch touched ([[eval-proactive]]); plain lint covers the repo.
 - **scenario ls [<node>|.] [--unmeasured] [--json]** — the DECLARED half of the scoreboard: the measurement
-  contracts (name · tags · latest verdict), no readings. Bare lists every measurable node's scenarios;
+  contracts (name · tags · normalized test reference · latest verdict), no readings. Bare lists every measurable node's scenarios;
   `--unmeasured` keeps only those with no effective reading — never measured, or every filing retracted —
   the blind-spot worklist a measuring hand picks from.
 - **add [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —

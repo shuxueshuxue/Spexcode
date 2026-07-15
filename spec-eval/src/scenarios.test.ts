@@ -13,7 +13,7 @@ import type { ScenarioIndex } from './scenariofresh.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'eval-test-'))
 
-// ---- eval.md scenario parsing (name + description + expected + optional test) ----
+// ---- eval.md scenario parsing (name + description + expected + optional normalized test reference) ----
 
 test('parseScenarios: single-line fields, optional test path', () => {
   const md = `---
@@ -30,7 +30,7 @@ body text is ignored by the parser
 `
   const sc = parseScenarios(md)
   assert.equal(sc.length, 2)
-  assert.deepEqual(sc[0], { name: 'login-works', description: 'log in with valid creds', expected: 'lands on the dashboard', test: 'tests/login.spec.ts' })
+  assert.deepEqual(sc[0], { name: 'login-works', description: 'log in with valid creds', expected: 'lands on the dashboard', test: { path: 'tests/login.spec.ts' } })
   assert.deepEqual(sc[1], { name: 'logout-redirects', description: 'log out', expected: 'back on /login' })
 })
 
@@ -50,7 +50,32 @@ scenarios:
   assert.equal(sc.length, 1)
   assert.equal(sc[0].description, 'first line\nsecond line')
   assert.equal(sc[0].expected, 'one logical sentence folded')
-  assert.equal(sc[0].test, 'e2e/prose.spec.ts')
+  assert.deepEqual(sc[0].test, { path: 'e2e/prose.spec.ts' })
+})
+
+test('parseScenarios normalizes scalar and case-specific test references', () => {
+  const sc = parseScenarios(`---
+scenarios:
+  - name: scalar
+    description: a
+    expected: b
+    test: tests/auth.spec.ts
+  - name: block-object
+    description: a
+    expected: b
+    test:
+      path: tests/auth.spec.ts
+      name: "login > accepts @smoke [chrome]"
+  - name: flow-object
+    description: a
+    expected: b
+    test: { path: tests/auth.spec.ts, name: "allows admin, user" }
+---`)
+  assert.deepEqual(sc.map((s) => s.test), [
+    { path: 'tests/auth.spec.ts' },
+    { path: 'tests/auth.spec.ts', name: 'login > accepts @smoke [chrome]' },
+    { path: 'tests/auth.spec.ts', name: 'allows admin, user' },
+  ])
 })
 
 test('parseScenarios: no frontmatter / no scenarios key → empty', () => {
@@ -140,6 +165,54 @@ scenarios:
     tags: frontend-e2e
 ---
 body`, ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile']), [])
+})
+
+test('validateScenarios: test object is strict and names every malformed part', () => {
+  const errs = validateScenarios(`---
+scenarios:
+  - name: missing-name
+    description: a
+    expected: b
+    tags: cli
+    test:
+      path: tests/auth.spec.ts
+  - name: unknown-key
+    description: a
+    expected: b
+    tags: cli
+    test: { path: tests/auth.spec.ts, name: login, grep: smoke }
+  - name: duplicate-key
+    description: a
+    expected: b
+    tags: cli
+    test:
+      path: tests/auth.spec.ts
+      name: first
+      name: second
+---`)
+  assert.ok(errs.some((e) => /scenario 'missing-name': `test` object missing required field `name`/.test(e)), errs.join(' | '))
+  assert.ok(errs.some((e) => /scenario 'unknown-key': unknown `test` field `grep`/.test(e)), errs.join(' | '))
+  assert.ok(errs.some((e) => /scenario 'duplicate-key': duplicate `test.name` field/.test(e)), errs.join(' | '))
+})
+
+test('validateScenarios: scalar and object test paths must exist', () => {
+  const root = tmp()
+  mkdirSync(join(root, 'tests'), { recursive: true })
+  writeFileSync(join(root, 'tests/auth.spec.ts'), 'export {}\n')
+  const doc = (testRef: string) => `---
+scenarios:
+  - name: path-check
+    description: a
+    expected: b
+    tags: cli
+${testRef}
+---`
+  assert.deepEqual(validateScenarios(doc('    test: tests/auth.spec.ts'), [], root), [])
+  assert.deepEqual(validateScenarios(doc('    test:\n      path: tests/auth.spec.ts\n      name: login'), [], root), [])
+  const scalar = validateScenarios(doc('    test: tests/missing.spec.ts'), [], root)
+  const object = validateScenarios(doc('    test: { path: tests/missing.spec.ts, name: login }'), [], root)
+  assert.ok(scalar.some((e) => /`test\.path` not found: tests\/missing\.spec\.ts/.test(e)), scalar.join(' | '))
+  assert.ok(object.some((e) => /`test\.path` not found: tests\/missing\.spec\.ts/.test(e)), object.join(' | '))
 })
 
 test('validateScenarios: tags are required (≥1) and must be drawn from the library', () => {

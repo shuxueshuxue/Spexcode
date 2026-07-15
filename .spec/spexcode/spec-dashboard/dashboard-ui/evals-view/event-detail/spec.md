@@ -107,10 +107,16 @@ and by **how many commits** (`EvalsFeed.jsx +3`) — the per-file drift count is
 attached to the reading by `evalTimeline` (the frontend has no git). It is reporting only: it never decides
 freshness, it names a decision already made, so a reviewer sees *why* a reading is behind and by how far. Every
 other affordance is freshness-blind — a remark is authored on a stale reading exactly as on a fresh one (the
-composer never consults freshness); staleness changes what the loss signal *says*, never what the human can *do*. The board folds only the latest reading per scenario
-([[graph-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
-[[eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
-than one reading (a fresh scenario is just its single reading). The remark track in the rail is
+composer never consults freshness); staleness changes what the loss signal *says*, never what the human can *do*. The A/B
+history is **HOME-PROVIDED, so it shares each home's ROOT** — the store-agnostic pane never assumes one timeline
+source. The [[evals-view]] page passes none and the pane lazily fetches the node's `/api/specs/:id/evals`
+timeline the [[eval-tab]] uses (the board folds only the latest reading per scenario, [[graph-lean]], so
+walking the poles needs this one read). The **session eval tab** instead supplies its already-computed
+**WORKTREE-rooted** readings for the scenario ([[session-eval]]) — because on that home the selected reading is
+the session's own **un-merged in-session** reading, which lives in the branch's worktree and is therefore ABSENT
+from the main-checkout `/api/specs` timeline; re-fetching it there would strand the current video behind an
+older inherited reading and disable the newer-nav. Either way there is no new endpoint and no board bloat; the
+strip shows only when a scenario has more than one reading (a fresh scenario is just its single reading). The remark track in the rail is
 per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings
 arrive only from the eval seam's CLI ([[eval-core]]'s `spex eval add`) and surface here on the next
 refresh; the pane never mutates or appends the scenario's history itself.

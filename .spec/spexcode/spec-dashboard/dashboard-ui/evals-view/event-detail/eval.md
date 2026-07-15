@@ -182,6 +182,25 @@ scenarios:
       REMOVES the human's own row from the thread. Both writes ride the CLI-parity
       /api/remarks/resolve|retract with the `<thread-id>#<rid>` ref in the BODY; a refused action
       surfaces its server message on the row, never swallowed. No page errors.
+  - name: session-home-history-rooted
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/SessionEval.jsx]
+    description: >-
+      In a real browser open a SESSION's console Eval tab (not #/evals) for a session whose worktree has
+      filed an in-session VIDEO reading on a scenario the MAIN checkout still scores with an OLDER,
+      different reading (e.g. an image). The row shows the in-session reading (vid·…). Select it and read
+      the detail: how many <video> elements mount (`.an-video`); whether the media shown is the in-session
+      video or the older main-checkout still; whether the A/B strip's newer (›) control can reach the
+      current reading. Contrast with the same row on the #/evals page (main-rooted).
+    expected: |-
+      The session Eval tab is WORKTREE-rooted end to end: selecting an in-session video row opens THAT
+      reading — its <video> mounts on the stage (`.an-video` present, video count ≥ 1) and the A/B strip
+      shows the in-session reading as the latest (the › newer control disabled AT it, not short of it).
+      The detail is NEVER the older main-checkout reading: the pane must not re-fetch the main
+      `/api/specs/:id/evals` timeline (which lacks the un-merged in-session reading) and strand the
+      current video behind an inherited still with the newer-nav disabled. The A/B history is
+      home-provided — the session tab hands EventDetail its already-computed worktree readings, so the
+      walk reflects the session's branch; the #/evals page (main-rooted) still fetches its own timeline.
 ---
 # event-detail loss
 

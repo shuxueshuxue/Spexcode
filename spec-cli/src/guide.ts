@@ -159,8 +159,13 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
                \`frontend-e2e, backend-api, cli, desktop, mobile\`). A tag outside the library is rejected —
                use an existing one, or add it to the library to mint it. Tags classify a scenario (surface,
                device) so it can be filtered and, later, routed to the right driver.
-  test         optional. A repo path to a co-located runnable file (a playwright.spec.ts, a script)
-               the agent MAY run by hand. Not a driver — eval never executes it.
+  test         optional. Either a repo-path scalar (the backward-compatible shorthand) or a strict object:
+                 test:
+                   path: tests/auth.spec.ts
+                   name: rejects an expired session
+               Both forms normalize in JSON to \`{ "path": "..." }\` with optional \`"name"\`. The object
+               requires exactly \`path\` + \`name\`; its case name is opaque text preserved for the measuring
+               hand. The path must exist. SpexCode does not parse WDIO/Playwright or execute anything.
   code         optional. The file THIS scenario GOVERNS, ideally one (a comma list / flow list \`[a, b]\` is
                allowed) — its own slice of the code freshness axis, so scenarios on one node go stale
                independently. Absent → it inherits the node's \`code:\` list. A file governed by > maxOwners

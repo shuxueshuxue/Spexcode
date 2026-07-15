@@ -7,7 +7,7 @@ import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
-import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
+import { evalNodesAsync, type ScenarioTestReference } from '../../spec-eval/src/scenarios.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -29,11 +29,17 @@ export function latestPerScenario<T extends { scenario: string }>(readings: T[])
   return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
 }
 
-// the board's scenario fold ([[graph-lean]]): the declared set rides SLIM — {name, tags} is everything an
-// overview surface joins state onto (badge, stats, focus rows, search rows); the prose (description/
-// expected) and per-scenario code stay off the hot poll, carried by `/api/specs/lite` and `/api/specs/:id/evals`.
-export function slimScenarios(scenarios: { name: string; tags?: string[] }[]): { name: string; tags?: string[] }[] {
-  return scenarios.map((s) => ({ name: s.name, ...(s.tags?.length ? { tags: s.tags } : {}) }))
+// the board's scenario fold ([[graph-lean]]): the declared set rides SLIM — name/tags plus the normalized
+// test reference a measuring hand can follow. Prose and per-scenario code stay off the hot poll, carried by
+// `/api/specs/lite` and `/api/specs/:id/evals`; the opaque test case name is metadata, not an executor seam.
+export function slimScenarios(
+  scenarios: { name: string; tags?: string[]; test?: ScenarioTestReference }[],
+): { name: string; tags?: string[]; test?: ScenarioTestReference }[] {
+  return scenarios.map((s) => ({
+    name: s.name,
+    ...(s.tags?.length ? { tags: s.tags } : {}),
+    ...(s.test ? { test: s.test } : {}),
+  }))
 }
 
 export async function buildBoard() {
@@ -139,7 +145,7 @@ export async function buildBoard() {
   // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
   // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
   // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
-  // SLIM — {name, tags} only, the fields every overview surface joins state onto — with its prose
+  // SLIM — name/tags/test only, the fields every overview surface or measuring hand needs — with its prose
   // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
   // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
   // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-measurable nodes. The

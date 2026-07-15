@@ -30,6 +30,9 @@ scenarios:
       longer blind to its own sources.
   - name: schema-gate-rejects-malformed
     tags: [cli]
+    test:
+      path: spec-eval/src/scenarios.test.ts
+      name: parseScenarios normalizes scalar and case-specific test references
     description: >-
       Through the real `spex` surface, write a eval.md with a typo'd field key and a missing
       `expected` into a node dir, then (a) run `spex eval lint` and (b) stage it and run

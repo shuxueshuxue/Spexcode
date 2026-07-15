@@ -2,7 +2,7 @@ import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
-import { evalNodes, type EvalNode } from './scenarios.js'
+import { evalNodes, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, codeDrift, contentProbeFor, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
@@ -91,7 +91,7 @@ function toRemarkView(rm: Reply, threadId: string, dangling: boolean): RemarkVie
 // at NODE level. `scenario` is the orphaned name (rendered struck-through / gone); `remarks` are all dangling.
 export type DanglingTrack = { scenario: string; threadId: string; thread: Issue; remarks: RemarkView[] }
 
-export type ScenarioInfo = { name: string; expected: string; tags?: string[]; code?: string[] }
+export type ScenarioInfo = { name: string; expected: string; tags?: string[]; test?: ScenarioTestReference; code?: string[] }
 
 // `hasEvalFile` distinguishes a node that declares no scenarios (no eval.md) from one that declares some but
 // has no readings yet — the tab says different things for each. `scenarios` is the declared set; `readings`
@@ -164,7 +164,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const threadFor = (scenario: string): Issue | undefined => tracks.get(trackKey(id, scenario))?.thread
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
     name: s.name, expected: s.expected,
-    ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
+    ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.test ? { test: s.test } : {}),
+    ...(s.code?.length ? { code: s.code } : {}),
   }))
   // one raw sidecar read: the effective readings feed the scoreboard rows below; the retraction events ride
   // along as the undo trace (newest-first, like the readings), the human-ok events as the sign-off overlay.

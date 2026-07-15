@@ -4,7 +4,7 @@ import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { evalNodes, validateScenarios, resolveEvalNode, scenarioHash, EVAL_FILE, type EvalNode } from './scenarios.js'
+import { evalNodes, validateScenarios, resolveEvalNode, scenarioHash, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
@@ -115,7 +115,7 @@ async function scan(args: string[] = []): Promise<number> {
     if (y) {
       // schema first: a malformed eval.md is the loudest gap — report each violation, then still scan its
       // (leniently-parsed) scenarios for stale/missing so a typo doesn't mask a real freshness gap.
-      for (const e of validateScenarios(readFileSync(join(y.dir, EVAL_FILE), 'utf8'), cfg.scenarioTags)) {
+      for (const e of validateScenarios(readFileSync(join(y.dir, EVAL_FILE), 'utf8'), cfg.scenarioTags, root)) {
         malformed++
         findings.push(`  • eval-schema: '${s.id}' ${e} — fix ${y.evalPath}`)
       }
@@ -512,7 +512,7 @@ function checkStaged(): number {
   for (const rel of staged.filter((p) => p === EVAL_FILE || p.endsWith('/' + EVAL_FILE))) {
     const abs = join(root, rel)
     if (!existsSync(abs)) continue   // staged deletion — nothing to validate
-    const errs = validateScenarios(readFileSync(abs, 'utf8'), tagLibrary)
+    const errs = validateScenarios(readFileSync(abs, 'utf8'), tagLibrary, root)
     if (!errs.length) continue
     bad = true
     console.error(`✗ SpexCode eval: ${rel} — invalid scenario schema:`)
@@ -578,6 +578,34 @@ export function formatTimeline(tl: EvalTimeline): string {
 // (the collection view); a <node>/`.` scopes to one node. --unmeasured keeps only scenarios with NO
 // effective reading — never measured, or every filing retracted — the blind-spot worklist a measuring
 // hand picks from. Flag set closed, like every eval verb.
+export type ScenarioListRow = {
+  node: string
+  scenario: string
+  tags?: string[]
+  test?: ScenarioTestReference
+  measured: boolean
+  latest?: { verdict?: Verdict; ts: string }
+}
+
+export function scenarioListRows(nodes: EvalNode[], unmeasuredOnly = false): ScenarioListRow[] {
+  const rows: ScenarioListRow[] = []
+  for (const n of nodes) {
+    const latest = latestPerScenario(readReadings(n.sidecarPath))
+    for (const sc of n.scenarios) {
+      const r = latest.get(sc.name)
+      if (unmeasuredOnly && r) continue
+      rows.push({
+        node: n.id, scenario: sc.name,
+        ...(sc.tags?.length ? { tags: sc.tags } : {}),
+        ...(sc.test ? { test: sc.test } : {}),
+        measured: !!r,
+        ...(r ? { latest: { ...(r.verdict ? { verdict: r.verdict } : {}), ts: r.ts } } : {}),
+      })
+    }
+  }
+  return rows
+}
+
 async function scenarioLs(args: string[]): Promise<number> {
   for (const a of args) {
     if (!a.startsWith('--')) continue
@@ -598,21 +626,7 @@ async function scenarioLs(args: string[]): Promise<number> {
     nodes = [res.node]
   }
   const unmeasuredOnly = has(args, 'unmeasured')
-  type Row = { node: string; scenario: string; tags?: string[]; measured: boolean; latest?: { verdict?: Verdict; ts: string } }
-  const rows: Row[] = []
-  for (const n of nodes) {
-    const latest = latestPerScenario(readReadings(n.sidecarPath))
-    for (const sc of n.scenarios) {
-      const r = latest.get(sc.name)
-      if (unmeasuredOnly && r) continue
-      rows.push({
-        node: n.id, scenario: sc.name,
-        ...(sc.tags?.length ? { tags: sc.tags } : {}),
-        measured: !!r,
-        ...(r ? { latest: { ...(r.verdict ? { verdict: r.verdict } : {}), ts: r.ts } } : {}),
-      })
-    }
-  }
+  const rows = scenarioListRows(nodes, unmeasuredOnly)
   if (has(args, 'json')) { console.log(JSON.stringify(rows, null, 2)); return 0 }
   if (!rows.length) {
     console.log(`spex eval scenario ls: ${unmeasuredOnly ? 'no unmeasured scenarios' : 'no scenarios declared'}${sel ? ` on '${nodes[0]?.id ?? sel}'` : ''}`)

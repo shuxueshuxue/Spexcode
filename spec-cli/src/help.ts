@@ -224,7 +224,7 @@ ls — node-scoped bare (its per-scenario eval history); session-scoped with an 
 ✦-marked ahead of the inherited baseline. --export writes that evaluation as ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
-scenario ls — the DECLARED contracts (name · tags · latest verdict), no evals: bare lists every
+scenario ls — the DECLARED contracts (name · tags · normalized test reference · latest verdict), no evals: bare lists every
 measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
 
 lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·

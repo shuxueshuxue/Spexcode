@@ -4,7 +4,9 @@ status: active
 hue: 280
 desc: The Enter surface — two-pane session interface with a live tmux terminal.
 code:
-  - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/SessionInterface.jsx#SessionInterface
+  - spec-dashboard/src/SessionInterface.jsx#composingKey
+  - spec-dashboard/src/SessionInterface.jsx#typeKeyToken
 related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionWindow.jsx

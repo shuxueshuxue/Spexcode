@@ -5,6 +5,8 @@ hue: 200
 desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer — a collapsed auto-growing bar DOCKED at the detail's foot — routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesPage.jsx#IssuesPage
+  - spec-dashboard/src/IssuesPage.jsx#IssueDetail
+  - spec-dashboard/src/IssuesPage.jsx#NewThreadForm
 related:
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx

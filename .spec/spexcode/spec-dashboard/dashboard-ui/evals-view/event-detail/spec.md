@@ -5,6 +5,8 @@ hue: 200
 desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
 code:
   - spec-dashboard/src/EventDetail.jsx#EventDetail
+  - spec-dashboard/src/EventDetail.jsx#StepRail
+  - spec-dashboard/src/EventDetail.jsx#EvalRemarks
 related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/index.ts

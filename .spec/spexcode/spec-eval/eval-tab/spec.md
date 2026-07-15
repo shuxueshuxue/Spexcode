@@ -4,7 +4,8 @@ status: active
 hue: 140
 desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with an evidence GALLERY (N images + a video/transcript) on expand, plus the spec-cli read API behind it.
 code:
-  - spec-eval/src/evaltab.ts
+  - spec-eval/src/evaltab.ts#evalTimeline
+  - spec-eval/src/evaltab.ts#readBlobByHash
 related:
   - spec-cli/src/graph.ts
   - spec-cli/src/index.ts

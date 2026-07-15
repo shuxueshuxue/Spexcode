@@ -6,6 +6,7 @@ hue: 175
 desc: Keep the spec↔code graph honest — every code file is claimed by a spec; `spex lint` enforces it.
 code:
   - spec-cli/src/lint.ts#specLint
+  - spec-cli/src/lint.ts#loadConfig
 related:
   - spexcode.json
 ---

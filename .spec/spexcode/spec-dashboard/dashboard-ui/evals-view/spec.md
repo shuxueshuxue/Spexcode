@@ -4,7 +4,8 @@ status: active
 hue: 200
 desc: The dashboard's Evals page — a top-level route (#/evals, [[side-nav]]) peer to the graph, the session board, and the Issues page, showing the project's current measured loss as a MASTER-DETAIL: the [[evals-feed]] list in a SLIM, foldable left column, the [[event-detail]] workspace of the selection full-height on the right. Evals lead — the board's `f` and ⌥F land here.
 code:
-  - spec-dashboard/src/EvalsPage.jsx
+  - spec-dashboard/src/EvalsPage.jsx#EvalsPage
+  - spec-dashboard/src/EvalsPage.jsx#EvalMasterDetail
 ---
 
 # evals-view

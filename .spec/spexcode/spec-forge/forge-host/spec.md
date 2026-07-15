@@ -5,6 +5,7 @@ hue: 280
 desc: WHICH forge a repo talks to is a repo fact, not a constant — resolveForgeHost() derives the host from the origin remote (github.com → github, gitlab/self-hosted forms → gitlab), an explicit forge.host config overrides, and a resolved host with no registered driver degrades to an empty slice, never a wrong-host call.
 code:
   - spec-forge/src/drivers.ts#resolveForgeHost
+  - spec-forge/src/drivers.ts#forgeDriverFor
 ---
 # forge-host
 

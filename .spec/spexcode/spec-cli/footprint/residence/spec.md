@@ -5,6 +5,7 @@ hue: 200
 desc: The vote-less footprint — materialized artifacts carry no facts so they are NEVER tracked; spec data always tracked, machine facts never, run residue out-of-tree; a contract file's residence is a LIVE content fact (tracked → filter, wholly-ours → exclude, user-prose → un-hidden + clean armed).
 code:
   - spec-cli/src/worktree-sources.ts#seedWorktreeHostState
+  - spec-cli/src/worktree-sources.ts#hideSeededFromGit
 related:
   - spec-cli/src/materialize.ts
   - spec-cli/src/layout.ts

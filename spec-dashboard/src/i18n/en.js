@@ -194,12 +194,18 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
+    attach: 'attach…',
     select: 'select…',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
     renameTitle: 'rename “{name}”',
     renamePlaceholder: 'display name (blank to reset)',
+    // attach modal: hands over the `spex session attach <id>` escape-hatch command ([[attach-menu]]).
+    attachTitle: 'attach to “{name}”',
+    attachHint: 'Run this in a terminal on the host to attach a real tmux client to the session:',
+    attachCopy: 'copy',
+    attachCopied: 'copied',
   },
 
   // the multi-select bar + bulk-close confirm ([[session-multi-select]]). The verb is `close` — the SAME

@@ -576,7 +576,10 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
             </div>
           )}
 
-          {docs.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
+          {/* structured `data` folds behind its header when the reading ALSO has a clip/still ([[event-detail]] /
+              [[evidence-kind-taxonomy]]) — the media is the protagonist, the data a secondary drill-down; a
+              data-only reading stays open (only DataBlock reads `collapsed`, so a transcript is unaffected). */}
+          {docs.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} collapsed={hasVideo || images.length > 0} key={`${e.hash}-${i}`} />)}
 
           {ev.length === 0 && (viewing.verdict?.note
             ? <pre className="eval-transcript">{viewing.verdict.note}</pre>

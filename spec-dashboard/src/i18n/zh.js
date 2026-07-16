@@ -200,9 +200,11 @@ export default {
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
     renameTitle: '重命名“{name}”',
     renamePlaceholder: '显示名称（留空以重置）',
-    // 接入弹窗：交出 `spex session attach <id>` 逃生舱命令（[[attach-menu]]）。
+    // 接入弹窗（[[attach-menu]]）：提供两条可复制的接入命令——`spex session attach` 官方动词，以及原始 `tmux -L … attach` 兜底。
     attachTitle: '接入“{name}”',
-    attachHint: '在宿主机的终端里运行此命令，以一个真正的 tmux 客户端接入该会话：',
+    attachHint: '在宿主机的终端里运行其中一条命令，以一个真正的 tmux 客户端接入该会话：',
+    attachSpex: 'spex',
+    attachTmux: 'tmux',
     attachCopy: '复制',
     attachCopied: '已复制',
   },

@@ -15,7 +15,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -168,9 +168,13 @@ app.post('/api/evidence', async (c) => {
 // configured `default` NAME so the dropdown pre-selects the SAME launcher a bare `spex session new` uses
 // (the CLI/config default), instead of the alphabetically-first one. Missing defaultLauncher is returned
 // as an actionable config error, not hidden by falling through to the built-in `claude` launcher.
+// `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
+// so the row's attach modal ([[attach-menu]]) can offer the RAW `tmux -L <socket> attach -t <id>` fallback
+// beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
   launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
+  tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))
 // the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with

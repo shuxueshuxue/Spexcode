@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
-import { apiFetch } from './data.js'
+import { apiFetch, loadSettings } from './data.js'
 import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
@@ -11,9 +11,14 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSe
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
   const [attaching, setAttaching] = useState(null) // the session whose attach modal is open | null ([[attach-menu]])
+  const [tmuxSocket, setTmuxSocket] = useState('spexcode') // the private tmux server's -L label; the default until settings load
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
+
+  // the tmux socket is a backend fact (env-overridable), fetched once so the raw-tmux attach fallback names the
+  // RIGHT server; the built-in default stands in until it lands and is harmless if the fetch never returns.
+  useEffect(() => { loadSettings().then((s) => { if (s?.tmuxSocket) setTmuxSocket(s.tmuxSocket) }).catch(() => { /* keep the default */ }) }, [])
 
   // standard context-menu dismissal: any click outside closes the popped menu. The menu div stops its own
   // clicks (below) so picking an item never trips this. Bound only while it's open.
@@ -103,7 +108,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSe
           <button className="sess-menu-item danger" onClick={startClose}>{t('sessionWindow.close')}</button>
         </div>
       )}
-      <SessionAttach session={attaching} onClose={() => setAttaching(null)} />
+      <SessionAttach session={attaching} socket={tmuxSocket} onClose={() => setAttaching(null)} />
       {/* rename + close modals below share the sess-rename chrome. */}
       {renaming && (
         <Modal

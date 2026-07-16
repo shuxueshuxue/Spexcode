@@ -187,9 +187,11 @@ export async function loadReviewPlugins() {
 }
 
 // the resolved runtime settings the backend serves at /api/settings: `{ layout, launchers: [{ name, harness }],
-// default: '<name>' }` (never the host `cmd`) — `default` is the configured `defaultLauncher` so the New-Session
-// dropdown pre-selects the SAME launcher a bare `spex session new` uses ([[launcher-select]]). Built-in
-// `claude`/`codex` profiles keep the picker present even when the project defines no extra launchers.
+// tmuxSocket, default: '<name>' }` (never the host `cmd`) — `default` is the configured `defaultLauncher` so the
+// New-Session dropdown pre-selects the SAME launcher a bare `spex session new` uses ([[launcher-select]]). Built-in
+// `claude`/`codex` profiles keep the picker present even when the project defines no extra launchers. `tmuxSocket`
+// is the `-L` label the private tmux server runs under, so the attach modal ([[attach-menu]]) can compose the raw
+// `tmux -L <socket> attach -t <id>` fallback without hardcoding the socket.
 export async function loadSettings() {
   const res = await apiFetch('/api/settings')
   return res.json()

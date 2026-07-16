@@ -1916,9 +1916,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-blind .ef-scenario { color: var(--muted); }
 .se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }
 .ef-insession { color: var(--blue); font-size: 10px; flex: none; }
-/* the attribution boundary inside a group: ✦ (this session's readings) above, inherited baseline below. */
-.se-divider { display: flex; align-items: center; gap: 8px; padding: 5px 10px 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+/* the attribution boundary inside a group: ✦ (this session's readings) above, inherited baseline below —
+   a BUTTON: the default-collapsed baseline's toggle, carrying its row count. */
+.se-divider { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px 5px; background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
+.se-divider:hover { color: var(--ink2); }
+.se-divider:hover::before, .se-divider:hover::after { border-top-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+.se-divider-arrow { flex: none; font-size: 8px; }
+.se-divider-n { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; line-height: 1.5; }
 
 /* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
    the evals feed's kind filter; one control, one look. */

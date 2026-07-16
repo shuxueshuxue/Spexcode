@@ -58,8 +58,12 @@ fatal failure: **blind spots lead** (declared, never measured — the outstandin
 own measurements ✦-marked (a reading is the session's own iff THIS session filed it or its `codeSha` is
 one of the branch's commits — derived from the reading, never hand-tagged; filing alone counts, else a
 session that measured without committing code reads as if it did nothing), then the **inherited
-baseline** — other sessions' latest readings — under an explicit divider naming it; a count chip narrows
-the list to the session's own alone. The rows are the DECLARED scenarios' current score, the same
+baseline** — other sessions' latest readings — **default-collapsed** behind an explicit divider naming it:
+the divider is the group's toggle, carrying its inherited-row count so the folded baseline stays legible
+and an obvious expand/collapse affordance; expanding reveals the same rows in place. The fold changes
+only visibility, never semantics — a collapsed row leaves the selection walk exactly as a filtered row
+does, and a count chip still narrows the list to the session's own alone (while it narrows, the inherited
+divider withdraws with its rows). The rows are the DECLARED scenarios' current score, the same
 latest-per-scenario computation every eval face reads (each row carrying its ✓/✗, muted when stale) — a
 retired scenario's residual reading contributes no row. A gates strip (the same
 `reviewPayload` numbers `spex session review` prints — lint memoized on the checkout fingerprint,

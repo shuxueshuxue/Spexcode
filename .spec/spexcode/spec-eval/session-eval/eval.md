@@ -39,16 +39,20 @@ scenarios:
     description: >
       Open the Eval tab of a session that filed a reading WITHOUT committing code (its codeSha is the
       merge-base) over a node carrying older readings by other sessions plus a retired scenario's residual
-      reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the divider, the
-      count chip, and whether the retired scenario shows.
+      reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the inherited
+      divider's default state, its count, and whether the retired scenario shows. Then click the divider
+      to expand, click again to collapse, and walk j/k across both states.
     expected: >
       Every measured row carries its ✓/✗ verdict mark (muted when stale). The session's own reading is
       ✦-marked and leads its group even when the session has no code commits (a reading is the session's
       own when IT filed it, not only when its codeSha is a branch commit), and the ✦ count chip is present
-      to narrow to those. Inherited rows (other sessions' latest readings) sit below an explicit divider
-      naming them, so the session's own work and the inherited baseline can never be misread as one. A
-      retired scenario (declared in no eval.md) contributes NO row — the tab is bounded by declared
-      scenarios, the same latest-per-scenario computation every eval face reads.
+      to narrow to those. The inherited baseline (other sessions' latest readings) arrives DEFAULT-COLLAPSED
+      behind its explicit divider — a toggle naming the baseline with the inherited-row count and a visible
+      expand affordance; while collapsed no inherited row renders and the j/k walk never lands on one.
+      Clicking the divider expands the same inherited rows in place below it — selection stays where it was,
+      the ✦ filter still narrows to the session's own (withdrawing the divider with its rows) — and clicking
+      again re-collapses. A retired scenario (declared in no eval.md) contributes NO row — the tab is
+      bounded by declared scenarios, the same latest-per-scenario computation every eval face reads.
   - name: eval-cli-read
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts]

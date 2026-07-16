@@ -11,8 +11,9 @@ import { Icon } from './icons.jsx'
 // changed nodes, WORKTREE-rooted readings). The master-detail is the SAME shared shell the Evals page
 // renders ([[evals-view]]'s EvalMasterDetail — split, fold, j/k), so the two surfaces cannot drift:
 // collapsed rows on the left (blind spots lead, then what THIS session measured ✦-marked, then the
-// inherited baseline — other sessions' latest readings — under an explicit divider; the ✦ chip narrows
-// to the session's own), the shared EventDetail as the full-height detail on the right — the
+// inherited baseline — other sessions' latest readings — DEFAULT-COLLAPSED behind its explicit divider,
+// a toggle carrying the group's row count; the ✦ chip narrows to the session's own), the shared
+// EventDetail as the full-height detail on the right — the
 // SAME media + remark thread + composer, since the (node,scenario) thread rides each reading as
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
@@ -21,6 +22,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
+  const [openInherited, setOpenInherited] = useState(() => new Set())  // node ids whose inherited baseline is expanded
   const [sel, setSel] = useState(null)
   const seq = useRef(0)
 
@@ -36,7 +38,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   }, [sessionId])
 
   useEffect(() => {
-    setModel(null); setSel(null); setOnlySession(false)
+    setModel(null); setSel(null); setOnlySession(false); setOpenInherited(new Set())
     loadModel()
   }, [sessionId, loadModel])
 
@@ -60,10 +62,13 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   const sessionTotal = groups.reduce((a, g) => a + g.sessionN, 0)
 
   // the flat visible list drives selection (and the default: the first row — blind spot or freshest).
+  // Visibility is the ONE semantics: an inherited row whose group is folded leaves this list exactly as a
+  // ✦-filtered row does, so the j/k walk, the default selection, and the fallback never see hidden rows.
   const visible = useMemo(() => groups.flatMap((g) => [
     ...g.blind.map((b) => ({ kind: 'blind', key: `blind:${b.node}·${b.scenario}`, item: b })),
-    ...g.rows.filter((r) => !onlySession || r.inSession).map((r) => ({ kind: 'eval', key: entryKey(r), item: r })),
-  ]), [groups, onlySession])
+    ...g.rows.filter((r) => r.inSession || (!onlySession && openInherited.has(g.node.id)))
+      .map((r) => ({ kind: 'eval', key: entryKey(r), item: r })),
+  ]), [groups, onlySession, openInherited])
   const effSel = sel && visible.some((v) => v.key === sel) ? sel : visible[0]?.key ?? null
   const selEntry = visible.find((v) => v.key === effSel)
 
@@ -117,29 +122,45 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
           {visible.length === 0 && <div className="fv-note">{t('sessionEval.empty')}</div>}
           {groups.map((g) => {
             const gRows = visible.filter((v) => v.item.node === g.node.id)
-            if (!gRows.length && !g.node.uncoveredFrontend) return null
+            // the attribution boundary ([[session-eval]]): the inherited baseline is DEFAULT-COLLAPSED
+            // behind its divider — a toggle naming the baseline and counting its rows, rendered whenever
+            // the group HAS inherited rows (folded rows are outside `visible`, so the divider is what
+            // keeps the baseline legible). The ✦ filter withdraws the divider with its rows.
+            const inheritedN = g.rows.length - g.sessionN
+            const hasInherited = inheritedN > 0 && !onlySession
+            if (!gRows.length && !hasInherited && !g.node.uncoveredFrontend) return null
+            const open = openInherited.has(g.node.id)
+            const renderRow = (v) => v.kind === 'blind' ? (
+              <button key={v.key} className={`ef-row se-blind ${effSel === v.key ? 'sel' : ''}`} onClick={() => setSel(v.key)}>
+                <ScoreBadge state="missing" />
+                <span className="ef-scenario">{v.item.scenario}</span>
+                <span className="ef-time">{t('sessionEval.unmeasured')}</span>
+              </button>
+            ) : (
+              <EvalRow key={v.key} e={v.item} selected={effSel === v.key} onClick={() => setSel(v.key)} />
+            )
             return (
               <section className="fv-group" key={g.node.id}>
                 <header className="fv-group-head">
                   <span className="fv-group-title" style={{ color: `hsl(${g.node.hue} 60% 60%)` }}>{g.node.title}</span>
                   {g.node.uncoveredFrontend && <span className="se-warn">{t('sessionEval.noEvalFile')}</span>}
                 </header>
-                {gRows.map((v, i) => {
-                  // the attribution boundary: the first inherited row after the session's own ✦ rows gets a
-                  // divider naming the baseline, so the two provenances can never be misread as one list.
-                  const divider = v.kind === 'eval' && !v.item.inSession && i > 0 &&
-                    gRows[i - 1].kind === 'eval' && gRows[i - 1].item.inSession
-                  const row = v.kind === 'blind' ? (
-                    <button key={v.key} className={`ef-row se-blind ${effSel === v.key ? 'sel' : ''}`} onClick={() => setSel(v.key)}>
-                      <ScoreBadge state="missing" />
-                      <span className="ef-scenario">{v.item.scenario}</span>
-                      <span className="ef-time">{t('sessionEval.unmeasured')}</span>
-                    </button>
-                  ) : (
-                    <EvalRow key={v.key} e={v.item} selected={effSel === v.key} onClick={() => setSel(v.key)} />
-                  )
-                  return divider ? [<div key={`div:${g.node.id}`} className="se-divider">{t('sessionEval.inherited')}</div>, row] : row
-                })}
+                {gRows.filter((v) => v.kind === 'blind' || v.item.inSession).map(renderRow)}
+                {hasInherited && (
+                  <button
+                    className={`se-divider ${open ? 'open' : ''}`} aria-expanded={open}
+                    onClick={() => setOpenInherited((s) => {
+                      const next = new Set(s)
+                      next.has(g.node.id) ? next.delete(g.node.id) : next.add(g.node.id)
+                      return next
+                    })}
+                  >
+                    <span className="se-divider-arrow">{open ? '▾' : '▸'}</span>
+                    {t('sessionEval.inherited')}
+                    <span className="se-divider-n">{inheritedN}</span>
+                  </button>
+                )}
+                {gRows.filter((v) => v.kind === 'eval' && !v.item.inSession).map(renderRow)}
               </section>
             )
           })}

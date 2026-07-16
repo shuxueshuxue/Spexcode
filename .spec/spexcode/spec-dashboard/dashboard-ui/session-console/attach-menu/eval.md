@@ -3,8 +3,8 @@ scenarios:
   - name: attach-shows-both-commands
     tags: [frontend-e2e, desktop]
     description: >
-      On the session console (#/sessions), right-click a LIVE session row and pick "attach…" from the context
-      menu. A modal titled with the session's headline should open showing TWO read-only command fields. Read
+      On the session console (#/sessions), right-click a LIVE session row and pick "open in terminal…" from the
+      context menu. A modal titled with the session's headline should open showing TWO read-only command fields. Read
       both from the live DOM: one must equal `spex session attach <id>` and the other `tmux -L <socket> attach
       -t <id>`, where <id> is that row's session id and <socket> is the backend's tmuxSocket from /api/settings
       (default `spexcode`). Confirm each field is selectable (click selects all) and has its own copy button.
@@ -17,8 +17,8 @@ scenarios:
   - name: attach-only-when-live
     tags: [frontend-e2e, desktop]
     description: >
-      Right-click a LIVE row (liveness online) and confirm "attach…" is in the menu; then right-click an
-      OFFLINE row (a stopped/dormant session) and confirm "attach…" is ABSENT. A queued row (not yet launched)
+      Right-click a LIVE row (liveness online) and confirm "open in terminal…" is in the menu; then right-click
+      an OFFLINE row (a stopped/dormant session) and confirm it is ABSENT. A queued row (not yet launched)
       likewise shows no attach item.
     expected: >
       Attach appears only when a live tmux window exists to join: present on a non-offline, non-queued row,

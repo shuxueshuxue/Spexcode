@@ -63,7 +63,7 @@ export default {
     okBtn: '签核',
     okTitle: '人工签核这条读数 — 表示你已复核并认可其判定；已签核且未过期的场景会离开默认列表，直到新读数落地或它过期',
     okdTip: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
-    okChip: ({ n }) => `☑ ${n} 已签核`,
+    okChip: ({ n }) => `${n} 已签核`,
     okChipTitle: '显示被默认隐藏的已签核场景',
   },
 

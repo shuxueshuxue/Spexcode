@@ -244,19 +244,13 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDi
   let file = join(distDir, rel)
   if (!file.startsWith(distDir)) file = join(distDir, 'index.html')
   if (urlPath === '/' || !existsSync(file)) {
-    // @@@ missing-asset 404 - only extensionless SPA routes fall back to index.html. A missing FILE
-    // request (it has an extension) is a stale hashed chunk from a pre-rebuild page still open in some
-    // browser: answering it with HTML trips the strict module-MIME check and hides the miss from the
-    // client — 404 instead, so the shell's vite:preloadError recovery can see it and reload.
+    // @@@ missing-asset 404 - a missing extensioned path is a stale hashed chunk, not an SPA route: answer
+    // 404, not HTML (which trips the module-MIME check), so the shell's reload recovery sees it ([[public-mode]]).
     if (urlPath !== '/' && extname(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found') }
     file = join(distDir, 'index.html')
   }
   if (!existsSync(file)) { res.writeHead(503); return res.end('dashboard build missing') }
   const type = MIME[extname(file)] || 'application/octet-stream'
-  // @@@ cache-policy - hashed /assets/* are content-addressed (immutable per build) → cache hard; index.html
-  // (and every SPA fallback to it) is no-cache → revalidated each load. Without that a browser holding a
-  // pre-rebuild index.html keeps requesting dead chunk hashes and the stale-chunk reload ([[dashboard-shell]])
-  // re-serves the SAME cached index, never reaching the fresh build — a lazy route (issues) 404s forever.
   const cacheControl = /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'
   const raw = readFileSync(file)
   if (wantsGzip(req) && COMPRESSIBLE.test(type)) {

@@ -36,6 +36,10 @@ to `index.html`; a missing path *with* an extension is a stale hashed chunk requ
 page still open in some browser, and it answers **404** — serving HTML there would trip the browser's
 strict module-MIME check and hide the miss from the client, stranding the tab, where the 404 lets the
 shell's stale-chunk recovery ([[dashboard-shell]]) see the failure and reload itself onto the fresh build.
+That recovery only closes if the reload reaches the **fresh** `index.html`, so the cache policy is
+load-bearing: content-addressed `/assets/*` are cached `immutable`, while `index.html` and its SPA
+fallbacks are `no-cache` (revalidated every load). Otherwise a pre-rebuild tab's reload re-serves the
+cached index, never leaves the old build, and a lazy route (issues, its own chunk) 404s forever.
 
 **Compression is transport, so it lives at the gateway — once, for every deployment.** Text-ish responses
 ship gzipped when the client accepts it, static and proxied alike; upstream and product semantics never

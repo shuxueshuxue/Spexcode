@@ -49,6 +49,20 @@ scenarios:
       and the JS bundle both under a third); the SSE stream carries NO content-encoding (the exclusion —
       an event must never sit in a zlib buffer) and the triggered event still arrives on the debounce
       scale. The upstream is untouched: only the gateway compresses.
+  - name: stale-chunk-recovery
+    tags: [backend-api]
+    code: spec-cli/src/gateway.ts
+    description: >
+      Against a running gateway, fetch the three static classes and read their Cache-Control: GET /
+      (index.html), GET a real hashed asset under /assets/, and GET a non-existent hashed chunk
+      (/assets/IssuesPage-DEADBEEF.js) — the exact stale-chunk case a pre-rebuild browser hits.
+    expected: |
+      index.html (and any extensionless SPA route falling back to it) comes back `Cache-Control: no-cache`
+      — revalidated every load so a redeploy is always picked up. A hashed asset under /assets/ comes back
+      `Cache-Control: public, max-age=31536000, immutable`. A missing hashed chunk answers 404 (never HTML).
+      Together these close the shell's reload recovery: after a dist rebuild the reload reaches the fresh
+      index and the lazy issues-page chunk loads, instead of re-serving a cached index that points at a dead
+      chunk hash forever.
   - name: gateway-full-loop
     tags: [frontend-e2e, desktop]
     description: >

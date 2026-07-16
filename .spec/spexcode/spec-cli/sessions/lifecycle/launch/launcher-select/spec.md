@@ -41,7 +41,8 @@ the committed file — a launcher name is portable, its `cmd` is a machine fact.
 **Selection at create time.** `spex new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
 launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill button wearing the selected
-launcher's harness vendor mark + name (no caret; a pop-out card, not a dropdown) that pops out a card with
+launcher's harness vendor mark + name (no caret, no label) that opens a **viewport-centred pop-out card**
+over a light backdrop (not an anchored dropdown) with
 **one row per launcher** (its harness glyph + its name), each row showing a dim one-line preview of the
 profile's configured `cmd` that expands on click into the full **read-only command detail** — so a human can
 inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole

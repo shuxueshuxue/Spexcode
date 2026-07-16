@@ -127,6 +127,10 @@ refresh; the pane never mutates or appends the scenario's history itself.
 the same act, and on a scenario that act is a **remark** ([[remark-substrate]]) — a scenario-scoped concern
 is never an issue (I1: else the loss signal could be bypassed). The rail renders the eval's thread
 ([[issues-view]]'s shared `Thread`), and every mark is a remark on it, carrying the mutable `resolved` bit.
+The track is the thread's **remarks** — the `rid`-carrying replies — NOT its container root: an eval thread's
+body is a system-minted stub (`Remarks on the <scenario> eval of <node>`) that find-or-create writes to
+close the race window, and it is never a remark ([[remark-substrate]]: every remark is a reply, never the
+thread body), so it renders as neither a track row nor a count — the rail shows exactly the remarks, once each.
 A remark is **anchored** by a prose convention — the same philosophy as `Spec:` and `[[node]]` — a body
 whose first line reads `▶m:ss · <step>` IS anchored to that video moment: the renderer linkifies it (click
 seeks the clip), and the composer over a clip gains a **⏱** affordance that stamps the current frame — its

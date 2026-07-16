@@ -175,10 +175,12 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   // concern against a resident issues list. Computed here (not just in the comments section) so the scrubber
   // can render each anchored remark as a marker and the keyboard can jump between them.
   const thread = entry.thread ?? null
-  const comments = useMemo(
-    () => (thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []),
-    [thread],
-  )
+  // the review track is the thread's REMARKS — the replies carrying a `rid` ([[remark-substrate]]: "every
+  // remark is a reply, NEVER the thread body"). The thread's ROOT body is a system-minted container stub
+  // ("Remarks on the `<scenario>` eval of [[node]]", authored under find-or-create to close the race
+  // window), not a human remark — rendering it as a comment doubled every track (a phantom row above the
+  // real remark, and an inflated "review track (N)" count). Mirror the backend's own `replies.filter(isRemark)`.
+  const comments = useMemo(() => (thread?.replies ?? []).filter((r) => r.rid !== undefined), [thread])
   // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading. The
   // chain's first link is the LATEST reading's filer, so read it from the newest history row (history is
   // newest-first), falling back to the viewed reading; a legacy reading without `by` yields nothing and the

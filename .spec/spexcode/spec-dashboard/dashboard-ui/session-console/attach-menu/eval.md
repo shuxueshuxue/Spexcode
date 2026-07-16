@@ -1,17 +1,19 @@
 ---
 scenarios:
-  - name: attach-shows-command
+  - name: attach-shows-both-commands
     tags: [frontend-e2e, desktop]
     description: >
       On the session console (#/sessions), right-click a LIVE session row and pick "attach…" from the context
-      menu. A modal titled with the session's headline should open showing a single read-only command field.
-      Read the command text from the live DOM and compare it to `spex session attach <id>`, where <id> is that
-      row's session id. Confirm the field is selectable (click selects all) and the copy button is present.
+      menu. A modal titled with the session's headline should open showing TWO read-only command fields. Read
+      both from the live DOM: one must equal `spex session attach <id>` and the other `tmux -L <socket> attach
+      -t <id>`, where <id> is that row's session id and <socket> is the backend's tmuxSocket from /api/settings
+      (default `spexcode`). Confirm each field is selectable (click selects all) and has its own copy button.
     expected: >
-      The modal shows exactly `spex session attach <id>` with the right-clicked session's id — the project's
-      own blessed attach verb, not a hardcoded `tmux -L … attach` string. The field is read-only and click-to-
-      select, a copy button sits beside it, and the modal mutates no session (it only hands over the command).
-      The command, pasted into a shell on the host, foreground-attaches a real tmux client to that session.
+      The modal shows both attach forms for the right-clicked row: the blessed `spex session attach <id>` and
+      the raw `tmux -L <socket> attach -t <id>` with the real socket (never hardcoded — sourced from the
+      backend). Each sits in its own read-only, click-to-select field with its own copy button, and the modal
+      mutates no session (it only hands over the commands). Either command, pasted into a shell on the host,
+      attaches a real tmux client to that session.
   - name: attach-only-when-live
     tags: [frontend-e2e, desktop]
     description: >
@@ -28,9 +30,9 @@ scenarios:
 
 Measure through the **real session-row right-click menu**, YATU-style: run the dashboard (`npm run dev` in
 spec-dashboard) against a `spex serve` with at least one live session, open the console with `Enter`,
-right-click an actual row, pick attach, and read the popped modal's command straight from the live DOM —
-never by reasoning about the source. The loss is the two contracts this node owns: the command is
-`spex session attach <id>` for the right-clicked row (the blessed CLI verb, [[session-attach]], not a raw
-tmux string), and attach is offered only when a live tmux window exists (present on live rows, absent on
-offline/queued). The command's real attachability is the CLI verb's contract ([[session-attach]]), verified
-once on the host, not re-proven per reading.
+right-click an actual row, pick attach, and read the popped modal's commands straight from the live DOM —
+never by reasoning about the source. The loss is the two contracts this node owns: the modal offers BOTH
+`spex session attach <id>` (the blessed CLI verb, [[session-attach]]) and `tmux -L <socket> attach -t <id>`
+(socket from the backend, id of the right-clicked row), and attach is offered only when a live tmux window
+exists (present on live rows, absent on offline/queued). Each command's real attachability is verified once
+on the host, not re-proven per reading.

@@ -201,9 +201,12 @@ export default {
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
     renameTitle: 'rename “{name}”',
     renamePlaceholder: 'display name (blank to reset)',
-    // attach modal: hands over the `spex session attach <id>` escape-hatch command ([[attach-menu]]).
+    // attach modal ([[attach-menu]]): offers two copyable attach commands — the blessed `spex session attach`
+    // verb and the raw `tmux -L … attach` fallback.
     attachTitle: 'attach to “{name}”',
-    attachHint: 'Run this in a terminal on the host to attach a real tmux client to the session:',
+    attachHint: 'Run one of these in a terminal on the host to attach a real tmux client to the session:',
+    attachSpex: 'spex',
+    attachTmux: 'tmux',
     attachCopy: 'copy',
     attachCopied: 'copied',
   },

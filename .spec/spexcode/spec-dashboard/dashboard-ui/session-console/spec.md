@@ -57,12 +57,18 @@ greyed and unfocused until the POST *and* a board re-read returned. You stay on 
 appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
-Beneath the box a native launcher-**name** `<select>` is the ONLY launch choice ([[launcher-select]]). A
+Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
 launch `POST /api/sessions` carries only `launcher`; the backend derives `harness` from that selected profile.
-Built-in `claude` and `codex` launchers keep the select present even in a zero-config project, and configured
-profiles add more names. The selected launcher's harness reads as a derived **icon** beside the select: the
-vendor glyph updates as the selection changes, but it is an adornment, not a second input. The launcher pick is
+The picker is a clean pill **button** wearing the selected launcher's harness vendor mark + name — no caret,
+no label: it opens a **centred pop-out card** — a viewport-centred dialog over a light backdrop, deliberately
+not an anchored dropdown — with **one row per launcher** (the row's
+harness glyph + name, the selected row marked), and beneath each name a dim one-line monospace **preview of
+the profile's configured command**; the preview itself is the expand affordance (click it for the full
+wrapped command, read-only selectable text — no chevron buttons, no edit surface: config files remain the
+sole place a `cmd` is written). Selecting a row closes the pop;
+a backdrop click or Esc closes it too. Built-in `claude` and `codex` launchers keep the picker present even in a
+zero-config project, and configured profiles add more names. The launcher pick is
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
@@ -139,9 +145,9 @@ chrome never blurs it, the panel **suppresses the native context menu** and **re
 right-click. Focus retention blankets the **inert** chrome only: it blocks the blur by cancelling the
 mousedown's default over dead space, but **never over a native form control** (`<select>`, an `<option>`)
 that owns its own mousedown — a native `<select>` *opens* on that default action, so cancelling it would
-leave the control dead to the pointer. The launcher picker ([[launcher-select]]) is such a control; keeping
-the input focused must not cost the picker its click, so the two concerns coexist — focus stays, and the
-native dropdown still opens. It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
+leave the control dead to the pointer. (No such control currently renders in the panel — the launcher
+picker ([[launcher-select]]) is a button pop-out, whose clicks fire fine under the blanket — but the
+carve-out stays as the rule any future native control relies on.) It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
 round-trip away from the Terminal tab** — the box unmounts while Eval or type mode replaces it, but its height is
 derived from the per-session draft (which persists), so on return it re-fits to that draft instead of collapsing
 back to one line. It carries the same **completion** menus

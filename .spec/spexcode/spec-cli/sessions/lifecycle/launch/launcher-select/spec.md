@@ -26,7 +26,7 @@ ordinary named launchers (`claude` = `{harness: claude, cmd: 'claude --dangerous
 `codex` = `{harness: codex, cmd: 'codex --yolo'}`), after which they are edited, renamed, or removed like any
 other entry. A project that must run workers under an auth wrapper (reclaude) sets that launcher's `cmd` in
 the gitignored `spexcode.local.json` — there is NO runtime env that rewrites a launcher's command. So the
-dropdown lists exactly the config's real launchers, and two names
+picker lists exactly the config's real launchers, and two names
 can never resolve to the same command as ghost duplicates. Because a launcher NAMES a harness, picking a
 launcher is the ONLY user-facing launch selection. The old free-standing harness pick is gone.
 
@@ -40,9 +40,16 @@ the committed file — a launcher name is portable, its `cmd` is a machine fact.
 
 **Selection at create time.** `spex new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
-launcher dropdown sourced from `GET /api/settings`, with the selected launcher's harness shown only as a
-derived vendor glyph beside the select. That endpoint reports BOTH the `{ name, harness }` list AND the
-configured `default` name (`{ launchers, default }`). The dropdown's INITIAL selection is always a visible
+launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill button wearing the selected
+launcher's harness vendor mark + name (no caret, no label) that opens a **viewport-centred pop-out card**
+over a light backdrop (not an anchored dropdown) with
+**one row per launcher** (its harness glyph + its name), each row showing a dim one-line preview of the
+profile's configured `cmd` that expands on click into the full **read-only command detail** — so a human can
+inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole
+place a `cmd` is written. That endpoint reports the `{ name, harness, cmd }` list AND the
+configured `default` name (`{ launchers, default }`); the `cmd` rides the payload as read-only display data
+for that detail (the dashboard sits behind the deployment's gateway auth). The mobile composer keeps a plain
+native select — the pop-out is desktop chrome. The picker's INITIAL selection is always a visible
 launcher choice: a still-valid remembered (per-browser) pick wins, else the configured `default`, else the
 first real launcher in the list. That last case is not an implicit backend fallback — the dashboard sends the
 selected launcher name explicitly. The seeded `claude`/`codex` profiles are ordinary selectable entries (and

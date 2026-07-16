@@ -389,6 +389,7 @@ export default {
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用命令预设' },
     harnessLabel: '启动智能体',
     launcherLabel: '启动器',
+    launcherCmd: '命令',
     tabTerminal: '终端',
     tabEval: '评测',
     typeBtn: '终端交互',

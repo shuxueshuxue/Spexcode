@@ -194,7 +194,7 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
-    attach: 'attach…',
+    attach: 'open in terminal…',
     select: 'select…',
     close: 'close',
     closeTitle: 'close “{name}”?',

@@ -27,6 +27,11 @@ verb and the raw tmux form, since a shell without `spex` on PATH still has tmux.
 ## expanded spec
 
 **Attach** is a context-menu verb beside rename, select, and close ([[session-rename]], [[session-multi-select]]).
+Its menu **label reads "open in terminal…"**, not the bare word "attach": the concept is a tmux attach, but the
+label must make sense to a human who has never touched tmux, so it says what the verb *does* — opens this
+session in your own terminal — while the internal name (this node, the `startAttach` handler) stays "attach".
+The trailing `…` marks that it opens a dialog rather than acting at once, matching "select…".
+
 Picking it swaps the menu for a small modal (the shared rename-modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]) — and offers **two copyable forms of
 the attach command** for the right-clicked row, so the human picks whichever their host shell can run:

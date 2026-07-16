@@ -750,7 +750,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    API is absent. */
 .sess-attach-modal { width: min(460px, 94vw); }
 .sess-attach { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 2px; }
-.sess-attach-hint { margin: 0 0 2px; color: var(--ink); font-size: 12px; line-height: 1.4; }
 .sess-attach-row { display: flex; align-items: center; gap: 8px; }
 .sess-attach-label {
   flex: none; width: 34px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right;

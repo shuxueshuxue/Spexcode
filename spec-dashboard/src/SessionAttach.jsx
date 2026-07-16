@@ -44,7 +44,6 @@ export default function SessionAttach({ session, socket, onClose }) {
       onClose={onClose}
     >
       <div className="sess-attach">
-        <p className="sess-attach-hint">{t('sessionWindow.attachHint')}</p>
         <CmdRow label={t('sessionWindow.attachSpex')} cmd={spexCmd} />
         <CmdRow label={t('sessionWindow.attachTmux')} cmd={tmuxCmd} />
       </div>

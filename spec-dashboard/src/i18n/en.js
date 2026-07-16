@@ -204,7 +204,6 @@ export default {
     // attach modal ([[attach-menu]]): offers two copyable attach commands — the blessed `spex session attach`
     // verb and the raw `tmux -L … attach` fallback.
     attachTitle: 'attach to “{name}”',
-    attachHint: 'Run one of these in a terminal on the host to attach a real tmux client to the session:',
     attachSpex: 'spex',
     attachTmux: 'tmux',
     attachCopy: 'copy',

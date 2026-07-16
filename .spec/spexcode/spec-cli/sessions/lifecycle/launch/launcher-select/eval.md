@@ -7,22 +7,23 @@ scenarios:
       measure the launcher pop-out picker on a project whose config defines `sessions.launchers` (e.g.
       `reclaude` → claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the
       New-Session box, and read the DOM: assert the trigger button `.si-launcher-btn` is present (wearing
-      the selected launcher's harness glyph + name), that the `.si-agent-picker` harness radiogroup is
-      ABSENT, and that no native `.si-launcher-select` remains. Click the trigger: a `.si-launcher-pop`
-      menu opens with exactly one `.si-launcher-row` per available profile, each row showing its own
-      harness vendor glyph + launcher name. Click a row's `.si-launcher-expand` chevron: a read-only
-      `.si-launcher-cmd` detail expands showing that profile's configured command verbatim, with no input
-      or edit affordance anywhere in the pop. Cross-check the source data at `GET /api/settings` (each
+      the selected launcher's harness glyph + name, with NO caret glyph), that the `.si-agent-picker`
+      harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Click the trigger: a
+      `.si-launcher-pop` card opens with exactly one `.si-launcher-row` per available profile, each row
+      showing its own harness vendor glyph + launcher name, plus a dim one-line `.si-launcher-cmd` preview
+      of that profile's command. Click a preview: it expands (`.si-launcher-cmd.open`) to the full
+      configured command verbatim as read-only selectable text, with no input or edit affordance anywhere
+      in the pop and no chevron/expand buttons. Cross-check the source data at `GET /api/settings` (each
       launcher now carries `{ name, harness, cmd }`). Screenshot the opened pop with one cmd expanded.
     expected: >-
       Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger; clicking it opens
-      `.si-launcher-pop` with exactly one row per profile (harness glyph + name per row), the harness
-      radiogroup and the old native select are gone, and the chosen launcher name is what the New-Session
-      POST sends (backend derives the harness from it). A row's chevron expands `.si-launcher-cmd` with the
-      profile's exact configured command as selectable read-only text — no editing surface exists in the
-      dashboard; config files stay the only place a cmd is written. `GET /api/settings` returns the same
-      `{name, harness, cmd}` launchers list the pop renders. A launcher subsumes the harness axis; picking
-      one is the single choice the human makes.
+      the `.si-launcher-pop` card with exactly one row per profile (harness glyph + name + dim cmd preview
+      per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
+      what the New-Session POST sends (backend derives the harness from it). Clicking a preview expands
+      `.si-launcher-cmd.open` with the profile's exact configured command as selectable read-only text —
+      no editing surface exists in the dashboard; config files stay the only place a cmd is written.
+      `GET /api/settings` returns the same `{name, harness, cmd}` launchers list the pop renders. A
+      launcher subsumes the harness axis; picking one is the single choice the human makes.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts
   - name: dropdown-honors-default-launcher

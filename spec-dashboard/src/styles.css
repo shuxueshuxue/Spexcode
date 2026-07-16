@@ -1312,51 +1312,58 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* vendor glyph shared by launcher-derived harness adornments. */
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
-/* launcher pop-out picker — the sole launch choice ([[launcher-select]]): a pill trigger (selected
-   harness mark + name) opening a menu of one row per launcher, each expandable to its read-only cmd. */
+/* launcher pop-out picker — the sole launch choice ([[launcher-select]]): a clean pill trigger (selected
+   harness mark + name, no caret) popping out an elevated card; one row per launcher, its cmd shown as a
+   dim one-line preview that expands read-only on click. Deliberately NOT dropdown-styled: no chevrons. */
 .si-launcher-picker { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
 .si-launcher-harness { display: inline-flex; align-items: center; color: var(--ink2); flex: none; }
 .si-launcher-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 28px; padding: 0 10px; cursor: pointer; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 28px; padding: 0 12px; cursor: pointer; color: var(--ink);
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  font-size: 12px; transition: border-color .12s ease;
+  font-size: 12px; transition: border-color .12s ease, box-shadow .12s ease;
 }
 .si-launcher-btn:hover, .si-launcher-btn.on { border-color: var(--blue); }
-.si-launcher-caret { color: var(--ink2); transition: transform .12s ease; }
-.si-launcher-btn.on > .si-launcher-caret, .si-launcher-expand.on .si-launcher-caret { transform: rotate(180deg); }
-/* the pop-out menu — opens DOWNWARD under the centred trigger, above the hint line. */
+.si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+/* the pop-out card — elevated, scale-in entrance, under the centred trigger. */
 .si-launcher-pop {
-  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  z-index: 30; min-width: 240px; max-width: 420px; padding: 4px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  z-index: 30; min-width: 300px; max-width: 480px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .2);
+  transform-origin: top center;
+  animation: si-launcher-pop-in .14s ease;
 }
-/* one row per launcher: the selecting main button + the cmd expander side by side; the expanded
-   read-only cmd wraps to a full-width line below them. */
-.si-launcher-row { display: flex; flex-wrap: wrap; align-items: center; border-radius: 7px; }
+@keyframes si-launcher-pop-in {
+  from { opacity: 0; transform: translateX(-50%) scale(.94); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+/* one row per launcher: the selecting main line, then the cmd preview beneath it. */
+.si-launcher-row { display: flex; flex-direction: column; border-radius: 8px; }
 .si-launcher-row.on { background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .si-launcher-row-main {
-  flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 8px; cursor: pointer; color: var(--ink); font-size: 12px;
-  background: none; border: none; border-radius: 7px; text-align: left;
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 8px 10px 2px; cursor: pointer; color: var(--ink); font-size: 12.5px;
+  background: none; border: none; border-radius: 8px; text-align: left;
 }
-.si-launcher-row-main:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.si-launcher-row:not(.on):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+/* a cmd-less profile has no preview line — keep its row symmetric. */
+.si-launcher-row-main:last-child { padding-bottom: 8px; }
 .si-launcher-row .si-launcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-launcher-check { color: var(--blue); flex: none; margin-left: auto; }
-.si-launcher-expand {
-  flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; margin-right: 4px; padding: 0; cursor: pointer;
-  color: var(--ink2); background: none; border: none; border-radius: 6px;
-}
-.si-launcher-expand:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); }
-/* the read-only command detail — plain inspection text, visibly non-editable (no field chrome). */
+/* the cmd detail — a dim mono one-line preview that IS the expand affordance; expanded it wraps in
+   full as read-only selectable text (no field chrome, nothing editable). */
 .si-launcher-cmd {
-  flex-basis: 100%; margin: 0 8px 6px; padding: 5px 8px;
-  font-size: 11px; line-height: 1.5; color: var(--ink2);
-  background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 6px;
-  white-space: pre-wrap; word-break: break-all; user-select: text; cursor: text;
+  margin: 0 10px 8px 35px; min-width: 0;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: var(--ink2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; opacity: .75; transition: opacity .12s ease;
+}
+.si-launcher-cmd:hover { opacity: 1; }
+.si-launcher-cmd.open {
+  white-space: pre-wrap; word-break: break-all; user-select: text; cursor: text; opacity: 1;
+  background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 6px; padding: 5px 8px;
 }
 
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action

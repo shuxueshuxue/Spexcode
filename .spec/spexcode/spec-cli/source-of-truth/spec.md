@@ -5,7 +5,7 @@ session: sess-ce4e5cc
 hue: 200
 desc: .spec on main is canonical; worktrees hold session-attributed proposals.
 code:
-  - spec-cli/src/specs.ts
+  - spec-cli/src/specs.ts#loadSpecs
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts

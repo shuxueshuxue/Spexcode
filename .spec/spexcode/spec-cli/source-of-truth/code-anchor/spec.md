@@ -5,6 +5,7 @@ hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
   - spec-cli/src/anchors.ts#anchorHitCommits
+  - spec-cli/src/anchors.ts#resolveAnchor
 related:
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts

@@ -6,6 +6,8 @@ hue: 210
 desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a TERMINAL-FREE session surface (the persisted timeline as the conversation, a composer that asks for note replies), reusing the same polled data, the same API routes, and the same panes as the desktop.
 code:
   - spec-dashboard/src/MobileApp.jsx#MobileApp
+  - spec-dashboard/src/MobileApp.jsx#MobileSessionDetail
+  - spec-dashboard/src/MobileApp.jsx#MobileNewSession
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/data.js

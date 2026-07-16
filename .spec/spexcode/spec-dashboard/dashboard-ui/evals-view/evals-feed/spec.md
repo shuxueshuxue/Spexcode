@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a filter — no stale control exists); one kind dropdown (video | image | all) as the only filter, the shared control the issues drain wears; title-only rows, media strictly lazy.
 code:
-  - spec-dashboard/src/EvalsFeed.jsx
+  - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/graph.ts

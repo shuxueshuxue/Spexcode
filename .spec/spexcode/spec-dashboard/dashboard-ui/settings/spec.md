@@ -6,6 +6,7 @@ hue: 160
 desc: Internationalized copy + the settings page (#/settings) that picks the language.
 code:
   - spec-dashboard/src/Settings.jsx#Settings
+  - spec-dashboard/src/Settings.jsx#Shortcuts
 related:
   - spec-dashboard/src/i18n/index.jsx
   - spec-dashboard/src/i18n/en.js

@@ -67,6 +67,90 @@ function typeKeyToken(e) {
 // the `/` matcher + dropdown render (matchSlash, SlashMenu) are the SHARED module ./mentions.jsx too —
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
+// @@@launcher pop-out picker ([[launcher-select]]) — the desktop launch choice: a pill button (the selected
+// launcher's harness vendor mark + name) that POPS OUT a menu, one row per configured launcher — its harness
+// glyph + name — with a per-row chevron expanding the profile's resolved `cmd` as a READ-ONLY detail
+// (inspection only; editing stays in spexcode.json/.local.json). Replaces the old native <select>, whose
+// options could carry neither the vendor glyph nor a command detail. Selecting closes the pop; outside
+// mousedown or Esc closes it too, and the expand state resets so the pop always reopens folded.
+function LauncherPicker({ launchers, launcher, pickLauncher }) {
+  const t = useT()
+  const [pop, setPop] = useState(false)
+  const [expanded, setExpanded] = useState(() => new Set())   // launcher names whose cmd detail is open
+  const rootRef = useRef(null)
+  useEffect(() => {
+    if (!pop) return
+    const onDown = (e) => { if (!rootRef.current?.contains(e.target)) setPop(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
+    window.addEventListener('mousedown', onDown, true)
+    window.addEventListener('keydown', onKey, true)
+    return () => { window.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
+  }, [pop])
+  const openPop = () => { setExpanded(new Set()); setPop((v) => !v) }
+  const toggleCmd = (name) => setExpanded((s) => { const n = new Set(s); if (!n.delete(name)) n.add(name); return n })
+  // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
+  // the default — same fallback the backend applies).
+  const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
+  const SelGlyph = selHarness.Glyph
+  return (
+    <div className="si-launcher-picker" ref={rootRef}>
+      <span className="si-launcher-label">{t('session.launcherLabel')}</span>
+      <button
+        type="button"
+        className={pop ? 'si-launcher-btn on' : 'si-launcher-btn'}
+        onClick={openPop}
+        aria-haspopup="menu"
+        aria-expanded={pop}
+        aria-label={t('session.launcherLabel')}
+        data-tip={t('session.launcherLabel')}
+      >
+        <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
+        <span className="si-launcher-name">{launcher}</span>
+        <Icon name="chevron-down" size={12} className="si-launcher-caret" />
+      </button>
+      {pop && (
+        <div className="si-launcher-pop" role="menu" aria-label={t('session.launcherLabel')}>
+          {launchers.map((l) => {
+            const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
+            const HGlyph = h.Glyph
+            const isOpen = expanded.has(l.name)
+            return (
+              <div key={l.name} className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={l.name === launcher}
+                  className="si-launcher-row-main"
+                  onClick={() => { pickLauncher(l.name); setPop(false) }}
+                >
+                  <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
+                  <span className="si-launcher-name">{l.name}</span>
+                  {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
+                </button>
+                {/* the cmd expander — only when the profile actually carries a cmd; toggles the read-only
+                    detail line below without selecting the row. */}
+                {l.cmd ? (
+                  <button
+                    type="button"
+                    className={isOpen ? 'si-launcher-expand on' : 'si-launcher-expand'}
+                    onClick={() => toggleCmd(l.name)}
+                    aria-expanded={isOpen}
+                    aria-label={t('session.launcherCmd')}
+                    data-tip={t('session.launcherCmd')}
+                  >
+                    <Icon name="chevron-down" size={12} className="si-launcher-caret" />
+                  </button>
+                ) : null}
+                {isOpen && l.cmd ? <code className="si-launcher-cmd">{l.cmd}</code> : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
@@ -564,8 +648,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const t = e.target
     if (isTextField(t)) return
     // a native <select> opens its dropdown ON the default mousedown action — preventDefault would suppress
-    // it from ever opening (the launcher picker), so leave native form controls alone. Focus retention only
-    // needs to blanket the inert chrome, not the interactive controls that own their own mousedown.
+    // it from ever opening, so leave native form controls alone. Focus retention only needs to blanket the
+    // inert chrome, not any interactive control that owns its own mousedown. (No select currently renders
+    // in the panel — the launcher picker is now a button pop-out, which fires onClick regardless — but the
+    // carve-out stays: it is the rule any future native control relies on.)
     if (t.closest && t.closest('select')) return
     // the terminal owns its own text selection — preventing default on it would break the drag-select.
     if (t.closest && t.closest('.si-term-body')) return
@@ -713,26 +799,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
-              {/* launcher picker — the only launch choice. The selected launcher's harness is displayed as a
-                  derived vendor glyph, never as a second input. */}
-              {launchers.length ? (() => {
-                // the glyph shows the SELECTED launcher's harness as an icon (matching the old icon-only
-                // harness radios) instead of a ` · claude`/` · codex` text suffix on each option; it updates
-                // as the selection changes. A native <option> can't hold an SVG, so it sits beside the select.
-                const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
-                const HarnessGlyph = selHarness.Glyph
-                return (
-                <label className="si-launcher-picker" data-tip={t('session.launcherLabel')}>
-                  <span className="si-launcher-label">{t('session.launcherLabel')}</span>
-                  <span className="si-launcher-harness" data-tip={selHarness.label} aria-hidden="true"><HarnessGlyph /></span>
-                  <select className="si-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)} aria-label={t('session.launcherLabel')}>
-                    {launchers.map((l) => (
-                      <option key={l.name} value={l.name}>{l.name}</option>
-                    ))}
-                  </select>
-                </label>
-                )
-              })() : null}
+              {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
+                  (LauncherPicker above) with per-launcher harness marks and expandable read-only cmd details. */}
+              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>

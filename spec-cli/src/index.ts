@@ -163,17 +163,19 @@ app.post('/api/evidence', async (c) => {
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
-// `.layout.main`) and the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown
-// offers — `{ name, harness }` only (the `cmd` is a host secret, never shipped to the browser) — plus the
-// configured `default` NAME so the dropdown pre-selects the SAME launcher a bare `spex session new` uses
-// (the CLI/config default), instead of the alphabetically-first one. Missing defaultLauncher is returned
-// as an actionable config error, not hidden by falling through to the built-in `claude` launcher.
+// `.layout.main`) and the named launcher profiles ([[launcher-select]]) the New-Session picker
+// offers — `{ name, harness, cmd }`, the cmd read-only display data for the picker's expandable
+// per-launcher detail (the dashboard sits behind the gateway auth; the browser can read but never edit
+// config) — plus the configured `default` NAME so the picker pre-selects the SAME launcher a bare
+// `spex session new` uses (the CLI/config default), instead of the alphabetically-first one. Missing
+// defaultLauncher is returned as an actionable config error, not hidden by falling through to the
+// built-in `claude` launcher.
 // `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
 // so the row's attach modal ([[attach-menu]]) can offer the RAW `tmux -L <socket> attach -t <id>` fallback
 // beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
-  launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
+  launchers: launcherList().map(({ name, harness, cmd }) => ({ name, harness, cmd })),
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))

@@ -253,15 +253,20 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDi
   }
   if (!existsSync(file)) { res.writeHead(503); return res.end('dashboard build missing') }
   const type = MIME[extname(file)] || 'application/octet-stream'
+  // @@@ cache-policy - hashed /assets/* are content-addressed (immutable per build) → cache hard; index.html
+  // (and every SPA fallback to it) is no-cache → revalidated each load. Without that a browser holding a
+  // pre-rebuild index.html keeps requesting dead chunk hashes and the stale-chunk reload ([[dashboard-shell]])
+  // re-serves the SAME cached index, never reaching the fresh build — a lazy route (issues) 404s forever.
+  const cacheControl = /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'
   const raw = readFileSync(file)
   if (wantsGzip(req) && COMPRESSIBLE.test(type)) {
     const mtime = statSync(file).mtimeMs
     let hit = gzMemo.get(file)
     if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw) }; gzMemo.set(file, hit) }
-    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' })
+    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Cache-Control': cacheControl })
     return res.end(hit.gz)
   }
-  res.writeHead(200, { 'Content-Type': type })
+  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl })
   res.end(raw)
 }
 

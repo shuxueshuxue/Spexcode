@@ -68,25 +68,22 @@ function typeKeyToken(e) {
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
 // @@@launcher pop-out picker ([[launcher-select]]) — the desktop launch choice: a clean pill button (the
-// selected launcher's harness vendor mark + name, NO caret — this is a pop-out card, not a dropdown) that
-// pops out an elevated card, one row per configured launcher: its harness glyph + name, and beneath them a
-// dim one-line monospace PREVIEW of the profile's `cmd` — the preview itself is the expand affordance
-// (click it for the full wrapped command; no chevron buttons anywhere), and the detail stays READ-ONLY
-// (inspection only; editing stays in spexcode.json/.local.json). Replaces the old native <select>, whose
-// options could carry neither the vendor glyph nor a command detail. Selecting closes the pop; outside
-// mousedown or Esc closes it too, and the expand state resets so the pop always reopens collapsed.
+// selected launcher's harness vendor mark + name, no caret, no label) that opens a CENTRED pop-out card —
+// a viewport-centred dialog over a light backdrop, deliberately not an anchored dropdown. One row per
+// configured launcher: its harness glyph + name, and beneath them a dim one-line monospace PREVIEW of the
+// profile's `cmd` — the preview itself is the expand affordance (click it for the full wrapped command; no
+// chevron buttons anywhere), and the detail stays READ-ONLY (inspection only; editing stays in
+// spexcode.json/.local.json). Selecting closes the pop; backdrop click or Esc closes it too, and the
+// expand state resets so the pop always reopens collapsed.
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
   const [expanded, setExpanded] = useState(() => new Set())   // launcher names whose cmd detail is open
-  const rootRef = useRef(null)
   useEffect(() => {
     if (!pop) return
-    const onDown = (e) => { if (!rootRef.current?.contains(e.target)) setPop(false) }
     const onKey = (e) => { if (e.key === 'Escape') setPop(false) }
-    window.addEventListener('mousedown', onDown, true)
     window.addEventListener('keydown', onKey, true)
-    return () => { window.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [pop])
   const openPop = () => { setExpanded(new Set()); setPop((v) => !v) }
   // an expanded cmd is selectable text — a click that ends a text selection (copying the command) must
@@ -100,12 +97,12 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
   const SelGlyph = selHarness.Glyph
   return (
-    <div className="si-launcher-picker" ref={rootRef}>
+    <div className="si-launcher-picker">
       <button
         type="button"
         className={pop ? 'si-launcher-btn on' : 'si-launcher-btn'}
         onClick={openPop}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={pop}
         aria-label={t('session.launcherLabel')}
       >
@@ -113,42 +110,47 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
         <span className="si-launcher-name">{launcher}</span>
       </button>
       {pop && (
-        <div className="si-launcher-pop" role="menu" aria-label={t('session.launcherLabel')}>
-          {launchers.map((l) => {
-            const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
-            const HGlyph = h.Glyph
-            const isOpen = expanded.has(l.name)
-            return (
-              <div key={l.name} className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={l.name === launcher}
-                  className="si-launcher-row-main"
-                  onClick={() => { pickLauncher(l.name); setPop(false) }}
-                >
-                  <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
-                  <span className="si-launcher-name">{l.name}</span>
-                  {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
-                </button>
-                {/* the cmd detail — a dim one-line preview that IS the expand affordance: click for the
-                    full wrapped command, click again to collapse. Read-only, separate from row select. */}
-                {l.cmd ? (
-                  <div
-                    className={isOpen ? 'si-launcher-cmd open' : 'si-launcher-cmd'}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleCmd(l.name)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCmd(l.name) } }}
-                    aria-expanded={isOpen}
-                    aria-label={t('session.launcherCmd')}
-                    data-tip={isOpen ? undefined : t('session.launcherCmd')}
-                  >{l.cmd}</div>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
+        <>
+          {/* full-viewport backdrop — the outside-click close surface; a mousedown here is inert chrome
+              under the panel's keepFocus blanket, so the composer keeps focus while the pop closes. */}
+          <div className="si-launcher-backdrop" onMouseDown={() => setPop(false)} />
+          <div className="si-launcher-pop" role="dialog" aria-modal="true" aria-label={t('session.launcherLabel')}>
+            {launchers.map((l) => {
+              const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
+              const HGlyph = h.Glyph
+              const isOpen = expanded.has(l.name)
+              return (
+                <div key={l.name} className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={l.name === launcher}
+                    className="si-launcher-row-main"
+                    onClick={() => { pickLauncher(l.name); setPop(false) }}
+                  >
+                    <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
+                    <span className="si-launcher-name">{l.name}</span>
+                    {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
+                  </button>
+                  {/* the cmd detail — a dim one-line preview that IS the expand affordance: click for the
+                      full wrapped command, click again to collapse. Read-only, separate from row select. */}
+                  {l.cmd ? (
+                    <div
+                      className={isOpen ? 'si-launcher-cmd open' : 'si-launcher-cmd'}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleCmd(l.name)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCmd(l.name) } }}
+                      aria-expanded={isOpen}
+                      aria-label={t('session.launcherCmd')}
+                      data-tip={isOpen ? undefined : t('session.launcherCmd')}
+                    >{l.cmd}</div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

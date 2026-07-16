@@ -1315,7 +1315,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* launcher pop-out picker — the sole launch choice ([[launcher-select]]): a bare pill trigger (selected
    harness mark + name — no caret, no label) popping out an elevated card; one row per launcher, its cmd
    shown as a dim one-line preview that expands read-only on click. Deliberately NOT dropdown-styled. */
-.si-launcher-picker { position: relative; display: inline-flex; align-items: center; }
+.si-launcher-picker { display: inline-flex; align-items: center; }
 .si-launcher-harness { display: inline-flex; align-items: center; color: var(--ink2); flex: none; }
 .si-launcher-btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -1325,20 +1325,27 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .si-launcher-btn:hover, .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
-/* the pop-out card — elevated, scale-in entrance, under the centred trigger. Sizes to its content so a
-   typical command preview fits on ONE line; the cap only guards against truly huge commands/viewports. */
+/* the pop-out — a viewport-CENTRED dialog over a light backdrop (not an anchored dropdown), scale-in from
+   centre. Sizes to its content so a typical command preview fits on ONE line; the cap guards huge
+   commands/viewports, and overflow scrolls when a project has many launchers. */
+.si-launcher-backdrop {
+  position: fixed; inset: 0; z-index: 29;
+  background: rgba(0, 0, 0, .18);
+  animation: si-launcher-fade-in .14s ease;
+}
+@keyframes si-launcher-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .si-launcher-pop {
-  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  z-index: 30; width: max-content; min-width: 300px; max-width: min(680px, calc(100vw - 48px));
-  padding: 6px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, .2);
-  transform-origin: top center;
-  animation: si-launcher-pop-in .14s ease;
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 30; width: max-content; min-width: 340px; max-width: min(720px, calc(100vw - 64px));
+  max-height: min(70vh, 640px); overflow-y: auto;
+  padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .28);
+  animation: si-launcher-pop-in .16s ease;
 }
 @keyframes si-launcher-pop-in {
-  from { opacity: 0; transform: translateX(-50%) scale(.94); }
-  to { opacity: 1; transform: translateX(-50%) scale(1); }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 /* one row per launcher: the selecting main line, then the cmd preview beneath it. */
 .si-launcher-row { display: flex; flex-direction: column; border-radius: 8px; }

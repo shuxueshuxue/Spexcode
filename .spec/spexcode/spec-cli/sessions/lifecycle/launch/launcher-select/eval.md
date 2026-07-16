@@ -9,7 +9,9 @@ scenarios:
       New-Session box, and read the DOM: assert the trigger button `.si-launcher-btn` is present (wearing
       the selected launcher's harness glyph + name, with NO caret glyph), that the `.si-agent-picker`
       harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Click the trigger: a
-      `.si-launcher-pop` card opens with exactly one `.si-launcher-row` per available profile, each row
+      viewport-CENTRED `.si-launcher-pop` dialog opens over a `.si-launcher-backdrop` (its box centres on
+      the viewport midpoint — not anchored under the trigger), with exactly one `.si-launcher-row` per
+      available profile, each row
       showing its own harness vendor glyph + launcher name, plus a dim one-line `.si-launcher-cmd` preview
       of that profile's command. Click a preview: it expands (`.si-launcher-cmd.open`) to the full
       configured command verbatim as read-only selectable text, with no input or edit affordance anywhere
@@ -17,7 +19,8 @@ scenarios:
       launcher now carries `{ name, harness, cmd }`). Screenshot the opened pop with one cmd expanded.
     expected: >-
       Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger; clicking it opens
-      the `.si-launcher-pop` card with exactly one row per profile (harness glyph + name + dim cmd preview
+      the `.si-launcher-pop` centred dialog (over a light backdrop; backdrop click closes) with exactly one
+      row per profile (harness glyph + name + dim cmd preview
       per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
       what the New-Session POST sends (backend derives the harness from it). Clicking a preview expands
       `.si-launcher-cmd.open` with the profile's exact configured command as selectable read-only text —

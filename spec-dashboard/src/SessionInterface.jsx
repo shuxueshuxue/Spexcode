@@ -101,7 +101,6 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const SelGlyph = selHarness.Glyph
   return (
     <div className="si-launcher-picker" ref={rootRef}>
-      <span className="si-launcher-label">{t('session.launcherLabel')}</span>
       <button
         type="button"
         className={pop ? 'si-launcher-btn on' : 'si-launcher-btn'}
@@ -109,7 +108,6 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
         aria-haspopup="menu"
         aria-expanded={pop}
         aria-label={t('session.launcherLabel')}
-        data-tip={t('session.launcherLabel')}
       >
         <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
         <span className="si-launcher-name">{launcher}</span>

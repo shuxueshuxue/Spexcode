@@ -1312,11 +1312,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* vendor glyph shared by launcher-derived harness adornments. */
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
-/* launcher pop-out picker — the sole launch choice ([[launcher-select]]): a clean pill trigger (selected
-   harness mark + name, no caret) popping out an elevated card; one row per launcher, its cmd shown as a
-   dim one-line preview that expands read-only on click. Deliberately NOT dropdown-styled: no chevrons. */
-.si-launcher-picker { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
+/* launcher pop-out picker — the sole launch choice ([[launcher-select]]): a bare pill trigger (selected
+   harness mark + name — no caret, no label) popping out an elevated card; one row per launcher, its cmd
+   shown as a dim one-line preview that expands read-only on click. Deliberately NOT dropdown-styled. */
+.si-launcher-picker { position: relative; display: inline-flex; align-items: center; }
 .si-launcher-harness { display: inline-flex; align-items: center; color: var(--ink2); flex: none; }
 .si-launcher-btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -1326,10 +1325,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .si-launcher-btn:hover, .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
-/* the pop-out card — elevated, scale-in entrance, under the centred trigger. */
+/* the pop-out card — elevated, scale-in entrance, under the centred trigger. Sizes to its content so a
+   typical command preview fits on ONE line; the cap only guards against truly huge commands/viewports. */
 .si-launcher-pop {
   position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  z-index: 30; min-width: 300px; max-width: 480px; padding: 6px;
+  z-index: 30; width: max-content; min-width: 300px; max-width: min(680px, calc(100vw - 48px));
+  padding: 6px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 14px 36px rgba(0, 0, 0, .2);
   transform-origin: top center;
@@ -1362,7 +1363,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .si-launcher-cmd:hover { opacity: 1; }
 .si-launcher-cmd.open {
-  white-space: pre-wrap; word-break: break-all; user-select: text; cursor: text; opacity: 1;
+  white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
+  user-select: text; cursor: text; opacity: 1;
   background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 6px; padding: 5px 8px;
 }
 

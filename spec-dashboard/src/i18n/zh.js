@@ -193,12 +193,20 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
+    attach: '接入…',
     select: '多选…',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
     renameTitle: '重命名“{name}”',
     renamePlaceholder: '显示名称（留空以重置）',
+    // 接入弹窗（[[attach-menu]]）：提供两条可复制的接入命令——`spex session attach` 官方动词，以及原始 `tmux -L … attach` 兜底。
+    attachTitle: '接入“{name}”',
+    attachHint: '在宿主机的终端里运行其中一条命令，以一个真正的 tmux 客户端接入该会话：',
+    attachSpex: 'spex',
+    attachTmux: 'tmux',
+    attachCopy: '复制',
+    attachCopied: '已复制',
   },
 
   // 多选栏 + 批量关闭确认（[[session-multi-select]]）。动词用「关闭」——与单行菜单相同，不是第三个「删除」词。

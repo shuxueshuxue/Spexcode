@@ -162,8 +162,10 @@ type-mode toggle. A best-effort pane sniff — a
 select-caret line beside an `Esc`/Enter hint line — only ever **suggests** type mode by pulsing the type
 button, a non-authoritative nudge that never seizes keys.
 
-A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
-with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
+A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]), select for
+bulk close ([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
+`spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
+suppression; the shared `sessionName` puts that rename first in the label precedence.
 The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
 drag-to-reorder gesture. Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour

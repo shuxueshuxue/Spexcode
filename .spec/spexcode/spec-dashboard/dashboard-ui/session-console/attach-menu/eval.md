@@ -7,13 +7,14 @@ scenarios:
       context menu. A modal titled with the session's headline should open showing TWO read-only command fields. Read
       both from the live DOM: one must equal `spex session attach <id>` and the other `tmux -L <socket> attach
       -t <id>`, where <id> is that row's session id and <socket> is the backend's tmuxSocket from /api/settings
-      (default `spexcode`). Confirm each field is selectable (click selects all) and has its own copy button.
+      (default `spexcode`). Confirm the command rows begin immediately with no instructional paragraph above them,
+      and that each field is selectable (click selects all) and has its own copy button.
     expected: >
       The modal shows both attach forms for the right-clicked row: the blessed `spex session attach <id>` and
       the raw `tmux -L <socket> attach -t <id>` with the real socket (never hardcoded — sourced from the
-      backend). Each sits in its own read-only, click-to-select field with its own copy button, and the modal
-      mutates no session (it only hands over the commands). Either command, pasted into a shell on the host,
-      attaches a real tmux client to that session.
+      backend). The two command rows appear without an instructional lead-in; each sits in its own read-only,
+      click-to-select field with its own copy button, and the modal mutates no session (it only hands over the
+      commands). Either command, pasted into a shell on the host, attaches a real tmux client to that session.
   - name: attach-only-when-live
     tags: [frontend-e2e, desktop]
     description: >

@@ -34,7 +34,8 @@ The trailing `…` marks that it opens a dialog rather than acting at once, matc
 
 Picking it swaps the menu for a small modal (the shared rename-modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]) — and offers **two copyable forms of
-the attach command** for the right-clicked row, so the human picks whichever their host shell can run:
+the attach command** for the right-clicked row, so the human picks whichever their host shell can run. The
+modal opens directly on those command rows, with no instructional lead-in above them:
 
 - **`spex session attach <id>`** — the recommended, project-blessed verb ([[session-attach]]), which carries a
   detach hint, a locality guard, and offline-loud behaviour when run.

@@ -3,6 +3,7 @@ import { ScoreBadge, scenarioStates } from './score.jsx'
 import { liveSession } from './session.js'
 import FilterSelect from './FilterSelect.jsx'
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
 
 // The evals feed ([[evals-feed]]): the LEFT list of the Evals page (master-detail, [[evals-view]]) — the
 // project's CURRENT measured loss. The unit is the SCENARIO, never the reading — latest reading per
@@ -53,9 +54,13 @@ export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 // one eval row — the shared row grammar every eval face uses (the issues page's list here; the session Eval
 // tab reuses it verbatim so the two surfaces can never drift apart). `onOk` arms the human sign-off
 // affordance ([[human-ok]]) — only the Evals feed passes it; a home without it (the session tab) still
-// renders the settled ☑ mark on an ok'd reading, just no write.
+// renders the settled approval mark on an ok'd reading, just no write.
 export function EvalRow({ e, selected, onClick, onOk }) {
   const t = useT()
+  const okdTip = e.humanOk && t('evalsFeed.okdTip', {
+    by: e.humanOk.by,
+    at: new Date(e.humanOk.ts).toLocaleString(),
+  })
   return (
     <button className={`ef-row ${selected ? 'sel' : ''}`} onClick={onClick}>
       <ScoreBadge state={e.state} />
@@ -64,7 +69,7 @@ export function EvalRow({ e, selected, onClick, onOk }) {
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
       <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).filter(Boolean).join('·')}</span>
       {e.humanOk
-        ? <span className="ef-okd" data-tip={t('evalsFeed.okdTip', { by: e.humanOk.by, at: new Date(e.humanOk.ts).toLocaleString() })}>☑</span>
+        ? <span role="img" className="ef-okd" data-tip={okdTip} aria-label={okdTip}><Icon name="check" size={11} /></span>
         : onOk
           ? <span role="button" tabIndex={-1} className="ef-okbtn" data-tip={t('evalsFeed.okTitle')}
               onClick={(ev) => { ev.stopPropagation(); onOk(e) }}>{t('evalsFeed.okBtn')}</span>
@@ -154,6 +159,7 @@ export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRo
             {(showOk || okCount > 0) && (
               <button type="button" className={`ef-chip ef-okchip ${showOk ? 'on' : ''}`} onClick={() => setShowOk((v) => !v)}
                 data-tip={t('evalsFeed.okChipTitle')}>
+                <Icon name="check" size={11} />
                 {t('evalsFeed.okChip', { n: okCount })}
               </button>
             )}

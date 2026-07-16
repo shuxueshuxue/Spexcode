@@ -47,7 +47,9 @@ moment a newer reading lands (the ok doesn't transfer) or the reading goes stale
 The hide is **feed-level only** — node detail, the A/B strip, and the per-scenario history still show
 everything — and the feed's head carries a show-all chip (the live-chip grammar: self-hides at zero
 only while off), so ok'd entries stay one click away, never invisible-forever. A deep-linked eval the
-hide would conceal releases it, exactly like the kind/live filters.
+hide would conceal releases it, exactly like the kind/live filters. In the feed, a settled sign-off is
+the dashboard's shared stroke check inside a quiet green certification ring — never a platform-dependent
+Unicode checkbox — and the reveal chip uses the same glyph.
 
 **One write, CLI parity (LAW L).** The verb is `spex eval ok <node> --scenario <s>`; the dashboard's
 two affordances — the event-detail header (offered only while the viewed reading IS the scenario's

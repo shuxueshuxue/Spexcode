@@ -1827,9 +1827,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; opacity: .9; }
 .ef-kind { flex: none; margin-left: auto; font-size: 11px; color: var(--muted); }
 .ef-time { flex: none; color: var(--muted); font-size: 10.5px; min-width: 26px; text-align: right; }
-/* the human sign-off on a row ([[human-ok]]): the settled ☑ mark on an ok'd reading, and the quiet
+/* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
    hover-revealed ok affordance on an un-ok'd one (a span, not a nested button — the row IS a button). */
-.ef-okd { flex: none; color: var(--green); font-size: 11px; }
+.ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
+.ef-okchip { display: inline-flex; align-items: center; gap: 5px; }
 .ef-okbtn { flex: none; font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; line-height: 1.5; opacity: 0; transition: opacity .12s, color .12s, border-color .12s; }
 .ef-row:hover .ef-okbtn, .ef-row.sel .ef-okbtn { opacity: 1; }
 .ef-okbtn:hover { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }

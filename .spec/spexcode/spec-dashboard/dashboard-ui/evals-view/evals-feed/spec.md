@@ -60,7 +60,9 @@ options**: the dropdown stays video | image | all, so a transcript-only or blob-
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
 [[event-detail]] — media loads there, a `<video>` element exists only there. The group reports its visible
 rows upward so the page's j/k walk the feed; history drills down per scenario
-(the node's [[eval-tab]] scaffold), not in the list.
+(the node's [[eval-tab]] scaffold), not in the list. A human-ok'd row adds one settled certification
+mark: the shared stroke check inside a quiet green ring, with the signer/time as its accessible name;
+the show-all chip uses the same SVG. No platform-dependent checkbox character enters the row grammar.
 
 **One data path, one computation.** The board nodes arrive as a prop from the app's single board
 poll + SSE subscription — the section fetches nothing of its own — and latest-per-scenario is

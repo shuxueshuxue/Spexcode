@@ -4,43 +4,51 @@ scenarios:
     tags: [frontend-e2e]
     description: >-
       Through the REAL dashboard New-Session box (the product surface a human uses to launch a worker),
-      measure the launcher pick on a project whose config defines `sessions.launchers` (e.g. `reclaude` →
-      claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the New-Session box, and
-      read the DOM: assert a launcher `<select class="si-launcher-select">` is present, one `<option>` per
-      available profile, and that the `.si-agent-picker` harness radiogroup is ABSENT. Cross-check the source
-      data at `GET /api/settings`. Then, on a freshly-initialized project (whose seeded config carries only
-      the default `claude` and `codex` launchers) with `sessions.defaultLauncher: "claude"`, confirm the same
-      select renders exactly those two seeded options and the harness radios are still absent. Screenshot the New box.
+      measure the launcher pop-out picker on a project whose config defines `sessions.launchers` (e.g.
+      `reclaude` → claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the
+      New-Session box, and read the DOM: assert the trigger button `.si-launcher-btn` is present (wearing
+      the selected launcher's harness glyph + name, with NO caret glyph), that the `.si-agent-picker`
+      harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Click the trigger: a
+      viewport-CENTRED `.si-launcher-pop` dialog opens over a `.si-launcher-backdrop` (its box centres on
+      the viewport midpoint — not anchored under the trigger), with exactly one `.si-launcher-row` per
+      available profile, each row
+      showing its own harness vendor glyph + launcher name, plus a dim one-line `.si-launcher-cmd` preview
+      of that profile's command. Click a preview: it expands (`.si-launcher-cmd.open`) to the full
+      configured command verbatim as read-only selectable text, with no input or edit affordance anywhere
+      in the pop and no chevron/expand buttons. Cross-check the source data at `GET /api/settings` (each
+      launcher now carries `{ name, harness, cmd }`). Screenshot the opened pop with one cmd expanded.
     expected: >-
-      Launchers configured → the New box shows the `.si-launcher-select` dropdown with exactly one option
-      per profile, the harness radiogroup is gone, and the chosen launcher name is what the New-Session POST
-      sends (backend derives the harness from it). Fresh-init project (only the seeded `claude`/`codex`
-      launchers) → the same dropdown is present with exactly those two options — ordinary config entries, NOT
-      env-derived built-ins — and no plain harness radios render.
-      `GET /api/settings` returns the same `{name, harness}` launchers list the dropdown renders. A launcher subsumes
-      the harness axis; picking one is the single choice the human makes.
+      Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger; clicking it opens
+      the `.si-launcher-pop` centred dialog (over a light backdrop; backdrop click closes) with exactly one
+      row per profile (harness glyph + name + dim cmd preview
+      per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
+      what the New-Session POST sends (backend derives the harness from it). Clicking a preview expands
+      `.si-launcher-cmd.open` with the profile's exact configured command as selectable read-only text —
+      no editing surface exists in the dashboard; config files stay the only place a cmd is written.
+      `GET /api/settings` returns the same `{name, harness, cmd}` launchers list the pop renders. A
+      launcher subsumes the harness axis; picking one is the single choice the human makes.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts
   - name: dropdown-honors-default-launcher
     tags: [frontend-e2e, desktop]
     description: >-
-      Through the REAL dashboard New-Session box, measure that the launcher dropdown's INITIAL selection
+      Through the REAL dashboard New-Session box, measure that the launcher picker's INITIAL selection
       honors the configured `sessions.defaultLauncher` (not the alphabetically-first launcher). Stand up a
       project whose config defines several launchers where the default is NOT the alphabetically-first — e.g.
       `sessions.launchers = { "aaa": …, "reclaude": … }` with `sessions.defaultLauncher: "reclaude"`. With
       localStorage CLEARED (no remembered `si.launcher`), load the dashboard, open the New-Session box, and
-      read the dropdown's selected value: `document.querySelector('.si-launcher-select').value`. Cross-check
-      the source at `GET /api/settings` — it must report `{ launchers:[…], default:"reclaude" }`. Then set
+      read the trigger's selected name: `document.querySelector('.si-launcher-btn .si-launcher-name').textContent`.
+      Cross-check the source at `GET /api/settings` — it must report `{ launchers:[…], default:"reclaude" }`. Then set
       a remembered pick (`localStorage.setItem('si.launcher','aaa')`), reload, and confirm the still-valid
       remembered pick now wins over the default. Screenshot the composer in the fresh (defaulted) state.
     expected: >-
-      On a fresh browser (no remembered pick) the dropdown pre-selects `reclaude` — the configured
+      On a fresh browser (no remembered pick) the picker's trigger shows `reclaude` — the configured
       `defaultLauncher` — NOT `aaa` (the alphabetically-first), so the dashboard default AGREES with the CLI
       default (`spex new` with no `--launcher` also uses `reclaude`). `GET /api/settings` returns
       `{ launchers, default }` with `default:"reclaude"`. When a still-valid launcher is remembered in
       localStorage that remembered pick wins instead; only when nothing is remembered (or the remembered one
       no longer exists) does the configured default drive the initial selection. When no valid configured
-      default exists, the dropdown falls through to the first real launcher as a visible selected choice that
+      default exists, the picker falls through to the first real launcher as a visible selected choice that
       will be sent explicitly. The old behaviour (silently selecting `d[0]` even when a different config
       default existed, disagreeing with the CLI default) is gone.
     code: spec-dashboard/src/SessionInterface.jsx

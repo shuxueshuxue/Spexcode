@@ -397,6 +397,7 @@ export default {
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a command preset' },
     harnessLabel: 'agent launcher',
     launcherLabel: 'launcher',
+    launcherCmd: 'command',
     tabTerminal: 'terminal',
     tabEval: 'eval',
     typeBtn: 'type',

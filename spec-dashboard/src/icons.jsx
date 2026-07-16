@@ -13,6 +13,7 @@ const ICONS = {
   x: { node: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></> },
   'chevron-left': { node: <path d="m15 18-6-6 6-6" />, sw: 2 },
   'chevron-right': { node: <path d="m9 18 6-6-6-6" />, sw: 2 },
+  check: { node: <path d="M20 6 9 17l-5-5" />, sw: 2 },
   download: { node: <><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></> },
   clock: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></> },
   search: { node: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></> },

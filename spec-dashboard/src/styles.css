@@ -1624,6 +1624,20 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-sess-status { font-size: 12px; color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
 
+/* the header's eval entry + the evaluation host ([[session-eval]] on the phone): the SAME SessionEvalPane,
+   restacked for one-axis thumb reading — master list ABOVE the detail; the desktop fold toggle retires here
+   (stacking already gives the detail the full width). */
+.m-sess-evalbtn {
+  flex: none; margin-left: auto; padding: 6px 13px; font-size: 12px; font-family: var(--mono);
+  color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: 15px; cursor: pointer;
+}
+.m-sess-evalbtn.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
+.m-eval-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.m-eval-host > .m-empty { padding: 20px 14px; }
+.m-eval-host .fv-master { grid-template-columns: 1fr; grid-template-rows: minmax(110px, 38%) 1fr; }
+.m-eval-host .fv-list-col { border-right: none; border-bottom: 1px solid var(--line); }
+.m-eval-host .fv-fold, .m-eval-host .fv-unfold, .m-eval-host .fv-fold-inline { display: none; }
+
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
    below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
 .m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }

@@ -29,6 +29,35 @@ scenarios:
       renders, never an empty pane host. NOTHING in the phone shell scrolls horizontally: the scan finds
       zero sideways scrollers on spec/history/eval/timeline surfaces — wide content (code blocks, diff
       lines, long paths) WRAPS instead, because a thumb surface scrolls one axis only.
+  - name: session-detail-loading-string
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport (≤ 640px), open a session detail while its timeline request is still in
+      flight (hold the /api/sessions/:id/timeline answer a few seconds to make the pending state
+      observable). Read the text of the timeline's empty-state placeholder and screenshot it.
+    expected: |
+      The pending timeline reads the GENERIC loading word ("loading…" / 「加载中…」) — never another
+      surface's loading phrase. In particular it must not say "loading specs from git…" (the graph
+      HUD's boot string): a session conversation that claims to be loading specs misdescribes what
+      is happening and reads as a wrong screen.
+  - name: session-eval-on-phone
+    tags: [frontend-e2e, mobile]
+    description: >
+      On a PHONE viewport (≤ 640px), open a session detail. The header card carries a compact eval
+      entry. Tap it: the detail flips from the conversation to the session's evaluation — the SAME
+      SessionEvalPane the desktop console's Eval tab mounts ([[session-eval]]). Read the DOM: the
+      gates strip, the grouped scenario rows, the master/detail geometry (.fv-master), and whether
+      anything scrolls horizontally. Tap a row and read the detail. Tap the entry again: the
+      conversation returns. Record the whole interaction as a video.
+    expected: |
+      The eval entry opens the session's evaluation in place: the gates strip renders, the rows are
+      the shared eval family's (blind spots lead, ✦-marked own readings, inherited under its divider)
+      grouped by changed node, and the shell is the SAME .fv-master — restacked by CSS to ONE COLUMN
+      at thumb width (master list above, detail below; the desktop fold toggle hidden — stacking
+      already gives the detail full width), with no horizontal scrolling. Selecting a row shows the
+      shared detail below. The eval chunk loads lazily (only on first entry), and toggling back
+      returns the untouched conversation. A session with no worktree/diff shows the clean
+      no-evaluation placeholder, never a blank host.
   - name: timeline-scroll-pinning
     tags: [frontend-e2e, mobile]
     description: >
@@ -40,9 +69,9 @@ scenarios:
       A reader parked in history is never yanked: across the poll the scrollTop holds where the
       thumb left it — the refetch must not move it, neither by swapping in an identical events
       array nor by an unconditional pin-on-render. Only a reader already AT the bottom follows new
-      entries, chat style. The detail is the bare conversation — header, timeline, composer, no
-      tab row above the timeline (changed-nodes review is desktop scope) — so the freed line goes
-      to the conversation itself.
+      entries, chat style. The detail keeps the conversation bare — header (whose one extra control
+      is the compact eval entry, [[session-eval]]), timeline, composer, no tab row above the
+      timeline — so every in-flow line goes to the conversation itself.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]
     description: >

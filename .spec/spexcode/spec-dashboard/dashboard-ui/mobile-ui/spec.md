@@ -51,10 +51,17 @@ The two planes, made native to touch:
   (you / the sending session) — and a docked composer. Every dispatch from this surface carries
   `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
   asking for the reply there is the surface's fixed property, never a per-message option and never
-  a visible control (an earlier toggle chip read as unexplained noise and was deleted). The detail
-  is deliberately tab-less — header, timeline, composer, nothing else: changed-nodes review is the
-  desktop cockpit's job (an earlier changes tab spent a whole line labelling a list a phone reader
-  never used), so every line the phone has goes to the conversation. The scroller is chat-shaped
+  a visible control (an earlier toggle chip read as unexplained noise and was deleted). The
+  timeline's pending state reads the GENERIC loading word — never another surface's loading phrase
+  (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
+  detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
+  a list a phone reader never used — but the header carries ONE compact **eval** entry that flips
+  the detail to the session's evaluation: the SAME SessionEvalPane the desktop console's Eval tab
+  mounts ([[session-eval]] — gates strip, blind spots, ✦-marked own readings, inherited baseline),
+  loaded lazily (a phone that never opens it never downloads the eval family) and restacked by CSS
+  to one column at thumb width — master list above, detail below, the desktop fold toggle hidden
+  (stacking already gives the detail the full width). Reading the measured loss is exactly what a
+  phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
@@ -71,9 +78,9 @@ The two planes, made native to touch:
   failed create keeps the draft and fails loud. The draft itself lives above the plane, so a peek
   at the specs tab never loses a half-typed prompt.
 
-It answers "what does the tree say", "what are my agents doing", "talk to them", and now "start
-one" — from a phone. Merge/close and the live pane stay with the desktop board: acting on
-proposals is the manager cockpit's job, a deliberate scope line.
+It answers "what does the tree say", "what are my agents doing", "talk to them", "start one", and
+"what did one actually measure" — from a phone. Merge/close and the live pane stay with the desktop
+board: acting on proposals is the manager cockpit's job, a deliberate scope line.
 
 This node's slice of the shared `styles.css` is the narrow-viewport mobile face; classes other surfaces
 add there — most recently the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score

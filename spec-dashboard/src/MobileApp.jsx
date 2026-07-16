@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
@@ -7,6 +7,10 @@ import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR, STATUS_GLY
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
 import { composeLaunch, createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { useT } from './i18n/index.jsx'
+
+// the session's evaluation ([[session-eval]]) — the SAME pane the desktop console's Eval tab mounts,
+// lazy so a phone that never opens it never downloads the eval component family.
+const SessionEvalPane = lazy(() => import('./SessionEval.jsx'))
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
@@ -109,12 +113,15 @@ const sameEvents = (a, b) => a != null && a.length === b.length
 // @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail. Without a pane to
 // read, the persisted timeline IS the interaction record: every authored status transition (with the full
 // declaration note — the agent's reply) and every delivered prompt, timestamped, oldest first, with the
-// composer docked below. Freshness: an 8s poll while open, plus an immediate refetch whenever the board push
+// composer docked below. The header's one extra control flips the detail to the session's evaluation
+// ([[session-eval]] — the shared SessionEvalPane, restacked by CSS). Freshness: an 8s poll while open, plus
+// an immediate refetch whenever the board push
 // moves this session's status/note (the board stream is already live in App), plus one after every send.
-function MobileSessionDetail({ s, sessions, onBack }) {
+function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
   const t = useT()
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
+  const [showEval, setShowEval] = useState(false)   // header eval entry: conversation ⇄ the session's evaluation
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
@@ -124,7 +131,7 @@ function MobileSessionDetail({ s, sessions, onBack }) {
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
-  useEffect(() => { setEvents(null); setDetail(null); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
+  useEffect(() => { setEvents(null); setDetail(null); setShowEval(false); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
   useEffect(() => { const iv = setInterval(load, 8000); return () => clearInterval(iv) }, [load])
   useEffect(() => { load() }, [s.status, s.note, load])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
@@ -193,32 +200,45 @@ function MobileSessionDetail({ s, sessions, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
+        <button className={showEval ? 'm-sess-evalbtn on' : 'm-sess-evalbtn'} onClick={() => setShowEval((v) => !v)} title={t('sessionEval.btnTitle')}>
+          {t('sessionEval.btn')}
+        </button>
       </div>
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
-        {detail?.prompt && (
-          <details className="m-ev m-ev-prompt">
-            <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-            <div className="m-ev-text">{detail.prompt}</div>
-          </details>
-        )}
-        {events === null
-          ? <div className="m-empty">{t('hud.loading')}</div>
-          : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-      </div>
-      {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
-      {sendErr && <div className="m-senderr">{sendErr}</div>}
-      <div className="m-composer">
-        <div className="m-composer-line">
-          <textarea
-            className="m-input"
-            rows={1}
-            placeholder={t('mobile.inputPlaceholder')}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
+      {showEval ? (
+        <div className="m-eval-host">
+          <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
+            <SessionEvalPane sessionId={s.id} specs={specs} sessions={sessions} onOpenSession={onOpenSession} />
+          </Suspense>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
+            {detail?.prompt && (
+              <details className="m-ev m-ev-prompt">
+                <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
+                <div className="m-ev-text">{detail.prompt}</div>
+              </details>
+            )}
+            {events === null
+              ? <div className="m-empty">{t('common.loading')}</div>
+              : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
+          </div>
+          {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
+          {sendErr && <div className="m-senderr">{sendErr}</div>}
+          <div className="m-composer">
+            <div className="m-composer-line">
+              <textarea
+                className="m-input"
+                rows={1}
+                placeholder={t('mobile.inputPlaceholder')}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -287,7 +307,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   if (creating) return <MobileNewSession specs={specs} draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
-  if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
+  if (open) return <MobileSessionDetail s={open} sessions={sessions} specs={specs} onOpenSession={setOpenId} onBack={() => setOpenId(null)} />
   return (
     <div className="m-sesslist">
       <button className="m-new-btn" onClick={() => setCreating(true)}>

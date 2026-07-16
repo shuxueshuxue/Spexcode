@@ -201,6 +201,20 @@ scenarios:
       current video behind an inherited still with the newer-nav disabled. The A/B history is
       home-provided — the session tab hands EventDetail its already-computed worktree readings, so the
       walk reflects the session's branch; the #/evals page (main-rooted) still fetches its own timeline.
+  - name: data-folds-under-media
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/Evidence.jsx, spec-dashboard/src/EventDetail.jsx]
+    description: >-
+      Select a reading carrying BOTH a clip/still AND a structured `data` entry (a vid·img·data reading). On
+      the detail stage read the data block: is it FOLDED behind its labelled header by default, with the JSON
+      HIDDEN (checkVisibility=false) until the header is clicked — then shown? Then compare a data-ONLY
+      reading's block.
+    expected: |-
+      When the reading also carries primary media (video/still), the structured `data` renders as a native
+      <details> FOLDED to just its "STRUCTURED DATA (JSON)" header (a ▸ marker), the JSON hidden
+      (checkVisibility=false) so it never pushes the clip/gallery off the stage; clicking the header opens it
+      (▾ + the pretty-printed block). A data-ONLY reading renders the block OPEN (it IS the evidence). Only
+      the `data` kind folds — a transcript is unaffected — and the fold is native HTML, no JS state.
 ---
 # event-detail loss
 

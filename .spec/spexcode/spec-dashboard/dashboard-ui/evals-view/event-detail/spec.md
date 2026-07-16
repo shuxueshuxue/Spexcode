@@ -81,7 +81,11 @@ each still full-width and **click-to-enlarge** (a click opens that blob in a vie
 anywhere or Esc closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is
 the evidence, and the stage's width is not its ceiling). A transcript entry renders as
 text, a missing blob as the honest sentinel per entry, a blob-less (`note`) reading its verdict note as the text
-body (never an empty media box). When the reading
+body (never an empty media box). A **structured `data`** entry ([[evidence-kind-taxonomy]]) renders as its
+validatable block, but **FOLDS behind its own header when the reading ALSO carries a clip or still** — the
+media is the protagonist and the data a secondary drill-down, so it must not push the video/gallery off the
+stage; a **data-only** reading keeps it open, since the block IS the evidence (a native fold, no JS state).
+When the reading
 carries a [[step-timeline]]
 sidecar, a **step ruler** renders naming each step at its position — labels keyed by the map's **axis**
 (time→m:ss, frame→#123, line→L42, index→3/N), so the rail is no longer welded to the clip: a **non-video**

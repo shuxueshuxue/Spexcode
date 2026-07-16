@@ -46,8 +46,11 @@ export function Transcript({ hash }) {
 // structured DATA evidence ([[evidence-kind-taxonomy]]) — a machine export (JSON) rendered as a validatable
 // data block, not scrolling transcript text: pretty-print when it parses, show the raw bytes with an
 // "invalid JSON" marker when it doesn't (the honesty is that the structure is checkable, so a broken export
-// is visibly broken, never silently a wall of text).
-export function DataBlock({ hash }) {
+// is visibly broken, never silently a wall of text). `collapsed` folds it behind its own labelled header
+// (a native <details>, so the toggle needs no JS state): the caller sets it when the reading ALSO carries
+// primary media ([[event-detail]]) — the structured data is then SECONDARY and must not push the clip/stills
+// off the stage; a data-ONLY reading stays open, since the block IS the evidence.
+export function DataBlock({ hash, collapsed = false }) {
   const t = useT()
   const [state, setState] = useState(null)
   useEffect(() => {
@@ -63,9 +66,16 @@ export function DataBlock({ hash }) {
     return () => { live = false }
   }, [hash])
   if (state === null) return <pre className="eval-data loading">{t('nodeView.eval.loadingData')}</pre>
+  const head = state.valid ? t('nodeView.eval.data') : t('nodeView.eval.dataInvalid')
+  if (collapsed) return (
+    <details className="eval-datawrap eval-datafold">
+      <summary className="eval-datahead">{head}</summary>
+      <pre className="eval-data">{state.text}</pre>
+    </details>
+  )
   return (
     <div className="eval-datawrap">
-      <div className="eval-datahead">{state.valid ? t('nodeView.eval.data') : t('nodeView.eval.dataInvalid')}</div>
+      <div className="eval-datahead">{head}</div>
       <pre className="eval-data">{state.text}</pre>
     </div>
   )
@@ -122,11 +132,11 @@ export function FullscreenButton({ target, className = '' }) {
 
 // one evidence entry rendered by its kind — a transcript pulls its text, a video plays inline, an image
 // shows (click-to-enlarge); a pruned entry (state 'miss') is the honest sentinel, never a broken media box.
-export function EvidenceItem({ e, alt = '' }) {
+export function EvidenceItem({ e, alt = '', collapsed = false }) {
   const t = useT()
   if (e.state === 'miss') return <div className="eval-noimg">{t('nodeView.eval.miss')}</div>
   if (e.kind === 'transcript') return <Transcript hash={e.hash} />
-  if (e.kind === 'data') return <DataBlock hash={e.hash} />
+  if (e.kind === 'data') return <DataBlock hash={e.hash} collapsed={collapsed} />
   if (e.kind === 'video') return <video className="eval-video" src={blobUrl(e.hash)} controls preload="metadata" playsInline />
   return <EvidenceImage hash={e.hash} alt={alt} />
 }

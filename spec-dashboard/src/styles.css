@@ -1722,6 +1722,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-datahead { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
 .eval-data { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-data.loading { color: var(--muted); }
+/* folded structured data ([[event-detail]]): the header IS the toggle when a clip/still is the primary evidence */
+.eval-datafold > summary.eval-datahead { cursor: pointer; user-select: none; list-style: none; }
+.eval-datafold > summary.eval-datahead::-webkit-details-marker { display: none; }
+.eval-datafold > summary.eval-datahead::before { content: '▸ '; color: var(--muted); }
+.eval-datafold[open] > summary.eval-datahead::before { content: '▾ '; }
+.eval-datafold:not([open]) > summary.eval-datahead { border-bottom: none; }
 
 /* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
 /* the filter chips are ONE control language across both tabs ([[evals-view]] / [[issues-view]]): a segmented

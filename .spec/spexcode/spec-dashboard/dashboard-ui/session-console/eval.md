@@ -394,42 +394,42 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, with the project configured with named launchers
-      ([[launcher-select]]) so the New-Session composer shows the launcher `<select>` (`.si-launcher-select`)
-      in place of the harness radios. Open the New Session tab and dispatch a REAL pointer mousedown at the
-      centre of the select (not a programmatic `selectOption`, which bypasses the mousedown path that is the
-      whole bug). A native `<select>` opens its dropdown ON the mousedown default action, so the measurable
-      fingerprint is whether the panel-level focus-retention handler (`keepFocus`) cancels that default:
-      attach a one-shot `mousedown` listener on the select, dispatch the pointer, and read the event's
-      `defaultPrevented` after the bubbling panel handler has run. Corroborate that the control is
-      pointer-interactable (its value changes) and screenshot the composer.
+      ([[launcher-select]]) so the New-Session composer shows the launcher pop-out trigger
+      (`.si-launcher-btn`) in place of the old native select. Open the New Session tab and dispatch a REAL
+      pointer click at the centre of the trigger (not a programmatic state flip — the pointer path is what
+      the panel-level focus-retention handler `keepFocus` blankets). The trigger is a button, so its pop
+      must open on `click` even though `keepFocus` cancels the mousedown default over non-text chrome:
+      after the click, assert the `.si-launcher-pop` menu is open AND the composer textarea still holds
+      focus (`document.activeElement`). Then pick a row with another real click: the pop closes, the
+      trigger's `.si-launcher-name` follows the pick, and focus is still in the textarea. Screenshot the
+      opened pop.
     expected: |
-      The mousedown's `defaultPrevented` is FALSE — the composer's focus retention no longer cancels the
-      select's default action, so the native launcher dropdown opens on a real click and the picker is
-      operable by the pointer (its value follows the chosen option). Focus retention still blankets the
-      inert chrome; it just spares native form controls (`<select>`/`<option>`) that own their own
-      mousedown. Regression guard: with the `keepFocus` select exemption removed, the same measurement
-      reads `defaultPrevented` TRUE and the dropdown never opens.
+      A real pointer click opens the pop-out (`.si-launcher-pop` present) and the focus-retention blanket
+      costs the picker nothing — button semantics fire on click regardless of the cancelled mousedown
+      default, and the docked composer input NEVER loses focus across open/pick/close. Picking a row
+      closes the pop and the trigger name follows the selection. The old native-select coexistence
+      concern is moot (no select renders in the panel); the keepFocus form-control carve-out remains as
+      the rule any future native control relies on.
   - name: launcher-picker-shows-harness-icon
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, with the project configured with at least two named
       launchers whose harnesses DIFFER ([[launcher-select]]) — e.g. one `claude` launcher and one `codex`
-      launcher — so the New-Session composer shows the launcher `<select>` (`.si-launcher-select`). Open the
-      New Session tab. First read the option text: the `<option>`s show ONLY the launcher name, with NO
-      ` · claude`/` · codex` harness text suffix. Then read the harness adornment beside the select
-      (`.si-launcher-harness svg`) and confirm it renders an inline-SVG vendor glyph (the same mark the
-      harness radios use — Anthropic for a claude launcher, OpenAI for a codex launcher), NOT text. With a
-      claude-harness launcher selected, note WHICH glyph shows (its path `d`, or the wrapper's `title`); then
-      change the selection to the codex-harness launcher and RE-READ the adornment. Screenshot the composer on
-      each selection.
+      launcher — so the New-Session composer shows the launcher pop-out picker. Open the New Session tab.
+      Read the trigger (`.si-launcher-btn`): it wears the SELECTED launcher's harness as an inline-SVG
+      vendor glyph (`.si-launcher-harness svg`) beside the name — never a ` · claude`/` · codex` text
+      suffix. Open the pop and read every row: each `.si-launcher-row` wears ITS OWN launcher's harness
+      glyph beside its name (Anthropic for a claude launcher, OpenAI for a codex launcher), again with no
+      harness text suffix in the row label. With a claude-harness launcher selected, note WHICH glyph the
+      trigger shows (its path `d`); then pick the codex-harness launcher and RE-READ the trigger's
+      adornment. Screenshot the opened pop and the composer after each selection.
     expected: |
-      The `<option>` labels carry the launcher name alone — no ` · claude`/` · codex` text suffix. Beside the
-      select sits a single small inline-SVG harness glyph (`.si-launcher-harness svg`), never a text harness
-      label: it reflects the SELECTED launcher's harness — the Anthropic mark for a claude launcher, the
-      OpenAI mark for a codex launcher (the SAME vendor glyphs the icon-only harness radios use). Changing the
-      selection to a launcher on the other harness SWAPS the glyph to that harness's mark (the `title` and the
-      SVG path change), so the icon always tracks the current selection. The native `<select>` still opens and
-      operates on click (the launcher-picker-opens-on-click contract is unaffected).
+      Trigger and rows carry the launcher name alone — no harness text suffix anywhere. The trigger's
+      inline-SVG glyph reflects the SELECTED launcher's harness and SWAPS when the selection moves to a
+      launcher on the other harness (the SVG path changes to that vendor's mark); every pop row shows its
+      own harness's glyph, so differing-harness launchers are visually distinct at a glance (the same
+      vendor glyphs the old icon-only harness radios used). The pop still opens and operates on click
+      (the launcher-picker-opens-on-click contract is unaffected).
     related: spec-dashboard/src/SessionInterface.jsx
   - name: tab-dblclick-locks-graph
     tags: [frontend-e2e, desktop]

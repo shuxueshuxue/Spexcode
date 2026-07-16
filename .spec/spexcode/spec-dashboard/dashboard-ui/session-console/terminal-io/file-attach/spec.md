@@ -6,6 +6,7 @@ hue: 170
 desc: Drop a file on the prompt — it rides to the worker's /tmp and the prompt keeps its path.
 code:
   - spec-cli/src/uploads.ts#saveUpload
+  - spec-cli/src/uploads.ts#safeName
 related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css

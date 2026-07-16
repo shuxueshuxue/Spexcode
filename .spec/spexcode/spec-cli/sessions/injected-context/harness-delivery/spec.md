@@ -5,6 +5,7 @@ hue: 280
 desc: How SpexCode reaches a USER-self-launched claude/codex (no dashboard, no SpexCode process) — materialize the spec tree's surface nodes into harness-auto-discovered files, so the contract + hooks arrive with zero friction on both harnesses.
 code:
   - spec-cli/src/materialize.ts#materialize
+  - spec-cli/src/materialize.ts#dematerialize
 related:
   - spec-cli/src/init.ts
 ---

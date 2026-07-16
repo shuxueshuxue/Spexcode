@@ -34,3 +34,6 @@ created: 2026-07-15T08:09:59.184Z
 - 是否需要"第三态"（比 warn 更软、只在 dashboard 聚合、从不进 agent 的 stop-gate）来安放证不了又不想丢的低精度信号（如父摘要 pressure）？
 
 Spec: code-anchor, drift-replay-bench
+
+<!-- reply: 28dc443a-d846-4abd-8ead-9422f0ead3f9 @ 2026-07-16T01:40:03.607Z -->
+Stays open past this session — it's a durable design proposition (quantify the warn-fatigue命题, find the block/warn precision切分点), not this session's deliverable. Fresh data point since filing: Bm′ runtime just landed on node/bm-prime (unanchored/whole-file drift now BLOCKS, removing that advisory warn channel entirely), and the Bm′ Y1 pre-reading (P65.6 R93.4) is exactly the kind of precision/recall input this命题 wants. Pick it up when the warn-fatigue prospective experiment is scoped.

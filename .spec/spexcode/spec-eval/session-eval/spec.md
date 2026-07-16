@@ -65,7 +65,9 @@ retired scenario's residual reading contributes no row. A gates strip (the same
 `reviewPayload` numbers `spex session review` prints — lint memoized on the checkout fingerprint,
 [[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
 measuring the real product, not by a language-specific checker. When the session has no worktree/diff the
-tab shows a clean empty placeholder.
+tab shows a clean empty placeholder. The pane has a second interactive home: the phone's session detail
+([[mobile-ui]]) flips to the SAME component behind its header eval entry — lazily loaded, restacked to one
+column by the phone's CSS; no mobile clone of the rows, the order, or the detail.
 
 The **self-contained HTML** (`renderExportHtml`: evidence inlined as data-URIs, every changed file's
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare

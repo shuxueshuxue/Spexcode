@@ -397,7 +397,7 @@ export default {
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a command preset' },
     harnessLabel: 'agent launcher',
     launcherLabel: 'launcher',
-    launcherCmd: 'command',
+    launcherTip: 'edit spexcode.json / spexcode.local.json to change launchers',
     tabTerminal: 'terminal',
     tabEval: 'eval',
     typeBtn: 'type',

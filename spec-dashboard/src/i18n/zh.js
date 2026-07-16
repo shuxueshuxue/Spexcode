@@ -193,7 +193,7 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
-    attach: '接入…',
+    attach: '在终端中打开…',
     select: '多选…',
     close: '关闭',
     closeTitle: '关闭“{name}”？',

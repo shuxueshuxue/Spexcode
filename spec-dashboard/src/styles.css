@@ -1360,19 +1360,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-launcher-row-main:last-child { padding-bottom: 8px; }
 .si-launcher-row .si-launcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-launcher-check { color: var(--blue); flex: none; margin-left: auto; }
-/* the cmd detail — a dim mono one-line preview that IS the expand affordance; expanded it wraps in
-   full as read-only selectable text (no field chrome, nothing editable). */
+/* the cmd — inert read-only text under the name: shown in FULL (wrapping only when genuinely long),
+   selectable for copying, never a control (no pointer, no hover state, nothing to click). */
 .si-launcher-cmd {
   margin: 0 10px 8px 35px; min-width: 0;
   font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: var(--ink2);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  cursor: pointer; opacity: .75; transition: opacity .12s ease;
-}
-.si-launcher-cmd:hover { opacity: 1; }
-.si-launcher-cmd.open {
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
-  user-select: text; cursor: text; opacity: 1;
-  background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 6px; padding: 5px 8px;
+  user-select: text; opacity: .75;
 }
 
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action

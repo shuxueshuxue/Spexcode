@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createResilientSocket } from './resilientSocket.js'
+import { createResilientSocket, SERVER_PING_MS, DEAD_MS } from './resilientSocket.js'
 
 // The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl, timers,
 // and clock are injectable, so the silence watchdog — the detector for a HALF-OPEN link, where the peer is
@@ -62,11 +62,19 @@ function harness() {
   return { clock, sockets, states, messages, sock }
 }
 
+// The heartbeat contract has ONE primitive per side of the wire: the server's ping cadence
+// (TERM_PING_MS in spec-cli/src/index.ts) and this mirror of it — every other window is derived.
+// Same pinning pattern as streamHeartbeat.test.mjs holds the SSE pair to the board stream's cadence.
+test('the mirror matches the server ping cadence and the dead window derives from it', () => {
+  assert.equal(SERVER_PING_MS, 10000) // = TERM_PING_MS in spec-cli/src/index.ts — change BOTH or neither
+  assert.equal(DEAD_MS, 2.5 * SERVER_PING_MS)
+})
+
 test('an OPEN socket silent past the dead window is presumed dead and reopened', () => {
   const { clock, sockets, states } = harness()
   clock.advance(10)                    // socket #1 opens
   sockets[0].emit('ping')              // heard once
-  clock.advance(60000)                 // then total silence — and NO close event, ever (half-open)
+  clock.advance(2 * DEAD_MS + 10000)   // then total silence — and NO close event, ever (half-open)
   assert.ok(sockets.length > 1, 'a replacement socket must be constructed')
   assert.ok(states.includes('reconnecting'), 'the drop is loud — reconnecting is surfaced')
   // the replacement DID come up (an 'open' after the first 'reconnecting'); with a server that stays
@@ -78,14 +86,14 @@ test('an OPEN socket silent past the dead window is presumed dead and reopened',
 test('inbound traffic within the window — frames or pings — keeps the link alive', () => {
   const { clock, sockets } = harness()
   clock.advance(10)
-  for (let i = 0; i < 20; i++) { sockets[0].emit('ping'); clock.advance(10000) }  // server cadence
+  for (let i = 0; i < 20; i++) { sockets[0].emit('ping'); clock.advance(SERVER_PING_MS) }  // server cadence
   assert.equal(sockets.length, 1, 'a healthy-but-quiet link is never falsely dropped')
 })
 
 test('late events from the force-dropped zombie are ignored', () => {
   const { clock, sockets, messages } = harness()
   clock.advance(10)
-  clock.advance(60000)                 // watchdog drops socket #1, opens #2
+  clock.advance(2 * DEAD_MS + 10000)   // watchdog drops socket #1, opens #2
   const before = messages.length
   sockets[0].emit('stale-bytes')       // the zombie speaks from the grave
   assert.equal(messages.length, before, 'superseded-socket guard holds for watchdog drops too')
@@ -95,14 +103,15 @@ test('an intentional close() stops the watchdog for good', () => {
   const { clock, sockets, sock } = harness()
   clock.advance(10)
   sock.close()
-  clock.advance(120000)                // silence forever after an intentional close
+  clock.advance(5 * DEAD_MS)           // silence forever after an intentional close
   assert.equal(sockets.length, 1, 'no resurrection after close()')
 })
 
 test('a watchdog drop reopens with backoff, not a hammer', () => {
   const { clock, sockets } = harness()
   clock.advance(10)
-  clock.advance(29995)                 // one watchdog drop lands (25s window, 5s check cadence)…
+  // one watchdog drop lands: the breach is noticed within half a ping of the DEAD_MS deadline…
+  clock.advance(DEAD_MS + SERVER_PING_MS / 2 - 5)
   assert.equal(sockets.length, 1, '…and the replacement waits out the backoff delay first')
   clock.advance(1000)                  // past the 500ms base backoff
   assert.equal(sockets.length, 2, 'exactly one replacement is constructed per drop')

@@ -456,9 +456,11 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // {t:'wheel',…}. The bridge resolves the wheel against tmux pane state: copy-mode repaint for normal panes,
 // SGR mouse report injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent
 // frame and live bytes arrive as events.
-// keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract:
-// a healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
-// silent past 2.5× this window dead (the half-open link a NAT/tunnel kills without a close event), and the
+// keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
+// and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
+// resilientSocket.js, pinned by its test) and DERIVES its dead window (2.5×) and watchdog rate from it.
+// A healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
+// silent past its derived window dead (the half-open link a NAT/tunnel kills without a close event), and the
 // traffic itself keeps an idle socket warm through those middleboxes. Text frame; the terminal renders only
 // binary frames, so it needs no client-side filtering beyond what already exists.
 const TERM_PING_MS = 10000

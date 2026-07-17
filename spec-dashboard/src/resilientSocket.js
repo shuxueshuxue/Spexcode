@@ -1,12 +1,20 @@
 const OPEN = 1 // WebSocket.OPEN — identical (1) in the browser and in Node's `ws`.
 const DEFAULT_BACKOFF = [500, 1000, 2000, 4000, 8000] // ms, indexed by attempt; the last value is the cap.
 const STABLE_MS = 3000 // a connection that stays open this long is healthy → reset backoff to its base.
-// Heartbeat contract ([[reconnect]]): the server pings every terminal socket every 10s (index.ts), so a
-// healthy link is GUARANTEED inbound traffic. An OPEN socket silent past 2.5× that cadence is presumed
-// DEAD — the half-open link a NAT/tunnel tears down without ever delivering a close event — and is
-// force-dropped into the normal reopen machinery. 2.5× absorbs one lost ping plus jitter.
-const DEAD_MS = 25000
-const WATCH_MS = 5000 // how often the silence watchdog looks at the clock.
+// Heartbeat contract ([[reconnect]]): the server pings every terminal socket on a fixed cadence
+// (TERM_PING_MS in spec-cli's socket route), so a healthy link is GUARANTEED inbound traffic.
+// SERVER_PING_MS is the client's MIRROR of that promise — held to it by resilientSocket.test.mjs, the
+// same way data.js's STREAM_HEARTBEAT_MS pins the SSE stream's cadence. It is the ONE timing knob on
+// this side of the wire; the other windows derive from it, never free-standing numbers:
+//   DEAD_MS  — an OPEN socket silent past 2.5× the cadence is presumed DEAD (the half-open link a
+//              NAT/tunnel tears down without ever delivering a close event) and is force-dropped into
+//              the normal reopen machinery. 2.5× absorbs one lost ping plus jitter — the same
+//              multiplier the SSE stream's dead window uses.
+//   WATCH_MS — the watchdog reads the clock twice per ping window, so a breach is noticed within
+//              half a ping of the deadline.
+export const SERVER_PING_MS = 10000
+export const DEAD_MS = 2.5 * SERVER_PING_MS
+const WATCH_MS = SERVER_PING_MS / 2
 
 export function createResilientSocket({
   url,
@@ -19,8 +27,6 @@ export function createResilientSocket({
   now = Date.now,
   backoff = DEFAULT_BACKOFF,
   stableMs = STABLE_MS,
-  deadMs = DEAD_MS,
-  watchMs = WATCH_MS,
   onOpen = () => {},
   onMessage = () => {},
   onState = () => {},
@@ -73,17 +79,17 @@ export function createResilientSocket({
 
   // The silence watchdog — the ONLY detector for a half-open link (peer gone, no close event will ever
   // fire, readyState stuck OPEN). An open socket that has heard NOTHING — no frame, no server ping — for
-  // `deadMs` is presumed dead: supersede it first (its late events must be ignored), best-effort close the
+  // DEAD_MS is presumed dead: supersede it first (its late events must be ignored), best-effort close the
   // zombie, and hand recovery to the same backoff/reopen path a genuine close takes.
   const watchdog = setIntervalImpl(() => {
     if (closedByUs || !ws || ws.readyState !== OPEN) return
-    if (now() - lastHeardAt <= deadMs) return
+    if (now() - lastHeardAt <= DEAD_MS) return
     const zombie = ws
     ws = null
     clearStable()
     try { zombie.close() } catch { /* already dying */ }
     scheduleReopen()
-  }, watchMs)
+  }, WATCH_MS)
 
   const api = {
     // send returns false (a no-op) while the socket is mid-reconnect, matching the read-only view's contract:

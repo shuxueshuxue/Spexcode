@@ -39,4 +39,63 @@ scenarios:
       status (asking/awaiting). A PreToolUse block carries the handler's own reason, not a generic
       placeholder. The failure signature is a record stuck `active` forever with `stop-gate-taught` present
       and a frozen timeline — the rejection silently dropped.
+  - name: pi-pretooluse-block
+    tags: [backend-api]
+    description: >-
+      YATU: in an adopter repo, add a temporary `surface: hook` node (events [PreToolUse], block: true)
+      whose script emits `{"decision":"block","reason":…}` on stdout for a marked path, materialize, then
+      dispatch a pi worker told to touch that path. Remove the node after.
+    expected: >-
+      The tool call is genuinely blocked — the forbidden file is never touched — and the agent sees the
+      handler's OWN reason text (visible in the pane), not a generic placeholder; the session continues
+      normally after the block.
+  - name: pi-ask-note
+    tags: [backend-api]
+    description: >-
+      YATU: a dispatched pi worker runs `spex session ask --note '<question>'` as its declaration.
+    expected: >-
+      The record flips to `asking` and the note carries the question verbatim where the board reads it
+      (`session ls` / the graph payload).
+  - name: pi-deliver-steer
+    tags: [backend-api]
+    description: >-
+      YATU: `spex session send` to an IDLE pi session, then a second send while a turn is RUNNING
+      (pi delivers via `sendUserMessage {deliverAs: steer}` over the rendezvous socket).
+    expected: >-
+      The idle send exits 0 and lands as EXACTLY ONE injected user message that starts a new turn; the
+      mid-turn send also lands exactly once, steering the LIVE turn (its effect visible in that same
+      turn's output) — never dropped, never duplicated.
+  - name: pi-resume
+    tags: [backend-api]
+    description: >-
+      YATU: `spex session stop` a pi session (worktree kept), then `spex session resume` it — the relaunch
+      rides `pi --session <id>`.
+    expected: >-
+      The resumed TUI continues the SAME pi conversation — prior turns are present and referencable (the
+      agent can answer from earlier context) — never a fresh empty session; a missing session file fails
+      loud rather than silently minting a new one.
+  - name: pi-liveness
+    tags: [backend-api]
+    description: >-
+      YATU: kill the pi TUI process of a live session (the rendezvous listener dies with it), read board
+      liveness; then resume and read again.
+    expected: >-
+      Liveness reads `offline` within seconds of the kill (the socket connect probe refuses — the stale
+      socket FILE never reads as alive); after resume it reads `online` again.
+  - name: pi-commit-gate
+    tags: [backend-api]
+    description: >-
+      YATU: a dispatched pi worker with UNCOMMITTED files runs `spex session done --propose merge`.
+    expected: >-
+      The declaration is rejected and the reason names the uncommitted work (the commit-before-declare
+      contract), delivered into the session so the agent acts on it; after committing, the same proposal
+      is accepted.
+  - name: pi-close-residue
+    tags: [backend-api]
+    description: >-
+      YATU: `spex session close` a pi session, then sweep for residue: tmux window, pi process tree,
+      worktree, rendezvous socket, session record.
+    expected: >-
+      Zero residue — the tmux window is gone, no pi process of that session survives, the worktree and
+      node branch are retired, and the rendezvous socket path is unlinked.
 ---

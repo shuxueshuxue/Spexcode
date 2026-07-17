@@ -1,5 +1,5 @@
 {
-  "harnesses": ["claude", "codex"],
+  "harnesses": ["claude", "codex", "opencode", "pi"],
   "lint": {
     "governedRoots": ["spec-dashboard/src", "spec-cli/src", "spec-forge/src", "spec-eval/src"],
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],

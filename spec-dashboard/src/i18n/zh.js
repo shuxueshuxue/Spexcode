@@ -83,6 +83,8 @@ export default {
     capturing: '正在截取画面…',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
+    railFold: '折叠评审轨道 — 让画面占满宽度',
+    railUnfold: '展开评审轨道',
     abOlder: '更早的 eval（‹ 靠近 A / 复现出的 bug）',
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',

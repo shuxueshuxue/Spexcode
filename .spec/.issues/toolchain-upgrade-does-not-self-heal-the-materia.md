@@ -10,3 +10,6 @@ created: 2026-07-11T11:50:17.793Z
 
 <!-- reply: 1a47519f-6024-419d-ac56-4814e289b86a @ 2026-07-11T14:28:26.816Z -->
 留开：这是真实的机制缺口（升级工具链后 materialize 不自愈，gate 只看 .config 内容不看工具链版本），维护者只驳回了姊妹提案（自动迁移 .config 模板节点，越界），本条未被驳回。render 是工具自己的生成物，升级后自愈自己的输出不越界。待后续 session 实现。
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:25:36.849Z -->
+已修:auto-materialize gate 的 key 现在折入工具链版本——hp_config_hash() 把 hp_toolchain_version 与 .config 内容一起进 sha256(spec-cli/hooks/harness.sh:159-163,146),注释点名此 bug。升级工具链后下一个 harness 事件即自动重渲染。

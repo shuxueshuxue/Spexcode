@@ -71,7 +71,9 @@ function typeKeyToken(e) {
 // selected launcher's harness vendor mark + name, no caret, no label) that opens a CENTRED pop-out card —
 // a viewport-centred dialog over a light backdrop, deliberately not an anchored dropdown. One row per
 // configured launcher: its harness glyph + name, and beneath them the profile's `cmd` in full as PLAIN
-// READ-ONLY text — not a control: nothing in the card is clickable except the row select itself. The
+// READ-ONLY display text. The WHOLE row is one pick target — the row itself is the button, so a click
+// anywhere on it (the cmd line included) picks the launcher; the cmd never forms an independent
+// selection/control surface that could swallow the pick. The
 // trigger's tooltip points at spexcode.json / spexcode.local.json as the one place launchers change.
 // Selecting closes the pop; backdrop click or Esc closes it too.
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
@@ -111,21 +113,22 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
               const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
               const HGlyph = h.Glyph
               return (
-                <div key={l.name} className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}>
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={l.name === launcher}
-                    className="si-launcher-row-main"
-                    onClick={() => { pickLauncher(l.name); setPop(false) }}
-                  >
+                <button
+                  key={l.name}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={l.name === launcher}
+                  className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}
+                  onClick={() => { pickLauncher(l.name); setPop(false) }}
+                >
+                  <span className="si-launcher-row-main">
                     <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
                     <span className="si-launcher-name">{l.name}</span>
                     {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
-                  </button>
-                  {/* the cmd — inert read-only text (selectable for copying), never a control. */}
-                  {l.cmd ? <div className="si-launcher-cmd">{l.cmd}</div> : null}
-                </div>
+                  </span>
+                  {/* the cmd — read-only display text; part of the same pick target, never its own surface. */}
+                  {l.cmd ? <span className="si-launcher-cmd">{l.cmd}</span> : null}
+                </button>
               )
             })}
           </div>

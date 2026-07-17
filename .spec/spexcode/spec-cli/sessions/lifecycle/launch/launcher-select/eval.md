@@ -15,9 +15,11 @@ scenarios:
       the viewport midpoint — not anchored under the trigger), with exactly one `.si-launcher-row` per
       available profile, each row
       showing its own harness vendor glyph + launcher name, plus the profile's full `.si-launcher-cmd`
-      text. Assert the cmd is INERT read-only text: it carries no `role`, no `tabindex`, no
-      pointer cursor, and clicking it neither selects the row nor changes the DOM; there is no input or
-      edit affordance anywhere in the pop and no chevron/expand buttons. Cross-check the source data at
+      text. Assert the WHOLE row is one pick target: clicking directly ON the `.si-launcher-cmd` text of a
+      non-selected launcher PICKS that launcher — the pop closes and the trigger's `.si-launcher-name`
+      now shows the clicked profile — and the cmd is display-only otherwise (no input or edit affordance
+      anywhere in the pop, no chevron/expand buttons, no independent selection surface that would swallow
+      the click). Cross-check the source data at
       `GET /api/settings` (each
       launcher carries `{ name, harness, cmd }`). Screenshot the opened pop.
     expected: >-
@@ -27,7 +29,9 @@ scenarios:
       row per profile (harness glyph + name + the full cmd
       per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
       what the New-Session POST sends (backend derives the harness from it). The cmd renders in full as
-      inert selectable text — not a control (no role/tabindex/pointer, a click on it is a no-op) —
+      read-only display text, and the row it belongs to is ONE pick target — a click anywhere on the row,
+      the cmd text included, picks that launcher and closes the pop (a cmd click that is a no-op, or that
+      merely starts a text selection, is the OLD broken behaviour) —
       no editing surface exists in the dashboard; config files stay the only place a cmd is written.
       `GET /api/settings` returns the same `{name, harness, cmd}` launchers list the pop renders. A
       launcher subsumes the harness axis; picking one is the single choice the human makes.

@@ -1346,26 +1346,31 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
-/* one row per launcher: the selecting main line, then the cmd preview beneath it. */
-.si-launcher-row { display: flex; flex-direction: column; border-radius: 8px; }
+/* one row per launcher — the row ITSELF is the pick button (name line + cmd preview inside it), so a
+   click anywhere on it, cmd included, selects the launcher. */
+.si-launcher-row {
+  display: flex; flex-direction: column; border-radius: 8px; width: 100%;
+  appearance: none; background: none; border: none; font: inherit; text-align: left;
+  cursor: pointer; padding: 0;
+}
 .si-launcher-row.on { background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .si-launcher-row-main {
   display: flex; align-items: center; gap: 9px; min-width: 0;
-  padding: 8px 10px 2px; cursor: pointer; color: var(--ink); font-size: 12.5px;
-  background: none; border: none; border-radius: 8px; text-align: left;
+  padding: 8px 10px 2px; color: var(--ink); font-size: 12.5px;
 }
 .si-launcher-row:not(.on):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 /* a cmd-less profile has no preview line — keep its row symmetric. */
 .si-launcher-row-main:last-child { padding-bottom: 8px; }
 .si-launcher-row .si-launcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-launcher-check { color: var(--blue); flex: none; margin-left: auto; }
-/* the cmd — inert read-only text under the name: shown in FULL (wrapping only when genuinely long),
-   selectable for copying, never a control (no pointer, no hover state, nothing to click). */
+/* the cmd — read-only display text under the name: shown in FULL (wrapping only when genuinely long).
+   It lives INSIDE the row button, so it is part of the one pick target — no user-select region of its
+   own to swallow the click. */
 .si-launcher-cmd {
-  margin: 0 10px 8px 35px; min-width: 0;
+  display: block; margin: 0 10px 8px 35px; min-width: 0;
   font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: var(--ink2);
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
-  user-select: text; opacity: .75;
+  opacity: .75;
 }
 
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action

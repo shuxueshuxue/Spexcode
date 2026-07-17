@@ -44,8 +44,11 @@ launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill bu
 launcher's harness vendor mark + name (no caret, no label; its tooltip names `spexcode.json` /
 `spexcode.local.json` as where launchers change) that opens a **viewport-centred pop-out card**
 over a light backdrop (not an anchored dropdown) with
-**one row per launcher** (its harness glyph + its name), each row showing the profile's configured `cmd`
-in full as inert **read-only text** (selectable, never a control) — so a human can
+**one row per launcher** (its harness glyph + its name, and beneath them the profile's configured `cmd`
+shown in full as read-only display text). The **entire row is ONE pick target**: a click anywhere on it —
+the `cmd` line included — picks the launcher and closes the pop. The `cmd` never behaves as a surface of
+its own (no control, no independent text-selection region: a cmd click that merely started a text
+selection instead of picking read as a broken row). So a human can
 inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole
 place a `cmd` is written. That endpoint reports the `{ name, harness, cmd }` list AND the
 configured `default` name (`{ launchers, default }`); the `cmd` rides the payload as read-only display data

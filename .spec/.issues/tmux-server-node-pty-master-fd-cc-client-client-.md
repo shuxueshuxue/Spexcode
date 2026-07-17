@@ -18,3 +18,6 @@ created: 2026-07-17T12:25:03.799Z
 修复方向:node-pty spawn 出的 master fd 需要 FD_CLOEXEC(node-pty 已知问题,fork 竞态泄 fd 给并发 spawn 的子进程);或 bridge 死亡时主动校验 slave 真正 EIO。只要 dashboard 会反复 spawn/kill `-CC` client(reconcile 正是这么做的),这个 wedge 就会周期性复发——本次已是线上真实中断(用户报障)。
 
 临时恢复手段(已执行,供下次复发时用):找出泄漏 master 的持有者(全进程扫 ptmx fdinfo 的 tty-index,对没有活 client 的 pts 号下手),kill 那个进程即可,无需杀 tmux server(杀 server 会带走所有 agent 会话)。
+
+<!-- reply: human @ 2026-07-17T13:43:57.441Z -->
+@new:reclaude 从根本上处理一下

@@ -1,25 +1,25 @@
 ---
 scenarios:
-  - name: warm-bridge-pre-sized-no-reflow
+  - name: unwatched-warm-bridge-stays-silent
     tags: [backend-api]
     description: >-
-      Measure the on-attach reflow through the real bridge surface. Seed two live sessions on a tmux
-      socket at the cold default (120x40). Start the supervisor and let it pre-warm both, then have ONE
-      viewer attach and fit to a browser size (e.g. 214x57) via the real path (attachViewer + resizeBridge,
-      the same calls the dashboard WebSocket drives). While that viewer stays attached it holds the only
-      size vote on the socket, so the OTHER, unwatched session's warm hold is deferred (its size-neutral
-      client cannot move a window while a sized viewer votes). Then DETACH the viewer and poll tmux
-      `#{window_width}x#{window_height}` for the unwatched session across a supervisor tick. ZERO loss =
-      once the socket is quiet it converges to the last-known viewer size off-screen, so a later attach
-      sends a size that already matches and tmux re-wraps nothing.
-      File with `spex yatsu eval live-view --scenario warm-bridge-pre-sized-no-reflow --result <txt>`.
+      Measure that the bridge supervisor does NO periodic work for an unwatched session. Through the real
+      product surface (the dashboard viewing session A, CDP capturing every WebSocket frame — or the
+      equivalent attachViewer/resizeBridge API drive), hold a sized viewer on session A for several
+      supervisor ticks (≥40s) while another live-but-quiet session B keeps a hidden (never-sized)
+      subscriber. Count the frames B's socket receives and classify them: reconstructed frames carry the
+      frame header signature (pen reset + viewport clear, `\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J…`); genuine
+      live `%output` does not. Also confirm the keep-alive ping still arrives on cadence, and that tmux's
+      window size for B is not being asserted each tick (its geometry stays wherever the last sized viewer
+      left it). File with `spex eval add live-view --scenario unwatched-warm-bridge-stays-silent --result <txt>`.
     expected: >-
-      While the viewer is attached, the unwatched session stays at its cold size (the warm hold is
-      suppressed by the live vote — deferred, not lost). Within a tick or two of the viewer detaching, the
-      unwatched warm bridge's tmux window moves to the last-known viewer size WITHOUT any viewer ever
-      attaching to it; a viewer opening it afterward finds the pane already at its size — the open-time fit
-      is a no-op, so there is no visible cols/rows reflow. A watched session stays put across ticks (no
-      thrash), since its pre-size equals its own recorded fit.
+      B's hidden socket receives ZERO supervisor-driven reconstructed frames across the ticks — no per-tick
+      capture, no per-tick broadcast, no refresh-client assert (the old warm-hold path, measured at one
+      identical ~3.4KB full frame every reconcile tick per unwatched session while anyone voted, is gone;
+      its threat model — windows drifting while unwatched — is already closed by bare-attach-asserts-nothing
+      plus neutral clients yielding). The only idle traffic on B's socket is the 10s keep-alive ping;
+      genuine `%output` from B's own TUI still flows through untouched, and event-driven repaints
+      (re-bind, mode change) remain intact.
   - name: foreign-instance-size-neutrality
     tags: [backend-api]
     description: >-
@@ -176,9 +176,10 @@ The live terminal's product surface is measured through the **real bridge API** 
 (`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —
 not an internal probe. The losses, about a pane behaving wrong the moment a human opens it:
 
-- **on-attach reflow** — the pane re-wrapping from a stale size to the browser size. Zero loss is the
-  supervisor holding every warm bridge at the last-known viewer size, so the pane is already correct
-  before they look.
+- **unwatched idle cost** — the supervisor doing periodic work for sessions nobody is looking at. Zero
+  loss is an unwatched warm bridge that is completely silent (no per-tick assert/capture/broadcast; a
+  hidden pane's idle traffic is the keep-alive ping alone), with window geometry owned by sized viewers
+  and simply kept between them.
 - **undersized first frame** — a warm pane connects while still hidden (0×0), so a guessed-size first
   frame would land short and then snap to full when the human looks. Zero loss is the server **deferring**
   that first paint **purely** to the client's first resize (drawn at the real visible size), with **no timer

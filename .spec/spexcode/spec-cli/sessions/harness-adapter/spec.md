@@ -40,8 +40,12 @@ record to `asking` with the note on the board; (4) **deliver + steer** — an id
 conversation; (6) **liveness** — a killed agent reads `offline` within seconds (even with a stale socket
 file on disk) and a relaunch reads `online`; (7) **commit gate** — a dirty-tree merge proposal is rejected
 at settle with the reason delivered into the session; (8) **close** — zero residue (tmux window, process
-tree, worktree/branch, sockets, session record). The matrix scenarios in [[pi-harness]]'s eval.md are the
-reference instantiation; a harness whose evidence is only artifacts has not been measured.
+tree, worktree/branch, sockets, session record). The matrix is not prose to re-transcribe per harness: it
+is defined ONCE, as data, in [[live-matrix]], and `spex eval matrix <launcher>` drives a real dispatched
+session of any registered launcher through all eight behaviors — syncing the rows into that harness node's
+eval.md scenarios and filing a per-row reading with its evidence transcript, so a new harness is covered by
+its launcher + node alone, zero new runner code. A harness whose evidence is only artifacts has not been
+measured.
 
 ## expanded spec
 

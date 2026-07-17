@@ -527,12 +527,12 @@ if (cmd === 'serve') {
       if (!n.hasEvalFile && !n.uncoveredFrontend) console.log('      (no eval.md — nothing declared to measure)')
       else if (n.hasEvalFile && !n.scenarios.length) console.log('      (eval.md declares no scenarios)')
     }
-  } else if (['add', 'ls', 'scenario', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
+  } else if (['add', 'ls', 'scenario', 'matrix', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.
     const { runEval } = await import('../../spec-eval/src/cli.js')
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
-    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | ok | retract | clean  (spex help eval)`)
+    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | matrix | lint | ok | retract | clean  (spex help eval)`)
     if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export])`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     process.exit(2)
   }

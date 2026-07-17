@@ -204,13 +204,14 @@ ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · ok · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls · matrix · lint · ok · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
        spex eval ls --session <SEL> --export [--open | --out <path>]
        spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
+       spex eval matrix <launcher> [--node <id>] [--rows k1,k2]   the harness live-behavior matrix
        spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
        spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest reading
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
@@ -228,6 +229,12 @@ HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
 scenario ls — the DECLARED contracts (name · tags · normalized test reference · latest verdict), no evals: bare lists every
 measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
+
+matrix — run the eight-row harness live-behavior matrix against a REAL dispatched session of the named
+launcher (the harness-adapter acceptance rule, defined once in spec-eval/src/matrix.ts): it syncs the
+rows into the \`<harness>-harness\` node's eval.md scenarios, drives one worker through undeclared-stop ·
+pretooluse-block · ask-note · deliver-steer · resume · liveness · commit-gate · close-residue, and files
+a per-row reading with its evidence transcript. A new harness needs only its launcher + spec node.
 
 lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
 stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source with no eval.md

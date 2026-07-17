@@ -656,12 +656,18 @@ export async function runEval(args: string[]): Promise<number> {
   if (sub === 'retract') return retractCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'ls') return show(args.slice(1))
+  if (sub === 'matrix') {
+    // the live-behavior matrix runner ([[live-matrix]]) — lazily imported so the heavy session machinery
+    // never loads for the plain filing/reading verbs.
+    const { runMatrix } = await import('./matrix.js')
+    return runMatrix(args.slice(1))
+  }
   if (sub === 'scenario') {
     if (args[1] === 'ls') return scenarioLs(args.slice(2))
     console.error('spex eval scenario: ls [<node>|.] [--unmeasured] [--json] — list declared scenarios (the measurement contracts)')
     return 2
   }
-  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | lint [--changed] | ok <node> [--scenario <name>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
+  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | matrix <launcher> [--node <id>] [--rows k1,k2] | lint [--changed] | ok <node> [--scenario <name>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
   return 2
 }
 

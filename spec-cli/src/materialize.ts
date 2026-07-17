@@ -156,18 +156,20 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   // and even unfiltered the phantom-`M` lingers) — settle the index stat, content-guarded so a user's real
   // unstaged edit is never staged ([[content-filter]] edge 2).
   try { settleIndexStat(proj, HARNESSES.flatMap((h) => h.contractFiles(proj))) } catch { /* not a git repo */ }
-  // leaving nothing behind: drop the now-EMPTY dirs the assert phase mkdir'ed (.claude/.codex/.pi and their
-  // skills/agents/extensions subdirs). Each candidate is pruned UP ITS PARENT CHAIN to the project root —
-  // a harness may nest its artifacts a level deep (pi's .pi/extensions), and removing only the leaf would
-  // strand the empty parent. rmdirSync is NON-recursive, so a dir holding any user file stops the walk
-  // untouched; `.git/spexcode/` is deliberately NOT swept (shared per-clone home).
+  // leaving nothing behind: drop the now-EMPTY dirs the assert phase mkdir'ed (.claude/.codex/.opencode/.pi
+  // and their skills/agents/plugins/extensions subdirs). Each dir AND its parent are swept deepest-first,
+  // because a harness may nest its shim a level below its home (opencode's .opencode/plugins/, pi's
+  // .pi/extensions/) — but never the checkout roots themselves. rmdirSync is NON-recursive, so a dir holding
+  // any user file survives untouched; `.git/spexcode/` is deliberately NOT swept (shared per-clone home).
   for (const h of HARNESSES) {
     const anchor = h.worktreeHookAnchor(proj)
-    for (let d of [h.skillDir(proj), h.agentDir(proj), dirname(h.shimFile(proj)), anchor ? dirname(anchor) : null])
-      while (d && d !== proj) {
-        try { rmdirSync(d) } catch { break }   // non-empty or absent — keep, and stop the walk
-        d = dirname(d)
-      }
+    const dirs = [h.skillDir(proj), h.agentDir(proj), dirname(h.shimFile(proj)), anchor ? dirname(anchor) : null]
+      .filter((d): d is string => !!d)
+    const roots = new Set([proj, mainCheckout(proj)])
+    const sweep = [...new Set([...dirs, ...dirs.map((d) => dirname(d))])]
+      .filter((d) => !roots.has(d))
+      .sort((a, b) => b.length - a.length)
+    for (const d of sweep) { try { rmdirSync(d) } catch { /* non-empty or absent — keep */ } }
   }
 }
 

@@ -6,7 +6,8 @@ import { createConnection, type Socket } from 'node:net'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { claudeSlashCommands, codexSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
+import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
+import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
@@ -23,7 +24,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'pi'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -102,10 +103,10 @@ export interface Harness {
   // ONLY place agent-surface divergence lives (the skillDir analog). Claude reads .claude/agents/<name>.md;
   // Codex has no file-discovered agent-definition primitive, so it returns null and materialize skips it.
   agentDir(proj: string): string | null
-  // the shim payload: the FILE CONTENT materialize writes at shimFile — whatever form THIS harness discovers
-  // (claude/codex: a hooks JSON binding every event → the dispatcher; pi: a generated TypeScript extension
-  // that forwards its events to the dispatcher) — and the per-event command string (shared with the trust
-  // writer so they hash identically).
+  // the shim payload: `content` is whatever artifact THIS harness auto-discovers to wire every event to the
+  // dispatcher (harness id baked in) — a settings/hooks JSON for claude/codex, a generated event-bus PLUGIN
+  // for opencode, a generated TypeScript EXTENSION for pi — plus the per-event command string (shared with
+  // the trust writer so they hash identically).
   shim(dispatch: string, spex: string): { content: string; cmd: (e: string) => string }
   // make a dispatched/self-launched agent run the hooks with zero prompts. Codex writes PROJECT trust — and, on
   // a binary without `--dangerously-bypass-hook-trust`, per-hook trusted_hash blocks — into the GLOBAL
@@ -1022,6 +1023,28 @@ const PI_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUs
 const claudeBaseCmd = (cmd?: string) => cmd || 'claude --dangerously-skip-permissions'
 const codexBaseCmd = (cmd?: string) => cmd || 'codex --yolo'
 const piBaseCmd = (cmd?: string) => cmd || 'pi'   // pi runs tools without permission prompts — no yolo flag exists or is needed
+const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode --auto'   // --auto = zero-prompt permissions (opencode's trust mechanism — writeTrust is a no-op)
+
+// @@@ opencodeLaunchCommand - the tail-branching launch script (the codex marker pattern, minus any server:
+// opencode is a per-session process like claude). The caller-appended tail ("$@") is EITHER one single-quoted
+// prompt arg (a NEW launch → `--prompt`), or a resume marker from opencodeHarness.resumeArg: `--resume <id>`
+// re-attaches the owned opencode session (`--session <id>`, the SAME conversation), `--continue` re-attaches
+// the worktree's last session when no id was ever captured (the plugin failed before its first event). A new
+// launch's tail can never BE a literal marker (it's one quoted prompt), so the branch is unambiguous.
+export function opencodeLaunchCommand(opencodeCmd = 'opencode --auto'): string {
+  const script = [
+    `if [ "\${1:-}" = "--resume" ]; then`,
+    `  exec ${opencodeCmd} --session "$2"`,
+    `elif [ "\${1:-}" = "--continue" ]; then`,
+    `  exec ${opencodeCmd} --continue`,
+    `elif [ -n "\${1:-}" ]; then`,
+    `  exec ${opencodeCmd} --prompt "$1"`,
+    `else`,
+    `  exec ${opencodeCmd}`,
+    `fi`,
+  ].join('\n')
+  return `bash -lc ${shQuote(script)} spexcode-opencode`
+}
 
 export const claudeHarness: Harness = {
   id: 'claude',
@@ -1129,7 +1152,7 @@ export const codexHarness: Harness = {
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
 }
 
-// @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the three:
+// @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:
 // the caller pins the session id at launch (`--session-id <id>`, creating the session if missing), the shim
 // lives IN the worktree, and the rendezvous prompt/liveness channel is REUSED wholesale — pi has no external
 // hook binding (its lifecycle surface is the in-process extension API), so the shim is a GENERATED TypeScript
@@ -1171,8 +1194,51 @@ export const piHarness: Harness = {
   resumeArg: (rec) => `--session ${rec.session}`,
 }
 
+export const opencodeHarness: Harness = {
+  id: 'opencode',
+  events: OPENCODE_EVENTS,
+  // LITERALLY true: the generated plugin ([[opencode-harness]], opencode.ts) BINDS the per-session rendezvous
+  // socket the launch env hands it and speaks the reply/repaint mini-protocol, so claude's deliver (atomic
+  // parse-confirmed write) and socket-listener liveness are reused verbatim — no opencode transport code.
+  ownsRendezvous: true,
+  paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
+  launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
+  baseCmd: opencodeBaseCmd,
+  sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)
+  // opencode exports NO per-session env var to its tool subprocesses (probed, 1.18.3). Identity flows through
+  // the launch-injected SPEXCODE_SESSION_ID — honest here because each opencode TUI is a per-session process
+  // (no codex-style shared-server contamination). This var is therefore never set; envSessionId's
+  // SPEXCODE_SESSION_ID tier resolves the record.
+  sessionEnvVar: 'OPENCODE_SESSION_ID',
+  // the "shim" is a generated opencode PLUGIN in the worktree's own tree — opencode auto-loads project plugins
+  // by walking the cwd, so like claude it self-anchors and needs no root-checkout rewrite or worktree anchor.
+  shimFile: (proj) => join(proj, '.opencode', 'plugins', 'spexcode.ts'),
+  worktreeHookAnchor: () => null,
+  contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // opencode reads AGENTS.md natively (same file codex owns; the managed block is idempotent across writers)
+  skillDir: (proj) => join(proj, '.opencode', 'skills'),
+  agentDir: (proj) => join(proj, '.opencode', 'agents'),
+  // content = the plugin source; cmd = the SAME per-event command the plugin bakes into dispatch calls, so
+  // any consumer that hashes/inspects commands sees one truth (trust is a no-op here regardless).
+  shim: (dispatch, spex) => ({ content: opencodePluginSource(dispatch, spex), cmd: (e) => `SPEX='${spex}' bash ${dispatch} opencode ${e}` }),
+  writeTrust: () => { /* zero-prompt is the launcher's `--auto` flag — nothing to write */ },
+  removeTrust: () => { /* nothing was written */ },
+  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  slashCommands: opencodeSlashCommands,
+  // online iff the window is up AND the agent answers on a channel: PREFER the rendezvous socket listener
+  // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to
+  // load still reads honestly from the process signal instead of a false offline.
+  liveness: (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
+    (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline'),
+  deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  // owned opencode session id → `--resume <id>` marker (the launch script re-attaches `--session <id>`, the
+  // SAME conversation); never captured → `--continue` marker (opencode's own "last session in this directory",
+  // which in a dedicated worktree is this worker's). The discriminator is sound for the same reason codex's
+  // is: a NEW launch's tail is always ONE single-quoted prompt arg, never a literal marker.
+  resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : '--continue'),
+}
+
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, piHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

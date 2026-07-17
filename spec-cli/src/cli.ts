@@ -887,6 +887,17 @@ if (cmd === 'serve') {
     const sid = process.env.SPEXCODE_SESSION_ID
     if (sid) markHarnessSessionId(sid, r.threadId)
     console.log(r.threadId)
+  } else if (sub === 'opencode-capture') {
+    // opencode MINTS its own session id (no launch flag pins it), so the generated plugin's FIRST event calls
+    // this to store that id as harness_session_id on the governed record (SPEXCODE_SESSION_ID from the launch
+    // env, inherited by the opencode process → plugin). That is what lets reopen() resume the SAME
+    // conversation (`--session <id>`). A missing record/env is a clean no-op — a plugin loaded outside a
+    // governed launch has nothing to mark.
+    const { markHarnessSessionId } = await import('./sessions.js')
+    const ocid = process.argv[4]
+    if (!ocid) { console.error('usage: spex internal opencode-capture <opencode-session-id>'); process.exit(2) }
+    const sid = process.env.SPEXCODE_SESSION_ID
+    console.log(sid && markHarnessSessionId(sid, ocid) ? `captured ${ocid}` : 'noop (no governed session record)')
   } else if (sub === 'commit-surgery') {
     // the pre-commit footprint anchor ([[commit-surgery]]): unconditional materialize + staged-index repair
     // (strip our sentinel block from staged blobs, unstage HEAD-untracked generated artifacts). Called only

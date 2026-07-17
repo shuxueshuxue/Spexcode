@@ -26,13 +26,16 @@ prevent.
 
 So a dead link must be **detectable from traffic alone**, which makes liveness a two-sided **heartbeat
 contract**, same shape as the board stream's ([[dashboard-shell]]): the **server** sends a small keep-alive
-ping over every terminal socket on a fixed cadence (10s — one constant shared with the frame it protects,
-and traffic that also keeps an idle link warm through NAT timeouts), so the client is **guaranteed**
-inbound bytes on a healthy link; the **client** holds the socket to that promise — *any* inbound message
-proves liveness, and an OPEN socket silent past **2.5× the cadence** (25s: absorbs one dropped ping plus
-jitter, still fast enough to feel like recovery, not a reload) is **presumed dead**, force-dropped, and
-handed to the same reopen machinery as a real close event. No separate recovery path: detection is the only
-new act; a presumed-dead drop reopens, backs off, and announces itself exactly like a genuine drop.
+ping over every terminal socket on a fixed cadence (10s — traffic that also keeps an idle link warm through
+NAT timeouts), so the client is **guaranteed** inbound bytes on a healthy link; the **client** holds the
+socket to that promise — *any* inbound message proves liveness, and an OPEN socket silent past **2.5× the
+cadence** (25s: absorbs one dropped ping plus jitter, still fast enough to feel like recovery, not a reload)
+is **presumed dead**, force-dropped, and handed to the same reopen machinery as a real close event. The
+cadence is the contract's **one primitive number** — one constant per side of the wire, the client's a
+mirror of the server's held equal by test (as the board stream's pair is), and every other window (the dead
+window, the watchdog's check rate) **derived** from it, never a free-standing magic number. No separate
+recovery path: detection is the only new act; a presumed-dead drop reopens, backs off, and announces itself
+exactly like a genuine drop.
 
 The socket **reopens itself**:
 on an unexpected close it retries with **capped, escalating backoff**, indefinitely, while surfacing a

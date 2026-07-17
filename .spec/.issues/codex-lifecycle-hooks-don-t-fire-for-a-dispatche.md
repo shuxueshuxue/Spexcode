@@ -25,3 +25,6 @@ Net: contract CONTENT still reaches codex via AGENTS.md auto-discovery (it follo
 
 <!-- reply: 3ec0a7c5-550a-4ff3-8de6-f0b9509018d4 @ 2026-07-06T09:52:37.360Z -->
 Counter-evidence from today's CLI-only play (2026-07-06): a FRESH spex-init'd project (/home/jeffry/tmc, adopted same day) dispatched two codex workers through its own backend — BOTH produced commits with the Session: trailer, filed yatsu readings, declared done --propose merge, and executed their merge dispatches. The lifecycle path this issue reports as broken worked end-to-end on a fresh adoption with current main. Either the stop-gate/trailer gap was since fixed (materialize-era hook consolidation?) or the original repro had a stale toolchain. Recommend re-repro against current main before keeping this open.
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:26:23.622Z -->
+已修:newSession 调 bootstrapMaterialize(sessions.ts:1228/1255),对 dispatched worker 的 worktree 按与自启 agent 相同的路径 materialize;materialize.ts:142/164 遍历全部 HARNESSES,227-233 写 shim + linked-worktree 锚拷贝(.codex/hooks.json,设计见 harness.ts:82-96);spexcode.json 交付集含 codex(d6008ff8 又补上 opencode+pi)。Stop gate 与 Session: trailer 机制对 dispatched codex worker 均已送达。

@@ -185,6 +185,29 @@ scenarios:
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
       reading session.json + the commit trailer.
     code: spec-cli/src/harness.ts
+  - name: headless-lifecycle-claude
+    tags: [backend-api]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Through a REAL throwaway backend on a fresh-init adopter project, dispatch `spex session new "<small
+      real task>" --headless` under a claude launcher carrying a `headlessCmd` (a reclaude-class `… -p`
+      wrapper), let the one-shot turn run to its declaration, `spex session send` a follow-up turn, then
+      close. Read the record, the board row mid-turn AND between turns, the timeline, the worktree commits,
+      and the pane text.
+    expected: >-
+      The record pins mode=headless with the launcher's headlessCmd VERBATIM as its launch cmd (needsCmd:true
+      — never the interactive cmd, which would boot a TUI nobody attends); the hooks are ZERO-CHANGE in `-p`
+      mode — mark-active flips the record on launch, the stop-gate forces the declaration, so the board reads
+      working/online exactly while the one-shot process runs (turn-scoped agent.pid liveness) and the DECLARED
+      status (with honest between-turn `offline`) once it exits 0 — with NO fast-exit retry respray (a fast
+      exit IS the turn completing; the interactive template would have re-fired the prompt). The send lands as
+      an injected `--resume <id>` one-shot turn on the SAME conversation — the pane's turn script re-registers
+      agent.pid (that fresh registration is the delivery proof), the record flips back to working and
+      re-declares, and the timeline records the full working→declared→sent→working→declared path. Every worker
+      commit carries the `Session:` trailer, and close leaves zero residue (window, record, worktree, branch).
+      The failure this locks: a headless session whose lifecycle is proven only by artifact inspection — the pi
+      stop-gate precedent — where every mechanical proof is green while a real dispatched `-p` worker hangs
+      undeclared, resprayed, or silently loses its follow-up turns.
   - name: headless-lifecycle-codex
     tags: [backend-api]
     code: spec-cli/src/harness.ts

@@ -258,11 +258,35 @@ surface:
   JSON-RPC turn delivery live in the Codex adapter.
 - **headless (`HarnessHeadless` + `harnessOps`)** — a harness's HEADLESS (one-shot turn) capability object,
   mirroring `agentDir`'s "null = no such primitive" pattern: `{ needsCmd, launchCmd, liveness, deliver,
-  resumeArg }`, or null when the harness has no headless form (claude/pi/opencode today — a headless create on
+  resumeArg }`, or null when the harness has no headless form (pi/opencode today — a headless create on
   them fails loud at the create path). A session's `mode` is a PRODUCT dimension, so the ONE router
   `harnessOps(h, mode)` (a mode branch, never a harness branch) picks the capability object for a headless
   record and the interactive adapter for everything else; sessions.ts's launch/liveness/occupancy/waitForReady/
-  send/reopen all route through it. **codex's headless form is live** and is the interactive launch MINUS the
+  send/reopen all route through it, and `rvEnv` omits the rendezvous vars for any headless launch (no daemon
+  will listen; injecting them would make the record LOOK socket-addressable to every rendezvous consumer).
+  **claude's headless form is live** and is a ONE-SHOT `-p` PROCESS PER TURN: `needsCmd:true` — the
+  launcher's `headlessCmd` IS the agent command (a complete `… -p` invocation the config author writes;
+  create pins it as the record's launch cmd), and `launchCmd` embeds that pin WHOLE — zero parsing, and a
+  headless record without one is corruption, fail loud, never a silent interactive fallback (which would boot
+  a TUI nobody attends). The launch script template is mode-routed too: a one-shot process's FAST EXIT IS THE
+  TURN COMPLETING, so exit 0 ends the script with no retry (the interactive template's fast-exit-means-failure
+  retry loop would double-run a small task) and a non-zero exit prints the rc and fails loud. The hook path
+  is ZERO-CHANGE (verified live): `-p` mode fires the same hooks — mark-active flips the record, the
+  stop-gate's decision:block forces the continuation, declarations land — so the state machine never knows
+  the mode. Liveness is TURN-scoped: online iff the window is up AND the registered `agent.pid` is alive
+  (both launch.sh and each injected turn re-register it; legacy fallback = the claude-ish descendant tree
+  walk), so between turns the record's DECLARED lifecycle rules the display and an undeclared `active` with
+  no process honestly reads offline (a crash, since the stop-gate guarantees a non-crash exit declares).
+  `deliver` is the NEXT TURN: a still-registered live pid refuses loud (two concurrent `-p --resume` on one
+  claude session is undefined behavior — never a silent queue); idle, it writes a turn script (first act:
+  re-register `agent.pid`; then `exec env … <pinned headlessCmd> --resume <id> '<msg>'`) and types it into
+  the session pane — delivered = the pid file's fresh re-registration proves the turn PROCESS started (the
+  hooks take the record from there); a pane that swallows the line (not at a shell prompt) times out loud,
+  never a false `sent`. `resumeArg` is EMPTY: a headless session's continuation IS its next delivery, and
+  resume must never hand the one-shot command a fabricated prompt (the mbp wrapper's "Continue…" lesson —
+  the system never invents instructions on the human's behalf), so resumeSession's headless-with-empty-tail
+  path just ensures the window (the next turn's injection target) and points the caller at send.
+  **codex's headless form is live** and is the interactive launch MINUS the
   TUI attach: `needsCmd:false` — the executor already IS the shared app-server (the task runs as the
   backend-owned thread's FIRST turn on both paths; the interactive pane TUI only renders it), so `headlessCmd`
   never participates and the app-server binary still derives from the pinned interactive `cmd`'s first token

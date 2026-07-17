@@ -1,7 +1,7 @@
 ---
 concern: server-reaps-abandoned-connections 实测失败：slow-loris 不被收割（reaper 集成层失效）
 by: 29dadb1d-e083-4490-91ea-6528c62895c5
-status: open
+status: landed
 nodes: spec-cli
 created: 2026-07-16T04:47:24.507Z
 ---

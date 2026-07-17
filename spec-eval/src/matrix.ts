@@ -130,6 +130,19 @@ export class MatrixRun {
     this.lastLaunchAt = Date.now()
     return r.code
   }
+  // send with a bounded retry: right after a relaunch a harness may honestly read online off its
+  // pid-fallback while its control socket is still booting, and deliver fails LOUD in that window (per
+  // contract). Retrying is what a human manager does; the deliver-steer row keeps strict single-shot sends
+  // because first-shot accept on a settled worker IS its contract.
+  async sendRetry(text: string, seconds: number): Promise<boolean> {
+    const t0 = Date.now()
+    while (true) {
+      if ((await this.send(text)) === 0) return true
+      if (Date.now() - t0 > seconds * 1000) return false
+      this.log('send refused — retrying (the agent may still be rebinding its control socket)')
+      await new Promise((r) => setTimeout(r, 3000))
+    }
+  }
   // wait until the agent is past the launcher's boot grace: inside that window a dead agent legitimately
   // reads `starting` (death is unprovable mid-boot), so a liveness kill must land on an ESTABLISHED agent.
   async waitEstablished(): Promise<void> {
@@ -337,7 +350,7 @@ export const MATRIX: MatrixRow[] = [
         return s && s.liveness === 'online' ? s : false
       })
       if (!on) return { status: 'fail', note: 'session never read online after resume' }
-      if ((await ctx.send('Earlier in this conversation I gave you a token starting with TK. Reply with one line in the exact format RECALL=<that token>, then stop.')) !== 0) return { status: 'fail', note: 'recall send was not accepted' }
+      if (!(await ctx.sendRetry('Earlier in this conversation I gave you a token starting with TK. Reply with one line in the exact format RECALL=<that token>, then stop.', 90))) return { status: 'fail', note: 'recall send never accepted within 90s of the relaunch — the resumed agent is not reachable' }
       await ctx.settle(300)
       const pane = await ctx.capture('after recall')
       if (!pane.includes(`RECALL=${token}`)) return { status: 'fail', note: `resumed agent could not produce RECALL=${token} — not the same conversation` }
@@ -391,7 +404,7 @@ export const MATRIX: MatrixRow[] = [
       const wt = ctx.worker!.path
       writeFileSync(join(wt, 'matrix-scratch.txt'), 'scratch\n')
       const isDirty = async () => (await ctx.exec('git', ['-C', wt, 'status', '--porcelain'], { quiet: true })).out.trim() !== ''
-      if ((await ctx.send('This conformance run deliberately planted an uncommitted file (matrix-scratch.txt) in your worktree to test the commit gate. Do not commit or remove anything yourself yet. Run exactly: spex session done --propose merge — then stop. If the gate rejects you, follow whatever it says.')) !== 0) return { status: 'fail', note: 'instruction send was not accepted' }
+      if (!(await ctx.sendRetry('This conformance run deliberately planted an uncommitted file (matrix-scratch.txt) in your worktree to test the commit gate. Do not commit or remove anything yourself yet. Run exactly: spex session done --propose merge — then stop. If the gate rejects you, follow whatever it says.', 90))) return { status: 'fail', note: 'instruction send never accepted within 90s — the worker is not reachable' }
       // classify what the gate did. The record reads `review` the moment the CLI writes the proposal —
       // BEFORE the stop-gate has run at the agent's stop — so a transient review+dirty is the normal
       // mid-loop state, and only a STABLE dirty review (the gate's stop verdict and its forced-continuation

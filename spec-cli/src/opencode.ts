@@ -1,16 +1,18 @@
+import { shimRuntimeSource } from './shim-runtime.js'
+
 // @@@ opencode plugin generator - the opencode adapter's "shim" is not a settings JSON but a generated
 // opencode PLUGIN (.opencode/plugins/spexcode.ts, auto-loaded by opencode from the project tree) that runs
-// inside the agent process and plays TWO roles ([[opencode-harness]]):
-//   1. hook bridge — it subscribes to opencode's event bus and re-emits each event as a Claude-SHAPED payload
-//      piped into `dispatch.sh opencode <Event>` (session_id = the governed record id from the launch env,
-//      Claude tool names, `file_path`), so harness.sh needs no opencode parse arm — the default (claude
-//      family) branch handles it, exactly like the `plugin` bundle form. A blocking outcome is honored
-//      in-process: a PreToolUse block THROWS (opencode aborts the tool call); a Stop block re-injects the
-//      gate's reason as a follow-up prompt via the SDK client, closing the stop-gate loop.
-//   2. rendezvous daemon — it binds SpexCode's per-session rendezvous socket (CLAUDE_BG_RENDEZVOUS_SOCK from
-//      the launch env, the path every rendezvous-owning harness is handed) and answers the reply/repaint
-//      mini-protocol, so the claude adapter's deliver (parse-confirmed atomic write) and socket-listener
-//      liveness are reused VERBATIM — `ownsRendezvous: true` is literally true, no opencode transport code.
+// inside the agent process. It is a THIN HOST over the shared shim runtime ([[shim-runtime]], embedded
+// verbatim): this generator declares opencode's event-bus mapping (session.created → SessionStart,
+// chat.message → UserPromptSubmit, tool.execute.before/after → Pre/PostToolUse, session.idle → Stop) and its
+// host bindings; the payload synthesis, the block verdict (exit 2 + stdout decision:block JSON), and the
+// rendezvous server come from the runtime. opencode's host-specific verdict consumers ([[opencode-harness]]):
+// a PreToolUse block THROWS (opencode aborts the tool call); a Stop block re-injects the gate's reason as a
+// follow-up prompt via the SDK client, closing the stop-gate loop. What re-enters is always the parsed
+// REASON, never the escaped wire JSON. The rendezvous inject is client.session.prompt into the ROOT session,
+// gated by canInject (a plugin with no adopted session reply-rejects instead of confirming an undeliverable
+// prompt). What genuinely stays opencode-only below: session tracking (root vs subagent children, the
+// agent_id stamp), the minted-id capture, and the two resume seeds.
 // This module is a PURE content producer (no imports from harness.ts — the adapter object lives there, in the
 // one HARNESSES seam) so there is no import cycle.
 
@@ -20,7 +22,7 @@
 export const OPENCODE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // opencode tool name → Claude tool name, so [[inject-spec-first]] / [[inject-spec-of-file]] and every other
-// claude-family handler read the payload with zero opencode knowledge. Unknown tools pass through capitalized
+// claude-family handler read the payload with zero opencode knowledge. Unknown tools pass through untouched
 // (opencode's names are lowercase). Exported for tests.
 export const OPENCODE_TOOL_NAMES: Record<string, string> = {
   bash: 'Bash', edit: 'Edit', write: 'Write', read: 'Read', grep: 'Grep', glob: 'Glob', list: 'LS',
@@ -36,51 +38,15 @@ export function opencodePluginSource(dispatch: string, spex: string): string {
 // Bridges opencode's event bus into SpexCode's dispatch.sh (claude-shaped payloads) and serves the
 // per-session rendezvous socket for prompt delivery + liveness.
 import { spawn } from "node:child_process"
-import { createServer } from "node:net"
-import { existsSync, unlinkSync } from "node:fs"
+${shimRuntimeSource('opencode', dispatch, spex)}
 
-const DISPATCH = ${JSON.stringify(dispatch)}
-const SPEX = ${JSON.stringify(spex)}
 const TOOL_NAMES = ${JSON.stringify(OPENCODE_TOOL_NAMES)}
 
 export const SpexcodePlugin = async (ctx) => {
   const client = ctx && ctx.client
   const cwd = (ctx && (ctx.directory || (ctx.app && ctx.app.path && ctx.app.path.cwd))) || process.cwd()
   const recordId = (process.env.SPEXCODE_SESSION_ID || "").trim()
-
-  // feed one claude-shaped payload to dispatch.sh; the harness id "opencode" is baked as argv[1] (the
-  // deterministic shell-side detector). Payload key order matters: agent_id (when present) must precede
-  // tool_input so harness.sh's hp_is_subagent prefix scan can see it.
-  const dispatchEvent = (event, payload) => new Promise((resolve) => {
-    let out = "", err = ""
-    let child
-    try {
-      child = spawn("bash", [DISPATCH, "opencode", event], { cwd, env: { ...process.env, SPEX }, stdio: ["pipe", "pipe", "pipe"] })
-    } catch (e) { resolve({ code: 1, out, err: String(e) }); return }
-    child.stdout.on("data", (d) => { out += d })
-    child.stderr.on("data", (d) => { err += d })
-    child.on("error", (e) => resolve({ code: 1, out, err: err || String(e) }))
-    child.on("close", (code) => resolve({ code: code == null ? 1 : code, out, err }))
-    child.stdin.end(JSON.stringify({ session_id: recordId, cwd, hook_event_name: event, ...payload }))
-  })
-  const blocked = (r) => r.code === 2 || /"decision"\\s*:\\s*"block"/.test(r.out)
-  // the human-readable rejection: stderr when the handler wrote one (the exit-2 path), else the REASON
-  // field parsed out of the stdout decision:block JSON — never the raw wire JSON, whose escaped \\n turned
-  // the stop-gate's teaching menu into one unreadable line (claude renders the reason field, codex gets the
-  // stderr bridge; opencode must not be the one harness whose agent reads wire format).
-  const reason = (r) => {
-    const err = (r.err || "").trim()
-    if (err) return err
-    for (const line of (r.out || "").split("\\n")) {
-      const s = line.trim()
-      if (!s.startsWith("{")) continue
-      try {
-        const o = JSON.parse(s)
-        if (o && o.decision === "block" && typeof o.reason === "string" && o.reason) return o.reason
-      } catch { /* not a JSON line — keep scanning */ }
-    }
-    return (r.out || "").trim() || "blocked by a spexcode hook"
-  }
+  const rt = spexShimRuntime({ sessionId: () => recordId, cwd: () => cwd })
 
   // session tracking: the ROOT opencode session is this worker's conversation; child sessions (subagents)
   // are stamped agent_id so a parent's declared state stays out of its subagents' reach (the same
@@ -126,57 +92,20 @@ export const SpexcodePlugin = async (ctx) => {
     })()
   }
 
-  // rendezvous daemon: single-connection (a new connect kicks the previous — the claude daemon's contract,
-  // which makes the delivery side's atomic reply+repaint chunk decidable). {type:"reply"} injects the text
-  // as a prompt into the root session; {type:"repaint"} answers repaint-done (the in-order parse barrier).
-  // The data handler is deliberately SYNCHRONOUS: the whole chunk's lines parse in one pass and repaint-done
-  // flushes before any other event (a kicking connect included) can run. Awaiting injectPrompt inside the
-  // loop broke exactly this — the SDK prompt call resolves only when the TURN ends, so the confirm sat
-  // unsent for the whole turn, every board-probe connect kicked the connection, and the sender resent an
-  // already-landed prompt (false negative + duplicate injection). Confirmation means PARSED, not processed
-  // — the same contract the claude daemon answers ([[opencode-harness]]).
-  const sockPath = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || "").trim()
-  if (sockPath) {
-    try { if (existsSync(sockPath)) unlinkSync(sockPath) } catch { /* stale file from a crashed run */ }
-    let conn = null
-    const server = createServer((c) => {
-      if (conn) { try { conn.destroy() } catch { /* already gone */ } }
-      conn = c
-      let buf = ""
-      c.on("error", () => { /* peer went away — the delivery side handles retries */ })
-      c.on("data", (d) => {
-        buf += d.toString("utf8")
-        let nl
-        while ((nl = buf.indexOf("\\n")) >= 0) {
-          const line = buf.slice(0, nl); buf = buf.slice(nl + 1)
-          let msg = null
-          try { msg = JSON.parse(line) } catch { continue }
-          if (msg && msg.type === "reply" && typeof msg.text === "string") {
-            if (!client || !rootSession) {
-              // known-unable, decided synchronously: reply-rejected lands BEFORE repaint-done, so the
-              // sender fails loud instead of confirming a prompt that can never inject.
-              try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* */ }
-              continue
-            }
-            // fire-and-forget: the injection (a whole model turn) runs behind the confirm. A late failure
-            // can only best-effort reply-rejected — the sender has usually resolved and gone by then.
-            injectPrompt(msg.text).catch(() => { try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* */ } })
-          } else if (msg && msg.type === "repaint") {
-            try { c.write(JSON.stringify({ type: "repaint-done" }) + "\\n") } catch { /* */ }
-          }
-        }
-      })
-    })
-    server.on("error", () => { /* socket unavailable — liveness falls back to the agent pid */ })
-    server.listen(sockPath)
-    server.unref()   // never hold the host process open for our socket; opencode's own loop keeps it alive while it runs
-  }
+  // the rendezvous daemon, from the shared runtime: {type:"reply"} injects into the root session (a plugin
+  // that adopted no session yet reply-rejects synchronously, BEFORE repaint-done, so the sender fails loud
+  // instead of confirming a prompt that can never inject); {type:"repaint"} answers repaint-done in the same
+  // synchronous parse pass — confirmation means PARSED, not processed. The injection itself (a whole model
+  // turn: the SDK prompt call resolves only when the TURN ends) runs BEHIND the confirm.
+  rt.serveRendezvous(injectPrompt, { canInject: () => !!(client && rootSession) })
 
   const toolPayload = (input, output) => {
-    const args = { ...((output && output.args) || {}) }
-    if (args.filePath !== undefined && args.file_path === undefined) { args.file_path = args.filePath; delete args.filePath }
     const sid = (input && input.sessionID) || ""
-    return { ...stamp(sid), tool_name: TOOL_NAMES[(input && input.tool) || ""] || ((input && input.tool) || ""), tool_input: args }
+    return {
+      ...stamp(sid),   // agent_id must precede tool_input — harness.sh's hp_is_subagent prefix scan
+      tool_name: TOOL_NAMES[(input && input.tool) || ""] || ((input && input.tool) || ""),
+      tool_input: rt.toolInput(output && output.args, "filePath"),
+    }
   }
 
   return {
@@ -186,27 +115,28 @@ export const SpexcodePlugin = async (ctx) => {
       if (t === "session.created") {
         const info = p.info || {}
         if (info.parentID) children.add(info.id)
-        else if (!rootSession) { adopt(info.id); await dispatchEvent("SessionStart", { source: "startup" }) }
+        else if (!rootSession) { adopt(info.id); await rt.dispatchEvent("SessionStart", { source: "startup" }) }
       } else if (t === "session.idle") {
         const sid = p.sessionID || ""
         if (sid && rootSession && sid !== rootSession) return   // a subagent going idle is not this worker's Stop
         adopt(sid)
-        const r = await dispatchEvent("Stop", {})
-        if (blocked(r)) { try { await injectPrompt(reason(r)) } catch { /* gate reason lost; next idle re-fires it */ } }
+        const r = await rt.dispatchEvent("Stop", {})
+        // the stop-gate loop closes in-process: the gate's parsed reason re-enters as a follow-up prompt.
+        if (rt.blocked(r)) { try { await injectPrompt(rt.blockReason(r, "blocked by a spexcode hook")) } catch { /* gate reason lost; next idle re-fires it */ } }
       }
     },
     "chat.message": async (input, output) => {
       const sid = (output && output.message && output.message.sessionID) || (input && input.sessionID) || ""
       if (!(sid && children.has(sid))) adopt(sid)
       const text = ((output && output.parts) || []).filter((x) => x && x.type === "text").map((x) => x.text).join("\\n")
-      await dispatchEvent("UserPromptSubmit", { ...stamp(sid), prompt: text })
+      await rt.dispatchEvent("UserPromptSubmit", { ...stamp(sid), prompt: text })
     },
     "tool.execute.before": async (input, output) => {
-      const r = await dispatchEvent("PreToolUse", toolPayload(input, output))
-      if (blocked(r)) throw new Error(reason(r))   // aborts the tool call — the PreToolUse block contract
+      const r = await rt.dispatchEvent("PreToolUse", toolPayload(input, output))
+      if (rt.blocked(r)) throw new Error(rt.blockReason(r, "blocked by a spexcode hook"))   // aborts the tool call — the PreToolUse block contract
     },
     "tool.execute.after": async (input, output) => {
-      await dispatchEvent("PostToolUse", toolPayload(input, output))
+      await rt.dispatchEvent("PostToolUse", toolPayload(input, output))
     },
   }
 }

@@ -64,7 +64,11 @@ surface:
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no
   external hook binding at all, so its shim is an extension synthesizing claude-shaped payloads —
-  [[pi-harness]]). The shim's LOCATION is a divergence point too:
+  [[pi-harness]]). Every GENERATIVE shim (pi's extension, opencode's plugin) composes the ONE shared
+  shim runtime ([[shim-runtime]], embedded verbatim): the generator declares only its event-name mapping
+  and host API bindings, while the payload synthesis, the single block-verdict contract (exit 2 + stdout
+  decision:block JSON), and the multi-connection rendezvous server live in that one source — never
+  rewritten per harness. The shim's LOCATION is a divergence point too:
   Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
   from the **ROOT CHECKOUT** — codex-rs rewrites the hooks-config folder of any linked worktree to
   `<repo_root>/<rel-from-checkout-root>/.codex` (`root_checkout_hooks_folder_for_dir`), so a thread whose cwd is

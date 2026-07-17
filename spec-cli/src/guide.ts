@@ -210,7 +210,12 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       CLI harness stamping line numbers — take a baseline and at EACH real step push
                       \`{ at: <position>, step: "…" }\`; dump that array as \`--timeline\`. Its \`axis\` MUST match the
                       evidence it rides (a \`line\` map needs a \`--result\` transcript, a \`time\` map a \`--video\`);
-                      skip it for a short single-step artefact. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
+                      skip it for a short single-step artefact. A step name is a SHORT human label for its
+                      moment ("open graph") — never a metadata channel: the run's identity, its verdict, and
+                      the evidence's extent already have canonical homes (the scenario's \`test:\` field, the
+                      reading's --pass/--fail, the artefact itself), so a step like
+                      "runner start: path/to/spec.ts :: <full case title>" smuggles data the reading already
+                      carries and turns the step ruler into noise. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
                       time axis with \`tMs\` — is still accepted, read as \`axis: "time"\`.)
   STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
   backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin). A STRUCTURED export (a tool's

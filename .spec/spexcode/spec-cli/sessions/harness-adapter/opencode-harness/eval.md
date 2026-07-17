@@ -32,20 +32,15 @@ scenarios:
       the same select/erase/assert pipeline with no special case.
   - name: deliver-second-message
     tags: [backend-api]
-    code: spec-cli/src/opencode.ts
+    code: [spec-cli/src/opencode.ts]
     description: >-
-      Through the running product: dispatch an opencode worker, let it answer its first prompt, then
-      `spex session send` a SECOND message while the board liveness probe keeps connecting to the
-      rendezvous socket (every graph snapshot fires rendezvousListening — collisions are the norm, not
-      an edge). Read the send's exit code/output and count how many copies of the message the worker's
-      pane actually received.
+      Matrix row: `spex session send` a task to the settled (idle) worker that starts a long turn,
+      then send a SECOND message while that turn is in flight — all under normal board-probe
+      pressure (the runner polls the board throughout).
     expected: >-
-      The send exits 0 ("sent") and the pane shows the message injected exactly ONCE. The plugin's
-      daemon must answer the reply+repaint chunk with parse-confirmed repaint-done in the same
-      synchronous parse pass — never suspended on the prompt-injection await — so a concurrent probe
-      connect can't kick the connection between parse and confirm. A kicked-3× failure with the text
-      nonetheless landing (false negative → caller retries → duplicate injections) is the bug this
-      scenario guards against.
+      Both sends exit 0; the idle send lands EXACTLY once (no duplicate injection of the message
+      text); the mid-turn send reaches the LIVE turn — its steer marker shows in that same turn's
+      output — never dropped, never duplicated.
   - name: dispatched-opencode-worker-e2e
     tags: [backend-api]
     description: >-
@@ -61,93 +56,85 @@ scenarios:
       the mechanical layer above is measured, this end-to-end reading is the open item.
   - name: undeclared-stop-gate-rejection
     tags: [backend-api]
-    code: spec-cli/src/opencode.ts
+    code: [spec-cli/src/opencode.ts]
     description: >-
-      Through the running product: dispatch a real opencode worker on a trivial task and let it answer
-      WITHOUT declaring. Its session.idle fires the plugin's Stop dispatch; the stop-gate emits
-      decision:block. Read the pane/conversation for what the plugin injected, and the store
-      record/timeline for the state flow that follows.
+      Live-behavior matrix row (run by `spex eval matrix <launcher>`): dispatch a real worker of
+      this harness with a controlled prompt that answers one line and stops WITHOUT declaring, then
+      watch the settle from the outside — no steering, no help.
     expected: >-
-      The rejection is never dropped (the pi-harness lesson): the gate's block visibly re-enters the
-      conversation via client.session.prompt, the agent reacts to it with a real declaration
-      (done/ask/park), and the board flows out of `active` into the declared state. The injected text is
-      the gate's REASON — human-readable teaching prose with its newlines intact — not the raw
-      {"decision":"block",...} wire JSON (claude renders the reason field, codex gets the stderr bridge;
-      opencode must not be the one harness whose agent reads escaped wire format).
+      The stop-gate's rejection reaches the session — the gate's teach sentinel is planted and the
+      record flows out of `active` into a declared status (asking/review) on its own. The failure
+      signature is a record stuck `active` forever with the rejection silently dropped.
   - name: pretooluse-block-live
     tags: [backend-api]
-    code: spec-cli/src/opencode.ts
+    code: [spec-cli/src/opencode.ts]
     description: >-
-      Against a LIVE opencode worker: drop a temporary surface:hook node (PreToolUse, block:true,
-      guarding one specific path) into the worker's worktree .plugins, run spex materialize there
-      (dispatch.sh re-reads the tree-slot manifest per event — no opencode restart), then tell the agent
-      to touch the guarded path. Remove the node + re-materialize afterwards.
+      Matrix row: plant a transient `surface: hook` node (PreToolUse, block: true) guarding one
+      marked file in the live worker's worktree, `spex materialize` there, then tell the worker to
+      modify the guarded file; sweep the node and re-materialize afterwards.
     expected: >-
-      tool.execute.before throws on the guarded touch: the tool call is genuinely aborted (the guarded
-      file never changes) and the hook's reason is visible to the agent in the conversation, who reports
-      being blocked. After the node is removed and the manifest recompiled, the same touch passes —
-      the block was the manifest's doing, live-toggleable without relaunching the harness.
+      The tool call is genuinely blocked — the guarded file's content is untouched — and the
+      handler's OWN reason (a unique marker) is visible to the agent, who reports it; the session
+      continues normally after the block.
   - name: ask-note
     tags: [backend-api]
     description: >-
-      A live opencode worker runs `spex session ask --note '<question>'` (its own worker verb, from
-      inside the worktree with no --session flag). Read the board and the store record.
+      Matrix row: the live worker runs `spex session ask --note '<question>'` (its own declaration
+      verb, from inside its worktree) with a unique marker in the note.
     expected: >-
-      The record flips to asking with the note stored verbatim; `spex session ls` shows status asking
-      plus the note text; the concurrency slot frees (asking waits cheap). The CLI's confirmation text
-      is shown to the agent so it knows the claim landed.
+      The record flips to `asking` with the note carried verbatim where the board reads it (`spex
+      session show`), attributed to the right record.
   - name: deliver-mid-turn
     tags: [backend-api]
     description: >-
-      `spex session send` to an opencode worker while a turn is IN FLIGHT (the agent mid-answer), under
-      normal board-probe pressure. Compare with deliver-second-message (the idle-send reading): count
-      injected copies in opencode's message store and read the send's exit code.
+      Matrix row: `spex session send` a task to the settled (idle) worker that starts a long turn,
+      then send a SECOND message while that turn is in flight — all under normal board-probe
+      pressure (the runner polls the board throughout).
     expected: >-
-      The send exits 0 with parse-confirmed "sent" — the daemon confirms at parse time even though the
-      injection queues behind the running turn — and the message lands exactly ONCE, answered when the
-      current turn ends. No duplicate injection, no false negative.
+      Both sends exit 0; the idle send lands EXACTLY once (no duplicate injection of the message
+      text); the mid-turn send reaches the LIVE turn — its steer marker shows in that same turn's
+      output — never dropped, never duplicated.
   - name: resume-continuity
     tags: [backend-api]
     description: >-
-      Seed a live opencode worker with a token to remember, `spex session stop` it (tmux killed, worktree
-      kept), then `spex session resume` and ask for the token back. Repeat the cycle with the record's
-      harness_session_id cleared to force the --continue fallback route.
+      Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux
+      killed, worktree kept), `spex session resume` it, then ask for the token back without
+      repeating it.
     expected: >-
-      Resume relaunches via the --resume <id> marker → `--session <id>`: the SAME opencode conversation
-      continues (the token is recalled, the message history is one thread). With harness_session_id
-      absent the --continue marker re-attaches opencode's last session in the worktree — same
-      conversation again, both routes continuous, and the board returns to online/working.
+      The resumed agent continues the SAME conversation — it answers with the seeded token from
+      prior context in a fresh RECALL=<token> line — never a fresh empty session; the board returns
+      to online.
   - name: liveness-signals
     tags: [backend-api]
     description: >-
-      Kill a live opencode worker's TUI process out from under the board, read the board's liveness;
-      relaunch via resume and read it again. Check both signals: the plugin's rendezvous socket listener
-      (preferred) and the launch-registered agent.pid kill-0 fallback.
+      Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane (the
+      kill lands outside the launcher boot-grace window; the tmux window and any stale socket file
+      stay), read board liveness until it flips; then `spex session resume` and read again.
     expected: >-
-      Dead TUI reads offline promptly (no immortal `working`); after resume the session reads online
-      again with a live socket listener AND a fresh agent.pid. A plugin that failed to load would still
-      read honestly from the pid signal — the fallback exists and the preferred signal is the socket.
+      Liveness reads `offline` within seconds of the kill — a stale socket FILE never reads as
+      alive; the adapter's own per-harness signal decides — and after resume the session reads
+      online again.
   - name: commit-gate-rejection
     tags: [backend-api]
     description: >-
-      A live opencode worker with UNCOMMITTED work on its node branch declares
-      `spex session done --propose merge` and stops. Watch the Stop dispatch, the injected text, and
-      the record's final state.
+      Matrix row: the runner plants an uncommitted file in the live worker's worktree and the worker
+      runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a
+      committed re-proposal must be accepted.
     expected: >-
-      The stop-gate rejects the dishonest proposal: the block reason re-enters the conversation naming
-      the uncommitted files and the commit-first ritual; the session never stands as a false
-      review/done — it either commits and re-declares, or the gate's escape downgrades it to asking.
+      The dirty proposal is rejected at settle with the reason delivered into the session (the
+      record never stands as review while the tree is dirty); once the work is committed the same
+      proposal is accepted (status review) and the commit carries the `Session:` trailer attributing
+      it to this record.
   - name: close-residue
     tags: [backend-api]
     description: >-
-      `spex session close` a live opencode worker (proposal or not), then sweep the box: tmux -L
-      spexcode sessions, surviving opencode processes for that worktree, the .worktrees/ entry, the
-      node branch, and the rendezvous socket dir.
+      Matrix row: `spex session close` the worker, then sweep the box — tmux window, surviving
+      processes of that worktree, the worktree directory and node branch, the session record and its
+      global store dir.
     expected: >-
-      Zero residue: the tmux session is gone, no opencode process for that worktree survives, the
-      worktree directory and node branch are removed, and the per-session rendezvous socket is swept.
-      The global store dir dies with the session (close is retirement — the documented sweep; durable
-      history lives in git and the eval filings, not the record).
+      Zero residue: the tmux window is gone, no process of that worktree survives, worktree and
+      branch are retired, and the session's record/store dir is swept (durable history lives in git
+      and the eval filings, not the record).
 ---
 
 Measured YATU through the generated artifacts and the real CLI: the plugin file the adapter actually

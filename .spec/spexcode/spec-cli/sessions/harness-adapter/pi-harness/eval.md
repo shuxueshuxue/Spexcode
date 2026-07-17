@@ -29,73 +29,80 @@ scenarios:
   - name: stop-gate-bridge
     tags: [backend-api]
     description: >-
-      YATU: dispatch a pi worker with a trivial one-turn prompt and let it settle undeclared. The Stop gate
-      blocks the claude way — `{"decision":"block","reason":…}` on dispatch stdout, exit 2, stderr EMPTY —
-      so this measures whether the generated extension carries a stdout-JSON rejection back into the
-      session (agent_settled) and into a specific PreToolUse block reason (tool_call).
+      Live-behavior matrix row (run by `spex eval matrix <launcher>`): dispatch a real worker of
+      this harness with a controlled prompt that answers one line and stops WITHOUT declaring, then
+      watch the settle from the outside — no steering, no help.
     expected: >-
-      Right after the turn settles, the gate's reason text lands in the pi session as an injected user
-      message; the agent declares (`spex session …`) and session.json flows out of `active` to the declared
-      status (asking/awaiting). A PreToolUse block carries the handler's own reason, not a generic
-      placeholder. The failure signature is a record stuck `active` forever with `stop-gate-taught` present
-      and a frozen timeline — the rejection silently dropped.
+      The stop-gate's rejection reaches the session — the gate's teach sentinel is planted and the
+      record flows out of `active` into a declared status (asking/review) on its own. The failure
+      signature is a record stuck `active` forever with the rejection silently dropped.
   - name: pi-pretooluse-block
     tags: [backend-api]
     description: >-
-      YATU: in an adopter repo, add a temporary `surface: hook` node (events [PreToolUse], block: true)
-      whose script emits `{"decision":"block","reason":…}` on stdout for a marked path, materialize, then
-      dispatch a pi worker told to touch that path. Remove the node after.
+      Matrix row: plant a transient `surface: hook` node (PreToolUse, block: true) guarding one
+      marked file in the live worker's worktree, `spex materialize` there, then tell the worker to
+      modify the guarded file; sweep the node and re-materialize afterwards.
     expected: >-
-      The tool call is genuinely blocked — the forbidden file is never touched — and the agent sees the
-      handler's OWN reason text (visible in the pane), not a generic placeholder; the session continues
-      normally after the block.
+      The tool call is genuinely blocked — the guarded file's content is untouched — and the
+      handler's OWN reason (a unique marker) is visible to the agent, who reports it; the session
+      continues normally after the block.
   - name: pi-ask-note
     tags: [backend-api]
     description: >-
-      YATU: a dispatched pi worker runs `spex session ask --note '<question>'` as its declaration.
+      Matrix row: the live worker runs `spex session ask --note '<question>'` (its own declaration
+      verb, from inside its worktree) with a unique marker in the note.
     expected: >-
-      The record flips to `asking` and the note carries the question verbatim where the board reads it
-      (`session ls` / the graph payload).
+      The record flips to `asking` with the note carried verbatim where the board reads it (`spex
+      session show`), attributed to the right record.
   - name: pi-deliver-steer
     tags: [backend-api]
     description: >-
-      YATU: `spex session send` to an IDLE pi session, then a second send while a turn is RUNNING
-      (pi delivers via `sendUserMessage {deliverAs: steer}` over the rendezvous socket).
+      Matrix row: `spex session send` a task to the settled (idle) worker that starts a long turn,
+      then send a SECOND message while that turn is in flight — all under normal board-probe
+      pressure (the runner polls the board throughout).
     expected: >-
-      The idle send exits 0 and lands as EXACTLY ONE injected user message that starts a new turn; the
-      mid-turn send also lands exactly once, steering the LIVE turn (its effect visible in that same
-      turn's output) — never dropped, never duplicated.
+      Both sends exit 0; the idle send lands EXACTLY once (no duplicate injection of the message
+      text); the mid-turn send reaches the LIVE turn — its steer marker shows in that same turn's
+      output — never dropped, never duplicated.
   - name: pi-resume
     tags: [backend-api]
     description: >-
-      YATU: `spex session stop` a pi session (worktree kept), then `spex session resume` it — the relaunch
-      rides `pi --session <id>`.
+      Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux
+      killed, worktree kept), `spex session resume` it, then ask for the token back without
+      repeating it.
     expected: >-
-      The resumed TUI continues the SAME pi conversation — prior turns are present and referencable (the
-      agent can answer from earlier context) — never a fresh empty session; a missing session file fails
-      loud rather than silently minting a new one.
+      The resumed agent continues the SAME conversation — it answers with the seeded token from
+      prior context in a fresh RECALL=<token> line — never a fresh empty session; the board returns
+      to online.
   - name: pi-liveness
     tags: [backend-api]
     description: >-
-      YATU: kill the pi TUI process of a live session (the rendezvous listener dies with it), read board
-      liveness; then resume and read again.
+      Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane (the
+      kill lands outside the launcher boot-grace window; the tmux window and any stale socket file
+      stay), read board liveness until it flips; then `spex session resume` and read again.
     expected: >-
-      Liveness reads `offline` within seconds of the kill (the socket connect probe refuses — the stale
-      socket FILE never reads as alive); after resume it reads `online` again.
+      Liveness reads `offline` within seconds of the kill — a stale socket FILE never reads as
+      alive; the adapter's own per-harness signal decides — and after resume the session reads
+      online again.
   - name: pi-commit-gate
     tags: [backend-api]
     description: >-
-      YATU: a dispatched pi worker with UNCOMMITTED files runs `spex session done --propose merge`.
+      Matrix row: the runner plants an uncommitted file in the live worker's worktree and the worker
+      runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a
+      committed re-proposal must be accepted.
     expected: >-
-      The declaration is rejected and the reason names the uncommitted work (the commit-before-declare
-      contract), delivered into the session so the agent acts on it; after committing, the same proposal
-      is accepted.
+      The dirty proposal is rejected at settle with the reason delivered into the session (the
+      record never stands as review while the tree is dirty); once the work is committed the same
+      proposal is accepted (status review) and the commit carries the `Session:` trailer attributing
+      it to this record.
   - name: pi-close-residue
     tags: [backend-api]
     description: >-
-      YATU: `spex session close` a pi session, then sweep for residue: tmux window, pi process tree,
-      worktree, rendezvous socket, session record.
+      Matrix row: `spex session close` the worker, then sweep the box — tmux window, surviving
+      processes of that worktree, the worktree directory and node branch, the session record and its
+      global store dir.
     expected: >-
-      Zero residue — the tmux window is gone, no pi process of that session survives, the worktree and
-      node branch are retired, and the rendezvous socket path is unlinked.
+      Zero residue: the tmux window is gone, no process of that worktree survives, worktree and
+      branch are retired, and the session's record/store dir is swept (durable history lives in git
+      and the eval filings, not the record).
 ---

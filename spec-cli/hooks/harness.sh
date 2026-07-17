@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # @@@ harness.sh - the SHELL face of the [[harness-adapter]] (spec-cli/src/harness.ts). The hook scripts run
 # as pure shell, so they cannot import the TS adapter; this sourced library is its mirror. dispatch.sh sources
-# it and exports SPEXCODE_HARNESS (claude|codex) — baked into the shim by each adapter, so a hook learns its
+# it and exports SPEXCODE_HARNESS (claude|codex|opencode) — baked into the shim by each adapter, so a hook learns its
 # harness deterministically, never by sniffing the payload shape. EVERY harness-divergent payload-parse lives
 # HERE; the hook scripts stay harness-agnostic and just call hp_* (the one place Claude's tool names appear in
 # shell, plus codex's Bash-command mapping). The session-id + global-store resolution is harness-agnostic and

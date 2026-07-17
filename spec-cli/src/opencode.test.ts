@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { opencodePluginSource, OPENCODE_TOOL_NAMES } from './opencode.js'
 import { HARNESSES, harnessById, opencodeHarness, opencodeLaunchCommand, deliverViaRendezvous, rvSock } from './harness.js'
@@ -50,6 +50,34 @@ test('launch script: prompt tail → --prompt; --resume marker → --session; --
   assert.equal(run('--resume oc_abc'), 'STUB:--auto --session oc_abc')
   assert.equal(run('--continue'), 'STUB:--auto --continue')
   assert.equal(run(''), 'STUB:--auto')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('the REAL dispatch.sh consumes the `opencode` harness id and routes the claude-family parse (mark-active flips a record)', () => {
+  // exactly the shape the generated plugin emits: `dispatch.sh opencode <Event>` + a claude-shaped payload.
+  // If the dispatcher's id case ever drops `opencode`, $1 would be consumed as the EVENT and every hook goes
+  // silently inert — this pins the detector with the real dispatcher and the real mark-active hook.
+  const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
+  const dir = mkdtempSync(join(tmpdir(), 'spex-oc-dispatch-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', 'sid_OC'), { recursive: true })
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'mark-active', 'mark-active.sh')
+  writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  writeFileSync(join(runtime, 'hooks-manifest'), 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
+  const rec = join(runtime, 'sessions', 'sid_OC', 'session.json')
+  writeFileSync(rec, JSON.stringify({ session_id: 'sid_OC', governed: true, status: 'idle', proposal: '', note: '' }, null, 2))
+  const r = spawnSync('bash', [dispatch, 'opencode', 'PreToolUse'], {
+    cwd: dir,
+    env: { ...process.env, SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'), SPEXCODE_HOME: home },
+    input: '{"session_id":"sid_OC","cwd":"/x","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}',
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(readFileSync(rec, 'utf8'), /"status": "active"/, 'the claude-family default branch parsed the payload and flipped the record')
   rmSync(dir, { recursive: true, force: true })
 })
 

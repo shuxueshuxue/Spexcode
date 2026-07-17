@@ -81,14 +81,15 @@ same-client-size no-op). So window size is a **vote**, arbitrated by tmux's `ign
   of the flag. Two instances with *live sized viewers* on one session still converge latest-wins, as ever.
 
 A supervisor keeps a **warm** client for every *detached* live session — so a tab paints fast — and
-**skips** any session a human is already attached to in their own terminal. It holds the warm client at
-the **last-known viewer size** (per session, then a global/fixed fallback), resizing a stale one off-screen
-toward it, so a warm pane is already roughly right before anyone looks — the guess the handshake makes
-exact. Warm clients are neutral, so the hold's staleness guard reads the **window's** real size, not the
-client's: while a sized viewer votes anywhere on the socket the hold is suppressed and simply retries each
-tick, landing on the first tick after the socket goes quiet — **deferred, not lost**. A voting client keeps
-the client-size guard, so genuine viewer-vs-viewer contention stays latest-wins instead of a per-tick
-ping-pong.
+**skips** any session a human is already attached to in their own terminal. A warm client is spawned at the
+last-known viewer size (per session, then a global/fixed fallback) and then **left alone**: the supervisor
+never re-sizes it off-screen. Window geometry is owned by **sized viewers alone** — a bare attach asserts
+nothing and neutral clients yield, so between viewers a window simply keeps the last sized viewer's
+geometry; there is no drift for an off-screen hold to correct, and the size-first handshake draws the next
+first frame exact anyway. (The hold this replaces was measured to be a per-tick capture + full-frame
+broadcast to every hidden pane of every unwatched session whenever anyone voted — its suppressed retry was
+never the budgeted no-op.) So an unwatched warm bridge does **no periodic work at all**: no refresh-client,
+no capture, no broadcast — a hidden pane's only idle traffic is the terminal socket's keep-alive ping.
 
 ## first-visible, not first-connect
 

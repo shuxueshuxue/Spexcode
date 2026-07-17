@@ -115,9 +115,9 @@ async function reload(reason: string): Promise<void> {
 // client-side timeout-kill left the client's UPSTREAM socket half-open to the child (the old handler bailed
 // only on `error`, so a clean FIN / a silent drop never reaped the upstream) — 135 leaked conns piled on the
 // child and it looked dead. So a close on either side destroys BOTH (idempotent). The abandoned-but-silent
-// case (no FIN/RST ever arrives) is reaped from the CHILD instead — its HTTP keepAliveTimeout/requestTimeout
-// close an idle/stalled socket, whose close then propagates here — so an active WS/SSE (not idle keep-alive)
-// is never mistaken for abandoned and cut.
+// case (no FIN/RST ever arrives) is reaped from the CHILD instead — its socket-level reaper (reaper.ts)
+// destroys an idle/stalled socket, whose close then propagates here — so an active WS/SSE (not idle
+// keep-alive) is never mistaken for abandoned and cut.
 const proxy = net.createServer((client) => {
   const target = current
   if (!target) { client.destroy(); return }

@@ -458,7 +458,7 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // frame and live bytes arrive as events.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
-// resilientSocket.js, pinned by its test) and DERIVES its dead window (2.5×) and watchdog rate from it.
+// resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
 // A healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
 // silent past its derived window dead (the half-open link a NAT/tunnel kills without a close event), and the
 // traffic itself keeps an idle socket warm through those middleboxes. Text frame; the terminal renders only

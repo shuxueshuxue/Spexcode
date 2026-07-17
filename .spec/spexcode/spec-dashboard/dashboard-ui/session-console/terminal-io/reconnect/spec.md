@@ -32,8 +32,10 @@ socket to that promise — *any* inbound message proves liveness, and an OPEN so
 cadence** (25s: absorbs one dropped ping plus jitter, still fast enough to feel like recovery, not a reload)
 is **presumed dead**, force-dropped, and handed to the same reopen machinery as a real close event. The
 cadence is the contract's **one primitive number** — one constant per side of the wire, the client's a
-mirror of the server's held equal by test (as the board stream's pair is), and every other window (the dead
-window, the watchdog's check rate) **derived** from it, never a free-standing magic number. No separate
+mirror of the server's held equal by test (as the board stream's pair is), the dead window **derived** from
+it, never a free-standing magic number. And detection itself is **event-driven, not a polling loop**: a
+dead-man's switch — one one-shot timer re-armed by every inbound message — so on a healthy link nothing
+ever wakes, and the switch fires exactly once, at the silence deadline. No separate
 recovery path: detection is the only new act; a presumed-dead drop reopens, backs off, and announces itself
 exactly like a genuine drop.
 
@@ -52,7 +54,7 @@ reconcile — which is why reconnection here is a thin **transport** concern, no
 why it does not reintroduce the snapshot-splice scramble [[live-view]] warns against.
 
 The reconnect lives in a small, **framework-agnostic** helper that the terminal wires its open / message /
-state callbacks into; its WebSocket implementation, timers, and clock are **injectable**, so the reconnect
-state machine — backoff schedule, stable-vs-flapping reset, intentional-close suppression, the silence
-watchdog's presumed-dead drop, state transitions — is verifiable headlessly, with no browser and no real
+state callbacks into; its WebSocket implementation and timers are **injectable**, so the reconnect
+state machine — backoff schedule, stable-vs-flapping reset, intentional-close suppression, the dead-man
+switch's presumed-dead drop, state transitions — is verifiable headlessly, with no browser and no real
 network.

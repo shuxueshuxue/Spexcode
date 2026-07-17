@@ -2,18 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createResilientSocket, SERVER_PING_MS, DEAD_MS } from './resilientSocket.js'
 
-// The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl, timers,
-// and clock are injectable, so the silence watchdog — the detector for a HALF-OPEN link, where the peer is
+// The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl and
+// timers are injectable, so the dead-man's switch — the detector for a HALF-OPEN link, where the peer is
 // gone but no close event ever reaches the browser — is verifiable headlessly on a virtual clock. These
-// tests pin the heartbeat contract: any inbound message proves liveness; an OPEN socket silent past
-// `deadMs` is presumed dead, force-dropped, and reopened through the normal backoff machinery.
+// tests pin the heartbeat contract: any inbound message re-arms the switch; DEAD_MS of total silence on
+// an OPEN socket lets it fire once — presumed dead, force-dropped, reopened through the normal backoff.
 
-// virtual clock + timer wheel: setTimeout/setInterval driven by advance(), no real time.
+// virtual clock + timer wheel: setTimeout driven by advance(), no real time.
 function makeClock() {
   let now = 0, seq = 0
   const timers = new Map()
   const setT = (fn, ms) => { const id = ++seq; timers.set(id, { at: now + ms, fn }); return id }
-  const setI = (fn, ms) => { const id = ++seq; timers.set(id, { at: now + ms, fn, every: ms }); return id }
   const clear = (id) => { timers.delete(id) }
   const advance = (ms) => {
     const end = now + ms
@@ -22,13 +21,12 @@ function makeClock() {
       for (const [id, t] of timers) if (t.at <= end && (!next || t.at < next.at)) { next = t; nid = id }
       if (!next) break
       now = next.at
-      if (next.every) next.at = now + next.every
-      else timers.delete(nid)
+      timers.delete(nid)
       next.fn()
     }
     now = end
   }
-  return { now: () => now, setT, setI, clear, advance }
+  return { now: () => now, setT, clear, advance }
 }
 
 // fake WebSocket: opens after 5 virtual ms; never closes on its own unless told to.
@@ -54,8 +52,6 @@ function harness() {
     url: 'ws://x/api/sessions/abc/socket',
     WebSocketImpl: makeWS(clock, sockets),
     setTimeoutImpl: clock.setT, clearTimeoutImpl: clock.clear,
-    setIntervalImpl: clock.setI, clearIntervalImpl: clock.clear,
-    now: clock.now,
     onState: (s) => states.push(s),
     onMessage: (e) => messages.push(e.data),
   })
@@ -99,7 +95,7 @@ test('late events from the force-dropped zombie are ignored', () => {
   assert.equal(messages.length, before, 'superseded-socket guard holds for watchdog drops too')
 })
 
-test('an intentional close() stops the watchdog for good', () => {
+test('an intentional close() disarms the dead-man switch for good', () => {
   const { clock, sockets, sock } = harness()
   clock.advance(10)
   sock.close()
@@ -107,11 +103,11 @@ test('an intentional close() stops the watchdog for good', () => {
   assert.equal(sockets.length, 1, 'no resurrection after close()')
 })
 
-test('a watchdog drop reopens with backoff, not a hammer', () => {
+test('a dead-man drop reopens with backoff, not a hammer', () => {
   const { clock, sockets } = harness()
   clock.advance(10)
-  // one watchdog drop lands: the breach is noticed within half a ping of the DEAD_MS deadline…
-  clock.advance(DEAD_MS + SERVER_PING_MS / 2 - 5)
+  // the switch fires EXACTLY at lastHeard + DEAD_MS (event-driven — no check-cadence slack)…
+  clock.advance(DEAD_MS)
   assert.equal(sockets.length, 1, '…and the replacement waits out the backoff delay first')
   clock.advance(1000)                  // past the 500ms base backoff
   assert.equal(sockets.length, 2, 'exactly one replacement is constructed per drop')

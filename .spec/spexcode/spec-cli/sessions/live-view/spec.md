@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.foreign-instance.ts
+  - spec-cli/test/pty-bridge.fd-leak.ts
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
@@ -29,25 +30,38 @@ an output tap.
 Behind each session is exactly **one** real tmux client *per backend instance*, shared by every viewer of
 that instance — one authoritative pane size, never a size-fight (see the size vote below for how that
 survives a second instance on the same socket). That client is a **control-mode connection**
-(`tmux -CC attach-session`): it speaks tmux's line protocol, so the pty↔tmux boundary is an **event stream,
+(`tmux -C attach-session`): it speaks tmux's line protocol, so the client↔tmux boundary is an **event stream,
 not a poll loop** — bytes are *pushed* as `%output` events and a resize is announced by a `%layout-change`.
 
-**The whole control stream is parsed as bytes — never a string round-trip.** node-pty hands the bridge **raw
-Buffers**; it splits lines on the newline **byte**, un-escapes `%output` at the byte level, and broadcasts the
+**That client is transported over PIPES, never a pty** — a correctness requirement, not a preference.
+Control mode *is* a line protocol, so a terminal buys the bridge nothing, while a pty master fd is **not
+close-on-exec**: each client inherited every earlier client's master, so a killed bridge's pts outlived it
+inside a live sibling and never hit `EIO` — tmux kept writing to a client that would never drain and its
+**server's** event loop blocked forever in one `write(2)`, freezing every bridge on the socket at once
+(every terminal black). Ordinary child stdio **is** close-on-exec, so a piped client inherits nothing and
+the wedge has no mechanism; the bridge needs no native pty dependency at all. Two things follow. It is
+`-C`, not `-CC` — the doubled flag only adds echo suppression, which *requires* a tty and emits the DCS
+wrapper whose stripping once ate an OSC 8 terminator (below). And a pipe has no winsize, so a client states
+its own size with the same `refresh-client -C` used everywhere else: **one** mechanism for size, no
+terminal side-channel.
+
+**The whole control stream is parsed as bytes — never a string round-trip.** The client's stdout hands the
+bridge **raw Buffers**; it splits lines on the newline **byte**, un-escapes `%output` at the byte level, and broadcasts the
 pane's **raw UTF-8 bytes** verbatim (the `capture-pane` seed is joined and framed at the byte level too). This
-is the whole fix for intermittent `�` corruption: node-pty's own UTF-8 decode chops the stream on OS-read
+is the whole fix for intermittent `�` corruption: a UTF-8 decode at the transport chops the stream on OS-read
 boundaries, so a wide character (CJK, box-drawing, emoji) straddling two reads becomes a U+FFFD **before the
 bridge ever sees it**, unrecoverable. Byte-splitting is safe because tmux escapes only the C0 controls and
 backslash as octal `\NNN` (all `< 0x80`) and passes high bytes through **raw**, and a newline never falls
 inside a multi-byte character — so each wide char stays whole in one line, and un-escaping (each `\NNN` → its
 one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
 
-Byte-verbatim covers **escapes that end a captured row**: the control-mode DCS wrapper (`\x1b\\` on exit) is
-stripped from **protocol** lines only — a `capture-pane` reply **body** is pushed **raw**. A pane row can end
-in `\x1b\\` as the ST closing an **OSC 8 hyperlink** (which Claude Code emits for URLs and xterm renders
-underlined); eating it leaves the link unterminated, so xterm never closes it and underlines the **rest of the
-screen** — the "whole terminal goes underlined when I scroll" glitch. The wrapper never rides inside a reply
-block, so the strip stays on the protocol path and the body keeps its terminators.
+Byte-verbatim covers **escapes that end a captured row**. A pane row can end in `\x1b\\` as the ST closing an
+**OSC 8 hyperlink** (which Claude Code emits for URLs and xterm renders underlined); eating it leaves the link
+unterminated, so xterm never closes it and underlines the **rest of the screen** — the "whole terminal goes
+underlined when I scroll" glitch. Nothing can eat it now: `-C` emits no DCS wrapper, so the bridge strips
+nothing and every line — protocol or `capture-pane` body — keeps its terminators. The glitch came from a
+wrapper that only exists to let a control stream share a real terminal; on a dedicated pipe the whole class
+is gone rather than avoided.
 
 **Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
 `%layout-change` — even a same-size no-op emits one — so the bridge sets the size, then **waits to be told**

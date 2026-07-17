@@ -28,14 +28,12 @@
     "web": "cd spec-dashboard && npm run dev",
     "lint": "cd spec-cli && npm run -s lint",
     "hooks": "bash scripts/install-hooks.sh",
-    "prepack": "node scripts/prepack.mjs",
-    "postinstall": "node -e \"try{require('fs').readdirSync('node_modules/node-pty/prebuilds').forEach(d=>{try{require('fs').chmodSync('node_modules/node-pty/prebuilds/'+d+'/spawn-helper',0o755)}catch{}})}catch{}\""
+    "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@hono/node-ws": "^1.0.4",
     "hono": "^4.6.14",
-    "node-pty": "^1.0.0",
     "tsx": "^4.19.2"
   },
   "devDependencies": {

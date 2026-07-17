@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, claudeHeadlessOps, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -208,8 +208,8 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
     } },
   }))
   // name-sorted, exactly the config's real launchers — no ghost duplicates. Each row carries its optional
-  // headlessCmd (null when unset) and the backend-computed modes list — W1 baseline: every adapter's headless
-  // capability is null, so every launcher is interactive-only regardless of headlessCmd.
+  // headlessCmd (null when unset) and the backend-computed modes list — none of these configure a headlessCmd,
+  // so even the claude rows (whose adapter carries the needsCmd headless capability) stay interactive-only.
   assert.deepEqual(launcherList(root), [
     { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
     { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
@@ -242,8 +242,9 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
 
 // [[launcher-select]] headless — a launcher may carry TWO complete commands (`cmd` interactive, `headlessCmd`
 // one-shot). The parse layer passes headlessCmd through untouched (whole command, never rewritten), reads an
-// empty string as absent, and computes each row's `modes` from the ADAPTER capability — which in the W1
-// baseline is null on every adapter, so headless is offered nowhere yet.
+// empty string as absent, and computes each row's `modes` from the ADAPTER capability — claude carries
+// claudeHeadlessOps (needsCmd), so a claude launcher offers headless exactly when a headlessCmd is configured;
+// codex/pi/opencode still carry null and stay interactive-only.
 test('launchers parse headlessCmd (empty string = absent) and carry backend-computed modes', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-headless-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
@@ -260,25 +261,31 @@ test('launchers parse headlessCmd (empty string = absent) and carry backend-comp
   // resolveLauncher returns the same extended shape (no headless validation here — that is create-time).
   assert.equal(resolveLauncher('reclaude', root).headlessCmd, '/opt/reclaude --dangerously-skip-permissions -p')
   assert.equal(resolveLauncher('codex', root).headlessCmd, null)
-  // W1 baseline: EVERY adapter's headless capability is null → interactive-only everywhere, even with a
-  // configured headlessCmd. The capability flips per harness in its own implementation, not here.
-  for (const h of HARNESSES) assert.equal(h.headless, null, `${h.id} ships headless: null in W1`)
-  for (const l of [blank, codex, reclaude]) assert.deepEqual(l.modes, ['interactive'])
-  assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive'])
+  // capability state: claude ships claudeHeadlessOps (a needsCmd one-shot form); the other three still null.
+  assert.equal(claudeHarness.headless, claudeHeadlessOps)
+  assert.equal(claudeHarness.headless?.needsCmd, true)
+  for (const h of HARNESSES) if (h.id !== 'claude') assert.equal(h.headless, null, `${h.id} still ships headless: null`)
+  // so modes: a claude launcher WITH headlessCmd offers both; without one (needsCmd unmet) it stays
+  // interactive-only; codex (null capability) stays interactive-only even if a headlessCmd were configured.
+  assert.deepEqual(reclaude.modes, ['interactive', 'headless'])
+  for (const l of [blank, codex]) assert.deepEqual(l.modes, ['interactive'])
+  assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive', 'headless'])
+  assert.deepEqual(launcherModes('claude', null), ['interactive'])
+  assert.deepEqual(launcherModes('codex', 'anything'), ['interactive'])
   assert.deepEqual(launcherModes('no-such-harness', 'x'), ['interactive'])   // unknown harness contributes no headless, list stays renderable
 })
 
-test('pinnedLaunchCmd: interactive pins cmd; headless without the capability fails loud (the W1 400)', () => {
+test('pinnedLaunchCmd: interactive pins cmd; claude headless pins headlessCmd; a null-capability harness fails loud', () => {
   const l = { name: 'reclaude', harness: 'claude', cmd: '/opt/reclaude --skip', headlessCmd: '/opt/reclaude --skip -p' }
   assert.equal(pinnedLaunchCmd(claudeHarness, l, 'interactive'), '/opt/reclaude --skip')
-  // all adapters carry headless: null, so a headless create is rejected with the harness named — the expected
-  // end state of this task; W2/W3 flip the capability per harness.
-  assert.throws(() => pinnedLaunchCmd(claudeHarness, l, 'headless'), /no headless capability/)
+  // claude's capability is live (claudeHeadlessOps, needsCmd) → the pin IS the headlessCmd, verbatim.
+  assert.equal(pinnedLaunchCmd(claudeHarness, l, 'headless'), '/opt/reclaude --skip -p')
+  // codex still carries headless: null, so a headless create is rejected with the harness named (until its
+  // own app-server-side implementation lands).
   assert.throws(() => pinnedLaunchCmd(codexHarness, l, 'headless'), /no headless capability/)
 })
 
-test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCmd (missing → fail loud), server-side pins cmd', () => {
-  // fake capability objects — the contract W2/W3 implement against; the pin decision must route on the
+test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCmd (missing → fail loud), server-side pins cmd', () => {  // fake capability objects — the contract W2/W3 implement against; the pin decision must route on the
   // OBJECT, never on which harness it is.
   const stub: Omit<HarnessHeadless, 'needsCmd'> = {
     launchCmd: () => '', liveness: () => 'offline', deliver: async () => ({ ok: false }), resumeArg: () => '',
@@ -296,6 +303,35 @@ test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCm
   assert.equal(pinnedLaunchCmd(serverSide, { ...l, headlessCmd: null }, 'headless'), '/opt/reclaude --skip')
   // and interactive is untouched by the capability's presence.
   assert.equal(pinnedLaunchCmd(needsCmd, l, 'interactive'), '/opt/reclaude --skip')
+})
+
+// [[harness-adapter]] claude headless ops — the capability object's pure surface. launchCmd embeds the pinned
+// headlessCmd WHOLE (zero parsing; a headless record without a pin is corruption → fail loud, never a silent
+// interactive fallback); resumeArg is empty (a headless session's continuation is its next delivery, so
+// reopen must never hand the one-shot command a fabricated prompt tail).
+test('claudeHeadlessOps: launchCmd embeds the pinned headlessCmd whole (missing → fail loud); resumeArg is empty', () => {
+  assert.equal(claudeHeadlessOps.needsCmd, true)
+  assert.equal(claudeHeadlessOps.launchCmd('some-id', undefined, '/opt/reclaude --skip -p'), '/opt/reclaude --skip -p')
+  assert.throws(() => claudeHeadlessOps.launchCmd('some-id', undefined, undefined), /no pinned headlessCmd/)
+  assert.equal(claudeHeadlessOps.resumeArg({} as never), '')
+})
+
+// TURN-scoped liveness: online only WHILE a one-shot turn executes. Primary = the registered agent.pid
+// hot-tier verdict (both launch.sh and the injected turn.sh re-register it); a dead pid reads offline — which
+// between turns is exactly right, since reconcile shows the record's declared lifecycle and only an
+// UNDECLARED `active` ever surfaces this offline (an honest crash). Legacy fallback (no agent.pid) is the
+// claude-ish descendant tree walk — the pane's own shell never counts.
+test('claudeHeadlessOps liveness is turn-scoped: pidAlive verdict wins; fallback walks the claude-ish pane tree', () => {
+  const rec = {} as never
+  assert.equal(claudeHeadlessOps.liveness(rec, false, undefined, { pidAlive: true }), 'offline')   // window gone trumps everything
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { pidAlive: true }), 'online')     // a turn is executing
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { pidAlive: false }), 'offline')   // between turns / crashed — declared status is the between-turn truth
+  // legacy fallback: pid unregistered → the descendant tree scan (claude runs as claude/node BELOW the pane shell)
+  const running = new Map([[100, { ppid: 1, comm: 'bash' }], [200, { ppid: 100, comm: 'bash' }], [300, { ppid: 200, comm: 'claude' }]])
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: running }), 'online')
+  const idle = new Map([[100, { ppid: 1, comm: 'bash' }]])
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: idle }), 'offline')
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, {}), 'offline')                    // nothing to probe = not provably running
 })
 
 test('defaultSessionMode: absent → interactive; explicit headless honored; an unrecognized value fails loud', () => {

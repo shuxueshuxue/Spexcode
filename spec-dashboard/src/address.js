@@ -13,7 +13,8 @@ export function addressHash(address) {
   if (address.kind === 'graph-node') return routeHash('graph')
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
-    return routeHash('sessions', [address.sessionId, 'eval', ...(address.nodeId && address.scenario ? [address.nodeId, address.scenario] : [])].join('/'))
+    const segs = [address.sessionId, 'eval', ...(address.nodeId && address.scenario ? [address.nodeId, address.scenario] : [])]
+    return routeHash('sessions', segs.join('/'))
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)
@@ -29,9 +30,6 @@ export function navigateAddress(address, { onFocusNode, onOpenSession } = {}) {
   } else if (address.kind === 'session') {
     if (onOpenSession) onOpenSession(address.sessionId)
     else navigate('sessions', address.sessionId)
-  } else if (address.kind === 'session-eval') {
-    // hash-only: the sessions page applies the /eval sub-route itself (parseRoute would drop it here).
-    window.location.hash = addressHash(address)
   } else {
     const { page, param } = parseRoute(addressHash(address))
     navigate(page, param)

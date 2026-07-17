@@ -32,8 +32,9 @@ pages**, side by side with the graph and the board.
   page — it never scrolls away and never overlays content.
 - **The URL is the page state.** Routes are hash paths — `#/graph` (home; any unknown hash lands here),
   `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab; a tab address may carry the console's in-page
-  entrance past the id — `#/sessions/<sel>/eval[/<node>/<scenario>]`, parsed as the route's `sub` segments
-  and applied ONCE by the sessions page as [[address-routing]]'s `session-eval` address, then the echo
+  entrance past the id — `#/sessions/<sel>/eval[/<node>/<scenario>]`, riding the SAME multi-segment param
+  every deep page uses — the sessions page splits off the id and applies the rest ONCE as
+  [[address-routing]]'s `session-eval` address, then the echo
   normalizes back to the plain tab), `#/evals` (+ `#/evals/<node>/<scenario>`, the
   canonical eval address — [[evals-view]] owns what it selects; the route layer just carries the
   multi-segment param, each segment encoded on its own so the path shape survives), `#/issues`,

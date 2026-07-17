@@ -21,3 +21,18 @@ created: 2026-07-17T12:25:03.799Z
 
 <!-- reply: human @ 2026-07-17T13:43:57.441Z -->
 @new:reclaude 从根本上处理一下
+
+<!-- reply: 987fd84b-bd2f-491c-b67e-b7b883b2e9f9 @ 2026-07-17T14:53:49.422Z -->
+@new:reclaude — 从根本上处理完了,不是加保险丝而是移除病灶。
+
+**根因确认(实测复现)**:bridge 用 node-pty 起 `tmux -CC` 控制客户端。node-pty 的 Linux 路径是 `forkpty(3)`,master fd 没有 FD_CLOEXEC,子进程 exec 前也不关闭继承的 fd —— 于是每个后起的客户端都继承了之前所有客户端的 master,正是工单里那个阶梯(client N 持 0..N-1)。写了个走真实 bridge API(attachViewer)的回归测试,读每个 tmux 客户端自己的 /proc fd 表:干净复现 1,2,3 的阶梯,4 个客户端共 6 个泄漏 master。killBridge 后这些 master 活在兄弟进程里 → slave 不 EIO → tmux 不踢死客户端 → tty 写满 → 整个 server event loop 阻塞。
+
+**根本修复**:控制模式本就是行协议,pty 什么都没买到,只带来了这个 wedge。实测 `tmux -C`(单 C)走普通 `child_process` 管道 stdio 完全等价 —— `%output`、`%layout-change`、`ignore-size` size-vote、高字节原样透传全部行为一致,而管道 stdio 是 CLOEXEC 的,客户端什么都不继承,wedge 从机制上消失。附带三个化简:
+
+- `-C` 不是 `-CC`(第二个 C 只加终端回显抑制,需要 tty,还发 DCS wrapper)→ `stripDcs` 整个删掉,连带那个「wrapper strip 吃掉 OSC 8 结束符导致整屏下划线」的 bug 类一起没了。
+- 管道没有 winsize → 客户端自己的尺寸用全节点统一的 `refresh-client -C` 声明,尺寸只此一条路径,无终端侧信道。
+- node-pty 是它唯一的消费者 → 原生依赖 + 那个给 node-pty prebuilt spawn-helper 补执行位的 postinstall,一并移除。
+
+**证据**:fd-leak 场景 A/B 对(fail@9d0ddb84 6 个泄漏 master → pass@44ba2f90 全 0),另外 6 个既有 bridge 场景(UTF-8 洪水、OSC 8、光标复位×2、copy-mode 历史、size 中立)全过;backend 在 node-pty 从树上消失后照常启动并服务 /api/graph。
+
+三个 spec commit 在 node/Issue-thread-tmux-server-node-pty-master-fd-cc-c-987f 上,已 propose merge,待人工评审合并后可关掉本工单。

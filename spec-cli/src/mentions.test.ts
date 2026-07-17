@@ -5,9 +5,9 @@ import { parseMentions, resolveActors, spawnParent, newWorkerPrompt, summarize, 
 
 // ---- parseMentions: the pure grammar ----
 
-test('parseMentions: actors at word boundaries, nodes in [[]], each deduped first-seen', () => {
-  const { actors, nodes } = parseMentions('hey @abc look at [[sessions]] and @new — @abc again, also [[graph]] [[sessions]]')
-  assert.deepEqual(actors, ['abc', 'new'])
+test('parseMentions: actors at word boundaries, qualified @new, and nodes in [[]] are deduped first-seen', () => {
+  const { actors, nodes } = parseMentions('hey @abc look at [[sessions]] and @new — @new:codex @abc again, also [[graph]] [[sessions]] @new:codex')
+  assert.deepEqual(actors, ['abc', 'new', 'new:codex'])
   assert.deepEqual(nodes, ['sessions', 'graph'])
 })
 
@@ -28,6 +28,11 @@ test('resolveActors: new → sentinel; online id-prefix → session; offline-onl
   assert.equal((hit as { session: ActorSession }).session.id, 'abcd1234')
   assert.equal(dead.kind, 'unresolved')   // a dead session is never summoned
   assert.equal(nobody.kind, 'unresolved')
+})
+
+test('resolveActors: launcher-qualified new carries the explicit launcher', () => {
+  const [fresh] = resolveActors(['new:claude-glm'], [])
+  assert.deepEqual(fresh, { token: 'new:claude-glm', kind: 'new', launcher: 'claude-glm' })
 })
 
 // ---- spawnParent: any spawn's parent = its originator, session ids only ----
@@ -63,6 +68,10 @@ test('summarize: a spawn onto a settled thread warns in the outcome line', () =>
   const s = summarize([{ token: 'new', result: 'spawned', detail: 'abcd1234', note: 'thread landed' }])
   assert.ok(s.includes('new→abcd1234 ⚠ thread landed'))
   assert.equal(summarize([{ token: 'new', result: 'spawned', detail: 'abcd1234' }]), '@ new→abcd1234')
+})
+
+test('summarize: a qualified spawn keeps the selected launcher visible', () => {
+  assert.equal(summarize([{ token: 'new:codex', result: 'spawned', detail: 'abcd1234' }]), '@ new:codex→abcd1234')
 })
 
 // ---- implicit originator loop-in ----

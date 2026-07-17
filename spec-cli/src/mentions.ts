@@ -9,8 +9,9 @@
 // `@<token>` at a word boundary is an actor; `[[<id>]]` is a topic. Token chars are any unicode
 // letter/number plus [_-] (a CJK session handle or node id is first-class — same charset the launch-side
 // MENTION and the dashboard's MENTION_RE use); a session id, a short label/prefix, or the literal `new`.
-// Both forms are deduped in first-seen order.
-const ACTOR_RE = /(?:^|\s)@([\p{L}\p{N}_-]+)/gu
+// Only `new` may carry `:<launcher>` ([[launcher-select]]); keeping that choice in the token makes the same
+// prose work from the CLI and dashboard, with no composer-only field. Both forms are deduped first-seen.
+const ACTOR_RE = /(?:^|\s)@([\p{L}\p{N}_-]+)(?::([\p{L}\p{N}_.-]+))?/gu
 const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
 const uniq = (xs: string[]): string[] => [...new Set(xs)]
@@ -30,7 +31,7 @@ export function stripRefSigil(token: string): string {
 export function parseMentions(text: string): { actors: string[]; nodes: string[] } {
   const actors: string[] = []
   const nodes: string[] = []
-  for (const m of text.matchAll(ACTOR_RE)) actors.push(m[1])
+  for (const m of text.matchAll(ACTOR_RE)) actors.push(m[1] === 'new' && m[2] ? `new:${m[2]}` : m[1])
   for (const m of text.matchAll(NODE_RE)) nodes.push(m[1])
   return { actors: uniq(actors), nodes: uniq(nodes) }
 }
@@ -39,17 +40,19 @@ export function parseMentions(text: string): { actors: string[]; nodes: string[]
 // A minimal shape of what dispatchMentions needs from a Session (so this stays testable without sessions.ts).
 export type ActorSession = { id: string; node: string | null; name: string | null; title: string | null; liveness: string }
 export type Resolved =
-  | { token: string; kind: 'new' }
+  | { token: string; kind: 'new'; launcher?: string }
   | { token: string; kind: 'session'; session: ActorSession }
   | { token: string; kind: 'unresolved' }
 
-// Resolve each actor token to a `new` sentinel, an ONLINE session (never a dead one — you don't summon a
-// closed agent; `@new` acts on its behalf), or unresolved. Match order: literal `new` → exact id → id prefix
-// → name/title (case-insensitive) → name/title prefix. First online match wins.
+// Resolve each actor token to a `new` sentinel (optionally carrying its explicit launcher), an ONLINE
+// session (never a dead one — you don't summon a closed agent; `@new` acts on its behalf), or unresolved.
+// Match order: new/new:<launcher> → exact id → id prefix → name/title (case-insensitive) → name/title prefix.
+// First online match wins.
 export function resolveActors(tokens: string[], sessions: ActorSession[]): Resolved[] {
   const online = sessions.filter((s) => s.liveness === 'online')
   return tokens.map((token): Resolved => {
-    if (token === 'new') return { token, kind: 'new' }
+    const fresh = /^new(?::(.+))?$/.exec(token)
+    if (fresh) return { token, kind: 'new', ...(fresh[1] ? { launcher: fresh[1] } : {}) }
     const t = token.toLowerCase()
     const label = (s: ActorSession) => (s.name || s.title || '').toLowerCase()
     const hit =
@@ -115,7 +118,7 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions))
+        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions), r.launcher)
         out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
@@ -205,7 +208,7 @@ export function summarize(outcomes: DispatchOutcome[], loopIn?: LoopIn | null): 
   const parts: string[] = []
   if (outcomes.length) parts.push('@ ' + outcomes.map((o) => {
     if (o.result === 'sent') return `${o.token}→sent`
-    if (o.result === 'spawned') return `new→${o.detail}${o.note ? ` ⚠ ${o.note} — likely already landed` : ''}`
+    if (o.result === 'spawned') return `${o.token}→${o.detail}${o.note ? ` ⚠ ${o.note} — likely already landed` : ''}`
     if (o.result === 'offline') return `${o.token}→offline (stored)`
     if (o.result === 'unresolved') return `${o.token}→? (no live session; stored)`
     return `${o.token}→failed (${o.detail})`

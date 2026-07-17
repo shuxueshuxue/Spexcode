@@ -45,24 +45,49 @@ export async function createSession(prompt, launcher) {
   }
 }
 
+// One settings read shared by every launcher consumer. Issue/eval composers mount dynamically; making each
+// start from [] and fetch independently left a real race where an immediately accepted @new became a bare
+// default spawn before its launcher rows arrived. A module snapshot lets a later composer inherit the same
+// already-loaded profiles synchronously, while the one in-flight promise removes duplicate settings reads.
+let launcherSettings = null
+let launcherSettingsRequest = null
+const loadLauncherSettings = () => {
+  if (launcherSettings) return Promise.resolve(launcherSettings)
+  if (!launcherSettingsRequest) {
+    launcherSettingsRequest = loadSettings().then((d) => {
+      launcherSettings = d
+      return d
+    }).catch((e) => {
+      launcherSettingsRequest = null
+      throw e
+    })
+  }
+  return launcherSettingsRequest
+}
+
+const launcherListFrom = (d) => Array.isArray(d?.launchers) ? d.launchers : []
+const rememberedLauncher = () => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } }
+const initialLauncher = (list, configuredDefault, remembered = rememberedLauncher()) => {
+  if (list.some((l) => l.name === remembered)) return remembered
+  if (configuredDefault && list.some((l) => l.name === configuredDefault)) return configuredDefault
+  return list[0]?.name || remembered
+}
+
 // the configured launcher profiles ([[launcher-select]]) + the current pick. The pick is remembered
 // per-browser under the ONE key every surface shares, so phone and desktop agree on it. Initial selection
 // honors the config default so the dashboard agrees with the CLI (`spex new` with no --launcher uses
 // `defaultLauncher`): remembered pick (if still valid) → configured `default` → first.
 export function useLaunchers() {
-  const [launchers, setLaunchers] = useState([])
-  const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
+  const cached = launcherListFrom(launcherSettings)
+  const [launchers, setLaunchers] = useState(cached)
+  const [launcher, setLauncher] = useState(() => initialLauncher(cached, launcherSettings?.default))
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   useEffect(() => {
-    loadSettings().then((d) => {
-      const list = d?.launchers
-      if (!Array.isArray(list) || !list.length) return
+    loadLauncherSettings().then((d) => {
+      const list = launcherListFrom(d)
+      if (!list.length) return
       setLaunchers(list)
-      setLauncher((cur) => {
-        if (list.some((l) => l.name === cur)) return cur   // a still-valid remembered pick wins
-        if (d.default && list.some((l) => l.name === d.default)) return d.default   // else the configured default
-        return list[0].name   // else the first
-      })
+      setLauncher((cur) => initialLauncher(list, d.default, cur))
     }).catch(() => {})
   }, [])
   return { launchers, launcher, pickLauncher }

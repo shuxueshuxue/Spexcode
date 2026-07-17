@@ -82,8 +82,13 @@ holds the stream to its contract: the server pings on a fixed cadence, so silenc
 the stream is DEAD (half-open tunnel, sleep-resume, frozen tab), not merely quiet. On a breach it reopens
 (board-full re-anchors and repaints) and kicks the ETag refetch, so catch-up is instant; a frozen tab
 converges likewise as its overdue tick fires on resume. The poll's cost is zeroed by conditional
-requests: `loadBoard` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
-the repaint, so no failure mode is staler than the poll period. Because pushed boards and in-flight fetches can
+requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
+the repaint, so no failure mode is staler than the poll period. That guarantee holds only while the
+conditional key is the identity of the board actually DISPLAYED: the ETag latches when its body paints
+(never from a response a fresher board superseded), and a pushed board clears it — the display's identity
+is then a delta-chain tag the HTTP lane can't express, so the next poll goes unconditional once and
+re-earns its 304s from a painted response. A key that outlives its paint would let the poll 304 forever
+against a board nobody sees, turning push-delivered staleness permanent. Because pushed boards and in-flight fetches can
 interleave, the shell stamps every application with a monotonic sequence — a pushed board is freshest by
 channel order, so it bumps the sequence and invalidates any older fetch still in flight; a superseded
 response is dropped, never painted. Without that guard a just-closed session resurrects: the post-close

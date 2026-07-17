@@ -75,6 +75,25 @@ scenarios:
       hash. Zero loss = a dist rebuild under a live tab costs one automatic reload, never a dead
       "Failed to fetch dynamically imported module" click; a failure that persists right after that reload
       surfaces as an error instead of a reload loop.
+  - name: push-stale-poll-corrects
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]
+    description: >-
+      Real browser against a live backend with ONE online session. Arrange for the push channel to hand
+      the client a STALE board — a graph-full that omits the online session — and then go quiet on board
+      frames while heartbeat pings keep flowing (the missed-corrective mode behind issue #70: a stale
+      connect anchor whose corrective frame is lost; inject by wrapping EventSource to strip the session
+      from full frames and drop delta frames, pings passing). Without reloading, watch the sessions page
+      and every /api/graph fallback-poll response for at least 75 seconds.
+    expected: >-
+      The always-on fallback poll CORRECTS push-delivered staleness within about one poll period (≤20s;
+      hard wall 75s): the session reappears on the rail and its terminal pane mounts, and the poll answers
+      200 (never 304) the moment the displayed board diverges from the server's. The poll's conditional
+      key must be the identity of the board actually DISPLAYED — an ETag latched from a fetch that never
+      painted (superseded by a pushed board) must not gate it, or the poll 304s forever while the display
+      stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
+      Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
+      board nobody is seeing.
 ---
 # dashboard-shell — measurement
 

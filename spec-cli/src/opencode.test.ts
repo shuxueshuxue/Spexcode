@@ -87,7 +87,7 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
 // a fake SDK client records injected prompts, and the REAL deliverViaRendezvous talks to the plugin's socket.
 
 type Dispatched = { code: number }
-async function loadPlugin(opts: { session: string; block?: string[]; blockReason?: string; promptMs?: number }) {
+async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number }) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-plugin-'))
   const dispatch = join(dir, 'dispatch.sh')
   // records `<event>.json` (argv check included: $1 must be the baked harness id); blocks listed events.
@@ -97,10 +97,13 @@ async function loadPlugin(opts: { session: string; block?: string[]; blockReason
     '[ "$1" = "opencode" ] || { echo "wrong harness id: $1" >&2; exit 3; }',
     'cat > "$d/$2.json"',
     'if [ -f "$d/block-$2" ]; then echo "gate says no: $2" >&2; exit 2; fi',
+    // the stop-gate's REAL shape: decision:block JSON on STDOUT (escaped \n inside reason), stderr empty, exit 2
+    'if [ -f "$d/blockjson-$2" ]; then printf \'%s\\n\' \'{"decision":"block","reason":"declare first — pick ONE state:\\n  • done\\n  • ask"}\'; exit 2; fi',
     'exit 0',
   ].join('\n'))
   chmodSync(dispatch, 0o755)
   for (const e of opts.block ?? []) writeFileSync(join(dir, `block-${e}`), '')
+  for (const e of opts.blockJson ?? []) writeFileSync(join(dir, `blockjson-${e}`), '')
   const pluginFile = join(dir, 'spexcode-plugin.mjs')
   writeFileSync(pluginFile, opencodePluginSource(dispatch, '/bin/true'))   // SPEX stubbed: capture becomes a no-op spawn
   process.env.SPEXCODE_SESSION_ID = opts.session
@@ -164,6 +167,24 @@ test('block semantics: a PreToolUse block THROWS (aborts the tool call); a Stop 
   const p = t.prompts[0] as { path: { id: string }; body: { parts: { text: string }[] } }
   assert.equal(p.path.id, 'oc_root')
   assert.match(p.body.parts[0].text, /gate says no: Stop/)
+  rmSync(t.dir, { recursive: true, force: true })
+})
+
+test('stop-gate wire shape: a stdout decision:block JSON (stderr empty) injects the parsed REASON with real newlines, never the raw wire JSON', async () => {
+  // the live A-side field bug (undeclared-stop-gate-rejection): the stop-gate blocks by printing its
+  // decision JSON to STDOUT; reason() was err||out, so the agent was prompted with the escaped wire blob.
+  const t = await loadPlugin({ session: `oc-t3b-${process.pid}`, blockJson: ['Stop', 'PreToolUse'] })
+  await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
+  await t.hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'oc_root' } } })
+  assert.equal(t.prompts.length, 1)
+  const text = (t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text
+  assert.equal(text, 'declare first — pick ONE state:\n  • done\n  • ask')   // parsed reason, \n now REAL newlines
+  assert.ok(!text.includes('"decision"'), 'no wire JSON reaches the agent')
+  // the PreToolUse abort message gets the same treatment
+  await assert.rejects(
+    () => t.hooks['tool.execute.before']({ tool: 'write', sessionID: 'oc_root' }, { args: { filePath: '/w/x' } }),
+    (e: Error) => e.message.startsWith('declare first — pick ONE state:') && !e.message.includes('"decision"'),
+  )
   rmSync(t.dir, { recursive: true, force: true })
 })
 

@@ -64,7 +64,23 @@ export const SpexcodePlugin = async (ctx) => {
     child.stdin.end(JSON.stringify({ session_id: recordId, cwd, hook_event_name: event, ...payload }))
   })
   const blocked = (r) => r.code === 2 || /"decision"\\s*:\\s*"block"/.test(r.out)
-  const reason = (r) => (r.err || r.out || "blocked by a spexcode hook").trim()
+  // the human-readable rejection: stderr when the handler wrote one (the exit-2 path), else the REASON
+  // field parsed out of the stdout decision:block JSON — never the raw wire JSON, whose escaped \\n turned
+  // the stop-gate's teaching menu into one unreadable line (claude renders the reason field, codex gets the
+  // stderr bridge; opencode must not be the one harness whose agent reads wire format).
+  const reason = (r) => {
+    const err = (r.err || "").trim()
+    if (err) return err
+    for (const line of (r.out || "").split("\\n")) {
+      const s = line.trim()
+      if (!s.startsWith("{")) continue
+      try {
+        const o = JSON.parse(s)
+        if (o && o.decision === "block" && typeof o.reason === "string" && o.reason) return o.reason
+      } catch { /* not a JSON line — keep scanning */ }
+    }
+    return (r.out || "").trim() || "blocked by a spexcode hook"
+  }
 
   // session tracking: the ROOT opencode session is this worker's conversation; child sessions (subagents)
   // are stamped agent_id so a parent's declared state stays out of its subagents' reach (the same

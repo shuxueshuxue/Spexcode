@@ -27,7 +27,11 @@ the legacy contract, kept verbatim for old clients: a bare `graph-changed` signa
 `/api/graph` on its ETag/304 path. **Delta mode** (`?mode=delta`) inverts who fetches: the server sends a
 full snapshot on every (re)connect (`graph-full {to, graph}`), then per change either the hash-chained patch
 (`graph-delta {from, to, set, del}`) or a fresh full when the patch wouldn't win — the algebra, and the
-proof that this renders exactly what refetching would, is [[graph-delta]]'s contract.
+proof that this renders exactly what refetching would, is [[graph-delta]]'s contract. The cached anchor
+snapshot a connecting subscriber is seeded with lives exactly as long as its subscriber era: with zero
+delta subscribers nothing rebuilds on change, so the anchor dies with the era's last unsub (and a build
+that completes after it caches nothing) — a new era's first frame is a fresh build, never a kept frame
+from before the gap, whose missing sessions would empty the client's warm-terminal panes (issue #70).
 
 **Every change signal carries its domain.** `fireChanged(scope)` — 'sessions' or 'full' — feeds
 [[graph-cache]]'s scoped invalidation, so a session-only change is answered by the sessions SPLICE (fresh

@@ -54,12 +54,13 @@ export default function App() {
     const mine = ++issuesSeq.current
     return loadIssues().then((d) => { if (mine === issuesSeq.current) setIssuesData(d) }).catch(() => {})
   }, [])
-  // freshest-issued wins: stamp each load with a monotonic seq and apply only the latest, so a stale in-flight poll can't resurrect removed state
+  // freshest-issued wins: stamp each load with a monotonic seq and apply only the latest, so a stale in-flight poll can't resurrect removed state.
+  // seal() only after the body actually paints — a superseded response's ETag must never become the poll's conditional key (issue #70).
   const reqSeq = useRef(0)
   const reload = useCallback(() => {
     const mine = ++reqSeq.current
     return loadGraph()
-      .then((b) => { if (mine === reqSeq.current && b) { setLoadFailed(false); setBoard(b) } })
+      .then((r) => { if (mine === reqSeq.current && r) { setLoadFailed(false); setBoard(r.board); r.seal() } })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [])
   // push-first freshness ([[graph-stream]]/[[graph-delta]]): the delta stream carries whole boards (a full on

@@ -33,12 +33,21 @@ export async function apiFetch(input, init) {
 // we return null ("unchanged", the caller skips its repaint). cache:'no-store' keeps the browser HTTP cache
 // out of the loop, so the 304 reaches US instead of being swallowed into a cache-served 200 that would
 // repaint an identical board every tick.
+//
+// The conditional key MUST be the identity of the board the app actually DISPLAYS, or the poll goes blind
+// (issue #70): a response superseded by a pushed board never paints, so if its ETag latched anyway, every
+// later poll 304s against a board nobody is seeing while the display stays stale — a blackhole only a hard
+// refresh exits. So the tag is returned to the caller and latches only when the caller APPLIES the body
+// (`seal`), and a pushed board clears it (its identity is a delta-chain tag the HTTP lane can't express, so
+// the next poll goes unconditional once, re-earning its 304s from a painted response).
 let boardTag = ''
+const clearBoardTag = () => { boardTag = '' }   // a pushed board took the display — see subscribeBoardLive
 export async function loadGraph() {
   const res = await apiFetch('/api/graph', { cache: 'no-store', headers: boardTag ? { 'If-None-Match': boardTag } : {} })
   if (res.status === 304) return null
-  boardTag = res.headers.get('etag') || ''
-  return res.json()
+  const tag = res.headers.get('etag') || ''
+  const board = await res.json()
+  return { board, seal: () => { boardTag = tag } }
 }
 
 // the ONE way to build a `/api/specs/:id/*` URL ([[id-url-safe]]): the node id is the sole variable path
@@ -100,6 +109,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
       const { to, graph } = JSON.parse(e.data)
       values = unitize(graph)
       tag = to
+      clearBoardTag()   // the display's identity is now this frame's tag — the HTTP lane must re-earn its 304s
       onBoard(graph)
     })
     es.addEventListener('graph-delta', (e) => {
@@ -109,6 +119,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
       for (const k of d.del || []) values.delete(k)
       for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
       tag = d.to
+      clearBoardTag()
       onBoard(boardFrom(values))
     })
     es.addEventListener('graph-changed', () => { bump(); onLegacyChange?.() })

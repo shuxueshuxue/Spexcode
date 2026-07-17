@@ -1,6 +1,4 @@
-import * as pty from 'node-pty'
-import type { IPty } from 'node-pty'
-import { execFile } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { promisify } from 'node:util'
 import { listSessions, alive } from './sessions.js'
 
@@ -15,7 +13,9 @@ export type Viewer = { send: (data: Buffer) => void }
 // resolver for one control-mode command's %begin..%end reply lines (raw bytes — a capture-pane body is UTF-8).
 type Pending = (lines: Buffer[]) => void
 type Bridge = {
-  id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean
+  // the control client is a PIPE-transported child (`tmux -C` over child_process stdio), never a pty: control
+  // mode is a line protocol, so a terminal buys nothing and costs the fd-inheritance wedge (see ensureBridge).
+  id: string; proc: ChildProcess; cols: number; rows: number; prewarmed: boolean
   repaintToken: number
   // the size VOTE: whether this client currently asserts window size. Only a bridge some viewer has SIZED
   // (visible connect / resize — never a hidden board-load connect) votes; all others carry tmux's
@@ -83,7 +83,7 @@ const isOct = (c: number) => c >= 0x30 && c <= 0x37   // ASCII '0'..'7'
 
 // %output escaping (MEASURED against tmux 3.4, not assumed): tmux octal-escapes ONLY the C0 control bytes and
 // backslash (`\015` `\012` `\033` `\134`, all < 0x80) — every high byte is passed THROUGH RAW. We parse the
-// whole control stream as BYTES (never a string), because node-pty's own utf8 decode splits a multi-byte
+// whole control stream as BYTES (never a string), because any utf8 decode at the transport splits a multi-byte
 // character straddling two OS reads into a U+FFFD before we could see it — the corruption this closes. So work
 // on the raw `%output` byte segment: a `\NNN` (backslash 0x5C + three octal-digit bytes) becomes that one
 // byte, every other byte passes through UNTOUCHED. The result is already the pane's exact UTF-8 byte stream —
@@ -141,8 +141,8 @@ async function ensureTmuxOpts(): Promise<void> {
 }
 
 // --- control-mode protocol ---------------------------------------------------
-// The one client per session is a tmux control-mode connection (`tmux -CC attach-session`). tmux speaks a
-// line protocol on this pty: %output events push pane bytes, %begin/%end frame each command's reply, and
+// The one client per session is a tmux control-mode connection (`tmux -C attach-session`). tmux speaks a
+// line protocol on this pipe: %output events push pane bytes, %begin/%end frame each command's reply, and
 // %layout-change announces the converged size. So resize is deterministic (refresh-client -C, told done by
 // %layout-change) and bytes arrive as events — no pty resize + geometry poll, no per-repaint tmux exec.
 
@@ -151,13 +151,13 @@ async function ensureTmuxOpts(): Promise<void> {
 function command(b: Bridge, cmd: string): Promise<Buffer[]> {
   return new Promise((resolve) => {
     b.cmdQ.push(resolve)
-    try { b.pty.write(cmd + '\n') } catch { b.cmdQ = b.cmdQ.filter((r) => r !== resolve); resolve([]) }
+    try { b.proc.stdin?.write(cmd + '\n') } catch { b.cmdQ = b.cmdQ.filter((r) => r !== resolve); resolve([]) }
   })
 }
 
 // parse the control stream line by line AT THE BYTE LEVEL (an incomplete tail is held in b.buf until its 0x0A
 // arrives). Splitting on the newline byte — never on a decoded string — is what keeps a multi-byte UTF-8
-// character intact when it straddles two OS reads: node-pty hands us raw Buffers (encoding:null), so no read
+// character intact when it straddles two OS reads: the client's stdout hands us raw Buffers, so no read
 // boundary can shatter a wide char into a U+FFFD before we reassemble the line.
 function feed(b: Bridge, chunk: Buffer): void {
   b.buf = b.buf.length ? Buffer.concat([b.buf, chunk]) : chunk
@@ -170,38 +170,25 @@ function feed(b: Bridge, chunk: Buffer): void {
   }
 }
 
-// strip the control-mode DCS wrapper (`\x1bP<n>p` on enter, `\x1b\\` on exit) at the byte level — its bytes are
-// all ASCII and it only ever brackets the first/last notification, never %output data or capture content.
-function stripDcs(line: Buffer): Buffer {
-  if (line.length >= 2 && line[0] === 0x1b && line[1] === 0x50) {   // ESC P … p
-    const p = line.indexOf(0x70, 2)
-    if (p >= 0) line = line.subarray(p + 1)
-  }
-  if (line.length >= 2 && line[line.length - 2] === 0x1b && line[line.length - 1] === 0x5c) line = line.subarray(0, line.length - 2)   // ESC backslash
-  return line
-}
-
-function onLine(b: Bridge, lineBuf: Buffer): void {
+function onLine(b: Bridge, line: Buffer): void {
   // Inside a command reply everything is verbatim content until %end/%error. Capture-pane body lines are RAW
-  // pane bytes (real escapes + UTF-8), so they must NOT go through stripDcs: a captured row can legitimately
-  // END in \x1b\\ — the ST that terminates an OSC 8 hyperlink (`\x1b]8;;\x1b\\`, e.g. a Claude Code URL) — and
-  // stripDcs's trailing-\x1b\\ strip would eat it, leaving the hyperlink unterminated so xterm never closes it
-  // and paints the rest of the screen underlined. The DCS-exit wrapper only ever ends a control line at stream
-  // exit, never a reply body, so the strip belongs to the protocol path below, not here. Classify %end/%error
-  // on the raw line — but only one whose command number matches this %begin's closes it, so a pane row that
-  // merely starts with "%end" can't false-close.
+  // pane bytes (real escapes + UTF-8) and are pushed byte-verbatim: a captured row can legitimately END in
+  // \x1b\\ — the ST that terminates an OSC 8 hyperlink (`\x1b]8;;\x1b\\`, e.g. a Claude Code URL) — and eating
+  // it would leave the link unterminated, so xterm never closes it and underlines the rest of the screen.
+  // (Nothing here can eat it: `-C` emits no DCS wrapper to strip, so the whole class is gone with the pty.)
+  // Classify %end/%error on the raw line — but only one whose command number matches this %begin's closes it,
+  // so a pane row that merely starts with "%end" can't false-close.
   if (b.block) {
-    const h = lineBuf.toString('latin1')
+    const h = line.toString('latin1')
     const m = h.match(/^%(?:end|error) \S+ (\d+)/)
     if (m && m[1] === b.blockNum) {
       const lines = b.block; b.block = null
       const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
     } else {
-      b.block.push(lineBuf)   // raw bytes verbatim — escapes (incl. OSC 8 ST) + UTF-8, not to be string-mangled
+      b.block.push(line)   // raw bytes verbatim — escapes (incl. OSC 8 ST) + UTF-8, not to be string-mangled
     }
     return
   }
-  const line = stripDcs(lineBuf)
   // The control PROTOCOL (%begin/%end/%error/%output/%layout-change prefixes, command numbers, layout tokens)
   // is pure ASCII, so decode as latin1 for classification only — a total 1-byte↔1-char map, so a byte index
   // in `head` is the same byte index in `line`; the DATA is taken from the raw Buffer, never from `head`.
@@ -228,7 +215,7 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
     void repaint(b)
     return
   }
-  // %exit / %client-detached / window close → the client is gone; pty.onExit drives the re-bind.
+  // %exit / %client-detached / window close → the client is gone; the child's exit drives the re-bind.
 }
 
 function onLayout(b: Bridge, size?: string): void {
@@ -258,40 +245,63 @@ function awaitLayout(b: Bridge, want: string): Promise<void> {
   })
 }
 
-// spawn the shared control-mode client for a session (idempotent). Returns null if node-pty can't spawn.
+// spawn the shared control-mode client for a session (idempotent). Returns null if tmux can't be spawned.
+//
+// THE TRANSPORT IS A PIPE, NOT A PTY — and that is a correctness requirement, not a preference. Control mode
+// is a LINE PROTOCOL, so a terminal buys the bridge nothing (measured: `%output`, `%layout-change` and the
+// `ignore-size` vote all behave identically over pipes, and high bytes pass through raw either way). What a
+// pty COSTS is the wedge that blacks out every terminal at once: node-pty's Linux path is forkpty(3), which
+// returns a master fd with no FD_CLOEXEC and execs without closing inherited fds — so each client inherited
+// every EARLIER client's master (a staircase). A killed bridge's pts then outlived it inside a live sibling:
+// no EIO, so tmux never dropped the dead client, its tty write buffer filled, and the tmux SERVER's event
+// loop blocked forever in one write(2), freezing every bridge on the socket. Node's child_process stdio is
+// CLOEXEC, so a piped client inherits nothing and the wedge has no mechanism ([[live-view]] eval
+// `bridge-client-holds-only-its-stdio`). It is `-C`, not `-CC`: the second C only adds terminal echo
+// suppression, which needs a tty (tcgetattr fails on a pipe) and emits the DCS wrapper we would then strip.
 function ensureBridge(id: string, prewarm = false): Bridge | null {
   let b = bridges.get(id)
   if (b) { if (prewarm) b.prewarmed = true; return b }
-  // spawn at the last-known viewer size so a pre-warmed bridge already matches the dashboard's pane.
   const { cols, rows } = prewarmSize(id)
-  let p: IPty
+  let p: ChildProcess
   try {
-    // -CC = control mode (event stream); -u + a UTF-8 LANG force UTF-8 output even when the host locale is
-    // empty (a LaunchAgent gives LANG="" → tmux would substitute `_` for every wide char). encoding:null makes
-    // onData deliver raw Buffers so a wide char split across two reads can't be pre-decoded into a U+FFFD.
-    p = pty.spawn('tmux', ['-u', '-CC', '-L', TMUX_SOCK, 'attach-session', '-t', id], {
-      name: 'xterm-256color', cols, rows, encoding: null,
-      env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
+    // -u + a UTF-8 LANG force UTF-8 output even when the host locale is empty (a LaunchAgent gives LANG="" →
+    // tmux would substitute `_` for every wide char). stdout carries the whole control stream as raw Buffers,
+    // so no read boundary can pre-decode a wide char into a U+FFFD; stderr is discarded because the protocol
+    // (including %error) rides stdout, and an undrained stderr pipe is one more thing that could block tmux.
+    p = spawn('tmux', ['-u', '-C', '-L', TMUX_SOCK, 'attach-session', '-t', id], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+      env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
     })
   } catch { return null }
-  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0, voting: false, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
+  b = { id, proc: p, cols, rows, prewarmed: prewarm, repaintToken: 0, voting: false, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
   bridges.set(id, b)
   const bx = b
-  p.onData((d) => feed(bx, d as unknown as Buffer))   // encoding:null → d is a Buffer (typings say string)
+  p.stdout?.on('data', (d: Buffer) => feed(bx, d))
   // every client starts size-NEUTRAL: flag it before any refresh-client -C can enter the FIFO (a bare
   // attach asserts nothing — measured: only -C moves a window — so there is no pre-flag race). Sent as a
   // stream command, not an attach-time `-f`, so a pre-3.2 tmux degrades to a harmless in-stream %error
   // (old size-fight behaviour) instead of a client that cannot attach at all.
   void command(b, 'refresh-client -f ignore-size')
-  // attach-session exited (session died or we detached): drop the bridge, unblock any awaiting command AND any
-  // %layout-change waiter (no timer backs it now, so a bridge that dies mid-convergence MUST resolve its
-  // waiter or the awaiting repaint hangs), and if viewers remain kick a reconcile to re-bind fast.
-  p.onExit(() => {
+  // then state the client's own size — the pty's winsize used to carry it, and a pipe has none. It is asked
+  // for AFTER the neutral flag, so it still asserts nothing while a sized viewer votes; it matters only for
+  // the all-clients-flagged fallback, where every client counts again and a warm hold must hold the
+  // last-known viewer size rather than tmux's cold 80x24 default.
+  void command(b, `refresh-client -C ${cols}x${rows}`)
+  // the client exited (session died, we detached) or never spawned at all (tmux missing → 'error', which is
+  // fatal if unhandled): drop the bridge, unblock any awaiting command AND any %layout-change waiter (no timer
+  // backs it now, so a bridge that dies mid-convergence MUST resolve its waiter or the awaiting repaint
+  // hangs), and if viewers remain kick a reconcile to re-bind fast.
+  let reaped = false
+  const gone = () => {
+    if (reaped) return   // 'error' (never spawned) and 'exit' can both land; reap once
+    reaped = true
     if (bx.layoutWaiter) { const w = bx.layoutWaiter; bx.layoutWaiter = undefined; w.resolve() }
     const q = bx.cmdQ; bx.cmdQ = []; for (const r of q) r([])
     if (bridges.get(id) === bx) bridges.delete(id)
     if ((subscribers.get(id)?.size ?? 0) > 0) kickSupervisor()
-  })
+  }
+  p.on('exit', gone)
+  p.on('error', gone)
   return b
 }
 
@@ -313,7 +323,7 @@ function killBridge(id: string): void {
   if (!b) return
   if (b.layoutWaiter) { const w = b.layoutWaiter; b.layoutWaiter = undefined; w.resolve() }
   bridges.delete(id)
-  try { b.pty.kill() } catch { /* already gone */ }
+  try { b.proc.kill() } catch { /* already gone */ }
 }
 
 // a browser viewer connects: subscribe it to the (warm or fresh) bridge, then paint one coherent frame at
@@ -466,7 +476,7 @@ async function repaint(b: Bridge): Promise<void> {
     broadcast(b.id, reconstructFrame(mode, lines, full))
   })
   const cap = capturePaneCommand(b, mode)
-  try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }
+  try { b.proc.stdin?.write(cap + '\n') } catch { b.cmdQ.pop() }
 }
 
 export function detachViewer(id: string, v: Viewer): void {
@@ -499,7 +509,7 @@ function applySize(b: Bridge, cols: number, rows: number): void {
 }
 
 // one reconcile pass: warm a bridge per live session, re-bind a watched session whose client died, reap a
-// dead+unwatched bridge. Re-bind lives here (not pty.onExit) because this pass is alive-gated and
+// dead+unwatched bridge. Re-bind lives here (not the child's exit handler) because this pass is alive-gated and
 // rate-limited, so a flaky session can't storm respawns.
 async function reconcileOnce(): Promise<void> {
   const live = new Set<string>()
@@ -532,7 +542,7 @@ async function reconcileOnce(): Promise<void> {
   }
 }
 
-// serialize reconcile passes (one running, one queued), so a burst of onExit kicks collapses to one rerun.
+// serialize reconcile passes (one running, one queued), so a burst of exit kicks collapses to one rerun.
 let reconciling = false
 let reconcilePending = false
 async function runReconcile(): Promise<void> {

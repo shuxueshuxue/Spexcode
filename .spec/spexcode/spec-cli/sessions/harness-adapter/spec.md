@@ -472,7 +472,11 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   the id — so the id it returns is always resume-ready, and a genuine miss FAILS LOUD (non-zero, stores nothing;
   launch.sh aborts rather than `resume ""`). The 20s budget deliberately exceeds launch.sh's fast-fail threshold,
   so a real failure exits PAST it and the retry loop treats it as a true end, never a duplicate-prompt respray —
-  turning a silent permanent wedge into an honest, non-duplicating retry. No cold-branch pre-warm is needed: the
+  turning a silent permanent wedge into an honest, non-duplicating retry. The rollout scan walks day-dirs
+  newest-first but EXHAUSTIVELY — never capped at "the newest few" — because future-dated junk under
+  `sessions/` (a test once planted `2099/12/*` in the real CODEX_HOME) sorts above every real day-dir, and a
+  cap let three such dirs mask ALL real rollouts: every launch then died "persisted no rollout" with the
+  rollout sitting on disk. No cold-branch pre-warm is needed: the
   wait absorbs the warm-up on the first launch after a server boot (a few extra seconds in `starting`). Follow-up delivery opens a WebSocket to the same socket's `/rpc` and `turn/steer`/`turn/start`s
   the OWNED thread id. The app-server is a shared control plane, not a session identity; session routing is
   solely the owned Codex thread id, so several `spexcode serve` processes never cross-send. Delivery falls back

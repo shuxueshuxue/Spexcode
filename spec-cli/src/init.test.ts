@@ -25,7 +25,8 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
   const proj = mkdtempSync(join(tmpdir(), 'spex-init-'))
   const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
   const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
     execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })

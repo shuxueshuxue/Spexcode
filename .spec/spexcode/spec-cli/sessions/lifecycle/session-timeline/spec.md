@@ -10,6 +10,7 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/layout.ts
+  - spec-cli/src/session-timeline.test.ts
 ---
 
 # session-timeline
@@ -43,7 +44,19 @@ carrying its composed display word (awaiting→its proposal's label, active→wo
 every other surface speaks). The read FOLDS adjacent status lines with identical (status, proposal, note)
 into their first: two serve processes observing one store (a throwaway worktree/eval serve beside the live
 one) each keep their own last-seen and can append a single record move twice — the log stays best-effort
-append-only and duplicates die at read time, the same read-aggregation stance as the board. Write surface for the terminal-free sender: the one input route accepts
-`replyVia:"note"`, and the server appends `withNoteReplyHint` to the delivery — the insert that tells the
-agent its reader can only see declaration notes, so the complete reply belongs in `--note`. The phrase
-lives server-side, beside withSenderHint, so every surface (desktop later, too) opts in with the same flag.
+append-only and duplicates die at read time, the same read-aggregation stance as the board.
+
+Write surface for the terminal-free sender: the one input route accepts `replyVia:"note"`, and the server
+appends `withNoteReplyHint` to the delivery — the insert that tells the agent its reader can only see
+declaration notes, so the complete reply belongs in `--note`. The phrases live server-side, beside
+withSenderHint, so every surface (desktop later, too) opts in with the same flag.
+
+**The reply-channel signal is symmetric — an opt-in with no opt-out makes notes sticky.** The note insert
+declares itself per-message, and the note→terminal transition gets an explicit counter-insert: a human
+send with NO note flag whose *previous human* send carried one (`lastHumanSendVia`, derived from the
+durable sent log — no new state, restart-safe; agent-to-agent sends neither set nor clear it, they say
+nothing about where the human reads) is delivered wrapped in `withTerminalReplyHint` — "the sender reads
+your terminal again; reply in normal output, not in `--note`". Fired exactly once: the transition send
+itself is recorded flag-free, so the next terminal send sees a non-note last channel and ships bare.
+Without the counter-signal an agent that note-replied a few times keeps note-replying from context inertia
+long after the human left the phone — the failure that made entering the phone surface feel irreversible.

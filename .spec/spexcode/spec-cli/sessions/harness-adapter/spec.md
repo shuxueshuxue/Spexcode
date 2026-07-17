@@ -26,6 +26,23 @@ is in play.** So there is ONE `Harness` interface, ONE implementation per harnes
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
 that branching belongs to the harness detector and the adapter only.
 
+## acceptance — the live-behavior matrix
+
+An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with
+every mechanical proof green (shim written, manifest compiled, unit tests passing) while a real session
+silently dropped every stop-gate rejection and hung `active` forever. So a new or reworked harness adapter
+merges only with per-behavior eval readings, each measured through a REAL dispatched session of that
+harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
+session and the record flows out of `active`; (2) **PreToolUse block** — a blocking hook genuinely stops
+the tool and the handler's own reason reaches the agent; (3) **ask** — `spex session ask --note` flips the
+record to `asking` with the note on the board; (4) **deliver + steer** — an idle send lands exactly once
+(exit 0) and a mid-turn send reaches the live turn; (5) **resume** — stop → resume continues the SAME
+conversation; (6) **liveness** — a killed agent reads `offline` within seconds (even with a stale socket
+file on disk) and a relaunch reads `online`; (7) **commit gate** — a dirty-tree merge proposal is rejected
+at settle with the reason delivered into the session; (8) **close** — zero residue (tmux window, process
+tree, worktree/branch, sockets, session record). The matrix scenarios in [[pi-harness]]'s eval.md are the
+reference instantiation; a harness whose evidence is only artifacts has not been measured.
+
 ## expanded spec
 
 The harness is resolved ONCE into the matching adapter; everything downstream calls the adapter. DETECTION is

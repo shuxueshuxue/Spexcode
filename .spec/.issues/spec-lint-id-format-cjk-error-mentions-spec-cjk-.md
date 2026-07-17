@@ -1,7 +1,7 @@
 ---
 concern: spec lint id-format 把 CJK 节点目录报 ERROR，与 mentions spec 的 CJK-id 合法承诺矛盾
 by: 14f79c23-b5ae-490e-a9d8-c9c6983f336f
-status: open
+status: landed
 nodes: mentions
 created: 2026-07-12T00:27:01.701Z
 ---

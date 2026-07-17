@@ -8,22 +8,26 @@ scenarios:
       `reclaude` → claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the
       New-Session box, and read the DOM: assert the trigger button `.si-launcher-btn` is present (wearing
       the selected launcher's harness glyph + name, with NO caret glyph), that the `.si-agent-picker`
-      harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Click the trigger: a
+      harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Hover data: the
+      trigger's tooltip (`data-tip`) names the config file (`spexcode.json`) as where launchers change.
+      Click the trigger: a
       viewport-CENTRED `.si-launcher-pop` dialog opens over a `.si-launcher-backdrop` (its box centres on
       the viewport midpoint — not anchored under the trigger), with exactly one `.si-launcher-row` per
       available profile, each row
-      showing its own harness vendor glyph + launcher name, plus a dim one-line `.si-launcher-cmd` preview
-      of that profile's command. Click a preview: it expands (`.si-launcher-cmd.open`) to the full
-      configured command verbatim as read-only selectable text, with no input or edit affordance anywhere
-      in the pop and no chevron/expand buttons. Cross-check the source data at `GET /api/settings` (each
-      launcher now carries `{ name, harness, cmd }`). Screenshot the opened pop with one cmd expanded.
+      showing its own harness vendor glyph + launcher name, plus the profile's full `.si-launcher-cmd`
+      text. Assert the cmd is INERT read-only text: it carries no `role`, no `tabindex`, no
+      pointer cursor, and clicking it neither selects the row nor changes the DOM; there is no input or
+      edit affordance anywhere in the pop and no chevron/expand buttons. Cross-check the source data at
+      `GET /api/settings` (each
+      launcher carries `{ name, harness, cmd }`). Screenshot the opened pop.
     expected: >-
-      Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger; clicking it opens
+      Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger whose tooltip points
+      at `spexcode.json` / `spexcode.local.json`; clicking it opens
       the `.si-launcher-pop` centred dialog (over a light backdrop; backdrop click closes) with exactly one
-      row per profile (harness glyph + name + dim cmd preview
+      row per profile (harness glyph + name + the full cmd
       per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
-      what the New-Session POST sends (backend derives the harness from it). Clicking a preview expands
-      `.si-launcher-cmd.open` with the profile's exact configured command as selectable read-only text —
+      what the New-Session POST sends (backend derives the harness from it). The cmd renders in full as
+      inert selectable text — not a control (no role/tabindex/pointer, a click on it is a no-op) —
       no editing surface exists in the dashboard; config files stay the only place a cmd is written.
       `GET /api/settings` returns the same `{name, harness, cmd}` launchers list the pop renders. A
       launcher subsumes the harness axis; picking one is the single choice the human makes.

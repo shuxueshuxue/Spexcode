@@ -288,7 +288,10 @@ close, so read-time aliasing would fail) — never the raw thread id, never the 
 UNMATCHED thread id is the ordinary case, not an error — every repo on the box inherits a foreign
 `CODEX_THREAD_ID` from a codex session's shell — so a lookup that finds no record (or no store at all) is a
 clean no-op: the commit proceeds unstamped, with no empty and no foreign `Session:` trailer, and the hook's
-fail-loud stance is reserved for genuine errors past the lookup. The stamp
+fail-loud stance is reserved for genuine errors past the lookup. Per-session-process harnesses (opencode; pi)
+export NO harness var to tool subprocesses at all — their tier is the launch-injected `SPEXCODE_SESSION_ID`
+itself, trusted LAST and only when the record it names exists and is not codex's, so the uncontaminated
+per-process case stamps while a codex shell that somehow lost its thread id still cannot mis-attribute. The stamp
 lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an
 appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
 ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead. Claude is

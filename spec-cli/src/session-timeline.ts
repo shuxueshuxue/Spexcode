@@ -118,6 +118,20 @@ export function superviseTimeline(): void {
   scan()
 }
 
+// the channel of the LAST HUMAN send (from == null): 'note' when the note-reply hint rode along, else null.
+// This is what makes the reply-channel hints SYMMETRIC ([[sessions-core]] sendText): a human send with no
+// note flag arriving after a note-send is the "back at a terminal" transition, and the delivery gets the
+// counter-insert. Derived from the durable log — no new state, and it survives a server restart. Agent
+// senders (`from` set) say nothing about where the HUMAN is reading, so they neither set nor clear it.
+export function lastHumanSendVia(id: string): 'note' | null {
+  const evs = readEvents(id)
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const e = evs[i]
+    if (e.kind === 'sent' && e.from == null) return e.replyVia === 'note' ? 'note' : null
+  }
+  return null
+}
+
 // record a CONFIRMED prompt delivery (called by sendText after the harness accepted it). `text` is the
 // caller's message BEFORE any mechanism insert (the note-reply hint is transport, not conversation);
 // `replyVia` marks that the hint rode along so a surface can badge it.

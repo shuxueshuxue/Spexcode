@@ -26,6 +26,20 @@ scenarios:
       note) into its first line: the response never shows the same status word twice in a row with
       the same note. Genuinely distinct neighbours (same word, different note) and sent events are
       untouched; the kept events' order and timestamps are unchanged.
+  - name: note-terminal-switch
+    tags: [backend-api]
+    description: >
+      Against a real backend and a REAL dispatched worker (a trivial ack-only probe agent), drive the
+      one input route three times and capture the worker's pane after each confirmed delivery:
+      (1) a send with replyVia:"note" (the phone composer's shape), (2) a plain human send,
+      (3) another plain human send. Then GET the session's timeline.
+    expected: |
+      Delivery 1 arrives with the terminal-free notice appended (complete reply belongs in --note; the
+      notice declares itself per-message). Delivery 2 — the note→terminal transition — arrives wrapped
+      in the terminal-attached counter-insert that explicitly countermands note replies. Delivery 3
+      arrives BARE: the counter-insert fires exactly once at the transition, never on ordinary
+      terminal conversation. The timeline's three sent events record the caller's texts WITHOUT any
+      insert (hints are transport, not conversation).
 ---
 
 # session-timeline — yatsu

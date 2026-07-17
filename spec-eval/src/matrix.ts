@@ -392,10 +392,14 @@ export const MATRIX: MatrixRow[] = [
       writeFileSync(join(wt, 'matrix-scratch.txt'), 'scratch\n')
       const isDirty = async () => (await ctx.exec('git', ['-C', wt, 'status', '--porcelain'], { quiet: true })).out.trim() !== ''
       if ((await ctx.send('This conformance run deliberately planted an uncommitted file (matrix-scratch.txt) in your worktree to test the commit gate. Do not commit or remove anything yourself yet. Run exactly: spex session done --propose merge — then stop. If the gate rejects you, follow whatever it says.')) !== 0) return { status: 'fail', note: 'instruction send was not accepted' }
-      // classify what the gate did: while polling, a REVIEW standing with a dirty tree is the gate failing;
-      // a settle with the tree still dirty and no review is the gate holding; a clean review after the
-      // rejection text surfaced is the agent obeying the gate's own teaching (rejection PROVEN either way).
+      // classify what the gate did. The record reads `review` the moment the CLI writes the proposal —
+      // BEFORE the stop-gate has run at the agent's stop — so a transient review+dirty is the normal
+      // mid-loop state, and only a STABLE dirty review (the gate's stop verdict and its forced-continuation
+      // escape both missed) is the gate failing. A settle with the tree still dirty and no review is the
+      // gate holding; a clean review after the rejection text surfaced is the agent obeying the gate's own
+      // teaching (rejection PROVEN either way).
       let rejectionSeen = false
+      let dirtyReviewSince = 0
       let outcome: 'dirty-review' | 'held' | 'self-repaired' | null = null
       await ctx.poll('commit-gate outcome', 420, async () => {
         const s = await ctx.show()
@@ -405,7 +409,12 @@ export const MATRIX: MatrixRow[] = [
           const pane = await ctx.spex(['session', 'show', ctx.worker!.id, '--capture'], { quiet: true })
           if (/uncommitted (changes|work)/.test(pane.out + (s.note || ''))) { rejectionSeen = true; ctx.log('gate rejection text surfaced in the session') }
         }
-        if (s.status === 'review' && dirty) { outcome = 'dirty-review'; return true }
+        if (s.status === 'review' && dirty) {
+          dirtyReviewSince ||= Date.now()
+          if (Date.now() - dirtyReviewSince > 90_000) { outcome = 'dirty-review'; return true }
+          return false
+        }
+        dirtyReviewSince = 0
         if (s.status === 'review' && !dirty && rejectionSeen) { outcome = 'self-repaired'; return true }
         if (SETTLED.has(s.lifecycle) && s.status !== 'review' && dirty && rejectionSeen) { outcome = 'held'; return true }
         return false

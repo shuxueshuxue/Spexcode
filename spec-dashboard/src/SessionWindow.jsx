@@ -3,6 +3,7 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
 import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
+import { MODE_MARK } from './harness.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -73,6 +74,9 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
           headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
         <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
+        {/* ◇ = headless mode ([[session-console]] — harness.jsx's MODE_MARK vocabulary): interactive rows
+            stay unmarked, so the mark is the one glance-tell that a row's console face is the chat view. */}
+        {MODE_MARK[s.mode] && <span className="sess-mode" data-tip={t('session.modeHeadless')} aria-label={t('session.modeHeadless')}>{MODE_MARK[s.mode]}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
       <span className="sess-id" data-tip={headline}>{headline}</span>

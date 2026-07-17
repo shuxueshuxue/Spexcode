@@ -11,6 +11,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/session-timeline.test.ts
+  - spec-dashboard/src/TimelineChat.jsx
 ---
 
 # session-timeline

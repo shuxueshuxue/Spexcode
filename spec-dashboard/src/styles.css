@@ -655,6 +655,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   font-size: 10px; line-height: 1.3; opacity: .9; overflow: hidden;
 }
 .sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
+/* ◇ headless mode mark ([[session-console]] — harness.jsx MODE_MARK): a muted one-glyph tell beside the
+   status glyph; interactive rows render nothing here. */
+.sess-mode { flex: none; color: var(--muted); font-size: 10px; line-height: 1; }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
@@ -1711,6 +1714,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
    below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
+/* .tl-chat is the SHARED chat body's root (TimelineChat — the phone detail AND the desktop console's
+   headless Chat tab): a flex column filling whatever host mounts it; the pieces inside keep their m-*
+   classes (one markup, one style). In the console's absolute term layer it needs its own height + the
+   app paper (the layer sits where the dark terminal otherwise paints). */
+.tl-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.si-term-layer .tl-chat { height: 100%; background: var(--paper); }
 .m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
 .m-day { text-align: center; margin: 10px 0 6px; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
 .m-ev { margin: 8px 0; }

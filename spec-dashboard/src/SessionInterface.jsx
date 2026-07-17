@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
+import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
 import { composeLaunch, createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
 import { sessionForest } from './session.js'
@@ -235,6 +236,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
   const showRelaunch = noLivePane && selSession?.status !== 'queued'
+  // mode dispatch ([[session-console]] × the headless mode): an interactive session's right pane is the
+  // live tmux terminal; a HEADLESS session has no TUI to watch — its pane is the shared TimelineChat
+  // ([[mobile-ui]]'s terminal-free conversation), whose composer owns input (replyVia:'note' fixed), so
+  // the ❯ strip and type mode don't apply. Old records carry no mode and read interactive — unchanged.
+  const isHeadless = selSession?.mode === 'headless'
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -586,19 +592,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const uiCmds = uiCommandsFor(selSession?.status, runners)
+    // a headless session has no terminal to take over — the type channel doesn't exist there, so its
+    // button/command drop off (the chord below is guarded the same way).
+    .filter((c) => !(isHeadless && c.name === 'type'))
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey, isHeadless }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey, isHeadless } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles type mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
       // let it through so the console opens rather than toggling type mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
+      if ((e.altKey !== e.metaKey) && isI && active !== 'new' && !isHeadless) {
         e.preventDefault(); e.stopPropagation(); setTypeMode((v) => !v); return
       }
       // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
@@ -845,7 +854,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div className="si-tabbar">
                 {/* two tabs on the left: the live terminal (default) and the always-available eval. */}
                 <div className="si-tabs" role="tablist">
-                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
+                  {/* the first tab reads by the session's MODE: Terminal for an interactive pane, Chat for a
+                      headless session's terminal-free conversation — same slot, same tab state. */}
+                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t(isHeadless ? 'session.tabChat' : 'session.tabTerminal')}</button>
                   <button role="tab" aria-selected={rightTab === 'eval'} className={rightTab === 'eval' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('eval')}>{t('session.tabEval')}</button>
                 </div>
                 {/* no headline here: the left sidebar already identifies the session; the tab bar is just the
@@ -871,13 +882,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
                   Eval tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
               <div className="si-term-body" ref={termRef} style={{ position: 'relative', display: rightTab === 'terminal' ? undefined : 'none' }}>
-                {/* every opened session's terminal stays mounted; only the active one is shown */}
-                {[...opened].map((id) => (
-                  <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                    {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
-                    <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
-                  </div>
-                ))}
+                {/* every opened session's pane stays mounted; only the active one is shown. The pane is
+                    dispatched by the session's MODE: interactive → the live tmux terminal; headless → the
+                    shared TimelineChat (no TUI exists to watch — the timeline IS the conversation). The
+                    chat polls only while it is the shown pane (`active`); its draft/scroll stay warm. */}
+                {[...opened].map((id) => {
+                  const sess = sessions.find((x) => x.id === id)
+                  return (
+                    <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
+                      {sess?.mode === 'headless'
+                        ? <TimelineChat s={sess} sessions={sessions} active={id === active && rightTab === 'terminal'} />
+                        // active → this pane is the only one that holds a WebGL context (see SessionTerm).
+                        : <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />}
+                    </div>
+                  )
+                })}
                 {showRelaunch && (
                   <div className="si-offline">
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
@@ -887,8 +906,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 )}
               </div>
-              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
-              {rightTab === 'terminal' && (typeMode ? (
+              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at) —
+                  and to the INTERACTIVE mode only: a headless session's chat carries its own composer. */}
+              {rightTab === 'terminal' && !isHeadless && (typeMode ? (
                 // type mode replaces the prompt box: keys go straight to the pane (handled at the window level).
                 <div className="si-bottom type" onClick={() => setTypeMode(false)} data-tip={t('session.typeExit')}>
                   <span className="si-type-ind">{t('session.typeInd')}</span>

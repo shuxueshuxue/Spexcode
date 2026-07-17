@@ -520,7 +520,7 @@ export function selfSummary(paneTitle: string): string | null {
 // instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
 // memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
 const launchedAt = new Map<string, number>()
-const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
+export const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
                               // window (~3 attempts) so a relaunching session reads 'starting', not 'offline'
 const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this: fast
                               // exit before readiness is retryable, but it is not proof of one specific cause

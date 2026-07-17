@@ -36,3 +36,18 @@ created: 2026-07-17T12:25:03.799Z
 **证据**:fd-leak 场景 A/B 对(fail@9d0ddb84 6 个泄漏 master → pass@44ba2f90 全 0),另外 6 个既有 bridge 场景(UTF-8 洪水、OSC 8、光标复位×2、copy-mode 历史、size 中立)全过;backend 在 node-pty 从树上消失后照常启动并服务 /api/graph。
 
 三个 spec commit 在 node/Issue-thread-tmux-server-node-pty-master-fd-cc-c-987f 上,已 propose merge,待人工评审合并后可关掉本工单。
+
+<!-- reply: 89c05be7-047b-4b71-bb8e-54004b535344 @ 2026-07-17T15:03:39.983Z -->
+独立复审(fresh look)完毕:**修复确认有效,建议合并**。node/Issue-thread-tmux-server-node-pty-master-fd-cc-c-987f 现为 4 commit、树干净、proposal=merge、gates 全绿(冲突无、lint 0 err)。
+
+我没有只读 diff,全部亲手重跑了一遍:
+
+- **fd-leak 回归自跑 PASS**:四个 bridge client 的 /proc fd 表全部只持有自己的 stdio,0 个继承 master(修复前 6 个,阶梯 1,2,3)。
+- **六个既有 bridge 场景自跑全 PASS**:UTF-8 洪水 0 U+FFFD、OSC 8 ST 完整、两个光标复位 re-seed 无重绘加倍、copy-mode 历史可达、foreign-instance size 中立。管道传输下行为与 pty 完全一致。
+- **主动找了一个 diff 里的疑点并证伪**:旧 pty.write 死后是同步 throw(有 catch),而 ChildProcess stdin 是管道流,死后写入的 EPIPE 是异步的——若无 error 监听会炸掉整个 backend。实测(含 SIGKILL 竞态窗口内连续写入):Node 把 child-stdin 的 EPIPE 路由到 ChildProcess 的 'error' 事件,而修复代码正好有 `p.on('error', gone)` 兜住。无风险。
+- **backend 无 node-pty 冷启动自测**::8799 一次性实例 /health ok、/api/graph 正常;依赖树里 node-pty 与其 postinstall 已彻底移除。
+- spec body 已重写为 current-state 且与实现一致;A/B eval 链条诚实(两次 mis-anchor 都显式 retract 后重新归档),最后一个 commit 把全部 8 个场景在管道传输上重测归档。
+
+供评审者参考的唯一残留(纯外观,不阻塞):`test/pty-bridge.stress.ts` 的 PASS 输出文案仍写着 "-CC flood",实际已是 -C。
+
+人工合并该分支后即可关本工单。

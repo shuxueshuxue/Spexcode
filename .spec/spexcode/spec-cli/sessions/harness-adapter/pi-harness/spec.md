@@ -34,11 +34,17 @@ The extension does three jobs, each chosen so the rest of the product needs NO p
   `pi` joins the claude family through the default case, exactly like `plugin`. pi has no idle/attention or
   failed-stop event, so Notification/StopFailure are genuinely absent (the codex gap, not a TODO).
 - **Block bridging.** pi's `tool_call` blocks via a typed return (`{ block: true, reason }`); dispatch.sh
-  blocks via exit 2 + stderr. The extension bridges: exit 2 → return the block with the gate's stderr as the
-  reason. For Stop there is no blocking return — `agent_settled` fires after the run is already settled — so
-  the stop-gate's exit-2 stderr is instead **sent back in as a user message** (`pi.sendUserMessage`), which
-  triggers a new turn carrying the gate's instruction: pi's equivalent of claude's Stop-hook continuation.
-  The gate exits 0 once satisfied, so the loop terminates the same way claude's does.
+  signals a block with exit 2, and the reason arrives the **claude way** — the blocking handler's
+  `{"decision":"block","reason":…}` JSON on dispatch **stdout** (the stop-gate/commit-gate path; the
+  handler exits 0, dispatch maps the JSON to exit 2, stderr stays empty). The extension bridges: exit 2 →
+  return the block with the reason parsed from the stdout JSON, stderr as the fallback (a bare exit-2
+  handler) — pi consumes claude's native response channel just as it synthesizes claude's payloads, so
+  dispatch.sh needs no pi branch (the codex stderr bridge stays codex-only: codex is an external binary
+  that can only read stderr; pi's consumer is our own generated code). For Stop there is no blocking
+  return — `agent_settled` fires after the run is already settled — so the gate's reason is instead
+  **sent back in as a user message** (`pi.sendUserMessage`), never silently dropped, which triggers a new
+  turn carrying the gate's instruction: pi's equivalent of claude's Stop-hook continuation. The gate exits
+  0 once satisfied, so the loop terminates the same way claude's does.
 - **The rendezvous channel.** sessions.ts already exports `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>` to every
   `ownsRendezvous` launch; the extension binds a line-JSON server on that path speaking the reclaude
   mini-protocol (`{type:reply}` → `sendUserMessage`, `{type:repaint}` → `repaint-done`). So claude's

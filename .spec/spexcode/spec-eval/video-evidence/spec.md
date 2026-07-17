@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/Evidence.jsx
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/index.ts
 ---
 # video-evidence
 
@@ -36,7 +37,11 @@ The whole point is that almost nothing is new. `spex eval add --video <clip>` st
 shared cache and pushes one `video` entry onto the reading's evidence list (`spex blob put` is the same
 transport WITHOUT a reading, [[evidence-put]]); the MIME is sniffed from content
 (WebM / MP4) so `/api/evidence` streams a playable type — and answers **byte ranges**, without which a browser
-clamps every seek to 0; every dashboard home renders the `<video>` inline through the ONE shared evidence
+clamps every seek to 0. The endpoint also accepts an **ignored trailing `.<ext>`** on the hash
+(`/api/evidence/<hash>.webm`): third-party markdown renderers (GitLab, GitHub) decide image-vs-video by the
+URL's extension and sanitize raw `<video>` HTML away, so a suffix is the only way an MR note embeds a
+playable clip — the suffix is pure decoration, stripped before lookup, and never influences the served
+bytes or MIME (a wrong suffix still serves the true content); every dashboard home renders the `<video>` inline through the ONE shared evidence
 renderer ([[event-detail]]'s `Evidence.jsx` — the eval tab [[eval-tab]], the session proof
 ([[session-eval]]), and an issue/eval thread's blob links alike), lazy on
 expand, with the same *miss original file* when the blob is pruned; `spex eval ls` labels it. A clip is

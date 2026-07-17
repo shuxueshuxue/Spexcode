@@ -185,6 +185,27 @@ scenarios:
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
       reading session.json + the commit trailer.
     code: spec-cli/src/harness.ts
+  - name: headless-lifecycle-codex
+    tags: [backend-api]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Through a REAL throwaway backend on a fresh-init codex adopter project, dispatch `spex session new
+      "<small real task>" --headless` under a codex launcher carrying NO headlessCmd, let the worker run to
+      its declaration, `spex session send` a follow-up turn, then close. Read the record, the graph row, the
+      timeline, the pane text, the worktree commits, and the thread's rollout file on disk.
+    expected: >-
+      The record pins mode=headless with the INTERACTIVE cmd (needsCmd:false — the app-server binary still
+      derives from its first token) and the owned thread id; the pane shows ONLY the read-only placeholder
+      (thread banner + app-server log tail), never a codex TUI or any second agent process; the board reads
+      working/online exactly while a turn is in progress (the batched thread/read{includeTurns} sweep) and
+      the DECLARED status between turns; the timeline records queued→working→declared per cycle; every worker
+      commit carries the Session trailer via the harness_session_id alias; the send lands as a turn on the
+      SAME owned thread and close leaves zero residue (window, record, worktree, branch). THE core assertion
+      — the mbp wrapper incident this design answers (task prompt turn + a pane "Continue…" turn firing 0.8s
+      apart and executing concurrently for 34 minutes, double task_complete in one rollout): the rollout
+      contains exactly ONE user turn per delivered prompt and NO pane-origin turn at all — a double execution
+      is structurally impossible because the headless pane holds no agent, not merely avoided by wrapper
+      discipline.
 ---
 # eval.md — harness-adapter
 

@@ -12,6 +12,7 @@ related:
   - spec-cli/hooks/harness.sh
   - spec-cli/src/cli.ts
   - spec-cli/src/slash-commands.ts
+  - spec-cli/src/opencode.test.ts
 ---
 
 # opencode-harness

@@ -115,6 +115,7 @@ export const SpexcodePlugin = async (ctx) => {
     })
     server.on("error", () => { /* socket unavailable — liveness falls back to the agent pid */ })
     server.listen(sockPath)
+    server.unref()   // never hold the host process open for our socket; opencode's own loop keeps it alive while it runs
   }
 
   const toolPayload = (input, output) => {

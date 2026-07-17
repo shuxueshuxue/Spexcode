@@ -29,6 +29,11 @@ the agent from one verb, picked by an optional topic:
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
   it. The eval page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
   steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
+  A step name is a **short human label** for its moment, never a metadata channel — the run's identity,
+  verdict, and extent all have canonical homes (the scenario's `test:` field, the reading's verdict, the
+  evidence itself), and the manual says so, because the one free-text field that rides with the evidence
+  is exactly where an emitter author is tempted to smuggle provenance (a real adopter baked
+  `runner start: <file> :: <case title>` into every step and turned the dashboard's step ruler into noise).
   The concept is tool-neutral (Playwright is one emitter); `--timeline` is axis-tagged (a video's `time`,
   a transcript's `line`, a still sequence's `frame`, a data export's `index` — legacy `tMs` maps read as
   `time`), and a filing's axis must match an attached evidence entry's kind.

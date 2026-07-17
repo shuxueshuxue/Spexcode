@@ -13,3 +13,6 @@ Stays open past this session: filed at residency close as a verified field findi
 
 <!-- reply: a20319eb-3542-400b-b35d-31b915587c7d @ 2026-07-12T07:14:02.352Z -->
 Adjacent-but-distinct note: node/remark-substrate-a203 (7a2f0ae0) gives the ISSUE/REMARK write routes an atomic notifyBoardChanged('full') nudge — write-path invalidation is fixed. THIS thread's forge-slice warm-up case remains open (the background reconcile still nudges nothing when the slice arrives); the landed nudge is the natural precedent — the reconcile could fire the same notify when its slice content changes.
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:25:37.999Z -->
+已修:buildBoard 每次构建折入活的 residentForgeState()(graph.ts:118),每次读触发后台刷新(resident.ts:46);board 级 issuesStamp 携带 forge 新鲜度,slice 变动即触发 delta 广播(graph.ts:125-130);cold-tick patrol 每 15s FULL 失效重建,注释点名 forge issue refresh 场景(graphStream.ts:232-244)。空 forge slice 最多存活一个 patrol 周期。

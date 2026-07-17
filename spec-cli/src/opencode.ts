@@ -64,17 +64,36 @@ export const SpexcodePlugin = async (ctx) => {
     child.stdin.end(JSON.stringify({ session_id: recordId, cwd, hook_event_name: event, ...payload }))
   })
   const blocked = (r) => r.code === 2 || /"decision"\\s*:\\s*"block"/.test(r.out)
-  const reason = (r) => (r.err || r.out || "blocked by a spexcode hook").trim()
+  // the human-readable rejection: stderr when the handler wrote one (the exit-2 path), else the REASON
+  // field parsed out of the stdout decision:block JSON — never the raw wire JSON, whose escaped \\n turned
+  // the stop-gate's teaching menu into one unreadable line (claude renders the reason field, codex gets the
+  // stderr bridge; opencode must not be the one harness whose agent reads wire format).
+  const reason = (r) => {
+    const err = (r.err || "").trim()
+    if (err) return err
+    for (const line of (r.out || "").split("\\n")) {
+      const s = line.trim()
+      if (!s.startsWith("{")) continue
+      try {
+        const o = JSON.parse(s)
+        if (o && o.decision === "block" && typeof o.reason === "string" && o.reason) return o.reason
+      } catch { /* not a JSON line — keep scanning */ }
+    }
+    return (r.out || "").trim() || "blocked by a spexcode hook"
+  }
 
   // session tracking: the ROOT opencode session is this worker's conversation; child sessions (subagents)
   // are stamped agent_id so a parent's declared state stays out of its subagents' reach (the same
-  // discriminator claude's Task subagents carry).
-  let rootSession = ""
+  // discriminator claude's Task subagents carry). A RESUMED session re-fires no bus event until poked, so
+  // event-driven adoption alone leaves a resumed worker unreachable (the daemon reply-rejects every
+  // delivery): a --session resume seeds rootSession from the launch env (the resume marker's id), and a
+  // --continue resume falls back to asking the SDK for the newest root session.
+  let rootSession = (process.env.SPEXCODE_OPENCODE_RESUME_ID || "").trim()
   const children = new Set()
   const stamp = (sid) => (sid && children.has(sid) ? { agent_id: sid } : {})
   // opencode MINTS its own session id — report it once so the backend stores it as harness_session_id
   // (what reopen() resumes with, \`--session <id>\`). Fire-and-forget; a failure only costs resume-by-id.
-  let captured = false
+  let captured = !!rootSession   // a seeded (resumed) id is already on the record — don't re-report it
   const capture = (sid) => {
     if (captured || !sid || !recordId) return
     captured = true
@@ -84,6 +103,27 @@ export const SpexcodePlugin = async (ctx) => {
   const injectPrompt = async (text) => {
     if (!client || !rootSession) throw new Error("no session to prompt")
     await client.session.prompt({ path: { id: rootSession }, body: { parts: [{ type: "text", text }] } })
+  }
+
+  // --continue resume: no owned id was ever captured, and a reattached session fires no bus event until
+  // poked — ask the SDK for the newest root session (what --continue itself reattached) so deliveries can
+  // inject. Gated on the launch marker so a FRESH launch can never adopt a stale session; best-effort with
+  // bounded retries (the server may still be loading at plugin init), shape-defensive, and adopt() ignores
+  // the late result if a real event won the race.
+  if (!rootSession && process.env.SPEXCODE_OPENCODE_CONTINUE && client && client.session && typeof client.session.list === "function") {
+    (async () => {
+      for (let i = 0; i < 10 && !rootSession; i++) {
+        try {
+          const res = await client.session.list()
+          const arr = (res && (res.data || res)) || []
+          const roots = (Array.isArray(arr) ? arr : []).filter((s) => s && s.id && !s.parentID)
+          const at = (s) => (s.time && (s.time.updated || s.time.created)) || 0
+          roots.sort((a, b) => at(b) - at(a))
+          if (roots.length) { adopt(roots[0].id); return }
+        } catch { /* not up yet — retry */ }
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    })()
   }
 
   // rendezvous daemon: single-connection (a new connect kicks the previous — the claude daemon's contract,

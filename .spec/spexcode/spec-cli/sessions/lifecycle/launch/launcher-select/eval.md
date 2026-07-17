@@ -151,6 +151,43 @@ scenarios:
       mode field reads `interactive` on every payload.
     code: spec-cli/src/harness.ts
     related: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/cli.ts
+  - name: mode-toggle
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the REAL dashboard New-Session box in a real browser, measure the session-mode switch on a
+      settings payload whose launchers span the three headless shapes — one with a `headlessCmd`
+      (modes ["interactive","headless"]), one headless-capable WITHOUT an own command (headlessCmd null,
+      modes ["interactive","headless"] — the server-side-executor shape), and one interactive-only
+      (modes ["interactive"]). Until a harness adapter actually ships a headless capability the live
+      backend computes `modes: ["interactive"]` for every launcher, so the mixed payload comes from a
+      mocked `GET /api/settings` response — state the data source on the filing. Open the launcher pop:
+      a segmented `⌨ interactive | ◇ headless` switch (`.si-mode-toggle`) leads the card, its armed
+      segment wearing `aria-pressed="true"`, and ←/→ flips it from the keyboard. Toggle to headless and
+      read the rows: the `headlessCmd` row's `.si-launcher-cmd` now shows the HEADLESS command (back to
+      `cmd` when toggled back), the command-less capable row shows the server-side placeholder
+      (`.si-launcher-cmd-ph`) instead of a blank, and the interactive-only row greys out
+      (`.si-launcher-row.off`, `aria-disabled="true"`) — clicking it does NOT pick, and its tooltip
+      (`data-tip`) names the `headlessCmd` repair in `spexcode.json`. Close the pop with headless armed:
+      the pill trigger wears a small `◇` (`.si-launcher-mode-mark`), absent in interactive. Launch a
+      session and read the POST /api/sessions body: it carries `mode` explicitly. Then arm the illegal
+      remembered combo (localStorage `si.mode` = headless, `si.launcher` = the interactive-only launcher),
+      reload: the mode falls back to interactive with a visible `.si-mode-notice` naming the launcher,
+      and the launcher selection is UNCHANGED. Screenshot the toggle states, the greyed row + placeholder,
+      and the ◇-marked pill.
+    expected: >-
+      The pop card leads with the shared ModeToggle (the phone composer renders the same component at
+      touch size; its native select disables options the armed mode can't launch): aria-pressed marks the
+      armed segment, arrow keys flip it. Row command text follows the ARMED MODE — `cmd` in interactive,
+      `headlessCmd` in headless, a "runs server-side" placeholder for a capable launcher with no own
+      command — and a row whose backend-computed `modes` excludes the armed mode is greyed
+      (aria-disabled, so the config-repair tooltip still hovers) and refuses the pick; the frontend never
+      re-derives adapter capability from harness ids. The pill shows a quiet ◇ only while headless is
+      armed. The create body sends the visible `mode` pick explicitly (remembered under `si.mode` →
+      configured `defaultMode` → interactive). An illegal (launcher, mode) combo — remembered or
+      live-toggled — resolves on the MODE axis: interactive + an immediate visible notice naming the
+      launcher, never a silent launcher swap and never a silently armed create the backend would 400.
+    code: spec-dashboard/src/ModeToggle.jsx
+    related: spec-dashboard/src/launch.js, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/MobileApp.jsx, spec-cli/src/index.ts
 ---
 # eval.md — launcher-select
 

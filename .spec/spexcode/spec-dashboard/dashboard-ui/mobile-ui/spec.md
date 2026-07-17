@@ -69,9 +69,13 @@ The two planes, made native to touch:
 - **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out
   of the desktop console for exactly this reuse): the `/preset [[node]]…` grammar composition, the
-  launcher fetch + default resolution + the per-browser remembered pick (one localStorage key, so
-  phone and desktop agree), and the one `POST /api/sessions`. Only the chrome is phone-shaped —
-  textarea, native launcher `<select>`, one launch button. Where the desktop box fires in the
+  launcher fetch + default resolution + the per-browser remembered picks — launcher AND session
+  mode, one localStorage key per axis, so phone and desktop agree, with [[launcher-select]]'s
+  illegal-combo fallback surfacing its notice here too — and the one `POST /api/sessions`. Only
+  the chrome is phone-shaped — textarea, the shared session-mode toggle at touch size
+  ([[launcher-select]]'s ⌨/◇ switch, the same component the desktop pop card mounts), native
+  launcher `<select>` (an option the armed mode can't launch is disabled), one launch button.
+  Where the desktop box fires in the
   background and stays type-ready, the phone AWAITS the create with a busy button: the wait is
   honest (worktree+agent take seconds) and busy-gating doubles as the double-tap guard a touch
   surface needs. Success returns to the list, where the new row lands on the next board push; a

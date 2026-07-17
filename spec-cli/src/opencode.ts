@@ -89,6 +89,12 @@ export const SpexcodePlugin = async (ctx) => {
   // rendezvous daemon: single-connection (a new connect kicks the previous — the claude daemon's contract,
   // which makes the delivery side's atomic reply+repaint chunk decidable). {type:"reply"} injects the text
   // as a prompt into the root session; {type:"repaint"} answers repaint-done (the in-order parse barrier).
+  // The data handler is deliberately SYNCHRONOUS: the whole chunk's lines parse in one pass and repaint-done
+  // flushes before any other event (a kicking connect included) can run. Awaiting injectPrompt inside the
+  // loop broke exactly this — the SDK prompt call resolves only when the TURN ends, so the confirm sat
+  // unsent for the whole turn, every board-probe connect kicked the connection, and the sender resent an
+  // already-landed prompt (false negative + duplicate injection). Confirmation means PARSED, not processed
+  // — the same contract the claude daemon answers ([[opencode-harness]]).
   const sockPath = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || "").trim()
   if (sockPath) {
     try { if (existsSync(sockPath)) unlinkSync(sockPath) } catch { /* stale file from a crashed run */ }
@@ -98,7 +104,7 @@ export const SpexcodePlugin = async (ctx) => {
       conn = c
       let buf = ""
       c.on("error", () => { /* peer went away — the delivery side handles retries */ })
-      c.on("data", async (d) => {
+      c.on("data", (d) => {
         buf += d.toString("utf8")
         let nl
         while ((nl = buf.indexOf("\\n")) >= 0) {
@@ -106,7 +112,15 @@ export const SpexcodePlugin = async (ctx) => {
           let msg = null
           try { msg = JSON.parse(line) } catch { continue }
           if (msg && msg.type === "reply" && typeof msg.text === "string") {
-            try { await injectPrompt(msg.text) } catch { try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* */ } }
+            if (!client || !rootSession) {
+              // known-unable, decided synchronously: reply-rejected lands BEFORE repaint-done, so the
+              // sender fails loud instead of confirming a prompt that can never inject.
+              try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* */ }
+              continue
+            }
+            // fire-and-forget: the injection (a whole model turn) runs behind the confirm. A late failure
+            // can only best-effort reply-rejected — the sender has usually resolved and gone by then.
+            injectPrompt(msg.text).catch(() => { try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* */ } })
           } else if (msg && msg.type === "repaint") {
             try { c.write(JSON.stringify({ type: "repaint-done" }) + "\\n") } catch { /* */ }
           }

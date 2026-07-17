@@ -35,6 +35,10 @@ that plugin plays TWO roles at once:
   hands every rendezvous-owning harness) and answers the reply/repaint mini-protocol. That makes
   `ownsRendezvous: true` LITERALLY true — the claude adapter's `deliver` (parse-confirmed atomic write)
   and socket-listener liveness are reused unchanged; there is no opencode-specific transport code.
+  The daemon's side of that contract: confirmation means PARSED, not processed — the reply+repaint
+  chunk is parsed and `repaint-done` written in one synchronous pass, with the prompt injection (a
+  whole model turn, on the SDK) running behind the confirm, so a concurrent probe connect (the board
+  fires one per snapshot) can never kick the connection between parse and confirm.
 
 The remaining divergences are ordinary adapter facts: launch is a tail-branching script (a prompt tail
 launches `--prompt`, a `--resume <id>` marker re-attaches `--session <id>` — the codex marker pattern);
@@ -45,5 +49,6 @@ the zero-prompt mechanism). Liveness prefers the socket listener and falls back 
 agent pid, so a plugin that failed to load still reads honestly from the process signal.
 
 Verification status: the mechanical layer (materialize artifacts, shim → dispatch.sh event flow, launch
-script shape, clean/dematerialize inverse) is what tests cover; a real end-to-end opencode launch needs
-model credentials this box lacks and stays an open item.
+script shape, clean/dematerialize inverse, deliver under probe pressure) is what tests cover; the live
+deliver path is measured through a real dispatched opencode worker (the `deliver-second-message`
+scenario), and the full worker-lifecycle e2e reading remains the open item.

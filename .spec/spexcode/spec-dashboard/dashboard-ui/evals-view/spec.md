@@ -49,8 +49,9 @@ surfaces (`f`, ⌥F) land here.
   its own. The **right pane** is the full-height [[event-detail]] of the one selection — **selection IS
   detail** (no Enter, no in-place expansion): picking an eval row renders it as the event detail — the media
   stage under the review-track scrubber, the A/B strip in the header, and the (node, scenario) remark rail +
-  docked composer. **j/k walk the feed** (folded or not) and the detail follows; a key typed into an input
-  is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
+  docked composer. The list stays a picker + status surface: a write acting on the selected reading (notably
+  [[human-ok]]) lives in the detail and is never duplicated on its feed row. **j/k walk the feed** (folded or
+  not) and the detail follows; a key typed into an input is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
   owns the page shell: the split, the fold, the selection, and the j/k routing. That shell is ONE exported
   component (`EvalMasterDetail`), and it is deliberately SHARED: the session console's Eval tab
   ([[session-eval]]) renders the same shell around its own worktree-rooted list, so the two eval

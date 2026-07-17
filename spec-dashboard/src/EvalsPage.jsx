@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
-import { postEvalOk } from './data.js'
 import FoldToggle from './FoldToggle.jsx'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
@@ -120,15 +119,6 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
-  // the feed row's human sign-off ([[human-ok]]) — the same server write the detail header and `spex eval
-  // ok` use; a refused write surfaces its server message, success just reloads (the ok'd row leaves the
-  // default feed by the feed's own hide).
-  const okEval = useCallback(async (e) => {
-    const r = await postEvalOk(e.node, e.scenario).catch((err) => ({ error: String(err) }))
-    flash(r?.error || '')
-    await reloadBoard?.()
-  }, [reloadBoard])
-
   const selEval = effSel ? evalByKey.get(effSel) : null
 
   return (
@@ -143,7 +133,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
       {(foldBtn) => (
         <>
           {notice && <div className="fv-notice">{notice}</div>}
-          <EvalsGroup nodes={specs} sessions={sessions} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} onOk={okEval} mustShow={deepWant} lead={foldBtn} />
+          <EvalsGroup nodes={specs} sessions={sessions} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} lead={foldBtn} />
         </>
       )}
     </EvalMasterDetail>

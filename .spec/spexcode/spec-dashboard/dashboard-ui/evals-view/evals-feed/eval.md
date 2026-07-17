@@ -5,15 +5,16 @@ scenarios:
     description: >
       With at least one fresh video reading filed (spex eval add --video … --timeline …), open #/evals
       in a real browser (board `f` or the URL). Read the real DOM: the evals feed IS the LEFT list,
-      its kind dropdown's default value, the rows' media-element count; count /api/graph requests fired by
-      opening the page; select a video row and read where its media renders.
+      its kind dropdown's default value, the rows' media-element count and any row-level human-ok action;
+      count /api/graph requests fired by opening the page; select a video row and read where its media renders.
     expected: |
       The evals feed is the page's LEFT list with its kind dropdown in a sticky head; the dropdown's
       default value is `video` (falling back to `image` when no video reading exists). Rows are the LATEST
       reading per (node, scenario), newest first — title-only ALWAYS: zero <video>/<img>
       elements in the list. Opening the page fires ZERO extra /api/graph fetches (the group rides the
       app's one poll via props). Selecting a video row renders it in the RIGHT detail pane as the
-      annotator — the only place its <video> exists.
+      annotator — the only place its <video> exists and the only visible human-ok write door. Feed rows
+      carry settled human-ok status only; an un-ok'd row exposes no ok action.
   - name: stale-not-hidden-mixed-by-time
     tags: [frontend-e2e]
     description: >

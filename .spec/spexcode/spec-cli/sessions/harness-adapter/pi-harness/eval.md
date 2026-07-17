@@ -26,4 +26,17 @@ scenarios:
       liveness reads online while the pane lives and offline within seconds of a kill; a delivered prompt
       appears in the pi TUI as a user turn (repaint-done confirmed); resume brings back the same
       conversation, not a fresh session.
+  - name: stop-gate-bridge
+    tags: [backend-api]
+    description: >-
+      YATU: dispatch a pi worker with a trivial one-turn prompt and let it settle undeclared. The Stop gate
+      blocks the claude way — `{"decision":"block","reason":…}` on dispatch stdout, exit 2, stderr EMPTY —
+      so this measures whether the generated extension carries a stdout-JSON rejection back into the
+      session (agent_settled) and into a specific PreToolUse block reason (tool_call).
+    expected: >-
+      Right after the turn settles, the gate's reason text lands in the pi session as an injected user
+      message; the agent declares (`spex session …`) and session.json flows out of `active` to the declared
+      status (asking/awaiting). A PreToolUse block carries the handler's own reason, not a generic
+      placeholder. The failure signature is a record stuck `active` forever with `stop-gate-taught` present
+      and a frozen timeline — the rejection silently dropped.
 ---

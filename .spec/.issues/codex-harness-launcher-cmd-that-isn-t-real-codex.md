@@ -13,3 +13,6 @@ Repro: configure a named launcher {harness: codex, cmd: <not-real-codex, e.g. a 
 Contrast: the claude harness with a stub cmd fails/relaunches visibly; only the codex path silently blocks on thread-start.
 
 Belongs to the codex-launch lane (2fa94fac / the codex-rs hooks work, session 4143d606). Impact: makes codex-harness stub fixtures impossible and could wedge a create under a misconfigured codex launcher in the wild. Fix direction: a bounded timeout + loud failure on the codex thread-start handshake when the cmd doesn't come up as real codex.
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:26:22.513Z -->
+已修:launch 改队列化——newSession 建 worktree、写 queued 记录、materialize 后立即返回(sessions.ts:1183-1221),真正的 launch 在 startQueued 里 fire-and-forget(1059),POST 不再阻塞 40s;未知/缺失 launcher 在 newSession 时就响亮抛错(1187-1189)。坏 binary 仍只在 tmux 窗口内失败(后台 readiness 超时兜住,session 呈 offline),但挂起已消除。

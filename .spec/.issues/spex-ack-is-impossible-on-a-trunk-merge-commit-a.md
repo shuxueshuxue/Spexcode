@@ -35,3 +35,6 @@ could we like, nudge a session on the "close pending" state transition (like we 
 3. **顺手挖出并修掉一个隐藏 bug(session-stamp hook)**:原来 `printf '\nSession: …' >>` 的裸追加会把消息里已有的 trailer 块(比如 ack 的 Spec-OK)挤成"倒数第二段"——git 只把最后一段当 trailer 解析,Spec-OK 就静默降级成正文,driftFor 完全看不见(空 stamp 路径首次实测就中招)。改用 `git interpret-trailers --in-place`(git 自家 sample hook 的机制)+ 先补消息末尾换行:Spec-OK+Session 保持同一可解析块;副产品是 merge commit 的 Session: trailer 从此也真正可解析(旧裸追加下它一直折进 subject 段,`%(trailers)` 读不到)。
 
 验证是完整 A/B:A(fail)在 pre-fix main 的 scratch clone 里真造 drift→merge→ack 被 main-guard 拦(transcript 已 file);B(pass)在带 fix 的 clone 里同场景 ack 成功、Spec-OK 解析、`spex lint` 该 drift 消失、树不变确认、staged 文件未被卷入,负例(改树的直接 commit)仍被拦。scenario `ack-on-merge-commit` 落在 main-guard 的 yatsu.md。merge 落地后本 issue 可以 close(--as landed)。
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:18:58.810Z -->
+已修并 merge:bd3246f2(node/ack-empty-stamp-ca69)——ack 改走 tree-unchanged 空 stamp commit,main-guard 放行树不变提交,prepare-commit-msg 换 git interpret-trailers(顺带修复 Spec-OK trailer 降级)。B(pass) 读数 c9b71cfe(main-guard ack-on-merge-commit),此后 main 上多次 ack 实际落地(20951537 等)。close-nudge 早已落地(30f1725e)。

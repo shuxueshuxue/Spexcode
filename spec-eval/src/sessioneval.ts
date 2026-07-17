@@ -76,11 +76,14 @@ export type ExportModel = {
 export async function buildExportModel(id: string): Promise<ExportModel | null> {
   const payload = await reviewPayload(id)
   if (!payload) return null
-  const specs = await loadSpecs()
-  const specById = new Map(specs.map((s) => [s.id, s]))
-  // root the eval context at the SESSION's worktree (its branch's readings/freshness), not the backend checkout which would show main's; specs stay backend-shared (paths/titles/hues), only readings + drift are per-worktree
+  // root EVERYTHING at the SESSION's worktree — readings, freshness, AND the spec tree itself. The
+  // worktree's .spec is the branch's pending proposal ([[source-of-truth]]): a node the branch ADDED
+  // exists only there, so a trunk-rooted loadSpecs would silently drop it from the model (the 0fca
+  // family's node-existence layer). No worktree → the backend checkout, unchanged.
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
+  const specs = await loadSpecs(ctxRoot)
+  const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
 
@@ -550,10 +553,12 @@ export type SessionEvals = {
 export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
   const payload = await reviewPayload(id)
   if (!payload) return null
-  const specs = await loadSpecs()
-  const specById = new Map(specs.map((s) => [s.id, s]))
+  // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
+  // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
+  const specs = await loadSpecs(ctxRoot)
+  const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   // this session's own commits — the membership test behind `inSession`

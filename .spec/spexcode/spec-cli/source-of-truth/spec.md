@@ -25,7 +25,10 @@ database, reading must scale with history, not with the number of nodes.
 
 A node's whole observable state is **derived here, not stored** — version (its count of content
 commits), drift (governed code that moved ahead of the latest version), session (commit attribution),
-and status. The loader reads `.spec` from the filesystem and overlays these git-derived facts. Nothing
+and status. The loader reads `.spec` from the filesystem and overlays these git-derived facts. The
+loader itself takes the **checkout root as a parameter** (default: the backend's own checkout): an eval
+surface rooted at a session's worktree loads the spec tree from that same root, so a branch-ADDED node
+exists for it — the pending-proposal principle applied to node existence, not only to readings. Nothing
 is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is
 netted against **acknowledgement**: a `Spec-OK: <node>` trailer checkpoints that node's spec valid at its
 commit, quieting every drift commit at or below it back to the version — so one `spex ack` at the tip

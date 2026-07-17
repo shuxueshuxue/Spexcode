@@ -10,6 +10,7 @@ code:
   - spec-dashboard/src/MobileApp.jsx#MobileNewSession
 related:
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
@@ -28,7 +29,10 @@ board, so nothing about the data or the backend forks. The phone face is its **o
 session surface is a live pane; the phone deliberately mounts none. What replaces it is the
 persisted **[[session-timeline]]**: without a pane, the agent's declaration notes ARE its replies,
 and the timeline of status transitions + delivered prompts IS the conversation. The mode is
-phone-first but not phone-bound — any surface could opt into it later.
+phone-first but not phone-bound — the chat body lives in the shared **`TimelineChat`** component
+(timeline poll + board-push refresh + send-then-refresh, `replyVia:"note"` fixed), which the desktop
+console also mounts as a headless session's Chat tab ([[session-console]]); this node's
+`MobileSessionDetail` is the thin phone wrapper around it (identity card, back control, eval entry).
 
 **One API, never its own.** Every read/write the phone makes is a route the desktop already
 uses, through the shared `data.js` helpers: the pushed/polled board for both planes, the

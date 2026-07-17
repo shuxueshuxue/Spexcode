@@ -13,6 +13,7 @@ related:
   - spec-cli/src/guide.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/launch.js
+  - spec-dashboard/src/ModeToggle.jsx
   - spec-dashboard/src/harness.jsx
 ---
 
@@ -44,22 +45,37 @@ the committed file — a launcher name is portable, its `cmd` is a machine fact.
 **Selection at create time.** `spex new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
 launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill button wearing the selected
-launcher's harness vendor mark + name (no caret, no label; its tooltip names `spexcode.json` /
-`spexcode.local.json` as where launchers change) that opens a **viewport-centred pop-out card**
-over a light backdrop (not an anchored dropdown) with
-**one row per launcher** (its harness glyph + its name, and beneath them the profile's configured `cmd`
-shown in full as read-only display text). The **entire row is ONE pick target**: a click anywhere on it —
+launcher's harness vendor mark + name (no caret, no label — plus a quiet small `◇` while headless is
+armed; its tooltip names `spexcode.json` / `spexcode.local.json` as where launchers change) that opens a
+**viewport-centred pop-out card** over a light backdrop (not an anchored dropdown). The card leads with
+the session-MODE segmented switch — `⌨ interactive | ◇ headless`, the shared `ModeToggle` the phone
+composer renders too (aria-pressed marks the armed segment; ←/→ flips it) — then
+**one row per launcher** (its harness glyph + its name, and beneath them the command THE ARMED MODE
+would run — `cmd` in interactive, `headlessCmd` in headless, shown in full as read-only display text; a
+headless-capable launcher with no own command shows a "runs server-side" placeholder instead of a blank).
+A row whose `modes` excludes the armed mode greys out and refuses the pick, its tooltip naming the
+`headlessCmd` config repair (aria-disabled, so the tooltip's hover still fires); the frontend only
+CONSUMES the backend-computed `modes`, never re-deriving adapter capability. Otherwise the **entire row
+is ONE pick target**: a click anywhere on it —
 the `cmd` line included — picks the launcher and closes the pop. The `cmd` never behaves as a surface of
 its own (no control, no independent text-selection region: a cmd click that merely started a text
 selection instead of picking read as a broken row). So a human can
 inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole
-place a `cmd` is written. That endpoint reports the `{ name, harness, cmd }` list AND the
-configured `default` name (`{ launchers, default }`); the `cmd` rides the payload as read-only display data
+place a `cmd` is written. That endpoint reports the `{ name, harness, cmd, headlessCmd, modes }` list AND the
+configured `default` name plus `defaultMode` (`{ launchers, default, defaultMode }`); the `cmd`/`headlessCmd`
+ride the payload as read-only display data
 for that detail (the dashboard sits behind the deployment's gateway auth). The mobile composer keeps a plain
-native select — the pop-out is desktop chrome. The picker's INITIAL selection is always a visible
+native select (an option the armed mode can't launch is disabled) — the pop-out is desktop chrome; the mode
+switch itself is the same shared component at touch size. The picker's INITIAL selection is always a visible
 launcher choice: a still-valid remembered (per-browser) pick wins, else the configured `default`, else the
 first real launcher in the list. That last case is not an implicit backend fallback — the dashboard sends the
-selected launcher name explicitly. The seeded `claude`/`codex` profiles are ordinary selectable entries (and
+selected launcher name explicitly. The MODE pick mirrors that exactly: remembered per-browser (`si.mode`,
+beside `si.launcher`) → configured `defaultMode` → interactive, and the choice is sent explicitly on the
+create body. The two picks are validated as a COMBO, and the invalid combo resolves on the MODE axis, never
+the launcher axis: headless armed on a launcher whose `modes` excludes it — a remembered pick the config no
+longer honors, or a live toggle attempt on a headless-less launcher — falls back to interactive with an
+immediate visible notice naming the launcher, NEVER a silent launcher swap and never a silently armed create
+the backend would refuse. The seeded `claude`/`codex` profiles are ordinary selectable entries (and
 a default may name one of them), never an implicit no-choice fallback.
 A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400 from
 the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not

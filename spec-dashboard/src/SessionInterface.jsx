@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
-import { composeLaunch, createSession, useLaunchers, useCommandPresets } from './launch.js'
+import { composeLaunch, createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
@@ -14,6 +14,7 @@ import { useResizable } from './useResizable.js'
 import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
+import ModeToggle from './ModeToggle.jsx'
 import { useT } from './i18n/index.jsx'
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
@@ -68,15 +69,22 @@ function typeKeyToken(e) {
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
 // @@@launcher pop-out picker ([[launcher-select]]) — the desktop launch choice: a clean pill button (the
-// selected launcher's harness vendor mark + name, no caret, no label) that opens a CENTRED pop-out card —
-// a viewport-centred dialog over a light backdrop, deliberately not an anchored dropdown. One row per
-// configured launcher: its harness glyph + name, and beneath them the profile's `cmd` in full as PLAIN
-// READ-ONLY display text. The WHOLE row is one pick target — the row itself is the button, so a click
-// anywhere on it (the cmd line included) picks the launcher; the cmd never forms an independent
+// selected launcher's harness vendor mark + name, no caret, no label; a small ◇ joins it while headless
+// is armed) that opens a CENTRED pop-out card — a viewport-centred dialog over a light backdrop,
+// deliberately not an anchored dropdown. The card leads with the session-MODE segmented switch
+// (⌨ interactive | ◇ headless — the shared ModeToggle), then one row per configured launcher: its harness
+// glyph + name, and beneath them the command THE ARMED MODE would run — `cmd` in interactive, `headlessCmd`
+// in headless (a headless-capable launcher with no own command runs server-side; its row says so as a
+// placeholder) — in full as PLAIN READ-ONLY display text. A row the armed mode can't launch greys out
+// (aria-disabled — the real `disabled` attr would mute the hover events the config-repair tooltip needs)
+// and refuses the pick. Otherwise the WHOLE row is one pick target — the row itself is the button, so a
+// click anywhere on it (the cmd line included) picks the launcher; the cmd never forms an independent
 // selection/control surface that could swallow the pick. The
 // trigger's tooltip points at spexcode.json / spexcode.local.json as the one place launchers change.
-// Selecting closes the pop; backdrop click or Esc closes it too.
-function LauncherPicker({ launchers, launcher, pickLauncher }) {
+// Selecting closes the pop; backdrop click or Esc closes it too. `modeNotice` (a remembered/attempted
+// headless pick bounced back to interactive) renders as an inline alert — in the card when open, beside
+// the pill otherwise — so the fallback is visible wherever it happens.
+function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, modeNotice }) {
   const t = useT()
   const [pop, setPop] = useState(false)
   useEffect(() => {
@@ -87,8 +95,12 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   }, [pop])
   // the trigger's glyph shows the SELECTED launcher's harness (unknown/absent harness reads as claude,
   // the default — same fallback the backend applies).
-  const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
+  const selected = launchers.find((l) => l.name === launcher)
+  const selHarness = HARNESS_BY_ID[selected?.harness || 'claude'] || HARNESS_BY_ID.claude
   const SelGlyph = selHarness.Glyph
+  const notice = modeNotice
+    ? <span className="si-mode-notice" role="alert">{t('session.modeFellBack', { name: modeNotice })}</span>
+    : null
   return (
     <div className="si-launcher-picker">
       <button
@@ -102,24 +114,35 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
       >
         <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
         <span className="si-launcher-name">{launcher}</span>
+        {mode === 'headless' && <span className="si-launcher-mode-mark" title={t('session.modeHeadless')}>◇</span>}
       </button>
+      {!pop && notice}
       {pop && (
         <>
           {/* full-viewport backdrop — the outside-click close surface; a mousedown here is inert chrome
               under the panel's keepFocus blanket, so the composer keeps focus while the pop closes. */}
           <div className="si-launcher-backdrop" onMouseDown={() => setPop(false)} />
           <div className="si-launcher-pop" role="dialog" aria-modal="true" aria-label={t('session.launcherLabel')}>
+            <ModeToggle mode={mode} pickMode={pickMode} headlessOk={launcherModes(selected).includes('headless')} />
+            {notice}
             {launchers.map((l) => {
               const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
               const HGlyph = h.Glyph
+              const avail = launcherModes(l).includes(mode)
+              // headless-capable with no own headlessCmd = the executor is server-side (backend `modes`
+              // said yes without a command) — the cmd line shows that as a placeholder, not a blank.
+              const serverSide = mode === 'headless' && avail && !l.headlessCmd
+              const cmdText = mode === 'headless' ? l.headlessCmd : l.cmd
               return (
                 <button
                   key={l.name}
                   type="button"
                   role="menuitemradio"
                   aria-checked={l.name === launcher}
-                  className={l.name === launcher ? 'si-launcher-row on' : 'si-launcher-row'}
-                  onClick={() => { pickLauncher(l.name); setPop(false) }}
+                  aria-disabled={!avail}
+                  data-tip={avail ? undefined : t('session.modeUnavailableTip')}
+                  className={`si-launcher-row${l.name === launcher ? ' on' : ''}${avail ? '' : ' off'}`}
+                  onClick={() => { if (!avail) return; pickLauncher(l.name); setPop(false) }}
                 >
                   <span className="si-launcher-row-main">
                     <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
@@ -127,7 +150,9 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
                     {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
                   </span>
                   {/* the cmd — read-only display text; part of the same pick target, never its own surface. */}
-                  {l.cmd ? <span className="si-launcher-cmd">{l.cmd}</span> : null}
+                  {serverSide
+                    ? <span className="si-launcher-cmd si-launcher-cmd-ph">{t('session.headlessServerSide')}</span>
+                    : cmdText ? <span className="si-launcher-cmd">{cmdText}</span> : null}
                 </button>
               )
             })}
@@ -150,8 +175,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
-  // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
-  const { launchers, launcher, pickLauncher } = useLaunchers()
+  // launch choice; the fetch + default resolution live in the shared launch path (./launch.js), as does
+  // the session-mode axis (interactive | headless) and its illegal-combo fallback.
+  const { launchers, launcher, pickLauncher, mode, pickMode, modeNotice } = useLaunchers()
   const [sendErr, setSendErr] = useState(false)   // last text dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [typeMode, setTypeMode] = useState(false)
@@ -358,7 +384,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!raw) return
     const text = composeLaunch(raw, commandPresets, specs)
     setPrompt('')
-    createSession(text, launcher).then(() => reload?.())
+    createSession(text, launcher, mode).then(() => reload?.())
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)
@@ -799,8 +825,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
-                  (LauncherPicker above) with per-launcher harness marks and expandable read-only cmd details. */}
-              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
+                  (LauncherPicker above) with the mode toggle, per-launcher harness marks and read-only
+                  per-mode cmd details. */}
+              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} mode={mode} pickMode={pickMode} modeNotice={modeNotice} /> : null}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>

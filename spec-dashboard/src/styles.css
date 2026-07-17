@@ -1324,6 +1324,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .si-launcher-btn:hover, .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+/* the pill's headless mark — a quiet small ◇ only while headless is armed (interactive adds no noise). */
+.si-launcher-mode-mark { font-size: 10px; color: var(--ink2); flex: none; }
+/* the session-mode segmented switch (shared ModeToggle: desktop pop card + phone composer) —
+   ⌨ interactive | ◇ headless. The `.dim` segment is the headless-less-selected-launcher state: greyed
+   but still hoverable/clickable so the config-repair tooltip and the loud interactive-fallback fire. */
+.si-mode-toggle { display: flex; gap: 2px; padding: 3px; margin: 2px 2px 8px; background: var(--panel2); border-radius: 9px; }
+.si-mode-seg {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  appearance: none; border: none; background: transparent; font: inherit; font-size: 12px;
+  color: var(--ink2); padding: 5px 10px; border-radius: 6px; cursor: pointer;
+}
+.si-mode-seg.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+.si-mode-seg.dim { color: var(--muted); opacity: .55; }
+.si-mode-glyph { font-size: 11px; line-height: 1; }
+/* the illegal-combo fallback alert (a headless pick bounced back to interactive) — inline beside the
+   pill / under the card's toggle, same quiet-loud voice as .si-attach-err. */
+.si-mode-notice { color: var(--orange); font-size: 11px; margin: 0 6px 6px; align-self: center; }
 /* the pop-out — a viewport-CENTRED dialog over a light backdrop (not an anchored dropdown), scale-in from
    centre. Sizes to its content so a typical command preview fits on ONE line; the cap guards huge
    commands/viewports, and overflow scrolls when a project has many launchers. */
@@ -1358,7 +1375,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: flex; align-items: center; gap: 9px; min-width: 0;
   padding: 8px 10px 2px; color: var(--ink); font-size: 12.5px;
 }
-.si-launcher-row:not(.on):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.si-launcher-row:not(.on):not(.off):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+/* a row the ARMED MODE can't launch — greyed, unpickable (aria-disabled in the JSX; no `disabled` attr,
+   which would mute the hover events the config-repair tooltip rides on). */
+.si-launcher-row.off { opacity: .45; cursor: not-allowed; }
 /* a cmd-less profile has no preview line — keep its row symmetric. */
 .si-launcher-row-main:last-child { padding-bottom: 8px; }
 .si-launcher-row .si-launcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1372,6 +1392,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
+/* the server-side-executor placeholder (headless-capable launcher with no own headlessCmd) — prose,
+   not a command, so it de-monospaces and italicizes to read as a note. */
+.si-launcher-cmd-ph { font-family: inherit; font-style: italic; opacity: .6; }
 
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
    strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */
@@ -1739,6 +1762,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-new-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
 .m-new-input { min-height: 120px; }
 .m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+/* the shared ModeToggle at phone scale: taller touch segments, no extra margin (m-new-body's gap rules). */
+.m-new .si-mode-toggle { margin: 0; }
+.m-new .si-mode-seg { padding: 10px 12px; font-size: 14px; }
+.m-new .si-mode-notice { margin: 0; }
 .m-new-launcher-select {
   flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--mono); font-size: 14px;
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px;

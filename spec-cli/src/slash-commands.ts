@@ -240,3 +240,37 @@ export function codexSlashCommands(): SlashCommand[] {
   const prompts = [...seen.values()].filter((c) => c.source !== 'built-in').sort((a, b) => a.name.localeCompare(b.name))
   return [...builtins, ...prompts]
 }
+
+// opencode built-ins — a conservative pinned set (opencode 1.18.x TUI commands; its TUI registry is compiled,
+// not file-discoverable, so like the other two capture blocks this is version-specific and re-pinned by hand).
+const OPENCODE_BUILT_IN: ReadonlyArray<readonly [string, string]> = [
+  ['compact', 'Summarize and compact the current session'],
+  ['editor', 'Open the external editor for the message'],
+  ['exit', 'Exit opencode'],
+  ['export', 'Export the session'],
+  ['help', 'Show help'],
+  ['init', 'Create or update AGENTS.md'],
+  ['models', 'List and switch models'],
+  ['new', 'Start a new session'],
+  ['redo', 'Redo a previously undone message'],
+  ['sessions', 'List and switch sessions'],
+  ['share', 'Share the current session'],
+  ['themes', 'List and switch themes'],
+  ['undo', 'Undo the last message'],
+  ['unshare', 'Unshare the current session'],
+]
+
+// @@@ opencodeSlashCommands - opencode's `/` menu: the pinned built-ins + custom commands discovered the way
+// opencode discovers its own — `.opencode/command(s)/**/*.md` in the project and `~/.config/opencode/command(s)`
+// globally (both spellings are native). Like the other builders it never guesses: what isn't readable as a
+// file contributes nothing.
+export function opencodeSlashCommands(): SlashCommand[] {
+  const all: SlashCommand[] = []
+  const cfgHome = process.env.OPENCODE_CONFIG_DIR || join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'opencode')
+  for (const d of ['command', 'commands']) scanCommands(join(cfgHome, d), 'user', all)
+  const repo = repoRoot()
+  for (const d of ['command', 'commands']) scanCommands(join(repo, '.opencode', d), 'project', all)
+  for (const [name, description] of OPENCODE_BUILT_IN) all.push({ name, description, source: 'built-in' })
+  scanSkills(join(repo, '.opencode', 'skills'), all)
+  return dedupeSort(all)
+}

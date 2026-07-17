@@ -11,6 +11,10 @@ import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
+// type-only (erased at runtime, so no import cycle with sessions.ts): the headless capability object speaks
+// in the session vocabulary — the full record (its declared status is headless liveness truth between turns)
+// and the composed Liveness axis.
+import type { SessRec, Liveness } from './sessions.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -39,6 +43,31 @@ export type HarnessLivenessRecord = { session: string; harnessSessionId?: string
 export type ProcTable = Map<number, { ppid: number; comm: string }>
 export type PaneProbe = { panePid?: number; procs?: ProcTable; pidAlive?: boolean }
 
+// @@@ HarnessHeadless - a harness's HEADLESS (one-shot turn) capability object, mirroring agentDir's
+// "null = no such primitive" pattern. A session's `mode` is a PRODUCT dimension; the harness differences of
+// running headless live ENTIRELY behind this object — product code routes per mode
+// (`const ops = rec.mode === 'headless' && h.headless ? h.headless : h`), never per harness. All four
+// adapters currently carry null: the capability is turned on by each harness's own headless implementation
+// (claude: a one-shot `-p` process in the pane; codex: the executor already lives in the shared app-server,
+// so the pane never runs a second agent), landing separately — until then a headless create fails loud.
+export interface HarnessHeadless {
+  // whether this harness's headless form needs its OWN agent command (the launcher's `headlessCmd`).
+  // claude: true — the one-shot `-p` invocation IS that command. codex: false — the executor is the
+  // app-server, derived from the pinned interactive `cmd` (version-parity invariant), so no second command
+  // exists and `headlessCmd` is ignored.
+  readonly needsCmd: boolean
+  // the pane-side launch script. The configured command is embedded WHOLE — zero parsing, zero rewriting
+  // (the config author writes the full invocation; the system never edits its internals).
+  launchCmd(id: string, runtimeDir: string | undefined, cmd: string | undefined): string
+  // TURN-scoped liveness: online only while a turn is actually executing; between turns the record's
+  // DECLARED lifecycle is the truth (the stop-gate guarantees a non-crash exit declares).
+  liveness(rec: SessRec, tmuxAlive: boolean, runtimeDir: string, pane: PaneProbe, socketLive?: boolean): Liveness
+  // headless prompt delivery — the NEXT turn. A still-running turn refuses loud (never a silent queue).
+  deliver(rec: SessRec, text: string): Promise<DispatchResult>
+  // reopen semantics: a headless session's continuation is its next delivery, not a TUI re-attach.
+  resumeArg(rec: SessRec): string
+}
+
 export interface Harness {
   readonly id: HarnessId
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
@@ -56,6 +85,9 @@ export interface Harness {
   // instead of showing the folder name. This is the ONLY harness branch in the headline path: the capability
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
+  // the headless capability object (see HarnessHeadless above), or null when this harness has no headless
+  // form yet — a headless create on it fails loud at the create path.
+  readonly headless: HarnessHeadless | null
 
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
@@ -1058,6 +1090,7 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
+  headless: null,                                    // headless (one-shot -p) capability lands with its own implementation — until then a headless create fails loud
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
@@ -1094,6 +1127,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
+  headless: null,                                    // headless (app-server-executed, agent-free pane) capability lands with its own implementation
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
@@ -1175,6 +1209,7 @@ export const piHarness: Harness = {
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
+  headless: null,                                    // no headless form — a headless create on pi fails loud
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
@@ -1209,6 +1244,7 @@ export const opencodeHarness: Harness = {
   // parse-confirmed write) and socket-listener liveness are reused verbatim — no opencode transport code.
   ownsRendezvous: true,
   paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
+  headless: null,                                    // no headless form — a headless create on opencode fails loud
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)
@@ -1258,20 +1294,44 @@ export function harnessById(id: string): Harness {
 }
 
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
-// a launcher = a `{ harness, cmd }` pair in spexcode.json's `sessions.launchers`, keyed by a human-chosen name.
-// `claude` and `codex` are NOT special built-ins — `spex init` SEEDS them as ordinary named launchers (with the
-// regular command path), so they are edited like any other. harness defaults to claude. resolveLauncher throws
-// fail-loud on an unknown name (a session must never silently launch under the wrong auth) and validates the
-// harness id. There is NO env-derived built-in fallback: the dropdown lists exactly the config's real launchers.
-export type Launcher = { name: string; harness: string; cmd: string }
+// a launcher = a `{ harness, cmd, headlessCmd? }` entry in spexcode.json's `sessions.launchers`, keyed by a
+// human-chosen name. `claude` and `codex` are NOT special built-ins — `spex init` SEEDS them as ordinary named
+// launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
+// resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
+// auth) and validates the harness id. There is NO env-derived built-in fallback: the dropdown lists exactly
+// the config's real launchers.
+//
+// A launcher may carry TWO complete commands, one per session MODE: `cmd` (the interactive TUI — the field's
+// meaning is unchanged, existing configs need zero migration) and the optional `headlessCmd` (the one-shot
+// headless invocation). Both are written WHOLE by the config author; the system never parses or rewrites
+// their internals. An empty-string headlessCmd reads as absent; its absence is validated at USE time (a
+// headless create on a needsCmd harness fails loud), never at list time.
+export type SessionMode = 'interactive' | 'headless'
+export const SESSION_MODES: readonly SessionMode[] = ['interactive', 'headless']
+export type Launcher = { name: string; harness: string; cmd: string; headlessCmd: string | null }
 export type LauncherDefault = { default: string | null; error: string | null }
 
+// the modes a launcher can create sessions in — computed BACKEND-side from the adapter's headless capability
+// object, so adapter knowledge never leaks to the frontend (which only consumes this list). interactive is
+// always offered; headless requires the harness's `headless` capability AND, when that capability needs its
+// own command (needsCmd), a configured headlessCmd. An unknown harness id contributes no headless here (the
+// list stays renderable; resolveLauncher fails loud on it later).
+export function launcherModes(harness: string, headlessCmd: string | null): SessionMode[] {
+  const cap = HARNESSES.find((x) => x.id === harness)?.headless ?? null
+  return cap && (!cap.needsCmd || !!headlessCmd) ? ['interactive', 'headless'] : ['interactive']
+}
+
 // the configured named launchers from spexcode.json, as a stable name-sorted list (for the dashboard dropdown +
-// the CLI). Picking a launcher is the ONLY launch choice; the old separate harness pick is gone.
-export function launcherList(root = mainCheckout()): Launcher[] {
+// the CLI), each with its computed `modes`. Picking a launcher is the ONLY launch choice; the old separate
+// harness pick is gone.
+export function launcherList(root = mainCheckout()): (Launcher & { modes: SessionMode[] })[] {
   const m = readConfig(root).sessions?.launchers || {}
   return Object.keys(m)
-    .map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
+    .map((name) => {
+      const harness = m[name].harness || defaultHarness.id
+      const headlessCmd = m[name].headlessCmd?.trim() || null   // empty string reads as absent
+      return { name, harness, cmd: m[name].cmd, headlessCmd, modes: launcherModes(harness, headlessCmd) }
+    })
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -1301,7 +1361,42 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
-  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
+  // no headless validation here — mode availability is decided at CREATE time (pinnedLaunchCmd), where the
+  // requested mode is known; resolve stays the pure name→profile lookup.
+  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd, headlessCmd: l.headlessCmd?.trim() || null }
   harnessById(resolved.harness)   // validate the harness id fail-loud
   return resolved
+}
+
+// the configured default session MODE ([[launcher-select]] headless): the mode a create with no explicit
+// --mode/--headless choice uses. Absent → interactive (headless is opt-in, never a silent default flip); an
+// unrecognized value is a config error reported loud with the repair, exactly like a malformed JSON file —
+// never silently coerced.
+export function defaultSessionMode(root = mainCheckout()): SessionMode {
+  const raw = readConfig(root).sessions?.defaultMode?.trim()
+  if (!raw) return 'interactive'
+  if (!(SESSION_MODES as readonly string[]).includes(raw))
+    throw new Error(`sessions.defaultMode '${raw}' is not a session mode (valid: ${SESSION_MODES.join(' | ')}) — fix it in spexcode.json or spexcode.local.json`)
+  return raw as SessionMode
+}
+
+// the launch command a NEW session PINS on its record, per its mode ([[launcher-select]] resume-launcher-pin):
+//   interactive                → the launcher's interactive `cmd` (unchanged behavior).
+//   headless, needsCmd harness → the launcher's `headlessCmd` verbatim (the one-shot invocation IS that
+//                                command); missing → fail loud naming the config repair, never a silent
+//                                fall-through to the interactive cmd (which would boot a TUI nobody attends).
+//   headless, !needsCmd        → still the interactive `cmd` — the server-side executor (codex app-server) is
+//                                DERIVED from it (the version-parity invariant), so it is what must freeze.
+// A harness with no headless capability rejects headless outright, naming what does support it. Pure and
+// exported so the pin decision is unit-auditable without a git worktree.
+export function pinnedLaunchCmd(h: Harness, launcher: Launcher, mode: SessionMode): string {
+  if (mode !== 'headless') return h.baseCmd(launcher.cmd)
+  if (!h.headless) {
+    const capable = HARNESSES.filter((x) => x.headless).map((x) => x.id).join(', ')
+    throw new Error(`launcher '${launcher.name}' runs harness '${h.id}', which has no headless capability (headless-capable: ${capable || 'none yet'}) — create the session without --headless`)
+  }
+  if (!h.headless.needsCmd) return h.baseCmd(launcher.cmd)
+  if (!launcher.headlessCmd)
+    throw new Error(`launcher '${launcher.name}' has no headlessCmd — headless mode on harness '${h.id}' needs one; add "headlessCmd" to sessions.launchers.${launcher.name} in spexcode.json or spexcode.local.json (spex guide settings → LAUNCHERS)`)
+  return launcher.headlessCmd
 }

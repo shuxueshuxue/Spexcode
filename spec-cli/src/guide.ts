@@ -301,6 +301,8 @@ Example:
                             SELECTED harness (--harness); edit/add more like any other.
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
                             (required for no-choice creates). A portable NAME → committed.
+  sessions.defaultMode      the session MODE a create with no explicit --mode/--headless choice uses:
+                            "interactive" (the default — omit the key) or "headless". Policy → committed.
 A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
 must stay free of machine paths.
 
@@ -315,10 +317,18 @@ after which they are edited (or removed) exactly like any launcher you add. To r
 wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
 override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir
 variants. Shape:
-  "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>" } }
-\`harness\` defaults to "claude"; \`cmd\` is required. Because \`cmd\` is a machine fact (an abs wrapper path),
-the DEFINITION lives in the gitignored spexcode.local.json, while the portable defaultLauncher NAME sits
-in the committed spexcode.json — the merge keeps both:
+  "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>",
+                             "headlessCmd": "<headless launch command>" } }
+\`harness\` defaults to "claude"; \`cmd\` is required and stays the INTERACTIVE (TUI) command — existing
+configs need zero migration. \`headlessCmd\` is the OPTIONAL second complete command for HEADLESS (one-shot
+turn) sessions (\`spex session new --headless\` / the dashboard mode switch): write the FULL invocation
+(e.g. the same wrapper plus \`-p\`) — the system embeds it whole and never parses or rewrites it. An empty
+string reads as absent. Whether a launcher can go headless is the harness's capability: a harness whose
+headless executor is server-side needs no headlessCmd at all, one that runs a one-shot agent process
+requires it — a headless create missing it FAILS LOUD at create time, naming this section. Because a
+\`cmd\`/\`headlessCmd\` is a machine fact (an abs wrapper path), the DEFINITION lives in the gitignored
+spexcode.local.json, while the portable defaultLauncher NAME sits in the committed spexcode.json — the
+merge keeps both:
 
   spexcode.json  (committed — the portable name reference)
   { "sessions": { "defaultLauncher": "gpt5" } }

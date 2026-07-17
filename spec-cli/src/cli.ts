@@ -49,7 +49,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--mode', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -624,7 +624,15 @@ if (cmd === 'serve') {
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
     const nodeArg = flag('node')
-    const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined)
+    // the session MODE: --headless is sugar for --mode headless; an explicit --mode interactive overrides a
+    // configured sessions.defaultMode. A conflicting pair is a usage error, never a silent pick; validity of
+    // the value itself (and the launcher's headless capability) is the backend's fail-loud check.
+    const modeFlag = flag('mode')
+    if (has('headless') && modeFlag !== undefined && modeFlag !== 'headless') {
+      console.error(`spex session new: --headless conflicts with --mode ${modeFlag} — give one of them`); process.exit(2)
+    }
+    const mode = has('headless') ? 'headless' : modeFlag
+    const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined, mode)
     console.log(JSON.stringify(created, null, 2))
     await launchMonitorReminder(created.id)
   } else if (sub === 'ls') {
@@ -823,6 +831,7 @@ if (cmd === 'serve') {
           console.log(`  node     : ${x.node ?? '—'}`)
           console.log(`  branch   : ${x.branch ?? '—'}`)
           console.log(`  launcher : ${x.launcher ?? '—'}  (harness ${x.harness})`)
+          console.log(`  mode     : ${x.mode ?? 'interactive'}${x.mode === 'headless' ? ' ◇' : ''}`)
           console.log(`  worktree : ${x.path}`)
           console.log(`  created  : ${new Date(x.created).toISOString()}`)
           if (x.note) console.log(`  note     : ${x.note}`)

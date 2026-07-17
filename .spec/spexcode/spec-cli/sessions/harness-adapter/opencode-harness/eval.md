@@ -146,7 +146,8 @@ scenarios:
     expected: >-
       Zero residue: the tmux session is gone, no opencode process for that worktree survives, the
       worktree directory and node branch are removed, and the per-session rendezvous socket is swept.
-      The store record remains (history), marked closed.
+      The global store dir dies with the session (close is retirement — the documented sweep; durable
+      history lives in git and the eval filings, not the record).
 ---
 
 Measured YATU through the generated artifacts and the real CLI: the plugin file the adapter actually

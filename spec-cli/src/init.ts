@@ -3,7 +3,7 @@ import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { readConfig, readJsonConfig } from './layout.js'
-import { resolveHarnessTargets } from './harness-select.js'
+import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
@@ -54,7 +54,7 @@ function resolveHooksDir(dir: string): string | null {
   }
 }
 
-export async function specInit(targetArg: string | undefined, presetArg?: string): Promise<void> {
+export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
 
   // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target spexcode.json's
@@ -75,6 +75,24 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     execFileSync('git', ['-C', targetDir, 'rev-parse', '--is-inside-work-tree'], { stdio: ['ignore', 'ignore', 'ignore'] })
   } catch {
     console.error(`spex init: ${targetDir} is not a git repository. SpexCode is git-backed (git is the version database; the hooks live in .git). Run \`git init\` there first, then \`spex init\`.`)
+    process.exit(1)
+  }
+
+  // the harness DELIVERY TARGET set ([[harness-select]]) is a REQUIRED, explicit choice — `--harness <ids>`
+  // stamps it into spexcode.json; absent the flag, a pre-existing explicit `harnesses` field IS the choice.
+  // Neither → abort BEFORE writing anything: with many harnesses, a silent "deliver to all" would litter the
+  // adopter's tree (and global tool configs) with artifacts for harnesses they never installed. Legality
+  // (unknown ids, plugin exclusivity, empty set) fails loud here too, not as a soft materialize warning.
+  const flagRaw = (harnessArg ?? '').trim() ? parseHarnessFlag(harnessArg!.trim()) : null
+  const chosenHarnesses = flagRaw ?? readConfig(targetDir).harnesses ?? null
+  if (chosenHarnesses === null) {
+    console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). A pre-existing spexcode.json "harnesses" field also satisfies this.`)
+    process.exit(1)
+  }
+  try {
+    resolveHarnessTargets(chosenHarnesses)
+  } catch (e) {
+    console.error(`spex init: ${(e as Error).message}`)
     process.exit(1)
   }
 
@@ -100,27 +118,35 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     }
   }
 
-  // 1b. plant a starter spexcode.json (the lint/layout knob). The success message reports the value the
-  // template ACTUALLY ships (read from the planted file, never restated as a string literal here — the two
-  // once drifted: the message claimed ["src"] while the template seeded ["."]).
+  // 1b. plant a starter spexcode.json (the lint/layout knob) carrying the CHOSEN `harnesses` set. The
+  // template ships launchers for every native harness; seeding keeps only the SELECTED ones (a launcher for
+  // a tool the adopter didn't pick is exactly the litter --harness exists to prevent) — a plugin-only
+  // selection keeps them all, since the bundle serves the HOST agent while dispatched sessions still need a
+  // launcher. The success message reports values read back from the planted file, never restated literals.
   const cfgDest = join(targetDir, 'spexcode.json')
+  const nativeChosen = (chosenHarnesses as unknown[]).filter((m): m is string => typeof m === 'string')
   if (existsSync(cfgDest)) {
-    console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched.`)
+    if (flagRaw) {
+      // an explicit --harness on a re-init is a deliberate command: restamp THAT field, touch nothing else.
+      const cfg = (readJsonConfig(cfgDest) ?? {}) as Record<string, unknown>
+      cfg.harnesses = flagRaw
+      writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
+      console.log(`✓ stamped "harnesses": ${JSON.stringify(flagRaw)} into the existing spexcode.json (other fields untouched)`)
+    } else {
+      console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
+    }
   } else {
-    copyFileSync(join(TEMPLATES, 'spexcode.json'), cfgDest)
+    const cfg = (readJsonConfig(join(TEMPLATES, 'spexcode.json')) ?? {}) as Record<string, any>
+    cfg.harnesses = chosenHarnesses
+    if (nativeChosen.length && cfg.sessions?.launchers) {
+      cfg.sessions.launchers = Object.fromEntries(
+        Object.entries(cfg.sessions.launchers as Record<string, { harness?: string }>).filter(([, l]) => nativeChosen.includes(l.harness ?? 'claude')))
+      const names = Object.keys(cfg.sessions.launchers)
+      if (names.length) cfg.sessions.defaultLauncher = names[0]
+    }
+    writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
     const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
-    console.log(`✓ planted spexcode.json — lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded); curate explicit roots later if you want a narrower graph`)
-  }
-
-  // validate the harness DELIVERY TARGET set ([[harness-select]]) up front: a bad `harnesses` set (plugin +
-  // native, or a plugin with no folder) must fail LOUD here, not be silently swallowed by the materialize
-  // try/catch below. A fresh starter spexcode.json omits the field (defaults to all natives), so this only
-  // bites a hand-edited or re-init'd config — exactly where a clear error belongs.
-  try {
-    resolveHarnessTargets(readConfig(targetDir).harnesses)
-  } catch (e) {
-    console.error(`spex init: ${(e as Error).message}`)
-    process.exit(1)
+    console.log(`✓ planted spexcode.json — harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
   }
 
   // 2. install the git hooks: templates/hooks/* -> <repo>/<common-git-dir>/hooks/* (skip any that exist).

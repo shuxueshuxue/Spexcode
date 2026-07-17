@@ -467,9 +467,9 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'init') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
-  // into <targetDir> (default cwd). spex init [targetDir] [--preset <tier>]
+  // into <targetDir> (default cwd). spex init [targetDir] --harness <ids> [--preset <tier>]
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0], flag('preset'))
+  await specInit(positionals(3)[0], flag('preset'), flag('harness'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.plugins data or their own
@@ -583,7 +583,14 @@ if (cmd === 'serve') {
   // trust, for cwd's project. Anchored on git-native events only ([[commit-surgery]]): this verb, init,
   // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
   const { materialize } = await import('./materialize.js')
-  console.log(`materialized — content-hash ${materialize()}`)
+  try {
+    console.log(`materialized — content-hash ${materialize()}`)
+  } catch (e) {
+    // a policy error (e.g. a missing/illegal `harnesses` set) is a user-facing verdict, not a crash — one
+    // line + the repair it already carries, never a stack trace.
+    console.error(`spex materialize: ${(e as Error).message}`)
+    process.exit(1)
+  }
 } else if (cmd === 'doctor') {
   // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
   // the global install, while the report is about THIS agent's wiring): does the materialized workflow

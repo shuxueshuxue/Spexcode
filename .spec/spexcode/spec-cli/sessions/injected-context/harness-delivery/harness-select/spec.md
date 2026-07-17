@@ -19,11 +19,16 @@ because [[harness-delivery]]'s `materialize` re-runs at every git-native anchor 
 the intent must live where every re-materialize re-reads it, not in a command a human has to remember.
 
 The vocabulary is small. Each member is either a NATIVE harness id (`claude`, `codex` — the ids the
-[[harness-adapter]] registers) or a PLUGIN bundle. Omitting the field defaults to every native harness (the
-zero-config "deliver natively, everywhere"); it never silently collapses to "nothing".
+[[harness-adapter]] registers) or a PLUGIN bundle. **There is no default set**: the field is REQUIRED, an
+explicit adopter choice that [[spex-init]] demands up front (`spex init --harness <ids>`, the CLI spelling
+`parseHarnessFlag` translates — `plugin:<folder>` for a bundle) and stamps into `spexcode.json`. A missing
+field fails loud with that stamp as the named repair. The old zero-config "deliver to every native harness"
+was retired because it scales exactly wrong: every harness added to the registry would silently start
+littering every adopter's tree — and global tool configs (`~/.codex`, …) — with artifacts for CLIs they
+never installed.
 
-Two invariants are enforced fail-loud — an illegal set aborts `materialize`/`spex init` with a stated reason,
-never a silent or partial delivery:
+Three invariants are enforced fail-loud — an illegal set aborts `materialize`/`spex init` with a stated reason,
+never a silent or partial delivery. A missing field is the third: same loud abort, repair named above.
 
 - **plugin exclusivity** — a set containing a plugin may carry NO native harness. A plugin bundle is a SUPERSET
   delivery to its host agent, so pairing it with a native harness double-delivers. Choose EITHER native

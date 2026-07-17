@@ -14,7 +14,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    npm deps installed), or use the dev server.)
 
 2. Adopt a repo
-     cd <your-repo> && spex init                 # seeds .spec/ + git hooks (additive, never overwrites)
+     cd <your-repo> && spex init --harness claude   # seeds .spec/ + git hooks (additive, never overwrites)
+   --harness is required — the explicit choice of which harness(es) materialize delivers into.
    Works on any git repo. Edit .spec/project/spec.md to describe it, then grow child nodes
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 
@@ -291,8 +292,8 @@ Example:
                             Counts compute slots, not total sessions: idle/asking/review/done do not
                             occupy one. A policy number → committed spexcode.json; omit it to use the
                             default, or tune higher/lower for the project's usual host.
-  sessions.launchers        the NAMED launcher profiles (see LAUNCHERS). \`spex init\` seeds "claude" and
-                            "codex" here as ordinary entries; edit/add more like any other.
+  sessions.launchers        the NAMED launcher profiles (see LAUNCHERS). \`spex init\` seeds one entry per
+                            SELECTED harness (--harness); edit/add more like any other.
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
                             (required for no-choice creates). A portable NAME → committed.
 A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
@@ -301,8 +302,8 @@ must stay free of machine paths.
 ── LAUNCHERS (the profile block, split across the two files) ──
 A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
-reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS "claude" and "codex" as ordinary
-named launchers,
+reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordinary named launcher for each
+harness the adopter SELECTED (--harness), from the template pool
   "claude" → { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" }
   "codex"  → { "harness": "codex",  "cmd": "codex --yolo" }
 after which they are edited (or removed) exactly like any launcher you add. To run workers under an auth
@@ -396,7 +397,8 @@ Example — govern your own source dir and loosen the altitude budget:
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
-              { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
+              { "plugin": "<folder>" } bundle. REQUIRED — there is no default set: \`spex init --harness\`
+              stamps the explicit choice, and a missing field fails materialize loud. PERSISTENT and
               git-transactional: the edit takes effect at the next git-native materialize anchor (the commit
               that carries it, a checkout/merge that receives it, or a manual \`spex materialize\`) — a
               deselected harness's artifacts are pruned by that pass.`

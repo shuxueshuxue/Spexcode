@@ -38,9 +38,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
   starter ships `governedRoots: ["."]` — the zero-config safe default: `.` governs the *whole* project,
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
-  fresh repo just works and a mature one can still curate explicit roots. It also seeds the default
-  [[launcher-select]] launchers — `claude` and `codex` as ordinary `sessions.launchers` entries plus
-  `sessions.defaultLauncher: "claude"` — so session-create works out of the box without any env var; a host
+  fresh repo just works and a mature one can still curate explicit roots. The planted file also carries the
+  CHOSEN `harnesses` set (next paragraph) and seeds an ordinary [[launcher-select]] launcher for each
+  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first) — so
+  session-create works out of the box without seeding launchers for tools the adopter never picked; a host
   that needs an auth-wrapper command edits that launcher's `cmd` in `spexcode.local.json`.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
@@ -55,12 +56,14 @@ filter on the spot — clean status, no "mystery M", no decision hint — and hi
 the per-clone exclude without touching the host's `.gitignore`. A lingering `render`/`private` field in a
 pre-existing config is ignored with a loud non-fatal notice; nothing about it is ever fatal to adoption.
 
-**An illegal harness-target set fails loud, up front.** Before materializing, `init` validates the project's
-[[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated
-reason on an illegal one — a plugin paired with a native harness, or a plugin with no landing folder — rather
-than letting the later materialize swallow it as a soft "skipped" warning. A fresh starter `spexcode.json`
-omits the field (defaulting to every native harness), so this only bites a hand-edited or re-init'd config —
-exactly where a clear error belongs.
+**The harness delivery choice is REQUIRED, up front.** `--harness <id[,id]|plugin:<folder>>` names which
+harnesses [[harness-select]] delivers into; init stamps it into `spexcode.json` as the persistent `harnesses`
+field (an explicit `--harness` on a re-init restamps that one field of an existing config, touching nothing
+else). A pre-existing explicit field satisfies the requirement without the flag. Neither → init aborts
+BEFORE writing anything, like the git precondition — there is deliberately no default set, because with many
+registered harnesses "deliver to all" would litter the adopter's tree and global tool configs with artifacts
+for CLIs they never installed. An ILLEGAL set (unknown id, plugin paired with a native, plugin with no
+landing folder, empty list) fails just as loud, up front — never a soft "materialize skipped" warning.
 
 **A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
 database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but

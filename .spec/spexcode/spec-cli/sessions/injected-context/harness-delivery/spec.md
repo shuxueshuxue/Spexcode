@@ -60,7 +60,11 @@ scoped per project, for each SELECTED harness:
   discovers guide + contract together (nothing is lost by un-tracking the file). This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
-- **the thin shims** `.claude/settings.json` + `.codex/hooks.json`: one line per harness event → the dispatcher;
+- **the thin shims** — the adapter's `shim().content` written at its `shimFile(proj)`: a shim is whatever
+  FILE that harness auto-discovers, not necessarily a hooks JSON (`.claude/settings.json` +
+  `.codex/hooks.json` bind one line per event → the dispatcher; pi's `.pi/extensions/spexcode.ts` is a
+  generated extension doing the same — [[pi-harness]]). The empty-dir sweep after erase walks each artifact
+  dir's PARENT CHAIN up to the project root, since a harness may nest its artifacts a level deep;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

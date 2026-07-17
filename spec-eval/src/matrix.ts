@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { repoRoot } from '../../spec-cli/src/git.js'
 import { resolveLauncher, type Launcher } from '../../spec-cli/src/harness.js'
 import { envSessionId, mainCheckout, sessionStoreDir } from '../../spec-cli/src/layout.js'
-import { TMUX_SOCK } from '../../spec-cli/src/sessions.js'
+import { BOOT_GRACE_MS, TMUX_SOCK } from '../../spec-cli/src/sessions.js'
 import { fileHumanReading } from './filing.js'
 import { parseScenarios, type Scenario } from './scenarios.js'
 
@@ -50,6 +50,7 @@ export class MatrixRun {
   readonly launcher: Launcher
   readonly lines: string[] = []
   worker: { id: string; path: string; branch: string | null } | null = null
+  lastLaunchAt = 0   // when we last (re)launched the worker's agent — the liveness row waits out the boot grace from here
   private rowStart = 0
   constructor(launcher: Launcher) { this.launcher = launcher }
 
@@ -123,6 +124,21 @@ export class MatrixRun {
     if (!this.worker) return 1
     return (await this.spex(['session', 'send', this.worker.id, text])).code
   }
+  async resume(): Promise<number> {
+    if (!this.worker) return 1
+    const r = await this.spex(['session', 'resume', this.worker.id])
+    this.lastLaunchAt = Date.now()
+    return r.code
+  }
+  // wait until the agent is past the launcher's boot grace: inside that window a dead agent legitimately
+  // reads `starting` (death is unprovable mid-boot), so a liveness kill must land on an ESTABLISHED agent.
+  async waitEstablished(): Promise<void> {
+    const wait = this.lastLaunchAt + BOOT_GRACE_MS + 5000 - Date.now()
+    if (wait > 0) {
+      this.log(`waiting ${Math.ceil(wait / 1000)}s for the boot grace to lapse (kill must land on an established agent)`)
+      await new Promise((r) => setTimeout(r, wait))
+    }
+  }
 
   // launch the one worker the whole matrix drives. The prompt provokes row 1: a clean answer with an
   // explicit no-declaration instruction, so the FIRST settle is exactly the undeclared stop the gate must catch.
@@ -134,6 +150,7 @@ export class MatrixRun {
     let created: Record<string, any>
     try { created = JSON.parse(r.out) } catch { this.log('launch printed no JSON'); return null }
     this.worker = { id: created.id, path: created.path, branch: created.branch ?? null }
+    this.lastLaunchAt = Date.now()
     this.log(`worker ${created.id} launched (worktree ${created.path}, branch ${created.branch})`)
     return created
   }
@@ -314,8 +331,7 @@ export const MATRIX: MatrixRow[] = [
         return s && s.liveness === 'offline' ? s : false
       })
       if (!off) return { status: 'fail', note: 'session never read offline after spex session stop' }
-      const res = await ctx.spex(['session', 'resume', ctx.worker!.id])
-      if (res.code !== 0) return { status: 'fail', note: 'spex session resume failed' }
+      if ((await ctx.resume()) !== 0) return { status: 'fail', note: 'spex session resume failed' }
       const on = await ctx.poll('online after resume', 240, async () => {
         const s = await ctx.show()
         return s && s.liveness === 'online' ? s : false
@@ -331,12 +347,14 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'liveness',
     aliases: ['pi-liveness', 'liveness-signals'],
-    description: "Matrix row: SIGKILL the agent's whole process tree out from under the pane (window and "
-      + 'any stale socket file stay), read board liveness until it flips; then `spex session resume` and read again.',
+    description: "Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane "
+      + '(the kill lands outside the launcher boot-grace window; the tmux window and any stale socket file '
+      + 'stay), read board liveness until it flips; then `spex session resume` and read again.',
     expected: 'Liveness reads `offline` within seconds of the kill — a stale socket FILE never reads as '
       + "alive; the adapter's own per-harness signal decides — and after resume the session reads online again.",
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
+      await ctx.waitEstablished()
       const pids = await ctx.paneDescendants()
       if (!pids.length) return { status: 'skip', note: 'no agent processes found under the pane to kill' }
       for (const pid of pids) { try { process.kill(pid, 'SIGKILL') } catch { /* raced its own death */ } }
@@ -348,8 +366,7 @@ export const MATRIX: MatrixRow[] = [
       })
       const dt = Math.round((Date.now() - t0) / 1000)
       if (!off) return { status: 'fail', note: 'killed agent never read offline — a stale socket/pid still reads as alive' }
-      const res = await ctx.spex(['session', 'resume', ctx.worker!.id])
-      if (res.code !== 0) return { status: 'fail', note: `offline in ${dt}s, but resume failed` }
+      if ((await ctx.resume()) !== 0) return { status: 'fail', note: `offline in ${dt}s, but resume failed` }
       const on = await ctx.poll('online after relaunch', 240, async () => {
         const s = await ctx.show()
         return s && s.liveness === 'online' ? s : false
@@ -362,32 +379,57 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'commit-gate',
     aliases: ['pi-commit-gate', 'commit-gate-rejection'],
-    description: 'Matrix row: the live worker creates an uncommitted file and runs `spex session done '
-      + '--propose merge`; after the rejection it commits and proposes again.',
+    description: 'Matrix row: the runner plants an uncommitted file in the live worker\'s worktree and the '
+      + 'worker runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a '
+      + 'committed re-proposal must be accepted.',
     expected: 'The dirty proposal is rejected at settle with the reason delivered into the session (the '
-      + 'record never stands as review with a dirty tree); after committing, the same proposal is accepted '
-      + '(status review) and the commit carries the `Session:` trailer attributing it to this record.',
+      + 'record never stands as review while the tree is dirty); once the work is committed the same '
+      + 'proposal is accepted (status review) and the commit carries the `Session:` trailer attributing it '
+      + 'to this record.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const wt = ctx.worker!.path
-      if ((await ctx.send("Create a new file matrix-scratch.txt in your worktree containing the single word scratch. Do NOT commit anything. Then run exactly: spex session done --propose merge — and then stop.")) !== 0) return { status: 'fail', note: 'instruction send was not accepted' }
-      const a = await ctx.settle(360)
-      const dirty = (await ctx.exec('git', ['-C', wt, 'status', '--porcelain'], { quiet: true })).out.trim()
-      ctx.log(`after dirty proposal: status ${a?.status}/${a?.lifecycle}, dirty files:\n${dirty || '(clean)'}`)
-      await ctx.capture('after dirty proposal')
-      if (!a) return { status: 'fail', note: 'worker never settled after the dirty proposal' }
-      if (!dirty) return { status: 'skip', note: 'worker committed despite the instruction — the dirty-proposal case never existed' }
-      if (a.status === 'review') return { status: 'fail', note: 'a DIRTY merge proposal stands as review — the commit gate let a dishonest proposal through' }
-      if ((await ctx.send("Now commit your work: run git add -A && git commit -m 'matrix: scratch probe', then run exactly: spex session done --propose merge — and then stop.")) !== 0) return { status: 'fail', note: 'commit instruction send was not accepted' }
-      const b = await ctx.poll('clean proposal accepted (review)', 360, async () => {
+      writeFileSync(join(wt, 'matrix-scratch.txt'), 'scratch\n')
+      const isDirty = async () => (await ctx.exec('git', ['-C', wt, 'status', '--porcelain'], { quiet: true })).out.trim() !== ''
+      if ((await ctx.send('This conformance run deliberately planted an uncommitted file (matrix-scratch.txt) in your worktree to test the commit gate. Do not commit or remove anything yourself yet. Run exactly: spex session done --propose merge — then stop. If the gate rejects you, follow whatever it says.')) !== 0) return { status: 'fail', note: 'instruction send was not accepted' }
+      // classify what the gate did: while polling, a REVIEW standing with a dirty tree is the gate failing;
+      // a settle with the tree still dirty and no review is the gate holding; a clean review after the
+      // rejection text surfaced is the agent obeying the gate's own teaching (rejection PROVEN either way).
+      let rejectionSeen = false
+      let outcome: 'dirty-review' | 'held' | 'self-repaired' | null = null
+      await ctx.poll('commit-gate outcome', 420, async () => {
         const s = await ctx.show()
-        return s && s.status === 'review' ? s : false
+        if (!s) return false
+        const dirty = await isDirty()
+        if (!rejectionSeen) {
+          const pane = await ctx.spex(['session', 'show', ctx.worker!.id, '--capture'], { quiet: true })
+          if (/uncommitted (changes|work)/.test(pane.out + (s.note || ''))) { rejectionSeen = true; ctx.log('gate rejection text surfaced in the session') }
+        }
+        if (s.status === 'review' && dirty) { outcome = 'dirty-review'; return true }
+        if (s.status === 'review' && !dirty && rejectionSeen) { outcome = 'self-repaired'; return true }
+        if (SETTLED.has(s.lifecycle) && s.status !== 'review' && dirty && rejectionSeen) { outcome = 'held'; return true }
+        return false
       })
-      if (!b) return { status: 'fail', note: `dirty proposal correctly rejected (settled ${a.status}), but the clean re-proposal never reached review` }
+      await ctx.capture('after dirty proposal')
+      if (outcome === 'dirty-review') return { status: 'fail', note: 'a DIRTY merge proposal stands as review — the commit gate let a dishonest proposal through' }
+      if (!outcome) {
+        return rejectionSeen
+          ? { status: 'fail', note: 'gate rejection surfaced but the session reached no classifiable settle in time' }
+          : { status: 'skip', note: 'the dirty-proposal rejection was never observed (worker may have committed first) — re-run to measure' }
+      }
+      if (outcome === 'held') {
+        // the agent obeyed the rejection and is waiting — drive the honest completion explicitly.
+        if ((await ctx.send("Now commit the work: run git add -A && git commit -m 'matrix: scratch probe', then run exactly: spex session done --propose merge — and then stop.")) !== 0) return { status: 'fail', note: 'commit instruction send was not accepted' }
+        const b = await ctx.poll('clean proposal accepted (review)', 360, async () => {
+          const s = await ctx.show()
+          return s && s.status === 'review' && !(await isDirty()) ? s : false
+        })
+        if (!b) return { status: 'fail', note: 'dirty proposal correctly rejected, but the clean re-proposal never reached review' }
+      }
       const msg = (await ctx.exec('git', ['-C', wt, 'log', '-1', '--format=%B'], { quiet: true })).out
       ctx.log(`worker HEAD commit message:\n${trim(msg.trim(), 500)}`)
       if (!/^Session: /m.test(msg)) return { status: 'fail', note: 'clean proposal accepted but the commit carries no Session: trailer — attribution lost' }
-      return { status: 'pass', note: `dirty proposal rejected (settled ${a.status}, tree still dirty), clean proposal accepted as review, commit auto-stamped with the Session trailer` }
+      return { status: 'pass', note: `dirty proposal rejected (reason delivered in-session), committed re-proposal accepted as review${outcome === 'self-repaired' ? ' (agent self-repaired per the gate\'s teaching)' : ''}, commit auto-stamped with the Session trailer` }
     },
   },
   {

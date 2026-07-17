@@ -220,13 +220,13 @@ export function materialize(proj = process.cwd()): string {
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
-    writeFileSync(shimFile, shim.json)
+    writeFileSync(shimFile, shim.content)
     h.writeTrust(proj, shim.cmd)
     machinePaths.push(shimFile)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.json); machinePaths.push(anchor) }
+    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.content); machinePaths.push(anchor) }
   }
   // (6) skills + (7) sub-agents — each surface node → the file the harness auto-discovers, one per selected
   //     harness that has the primitive (skillDir/agentDir null skips — the divergence is the adapter's line).

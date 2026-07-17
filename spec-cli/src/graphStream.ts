@@ -94,9 +94,12 @@ async function rebuildAndBroadcast(): Promise<void> {
         // guaranteed win: ship the patch only when it actually beats the snapshot
         if (deltaData.length < fullFrame.data.length) frame = { event: 'graph-delta', data: deltaData }
       }
-      lastUnits = ok ? units : null
-      lastTag = tag
-      lastFullFrame = fullFrame
+      // the anchor is only meaningful while a delta subscriber holds the chain live: with none left,
+      // nothing rebuilds on change, so a cached anchor would silently age into a stale first frame for the
+      // NEXT era's subscriber (issue #70). A build that completes after the last unsub caches nothing
+      // (stopSourcesIfIdle cleared the anchor; leaving lastTag/lastUnits stale-cleared is consistent —
+      // rebuilds only run while delta subscribers exist, so nothing chains from them meanwhile).
+      if (deltaSubs.size) { lastUnits = ok ? units : null; lastTag = tag; lastFullFrame = fullFrame }
       for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
       for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
       // ---- repair accounting: a real (tag-moved) broadcast whose ONLY trigger was the cold-tick patrol
@@ -245,6 +248,11 @@ function ensureColdTick(): void {
 }
 
 function stopSourcesIfIdle(): void {
+  // the delta anchor dies with its era's last subscriber: past this point changes invalidate the cache but
+  // never rebuild, so lastFullFrame would drift arbitrarily far from the real board — and the next era's
+  // first subscriber would be anchored on it (its warm-terminal set then drops live sessions' panes, and the
+  // client's recovery lanes can latch each other out — issue #70). A new era opens on a fresh build instead.
+  if (deltaSubs.size === 0) { lastUnits = null; lastTag = ''; lastFullFrame = null }
   if (plainSubs.size + deltaSubs.size > 0) return
   if (hotPoller) { clearInterval(hotPoller); hotPoller = null; lastHot = '' }
   if (warmPoller) { clearInterval(warmPoller); warmPoller = null; lastWarm = '' }

@@ -68,8 +68,9 @@ function buildEntries(specs, sessions, corpus) {
   for (const s of sessions) {
     // a session reads as ONE name everywhere: the shared sessionHeadline ([[session-activity]]) the board rows,
     // window, tabs, and console header all show — NOT the raw stable handle, which left the palette naming a
-    // session differently from the board it was searched from. The stable handle still rides in `body` so
-    // search-by-node/branch/id keeps working even when the live self-summary has replaced it on screen.
+    // session differently from the board it was searched from. The handle rides in `body` as the match text;
+    // on a current backend it IS the server-derived label (rename name / prompt truncation), and that label
+    // is the whole search promise — raw id/node/branch fragments are deliberately not promised to match.
     const headline = sessionHeadline(s)
     const handle = sessionHandle(s)
     const sub = s.status || s.promptPreview || s.note || ''

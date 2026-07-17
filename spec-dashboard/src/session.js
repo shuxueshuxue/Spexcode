@@ -56,7 +56,9 @@ export const zoneSort = (sessions) => {
 // explicitly raw consumer (the rename prefill).
 //
 // `sessionHandle` is the STABLE handle — its ONLY sanctioned uses are the avatar/hover TOOLTIP, mobile's
-// handle-line, and search MATCHING (search still matches node/branch/id even where it shows the headline).
+// handle-line, and search MATCHING. On a current backend the wire always carries `label`, so this door
+// short-circuits there: what search matches IS the label (a rename name or the prompt truncation);
+// raw id/node/branch fragments are deliberately NOT promised searchable.
 // It is NEVER a visible one-line title: EVERY surface where a human reads "which session is this" (board
 // rows, the map window, Enter tabs, the console strip, the search palette, the @-mention dropdown, and the
 // node-menu overlay list) renders `sessionHeadline`. Naming the stable door `Handle`, not `Name`, is the

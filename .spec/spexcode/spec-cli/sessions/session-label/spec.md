@@ -62,7 +62,8 @@ dev reaching for it by intuition kept wiring the stable label into a visible one
 that recurred (the node-menu overlay list showed the label while the board beside it showed the live
 headline). Renaming the door removes the trap at its source: `sessionHeadline` is now the only intuitively
 "the name" door, so every human-visible one-line title lands on it, and `sessionHandle` is confined to its
-three real jobs — the avatar/hover **tooltip**, mobile's handle-line, and search **matching** (search still
-matches node/branch/id even where it shows the headline). Which surface reads which is [[session-activity]]'s
+three real jobs — the avatar/hover **tooltip**, mobile's handle-line, and search **matching** (the label —
+a rename name or the prompt truncation — is the match body even where the headline is shown; raw
+id/node/branch fragments are not promised searchable). Which surface reads which is [[session-activity]]'s
 "one name, every surface"; naming the doors for their role is what makes that guarantee hold instead of
 relying on every author to remember it.

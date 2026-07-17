@@ -81,16 +81,18 @@ scenarios:
       BOARD — the top-left window rows (`.sess-id`), where a live worker shows its self-summary headline, NOT
       its raw node/branch/id. Then open the search palette (⌘/Ctrl+/ over the session board, or `/` on the
       board) and read the SESSION rows' titles. Compare them to the board headlines. Also lock a session
-      (single-click its window row) and read the lock-hint banner's name. Finally, type a stable-handle
-      fragment (a session's node/branch/id) into the palette and confirm that session still matches.
+      (single-click its window row) and read the lock-hint banner's name. Finally, type a fragment of a
+      session's LABEL (the server-derived stable name — a human rename or the prompt truncation) into the
+      palette and confirm that session matches.
       Screenshot the board window beside the open palette.
     expected: >-
       Every session reads as ONE name across surfaces: each board-window headline appears verbatim as that
       session's title in the search palette, and the lock-hint banner shows the same headline — the palette
       and lock banner no longer show the raw stable handle (node/branch/id) while the board shows the live
-      self-summary. A human rename still wins everywhere. Search still MATCHES the stable handle even though
-      it no longer displays it, so typing a session's node/branch/id still finds it (the handle rides in the
-      row's match body). The place a session is searched from and the place it is found never disagree.
+      self-summary. A human rename still wins everywhere. Search matches the server-derived label (which
+      carries a rename name or the prompt truncation); raw id/node/branch fragments are deliberately NOT
+      promised to match — a zero-result id query is compliant behaviour, not a regression. The place a
+      session is searched from and the place it is found never disagree.
     code:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx

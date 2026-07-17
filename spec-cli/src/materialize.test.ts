@@ -42,7 +42,7 @@ function makeHost() {
   writeFileSync(join(proj, 'AGENTS.md'), '# team agents\nkeep me\n')
   writeFileSync(join(proj, '.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex('init', '.')
+  spex('init', '.', '--harness', 'claude,codex')
   g('add', '.spec', 'spexcode.json'); g('commit', '-qm', 'adopt (data tracked)', '--no-verify')
   const setLocal = (json: string | null) => {
     if (json === null) rmSync(join(proj, 'spexcode.local.json'), { force: true })
@@ -199,7 +199,7 @@ test('contract kind transition: user prose entering a wholly-ours CLAUDE.md un-h
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'README.md'), '# app\n')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex('init', '.')
+  spex('init', '.', '--harness', 'claude,codex')
 
   // state 1 — wholly ours: generated, excluded, invisible
   const claude = join(proj, 'CLAUDE.md')
@@ -289,7 +289,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'README.md'), '# app\n')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex(proj, 'init', '.')                                  // seeds .spec (incl .plugins/core) + materializes at main
+  spex(proj, 'init', '.', '--harness', 'claude,codex')     // seeds .spec (incl .plugins/core) + materializes at main
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
 
   const wt = join(proj, '.worktrees', 'wt')
@@ -409,7 +409,7 @@ test('harness selection chain: a codex-only repo NEVER grows .claude — init, m
 test('harness selection is persistent + self-healing at the git-native anchors: narrowing `harnesses` prunes on the next anchor materialize', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeBareRepo('spex-narrow-')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex(proj, 'init', '.')                                     // default set: both natives delivered
+  spex(proj, 'init', '.', '--harness', 'claude,codex')        // explicit both-natives set
   assert.ok(existsSync(join(proj, '.claude', 'settings.json')) && existsSync(join(proj, 'CLAUDE.md')), 'baseline: claude delivered')
   // narrow the PERSISTED selection — a bare config edit, exactly what an adopter does
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
@@ -433,7 +433,7 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
 test('per-tree materialize slots: a divergent worktree materializes into its own slot; another tree\'s later materialize never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env, g, spex } = makeBareRepo('spex-slots-')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex(proj, 'init', '.')
+  spex(proj, 'init', '.', '--harness', 'claude,codex')
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
   // worktree with a DIVERGENT .plugins: one extra surface:hook node bound to SessionStart
   const wt = join(proj, '.worktrees', 'wt')

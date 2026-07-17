@@ -13,19 +13,33 @@ export type HarnessTarget =
   | { kind: 'native'; id: HarnessId }
   | { kind: 'plugin'; folder: string }
 
-// the zero-config default: deliver to EVERY native harness, no plugin.
-export const DEFAULT_HARNESS_IDS: readonly HarnessId[] = HARNESSES.map((h) => h.id)
+// the native vocabulary (for messages and init's flag parsing). There is NO default set: the delivery
+// targets are an explicit adopter choice, stamped by `spex init --harness` and read back from config forever.
+export const NATIVE_HARNESS_IDS: readonly HarnessId[] = HARNESSES.map((h) => h.id)
 const KNOWN: readonly string[] = HARNESSES.map((h) => h.id)
+
+// the one-line repair every missing-selection error carries — the field is REQUIRED, never defaulted,
+// because with many harnesses a silent "deliver everywhere" would litter the adopter's tree with artifacts
+// for tools they never installed.
+const MISSING = `spexcode.json has no "harnesses" field — the delivery targets are an EXPLICIT choice, never a default. Declare it, e.g. "harnesses": ["claude"] — members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}. Fresh adoption: \`spex init --harness <ids>\` stamps it.`
+
+// parse `spex init --harness <spec>` into the raw JSON members the `harnesses` field carries: a comma-
+// separated list where `plugin:<folder>` means a plugin target and anything else is a native id. Pure
+// spelling translation — legality (unknown ids, plugin exclusivity) stays with resolveHarnessTargets.
+export function parseHarnessFlag(spec: string): unknown[] {
+  return spec.split(',').map((s) => s.trim()).filter(Boolean)
+    .map((s) => (s.startsWith('plugin:') ? { plugin: s.slice('plugin:'.length) } : s))
+}
 
 // parse + validate the spexcode.json `harnesses` field into resolved targets. FAIL LOUD on an illegal set —
 // materialize and init both gate on this so a bad config never silently delivers the wrong thing. `raw` is the
-// JSON value as written; undefined/null → the default native set.
+// JSON value as written; a MISSING field is itself illegal (the choice must exist, stamped by init).
 export function resolveHarnessTargets(raw: unknown): HarnessTarget[] {
-  if (raw === undefined || raw === null) return DEFAULT_HARNESS_IDS.map((id) => ({ kind: 'native', id }))
+  if (raw === undefined || raw === null) throw new Error(MISSING)
   if (!Array.isArray(raw))
-    throw new Error(`spexcode.json "harnesses" must be an ARRAY of targets (got ${typeof raw}). Members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}; omit the field to default to [${DEFAULT_HARNESS_IDS.join(', ')}].`)
+    throw new Error(`spexcode.json "harnesses" must be an ARRAY of targets (got ${typeof raw}). Members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
   if (raw.length === 0)
-    throw new Error(`spexcode.json "harnesses" is EMPTY — list at least one target, or remove the field to default to [${DEFAULT_HARNESS_IDS.join(', ')}].`)
+    throw new Error(`spexcode.json "harnesses" is EMPTY — list at least one target: native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
   const targets: HarnessTarget[] = []
   for (const m of raw) {
     if (typeof m === 'string') {

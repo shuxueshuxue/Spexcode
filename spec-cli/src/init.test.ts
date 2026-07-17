@@ -42,7 +42,7 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
 
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
   const { spex } = freshRepo()
-  const out = spex('init', '.')
+  const out = spex('init', '.', '--harness', 'claude,codex')
   assert.ok(out.includes(`lint.governedRoots starts as ${TEMPLATE_ROOTS}`), `plant message names the template value ${TEMPLATE_ROOTS}: ${out}`)
   assert.ok(out.includes(`(currently ${TEMPLATE_ROOTS})`), 'next-steps names the LIVE planted value')
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')
@@ -50,7 +50,7 @@ test('init success message reports the governedRoots the template ACTUALLY ships
 
 test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = freshRepo({ trackedContract: true })
-  const out = spex('init', '.')
+  const out = spex('init', '.', '--harness', 'claude,codex')
   assert.ok(!out.includes('--render') && !/vote/i.test(out), 'no vote vocabulary anywhere in the adoption output')
   // the tracked contract files are covered immediately: block in the worktree, index pristine, status clean
   assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'contract delivered into the tracked file')
@@ -63,10 +63,29 @@ test('adoption needs no vote: a host-TRACKED contract file goes straight through
   assert.ok(!existsSync(join(proj, '.gitignore')), 'init never creates or edits a host .gitignore')
 })
 
+test('init without --harness fails loud BEFORE writing anything — the delivery choice is required, never defaulted', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env } = freshRepo()
+  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . 2>&1; echo "exit:$?"`], { encoding: 'utf8', env })
+  assert.match(all, /--harness is required/, 'the error names the missing flag')
+  assert.match(all, /exit:1/, 'non-zero exit')
+  assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
+})
+
+test('--harness stamps the choice and seeds ONLY the selected harness\'s launcher', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, spex } = freshRepo()
+  spex('init', '.', '--harness', 'codex')
+  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  assert.deepEqual(cfg.harnesses, ['codex'], 'the choice is persisted as the harnesses field')
+  assert.deepEqual(Object.keys(cfg.sessions.launchers), ['codex'], 'unselected harnesses got no launcher')
+  assert.equal(cfg.sessions.defaultLauncher, 'codex', 'defaultLauncher follows the selection')
+  assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no claude artifacts for an unselected harness')
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'the selected harness was delivered')
+})
+
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
   writeFileSync(join(proj, 'spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')
-  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . 2>&1`], { encoding: 'utf8', env })
+  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . --harness claude,codex 2>&1`], { encoding: 'utf8', env })
   assert.match(all, /retired/i, 'the retired-field notice is loud')
   assert.ok(existsSync(join(proj, '.spec')), 'adoption proceeded — the field is inert, never fatal')
   assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'one residence behavior regardless of the field')

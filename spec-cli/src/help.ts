@@ -44,12 +44,14 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
   init: {
-    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name]',
-    body: `Usage: spex init [dir=cwd] [--preset default]
+    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  --harness <ids> [--preset name]',
+    body: `Usage: spex init [dir=cwd] --harness <id[,id]|plugin:<folder>> [--preset default]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
-shims). Additive — never overwrites your files. --preset picks the .plugins plugin tier (cumulative).
+shims). --harness is REQUIRED — the explicit choice of which harnesses materialize delivers into
+(stamped as spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
+field satisfies it. Additive — never overwrites your files. --preset picks the .plugins plugin tier (cumulative).
 Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',

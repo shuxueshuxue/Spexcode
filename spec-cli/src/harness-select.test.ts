@@ -1,13 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveHarnessTargets, partitionHarnesses, DEFAULT_HARNESS_IDS } from './harness-select.js'
+import { resolveHarnessTargets, partitionHarnesses, parseHarnessFlag } from './harness-select.js'
 
-test('default (omitted) delivers to every native harness, no plugin', () => {
+test('a MISSING field fails loud with the stamp repair — there is no default set', () => {
   for (const raw of [undefined, null]) {
-    const t = resolveHarnessTargets(raw)
-    assert.deepEqual(t, DEFAULT_HARNESS_IDS.map((id) => ({ kind: 'native', id })))
-    assert.ok(t.length >= 2 && t.every((x) => x.kind === 'native'))
+    assert.throws(() => resolveHarnessTargets(raw), /no "harnesses" field.*spex init --harness/s)
   }
+})
+
+test('parseHarnessFlag translates the CLI spelling to raw field members (validation stays with resolve)', () => {
+  assert.deepEqual(parseHarnessFlag('claude'), ['claude'])
+  assert.deepEqual(parseHarnessFlag('claude, codex'), ['claude', 'codex'])
+  assert.deepEqual(parseHarnessFlag('plugin:.zcode'), [{ plugin: '.zcode' }])
+  assert.deepEqual(resolveHarnessTargets(parseHarnessFlag('codex')), [{ kind: 'native', id: 'codex' }])
+  assert.throws(() => resolveHarnessTargets(parseHarnessFlag('claude,plugin:.zcode')), /EXCLUSIVE/)
 })
 
 test('native ids resolve to native targets; order preserved', () => {

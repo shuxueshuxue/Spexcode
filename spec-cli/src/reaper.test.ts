@@ -168,3 +168,41 @@ test('[https] TCP connect that never completes the TLS handshake is reaped at ~h
   assert.ok(dt >= HEADER_MS - 80 && dt < HEADER_MS * 3, `reaped at ~header deadline, got ${dt}ms`)
   sock.destroy(); srv.close()
 })
+
+// issue #65 pin: a server CREATED with Node's own timeouts BELOW the reaper deadlines must still be governed
+// by the reaper alone. Node's headersTimeout/keepAliveTimeout cover the same phases, and when they raced the
+// reaper they won (the child's headersTimeout: 20000 beat the 30s default header deadline on every reap and
+// silently capped SPEXCODE_REAP_HEADER_MS above 20s). install() claims ownership by zeroing them, so: the
+// loris dies at ~headerMs by a BARE destroy — zero bytes received; Node writing "408 Request Timeout" first
+// would mean its machinery still owns the socket — and an idle keep-alive dies at ~idleMs, not at Node's
+// keepAliveTimeout.
+test('[http] hostile serverOptions below the reaper deadlines do not shadow the reaper (issue #65)', async () => {
+  const server = http.createServer(
+    { keepAliveTimeout: 60, headersTimeout: 100, requestTimeout: 5000, connectionsCheckingInterval: 50 },
+    handler,
+  )
+  installConnectionReaper(server as http.Server, { headerMs: HEADER_MS, idleMs: IDLE_MS })
+  const port = await new Promise<number>((resolve) =>
+    server.listen(0, '127.0.0.1', () => resolve((server.address() as net.AddressInfo).port)))
+
+  const loris = await dial('http', port)
+  let received = 0
+  loris.on('data', (b) => { received += b.length })
+  loris.write('GET /api/graph HTTP/1.1\r\nHost: x\r\nX-Slow: ')   // dangling — never completes
+  const t0 = Date.now()
+  const reaped = await closesWithin(loris, HEADER_MS * 4)
+  const dt = Date.now() - t0
+  assert.ok(reaped, 'slow-loris socket must still be reaped')
+  assert.equal(received, 0, 'a reaper kill is a bare destroy — a 408 means Node headersTimeout fired, shadowing the reaper')
+  assert.ok(dt >= HEADER_MS - 80, `the reaper deadline governs, not Node headersTimeout(100ms), got ${dt}ms`)
+
+  const idle = await dial('http', port)
+  idle.write('GET / HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n')   // a COMPLETE request
+  await new Promise<void>((resolve) => { idle.once('data', () => resolve()) })
+  const armedAt = Date.now()
+  const idleReaped = await closesWithin(idle, IDLE_MS * 5)
+  const idleDt = Date.now() - armedAt
+  assert.ok(idleReaped, 'idle keep-alive socket must still be reaped')
+  assert.ok(idleDt >= IDLE_MS - 80, `the reaper idle deadline governs, not Node keepAliveTimeout(60ms), got ${idleDt}ms`)
+  loris.destroy(); idle.destroy(); server.close()
+})

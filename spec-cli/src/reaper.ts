@@ -1,11 +1,12 @@
-// @@@ socket-level connection reaper ([[spec-cli]]) - the ONE mechanism that actually reaps abandoned
-// sockets, because Node's own http.Server timeouts do not. MEASURED (eval server-reaps-abandoned-connections,
-// minimal http.createServer on Node 20/22/24): `headersTimeout` and `requestTimeout` DO NOT reap an
-// incomplete request — a slow-loris (TCP connect + partial headers, never completed) survives indefinitely
-// past the `connectionsCheckingInterval` sweep; only `keepAliveTimeout` (the idle-between-requests case) ever
-// fires. So the abandoned-connection pileup protection those options claim (the 135-conn starvation that
-// wedged the public port and triggered the mass-restore cascade) was NOT delivered. This helper is the real
-// mechanism: an explicit per-socket deadline at the server boundary, independent of the platform sweep.
+// @@@ socket-level connection reaper ([[spec-cli]]) - the ONE mechanism that reaps abandoned sockets (the
+// 135-conn starvation that wedged the public port and triggered the mass-restore cascade), and the SINGLE
+// OWNER of the deadlines it enforces. Node's own `headersTimeout`/`keepAliveTimeout` cover the same phases
+// (pre-request, idle-between-requests) and so are a second mechanism racing this one: MEASURED (eval
+// server-reaps-abandoned-connections, issue #65) a `headersTimeout: 20000` set beside the reaper won the
+// race on every reap at default config and silently capped SPEXCODE_REAP_HEADER_MS above 20s — the knob
+// went dead while the close still looked timely (Node's 408, not the reaper's destroy). So install()
+// DISABLES those overlapping Node timeouts on the server it guards; this helper is an explicit per-socket
+// deadline at the server boundary, with no platform machinery shadowing it.
 //
 // It keys on "no request has completed yet / idle between requests" — never on response DURATION — so a
 // long-lived ESTABLISHED stream (the /api/graph/stream SSE, a terminal WebSocket upgrade) is exempt for as
@@ -60,6 +61,13 @@ function resolveMs(explicit: number | undefined, env: string | undefined, fallba
 export function installConnectionReaper(server: HttpServer, opts: ReaperOptions = {}): void {
   const headerMs = resolveMs(opts.headerMs, process.env.SPEXCODE_REAP_HEADER_MS, 30000)
   const idleMs = resolveMs(opts.idleMs, process.env.SPEXCODE_REAP_IDLE_MS, 15000)
+
+  // claim single ownership of the phases the reaper covers (see header comment): Node's overlapping
+  // timeouts would otherwise race these deadlines and silently cap the env knobs. `requestTimeout` is
+  // deliberately LEFT at Node's default (~5 min): it bounds the in-flight request-body phase the reaper
+  // exempts (a silently-abandoned mid-body upload has no other reaper), and 5 min shadows no sane knob.
+  server.headersTimeout = 0
+  server.keepAliveTimeout = 0
 
   // per-socket tracking, on the SAME socket object 'request'/'upgrade' will report (see header comment).
   const track = (socket: Socket) => {

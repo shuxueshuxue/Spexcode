@@ -16,6 +16,18 @@ scenarios:
       unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.
     tags: cli
     code: spec-cli/src/guide.ts
+  - name: eval-topic-keeps-step-names-label-only
+    description: >
+      Run `spex guide eval` and read the printed --timeline section. The manual must be prescriptive
+      about step-name semantics, not just the JSON shape: a step is a short human label for its moment,
+      and run metadata must not be smuggled into it.
+    expected: >
+      The timeline passage states that a step name is a SHORT human label and never a metadata channel,
+      and names the canonical homes for what emitters are tempted to smuggle — the run's identity in the
+      scenario's `test:` field, the verdict on the reading, the extent on the evidence itself — with the
+      `runner start: <file> :: <case title>` shape called out as the anti-pattern.
+    tags: cli
+    code: spec-cli/src/guide.ts
 ---
 Measured by YATU: run the actual `spex guide` verb and read its printed output, never by reasoning about
 guide.ts. The guide is a reference surface, so the product surface a user touches IS the printed manual —

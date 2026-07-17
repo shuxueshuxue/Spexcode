@@ -4,11 +4,13 @@ scenarios:
     tags: [cli]
     code: spec-cli/src/mentions.ts
     description: >-
-      Call parseMentions on text mixing `@actor`, `@new`, repeated actors, and `[[node]]` refs. Then
+      Call parseMentions on text mixing `@actor`, bare `@new`, launcher-qualified `@new:codex`, repeated
+      actors, and `[[node]]` refs. Then
       resolveActors on the actor tokens against a session set containing an ONLINE session and an OFFLINE one.
     expected: >-
       parseMentions returns actors and nodes each deduped in first-seen order (`@` at word boundaries only,
-      `[[id]]` for nodes). resolveActors maps `new`→a `new` sentinel, a token matching an ONLINE session→that
+      `[[id]]` for nodes). resolveActors maps bare `new`→a default-launcher `new` sentinel,
+      `new:codex`→a `new` sentinel carrying launcher `codex`, a token matching an ONLINE session→that
       session (by id / id-prefix / name-or-title), and a token matching only an OFFLINE session OR nothing→
       `unresolved` — a dead session is never summoned.
   - name: landed-thread-guard

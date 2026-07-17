@@ -78,6 +78,19 @@ scenarios:
       by that visible named choice regardless of the configured default.
     code: spec-cli/src/sessions.ts
     related: spec-cli/src/index.ts, spec-cli/src/harness.ts, spec-cli/src/mentions.ts
+  - name: qualified-new-launcher
+    tags: [backend-api, cli]
+    description: >-
+      In an isolated runtime whose config defines two inert launcher profiles and a different default,
+      post a real local issue through the CLI with `@new:<non-default>` in its body. Read the spawned
+      session record and the CLI dispatch outcome; repeat with an unknown launcher name.
+    expected: >-
+      The explicit qualifier reaches the ordinary newSession launcher argument: the spawned record carries
+      the requested non-default launcher, its matching harness, and that profile's resolved command pin.
+      The dispatch summary names the qualified actor. An unknown qualifier creates no session/worktree and
+      is reported loudly as the mention's failed dispatch, while the issue post itself remains stored.
+    code: spec-cli/src/mentions.ts
+    related: spec-cli/src/sessions.ts
   - name: launcher-persisted-not-badged-on-board
     tags: [frontend-e2e, desktop]
     description: >-

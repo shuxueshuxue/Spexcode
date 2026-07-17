@@ -141,8 +141,13 @@ straight to the trunk.
   agent from any thread, and that mention IS the "assign to an agent" verb; the returned one-line
   dispatch summary is echoed briefly. Both composers carry the SAME `@session` / `[[node]]`
   **autocomplete dropdown** the console's inputs use ([[mentions]]'s shared menu — one implementation,
-  never a page-local fork): typing `@` lists the live sessions, `[[` lists the nodes (the thread's own
-  node leading), a pick inserts the token, and Esc closes the menu without leaving the page. **New opens as a
+  never a page-local fork): typing `@` lists the live sessions plus `@new`; accepting `@new` opens the
+  configured [[launcher-select]] profiles (name + read-only command), and accepting one inserts the explicit
+  `@new:<launcher>` token the stored prose dispatches. The profiles use the dashboard's one shared settings
+  read, so a dynamically-opened New modal inherits the already-loaded list instead of briefly turning an
+  immediate pick into a bare default spawn. `[[` lists the nodes (the thread's own node leading), and a pick
+  inserts the token. Esc closes the menu without leaving the page or losing the draft, and a synthetic
+  selection event at the same unchanged caret must not reopen what Esc dismissed. **New opens as a
   centered pop-out over the page, not as an inline row in the list column**: the left column stays a slim
   picker, the modal carries the same two text surfaces (concern + optional body), a single compact store
   picker (local plus the configured forge issue stores such as github/gitlab), its own close affordance, and

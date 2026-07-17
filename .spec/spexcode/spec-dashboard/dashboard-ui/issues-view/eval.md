@@ -24,13 +24,16 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
       On the running issues page, select a LOCAL issue and type into its reply composer, then open the
-      New form and type into its body textarea. In each: type `@`, read the dropdown, pick a row with
-      ↓/Enter and read the inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
+      New form and type into its body textarea. In each: type `@`, read the dropdown, pick the `@new` row
+      with ↓/Enter, read the launcher rows that replace it, pick a non-default launcher, and read the
+      inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
       the session console and re-check its `@`/`[[` menus still open (the shared-module regression).
     expected: >-
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
-      fork): `@` lists the live sessions plus `@new` and a pick inserts `@<id> ` (trailing space); `[[`
+      fork): `@` lists the live sessions plus `@new`; accepting `@new` opens one row per configured
+      launcher, and accepting a launcher inserts `@new:<launcher> ` (trailing space), while a live-session
+      pick still inserts `@<id> `. `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
       composer's menu opens UPWARD (visible above the docked textarea), and the New form's menu also opens
       UPWARD outside the New pop-out itself, never inserted into or clipped by the modal body and never

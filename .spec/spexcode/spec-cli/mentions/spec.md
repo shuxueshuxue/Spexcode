@@ -29,7 +29,9 @@ grammar is uniform, the logic is tiny.
   ([[local-issues]] links nodes this way), promoted to a first-class, resolvable, autocompletable reference.
 - **`@session` — an actor reference, and a HANDLE.** Resolves to a **live board session** and carries *what
   you can do to it*: watch it, or send it a prompt. **`@new`** is the special actor — dispatch a **fresh
-  worker** (on the surface's node / the thread's node), optionally with a preset. So an `@` in text is a
+  worker** (on the surface's node / the thread's node), optionally with a preset. Bare `@new` uses the
+  configured default launcher; `@new:<launcher>` chooses one named [[launcher-select]] profile for this
+  spawn. The qualifier belongs only to the synthetic `new` actor — session handles are unchanged. So an `@` in text is a
   contact you hand to a reader; what happens next is a **dispatch**, never a new datastore. **Any spawn's
   parent = its originator**: the `@new` worker records the mentioning author as its `parent`
   ([[session-nesting]]) so it folds under the session that summoned it — but only when that author IS a
@@ -61,6 +63,12 @@ grammar is uniform, the logic is tiny.
   Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns; the CLI hints via a
   mention line in `spex help session` and `spex help issues` — a CLI user must not have to find the
   grammar by reading the dashboard.
+- **Launcher choice stays in the prose.** The shared dashboard autocomplete treats its synthetic `@new`
+  row as a doorway to the configured launchers; picking one inserts `@new:<launcher> `, so the stored issue
+  or remark says which worker identity was requested and the CLI can author the exact same text. A typed
+  `@new:` filters that launcher list directly. Resolution carries the qualifier to [[launch]]'s existing
+  launcher argument; a missing qualifier retains the default behavior, while an unknown name fails loud in
+  the dispatch outcome. There is no composer-only launcher field and no second spawn API.
 - **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
   reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
   so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex eval add

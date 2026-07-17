@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
+import { useLaunchers } from './launch.js'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
@@ -263,7 +264,8 @@ function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const taRef = useRef(null)
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, up: true, fixedAbove: '.fv-new-modal' })
+  const { launchers } = useLaunchers()
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, up: true, fixedAbove: '.fv-new-modal' })
   useEffect(() => {
     if (!stores.some((s) => s.id === store)) setStore(stores[0]?.id || 'local')
   }, [stores, store])

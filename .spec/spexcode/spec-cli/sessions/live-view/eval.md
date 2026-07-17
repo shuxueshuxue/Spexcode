@@ -140,16 +140,16 @@ scenarios:
       Measure that wide characters survive the live %output byte path (the regression that shattered the
       display). On a tmux socket, attach a control-mode bridge through the real API, then flood the pane with
       MANY lines of CJK + box-drawing + emoji (e.g. `星★号😀笑脸└─┘中文🀄🎉αβγ` ×thousands) — enough bytes that
-      the multi-byte characters straddle node-pty's read boundaries, the exact condition that used to corrupt
-      them. Capture the bytes the bridge broadcasts to a viewer, decode as UTF-8, and count U+FFFD + check the
-      payload survived. File with `spex yatsu eval live-view --scenario output-preserves-utf8-wide-chars
-      --result <txt>`.
+      the multi-byte characters straddle the transport's read boundaries, the exact condition that used to
+      corrupt them. Capture the bytes the bridge broadcasts to a viewer, decode as UTF-8, and count U+FFFD +
+      check the payload survived. File with `spex yatsu eval live-view --scenario
+      output-preserves-utf8-wide-chars --result <txt>`.
     expected: >-
       The broadcast bytes decode to ZERO U+FFFD and every flooded payload copy is intact — because the bridge
-      parses the stream as BYTES end-to-end (node-pty gives raw Buffers, lines split on the newline byte,
-      %output un-escaped at the byte level and forwarded raw, no string round-trip). A path that decodes
-      node-pty chunks to a string first shatters any wide char split across two reads into a U+FFFD; that path
-      must be absent.
+      parses the stream as BYTES end-to-end (the client's stdout gives raw Buffers, lines split on the newline
+      byte, %output un-escaped at the byte level and forwarded raw, no string round-trip). A path that decodes
+      transport chunks to a string first shatters any wide char split across two reads into a U+FFFD; that
+      path must be absent.
   - name: bridge-client-holds-only-its-stdio
     tags: [backend-api]
     description: >-
@@ -157,11 +157,13 @@ scenarios:
       at once. Run `SPEXCODE_TMUX=fdleak-$$ npx tsx test/pty-bridge.fd-leak.ts` (from spec-cli/): drive the
       REAL bridge (attachViewer, the dashboard's path) for four sessions on one scratch socket, in order —
       the ordering is what builds the staircase — then read each spawned tmux control client's own /proc fd
-      table and count the pty masters and the fds beyond its stdio. Linux-only: /proc is the measurement
-      surface and the sole affected platform. File with `spex eval add live-view --scenario
-      bridge-client-holds-only-its-stdio --result <txt>`.
+      table and count its pty masters and the fds it INHERITED from the backend process (fd >2 aliasing an
+      fd the backend holds; tmux's own post-exec fds — its server socket, its self-pipe — are legitimately
+      its own and are not leaks). Linux-only: /proc is the measurement surface and the sole affected
+      platform. File with `spex eval add live-view --scenario bridge-client-holds-only-its-stdio
+      --result <txt>`.
     expected: >-
-      Every bridge client holds ONLY its stdio — ZERO inherited pty masters, ZERO fds beyond fd 2. The bug
+      Every bridge client holds ZERO inherited pty masters and ZERO fds inherited from the backend. The bug
       path must be absent: node-pty's Linux forkpty(3) returns a master with no FD_CLOEXEC and execs without
       closing inherited fds, so client N inherited the masters of clients 0..N-1 (a measured staircase:
       1, 2, 3 masters). That is what made a killed bridge's pts outlive it inside a sibling — no EIO, so tmux

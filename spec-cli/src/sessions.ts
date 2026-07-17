@@ -10,7 +10,7 @@ import { loadSpecs } from './specs.js'
 import { defaultHarness, defaultLauncher, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
-import { recordSent } from './session-timeline.js'
+import { recordSent, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -869,9 +869,20 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
 // the declaration NOTE ([[session-timeline]]). This one-line insert tells the agent exactly that, so its
 // next stop carries the complete answer in `--note` instead of prose that dies in an unseen terminal.
 // Appended server-side (the input route passes replyVia:'note'), so the phrase lives in ONE place and any
-// surface — desktop included, later — can opt in with the same flag.
+// surface — desktop included, later — can opt in with the same flag. The notice declares itself
+// PER-MESSAGE, and withTerminalReplyHint (below) is its counter-signal: without both, an agent that
+// note-replied a few times keeps note-replying from context inertia long after the human is back at a
+// terminal — the sticky-note failure this pair exists to prevent.
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-free client: the sender CANNOT see your terminal output. When you next stop (done/ask/park), put your COMPLETE reply to this message in the declaration's --note (e.g. spex session done --note "<full answer>") — the note is the only text that reaches them.`
+  `${text}\n\n— sent from a terminal-free client: the sender CANNOT see your terminal output. When you next stop (done/ask/park), put your COMPLETE reply to this message in the declaration's --note (e.g. spex session done --note "<full answer>") — the note is the only text that reaches them. This notice is PER-MESSAGE: a later message arriving WITHOUT it means the sender is back at a terminal and reads your normal output again.`
+// @@@ withTerminalReplyHint - the BACK-AT-A-TERMINAL counter-insert, appended exactly once at the
+// note→terminal transition (a human send with no note flag whose previous human send carried one —
+// [[session-timeline]] lastHumanSendVia). It explicitly countermands the note-reply instruction: telling
+// the agent once beats hoping it scopes the earlier per-message notice correctly (it demonstrably doesn't —
+// codex especially). Not repeated on later terminal sends: once the transition send is recorded, the last
+// human channel is no longer note, so ordinary conversation stays insert-free.
+export const withTerminalReplyHint = (text: string): string =>
+  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
 async function postJSON(path: string, body: unknown): Promise<void> {
   try {
     await fetch(`${await apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -1874,10 +1885,13 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
       if (blocked) return { ok: false, error: blocked }
     } catch { /* no pane to consult — let the delivery channel decide */ }
   }
-  // a terminal-free sender's dispatch carries the note-reply insert ([[session-timeline]]); appended here,
-  // beside the delivery, so every input surface shares the one phrase and the timeline records the message
-  // WITHOUT it (the hint is transport, not conversation).
-  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, opts.replyVia === 'note' ? withNoteReplyHint(text) : text)
+  // a terminal-free sender's dispatch carries the note-reply insert; a human send WITHOUT the flag whose
+  // previous human send carried it is the note→terminal transition and gets the one-shot counter-insert
+  // ([[session-timeline]]). Both appended here, beside the delivery, so every input surface shares the one
+  // phrase pair and the timeline records the message WITHOUT it (the hint is transport, not conversation).
+  const wrapped = opts.replyVia === 'note' ? withNoteReplyHint(text)
+    : !from && lastHumanSendVia(id) === 'note' ? withTerminalReplyHint(text) : text
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, wrapped)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)

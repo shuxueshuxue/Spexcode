@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -207,12 +207,14 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
       'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
     } },
   }))
-  // name-sorted, exactly the config's real launchers — no ghost duplicates.
+  // name-sorted, exactly the config's real launchers — no ghost duplicates. Each row carries its optional
+  // headlessCmd (null when unset) and the backend-computed modes list — W1 baseline: every adapter's headless
+  // capability is null, so every launcher is interactive-only regardless of headlessCmd.
   assert.deepEqual(launcherList(root), [
-    { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
-    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
-    { name: 'codex', harness: 'codex', cmd: 'codex --yolo' },
-    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions' },
+    { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
+    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
+    { name: 'codex', harness: 'codex', cmd: 'codex --yolo', headlessCmd: null, modes: ['interactive'] },
+    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
   ])
   assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
   assert.equal(resolveLauncher('codex', root).harness, 'codex')
@@ -236,6 +238,74 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, launchers: { claude: { harness: 'claude', cmd: 'claude --dangerously-skip-permissions' } }, defaultLauncher: 'claude' } }))
   assert.equal(defaultLauncher(root), 'claude')
   assert.deepEqual(launcherDefault(root), { default: 'claude', error: null })
+})
+
+// [[launcher-select]] headless — a launcher may carry TWO complete commands (`cmd` interactive, `headlessCmd`
+// one-shot). The parse layer passes headlessCmd through untouched (whole command, never rewritten), reads an
+// empty string as absent, and computes each row's `modes` from the ADAPTER capability — which in the W1
+// baseline is null on every adapter, so headless is offered nowhere yet.
+test('launchers parse headlessCmd (empty string = absent) and carry backend-computed modes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-headless-'))
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
+    sessions: { launchers: {
+      reclaude: { harness: 'claude', cmd: '/opt/reclaude --dangerously-skip-permissions', headlessCmd: '/opt/reclaude --dangerously-skip-permissions -p' },
+      blank: { harness: 'claude', cmd: 'claude', headlessCmd: '  ' },
+      codex: { harness: 'codex', cmd: 'codex --yolo' },
+    } },
+  }))
+  const [blank, codex, reclaude] = launcherList(root)
+  assert.equal(reclaude.headlessCmd, '/opt/reclaude --dangerously-skip-permissions -p')   // passed through WHOLE
+  assert.equal(blank.headlessCmd, null)                                                   // empty string reads as absent
+  assert.equal(codex.headlessCmd, null)                                                   // never configured
+  // resolveLauncher returns the same extended shape (no headless validation here — that is create-time).
+  assert.equal(resolveLauncher('reclaude', root).headlessCmd, '/opt/reclaude --dangerously-skip-permissions -p')
+  assert.equal(resolveLauncher('codex', root).headlessCmd, null)
+  // W1 baseline: EVERY adapter's headless capability is null → interactive-only everywhere, even with a
+  // configured headlessCmd. The capability flips per harness in its own implementation, not here.
+  for (const h of HARNESSES) assert.equal(h.headless, null, `${h.id} ships headless: null in W1`)
+  for (const l of [blank, codex, reclaude]) assert.deepEqual(l.modes, ['interactive'])
+  assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive'])
+  assert.deepEqual(launcherModes('no-such-harness', 'x'), ['interactive'])   // unknown harness contributes no headless, list stays renderable
+})
+
+test('pinnedLaunchCmd: interactive pins cmd; headless without the capability fails loud (the W1 400)', () => {
+  const l = { name: 'reclaude', harness: 'claude', cmd: '/opt/reclaude --skip', headlessCmd: '/opt/reclaude --skip -p' }
+  assert.equal(pinnedLaunchCmd(claudeHarness, l, 'interactive'), '/opt/reclaude --skip')
+  // all adapters carry headless: null, so a headless create is rejected with the harness named — the expected
+  // end state of this task; W2/W3 flip the capability per harness.
+  assert.throws(() => pinnedLaunchCmd(claudeHarness, l, 'headless'), /no headless capability/)
+  assert.throws(() => pinnedLaunchCmd(codexHarness, l, 'headless'), /no headless capability/)
+})
+
+test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCmd (missing → fail loud), server-side pins cmd', () => {
+  // fake capability objects — the contract W2/W3 implement against; the pin decision must route on the
+  // OBJECT, never on which harness it is.
+  const stub: Omit<HarnessHeadless, 'needsCmd'> = {
+    launchCmd: () => '', liveness: () => 'offline', deliver: async () => ({ ok: false }), resumeArg: () => '',
+  }
+  const needsCmd: Harness = { ...claudeHarness, headless: { needsCmd: true, ...stub } }
+  const serverSide: Harness = { ...codexHarness, headless: { needsCmd: false, ...stub } }
+  const l = { name: 'reclaude', harness: 'claude', cmd: '/opt/reclaude --skip', headlessCmd: '/opt/reclaude --skip -p' }
+  // needsCmd (claude-shaped): the pin IS the headlessCmd, verbatim — never the interactive cmd (which would
+  // boot a TUI nobody attends); missing headlessCmd names the config repair instead of falling through.
+  assert.equal(pinnedLaunchCmd(needsCmd, l, 'headless'), '/opt/reclaude --skip -p')
+  assert.throws(() => pinnedLaunchCmd(needsCmd, { ...l, headlessCmd: null }, 'headless'), /has no headlessCmd.*spex guide settings/)
+  // !needsCmd (codex-shaped): the executor derives from the interactive cmd (version parity), so headless
+  // still pins cmd and headlessCmd is ignored.
+  assert.equal(pinnedLaunchCmd(serverSide, l, 'headless'), '/opt/reclaude --skip')
+  assert.equal(pinnedLaunchCmd(serverSide, { ...l, headlessCmd: null }, 'headless'), '/opt/reclaude --skip')
+  // and interactive is untouched by the capability's presence.
+  assert.equal(pinnedLaunchCmd(needsCmd, l, 'interactive'), '/opt/reclaude --skip')
+})
+
+test('defaultSessionMode: absent → interactive; explicit headless honored; an unrecognized value fails loud', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-defmode-'))
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: {} }))
+  assert.equal(defaultSessionMode(root), 'interactive')                       // headless is opt-in, never a silent default
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { defaultMode: 'headless' } }))
+  assert.equal(defaultSessionMode(root), 'headless')
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { defaultMode: 'yolo' } }))
+  assert.throws(() => defaultSessionMode(root), /defaultMode 'yolo' is not a session mode/)
 })
 
 test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {

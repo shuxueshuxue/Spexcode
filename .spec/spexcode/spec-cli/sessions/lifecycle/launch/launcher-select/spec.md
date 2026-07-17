@@ -10,6 +10,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/guide.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/harness.jsx
@@ -80,6 +81,29 @@ per-session board badge — a harness glyph + name on every session row read as 
 stays clean. The wrong-launcher confusion (a human "testing claude-glm" quietly handed another launcher) is
 already closed at the point it matters — the create-time picker honoring `defaultLauncher` (above) — not by
 after-the-fact badging.
+
+**Two commands, one mode axis (headless).** A launcher may carry TWO complete commands, one per session
+MODE: `cmd` — the interactive TUI invocation, its meaning unchanged (existing configs need zero migration) —
+and the optional `headlessCmd`, the one-shot headless invocation (empty string reads as absent). Both are
+authored WHOLE by the config author; the system embeds them verbatim and never parses or rewrites their
+internals. A session's `mode` (`interactive` | `headless`) is a PRODUCT dimension picked at create time
+(`--headless` / `--mode` on the CLI, the `mode` field on `POST /api/sessions`; no explicit choice falls to
+`sessions.defaultMode`, absent → interactive — headless is opt-in, never a silent flip) and is pinned on the
+record BESIDE the command that mode selected, so a resume replays the same command AND mode for the session's
+whole life — the resume-launcher-pin extended to the mode axis. The per-mode pin rule: interactive pins `cmd`;
+headless on a harness whose headless form needs its own command (`needsCmd`) pins `headlessCmd` — a missing
+one fails the create loud, naming the config repair, never falling through to a TUI nobody attends; headless
+on a harness whose executor is server-side still pins `cmd` (the executor binary derives from it — version
+parity). How a harness runs headless lives ONLY behind the [[harness-adapter]]'s `headless` capability object
+(null = no headless form; product code routes per mode, never per harness), and each launcher's available
+`modes` are computed BACKEND-side from that capability — interactive always; headless when the capability
+exists and, for a needsCmd harness, a `headlessCmd` is configured — riding `GET /api/settings` (with
+`headlessCmd` and the configured `defaultMode`) so the frontend consumes availability instead of re-deriving
+adapter knowledge. Every create that asks what config/adapter can't honor is a loud 400/CLI error: an unknown
+mode, headless on a capability-less harness, a missing needsCmd `headlessCmd`. The chosen mode is durable data
+like the launcher name — it rides the session payloads (`/api/sessions`, `/api/graph`, the `:id` detail) and
+`spex session ls`/`show` (a quiet `◇` marks headless rows) — and an old record with no mode reads interactive,
+leaving every pre-existing path unchanged.
 
 **Correctness — the RESOLVED command is pinned, not re-resolved (the resume-launcher-pin).** The launch
 command used to be re-resolved globally at every launch (env → config → default), so a session created under

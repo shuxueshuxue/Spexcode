@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
-import { defaultHarness, defaultLauncher, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { defaultHarness, defaultLauncher, defaultSessionMode, harnessById, pinnedLaunchCmd, resolveLauncher, rvSock, rendezvousListening, SESSION_MODES, type Harness, type DispatchResult, type PaneProbe, type ProcTable, type SessionMode } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, lastHumanSendVia } from './session-timeline.js'
@@ -118,6 +118,7 @@ export type Session = {
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
+  mode: SessionMode   // interactive (a TUI in the pane) or headless (one-shot turns) — pinned at creation with the command it selects; old records read interactive
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
@@ -229,6 +230,7 @@ export type SessRec = {
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
+  mode: SessionMode         // the session's MODE, pinned at creation alongside the command it selected; records predating modes read interactive
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
@@ -242,7 +244,9 @@ function readRecord(id: string): SessRec | null {
   if (!raw) return null
   return fromRaw(raw)
 }
-function fromRaw(raw: RawRecord): SessRec {
+// the loose on-disk fields validated into the typed shape. Exported so the old-record defaults (harness →
+// claude, mode → interactive, absent pin → null) are unit-auditable without a store on disk.
+export function fromRaw(raw: RawRecord): SessRec {
   const status = LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
   const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
   const sk = raw.sortkey
@@ -255,6 +259,7 @@ function fromRaw(raw: RawRecord): SessRec {
     harnessSessionId: raw.harness_session_id || null,
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
+    mode: raw.mode === 'headless' ? 'headless' : 'interactive',   // records written before modes (or carrying junk) read interactive — every old path unchanged
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -281,6 +286,7 @@ function writeRecord(rec: SessRec): void {
     harness_session_id: rec.harnessSessionId ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
+    mode: rec.mode || 'interactive',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -585,7 +591,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const act = showActivity ? activity : null
   const pp = prompt ? promptPreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, launcher: rec.launcher, mode: rec.mode, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -1144,7 +1150,7 @@ export async function assertProjectMatch(verb: string): Promise<void> {
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
-export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
+export async function createSession(node: string | null, prompt: string, launcher?: string, mode?: string): Promise<Session> {
   await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
@@ -1156,11 +1162,11 @@ export async function createSession(node: string | null, prompt: string, launche
     res = await fetch(`${await apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt, parent, launcher }),
+      body: JSON.stringify({ node, prompt, parent, launcher, mode }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt, parent, launcher)
+    return newSession(node, prompt, parent, launcher, mode)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -1180,7 +1186,7 @@ export async function createSession(node: string | null, prompt: string, launche
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
 // only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
 // programmatic surface, every other surface is prompt only).
-export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string): Promise<Session> {
+export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string, mode?: string): Promise<Session> {
   const id = randomUUID()
   // a launcher ([[launcher-select]]) fixes BOTH the launch command (persisted below) AND the harness — so
   // picking one is the ONLY launch choice. Explicit --launcher wins, else the configured defaultLauncher.
@@ -1188,6 +1194,14 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const lname = launcher ?? defaultLauncher(mainRoot())
   const chosen = resolveLauncher(lname)
   const h = harnessById(chosen.harness)
+  // the session MODE: the request wins, else sessions.defaultMode, else interactive. Validated fail-loud
+  // HERE — before any worktree exists — so a bad mode, a headless request on a capability-less harness, or a
+  // missing headlessCmd rejects the create (the route's 400) instead of leaking a half-made session. The pin
+  // below already selects the mode's command, so resume replays the SAME command AND mode for the session's
+  // whole life ([[launcher-select]] resume-launcher-pin).
+  const m = (mode ?? defaultSessionMode(mainRoot())) as SessionMode
+  if (!SESSION_MODES.includes(m)) throw new Error(`unknown session mode '${mode}' (valid: ${SESSION_MODES.join(' | ')})`)
+  const pinned = pinnedLaunchCmd(h, chosen, m)
   // node identity + label: explicit --node wins, else the prompt's first `[[id]]` topic ref; a prompt with
   // none is node-agnostic and labeled by its first few words.
   const ref = node || mentionedNode(prompt)
@@ -1213,10 +1227,13 @@ export async function newSession(node: string | null, prompt: string, parent: st
     node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
     status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
     harness: h.id, harnessSessionId: null, launcher: chosen.name,
-    // PIN the resolved base launcher command NOW ([[launcher-select]] resume-launcher-pin) so every future
+    // PIN the resolved launch command NOW ([[launcher-select]] resume-launcher-pin) so every future
     // (re)launch replays THIS exact launcher — the one whose config-dir env holds the conversation — instead of
     // re-resolving against a default that may have flipped (a backend restarted under a different launcher).
-    launchCmd: h.baseCmd(chosen.cmd),
+    // The pin is MODE-selected (pinnedLaunchCmd above): headless on a needsCmd harness pins headlessCmd,
+    // everything else pins the interactive cmd.
+    launchCmd: pinned,
+    mode: m,
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
@@ -1727,7 +1744,8 @@ export function formatTable(sessions: Session[], color = true): string {
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
+    const modeMark = s.mode === 'headless' ? c('90', ' ◇') : ''   // ◇ = headless; interactive rows stay unmarked (no noise)
+    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}${modeMark}`
   })
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }

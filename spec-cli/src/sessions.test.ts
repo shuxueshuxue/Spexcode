@@ -5,8 +5,8 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness } from './harness.js'
-import { bootstrapMaterialize, launchScript, type SessRec } from './sessions.js'
-import { sessionRecordPath, sessionArtifactPath } from './layout.js'
+import { bootstrapMaterialize, fromRaw, launchScript, type SessRec } from './sessions.js'
+import { sessionRecordPath, sessionArtifactPath, type RawRecord } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -89,7 +89,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude',
+      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', mode: 'interactive',
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
 
@@ -106,4 +106,20 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })
   }
+})
+
+// [[launcher-select]] headless — the OLD-RECORD fallback: `mode` follows the same read rule as
+// `harness || 'claude'`. A record written before modes (no field), or carrying junk, reads `interactive`,
+// so every pre-existing session keeps its exact behavior; only an explicit 'headless' reads headless.
+test('old records without a mode field read interactive; only an explicit headless reads headless', () => {
+  const raw = (over: Partial<RawRecord> = {}): RawRecord => ({
+    session_id: 's1', governed: true, worktree_path: '/wt/x', branch: 'node/x-1', node: 'x',
+    title: null, name: null, status: 'active', proposal: null, merges: 0, note: null,
+    sortkey: null, createdAt: 1,
+    ...over,
+  })
+  assert.equal(fromRaw(raw()).mode, 'interactive')                          // pre-mode record → interactive, unchanged paths
+  assert.equal(fromRaw(raw({ mode: '' })).mode, 'interactive')              // empty value → interactive
+  assert.equal(fromRaw(raw({ mode: 'garbage' })).mode, 'interactive')       // junk never becomes a mode
+  assert.equal(fromRaw(raw({ mode: 'headless' })).mode, 'headless')         // the one explicit opt-in
 })

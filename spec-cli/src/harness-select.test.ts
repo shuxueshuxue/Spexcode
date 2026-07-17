@@ -1,13 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveHarnessTargets, partitionHarnesses, DEFAULT_HARNESS_IDS } from './harness-select.js'
+import { resolveHarnessTargets, partitionHarnesses, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
 
-test('default (omitted) delivers to every native harness, no plugin', () => {
+test('a MISSING field fails loud with the stamp repair — there is no default set', () => {
   for (const raw of [undefined, null]) {
-    const t = resolveHarnessTargets(raw)
-    assert.deepEqual(t, DEFAULT_HARNESS_IDS.map((id) => ({ kind: 'native', id })))
-    assert.ok(t.length >= 2 && t.every((x) => x.kind === 'native'))
+    assert.throws(() => resolveHarnessTargets(raw), /no "harnesses" field.*spex init --harness/s)
   }
+})
+
+test('parseHarnessFlag translates the CLI spelling to raw field members (validation stays with resolve)', () => {
+  assert.deepEqual(parseHarnessFlag('claude'), ['claude'])
+  assert.deepEqual(parseHarnessFlag('claude, codex'), ['claude', 'codex'])
+  assert.deepEqual(parseHarnessFlag('plugin:.adopter-a'), [{ plugin: '.adopter-a' }])
+  assert.deepEqual(resolveHarnessTargets(parseHarnessFlag('codex')), [{ kind: 'native', id: 'codex' }])
+  assert.throws(() => resolveHarnessTargets(parseHarnessFlag('claude,plugin:.adopter-a')), /EXCLUSIVE/)
 })
 
 test('native ids resolve to native targets; order preserved', () => {
@@ -41,8 +47,8 @@ test('unknown id and malformed members fail loud', () => {
 })
 
 test('partitionHarnesses splits live adapters into selected vs unselected', () => {
-  const all = partitionHarnesses(resolveHarnessTargets([...DEFAULT_HARNESS_IDS]))
-  assert.deepEqual(all.selected.map((h) => h.id).sort(), [...DEFAULT_HARNESS_IDS].sort())
+  const all = partitionHarnesses(resolveHarnessTargets([...NATIVE_HARNESS_IDS]))
+  assert.deepEqual(all.selected.map((h) => h.id).sort(), [...NATIVE_HARNESS_IDS].sort())
   assert.equal(all.unselected.length, 0)
 
   const pair = partitionHarnesses(resolveHarnessTargets(['claude', 'codex']))

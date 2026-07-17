@@ -21,7 +21,7 @@ type Config = {
   // its data-untrack semantics are long gone. See `spex guide footprint` MIGRATIONS.
   private?: boolean
   // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
-  // bundle; resolved + validated by [[harness-select]] (harness-select.ts). Default (omitted): all native harnesses.
+  // bundle; resolved + validated by [[harness-select]] (harness-select.ts). REQUIRED — no default set; `spex init --harness` stamps it.
   harnesses?: (string | { plugin?: string })[]
   dashboard?: {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)

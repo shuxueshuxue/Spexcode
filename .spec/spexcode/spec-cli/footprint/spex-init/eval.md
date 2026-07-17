@@ -3,17 +3,19 @@ scenarios:
   - name: honest-plant-message
     tags: [cli]
     description: >-
-      In a fresh git repo, run `spex init .` and compare what the success message + next-steps CLAIM about
-      lint.governedRoots with what the planted spexcode.json actually contains.
+      In a fresh git repo, run `spex init . --harness claude,codex` and compare what the success message +
+      next-steps CLAIM about lint.governedRoots, harnesses, and launchers with what the planted
+      spexcode.json actually contains.
     expected: >-
-      The printed value IS the planted value (the starter ships ["."]), read back from the file — no message
-      may restate a config value as a code literal. No stale ["src"] claim anywhere in the output.
+      Every printed value IS the planted value (the starter ships governedRoots ["."]; harnesses and the
+      seeded launcher names echo the --harness choice), read back from the file — no message may restate a
+      config value as a code literal. No stale ["src"] claim anywhere in the output.
   - name: no-vote-adoption
     tags: [cli]
     description: >-
-      Adopt on a host repo that already TRACKS its CLAUDE.md/AGENTS.md, through the real `spex init .`
-      (the retired --render flag must be gone). Read the output, git status, the index blobs, and the
-      host .gitignore.
+      Adopt on a host repo that already TRACKS its CLAUDE.md/AGENTS.md, through the real
+      `spex init . --harness claude,codex` (the retired --render flag must be gone). Read the output,
+      git status, the index blobs, and the host .gitignore.
     expected: >-
       No vote vocabulary anywhere: init covers the tracked contract files with the clean/smudge filter on
       the spot — status clean (no mystery M, no decision hint), index pristine, worktree carries the
@@ -23,7 +25,7 @@ scenarios:
     tags: [cli]
     description: >-
       Put a legacy `"render"` (any word, including garbage) or `"private": true` in a pre-existing config
-      and run `spex init .` / `spex materialize`.
+      and run `spex init . --harness claude,codex` / `spex materialize`.
     expected: >-
       Adoption and every materialize still SUCCEED — the field is inert — with a loud, non-fatal stderr notice
       naming the retirement, the removal recipe, and `spex guide footprint`. Removing the field retires

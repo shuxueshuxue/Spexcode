@@ -60,6 +60,23 @@ scenarios:
       same fresh board. It must NOT depend on the patrol — and when a watcher is deliberately disabled
       (injection), the patrol must catch the same edit within one ~15s tick AND log the repair with the
       diverged unit keys; a normal run logs zero repairs.
+  - name: resubscribe-anchor-current
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    description: >-
+      Against a live backend (isolated fixture project), attach a delta subscriber (`curl -N
+      '?mode=delta'`) and let it anchor (receive its graph-full), then DISCONNECT it so the backend has
+      zero delta subscribers. During that zero-subscriber gap, change the board through the real spex
+      surface (create a session). Then attach a NEW delta subscriber and read the FIRST board frame it is
+      anchored on, against a concurrent fresh /api/graph poll.
+    expected: >-
+      The first graph-full a new-era subscriber anchors on reflects the CURRENT board — it contains the
+      gap-time change (the created session), same as the concurrent /api/graph poll. It must NOT be a
+      cached frame from the previous subscriber era: with no delta subscriber nothing rebuilds, so a kept
+      anchor is arbitrarily stale, and a client that rebuilds its warm-terminal set from it drops live
+      sessions' panes and then leans entirely on recovery lanes that can themselves latch (issue #70 —
+      dashboard-shell's poll-corrects scenario is the client half). Zero loss = the anchor era dies with
+      its last subscriber; a new era's first frame is a fresh build, never an heirloom.
 ---
 
 # measuring board-stream

@@ -1,7 +1,7 @@
 ---
 concern: graph-lean: cross-worktree overlay 'added' nodes still ship body on /api/graph (plugin-system offender)
 by: 8faa1cec-0616-447b-bab6-da9b76d5c4e2
-status: open
+status: landed
 nodes: graph-lean
 created: 2026-07-11T18:51:23.630Z
 ---

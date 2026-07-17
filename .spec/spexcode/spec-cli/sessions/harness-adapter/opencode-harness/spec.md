@@ -20,28 +20,31 @@ related:
 opencode (opencode.ai, the `opencode` binary) joins claude and codex as a native [[harness-adapter]]
 implementation. The adapter's whole design is ONE trick: opencode has no shell-hook primitive, but it
 auto-loads project PLUGINS (`.opencode/plugins/*.ts`) that run inside the agent process with an SDK
-client — so the "shim" this adapter materializes is not a settings JSON but a generated plugin, and
-that plugin plays TWO roles at once:
+client — so the "shim" this adapter materializes is not a settings JSON but a generated plugin: a THIN
+HOST over the shared shim runtime ([[shim-runtime]], embedded verbatim by the generator), which owns the
+payload synthesis into `dispatch.sh opencode <Event>`, the block verdict (exit 2 + stdout decision:block
+JSON — the reason parsed, never the escaped wire format), and the rendezvous socket server. The plugin's
+own half plays two roles:
 
-- **hook bridge** — it subscribes to opencode's event bus and re-emits each event as a Claude-SHAPED
-  payload (`session_id` = the governed record id from the launch env, Claude tool names, `file_path`)
-  piped into `dispatch.sh opencode <Event>`. Because the payload is claude-family by construction,
-  `harness.sh` needs no opencode parse arm — the default (claude) branch handles it, exactly like the
-  `plugin` bundle form. A blocking hook outcome (exit 2 / `decision:"block"`) is honored in-process:
-  a PreToolUse block throws (opencode aborts the tool call), a Stop block re-injects the gate's reason
-  as a follow-up prompt, closing the stop-gate loop. What re-enters the conversation is the REASON —
-  stderr when the handler wrote one, else the reason field parsed out of the stdout decision JSON —
-  never the escaped wire format (claude renders the reason field, codex gets the stderr bridge;
-  opencode's agent must not be the one reading wire JSON). Tool events from a non-root opencode session are
-  stamped `agent_id` so the subagent discriminator keeps a parent's declared state safe, same as claude.
-- **rendezvous daemon** — it binds SpexCode's per-session rendezvous socket (the path the launch env
-  hands every rendezvous-owning harness) and answers the reply/repaint mini-protocol. That makes
-  `ownsRendezvous: true` LITERALLY true — the claude adapter's `deliver` (parse-confirmed atomic write)
-  and socket-listener liveness are reused unchanged; there is no opencode-specific transport code.
-  The daemon's side of that contract: confirmation means PARSED, not processed — the reply+repaint
-  chunk is parsed and `repaint-done` written in one synchronous pass, with the prompt injection (a
-  whole model turn, on the SDK) running behind the confirm, so a concurrent probe connect (the board
-  fires one per snapshot) can never kick the connection between parse and confirm.
+- **hook bridge** — it declares opencode's event-bus mapping (session.created → SessionStart,
+  chat.message → UserPromptSubmit, tool.execute.before/after → Pre/PostToolUse, session.idle → Stop),
+  with `session_id` = the governed record id from the launch env, Claude tool names, and `filePath`
+  normalized onto `file_path`. Because the payload is claude-family by construction, `harness.sh` needs
+  no opencode parse arm — the default (claude) branch handles it, exactly like the `plugin` bundle form.
+  The runtime's verdict is consumed through opencode's own channels: a PreToolUse block throws (opencode
+  aborts the tool call), a Stop block re-injects the gate's parsed reason as a follow-up prompt, closing
+  the stop-gate loop. Tool events from a non-root opencode session are stamped `agent_id` so the subagent
+  discriminator keeps a parent's declared state safe, same as claude.
+- **rendezvous daemon** — the runtime's server binds SpexCode's per-session rendezvous socket (the path
+  the launch env hands every rendezvous-owning harness) and answers the reply/repaint mini-protocol; the
+  plugin supplies the inject (`client.session.prompt` into the root session) and the reject gate (no
+  adopted session → reply-rejected before the repaint barrier, so a sender fails loud instead of
+  confirming an undeliverable prompt). That makes `ownsRendezvous: true` LITERALLY true — the claude
+  adapter's `deliver` (parse-confirmed atomic write) and socket-listener liveness are reused unchanged;
+  there is no opencode-specific transport code. Confirmation means PARSED, not processed — `repaint-done`
+  is written in the same synchronous parse pass, with the prompt injection (a whole model turn, on the
+  SDK) running behind the confirm — and the server is multi-connection, so a concurrent probe connect
+  (the board fires one per snapshot) can never kick a delivery at all.
 
 The remaining divergences are ordinary adapter facts: launch is a tail-branching script (a prompt tail
 launches `--prompt`, a `--resume <id>` marker re-attaches `--session <id>` — the codex marker pattern);

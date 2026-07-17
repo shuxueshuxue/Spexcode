@@ -9,6 +9,7 @@ code:
   - spec-dashboard/src/SessionInterface.jsx#typeKeyToken
 related:
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
@@ -118,6 +119,21 @@ wheel scrolls **the tmux pane's real history** — normal output through tmux co
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
 or plain HTTP** (past the secure-context-only Clipboard API).
+
+**The right pane dispatches on the session's `mode`.** Everything above and below describes an *interactive*
+session — the default, and what every record without a mode reads as. A **headless** session ([[launcher-select]]
+pins the mode at creation) has no TUI worth watching: its first tab reads **Chat** instead of Terminal (same
+slot, same tab state; the Eval tab is untouched), and the pane mounts the shared **TimelineChat** — the SAME
+terminal-free conversation body the phone's session detail wraps ([[mobile-ui]] / [[session-timeline]]): the
+persisted timeline as the transcript, refreshed by a poll plus the board push plus every send, with its own
+docked composer. Every dispatch from that composer carries `replyVia:'note'` **silently** — a terminal-free
+reader can only ever read declaration notes, so asking for the reply there is the surface's fixed property,
+exactly as on the phone. Because the chat owns input, the `❯` strip does not render for a headless session and
+**type mode does not exist there** (no button, and the reserved chord is inert) — the tab-bar's other lifecycle
+actions (merge, relaunch) keep working unchanged. Headless chats join the warm-mount contract like terminals
+(draft and scroll survive tab switches) but only the *shown* chat polls. On every session-row surface a headless
+session wears the muted **◇** mode mark beside its status glyph — the `MODE_MARK` vocabulary in `harness.jsx`,
+mirroring the CLI `session ls` glyph — while interactive rows stay unmarked (no noise).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. An **Enter that commits an IME

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { createConnection } from 'node:net'
 import { opencodePluginSource, OPENCODE_TOOL_NAMES } from './opencode.js'
 import { HARNESSES, harnessById, opencodeHarness, opencodeLaunchCommand, deliverViaRendezvous, rvSock } from './harness.js'
 
@@ -86,7 +87,7 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
 // a fake SDK client records injected prompts, and the REAL deliverViaRendezvous talks to the plugin's socket.
 
 type Dispatched = { code: number }
-async function loadPlugin(opts: { session: string; block?: string[]; blockReason?: string }) {
+async function loadPlugin(opts: { session: string; block?: string[]; blockReason?: string; promptMs?: number }) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-plugin-'))
   const dispatch = join(dir, 'dispatch.sh')
   // records `<event>.json` (argv check included: $1 must be the baked harness id); blocks listed events.
@@ -106,7 +107,8 @@ async function loadPlugin(opts: { session: string; block?: string[]; blockReason
   process.env.CLAUDE_BG_RENDEZVOUS_SOCK = rvSock(opts.session)
   const mod = await import(pathToFileURL(pluginFile).href)
   const prompts: unknown[] = []
-  const client = { session: { prompt: async (x: unknown) => { prompts.push(x) } } }
+  // promptMs simulates the REAL SDK contract: session.prompt resolves only when the injected TURN completes
+  const client = { session: { prompt: async (x: unknown) => { prompts.push(x); if (opts.promptMs) await new Promise((r) => setTimeout(r, opts.promptMs)) } } }
   const hooks = await mod.SpexcodePlugin({ client, directory: dir })
   const payload = (e: string) => JSON.parse(readFileSync(join(dir, `${e}.json`), 'utf8'))
   const raw = (e: string) => readFileSync(join(dir, `${e}.json`), 'utf8')
@@ -174,6 +176,31 @@ test('rendezvous daemon: the REAL claude deliver (atomic reply+repaint, parse-co
   const r = await deliverViaRendezvous(session, 'manager says: also update the docs')
   assert.equal(r.ok, true)                                    // repaint-done arrived → parse-confirmed, not optimistic
   assert.equal((t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text, 'manager says: also update the docs')
+  rmSync(t.dir, { recursive: true, force: true })
+  rmSync(rvSock(session), { force: true })
+})
+
+test('rendezvous daemon under probe pressure: kicking connects + a turn-length prompt call still parse-confirm — ONE injection, no false negative', async () => {
+  // the field bug (deliver-second-message A-side): session.prompt resolves only when the injected TURN ends,
+  // and the board liveness probe connects to the socket on every snapshot. The daemon awaiting the injection
+  // INSIDE its parse loop left repaint-done unsent for the whole turn, so every probe connect kicked the
+  // pending confirm — sender reported "NOT delivered" (false) and its retries re-injected the same prompt.
+  // The daemon must confirm at PARSE time, synchronously, before any concurrent connect can run.
+  const session = `oc-t5-${process.pid}`
+  const t = await loadPlugin({ session, promptMs: 1500 })     // a realistic slow turn, longer than the whole deliver
+  await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
+  for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
+  assert.ok(existsSync(rvSock(session)), 'the plugin bound the rendezvous socket from the launch env')
+  const storm = setInterval(() => {                           // the probe: connect (which kicks) then drop, every 20ms
+    const p = createConnection({ path: rvSock(session) })
+    p.on('error', () => { /* daemon may kick us right back */ })
+    setTimeout(() => p.destroy(), 10)
+  }, 20)
+  const r = await deliverViaRendezvous(session, 'second message under fire')
+  clearInterval(storm)
+  assert.equal(r.ok, true, `deliver must parse-confirm despite the probe storm (got: ${JSON.stringify(r)})`)
+  assert.equal(t.prompts.length, 1)                           // exactly one injection — a confirmed prompt is never resent
+  assert.equal((t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text, 'second message under fire')
   rmSync(t.dir, { recursive: true, force: true })
   rmSync(rvSock(session), { force: true })
 })

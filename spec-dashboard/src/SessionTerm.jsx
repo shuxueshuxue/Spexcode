@@ -221,10 +221,11 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     document.addEventListener('keydown', onCopyKey)
 
     const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
-    // the .si-term entrance animates via transform (ResizeObserver can't see it), so re-fit at animationend and across its duration to catch the true full width.
-    const termEl = hostRef.current.closest('.si-term')
+    // the .si-term-body entrance animates via transform/opacity (layout size never moves, so ResizeObserver
+    // can't see it) — animationend is the corrective re-fit for a measurement the entrance skipped as
+    // degenerate; steady-state size changes belong to the ResizeObserver + window listener below.
+    const termEl = hostRef.current.closest('.si-term-body')
     if (termEl) termEl.addEventListener('animationend', fitAndSync)
-    const refitTimers = [60, 180, 320].map((ms) => setTimeout(fitAndSync, ms))
     const ro = new ResizeObserver(fitAndSync)
     ro.observe(hostRef.current)
     window.addEventListener('resize', fitAndSync)
@@ -234,7 +235,6 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       if (flushRaf) cancelAnimationFrame(flushRaf)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
-      refitTimers.forEach(clearTimeout)
       if (termEl) termEl.removeEventListener('animationend', fitAndSync)
       ro.disconnect()
       window.removeEventListener('resize', fitAndSync)
@@ -246,21 +246,26 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
   }, [sessionId])
 
-  // menu-sniff, gated on `active`: poll the pane a few times a second and report via onMenu whether it
-  // currently looks like a select menu. Only the VISIBLE pane's nav button can pulse, so hidden warm panes
-  // skip the full-buffer scan entirely (every live session stays mounted — N sessions would otherwise all
-  // scan ~1.4×/s forever). Going hidden/unmounting clears the hint so a stale pulse can't stick.
+  // menu-sniff, gated on `active`: event-driven, not polled — xterm's onWriteParsed (output actually landed
+  // in the buffer) schedules one trailing scan per 150ms burst, so a busy pane scans a few times a second,
+  // an idle pane scans ZERO times. Only the VISIBLE pane's nav button can pulse, so hidden warm panes skip
+  // the subscription's scan entirely (every live session stays mounted — N sessions would otherwise all
+  // scan forever). One scan runs on becoming visible, since a menu may already be on screen from before the
+  // pane was shown. Going hidden/unmounting clears the hint so a stale pulse can't stick.
   useEffect(() => {
     const term = termRef.current
     if (!term || !active) return
-    const sniff = setInterval(() => { try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }, 700)
-    return () => { clearInterval(sniff); onMenuRef.current?.(sessionId, false) }
+    let timer = 0
+    const scan = () => { timer = 0; try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }
+    scan()
+    const sub = term.onWriteParsed(() => { if (!timer) timer = setTimeout(scan, 150) })
+    return () => { sub.dispose(); clearTimeout(timer); onMenuRef.current?.(sessionId, false) }
   }, [sessionId, active])
 
   // active-driven: runs each time this pane crosses the visibility line. Two independent jobs when it
   // becomes visible — (A) hold the GPU renderer for the on-screen pane only, (B) send the real size NOW so
-  // the server's deferred first frame lands at the true visible size instead of waiting on the slow
-  // animationend/timer refit chain.
+  // the server's deferred first frame lands at the true visible size instead of waiting on the entrance
+  // animationend refit.
   useEffect(() => {
     const term = termRef.current
     if (!term) return

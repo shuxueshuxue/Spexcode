@@ -256,6 +256,40 @@ surface:
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
   JSON-RPC turn delivery live in the Codex adapter.
+- **headless (`HarnessHeadless` + `harnessOps`)** — a harness's HEADLESS (one-shot turn) capability object,
+  mirroring `agentDir`'s "null = no such primitive" pattern: `{ needsCmd, launchCmd, liveness, deliver,
+  resumeArg }`, or null when the harness has no headless form (claude/pi/opencode today — a headless create on
+  them fails loud at the create path). A session's `mode` is a PRODUCT dimension, so the ONE router
+  `harnessOps(h, mode)` (a mode branch, never a harness branch) picks the capability object for a headless
+  record and the interactive adapter for everything else; sessions.ts's launch/liveness/occupancy/waitForReady/
+  send/reopen all route through it. **codex's headless form is live** and is the interactive launch MINUS the
+  TUI attach: `needsCmd:false` — the executor already IS the shared app-server (the task runs as the
+  backend-owned thread's FIRST turn on both paths; the interactive pane TUI only renders it), so `headlessCmd`
+  never participates and the app-server binary still derives from the pinned interactive `cmd`'s first token
+  (the version-parity invariant). `launchCmd` reuses `codexLaunchCommand` byte-for-byte — app-server bootstrap,
+  mkdir lock, `codex-launch` thread/start + first turn + rollout wait, the `--resume` marker branch — except
+  the final line: instead of `codex --remote … resume`, the pane prints a thread banner and `exec tail -f`s the
+  app-server log, a read-only placeholder that keeps the pane/close/terminal-backdoor semantics at zero cost.
+  That makes a DOUBLE EXECUTION structurally impossible — the pane holds no agent to fire a second turn (the
+  mbp wrapper incident this answers: a hand-built headless launcher ran the task prompt AND a pane "Continue…"
+  turn concurrently for 34 minutes, double task_complete in one rollout; here there is no process that could).
+  Headless liveness is TURN-scoped: the caller's snapshot batches every windowed codex-headless session's owned
+  thread id into ONE `codexThreadsInProgress` sweep (`thread/read{includeTurns}` per id over one WS connection,
+  TTL-cached against the 1s warm tier) and carries the verdict on the snapshot's online-signal channel — an
+  `inProgress` turn reads online/working; an idle thread reads not-online so the DECLARED lifecycle rules the
+  display (the stop-gate guarantees a non-crash turn end declares, and a still-`active` idle thread honestly
+  reads offline); a probe TIMEOUT lands in `unproven` → `unknown` (a busy server is not a dead one), while a
+  DEAD socket reads offline — the app-server IS the executor, so its death is the session's. The placeholder
+  pid is deliberately ignored. RPC shapes re-verified live against codex 0.144.3 (2026-07-17): identical to the
+  0.142.x pin (`turns[].status: "inProgress"→"completed"`, `thread/loaded/list → result.data`; 0.144 adds a
+  thread-level `status.type: active|idle` we don't yet consume), so the target-state probe shipped directly,
+  no degraded path. `deliver` and the first-turn/hook paths are the interactive channel VERBATIM (app-server
+  JSON-RPC steer-vs-start on the owned thread; hooks fire from the shared server and never depended on the
+  pane); `resumeArg` is the same `--resume <tid>` marker, which on the headless script resumes the owned
+  thread directly and lands on the placeholder — a headless reopen recreates the read-only pane, fires
+  nothing, and the conversation's continuation is simply the next delivery. One deliberate occupancy
+  consequence: a headless session holds a `maxActive` slot only while a turn actually executes, so
+  between-turn gaps free concurrency — intended, not a leak.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in

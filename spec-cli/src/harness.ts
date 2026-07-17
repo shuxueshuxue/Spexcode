@@ -60,8 +60,9 @@ export interface HarnessHeadless {
   // (the config author writes the full invocation; the system never edits its internals).
   launchCmd(id: string, runtimeDir: string | undefined, cmd: string | undefined): string
   // TURN-scoped liveness: online only while a turn is actually executing; between turns the record's
-  // DECLARED lifecycle is the truth (the stop-gate guarantees a non-crash exit declares).
-  liveness(rec: SessRec, tmuxAlive: boolean, runtimeDir: string, pane: PaneProbe, socketLive?: boolean): Liveness
+  // DECLARED lifecycle is the truth (the stop-gate guarantees a non-crash exit declares). Same optionality as
+  // Harness.liveness so the two are callable through the harnessOps union with the caller's ONE snapshot.
+  liveness(rec: SessRec, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): Liveness
   // headless prompt delivery — the NEXT turn. A still-running turn refuses loud (never a silent queue).
   deliver(rec: SessRec, text: string): Promise<DispatchResult>
   // reopen semantics: a headless session's continuation is its next delivery, not a TUI re-attach.
@@ -457,7 +458,15 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
-export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
+// `headless` swaps ONLY the final pane line: instead of attaching the visible `--remote … resume` TUI, the
+// pane holds a READ-ONLY placeholder (a banner + `tail -f` of the shared app-server log). Everything before it
+// — app-server bootstrap, mkdir lock, codex-launch thread/start + first turn + rollout wait, the `--resume`
+// marker branch — is byte-identical, because the task's execution body ALREADY lives in the app-server first
+// turn on both paths. That is the structural no-double-run guarantee: headless has no second agent process to
+// even start (the mbp wrapper incident ran the task prompt AND a pane "Continue…" turn concurrently for 34min;
+// here the pane holds no agent at all). `headlessCmd` never participates — the app-server binary derivation
+// stays on the pinned interactive `cmd`'s first token (the version-parity invariant above).
+export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot(), headless = false): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -531,7 +540,15 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serve
     `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
-    `exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`,
+    // interactive: attach the visible TUI to the thread. headless: NO agent in the pane — a banner naming the
+    // thread, then a read-only tail of the app-server log keeps the pane (and the close/liveness window
+    // semantics) alive without ever running a second executor.
+    ...(headless
+      ? [
+          `printf '[spexcode] headless codex thread %s\\n[spexcode] the agent runs on the project app-server; this pane is a read-only log tail\\n' "$tid"`,
+          `exec tail -f "$log"`,
+        ]
+      : [`exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`]),
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -782,6 +799,67 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
 // prompt), and delivery reuses it for follow-ups. Exported so the CLI's `codex-launch` can fire the first turn.
 export function codexTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return sendCodexAppServerTurn(sock, threadId, text, cwd)
+}
+
+// @@@ codexThreadsInProgress - the HEADLESS turn-scoped liveness probe ([[harness-adapter]] headless): one WS
+// connection to the project app-server, one `thread/read{includeTurns}` per owned thread id, answering which
+// threads have an in-progress turn RIGHT NOW. The caller (sessions.ts liveSnapshot) batches every windowed
+// codex-headless session into a single call per snapshot — the headless analog of the rendezvous-listener
+// sweep. Shape re-verified live on codex 0.144.3 (2026-07-17): turns[].status is "inProgress" while running,
+// "completed" after — identical to the 0.142.x pin, so activeTurnIdFromThread decides each read. Outcomes are
+// tri-state like rendezvousListening, because only two prove anything: `ok` (every read answered — a read that
+// ERRORS, e.g. a thread "not materialized before its first user message", proves no turn is running on it, so
+// it counts as idle, not as a probe failure); `dead` (connect refused/ENOENT — the app-server is down, and the
+// app-server IS the headless executor, so its death is the sessions' death); `timeout` (the wall expired on a
+// live connection — a busy server is not a dead one, so the caller renders unknown, never a false offline).
+export function codexThreadsInProgress(sock: string, threadIds: string[], timeoutMs = 4000): Promise<
+  { ok: true; inProgress: Set<string> } | { ok: false; dead?: boolean; timeout?: boolean; error: string }
+> {
+  return new Promise((resolve) => {
+    if (!threadIds.length) return resolve({ ok: true, inProgress: new Set() })
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    const inProgress = new Set<string>()
+    let answered = 0, upgraded = false, settled = false
+    const BASE = 100   // request ids 100+i → threadIds[i]; keeps clear of the initialize handshake's id 1
+    const done = (r: { ok: true; inProgress: Set<string> } | { ok: false; dead?: boolean; timeout?: boolean; error: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, timeout: true, error: `codex app-server did not answer ${threadIds.length} thread reads within ${timeoutMs}ms` }), timeoutMs)
+    conn.on('error', (e) => done({ ok: false, dead: true, error: `codex app-server connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => done({ ok: false, dead: true, error: 'codex app-server closed before the thread reads were answered' }))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.id === 1 && m.result) {
+        send({ method: 'initialized', params: {} })
+        threadIds.forEach((tid, i) => send({ id: BASE + i, method: 'thread/read', params: { threadId: tid, includeTurns: true } }))
+        return
+      }
+      if (typeof m.id !== 'number' || m.id < BASE || m.id >= BASE + threadIds.length) return
+      if (!m.error && m.result && activeTurnIdFromThread(m.result)) inProgress.add(threadIds[m.id - BASE])
+      if (++answered === threadIds.length) done({ ok: true, inProgress })
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, dead: true, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, dead: true, error: 'codex app-server sent a WebSocket close before the thread reads were answered' })
+    })
+  })
 }
 
 // @@@ codex rollout on disk - the visible TUI resumes a thread via `codex --remote resume <tid>`, which reads
@@ -1127,7 +1205,31 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  headless: null,                                    // headless (app-server-executed, agent-free pane) capability lands with its own implementation
+  // @@@ codex headless - the app-server IS the executor on the interactive path already (the task runs as the
+  // backend-owned thread's FIRST turn; the pane TUI only renders it), so codex's headless form is the
+  // interactive launch minus the final attach: the pane holds a read-only placeholder, and a second agent
+  // process is STRUCTURALLY impossible — nothing in the pane can start a turn (the mbp double-run fix).
+  headless: {
+    // the executor is the shared app-server, derived from the pinned interactive `cmd`'s first token (the
+    // version-parity invariant) — there is no second command, `headlessCmd` is ignored.
+    needsCmd: false,
+    launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot(), true),
+    // TURN-scoped: online iff the window is up AND the caller's app-server sweep (codexThreadsInProgress, fed
+    // through the snapshot's online-signal channel as `socketLive`) found an in-progress turn on the owned
+    // thread. Between turns the caller's reconcile lets the DECLARED lifecycle rule (the stop-gate guarantees a
+    // non-crash turn end declares); a still-`active` record with no running turn honestly reads offline. The
+    // pane probe (`pidAlive` = the placeholder tail) is deliberately ignored — a live placeholder proves
+    // nothing about the executor.
+    liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
+    // delivery is the interactive channel verbatim — app-server JSON-RPC steer-vs-start on the owned thread
+    // (it never depended on the pane). The record's runtime dir is the ambient project's, same as the
+    // interactive call site passes.
+    deliver: (rec, text) => deliverViaCodexAppServer({ session: rec.session, worktreePath: rec.worktreePath, harnessSessionId: rec.harnessSessionId, runtimeDir: runtimeRoot() }, text),
+    // same marker as interactive: reopen re-runs the launch script, which resumes the OWNED thread directly
+    // (tid=$2 — no codex-launch, no new thread, no re-fired prompt) and lands on the placeholder line — so a
+    // headless reopen recreates the read-only pane and nothing else; the conversation continues via deliver.
+    resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
+  },
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
@@ -1291,6 +1393,17 @@ export function harnessById(id: string): Harness {
   const h = HARNESSES.find((x) => x.id === id)
   if (!h) throw new Error(`unknown harness '${id}' (known: ${HARNESSES.map((x) => x.id).join(', ')})`)
   return h
+}
+
+// @@@ harnessOps - the ONE mode router product code branches on: a headless-mode record routes its runtime
+// (launchCmd / liveness / deliver / resumeArg) through the harness's headless capability object; everything
+// else — an interactive record, an old pre-mode record, or a harness with no headless form — stays on the
+// interactive adapter. This is a PRODUCT-dimension branch (`mode`), never a harness branch, so it lives here
+// once instead of an `if (headless)` per call site. A headless record on a null-capability harness cannot
+// exist past create (the create path fails loud), so the fallthrough is old-record safety, not a feature.
+export type HarnessOps = Harness | HarnessHeadless
+export function harnessOps(h: Harness, mode?: SessionMode | null): HarnessOps {
+  return mode === 'headless' && h.headless ? h.headless : h
 }
 
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------

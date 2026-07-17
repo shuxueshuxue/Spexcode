@@ -100,6 +100,27 @@ scenarios:
       focus-retention mousedown handler does not preventDefault inside the Eval workspace, a drag creates
       a non-empty browser selection, and ordinary Eval-tab buttons/row selection still work. No page
       errors.
+  - name: session-eval-deep-link
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/route.js, spec-dashboard/src/SessionEval.jsx]
+    related:
+      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/SessionInterface.jsx
+      - spec-dashboard/src/address.js
+    description: >
+      In a fresh browser tab (a cold app load — the MR-reviewer path), open
+      '#/sessions/<id>/eval/<node>/<scenario>' for a session holding a reading on that scenario, and read
+      the real DOM: which right-pane tab is active, which row is selected, and what the detail shows. Also
+      load the bare '#/sessions/<id>/eval' form, a target whose reading is INHERITED (another session's),
+      and a garbage node/scenario.
+    expected: >
+      The console opens with the EVAL tab active (never the terminal) and the named scenario's row selected,
+      its detail (media + remark thread + composer) open on the right — one click from an MR note to the
+      live, remarkable, worktree-rooted reading; no clicking through terminal→eval by hand. The bare /eval
+      form lands on the tab with its default first row. An inherited target auto-unfolds its baseline
+      divider so the selected row is visible. A name matching nothing degrades to the tab's default
+      selection — never a blank pane or a crash. After landing, the address bar normalizes to
+      '#/sessions/<id>' (the sub-route is an entrance, not synced view state).
 ---
 # session-eval loss
 

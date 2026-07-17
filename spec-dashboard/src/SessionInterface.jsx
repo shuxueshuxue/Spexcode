@@ -135,7 +135,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, evalSeed, onEvalSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -155,6 +155,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the type button's `.suggest` pulse
   // which of the right pane's two tabs is showing: the live terminal (default) or the always-available eval.
   const [rightTab, setRightTab] = useState('terminal')
+  // the Eval tab's deep-link target ({node,scenario}|null) — set by the one-shot evalSeed below, handed to
+  // the pane as its initial selection; cleared on tab switch so a later manual visit opens fresh.
+  const [evalJump, setEvalJump] = useState(null)
   // the Eval tab auto-collapses the session list to a thin strip ([[session-console]] / [[evals-view]]'s
   // fold-to-strip): the eval tab is itself a master-detail whose scenario list needs the width, so the
   // console's session list folds out of the way while it's shown and unfolds on the way back to Terminal.
@@ -221,7 +224,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
+  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal'); setEvalJump(null) }, [active])
+  // the eval deep link ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]' seeds this one-shot —
+  // flip the right pane to the Eval tab and hand the pane its target reading. Declared AFTER the [active]
+  // reset above so a deep load applies on top of it (effects run in declaration order within a commit).
+  useEffect(() => {
+    if (evalSeed == null) return
+    setRightTab('eval')
+    setEvalJump(evalSeed.node && evalSeed.scenario ? { node: evalSeed.node, scenario: evalSeed.scenario } : null)
+    onEvalSeedConsumed?.()
+  }, [evalSeed]) // eslint-disable-line react-hooks/exhaustive-deps
   // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
   // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
   useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])
@@ -895,7 +907,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   routinely names the session already being viewed (its own filed readings), where the plain
                   openSession would no-op (selection unchanged, hash identical) and leave a dead button —
                   so flip the right pane to the terminal, and only navigate when the filer is another session. */}
-              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions}
+              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} initialSel={evalJump}
                 onOpenSession={(id) => { setRightTab('terminal'); if (id !== active) onOpenSession?.(id) }} />}
           </div>
         </section>

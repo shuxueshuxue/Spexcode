@@ -136,9 +136,11 @@ app.post('/api/specs/:id/evals/ok', async (c) => {
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).
 // HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
 // currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
-// transport, so every evidence kind streams the same way.
+// transport, so every evidence kind streams the same way. A trailing `.<ext>` on the hash is IGNORED
+// decoration for third-party markdown renderers (GitLab/GitHub only emit a <video> player when the URL
+// ends in a video extension); the served bytes and MIME stay the stored ones — a wrong suffix never lies.
 app.get('/api/evidence/:hash', (c) => {
-  const r = readBlobByHash(c.req.param('hash'))
+  const r = readBlobByHash(c.req.param('hash').replace(/\.[a-z0-9]+$/i, ''))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
   const total = r.bytes.length
   const base = { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' }

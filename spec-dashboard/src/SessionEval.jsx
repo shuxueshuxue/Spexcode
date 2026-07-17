@@ -18,7 +18,7 @@ import { Icon } from './icons.jsx'
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
 // inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
-export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession }) {
+export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession, initialSel = null }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
@@ -64,6 +64,25 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   // the flat visible list drives selection (and the default: the first row — blind spot or freshest).
   // Visibility is the ONE semantics: an inherited row whose group is folded leaves this list exactly as a
   // ✦-filtered row does, so the j/k walk, the default selection, and the fallback never see hidden rows.
+  // the deep-link landing ([[session-eval]]): a '#/sessions/<id>/eval/<node>/<scenario>' entrance names one
+  // scenario — once the model is in, resolve it to its row (a reading via entryKey, else its blind-spot row)
+  // and select it; an INHERITED reading first unfolds its baseline group so the row is visible. One-shot per
+  // target; an unknown node/scenario resolves to nothing and the default (first visible row) stands.
+  const jumpedRef = useRef(null)
+  useEffect(() => {
+    if (!initialSel || !model || jumpedRef.current === initialSel) return
+    jumpedRef.current = initialSel
+    const g = groups.find((x) => x.node.id === initialSel.node)
+    if (!g) return
+    const r = g.rows.find((x) => x.scenario === initialSel.scenario)
+    if (r) {
+      if (!r.inSession) setOpenInherited((s) => new Set(s).add(g.node.id))
+      setSel(entryKey(r))
+    } else if (g.blind.some((b) => b.scenario === initialSel.scenario)) {
+      setSel(`blind:${initialSel.node}·${initialSel.scenario}`)
+    }
+  }, [initialSel, model, groups])
+
   const visible = useMemo(() => groups.flatMap((g) => [
     ...g.blind.map((b) => ({ kind: 'blind', key: `blind:${b.node}·${b.scenario}`, item: b })),
     ...g.rows.filter((r) => r.inSession || (!onlySession && openInherited.has(g.node.id)))

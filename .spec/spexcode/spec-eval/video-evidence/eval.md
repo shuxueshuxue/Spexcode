@@ -22,6 +22,22 @@ scenarios:
       - spec-eval/src/cli.ts
       - spec-eval/src/evaltab.ts
       - spec-eval/src/sessioneval.ts
+  - name: evidence-url-ext-suffix
+    tags: [backend-api]
+    description: >
+      Against a live backend holding a video evidence blob, GET /api/evidence/<hash>.webm (a trailing
+      extension suffix on the hash), the same URL with a WRONG suffix (.png), the bare-hash URL, and a
+      Range request on the suffixed URL. Also probe a garbage name with a suffix (foo.webm).
+    expected: |
+      The suffixed URL answers exactly like the bare hash: 200 with the STORED Content-Type (video/webm —
+      the sniffed MIME, regardless of what the suffix claims, so <hash>.png still serves video/webm), and
+      a Range request on the suffixed URL answers 206 with Content-Range. The suffix is decoration only —
+      stripped before lookup, never trusted for the MIME. A non-hash name keeps failing loud (400 invalid).
+      This is what lets a GitLab/GitHub MR note embed the clip as a real <video> player
+      (![d](…/api/evidence/<hash>.webm)), since those renderers pick the player by URL extension and strip
+      raw <video> HTML.
+    related:
+      - spec-cli/src/index.ts
 ---
 # video-evidence loss
 

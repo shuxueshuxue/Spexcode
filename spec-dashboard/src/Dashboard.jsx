@@ -53,7 +53,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
-  const { page, param } = useRoute()
+  const { page, param, sub } = useRoute()
   // focus survives a reload / a mobile↔desktop breakpoint remount within this tab (sessionStorage, so a
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
   const [focusId, setFocusId] = useState(() => {
@@ -69,6 +69,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
+  const [evalSeed, setEvalSeed] = useState(null)  // one-shot eval deep link ({node,scenario}|{}) from #/sessions/<id>/eval[/…]
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
@@ -151,6 +152,12 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   useLayoutEffect(() => {
     if (page === 'sessions' && param && param !== sessionSel) setSessionSel(param)
   }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the sessions sub-route is a ONE-SHOT deep link ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]'
+  // seeds the console's Eval tab (and optionally one scenario's reading), then the echo below normalizes the
+  // hash back to the plain tab address — the link is an entrance, not a synced view state.
+  useLayoutEffect(() => {
+    if (page === 'sessions' && sub?.[0] === 'eval') setEvalSeed({ node: sub[1] || null, scenario: sub[2] || null })
+  }, [page, sub]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
   }, [page, sessionSel])
@@ -608,6 +615,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           setSel={setSessionSel}
           seed={seed}
           onSeedConsumed={() => setSeed(null)}
+          evalSeed={evalSeed}
+          onEvalSeedConsumed={() => setEvalSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
           onOpenSession={openSession}

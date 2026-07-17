@@ -1,7 +1,7 @@
 ---
 concern: codex-harness launcher cmd that isn't real codex → POST /api/sessions hangs 40s+ with no loud failure
 by: 3ed32096-2012-466d-b194-d6c96d4781dd
-status: open
+status: landed
 nodes: harness-adapter
 created: 2026-07-04T13:57:37.456Z
 ---

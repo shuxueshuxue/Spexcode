@@ -84,6 +84,8 @@ export default {
     capturing: 'capturing frame…',
     failed: 'failed — is the backend up?',
     comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
+    railFold: 'fold the review track — the stage owns the width',
+    railUnfold: 'unfold the review track',
     abOlder: 'older eval (‹ toward the A / reproduced bug)',
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',

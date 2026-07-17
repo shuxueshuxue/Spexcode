@@ -151,16 +151,14 @@ export function startGateway(opts: GatewayOpts): void {
   }
 
   // server-side connection reaping ([[spec-cli]] / [[public-mode]]) - the internet-facing gateway is the
-  // public server in public mode, so it carries the SAME reaping as the child. The `reap` HTTP timeouts are
-  // kept (harmless) but are NOT the mechanism — MEASURED (eval server-reaps-abandoned-connections), Node's
-  // headersTimeout/requestTimeout don't reap an INCOMPLETE request; the real reaper is the socket-level
-  // `installConnectionReaper` (reaper.ts), applied below at every http server the serving path creates.
-  // Idle keep-alive / slow-loris / never-completing request only; the gated WS upgrade (handled below) is an
-  // active stream and exempt for its lifetime.
-  const reap = { keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000 }
+  // public server in public mode, so it carries the SAME reaping as the child: the socket-level
+  // `installConnectionReaper` (reaper.ts), the single owner of the header/idle deadlines — it disables
+  // Node's own overlapping HTTP timeouts, which were measured to race and shadow it (issue #65), so no
+  // timeout options are passed here. Idle keep-alive / slow-loris / never-completing request only; the
+  // gated WS upgrade (handled below) is an active stream and exempt for its lifetime.
   const server = secure
-    ? https.createServer({ cert: opts.tls!.cert, key: opts.tls!.key, ...reap }, handler)
-    : http.createServer(reap, handler)
+    ? https.createServer({ cert: opts.tls!.cert, key: opts.tls!.key }, handler)
+    : http.createServer(handler)
   installConnectionReaper(server)
 
   // @@@ WS gate - the terminal socket rides an HTTP upgrade. Gate it by the SAME cookie (the browser sends

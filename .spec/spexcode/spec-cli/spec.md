@@ -86,13 +86,16 @@ KEEPS SERVING rather than exiting and dropping the public port (and the tmux ses
 wedges even while its event loop is idle: a client that times out and kills its request leaks one server-side
 socket each time, and enough of them (135 were observed piling on the public port) starve the backend into
 *looking* dead while it is actually healthy — the trigger of the mass-restore cascade. Two layers close this,
-matched to what each server is. The **child** (and, in public mode, the **gateway**) is a real HTTP server.
-Node's own `keepAliveTimeout` / `headersTimeout` / `requestTimeout` are set on it (harmless) but are **not the
-mechanism**: MEASURED (eval `server-reaps-abandoned-connections`, on a minimal `http.createServer`, Node
-20/22/24), only `keepAliveTimeout` — the idle-*between*-requests case — ever fires; `headersTimeout` and
-`requestTimeout` do **not** reap an *incomplete* request through the `connectionsCheckingInterval` sweep, so a
-slow-loris (TCP connect + partial headers, never completed) survives indefinitely and the pileup protection
-those options claim is not delivered. So the real reaper is an explicit **socket-level deadline** at the
+matched to what each server is. The **child** (and, in public mode, the **gateway**) is a real HTTP server,
+and its reaper is the **single owner** of the abandoned-socket deadlines: Node's own overlapping HTTP
+timeouts (`headersTimeout`, `keepAliveTimeout`) are DISABLED at reaper install — they cover the same phases
+and so are a second mechanism racing the first, and MEASURED (eval `server-reaps-abandoned-connections`,
+issue #65) a `headersTimeout: 20000` set beside the reaper won the race at default config on every reap and
+silently capped `SPEXCODE_REAP_HEADER_MS` above 20s: the close still looked timely (Node's 408), but the
+tunable had silently stopped tuning. No timeout `serverOptions` are passed at the `serve`/`createServer`
+sites; `requestTimeout` alone stays at Node's default (~5 min) because it bounds the in-flight request-body
+phase the reaper deliberately exempts (a silently-abandoned mid-body upload has no other reaper) and 5 min
+shadows no sane deadline. The reaper is an explicit **socket-level deadline** at the
 server boundary (`reaper.ts`, one helper installed at every HTTP `createServer`/`serve` site): on socket
 birth it is armed with a header deadline it must complete a request within, else it is destroyed; while a
 request is in flight the deadline is disarmed (so a slow board build or a streaming response is never cut);

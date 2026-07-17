@@ -536,20 +536,18 @@ app.post('/api/sessions/:id/sort', async (c) => {
 const port = Number(process.env.PORT || 8787)
 // @@@ server-side connection reaping ([[spec-cli]]) - abandoned connections must die SERVER-SIDE, or they
 // pile up and wedge the backend (135 leaked conns once starved :8787 into looking dead — the cascade that
-// triggered the mass-restore incident, since every client-side timeout-kill leaks one). The `serverOptions`
-// timeouts below are kept (harmless), but they are NOT the mechanism: MEASURED (eval
-// server-reaps-abandoned-connections), Node's `headersTimeout`/`requestTimeout` do NOT reap an INCOMPLETE
-// request via the connectionsCheckingInterval sweep — a slow-loris survives indefinitely; only
-// keepAliveTimeout (idle-between-requests) ever fires. So the real reaper is the explicit socket-level
-// `installConnectionReaper` below (see reaper.ts): a per-socket deadline that reaps a slow-loris / idle
-// keep-alive but exempts an ACTIVE WS/SSE stream (board-stream, terminal socket) for as long as it streams.
+// triggered the mass-restore incident, since every client-side timeout-kill leaks one). The ONE mechanism is
+// the socket-level `installConnectionReaper` below (reaper.ts): a per-socket deadline that reaps a
+// slow-loris / idle keep-alive but exempts an ACTIVE WS/SSE stream (board-stream, terminal socket) for as
+// long as it streams. Deliberately NO `serverOptions` timeouts here: they were measured to be not harmless
+// but a second mechanism racing the reaper (issue #65 — a 20s headersTimeout won at default config and
+// silently capped SPEXCODE_REAP_HEADER_MS); the install disables Node's overlapping timeouts so the
+// deadlines have a single owner.
 // @@@ loopback bind ([[public-mode]]) - this child is NEVER the internet face: the supervisor (and in public
 // mode the gateway) fronts it, and dials it only via 127.0.0.1. Binding loopback is what makes "loopback is
 // the trust boundary" true — without a hostname Node binds all interfaces and the child is reachable from
 // the LAN with no password, bypassing the gate entirely (measured: eval auth-boundary).
-const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1', serverOptions: {
-  keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000,
-} })
+const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' })
 installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
 superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant

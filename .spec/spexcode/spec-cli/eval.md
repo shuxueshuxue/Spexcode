@@ -37,13 +37,18 @@ scenarios:
     description: >-
       Drive the connection-reaping contract through the REAL backend. Start the child server, then open a raw
       socket that sends PARTIAL headers and never completes the request (an abandoned/slow client — the shape
-      every client-side timeout-kill leaves behind), and observe when the SERVER closes it. Separately, confirm
+      every client-side timeout-kill leaves behind), and observe when the SERVER closes it. The probe MUST
+      attach a data listener (a paused socket never observes the server's close — two prior false "not reaped"
+      readings were exactly this artifact). Separately, confirm
       an ACTIVE long-lived response is NOT reaped: open the board-stream SSE (`/api/graph/stream`) and hold it
       idle past the timeout — it must stay open. File the transcript with `spex eval add spec-cli --scenario
       server-reaps-abandoned-connections --result <txt> --pass`.
     expected: >-
-      The stalled/partial request is REAPED server-side (the server closes the socket) at ~headersTimeout,
-      never left to linger indefinitely / to the multi-minute Node default — so abandoned connections cannot
+      The stalled/partial request is REAPED server-side at ~the reaper's header deadline
+      (`SPEXCODE_REAP_HEADER_MS`, default 30s) by a BARE socket destroy — zero response bytes; a
+      "408 Request Timeout" before the close means Node's own machinery fired instead, shadowing the
+      reaper and its env knob (issue #65) — never left to linger to the multi-minute Node default, so
+      abandoned connections cannot
       pile up and wedge the backend (the 135-conn starvation that started the mass-restore cascade). The active
       board-stream SSE is UNTOUCHED (an active response is not idle keep-alive), so a real dashboard's live
       stream is never severed by the reaper. The raw-TCP supervisor proxy propagates a close on either half to

@@ -13,19 +13,17 @@ export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 // '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval address — each segment decoded; the page splits on the first '/').
 // '#/issues/<id>' deep-links to SpexCode's internal issue detail.
-// A sessions route may carry segments PAST the id — '#/sessions/<id>/eval[/<node>/<scenario>]' — returned
-// as `sub` (decoded array), the console's in-page deep link ([[session-eval]]'s Eval tab). Other pages
-// have no sub-route; sub is null.
+// A sessions param may carry segments PAST the id — '#/sessions/<id>/eval[/<node>/<scenario>]', the
+// console's in-page deep link ([[session-eval]]'s Eval tab) — same multi-segment shape as evals; the
+// sessions page splits off the id and applies the rest.
 // Anything unknown lands on graph (the home page).
 export function parseRoute(hash) {
   const parts = (hash || '').replace(/^#\/?/, '').split('/').filter(Boolean)
   const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
-  const param = page === 'sessions' ? (parts[1] || null)
-    : page === 'evals' ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
-    : page === 'issues' ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
+  const param = page === 'sessions' || page === 'evals' || page === 'issues'
+    ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
     : null
-  const sub = page === 'sessions' && parts.length > 2 ? parts.slice(2).map(decodeURIComponent) : null
-  return { page, param, sub }
+  return { page, param }
 }
 
 // a param's '/'-separated segments are encoded one by one so a multi-segment param (evals' node/scenario)

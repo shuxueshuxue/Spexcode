@@ -94,6 +94,25 @@ scenarios:
       stays stale and the pane's only recovery is a hard refresh: the blackhole this scenario forbids.
       Zero loss = no interleaving of pushed boards and in-flight fetches leaves the 304 lane certifying a
       board nobody is seeing.
+  - name: idle-heartbeat-costs-nothing
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/heartbeat.js]
+    description: >-
+      Real browser against a live backend, with every setInterval/setTimeout registration and firing
+      instrumented (an init script wrapping the timer APIs, attributing each by call stack). Load the
+      dashboard, let the board render and the push stream establish, then leave the tab completely idle
+      for ≥35s (longer than one dead window) and read the census: which intervals the stream watchdog
+      registered, and how many times any data-layer timer FIRED during the idle window.
+    expected: >-
+      The stream's liveness watchdog is a dead-man switch, not a polling loop: it registers NO
+      setInterval (the only interval left is the 15s fallback poll, which is a different belt), and
+      during the whole idle window ZERO data-layer watchdog timers fire — every inbound stream event
+      (pings included) re-arms a one-shot that never gets to fire on a healthy link. The dead window
+      stays 2.5× the server ping cadence, derived from the ONE shared cadence primitive both the SSE
+      board stream and the terminal socket read (heartbeat.js). Zero loss = liveness detection costs
+      zero wakeups while the link is healthy, and a silent stream death still reopens within one dead
+      window (the same census rig, with the backend's pings frozen, must show a replacement
+      /api/graph/stream connection).
 ---
 # dashboard-shell — measurement
 

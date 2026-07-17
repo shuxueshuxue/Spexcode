@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createResilientSocket, SERVER_PING_MS, DEAD_MS } from './resilientSocket.js'
+import { createResilientSocket } from './resilientSocket.js'
+import { SERVER_PING_MS, DEAD_MS } from './heartbeat.js'
 
 // The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl and
 // timers are injectable, so the dead-man's switch — the detector for a HALF-OPEN link, where the peer is
@@ -58,10 +59,10 @@ function harness() {
   return { clock, sockets, states, messages, sock }
 }
 
-// The heartbeat contract has ONE primitive per side of the wire: the server's ping cadence
-// (TERM_PING_MS in spec-cli/src/index.ts) and this mirror of it — every other window is derived.
-// Same pinning pattern as streamHeartbeat.test.mjs holds the SSE pair to the board stream's cadence.
-test('the mirror matches the server ping cadence and the dead window derives from it', () => {
+// The heartbeat contract has ONE primitive for the whole client (heartbeat.js, shared with the SSE board
+// stream) — every other window is derived. streamHeartbeat.test.mjs pins the primitive to the server
+// cadences; here we pin that THIS channel consumes that shared switch, not a private copy.
+test('the socket holds the link to the shared heartbeat contract', () => {
   assert.equal(SERVER_PING_MS, 10000) // = TERM_PING_MS in spec-cli/src/index.ts — change BOTH or neither
   assert.equal(DEAD_MS, 2.5 * SERVER_PING_MS)
 })

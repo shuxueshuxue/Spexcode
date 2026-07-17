@@ -19,8 +19,8 @@ related:
 
 ## raw source
 
-SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code and Codex,
-tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
+SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Codex, and pi
+([[pi-harness]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
@@ -44,7 +44,10 @@ surface:
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
   commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
-  dispatcher (`.claude/settings.json` vs `.codex/hooks.json`). The shim's LOCATION is a divergence point too:
+  dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
+  the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no
+  external hook binding at all, so its shim is an extension synthesizing claude-shaped payloads —
+  [[pi-harness]]). The shim's LOCATION is a divergence point too:
   Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
   from the **ROOT CHECKOUT** — codex-rs rewrites the hooks-config folder of any linked worktree to
   `<repo_root>/<rel-from-checkout-root>/.codex` (`root_checkout_hooks_folder_for_dir`), so a thread whose cwd is

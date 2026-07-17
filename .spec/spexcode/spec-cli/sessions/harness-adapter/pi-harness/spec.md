@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/harness.ts
   - spec-cli/src/slash-commands.ts
+  - spec-cli/src/pi-harness.test.ts
   - spec-cli/hooks/dispatch.sh
   - spec-cli/hooks/harness.sh
 ---

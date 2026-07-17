@@ -94,8 +94,9 @@ export async function clientMerge(id: string): Promise<{ dispatched: boolean; re
 
 // POST /api/sessions/:id/resume — bring the agent back (relaunch ONLY if confirmed offline); demotes
 // working→idle, keeps any declaration. The RESUME GUARD REFUSES (409 {refused:true}) on a live/unproven agent;
-// `force` overrides for a wedged-but-alive process. {ok:false} otherwise = no such session (404).
-export async function clientResume(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+// `force` overrides for a wedged-but-alive process. {ok:false} otherwise = no such session (404). `info`
+// carries a non-error advisory (a headless resume ensures the window and points at send instead of relaunching).
+export async function clientResume(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   await guarded('session resume')
   const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({ force }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` }))

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, harnessOps, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, claudeHeadlessOps, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, harnessOps, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -209,7 +209,8 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
   }))
   // name-sorted, exactly the config's real launchers — no ghost duplicates. Each row carries its optional
   // headlessCmd (null when unset) and the backend-computed modes list — codex's headless capability is live
-  // (server-side executor, no headlessCmd needed) so its row offers both modes; claude's is still null.
+  // with no headlessCmd needed (server-side executor) so its row offers both modes; the claude rows carry the
+  // needsCmd:true capability, so with no headlessCmd configured they stay interactive-only.
   assert.deepEqual(launcherList(root), [
     { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
     { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headlessCmd: null, modes: ['interactive'] },
@@ -242,8 +243,10 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
 
 // [[launcher-select]] headless — a launcher may carry TWO complete commands (`cmd` interactive, `headlessCmd`
 // one-shot). The parse layer passes headlessCmd through untouched (whole command, never rewritten), reads an
-// empty string as absent, and computes each row's `modes` from the ADAPTER capability — which in the W1
-// baseline is null on every adapter, so headless is offered nowhere yet.
+// empty string as absent, and computes each row's `modes` from the ADAPTER capability — claude carries
+// claudeHeadlessOps (needsCmd), so a claude launcher offers headless exactly when a headlessCmd is configured;
+// codex's capability is server-side (!needsCmd), so it offers headless with no headlessCmd at all;
+// pi/opencode carry null and stay interactive-only.
 test('launchers parse headlessCmd (empty string = absent) and carry backend-computed modes', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-headless-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
@@ -260,33 +263,36 @@ test('launchers parse headlessCmd (empty string = absent) and carry backend-comp
   // resolveLauncher returns the same extended shape (no headless validation here — that is create-time).
   assert.equal(resolveLauncher('reclaude', root).headlessCmd, '/opt/reclaude --dangerously-skip-permissions -p')
   assert.equal(resolveLauncher('codex', root).headlessCmd, null)
-  // codex's headless capability is LIVE and needs no command of its own (`needsCmd:false` — the executor is
-  // the app-server, derived from the pinned interactive cmd), so a codex launcher offers headless even with
-  // NO headlessCmd. claude/pi/opencode still carry null → interactive-only, even with a configured
-  // headlessCmd (each capability flips in its own harness's implementation, never here).
+  // capability state: claude ships claudeHeadlessOps (a needsCmd one-shot form); codex's is LIVE and
+  // server-side (`needsCmd:false` — the executor is the app-server, derived from the pinned interactive cmd);
+  // pi/opencode still null (each capability flips in its own harness's implementation, never here).
+  assert.equal(claudeHarness.headless, claudeHeadlessOps)
+  assert.equal(claudeHarness.headless?.needsCmd, true)
   assert.equal(codexHarness.headless?.needsCmd, false)
-  for (const h of HARNESSES) if (h.id !== 'codex') assert.equal(h.headless, null, `${h.id} has no headless form yet`)
+  for (const h of HARNESSES) if (h.id !== 'claude' && h.id !== 'codex') assert.equal(h.headless, null, `${h.id} still ships headless: null`)
+  // so modes: a claude launcher WITH headlessCmd offers both; without one (needsCmd unmet) it stays
+  // interactive-only; a codex launcher offers both even with NO headlessCmd.
+  assert.deepEqual(reclaude.modes, ['interactive', 'headless'])
   assert.deepEqual(blank.modes, ['interactive'])
-  assert.deepEqual(reclaude.modes, ['interactive'])
   assert.deepEqual(codex.modes, ['interactive', 'headless'])
-  assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive'])
+  assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive', 'headless'])
+  assert.deepEqual(launcherModes('claude', null), ['interactive'])
   assert.deepEqual(launcherModes('codex', null), ['interactive', 'headless'])
   assert.deepEqual(launcherModes('no-such-harness', 'x'), ['interactive'])   // unknown harness contributes no headless, list stays renderable
 })
 
-test('pinnedLaunchCmd: interactive pins cmd; headless without the capability fails loud; codex headless pins the interactive cmd', () => {
+test('pinnedLaunchCmd: interactive pins cmd; claude headless pins headlessCmd; codex headless pins the interactive cmd', () => {
   const l = { name: 'reclaude', harness: 'claude', cmd: '/opt/reclaude --skip', headlessCmd: '/opt/reclaude --skip -p' }
   assert.equal(pinnedLaunchCmd(claudeHarness, l, 'interactive'), '/opt/reclaude --skip')
-  // claude still carries headless: null (W2's flip), so a headless create is rejected with the harness named.
-  assert.throws(() => pinnedLaunchCmd(claudeHarness, l, 'headless'), /no headless capability/)
+  // claude's capability is live (claudeHeadlessOps, needsCmd) → the pin IS the headlessCmd, verbatim.
+  assert.equal(pinnedLaunchCmd(claudeHarness, l, 'headless'), '/opt/reclaude --skip -p')
   // codex's live capability is server-side (!needsCmd): headless pins the INTERACTIVE cmd — the app-server
   // binary derives from its first token (version parity) — and headlessCmd is ignored.
   const cx = { name: 'codex', harness: 'codex', cmd: 'codex --yolo', headlessCmd: null }
   assert.equal(pinnedLaunchCmd(codexHarness, cx, 'headless'), 'codex --yolo')
 })
 
-test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCmd (missing → fail loud), server-side pins cmd', () => {
-  // fake capability objects — the contract W2/W3 implement against; the pin decision must route on the
+test('pinnedLaunchCmd routes per the capability object: needsCmd pins headlessCmd (missing → fail loud), server-side pins cmd', () => {  // fake capability objects — the contract W2/W3 implement against; the pin decision must route on the
   // OBJECT, never on which harness it is.
   const stub: Omit<HarnessHeadless, 'needsCmd'> = {
     launchCmd: () => '', liveness: () => 'offline', deliver: async () => ({ ok: false }), resumeArg: () => '',
@@ -335,8 +341,10 @@ test('harnessOps routes per mode, falling through when the harness has no headle
   assert.equal(harnessOps(codexHarness, 'interactive'), codexHarness)
   assert.equal(harnessOps(codexHarness, undefined), codexHarness)
   assert.equal(harnessOps(codexHarness, 'headless'), codexHarness.headless)
-  // claude has no headless form yet → a (theoretical) headless record falls through to the interactive adapter.
-  assert.equal(harnessOps(claudeHarness, 'headless'), claudeHarness)
+  assert.equal(harnessOps(claudeHarness, 'headless'), claudeHeadlessOps)
+  // pi has no headless form → a (theoretical) headless record falls through to the interactive adapter.
+  const pi = HARNESSES.find((h) => h.id === 'pi')!
+  assert.equal(harnessOps(pi, 'headless'), pi)
 })
 
 // codex headless liveness is TURN-scoped: online iff the window is up AND the caller's app-server sweep found
@@ -353,6 +361,35 @@ test('codex headless liveness: window + in-progress turn, placeholder pid ignore
   // prompt); no captured id → empty tail → fresh thread on the same record.
   assert.equal(ops.resumeArg(rec), '--resume tid-1')
   assert.equal(ops.resumeArg({ ...rec, harnessSessionId: null }), '')
+})
+
+// [[harness-adapter]] claude headless ops — the capability object's pure surface. launchCmd embeds the pinned
+// headlessCmd WHOLE (zero parsing; a headless record without a pin is corruption → fail loud, never a silent
+// interactive fallback); resumeArg is empty (a headless session's continuation is its next delivery, so
+// reopen must never hand the one-shot command a fabricated prompt tail).
+test('claudeHeadlessOps: launchCmd embeds the pinned headlessCmd whole (missing → fail loud); resumeArg is empty', () => {
+  assert.equal(claudeHeadlessOps.needsCmd, true)
+  assert.equal(claudeHeadlessOps.launchCmd('some-id', undefined, '/opt/reclaude --skip -p'), '/opt/reclaude --skip -p')
+  assert.throws(() => claudeHeadlessOps.launchCmd('some-id', undefined, undefined), /no pinned headlessCmd/)
+  assert.equal(claudeHeadlessOps.resumeArg({} as never), '')
+})
+
+// TURN-scoped liveness: online only WHILE a one-shot turn executes. Primary = the registered agent.pid
+// hot-tier verdict (both launch.sh and the injected turn.sh re-register it); a dead pid reads offline — which
+// between turns is exactly right, since reconcile shows the record's declared lifecycle and only an
+// UNDECLARED `active` ever surfaces this offline (an honest crash). Legacy fallback (no agent.pid) is the
+// claude-ish descendant tree walk — the pane's own shell never counts.
+test('claudeHeadlessOps liveness is turn-scoped: pidAlive verdict wins; fallback walks the claude-ish pane tree', () => {
+  const rec = {} as never
+  assert.equal(claudeHeadlessOps.liveness(rec, false, undefined, { pidAlive: true }), 'offline')   // window gone trumps everything
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { pidAlive: true }), 'online')     // a turn is executing
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { pidAlive: false }), 'offline')   // between turns / crashed — declared status is the between-turn truth
+  // legacy fallback: pid unregistered → the descendant tree scan (claude runs as claude/node BELOW the pane shell)
+  const running = new Map([[100, { ppid: 1, comm: 'bash' }], [200, { ppid: 100, comm: 'bash' }], [300, { ppid: 200, comm: 'claude' }]])
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: running }), 'online')
+  const idle = new Map([[100, { ppid: 1, comm: 'bash' }]])
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: idle }), 'offline')
+  assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, {}), 'offline')                    // nothing to probe = not provably running
 })
 
 test('defaultSessionMode: absent → interactive; explicit headless honored; an unrecognized value fails loud', () => {

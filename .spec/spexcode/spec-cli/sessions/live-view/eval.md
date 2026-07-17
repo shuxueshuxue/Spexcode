@@ -150,6 +150,24 @@ scenarios:
       %output un-escaped at the byte level and forwarded raw, no string round-trip). A path that decodes
       node-pty chunks to a string first shatters any wide char split across two reads into a U+FFFD; that path
       must be absent.
+  - name: bridge-client-holds-only-its-stdio
+    tags: [backend-api]
+    description: >-
+      Measure the fd inheritance that wedged the whole tmux server and blacked out every dashboard terminal
+      at once. Run `SPEXCODE_TMUX=fdleak-$$ npx tsx test/pty-bridge.fd-leak.ts` (from spec-cli/): drive the
+      REAL bridge (attachViewer, the dashboard's path) for four sessions on one scratch socket, in order —
+      the ordering is what builds the staircase — then read each spawned tmux control client's own /proc fd
+      table and count the pty masters and the fds beyond its stdio. Linux-only: /proc is the measurement
+      surface and the sole affected platform. File with `spex eval add live-view --scenario
+      bridge-client-holds-only-its-stdio --result <txt>`.
+    expected: >-
+      Every bridge client holds ONLY its stdio — ZERO inherited pty masters, ZERO fds beyond fd 2. The bug
+      path must be absent: node-pty's Linux forkpty(3) returns a master with no FD_CLOEXEC and execs without
+      closing inherited fds, so client N inherited the masters of clients 0..N-1 (a measured staircase:
+      1, 2, 3 masters). That is what made a killed bridge's pts outlive it inside a sibling — no EIO, so tmux
+      never dropped the dead client, its tty write buffer filled, and the tmux SERVER blocked forever in one
+      write(2), freezing every bridge on the socket. A pipe-transported control client (`tmux -C` over
+      child_process stdio) inherits nothing, so the wedge has no mechanism.
   - name: hidden-connect-defers-undersized-first-paint
     tags: [backend-api]
     description: >-

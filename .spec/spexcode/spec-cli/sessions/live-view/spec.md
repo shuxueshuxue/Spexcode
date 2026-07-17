@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.foreign-instance.ts
+  - spec-cli/test/pty-bridge.fd-leak.ts
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts

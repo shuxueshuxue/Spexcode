@@ -506,23 +506,14 @@ async function reconcileOnce(): Promise<void> {
   for (const s of await listSessions()) {
     if (!(await alive(s.id))) continue
     live.add(s.id)
-    // already ours → keep warm and resize a stale warm bridge to the last-known viewer size off-screen,
-    // so a first open finds the pane already at its size. TWO staleness guards, by vote state: a NEUTRAL
-    // client's hold is suppressed while any sized viewer votes on the socket, so its own client size would
-    // read "converged" after one suppressed attempt and wedge the hold forever — compare against the
-    // WINDOW's real size (lastLayout) instead, retrying each tick (one suppressed no-op command) until the
-    // first tick after the socket goes quiet: deferred, not lost. A VOTING client keeps the client-size
-    // guard: its -C lands, and when two voting instances watch ONE session the window is genuinely
-    // contended — latest assert wins and STOPS (a window-truth guard would re-assert every tick and turn
-    // that contention into a visible size ping-pong war).
+    // already ours → just keep it warm. NO off-screen size hold: window geometry is owned by sized
+    // viewers alone (a bare attach asserts nothing, neutral clients yield), so between viewers a window
+    // keeps the last sized viewer's geometry and there is no drift to correct. The hold this replaces was
+    // measured to be a per-tick capture + full-frame broadcast to every hidden pane of every unwatched
+    // session whenever anyone voted (its suppressed retry was never a no-op) — see [[live-view]].
     const existing = bridges.get(s.id)
     if (existing) {
       existing.prewarmed = true
-      const want = prewarmSize(s.id)
-      const stale = existing.voting
-        ? want.cols !== existing.cols || want.rows !== existing.rows
-        : existing.lastLayout !== `${want.cols}x${want.rows}`
-      if (stale) applySize(existing, want.cols, want.rows)
       continue
     }
     // no bridge for a live session: viewers waiting → re-bind and repaint (nothing else re-arms an idle

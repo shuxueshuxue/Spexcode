@@ -60,11 +60,13 @@ scoped per project, for each SELECTED harness:
   discovers guide + contract together (nothing is lost by un-tracking the file). This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
-- **the thin shims** — the adapter's `shim().content` written at its `shimFile(proj)`: a shim is whatever
-  FILE that harness auto-discovers, not necessarily a hooks JSON (`.claude/settings.json` +
-  `.codex/hooks.json` bind one line per event → the dispatcher; pi's `.pi/extensions/spexcode.ts` is a
-  generated extension doing the same — [[pi-harness]]). The empty-dir sweep after erase walks each artifact
-  dir's PARENT CHAIN up to the project root, since a harness may nest its artifacts a level deep;
+- **the shims** — each adapter's `shim().content` written to its `shimFile()`, whatever ARTIFACT that harness
+  auto-discovers to wire events to the dispatcher: a thin hooks JSON for claude/codex (`.claude/settings.json`
+  / `.codex/hooks.json`, one line per event), a generated event-bus plugin for opencode
+  (`.opencode/plugins/spexcode.ts` — [[opencode-harness]]), or a generated extension for pi
+  (`.pi/extensions/spexcode.ts` — [[pi-harness]]). materialize writes the bytes verbatim; the shape is the
+  adapter's fact, not this pipeline's. The post-erase empty-dir sweep covers each artifact dir AND its parent
+  (never a checkout root), since a harness may nest its shim a level below its home;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

@@ -22,36 +22,32 @@ genuinely new fact lives here in `pi-harness.ts`: **pi has no external hook bind
 surface is an in-process TypeScript extension API, so pi's shim is a **generated extension**
 (`.pi/extensions/spexcode.ts`, run natively by pi) that this node's file produces.
 
-## the generated extension — pi's face of dispatch.sh
+## the generated extension — a thin host over the shared runtime
 
-The extension does three jobs, each chosen so the rest of the product needs NO pi branch:
+The extension is a THIN HOST over the shared shim runtime ([[shim-runtime]], embedded verbatim by the
+generator): the payload synthesis into `dispatch.sh pi <Event>`, the block-verdict parse, and the rendezvous
+socket server are the runtime's, one source shared with every generative shim. What this generator declares
+is pi's OWN half, chosen so the rest of the product needs NO pi branch:
 
-- **Event forwarding.** It maps pi's five lifecycle events onto the claude event vocabulary and pipes each to
-  `dispatch.sh pi <Event>` with a **claude-SHAPED synthesized payload** (`session_id`, `cwd`,
-  `hook_event_name`, `tool_name` in Claude's capitalized vocabulary, `tool_input.file_path` from pi's `path`):
-  `session_start`→SessionStart, `input`→UserPromptSubmit, `tool_call`→PreToolUse, `tool_result`→PostToolUse,
-  `agent_settled`→Stop. Because the payload arrives claude-shaped, `hooks/harness.sh` needs no pi parse arm —
-  `pi` joins the claude family through the default case, exactly like `plugin`. pi has no idle/attention or
-  failed-stop event, so Notification/StopFailure are genuinely absent (the codex gap, not a TODO).
-- **Block bridging.** pi's `tool_call` blocks via a typed return (`{ block: true, reason }`); dispatch.sh
-  signals a block with exit 2, and the reason arrives the **claude way** — the blocking handler's
-  `{"decision":"block","reason":…}` JSON on dispatch **stdout** (the stop-gate/commit-gate path; the
-  handler exits 0, dispatch maps the JSON to exit 2, stderr stays empty). The extension bridges: exit 2 →
-  return the block with the reason parsed from the stdout JSON, stderr as the fallback (a bare exit-2
-  handler) — pi consumes claude's native response channel just as it synthesizes claude's payloads, so
-  dispatch.sh needs no pi branch (the codex stderr bridge stays codex-only: codex is an external binary
-  that can only read stderr; pi's consumer is our own generated code). For Stop there is no blocking
-  return — `agent_settled` fires after the run is already settled — so the gate's reason is instead
-  **sent back in as a user message** (`pi.sendUserMessage`), never silently dropped, which triggers a new
-  turn carrying the gate's instruction: pi's equivalent of claude's Stop-hook continuation. The gate exits
-  0 once satisfied, so the loop terminates the same way claude's does.
-- **The rendezvous channel.** sessions.ts already exports `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>` to every
-  `ownsRendezvous` launch; the extension binds a line-JSON server on that path speaking the reclaude
-  mini-protocol (`{type:reply}` → `sendUserMessage`, `{type:repaint}` → `repaint-done`). So claude's
-  delivery (`deliverViaRendezvous`, parse-confirmed by the repaint barrier) and claude's liveness (the
-  socket-LISTENER connect probe, already fired for every windowed session) work for pi **unchanged** —
-  `ownsRendezvous: true`, zero new transport code. Unlike reclaude the server accepts concurrent
-  connections, so a probe can never kick a delivery mid-parse.
+- **The event mapping.** pi's five lifecycle events onto the claude vocabulary — `session_start`→SessionStart,
+  `input`→UserPromptSubmit, `tool_call`→PreToolUse, `tool_result`→PostToolUse, `agent_settled`→Stop — with
+  `tool_name` capitalized to Claude's names and pi's `path` normalized onto `file_path`. Because every payload
+  arrives claude-shaped, `hooks/harness.sh` needs no pi parse arm — `pi` joins the claude family through the
+  default case, exactly like `plugin`. pi has no idle/attention or failed-stop event, so
+  Notification/StopFailure are genuinely absent (the codex gap, not a TODO).
+- **The verdict consumers.** The runtime decides blocked (exit 2) and extracts the reason (stdout
+  decision:block JSON, stderr for a bare exit-2 handler — [[shim-runtime]]'s one contract); pi consumes that
+  verdict through its own two channels. `tool_call` blocks via pi's typed return (`{ block: true, reason }`).
+  For Stop there is no blocking return — `agent_settled` fires after the run is already settled — so the
+  gate's reason is instead **sent back in as a user message** (`pi.sendUserMessage`), never silently dropped,
+  which triggers a new turn carrying the gate's instruction: pi's equivalent of claude's Stop-hook
+  continuation. The gate exits 0 once satisfied, so the loop terminates the same way claude's does.
+- **The rendezvous inject.** sessions.ts already exports `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>` to every
+  `ownsRendezvous` launch; the runtime's server binds it and pi supplies only the inject —
+  `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. claude's delivery
+  (`deliverViaRendezvous`, parse-confirmed by the repaint barrier) and claude's liveness (the socket-LISTENER
+  connect probe) work for pi **unchanged** — `ownsRendezvous: true`, zero new transport code; the runtime's
+  server is multi-connection, so a probe can never kick a delivery mid-parse.
 
 The extension also exports `PI_SESSION_ID` (the adapter's `sessionEnvVar`) at `session_start`, so tool
 subprocesses — and the agent's own `spex` calls — inherit their session identity; the pinned `--session-id`

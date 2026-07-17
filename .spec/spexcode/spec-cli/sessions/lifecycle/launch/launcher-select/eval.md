@@ -131,6 +131,26 @@ scenarios:
       their transcripts lived under the original's config dir).
     code: spec-cli/src/sessions.ts
     related: spec-cli/src/harness.ts
+  - name: headless-mode-gate
+    tags: [backend-api, cli]
+    description: >-
+      Through a REAL backend (a throwaway `spex serve` on a free port, the inherited stale SPEXCODE_API_URL
+      unset), measure the headless base layer while NO adapter carries a headless capability yet. Read
+      `GET /api/settings`: every launcher row must carry `headlessCmd` (null when unconfigured) and a
+      backend-computed `modes` list, and the payload a top-level `defaultMode`. Then request a headless
+      create through both real surfaces — `spex session new "probe" --headless --api <throwaway>` and
+      `POST /api/sessions {mode:"headless"}` — plus a junk mode (`mode:"yolo"`), and confirm the session
+      list and worktree set are unchanged after the refusals.
+    expected: >-
+      Settings: every launcher carries `modes:["interactive"]` while every adapter ships `headless: null`
+      (headless is offered nowhere until a harness's own implementation flips its capability), `headlessCmd`
+      rides through as authored (null when absent), and `defaultMode` is "interactive" unless configured. A
+      headless create is REFUSED loud on both surfaces — a 400/CLI error naming the launcher's harness and
+      that it has no headless capability — and creates NO session and NO worktree; a junk mode is a 400
+      naming the valid modes. Interactive creates are untouched by the new axis, and an old record with no
+      mode field reads `interactive` on every payload.
+    code: spec-cli/src/harness.ts
+    related: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/cli.ts
 ---
 # eval.md — launcher-select
 

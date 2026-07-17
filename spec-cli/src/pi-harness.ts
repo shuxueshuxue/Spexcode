@@ -14,8 +14,12 @@ import { homedir } from 'node:os'
 // hooks/harness.sh needs NO pi-specific parse arm (pi joins the claude family via the default case) — and
 // bridges pi's typed block contract ({ block: true, reason }) onto dispatch.sh's exit-2 contract. Event map:
 //   session_start → SessionStart · input → UserPromptSubmit · tool_call → PreToolUse (blockable) ·
-//   tool_result → PostToolUse · agent_settled → Stop (exit 2 → the gate's stderr is sent back to the agent
-//   as a user message, pi's equivalent of claude's Stop-block continuation).
+//   tool_result → PostToolUse · agent_settled → Stop (exit 2 → the gate's reason is sent back to the agent
+//   as a user message, pi's equivalent of claude's Stop-block continuation). A blocking handler's reason
+//   arrives the CLAUDE way — {"decision":"block","reason":…} JSON on dispatch STDOUT (the handler exits 0;
+//   dispatch maps the JSON to exit 2 and stderr stays EMPTY) — so the extension parses the stdout JSON
+//   first and falls back to stderr (a bare exit-2 handler); reading stderr alone silently dropped every
+//   stop-gate rejection and left the session stuck `active` forever.
 // It ALSO owns the session's rendezvous socket: sessions.ts launches every ownsRendezvous harness with
 // CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>; the extension binds a line-JSON server there speaking the reclaude
 // mini-protocol ({type:reply} → sendUserMessage; {type:repaint} → repaint-done), so claude's liveness
@@ -49,6 +53,17 @@ export default function spexcode(pi: ExtensionAPI) {
     const tool_input: Record<string, unknown> = { ...(input && typeof input === "object" ? input as Record<string, unknown> : {}) }
     if (typeof tool_input.path === "string" && tool_input.file_path === undefined) tool_input.file_path = tool_input.path
     return { tool_name: TOOL[toolName] ?? toolName, tool_input }
+  }
+  // a blocking hook speaks claude natively: {"decision":"block","reason":"…"} on dispatch STDOUT (the
+  // stop-gate/commit-gate path — dispatch exits 2, stderr EMPTY). Extract the reason from the stdout JSON
+  // (regex, since several handlers' JSON objects may arrive glued; JSON.parse of the string literal
+  // unescapes it), and fall back to stderr — the channel a bare exit-2 handler writes.
+  const blockReason = (r: { stdout: string; stderr: string }): string => {
+    if (/"decision"\\s*:\\s*"block"/.test(r.stdout)) {
+      const m = r.stdout.match(/"reason"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"/)
+      if (m) { try { return JSON.parse('"' + m[1] + '"') } catch { /* malformed escape — stderr fallback */ } }
+    }
+    return r.stderr.trim()
   }
 
   // the rendezvous control socket — bound as soon as the extension loads so liveness reads online early.
@@ -85,14 +100,15 @@ export default function spexcode(pi: ExtensionAPI) {
   pi.on("input", async (event) => { dispatchEvent("UserPromptSubmit", { prompt: event.text }) })
   pi.on("tool_call", async (event) => {
     const r = dispatchEvent("PreToolUse", toolFields(event.toolName, event.input))
-    if (r.status === 2) return { block: true, reason: r.stderr.trim() || "blocked by a SpexCode hook" }
+    if (r.status === 2) return { block: true, reason: blockReason(r) || "blocked by a SpexCode hook" }
   })
   pi.on("tool_result", async (event) => { dispatchEvent("PostToolUse", toolFields(event.toolName, event.input)) })
   pi.on("agent_settled", async () => {
     const r = dispatchEvent("Stop")
-    // exit 2 = the stop gate holds the turn open; its stderr instruction goes back in as a user message —
-    // pi's equivalent of claude's Stop-hook block (the gate exits 0 once the contract is satisfied).
-    if (r.status === 2 && r.stderr.trim()) pi.sendUserMessage(r.stderr.trim(), { deliverAs: "steer" })
+    // exit 2 = the stop gate holds the turn open; its reason goes back in as a user message — pi's
+    // equivalent of claude's Stop-hook block (the gate exits 0 once the contract is satisfied). NEVER
+    // silent: a dropped rejection is a session stuck \`active\` forever.
+    if (r.status === 2) pi.sendUserMessage(blockReason(r) || "a SpexCode Stop hook blocked this stop without giving a reason", { deliverAs: "steer" })
   })
   pi.on("session_shutdown", async () => {
     srv?.close()

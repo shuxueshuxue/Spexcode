@@ -66,6 +66,23 @@ test('pi extension: dispatch exit 2 bridges to { block, reason } on tool_call an
   assert.equal(sent[0].text, 'not yet — commit first')
 })
 
+test('pi extension: a stdout decision:block JSON (the stop-gate shape — exit 2, stderr EMPTY) carries its reason through', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
+  // the real dispatch shape: handlers' stdout is concatenated WITHOUT separators (an additionalContext
+  // object may arrive glued before the block decision), the reason carries JSON escapes, stderr is empty.
+  const glued = `{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"heads-up"}}` +
+    `{"decision":"block","reason":"undeclared stop — declare it: run \`spex session <choice>\`.\\nSee \\"help session\\"."}`
+  const { factory } = await loadExtension(dir, `printf '%s' '${glued}'\nexit 2`)
+  const { api, handlers, sent, ctx } = stubPi()
+  factory(api)
+  const expected = 'undeclared stop — declare it: run `spex session <choice>`.\nSee "help session".'
+  const verdict = await handlers.get('tool_call')!({ toolName: 'bash', input: { command: 'ls' } }, ctx) as { block: boolean; reason: string }
+  assert.deepEqual(verdict, { block: true, reason: expected }, 'PreToolUse block reads the stdout JSON reason, unescaped')
+  await handlers.get('agent_settled')!({}, ctx)
+  assert.equal(sent.length, 1, 'the Stop rejection is injected, never silently dropped')
+  assert.equal(sent[0].text, expected)
+})
+
 test('pi extension: binds the rendezvous socket and speaks the reclaude protocol (reply → sendUserMessage, repaint → repaint-done)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
   const sock = join(dir, 'rv.sock')

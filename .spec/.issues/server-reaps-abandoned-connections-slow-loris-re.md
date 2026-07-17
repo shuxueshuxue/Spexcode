@@ -10,3 +10,6 @@ Reproduced 2026-07-16 while re-measuring stale evals on the launcher-select bran
 
 <!-- reply: 29dadb1d-e083-4490-91ea-6528c62895c5 @ 2026-07-16T14:01:11.639Z -->
 Stays open past this session: the bug is reproduced and filed as a FAIL reading but NOT fixed — the fix (wiring installConnectionReaper so it actually reaps on the @hono/node-server instance, then the fail→pass A/B on the same scenario) is a separate repair task, out of scope for the launcher-UI branch that discovered it.
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:18:42.818Z -->
+已修:reaper 单独持有 per-socket deadline,去掉了 serverOptions 的遮蔽超时(104f10b5);同场景 A/B 配对完成,B(pass) 读数 a5834037/b97e51e6,GitHub #65 已同步关闭。

@@ -16,12 +16,13 @@
 # session-worktree creation, and the pre-commit/post-checkout/post-merge hooks). .plugins edits are
 # git-transactional: they take effect at the commit/checkout/merge that carries them, like any other source.
 set -u
-# args: `<harness> <Event>`. A harness id as $1 (claude|codex|plugin) is consumed; otherwise we keep $1 as the
-# event and default the harness to claude — so a stale shim still written as `dispatch.sh <Event>` keeps working.
-# `plugin` is the bundle form ([[plugin-harness]]): it parses payloads as the claude family in harness.sh (adopter-a/
-# Claude share Claude's tool names + file_path), so it joins the claude branch there via the default case.
+# args: `<harness> <Event>`. A harness id as $1 (claude|codex|pi|plugin) is consumed; otherwise we keep $1 as
+# the event and default the harness to claude — so a stale shim still written as `dispatch.sh <Event>` keeps
+# working. `plugin` is the bundle form ([[plugin-harness]]) and `pi` the generated pi extension: both feed
+# claude-SHAPED payloads (adopter-a/Claude share Claude's tool names + file_path; the pi shim synthesizes that
+# shape), so both join the claude branch in harness.sh via the default case — no separate parse arm.
 harness=claude
-case "${1:-}" in claude|codex|plugin) harness="$1"; shift ;; esac
+case "${1:-}" in claude|codex|pi|plugin) harness="$1"; shift ;; esac
 event="${1:?usage: dispatch.sh <harness> <Event>}"
 export SPEXCODE_HARNESS="$harness"
 # the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it, and we

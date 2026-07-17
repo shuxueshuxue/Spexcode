@@ -227,6 +227,48 @@ const CODEX_BUILT_IN: ReadonlyArray<readonly [string, string]> = [
 // the user's saved prompts in `$CODEX_HOME/prompts/*.md` (each filename becomes `/<name>`, codex's custom-
 // prompt convention). Like the Claude builder it NEVER guesses — plugin commands that aren't readable as
 // simple files contribute nothing. Presentation order: built-ins first (codex's enum order), then prompts.
+// @@@ PI_BUILT_IN seed - pi's `/` menu, extracted from the INSTALLED pi's own command table
+// (dist/core/slash-commands.js, @earendil-works/pi-coding-agent 0.80.10) — discovered, not guessed, same
+// discipline as the claude/codex captures; to refresh for a new pi, re-read that module.
+const PI_BUILT_IN: ReadonlyArray<readonly [string, string]> = [
+  ['settings', 'Open settings menu'],
+  ['model', 'Select model (opens selector UI)'],
+  ['scoped-models', 'Enable/disable models for Ctrl+P cycling'],
+  ['export', 'Export session (HTML default, or specify path: .html/.jsonl)'],
+  ['import', 'Import and resume a session from a JSONL file'],
+  ['share', 'Share session as a secret GitHub gist'],
+  ['copy', 'Copy last agent message to clipboard'],
+  ['name', 'Set session display name'],
+  ['session', 'Show session info and stats'],
+  ['changelog', 'Show changelog entries'],
+  ['hotkeys', 'Show all keyboard shortcuts'],
+  ['fork', 'Create a new fork from a previous user message'],
+  ['clone', 'Duplicate the current session at the current position'],
+  ['tree', 'Navigate session tree (switch branches)'],
+  ['trust', 'Save project trust decision for future sessions'],
+  ['login', 'Configure provider authentication'],
+  ['logout', 'Remove provider authentication'],
+  ['new', 'Start a new session'],
+  ['compact', 'Manually compact the session context'],
+  ['resume', 'Resume a different session'],
+  ['reload', 'Reload keybindings, extensions, skills, prompts, themes, and context files'],
+]
+
+// @@@ piSlashCommands - pi's `/` menu, computed the way pi computes its own: built-ins (above) + prompt
+// templates (`~/.pi/agent/prompts/*.md` global, `.pi/prompts/*.md` project — each filename becomes `/<name>`)
+// + skills (`/skill:<name>` is pi's spelling, but the bare name is what our dropdown wants). Best-effort like
+// the codex builder: what isn't readable as simple files contributes nothing.
+export function piSlashCommands(): SlashCommand[] {
+  const repo = repoRoot()
+  const all: SlashCommand[] = []
+  for (const [name, description] of PI_BUILT_IN) all.push({ name, description, source: 'built-in' })
+  scanCommands(join(homedir(), '.pi', 'agent', 'prompts'), 'user', all)
+  scanCommands(join(repo, '.pi', 'prompts'), 'project', all)
+  scanSkills(join(homedir(), '.pi', 'agent', 'skills'), all)
+  scanSkills(join(repo, '.pi', 'skills'), all)
+  return dedupeSort(all)
+}
+
 export function codexSlashCommands(): SlashCommand[] {
   const all: SlashCommand[] = []
   for (const [name, description] of CODEX_BUILT_IN) all.push({ name, description, source: 'built-in' })

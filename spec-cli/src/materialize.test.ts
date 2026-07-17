@@ -30,7 +30,8 @@ function makeHost() {
   const proj = mkdtempSync(join(tmpdir(), 'spex-rp-'))
   const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
   const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
     execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -191,7 +192,8 @@ test('contract kind transition: user prose entering a wholly-ours CLAUDE.md un-h
   const proj = mkdtempSync(join(tmpdir(), 'spex-kind-'))
   const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
   const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
     execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -281,7 +283,8 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   const proj = mkdtempSync(join(tmpdir(), 'spex-cxwt-'))
   const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
   const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) => execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env })
 
@@ -352,7 +355,8 @@ function makeBareRepo(prefix: string) {
   const proj = mkdtempSync(join(tmpdir(), prefix))
   const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
   const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) =>
     execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })

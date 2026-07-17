@@ -43,11 +43,11 @@ test('unknown id and malformed members fail loud', () => {
 test('partitionHarnesses splits live adapters into selected vs unselected', () => {
   const both = partitionHarnesses(resolveHarnessTargets(['claude', 'codex']))
   assert.deepEqual(both.selected.map((h) => h.id).sort(), ['claude', 'codex'])
-  assert.equal(both.unselected.length, 0)
+  assert.deepEqual(both.unselected.map((h) => h.id), ['pi'])
 
   const onlyClaude = partitionHarnesses(resolveHarnessTargets(['claude']))
   assert.deepEqual(onlyClaude.selected.map((h) => h.id), ['claude'])
-  assert.deepEqual(onlyClaude.unselected.map((h) => h.id), ['codex'])
+  assert.deepEqual(onlyClaude.unselected.map((h) => h.id).sort(), ['codex', 'pi'])
 
   // a plugin set selects NO native harness → every native is unselected (and thus pruned by materialize).
   const plugin = partitionHarnesses(resolveHarnessTargets([{ plugin: '.adopter-a' }]))

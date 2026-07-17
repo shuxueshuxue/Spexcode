@@ -59,6 +59,94 @@ scenarios:
       pid-fallback), deliver confirmed, resume continuous, declarations attributed to the right record.
       NOTE: needs a box with opencode model credentials — unmeasured where none exist (this box, 2026-07-16);
       the mechanical layer above is measured, this end-to-end reading is the open item.
+  - name: undeclared-stop-gate-rejection
+    tags: [backend-api]
+    code: spec-cli/src/opencode.ts
+    description: >-
+      Through the running product: dispatch a real opencode worker on a trivial task and let it answer
+      WITHOUT declaring. Its session.idle fires the plugin's Stop dispatch; the stop-gate emits
+      decision:block. Read the pane/conversation for what the plugin injected, and the store
+      record/timeline for the state flow that follows.
+    expected: >-
+      The rejection is never dropped (the pi-harness lesson): the gate's block visibly re-enters the
+      conversation via client.session.prompt, the agent reacts to it with a real declaration
+      (done/ask/park), and the board flows out of `active` into the declared state. The injected text is
+      the gate's REASON — human-readable teaching prose with its newlines intact — not the raw
+      {"decision":"block",...} wire JSON (claude renders the reason field, codex gets the stderr bridge;
+      opencode must not be the one harness whose agent reads escaped wire format).
+  - name: pretooluse-block-live
+    tags: [backend-api]
+    code: spec-cli/src/opencode.ts
+    description: >-
+      Against a LIVE opencode worker: drop a temporary surface:hook node (PreToolUse, block:true,
+      guarding one specific path) into the worker's worktree .plugins, run spex materialize there
+      (dispatch.sh re-reads the tree-slot manifest per event — no opencode restart), then tell the agent
+      to touch the guarded path. Remove the node + re-materialize afterwards.
+    expected: >-
+      tool.execute.before throws on the guarded touch: the tool call is genuinely aborted (the guarded
+      file never changes) and the hook's reason is visible to the agent in the conversation, who reports
+      being blocked. After the node is removed and the manifest recompiled, the same touch passes —
+      the block was the manifest's doing, live-toggleable without relaunching the harness.
+  - name: ask-note
+    tags: [backend-api]
+    description: >-
+      A live opencode worker runs `spex session ask --note '<question>'` (its own worker verb, from
+      inside the worktree with no --session flag). Read the board and the store record.
+    expected: >-
+      The record flips to asking with the note stored verbatim; `spex session ls` shows status asking
+      plus the note text; the concurrency slot frees (asking waits cheap). The CLI's confirmation text
+      is shown to the agent so it knows the claim landed.
+  - name: deliver-mid-turn
+    tags: [backend-api]
+    description: >-
+      `spex session send` to an opencode worker while a turn is IN FLIGHT (the agent mid-answer), under
+      normal board-probe pressure. Compare with deliver-second-message (the idle-send reading): count
+      injected copies in opencode's message store and read the send's exit code.
+    expected: >-
+      The send exits 0 with parse-confirmed "sent" — the daemon confirms at parse time even though the
+      injection queues behind the running turn — and the message lands exactly ONCE, answered when the
+      current turn ends. No duplicate injection, no false negative.
+  - name: resume-continuity
+    tags: [backend-api]
+    description: >-
+      Seed a live opencode worker with a token to remember, `spex session stop` it (tmux killed, worktree
+      kept), then `spex session resume` and ask for the token back. Repeat the cycle with the record's
+      harness_session_id cleared to force the --continue fallback route.
+    expected: >-
+      Resume relaunches via the --resume <id> marker → `--session <id>`: the SAME opencode conversation
+      continues (the token is recalled, the message history is one thread). With harness_session_id
+      absent the --continue marker re-attaches opencode's last session in the worktree — same
+      conversation again, both routes continuous, and the board returns to online/working.
+  - name: liveness-signals
+    tags: [backend-api]
+    description: >-
+      Kill a live opencode worker's TUI process out from under the board, read the board's liveness;
+      relaunch via resume and read it again. Check both signals: the plugin's rendezvous socket listener
+      (preferred) and the launch-registered agent.pid kill-0 fallback.
+    expected: >-
+      Dead TUI reads offline promptly (no immortal `working`); after resume the session reads online
+      again with a live socket listener AND a fresh agent.pid. A plugin that failed to load would still
+      read honestly from the pid signal — the fallback exists and the preferred signal is the socket.
+  - name: commit-gate-rejection
+    tags: [backend-api]
+    description: >-
+      A live opencode worker with UNCOMMITTED work on its node branch declares
+      `spex session done --propose merge` and stops. Watch the Stop dispatch, the injected text, and
+      the record's final state.
+    expected: >-
+      The stop-gate rejects the dishonest proposal: the block reason re-enters the conversation naming
+      the uncommitted files and the commit-first ritual; the session never stands as a false
+      review/done — it either commits and re-declares, or the gate's escape downgrades it to asking.
+  - name: close-residue
+    tags: [backend-api]
+    description: >-
+      `spex session close` a live opencode worker (proposal or not), then sweep the box: tmux -L
+      spexcode sessions, surviving opencode processes for that worktree, the .worktrees/ entry, the
+      node branch, and the rendezvous socket dir.
+    expected: >-
+      Zero residue: the tmux session is gone, no opencode process for that worktree survives, the
+      worktree directory and node branch are removed, and the per-session rendezvous socket is swept.
+      The store record remains (history), marked closed.
 ---
 
 Measured YATU through the generated artifacts and the real CLI: the plugin file the adapter actually

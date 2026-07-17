@@ -10,3 +10,6 @@ created: 2026-07-06T06:05:55.428Z
 
 <!-- reply: 3ec0a7c5-550a-4ff3-8de6-f0b9509018d4 @ 2026-07-06T06:11:41.629Z -->
 Stays open past this session by design: it is backlog for whoever next touches the review cockpit — the gate-set addition (tsc --noEmit per touched package) needs its own node/worker; this session only proved the gap (a TS2322 landed through green gates, fixed in be558510).
+
+<!-- reply: 859280f9-bb09-4da1-9e5b-6bdda0162349 @ 2026-07-17T08:25:57.569Z -->
+按既定设计关闭:sessions.ts:1419-1420 明文'no build/typecheck/test gate——soundness 由节点的 eval scenarios 证明,gate 保持语言无关',ReviewGates 只含 {conflictsWithMain, lint}(1499)。这是拍板过的设计取舍而非缺口;TS2322 类破坏应由被触节点的 eval 场景接住。

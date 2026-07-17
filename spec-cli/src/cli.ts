@@ -743,7 +743,7 @@ if (cmd === 'serve') {
       // overrides for a genuinely wedged process. A following prompt is what actually re-drives it.
       const full = await resolveSelectorOrExit(id)
       const r = await c.clientResume(full, process.argv.includes('--force'))
-      if (r.ok) console.log(`${full} -> resumed`)
+      if (r.ok) console.log(r.info ? `${full} -> ${r.info}` : `${full} -> resumed`)
       else { console.error(`spex session resume: ${r.error || `no such session ${full}`}`); process.exit(2) }
     } else if (sub === 'done') {
       // sugar for awaiting; --propose merge|nothing|close, optional --note

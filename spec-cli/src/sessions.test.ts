@@ -77,6 +77,40 @@ test('launch retry log names the fast exit without guessing a daemon race', () =
   }
 })
 
+// [[harness-adapter]] headless launch template — the agent is a ONE-SHOT process, so the interactive
+// fast-exit retry is WRONG here (a small task completing in seconds would be re-run, doubling the work): the
+// headless template treats exit 0 as COMPLETION and a non-zero exit as a loud, unretried failure. And no
+// rendezvous env: nothing will ever listen, so the record must not look socket-addressable.
+test('headless launchScript: exit 0 is completion (never a retry), non-zero fails loud, no rendezvous env', () => {
+  const prevHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-headless-tpl-'))
+  process.env.SPEXCODE_HOME = home
+  try {
+    const script = launchScript('headless-tpl-test', `--session-id x 'do the task'`, claudeHarness, '/opt/reclaude --skip -p', 'headless')
+    const body = readFileSync(script, 'utf8')
+    assert.doesNotMatch(body, /CLAUDE_BG_BACKEND|CLAUDE_BG_RENDEZVOUS_SOCK/, 'no rendezvous env for a headless launch')
+    assert.doesNotMatch(body, /__spex_try|retrying/, 'no fast-exit retry loop for a one-shot agent')
+    assert.match(body, /\/opt\/reclaude --skip -p --session-id x/, 'the pinned headlessCmd is embedded whole')
+    assert.match(body, /agent\.pid/, 'the turn process is still birth-registered')
+
+    // EXECUTE the template: a completing agent (`true`) exits 0 immediately — completion, not a fast-fail.
+    const okScript = launchScript('headless-tpl-ok', '', claudeHarness, 'true', 'headless')
+    const ok = spawnSync('bash', [okScript], { encoding: 'utf8' })
+    assert.equal(ok.status, 0)
+    assert.doesNotMatch(ok.stderr ?? '', /retry|attempt/)
+
+    // a failing agent (`false`) propagates its rc loud, once — no respray of the one-shot prompt.
+    const failScript = launchScript('headless-tpl-fail', '', claudeHarness, 'false', 'headless')
+    const fail = spawnSync('bash', [failScript], { encoding: 'utf8' })
+    assert.equal(fail.status, 1)
+    assert.match(fail.stderr ?? '', /\[spex launch\] headless agent exited rc=1/)
+  } finally {
+    if (prevHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prevHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('a failed creation-time materialize is reported loud and stamped on the record note', () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-materialize-fail-'))

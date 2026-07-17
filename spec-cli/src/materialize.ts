@@ -156,13 +156,20 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   // and even unfiltered the phantom-`M` lingers) — settle the index stat, content-guarded so a user's real
   // unstaged edit is never staged ([[content-filter]] edge 2).
   try { settleIndexStat(proj, HARNESSES.flatMap((h) => h.contractFiles(proj))) } catch { /* not a git repo */ }
-  // leaving nothing behind: drop the now-EMPTY dirs the assert phase mkdir'ed (.claude/.codex and their
-  // skills/agents subdirs — children listed before parents). rmdirSync is NON-recursive, so a dir holding
-  // any user file survives untouched; `.git/spexcode/` is deliberately NOT swept (shared per-clone home).
+  // leaving nothing behind: drop the now-EMPTY dirs the assert phase mkdir'ed (.claude/.codex/.opencode and
+  // their skills/agents/plugins subdirs). Each dir AND its parent are swept deepest-first, because a harness
+  // may nest its shim a level below its home (opencode's .opencode/plugins/) — but never the checkout roots
+  // themselves. rmdirSync is NON-recursive, so a dir holding any user file survives untouched;
+  // `.git/spexcode/` is deliberately NOT swept (shared per-clone home).
   for (const h of HARNESSES) {
     const anchor = h.worktreeHookAnchor(proj)
-    for (const d of [h.skillDir(proj), h.agentDir(proj), dirname(h.shimFile(proj)), anchor ? dirname(anchor) : null])
-      if (d) { try { rmdirSync(d) } catch { /* non-empty or absent — keep */ } }
+    const dirs = [h.skillDir(proj), h.agentDir(proj), dirname(h.shimFile(proj)), anchor ? dirname(anchor) : null]
+      .filter((d): d is string => !!d)
+    const roots = new Set([proj, mainCheckout(proj)])
+    const sweep = [...new Set([...dirs, ...dirs.map((d) => dirname(d))])]
+      .filter((d) => !roots.has(d))
+      .sort((a, b) => b.length - a.length)
+    for (const d of sweep) { try { rmdirSync(d) } catch { /* non-empty or absent — keep */ } }
   }
 }
 
@@ -220,13 +227,13 @@ export function materialize(proj = process.cwd()): string {
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
-    writeFileSync(shimFile, shim.json)
+    writeFileSync(shimFile, shim.content)
     h.writeTrust(proj, shim.cmd)
     machinePaths.push(shimFile)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.json); machinePaths.push(anchor) }
+    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.content); machinePaths.push(anchor) }
   }
   // (6) skills + (7) sub-agents — each surface node → the file the harness auto-discovers, one per selected
   //     harness that has the primitive (skillDir/agentDir null skips — the divergence is the adapter's line).

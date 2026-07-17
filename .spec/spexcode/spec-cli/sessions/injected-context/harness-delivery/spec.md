@@ -60,7 +60,11 @@ scoped per project, for each SELECTED harness:
   discovers guide + contract together (nothing is lost by un-tracking the file). This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
-- **the thin shims** `.claude/settings.json` + `.codex/hooks.json`: one line per harness event → the dispatcher;
+- **the shims** — each adapter's `shim().content` written to its `shimFile()`, whatever ARTIFACT that harness
+  auto-discovers to wire events to the dispatcher: a thin hooks JSON for claude/codex (`.claude/settings.json`
+  / `.codex/hooks.json`, one line per event) or a generated event-bus plugin for opencode
+  (`.opencode/plugins/spexcode.ts` — [[opencode-harness]]). materialize writes the bytes verbatim; the shape
+  is the adapter's fact, not this pipeline's;
 - **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no

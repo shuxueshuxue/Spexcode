@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # @@@ harness.sh - the SHELL face of the [[harness-adapter]] (spec-cli/src/harness.ts). The hook scripts run
 # as pure shell, so they cannot import the TS adapter; this sourced library is its mirror. dispatch.sh sources
-# it and exports SPEXCODE_HARNESS (claude|codex) — baked into the shim by each adapter, so a hook learns its
+# it and exports SPEXCODE_HARNESS (claude|codex|opencode) — baked into the shim by each adapter, so a hook learns its
 # harness deterministically, never by sniffing the payload shape. EVERY harness-divergent payload-parse lives
 # HERE; the hook scripts stay harness-agnostic and just call hp_* (the one place Claude's tool names appear in
 # shell, plus codex's Bash-command mapping). The session-id + global-store resolution is harness-agnostic and
 # lives here too, so the six hooks no longer each repeat the git-common-dir → project-key dance.
-# SPEXCODE_HARNESS is claude|codex|plugin: `plugin` is the bundle form ([[plugin-harness]]) and its host (z-code/
-# Claude) shares Claude's payload shape, so every `case "$SPEXCODE_HARNESS"` below routes it through the claude
-# branch via the default case — there is no separate `plugin)` arm to maintain.
+# SPEXCODE_HARNESS is claude|codex|opencode|plugin: `plugin` is the bundle form ([[plugin-harness]]) and its host
+# (z-code/Claude) shares Claude's payload shape; `opencode`'s generated plugin ([[opencode-harness]]) SYNTHESIZES
+# claude-shaped payloads by construction — so every `case "$SPEXCODE_HARNESS"` below routes both through the
+# claude branch via the default case; there is no separate `plugin)`/`opencode)` arm to maintain.
 
 # the string value of a top-level JSON string field (first match). Harness-agnostic — both harnesses' payloads
 # carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name. The value is scanned as a

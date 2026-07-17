@@ -8,6 +8,8 @@ code:
 related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/heartbeat.js
+  - spec-dashboard/src/streamHeartbeat.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
 ---
@@ -77,11 +79,16 @@ channel — a full on connect, then patches the data layer applies to its unit-m
 state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
 fresh full. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
 surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
-subscription to exactly this refetch path. Third, a **slow fallback poll that always runs** as the final belt. Between them a **heartbeat watchdog**
+subscription to exactly this refetch path. Third, a **slow fallback poll that always runs** as the final belt. Between them a **heartbeat dead-man switch**
 holds the stream to its contract: the server pings on a fixed cadence, so silence past 2.5× that window means
-the stream is DEAD (half-open tunnel, sleep-resume, frozen tab), not merely quiet. On a breach it reopens
-(board-full re-anchors and repaints) and kicks the ETag refetch, so catch-up is instant; a frozen tab
-converges likewise as its overdue tick fires on resume. The poll's cost is zeroed by conditional
+the stream is DEAD (half-open tunnel, sleep-resume, frozen tab), not merely quiet. The cadence primitive, the
+derived dead window, and the switch itself live in ONE shared client heartbeat module (`heartbeat.js`) that the
+terminal socket ([[reconnect]]) reads too — one constant for the whole client, held equal to the server's two
+ping cadences by test, never a per-channel copy. Detection is **event-driven, not a polling loop**: every
+stream event (pings included) re-arms one one-shot timer, so on a healthy link liveness costs zero wakeups and
+nothing ever fires. On a breach it reopens (board-full re-anchors and repaints), re-arms to keep watching the
+replacement, and kicks the ETag refetch, so catch-up is instant; a frozen tab runs no timers, so its overdue
+one-shot fires on resume and converges likewise. The poll's cost is zeroed by conditional
 requests: `loadGraph` sends `If-None-Match`, an unchanged board answers a bodyless 304 and the shell skips
 the repaint, so no failure mode is staler than the poll period. That guarantee holds only while the
 conditional key is the identity of the board actually DISPLAYED: the ETag latches when its body paints

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/resilientSocket.js#createResilientSocket
 related:
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/resilientSocket.test.mjs
   - spec-cli/src/index.ts
 ---
@@ -31,11 +32,13 @@ NAT timeouts), so the client is **guaranteed** inbound bytes on a healthy link; 
 socket to that promise — *any* inbound message proves liveness, and an OPEN socket silent past **2.5× the
 cadence** (25s: absorbs one dropped ping plus jitter, still fast enough to feel like recovery, not a reload)
 is **presumed dead**, force-dropped, and handed to the same reopen machinery as a real close event. The
-cadence is the contract's **one primitive number** — one constant per side of the wire, the client's a
-mirror of the server's held equal by test (as the board stream's pair is), the dead window **derived** from
-it, never a free-standing magic number. And detection itself is **event-driven, not a polling loop**: a
-dead-man's switch — one one-shot timer re-armed by every inbound message — so on a healthy link nothing
-ever wakes, and the switch fires exactly once, at the silence deadline. No separate
+cadence is the contract's **one primitive number**, and on the client it lives in ONE place: the shared
+heartbeat module (`heartbeat.js`) that the board SSE stream reads too — a single constant for the whole
+client, held equal to the server's ping cadences by test, the dead window **derived** from it, never a
+free-standing magic number or a per-channel copy. Detection itself is likewise the shared module's
+**dead-man's switch** — event-driven, not a polling loop: one one-shot timer re-armed by every inbound
+message — so on a healthy link nothing ever wakes, and the switch fires exactly once, at the silence
+deadline. No separate
 recovery path: detection is the only new act; a presumed-dead drop reopens, backs off, and announces itself
 exactly like a genuine drop.
 

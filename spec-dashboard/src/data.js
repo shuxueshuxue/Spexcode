@@ -1,3 +1,5 @@
+import { createDeadman } from './heartbeat.js'
+
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
@@ -58,13 +60,6 @@ export async function loadGraph() {
 export const specUrl = (id, ...parts) =>
   `/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
 
-// heartbeat contract ([[dashboard-shell]]): the server sends a `ping` keep-alive every STREAM_HEARTBEAT_MS,
-// so a stream silent past 2.5× that window is presumed DEAD, not merely quiet. 2.5× absorbs one dropped ping
-// plus jitter before a reopen fires, so a healthy-but-idle stream is never falsely torn down.
-export const STREAM_HEARTBEAT_MS = 10000   // server `ping` cadence (boardStream.ts) — the contract we hold it to
-export const STREAM_DEAD_MS = 25000        // 2.5× the ping window: no event for this long ⇒ stream presumed dead
-export const streamStale = (lastEventAt, now) => now - lastEventAt > STREAM_DEAD_MS
-
 // subscribe to the graph's push channel in DELTA mode ([[graph-stream]]/[[graph-delta]]): the server sends a
 // full snapshot on connect (`graph-full {to, graph}`), then hash-chained patches (`graph-delta {from, to,
 // set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's
@@ -75,19 +70,18 @@ export const streamStale = (lastEventAt, now) => now - lastEventAt > STREAM_DEAD
 // mode: `onLegacyChange` fires and the caller refetches, exactly the pre-delta protocol. A silently dead
 // EventSource (half-open tunnel, sleep-resume, frozen tab) delivers no data AND no error, so it can't be
 // caught by an error handler — but it also stops delivering the server's `ping`, and THAT is detectable: a
-// watchdog holds the stream to the heartbeat contract above and, on a breach (no event for STREAM_DEAD_MS),
-// reopens it (re-anchoring on a fresh graph-full) and fires onLegacyChange once so the caller's ETag refetch
-// races the reconnect for immediacy. A frozen tab runs no timers, so on unfreeze the overdue interval fires
-// at once, sees a huge age, and reopens+refetches within ~a second of becoming visible — no visibilitychange
-// hook needed. EventSource still auto-reconnects on a clean drop (a backend hot-reload); the watchdog only
-// covers the silent-death case the browser can't see. The fallback poll stays as the final belt. Returns an
-// unsubscribe.
+// dead-man's switch (heartbeat.js — the shared client heartbeat contract) is re-armed by every stream event,
+// so on a healthy link it never fires; DEAD_MS of silence lets it fire once, and the breach reopens the
+// stream (re-anchoring on a fresh graph-full) and fires onLegacyChange so the caller's ETag refetch races
+// the reconnect for immediacy. A frozen tab runs no timers, so its overdue one-shot fires on unfreeze and
+// converges within ~a second of becoming visible — no visibilitychange hook needed. EventSource still
+// auto-reconnects on a clean drop (a backend hot-reload); the dead-man only covers the silent-death case the
+// browser can't see. The fallback poll stays as the final belt. Returns an unsubscribe.
 export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   let es = null
   let closed = false
   let values = null   // unit-value map, the client's copy of the server's decomposition
   let tag = ''
-  let lastEventAt = Date.now()   // any stream event (data OR ping) bumps this; the watchdog reads it
   const unitize = (b) => {
     const { nodes = [], sessions = [], ...meta } = b
     const m = new Map([['meta', meta], ['nodes#order', nodes.map((n) => n.id)], ['sess#order', sessions.map((s) => s.id)]])
@@ -100,7 +94,14 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
     return { ...(m.get('meta') || {}), nodes: pick('node:', 'nodes#order'), sessions: pick('sess:', 'sess#order') }
   }
   const reopen = () => { try { es?.close() } catch { /* already closed */ } ; values = null; tag = ''; open() }
-  const bump = () => { lastEventAt = Date.now() }   // heartbeat: every event proves the stream still lives
+  // the dead-man's switch: any stream event (data OR ping) re-arms it; on a healthy stream it never fires.
+  // A breach presumes the stream dead — reopen (its board-full re-anchors and repaints), re-arm to keep
+  // watching the replacement, and fire onLegacyChange so the caller's ETag refetch races the reconnect.
+  const deadman = createDeadman(() => {
+    if (!es || closed) return
+    reopen(); deadman.arm(); onLegacyChange?.()
+  })
+  const bump = () => deadman.arm()   // heartbeat: every event proves the stream still lives
   const open = () => {
     if (closed) return
     try { es = new EventSource('/api/graph/stream?mode=delta') } catch { es = null; return }
@@ -127,13 +128,8 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
     es.addEventListener('ready', bump)    // stream-open ack — likewise a pure liveness beat
   }
   open()
-  // heartbeat watchdog: poll every ~5s and, if an open stream has gone silent past the dead window, treat it
-  // as dead — reopen (its board-full re-anchors and repaints) and fire onLegacyChange so the caller's ETag
-  // refetch races the reconnect. A frozen tab's overdue tick fires on unfreeze and converges the same way.
-  const watchdog = setInterval(() => {
-    if (es && !closed && streamStale(lastEventAt, Date.now())) { reopen(); bump(); onLegacyChange?.() }
-  }, 5000)
-  return () => { closed = true; clearInterval(watchdog); try { es?.close() } catch { /* already closed */ } }
+  bump()   // arm from the subscribe instant, so a stream that never comes up at all still breaches
+  return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
 }
 
 // the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.

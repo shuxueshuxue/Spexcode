@@ -107,8 +107,10 @@ cost a surface that named a session differently from its own board.) The stable
 **tooltips** and mobile's handle-line. Even
 the [[session-rename]] prompt — where you edit the `name` override — titles itself with the headline the row
 shows, not this handle, so it never names the session differently from the row it was opened from; its input
-still prefills with the raw `name` override. Search still *matches* the handle even when it no longer
-*shows* it, so finding a session by node/branch/id keeps working. That the door is *named* `sessionHandle`,
+still prefills with the raw `name` override. Search *matches* the handle even when it no longer *shows*
+it — and on a current backend the handle IS the server-derived label (a rename name or the prompt
+truncation), which is the whole search promise: a session is found by the stable name a human knows it
+by, while raw id/node/branch fragments are deliberately not promised searchable. That the door is *named* `sessionHandle`,
 not `sessionName`, is what keeps this guarantee from eroding again — a new pick-list can't grab the stable
 label by reflex ([[session-label]]).
 

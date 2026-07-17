@@ -14,6 +14,21 @@ scenarios:
       the buttons), and DOM reads confirm every icon-only button carries both title and aria-label.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/icons.jsx]
+  - name: harness-product-marks
+    description: >
+      Open the running dashboard's New-Session launcher picker in a real browser, on a project whose
+      config defines one launcher per harness (claude, codex, opencode, pi). The trigger and every
+      pop-out row must wear that harness's OWN official product mark (the Claude spark, the Codex ring,
+      the opencode nested squares, the pi P-mark) — not a vendor-company logo, and never a wrong-harness
+      fallback for opencode/pi. Marks are fill-based `si-agent-glyph` SVGs inheriting currentColor, so
+      they must read in both the light and dark theme.
+    expected: >
+      Screenshots of the opened launcher pop-out (light + dark) show four distinct product marks, one
+      per harness row; DOM reads confirm four `.si-launcher-row`s each containing an `svg.si-agent-glyph`
+      with a distinct path signature (no two rows share one glyph, i.e. no claude-fallback for
+      opencode/pi).
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/harness.jsx]
 ---
 
 Measure YATU: run the worktree dashboard (vite; symlink node_modules first) against a spex backend,

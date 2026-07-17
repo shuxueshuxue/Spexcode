@@ -15,7 +15,7 @@ related:
 
 # launcher-select
 
-How a worker is brought up has TWO facts: WHICH harness ([[harness-adapter]] — claude vs codex)
+How a worker is brought up has TWO facts: WHICH harness ([[harness-adapter]] — claude / codex / opencode / pi)
 and WHICH command actually launches it (a login `reclaude`, an API-key `claude-glm`, a bespoke wrapper). A
 launcher fuses those two into ONE named profile, so the human picks a single thing per session and the
 harness rides along for free. Every launcher is a NAMED entry in `spexcode.json` / `spexcode.local.json`'s

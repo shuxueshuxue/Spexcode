@@ -26,9 +26,13 @@ the accessible name impossible to forget.
   rail's 18-grid page glyphs, the 16-grid utility set). Every stroke icon obeys the same contract:
   `fill=none`, `stroke=currentColor`, round caps/joins, ~1.4–2 stroke width, `aria-hidden` — so any
   glyph inherits its host's color and hover exactly like text. An unknown name throws (fail loud, no
-  silent blank button). The two fill-based vendor marks (Anthropic/OpenAI, re-exported through
-  `harness.jsx`) live here too but deliberately outside the stroke contract — they are brand marks,
-  not linear icons.
+  silent blank button). The fill-based harness product marks (Claude Code / Codex / opencode / pi,
+  re-exported through `harness.jsx`) live here too but deliberately outside the stroke contract — they
+  are brand marks, not linear icons. Each is the harness's OWN official product mark, not its vendor
+  company's logo (the Claude spark, not the Anthropic wordmark; the Codex ring, not the OpenAI flower),
+  sourced from AionUi's multi-CLI icon set and monochrome-adapted: hardcoded brand fills stripped so
+  the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
+  tone as an opacity step.
 - **`<IconButton icon label onClick/>` is the icon-only button.** `label` is required and becomes BOTH
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).

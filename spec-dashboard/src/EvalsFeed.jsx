@@ -52,10 +52,9 @@ export function currentEntries(nodes) {
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
 // one eval row — the shared row grammar every eval face uses (the issues page's list here; the session Eval
-// tab reuses it verbatim so the two surfaces can never drift apart). `onOk` arms the human sign-off
-// affordance ([[human-ok]]) — only the Evals feed passes it; a home without it (the session tab) still
-// renders the settled approval mark on an ok'd reading, just no write.
-export function EvalRow({ e, selected, onClick, onOk }) {
+// tab reuses it verbatim so the two surfaces can never drift apart). Human-ok is status-only here: the
+// selected detail is the review surface and owns the ONE visible write door ([[human-ok]]).
+export function EvalRow({ e, selected, onClick }) {
   const t = useT()
   const okdTip = e.humanOk && t('evalsFeed.okdTip', {
     by: e.humanOk.by,
@@ -68,12 +67,7 @@ export function EvalRow({ e, selected, onClick, onOk }) {
       <span className="ef-scenario" data-tip={e.scenario}>{e.scenario}</span>
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
       <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).filter(Boolean).join('·')}</span>
-      {e.humanOk
-        ? <span role="img" className="ef-okd" data-tip={okdTip} aria-label={okdTip}><Icon name="check" size={11} /></span>
-        : onOk
-          ? <span role="button" tabIndex={-1} className="ef-okbtn" data-tip={t('evalsFeed.okTitle')}
-              onClick={(ev) => { ev.stopPropagation(); onOk(e) }}>{t('evalsFeed.okBtn')}</span>
-          : null}
+      {e.humanOk && <span role="img" className="ef-okd" data-tip={okdTip} aria-label={okdTip}><Icon name="check" size={11} /></span>}
       <span className="ef-time">{rel(e.ts)}</span>
     </button>
   )
@@ -94,7 +88,7 @@ const rel = (ts) => {
 // group carries no title of its own — the [[side-nav]] rail names the Evals page; this list's head is the
 // shared two-row cluster: the CONTROL row (`lead` — the shell's anchored fold toggle — beside the kind
 // dropdown, the SAME shared control as the issues drain's store filter) over the chip row.
-export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRows, onOk = null, mustShow = null, lead = null }) {
+export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRows, mustShow = null, lead = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [liveOnly, setLiveOnly] = useState(false) // [[live-session-filter]]: only readings whose filer is alive
@@ -168,7 +162,7 @@ export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRo
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (
-        <EvalRow key={entryKey(e)} e={e} selected={sel === entryKey(e)} onClick={() => onSel(entryKey(e), e)} onOk={onOk} />
+        <EvalRow key={entryKey(e)} e={e} selected={sel === entryKey(e)} onClick={() => onSel(entryKey(e), e)} />
       ))}
     </section>
   )

@@ -49,12 +49,14 @@ everything — and the feed's head carries a show-all chip (the live-chip gramma
 only while off), so ok'd entries stay one click away, never invisible-forever. A deep-linked eval the
 hide would conceal releases it, exactly like the kind/live filters. In the feed, a settled sign-off is
 the dashboard's shared stroke check inside a quiet green certification ring — never a platform-dependent
-Unicode checkbox — and the reveal chip uses the same glyph.
+Unicode checkbox — and the reveal chip uses the same glyph. Feed rows are STATUS-ONLY: they never offer
+the write before sign-off, because human-ok certifies that the reading's evidence was actually reviewed.
 
 **One write, CLI parity (LAW L).** The verb is `spex eval ok <node> --scenario <s>`; the dashboard's
-two affordances — the event-detail header (offered only while the viewed reading IS the scenario's
-latest; older A/B poles are history) and the evals-feed row — call the same server route, whose identity
-is **server-derived `human`**, never the request body. A **governed session is refused the CLI verb**:
+event-detail header affordance (offered only while the viewed reading IS the scenario's latest; older A/B
+poles are history) and its typed `/ok` twin call the same runner and server route, whose identity is
+**server-derived `human`**, never the request body. The header is the one visible write door; `/ok` is its
+keyboard grammar, not a second button. A **governed session is refused the CLI verb**:
 an agent blessing a reading would hide it from exactly the review the ok certifies — the no-self-resolve
 analogue; an agent's judgment on a reading is a remark. No review-track dropdown or queue here — a
 separate future lane.

@@ -20,9 +20,10 @@ test('uninstall surgically removes the SpexCode footprint, never the user data',
   const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
   const codexHome = mkdtempSync(join(tmpdir(), 'codexhome-'))
   const proj = gitRepo()
-  const prevHome = process.env.SPEXCODE_HOME, prevCodex = process.env.CODEX_HOME
+  const prevHome = process.env.SPEXCODE_HOME, prevCodex = process.env.CODEX_HOME, prevPi = process.env.SPEXCODE_PI_AGENT_DIR
   process.env.SPEXCODE_HOME = home
   process.env.CODEX_HOME = codexHome
+  process.env.SPEXCODE_PI_AGENT_DIR = mkdtempSync(join(tmpdir(), 'pihome-'))
   try {
     // --- the user's OWN data + prose (all must survive) ---
     mkdirSync(join(proj, '.spec', 'x'), { recursive: true })
@@ -81,6 +82,7 @@ test('uninstall surgically removes the SpexCode footprint, never the user data',
   } finally {
     process.env.SPEXCODE_HOME = prevHome
     process.env.CODEX_HOME = prevCodex
+    process.env.SPEXCODE_PI_AGENT_DIR = prevPi
   }
 })
 

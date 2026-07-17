@@ -6,8 +6,9 @@ import { createConnection, type Socket } from 'node:net'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, type SlashCommand } from './slash-commands.js'
+import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
+import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
 
@@ -23,7 +24,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -104,7 +105,8 @@ export interface Harness {
   agentDir(proj: string): string | null
   // the shim payload: `content` is whatever artifact THIS harness auto-discovers to wire every event to the
   // dispatcher (harness id baked in) — a settings/hooks JSON for claude/codex, a generated event-bus PLUGIN
-  // for opencode — plus the per-event command string (shared with the trust writer so they hash identically).
+  // for opencode, a generated TypeScript EXTENSION for pi — plus the per-event command string (shared with
+  // the trust writer so they hash identically).
   shim(dispatch: string, spex: string): { content: string; cmd: (e: string) => string }
   // make a dispatched/self-launched agent run the hooks with zero prompts. Codex writes PROJECT trust — and, on
   // a binary without `--dangerously-bypass-hook-trust`, per-hook trusted_hash blocks — into the GLOBAL
@@ -1009,6 +1011,10 @@ export function paneTreeRunsCodex(pane?: PaneProbe): boolean {
 
 const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'Notification'] as const
 const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
+// the five claude-shaped events pi's generated extension SYNTHESIZES from its own lifecycle (session_start →
+// SessionStart, input → UserPromptSubmit, tool_call → PreToolUse, tool_result → PostToolUse, agent_settled →
+// Stop). pi has no idle/attention or failed-stop event → no Notification/StopFailure, same real gap as codex.
+const PI_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by
 // launchCmd and baseCmd so the two never diverge: the launcher's pinned `cmd` wins. The bare default is only
@@ -1016,6 +1022,7 @@ const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToo
 // resolution, because claude/codex are ordinary named launchers now ([[launcher-select]]), resolved by name.
 const claudeBaseCmd = (cmd?: string) => cmd || 'claude --dangerously-skip-permissions'
 const codexBaseCmd = (cmd?: string) => cmd || 'codex --yolo'
+const piBaseCmd = (cmd?: string) => cmd || 'pi'   // pi runs tools without permission prompts — no yolo flag exists or is needed
 const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode --auto'   // --auto = zero-prompt permissions (opencode's trust mechanism — writeTrust is a no-op)
 
 // @@@ opencodeLaunchCommand - the tail-branching launch script (the codex marker pattern, minus any server:
@@ -1145,6 +1152,48 @@ export const codexHarness: Harness = {
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
 }
 
+// @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:
+// the caller pins the session id at launch (`--session-id <id>`, creating the session if missing), the shim
+// lives IN the worktree, and the rendezvous prompt/liveness channel is REUSED wholesale — pi has no external
+// hook binding (its lifecycle surface is the in-process extension API), so the shim is a GENERATED TypeScript
+// extension (.pi/extensions/spexcode.ts, run natively by pi) that forwards five claude-shaped events to
+// dispatch.sh AND binds this session's rendezvous socket itself (sessions.ts already exports
+// CLAUDE_BG_RENDEZVOUS_SOCK to every ownsRendezvous launch) speaking the reclaude line protocol — so
+// deliverViaRendezvous and the socket-listener liveness work UNCHANGED. Trust: pi gates project-local
+// extensions behind saved per-directory trust (~/.pi/agent/trust.json), so writeTrust stamps the main
+// checkout there (the nearest-parent lookup covers nested worktrees) and the launch carries `--approve` as
+// one-run defence. See pi-harness.ts for the extension source + trust mechanics.
+export const piHarness: Harness = {
+  id: 'pi',
+  events: PI_EVENTS,
+  ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
+  paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
+  launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
+  baseCmd: piBaseCmd,
+  sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
+  sessionEnvVar: 'PI_SESSION_ID',                    // exported by the generated extension at session_start; tool subprocesses inherit it
+  shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
+  worktreeHookAnchor: () => null,                    // the extension lives in the worktree and self-anchors, like claude
+  contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // pi auto-loads AGENTS.md context files (shared with codex — writeManagedBlock is idempotent)
+  skillDir: (proj) => join(proj, '.pi', 'skills'),   // Agent Skills standard dirs, discovered after project trust
+  agentDir: () => null,                              // pi has no file-discovered sub-agent primitive — materialize skips it
+  shim: (dispatch, spex) => ({
+    content: piExtensionSource(dispatch, spex),
+    cmd: (e: string) => `SPEX='${spex}' bash ${dispatch} pi ${e}`,   // what the extension actually spawns, for parity with buildShim
+  }),
+  writeTrust: (proj) => writePiTrust(mainCheckout(proj)),   // trust keys on the MAIN checkout; nearest-parent lookup covers worktrees
+  removeTrust: (proj) => removePiTrust(mainCheckout(proj)),
+  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  slashCommands: piSlashCommands,
+  // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
+  // socket the generated extension binds. socketLive is already probed for every windowed session.
+  liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
+  deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  // reopen the SAME conversation: `--session <id>` resumes the exact session we pinned at launch and FAILS
+  // LOUD when its file is gone (unlike `--session-id`, which would silently mint a fresh empty session).
+  resumeArg: (rec) => `--session ${rec.session}`,
+}
+
 export const opencodeHarness: Harness = {
   id: 'opencode',
   events: OPENCODE_EVENTS,
@@ -1189,7 +1238,7 @@ export const opencodeHarness: Harness = {
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

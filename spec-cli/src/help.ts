@@ -24,9 +24,9 @@ const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on
 node/<id> branch). One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
 scenario ls · issue ls/show/links) take --json.`
 
-const MENTION_NOTE = `Mentions: @session · [[node]] · @new work in ANY prompt, issue, or remark body — text passed as a CLI
-arg included. [[node]] names the topic node; @session hands the text to that live agent; @new spawns a
-fresh worker on the thread's node.`
+const MENTION_NOTE = `Mentions: @session · [[node]] · @new / @new:<launcher> work in ANY prompt, issue, or remark body —
+text passed as a CLI arg included. [[node]] names the topic node; @session hands the text to that live agent;
+@new spawns a fresh worker on the thread's node (bare = configured default; :<launcher> = that named profile).`
 
 const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────

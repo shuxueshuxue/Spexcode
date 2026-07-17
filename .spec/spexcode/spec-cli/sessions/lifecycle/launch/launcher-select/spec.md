@@ -9,7 +9,9 @@ related:
   - spec-cli/src/layout.ts
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
+  - spec-cli/src/help.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/launch.js
   - spec-dashboard/src/harness.jsx
 ---
 
@@ -61,6 +63,15 @@ a default may name one of them), never an implicit no-choice fallback.
 A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400 from
 the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not
 create-session inputs; callers use `--launcher <name>` / `{ launcher }`.
+
+The universal actor mention has the same create-time choice: bare `@new` uses `defaultLauncher`, while
+`@new:<launcher>` passes that explicit profile name into the SAME `newSession` call. The dashboard's shared
+`@` autocomplete makes the choice reachable instead of asking the human to memorize syntax: accepting its
+`@new` row opens the configured launcher rows, and accepting one inserts the durable, inspectable
+`@new:<launcher>` token into the prose. The qualifier changes only this one spawn; it never changes the
+configured default or the New-Session picker's remembered choice. An unknown qualifier is the same loud
+create failure as an unknown `--launcher` value, reported in the mention dispatch outcome while the issue
+text remains stored.
 
 **Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it
 is stored on the record and rides the session payload (`/api/sessions` + `/api/graph`) alongside its

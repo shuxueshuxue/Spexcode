@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete, matchSlash, SlashMenu } from './mentions.jsx'
+import { useLaunchers } from './launch.js'
 import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
@@ -205,7 +206,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
   const [focused, setFocused] = useState(false)
   const taRef = useRef(null)
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
+  const { launchers } = useLaunchers()
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
   // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
   // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
   // a BUILT-IN verb (`run`) fires the SAME closure its header button calls (reviewCommands.js, so button

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -64,8 +64,25 @@ export function matchSessions(sessions, query) {
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
   const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
   const exactCount = scored.filter((x) => x.score === 0).length
-  items.splice(exactCount, 0, { id: 'new', label: 'new', sub: 'spawn a fresh worker' })
+  items.splice(exactCount, 0, { id: 'new', label: 'new', sub: 'choose a launcher' })
   return items.slice(0, 8)
+}
+
+// The second stage behind the synthetic @new row: configured launcher names, prefix-ranked like the other
+// mention sets. The cmd is read-only context in the row; accepting one writes @new:<name> into the prose,
+// which the CLI resolver carries to the ordinary newSession launcher argument ([[launcher-select]]).
+export function matchLaunchers(launchers, query) {
+  const q = query.toLowerCase()
+  return (launchers || [])
+    .map((l) => {
+      const name = (l.name || '').toLowerCase()
+      const score = !q ? 1 : name.startsWith(q) ? 0 : name.includes(q) ? 1 : -1
+      return { l, score }
+    })
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => a.score - b.score || a.l.name.localeCompare(b.l.name))
+    .slice(0, 8)
+    .map(({ l }) => ({ id: l.name, label: l.name, sub: l.cmd || l.harness || '' }))
 }
 
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
@@ -155,12 +172,18 @@ export function nodeMentionAt(value, caret, specs, focusId) {
 // over handle-chars; if that run is preceded by an `@` at a WORD BOUNDARY (start of line or after
 // whitespace), the caret sits inside an `@query` actor token. `[[`=topic, `@`=actor — the two triggers never
 // collide (a bare `@` mid-word, e.g. an email, is not a boundary and stays inert).
-export function actorMentionAt(value, caret, sessions) {
+export function actorMentionAt(value, caret, sessions, launchers = []) {
   let i = caret - 1
-  while (i >= 0 && /[\p{L}\p{N}_.\-]/u.test(value[i])) i--
+  while (i >= 0 && /[\p{L}\p{N}_.:\-]/u.test(value[i])) i--
   // i now points at the char just left of the handle run — the `@` sigil for an actor token.
   if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
     const query = value.slice(i + 1, caret)
+    if (query.startsWith('new:')) {
+      const launcherQuery = query.slice('new:'.length)
+      const items = matchLaunchers(launchers, launcherQuery)
+      if (!items.length) return null
+      return { kind: 'launcher', items, index: 0, start: i, end: caret, query: launcherQuery }
+    }
     const items = matchSessions(sessions, query)
     if (!items.length) return null
     return { kind: 'actor', items, index: 0, start: i, end: caret, query }
@@ -174,9 +197,12 @@ export function actorMentionAt(value, caret, sessions) {
 // synthetic `@new` row wears a subtle distinct style). No emoji.
 export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   const t = useT()
-  const actor = menu.kind === 'actor'
-  const head = menu.query
-    ? (actor ? `@${menu.query}` : `[[${menu.query}]]`)
+  const launcher = menu.kind === 'launcher'
+  const actor = menu.kind === 'actor' || launcher
+  const head = launcher
+    ? `@new:${menu.query}`
+    : menu.query
+      ? (actor ? `@${menu.query}` : `[[${menu.query}]]`)
     : t(actor ? 'session.menuSessions' : 'session.menuSpecNodes')
   return (
     <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
@@ -186,12 +212,12 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
           key={it.id}
           role="option"
           aria-selected={i === menu.index}
-          className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${actor && it.id === 'new' ? ' new' : ''}`}
+          className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (actor && it.id === 'new') ? ' new' : ''}`}
           onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
           onMouseEnter={() => onHover(i)}
         >
           {!actor && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
-          <span className="mention-id">{actor ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
+          <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : actor ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
           <span className="mention-path">{actor ? it.sub : specPath(it.path)}</span>
         </li>
       ))}
@@ -204,13 +230,21 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
 // and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
 // when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-
 // level state machine (it also multiplexes `/` menus) but builds from the SAME scanners and MentionMenu.
-export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], focusId = null, up = false, fixedAbove = null }) {
+export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], launchers = [], focusId = null, up = false, fixedAbove = null }) {
   const [menu, setMenu] = useState(null)
   const [fixedStyle, setFixedStyle] = useState(null)
+  // React synthesizes onSelect after Escape keyup even when the native selection did not move. Without a
+  // dismissal key that synthetic sync immediately reopened the menu Esc had just closed. The dismissal is
+  // only for this exact draft+caret; typing or moving naturally changes the key and re-enables completion.
+  const dismissed = useRef(null)
+  const caretKey = (el) => `${el.value}\0${el.selectionStart}`
   const sync = (el) => {
     if (!el) { setMenu(null); setFixedStyle(null); return }
+    const key = caretKey(el)
+    if (dismissed.current === key) { setMenu(null); setFixedStyle(null); return }
+    dismissed.current = null
     const caret = el.selectionStart
-    const next = nodeMentionAt(el.value, caret, specs, focusId) || actorMentionAt(el.value, caret, sessions)
+    const next = nodeMentionAt(el.value, caret, specs, focusId) || actorMentionAt(el.value, caret, sessions, launchers)
     setMenu(next)
     if (!next || !fixedAbove) { setFixedStyle(null); return }
     const input = el.getBoundingClientRect()
@@ -223,11 +257,32 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
       bottom: `${Math.max(8, window.innerHeight - above + 8)}px`,
     })
   }
+  // @new may be accepted before the first settings request finishes. Its draft is already `@new:`; when
+  // the profiles arrive, re-run the ordinary scanner at that unchanged focused caret so the chooser opens
+  // instead of silently degrading to the default. An Esc dismissal survives because sync checks its key.
+  useEffect(() => {
+    const el = inputRef.current
+    if (launchers.length && el && document.activeElement === el) sync(el)
+  }, [launchers])
   const navBy = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   const accept = (item) => {
     if (!item || !menu) return
-    const insert = menu.kind === 'actor' ? `@${item.id} ` : `[[${item.id}]] `
+    dismissed.current = null
     const before = value.slice(0, menu.start)
+    // @new is a doorway, not a silent default: accepting it always writes @new:. If settings are ready the
+    // launcher menu stays open now; otherwise the effect above opens it when the one shared read resolves.
+    if (menu.kind === 'actor' && item.id === 'new') {
+      const insert = '@new:'
+      const nextValue = before + insert + value.slice(menu.end)
+      const caret = before.length + insert.length
+      setValue(nextValue)
+      setMenu(actorMentionAt(nextValue, caret, sessions, launchers))
+      requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+      return
+    }
+    const insert = menu.kind === 'actor' ? `@${item.id} `
+      : menu.kind === 'launcher' ? `@new:${item.id} `
+      : `[[${item.id}]] `
     setValue(before + insert + value.slice(menu.end))
     setMenu(null)
     setFixedStyle(null)
@@ -239,10 +294,15 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navBy(1); return true }
     if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); navBy(-1); return true }
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return true }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMenu(null); setFixedStyle(null); return true }
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation()
+      if (inputRef.current) dismissed.current = caretKey(inputRef.current)
+      setMenu(null); setFixedStyle(null)
+      return true
+    }
     return false
   }
-  const close = () => { setMenu(null); setFixedStyle(null) }
+  const close = () => { dismissed.current = null; setMenu(null); setFixedStyle(null) }
   const menuEl = menu
     ? <MentionMenu menu={menu} up={up} fixedStyle={fixedStyle} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
     : null

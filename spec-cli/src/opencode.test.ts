@@ -41,16 +41,21 @@ test('liveness: socket listener preferred, agent.pid fallback (a plugin that fai
 test('launch script: prompt tail → --prompt; --resume marker → --session; --continue marker; empty → bare TUI', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-launch-'))
   const stub = join(dir, 'opencode')
-  writeFileSync(stub, '#!/usr/bin/env bash\necho "STUB:$*"\n')
+  // the stub also prints the resume env markers so the seeding contract is pinned here: a --resume
+  // relaunch must hand the plugin the owned id (SPEXCODE_OPENCODE_RESUME_ID), a --continue relaunch the
+  // continue flag — a resumed session fires no bus event, so the env is the plugin's only adoption seed.
+  writeFileSync(stub, '#!/usr/bin/env bash\necho "STUB:$* rid=${SPEXCODE_OPENCODE_RESUME_ID:-} cont=${SPEXCODE_OPENCODE_CONTINUE:-}"\n')
   chmodSync(stub, 0o755)
   const env = { ...process.env, PATH: `${dir}:${process.env.PATH}` }
+  delete (env as Record<string, string | undefined>).SPEXCODE_OPENCODE_RESUME_ID
+  delete (env as Record<string, string | undefined>).SPEXCODE_OPENCODE_CONTINUE
   const run = (tail: string) =>
     execFileSync('bash', ['-c', `${opencodeLaunchCommand('opencode --auto')} ${tail}`], { encoding: 'utf8', env })
       .split('\n').find((l) => l.startsWith('STUB:'))
-  assert.equal(run(`'fix the login bug'`), 'STUB:--auto --prompt fix the login bug')
-  assert.equal(run('--resume oc_abc'), 'STUB:--auto --session oc_abc')
-  assert.equal(run('--continue'), 'STUB:--auto --continue')
-  assert.equal(run(''), 'STUB:--auto')
+  assert.equal(run(`'fix the login bug'`), 'STUB:--auto --prompt fix the login bug rid= cont=')
+  assert.equal(run('--resume oc_abc'), 'STUB:--auto --session oc_abc rid=oc_abc cont=')
+  assert.equal(run('--continue'), 'STUB:--auto --continue rid= cont=1')
+  assert.equal(run(''), 'STUB:--auto rid= cont=')
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -87,7 +92,7 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
 // a fake SDK client records injected prompts, and the REAL deliverViaRendezvous talks to the plugin's socket.
 
 type Dispatched = { code: number }
-async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number }) {
+async function loadPlugin(opts: { session: string; block?: string[]; blockJson?: string[]; blockReason?: string; promptMs?: number; resumeId?: string; continueList?: unknown[] }) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oc-plugin-'))
   const dispatch = join(dir, 'dispatch.sh')
   // records `<event>.json` (argv check included: $1 must be the baked harness id); blocks listed events.
@@ -108,10 +113,20 @@ async function loadPlugin(opts: { session: string; block?: string[]; blockJson?:
   writeFileSync(pluginFile, opencodePluginSource(dispatch, '/bin/true'))   // SPEX stubbed: capture becomes a no-op spawn
   process.env.SPEXCODE_SESSION_ID = opts.session
   process.env.CLAUDE_BG_RENDEZVOUS_SOCK = rvSock(opts.session)
+  // the resume seeds are read at plugin LOAD — set (or clear, to stop cross-test leakage) before import
+  if (opts.resumeId) process.env.SPEXCODE_OPENCODE_RESUME_ID = opts.resumeId
+  else delete process.env.SPEXCODE_OPENCODE_RESUME_ID
+  if (opts.continueList) process.env.SPEXCODE_OPENCODE_CONTINUE = '1'
+  else delete process.env.SPEXCODE_OPENCODE_CONTINUE
   const mod = await import(pathToFileURL(pluginFile).href)
   const prompts: unknown[] = []
   // promptMs simulates the REAL SDK contract: session.prompt resolves only when the injected TURN completes
-  const client = { session: { prompt: async (x: unknown) => { prompts.push(x); if (opts.promptMs) await new Promise((r) => setTimeout(r, opts.promptMs)) } } }
+  const client = {
+    session: {
+      prompt: async (x: unknown) => { prompts.push(x); if (opts.promptMs) await new Promise((r) => setTimeout(r, opts.promptMs)) },
+      list: async () => ({ data: opts.continueList ?? [] }),
+    },
+  }
   const hooks = await mod.SpexcodePlugin({ client, directory: dir })
   const payload = (e: string) => JSON.parse(readFileSync(join(dir, `${e}.json`), 'utf8'))
   const raw = (e: string) => readFileSync(join(dir, `${e}.json`), 'utf8')
@@ -186,6 +201,42 @@ test('stop-gate wire shape: a stdout decision:block JSON (stderr empty) injects 
     (e: Error) => e.message.startsWith('declare first — pick ONE state:') && !e.message.includes('"decision"'),
   )
   rmSync(t.dir, { recursive: true, force: true })
+})
+
+test('resumed session (--session route): the env-seeded rootSession makes the daemon deliverable with NO bus event', async () => {
+  // the resume-continuity A-side field bug: a resumed session fires no session.created/idle/chat until a
+  // human pokes the TUI, so event-driven adoption left the daemon reply-rejecting every delivery.
+  const session = `oc-t6-${process.pid}`
+  const t = await loadPlugin({ session, resumeId: 'oc_resumed' })
+  for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
+  const r = await deliverViaRendezvous(session, 'steer straight after resume')   // no event fired at all
+  assert.equal(r.ok, true)
+  const p = t.prompts[0] as { path: { id: string }; body: { parts: { text: string }[] } }
+  assert.equal(p.path.id, 'oc_resumed')                       // injected into the RESUMED conversation
+  assert.equal(p.body.parts[0].text, 'steer straight after resume')
+  rmSync(t.dir, { recursive: true, force: true })
+  rmSync(rvSock(session), { force: true })
+})
+
+test('resumed session (--continue route): the SDK session.list fallback adopts the newest ROOT session', async () => {
+  const session = `oc-t7-${process.pid}`
+  const t = await loadPlugin({ session, continueList: [
+    { id: 'oc_old', time: { updated: 100 } },
+    { id: 'oc_newest', time: { updated: 300 } },
+    { id: 'oc_child', parentID: 'oc_newest', time: { updated: 400 } },   // children never adopted
+  ] })
+  for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
+  let ok = false
+  for (let i = 0; i < 100 && !ok; i++) {                      // the fallback is async — poll the deliver
+    const r = await deliverViaRendezvous(session, 'steer after --continue')
+    ok = r.ok
+    if (!ok) await new Promise((r2) => setTimeout(r2, 50))
+  }
+  assert.equal(ok, true, 'the fallback adopted a session and the daemon accepted the delivery')
+  const p = t.prompts[0] as { path: { id: string } }
+  assert.equal(p.path.id, 'oc_newest')
+  rmSync(t.dir, { recursive: true, force: true })
+  rmSync(rvSock(session), { force: true })
 })
 
 test('rendezvous daemon: the REAL claude deliver (atomic reply+repaint, parse-confirmed) lands a prompt in the session', async () => {

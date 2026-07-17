@@ -1034,8 +1034,15 @@ const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode --auto'   // --auto =
 export function opencodeLaunchCommand(opencodeCmd = 'opencode --auto'): string {
   const script = [
     `if [ "\${1:-}" = "--resume" ]; then`,
+    // the marker carries the owned session id — export it so the plugin can seed rootSession at load: a
+    // resumed session re-fires NO bus event until poked, so without this the rendezvous daemon rejects
+    // every delivery (resume-continuity A-side: continuity ✓, steerability ✗).
+    `  export SPEXCODE_OPENCODE_RESUME_ID="$2"`,
     `  exec ${opencodeCmd} --session "$2"`,
     `elif [ "\${1:-}" = "--continue" ]; then`,
+    // no owned id to seed — mark the continue-resume so the plugin knows to ask the SDK for the
+    // reattached session (scoped to this marker so a FRESH launch can never adopt a stale session).
+    `  export SPEXCODE_OPENCODE_CONTINUE=1`,
     `  exec ${opencodeCmd} --continue`,
     `elif [ -n "\${1:-}" ]; then`,
     `  exec ${opencodeCmd} --prompt "$1"`,

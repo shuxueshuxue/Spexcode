@@ -188,7 +188,11 @@ export class MatrixRun {
     const kids = new Map<number, number[]>()
     for (const line of ps.out.split('\n')) {
       const m = /^\s*(\d+)\s+(\d+)/.exec(line)
-      if (m) { const pp = Number(m[2]); (kids.get(pp) ?? kids.set(pp, []).get(pp)!).push(Number(m[1])) }
+      if (!m) continue
+      const [pid, ppid] = [Number(m[1]), Number(m[2])]
+      const siblings = kids.get(ppid)
+      if (siblings) siblings.push(pid)
+      else kids.set(ppid, [pid])
     }
     const out: number[] = []
     const stack = [panePid]
@@ -621,12 +625,22 @@ function findNodeDir(root: string, id: string): string | null {
   return hits[0] ?? null
 }
 
+const VALUE_FLAGS = ['--node', '--rows']
+
 export async function runMatrix(args: string[]): Promise<number> {
   const flag = (name: string): string | undefined => {
     const i = args.indexOf(`--${name}`)
     return i >= 0 ? args[i + 1] : undefined
   }
-  const launcherName = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--node' && args[args.indexOf(a) - 1] !== '--rows')
+  // the launcher is the first bare positional — scanned left to right, skipping each value flag's value
+  // (so `--rows liveness pi` reads `pi`, never `liveness`).
+  let launcherName: string | undefined
+  for (let i = 0; i < args.length; i++) {
+    if (VALUE_FLAGS.includes(args[i])) { i++; continue }
+    if (args[i].startsWith('--')) continue
+    launcherName = args[i]
+    break
+  }
   if (!launcherName) {
     console.error('usage: spex eval matrix <launcher> [--node <id>] [--rows key1,key2]\n  runs the eight-row live-behavior matrix against a REAL dispatched session of that launcher and files a per-row reading (rows: ' + MATRIX.map((r) => r.key).join(', ') + ')')
     return 2

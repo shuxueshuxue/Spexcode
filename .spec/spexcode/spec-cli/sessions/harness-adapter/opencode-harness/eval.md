@@ -30,6 +30,22 @@ scenarios:
       AGENTS.md managed block, and .opencode skill artifacts, all exclude-hidden; narrowing the set prunes
       every .opencode artifact AND sweeps the emptied .opencode/ home itself — the third native harness rides
       the same select/erase/assert pipeline with no special case.
+  - name: deliver-second-message
+    tags: [backend-api]
+    code: spec-cli/src/opencode.ts
+    description: >-
+      Through the running product: dispatch an opencode worker, let it answer its first prompt, then
+      `spex session send` a SECOND message while the board liveness probe keeps connecting to the
+      rendezvous socket (every graph snapshot fires rendezvousListening — collisions are the norm, not
+      an edge). Read the send's exit code/output and count how many copies of the message the worker's
+      pane actually received.
+    expected: >-
+      The send exits 0 ("sent") and the pane shows the message injected exactly ONCE. The plugin's
+      daemon must answer the reply+repaint chunk with parse-confirmed repaint-done in the same
+      synchronous parse pass — never suspended on the prompt-injection await — so a concurrent probe
+      connect can't kick the connection between parse and confirm. A kicked-3× failure with the text
+      nonetheless landing (false negative → caller retries → duplicate injections) is the bug this
+      scenario guards against.
   - name: dispatched-opencode-worker-e2e
     tags: [backend-api]
     description: >-

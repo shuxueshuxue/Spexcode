@@ -4,11 +4,18 @@ export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const evalAddress = (nodeId, scenario) => ({ kind: 'eval', nodeId, scenario })
+// a session's IN-SESSION eval detail ([[session-eval]]): the console with the Eval tab active, optionally
+// landed on one scenario's worktree-rooted reading — the address an MR/CI note pastes for one-click review.
+export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'session-eval', sessionId, nodeId, scenario })
 
 export function addressHash(address) {
   if (!address) return routeHash('graph')
   if (address.kind === 'graph-node') return routeHash('graph')
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
+  if (address.kind === 'session-eval') {
+    const segs = [address.sessionId, 'eval', ...(address.nodeId && address.scenario ? [address.nodeId, address.scenario] : [])]
+    return routeHash('sessions', segs.join('/'))
+  }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)
   return routeHash('graph')

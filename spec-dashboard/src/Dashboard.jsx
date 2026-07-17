@@ -69,6 +69,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
+  const [evalSeed, setEvalSeed] = useState(null)  // one-shot eval deep link ({node,scenario}|{}) from #/sessions/<id>/eval[/…]
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
@@ -148,8 +149,15 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
   // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (no history
   // entry per tab-hop — pages push, tabs replace, see route.js).
+  // the sessions param is '<id>' or '<id>/eval[/<node>/<scenario>]' (the page splits, like evals): the id
+  // applies to the selection; the segments past it are a ONE-SHOT deep link ([[session-eval]]) seeding the
+  // console's Eval tab (and optionally one scenario's reading), then the echo below normalizes the hash
+  // back to the plain tab address — the link is an entrance, not a synced view state.
   useLayoutEffect(() => {
-    if (page === 'sessions' && param && param !== sessionSel) setSessionSel(param)
+    if (page !== 'sessions' || !param) return
+    const [id, entrance, node, ...scen] = param.split('/')
+    if (id && id !== sessionSel) setSessionSel(id)
+    if (entrance === 'eval') setEvalSeed({ node: node || null, scenario: scen.join('/') || null })
   }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
@@ -608,6 +616,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           setSel={setSessionSel}
           seed={seed}
           onSeedConsumed={() => setSeed(null)}
+          evalSeed={evalSeed}
+          onEvalSeedConsumed={() => setEvalSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
           onOpenSession={openSession}

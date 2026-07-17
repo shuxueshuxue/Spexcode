@@ -11,8 +11,9 @@ scenarios:
       reload.
     expected: >-
       The ok'd row leaves the default feed (it is fresh AND human-ok'd — reviewed loss), the head grows
-      a "N ok'd" chip whose toggle reveals the hidden row wearing its settled ☑ mark, and the detail
-      header shows "human-ok" with the signer instead of the ok button. The moment a newer reading
+      a "N ok'd" chip whose toggle reveals the hidden row wearing its settled green certification ring:
+      a real shared stroke SVG check, never a Unicode checkbox. The reveal chip uses that same SVG. The
+      detail header shows "human-ok" with the signer instead of the ok button. The moment a newer reading
       lands, the scenario reappears in the default feed unblessed — the ok stayed bound to the older
       reading and transferred to nothing.
   - name: ok-durable-and-monotonic

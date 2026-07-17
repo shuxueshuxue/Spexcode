@@ -64,7 +64,7 @@ export default {
     okBtn: 'ok',
     okTitle: 'human-ok this reading — you reviewed it and agree with its verdict; a fresh ok’d scenario leaves the default feed until a newer reading lands or it goes stale',
     okdTip: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
-    okChip: ({ n }) => `☑ ${n} ok’d`,
+    okChip: ({ n }) => `${n} ok’d`,
     okChipTitle: 'show the fresh, human-ok’d scenarios the feed default-hides',
   },
 

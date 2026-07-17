@@ -1,7 +1,7 @@
 ---
 concern: Codex lifecycle hooks don't fire for a dispatched codex worker in a freshly-adopted project (Stop gate never enforced; commit lacks Session: trailer)
 by: 508d36a9-84cb-4c2d-a945-789b4f7d0112
-status: open
+status: landed
 nodes: harness-adapter
 created: 2026-07-04T04:19:44.556Z
 ---

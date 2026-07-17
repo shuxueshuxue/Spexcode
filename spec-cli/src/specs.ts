@@ -141,21 +141,22 @@ function raws(): Raw[] {
 // way the sync walk (one ~450ms uninterrupted stretch) did. Same output as raws() — identical push order
 // (pre-order DFS, dir before children) and the same reId — so every caller reads the same nodes; only
 // loadSpecs (already async, on the hot path) uses it, the light one-shot callers keep the sync raws().
-async function walkAsync(dir: string, parent: string | null, acc: Raw[]): Promise<void> {
+async function walkAsync(dir: string, parent: string | null, acc: Raw[], root: string): Promise<void> {
   let myId = parent
   if (existsSync(join(dir, 'spec.md'))) {
     myId = basename(dir)
-    const relPath = relative(ROOT, join(dir, 'spec.md'))
+    const relPath = relative(root, join(dir, 'spec.md'))
     const { fm, body } = parseFrontmatter(await readFile(join(dir, 'spec.md'), 'utf8'))
     acc.push({ id: myId, parent, relPath, fm, body })
   }
   for (const e of await readdir(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) await walkAsync(join(dir, e.name), myId, acc)
+    if (e.isDirectory()) await walkAsync(join(dir, e.name), myId, acc, root)
   }
 }
-async function rawsAsync(): Promise<Raw[]> {
+async function rawsAsync(root: string): Promise<Raw[]> {
   const acc: Raw[] = []
-  if (existsSync(SPEC_DIR)) await walkAsync(SPEC_DIR, null, acc)
+  const specDir = join(root, '.spec')
+  if (existsSync(specDir)) await walkAsync(specDir, null, acc, root)
   reId(acc)
   return acc
 }
@@ -222,10 +223,14 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
   return r ? { body: r.body.trim(), parts: parseParts(r.body) } : null
 }
 
-export async function loadSpecs() {
+// `root` defaults to the backend's own checkout — the canonical tree. A session worktree may be passed
+// instead ([[source-of-truth]]'s several-checkouts principle at the loader level): its .spec is the
+// branch's pending proposal, so eval surfaces rooted at a session must load the spec tree from the SAME
+// root as their readings/indexes, or a branch-NEW node simply does not exist for them.
+export async function loadSpecs(root: string = ROOT) {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
   // the event loop). Every node below is then a pure lookup.
-  const [idx, didx, allRaws] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT), rawsAsync()])
+  const [idx, didx, allRaws] = await Promise.all([historyIndex(root), driftIndex(root), rawsAsync(root)])
   return Promise.all(allRaws.map(async (r) => {
     const h = rowsFor(idx, r.relPath)
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.

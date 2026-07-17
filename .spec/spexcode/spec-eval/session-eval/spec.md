@@ -31,8 +31,12 @@ one place the eval engine reaches into the review state ([[manager-cockpit]]'s `
 backend: `buildExportModel(id)` joins the payload's diff (grouped per spec node) with each changed node's
 [[eval-tab]] timeline (latest reading per scenario — verdict, expected, the content-addressed
 evidence) and the gates; `renderExportHtml(model)` emits ONE self-contained HTML document, evidence inlined
-as data-URIs ([[eval-core]]'s cache) so it stands alone as a plain file. The eval timelines are rooted at
-the **session's worktree**, so freshness and readings reflect that branch, not the backend's checkout. The
+as data-URIs ([[eval-core]]'s cache) so it stands alone as a plain file. The whole model is rooted at the
+**session's worktree** — the eval timelines (freshness and readings reflect that branch, not the backend's
+checkout) AND the **spec tree itself** (`loadSpecs` at the worktree root): a node the branch **added** is a
+first-class changed node here — present with its declared scenarios and filed readings while the branch is
+still un-merged — because the worktree's `.spec` is the branch's pending proposal ([[source-of-truth]]),
+not invisible. A session with no worktree reads the backend checkout unchanged. The
 headline is DERIVED (the node, else the branch) — there is no agent-authored claim, manifest, or narrative.
 A frontend node with no eval.md shows as an honest blind spot, never hidden.
 

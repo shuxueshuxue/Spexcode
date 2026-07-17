@@ -456,6 +456,12 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // {t:'wheel',…}. The bridge resolves the wheel against tmux pane state: copy-mode repaint for normal panes,
 // SGR mouse report injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent
 // frame and live bytes arrive as events.
+// keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract:
+// a healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
+// silent past 2.5× this window dead (the half-open link a NAT/tunnel kills without a close event), and the
+// traffic itself keeps an idle socket warm through those middleboxes. Text frame; the terminal renders only
+// binary frames, so it needs no client-side filtering beyond what already exists.
+const TERM_PING_MS = 10000
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
@@ -463,10 +469,12 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const qc = Number(c.req.query('cols')), qr = Number(c.req.query('rows'))
   const initialSize = qc > 0 && qr > 0 ? { cols: qc, rows: qr } : undefined
   let viewer: Viewer | null = null
+  let ping: ReturnType<typeof setInterval> | undefined
   return {
     onOpen(_evt, ws) {
       viewer = { send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } } }
-      if (!attachViewer(id, viewer, initialSize)) { try { ws.close() } catch { /* already closed */ } }
+      if (!attachViewer(id, viewer, initialSize)) { try { ws.close() } catch { /* already closed */ } return }
+      ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
     },
     onMessage(evt) {
       if (!viewer) return
@@ -481,7 +489,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
         } catch { /* ignore */ }
       }
     },
-    onClose() { if (viewer) detachViewer(id, viewer) },
+    onClose() { if (ping) clearInterval(ping); if (viewer) detachViewer(id, viewer) },
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.

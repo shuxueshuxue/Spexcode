@@ -2,7 +2,7 @@
 title: event-detail
 status: active
 hue: 200
-desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
+desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in a right RAIL — default-FOLDED to the shared fold strip ([[fold-toggle]]), unfolding on the strip or on any mark gesture — with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
 code:
   - spec-dashboard/src/EventDetail.jsx#EventDetail
   - spec-dashboard/src/EventDetail.jsx#StepRail
@@ -40,8 +40,17 @@ media→thread→composer vertically forces a scroll ping-pong between the frame
 (bottom) on every mark. So the pane splits into three fixed regions, the annotator shape: a **slim HEADER
 band** (scenario · node · the verdict badge · timestamp · the FILER's liveness · the A/B strip
 right-aligned), a center
-**MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
-at the rail's foot**. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
+**MEDIA STAGE**, and a **RIGHT RAIL** carrying the remark track with the composer **docked
+at the rail's foot**. The rail is **default-FOLDED**: on arrival it renders as the shared thin fold
+strip ([[fold-toggle]] — the same vertical-strip affordance every master list folds to, the one shared
+component, no rail-specific drawing), badged with the remark count (accented while any remark is still
+open, so the outstanding loss stays glanceable through the fold). It unfolds when the reviewer asks —
+a click on the strip — or when the review act itself needs it: any mark gesture (a drag-circle on the
+frame, the keyboard's `a`, selecting a remark via a scrubber marker or the ↑/↓ jump) lands in the rail,
+so the gesture unfolds it on its own. The unfolded rail head carries the same shared inline fold badge
+to fold it back, and the fold state persists across selection switches — a new selection neither
+re-folds an opened rail nor re-opens a folded one. On the phone eval host, where the desktop folds
+retire (stacking already gives the detail the full width), the rail simply stays open. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
 composer): its writing surface is already usable at idle — a multi-line box a few lines tall, never a
 one-line sliver you must click to expand (the box you land on is the box you write in) — that auto-grows
 with the draft above that floor and reveals its actions row (⏱ / Send) only while engaged, so the write

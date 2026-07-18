@@ -93,6 +93,90 @@
   --term-bg: #11111b; /* crust */
 }
 
+/* Everforest (dark) — FireIsGood/obsidian-everforest-enchanted, MIT, © 2023 FireIsGood.
+   Organic forest green: the Everforest soft-dark bg ramp + the warm sage fg/accent set. */
+:root[data-theme=everforest] {
+  --paper: #333c43;   /* bg0 */
+  --panel: #293136;   /* bg-dim */
+  --panel2:#434f55;   /* bg2 */
+  --line:  #555f66;   /* bg4 */
+  --ink:   #d3c6aa;   /* fg */
+  --ink2:  #e4d9c2;   /* fg lifted for headings (derived — Everforest reuses fg) */
+  --muted: #859289;   /* grey1 */
+  --blue:  #7fbbb3;   /* fg-blue */
+  --green: #a7c080;   /* fg-green */
+  --orange:#e69875;   /* fg-orange */
+  --red:   #e67e80;   /* fg-red */
+  --yellow:#dbbc7f;   /* fg-yellow */
+  --magenta:#d699b6;  /* fg-purple */
+  --cyan:  #83c092;   /* fg-aqua */
+  --term-bg: #293136; /* bg-dim */
+}
+
+/* Gruvbox (dark) — insanum/obsidian_gruvbox, MIT, © 2020 Eric Davis.
+   Warm retro amber: the gruvbox dark bg ramp + light fg pair + the bright accent set. */
+:root[data-theme=gruvbox] {
+  --paper: #282828;   /* dark0 */
+  --panel: #1d2021;   /* dark0-hard */
+  --panel2:#3c3836;   /* dark1 */
+  --line:  #504945;   /* dark2 */
+  --ink:   #ebdbb2;   /* light1 */
+  --ink2:  #fbf1c7;   /* light0 */
+  --muted: #928374;   /* gray */
+  --blue:  #83a598;   /* bright-blue */
+  --green: #b8bb26;   /* bright-green */
+  --orange:#fe8019;   /* bright-orange */
+  --red:   #fb4934;   /* bright-red */
+  --yellow:#fabd2f;   /* bright-yellow */
+  --magenta:#d3869b;  /* bright-purple */
+  --cyan:  #8ec07c;   /* bright-aqua */
+  --term-bg: #1d2021; /* dark0-hard */
+}
+
+/* Rosé Pine Dawn (light) — rose-pine/obsidian, MIT, © 2024 Rosé Pine.
+   Rose/blush light: the Dawn base/surface/overlay ramp + text trio + the six Dawn accents, slotted
+   by Rosé Pine's own terminal mapping (green=pine, blue=foam, cyan=rose); Dawn has no seventh
+   accent, so the orange slot reuses rose. */
+:root[data-theme=rosepine] {
+  --paper: #faf4ed;   /* base */
+  --panel: #fffaf3;   /* surface */
+  --panel2:#f2e9e1;   /* overlay */
+  --line:  #cecacd;   /* highlight-high */
+  --ink:   #575279;   /* text — body (subtle is below readable contrast on base) */
+  --ink2:  #46425f;   /* text deepened for headings (derived — Dawn's ramp stops at text) */
+  --muted: #9893a5;   /* muted */
+  --blue:  #56949f;   /* foam */
+  --green: #286983;   /* pine */
+  --orange:#d7827e;   /* rose (reused — Dawn has six accents) */
+  --red:   #b4637a;   /* love */
+  --yellow:#ea9d34;   /* gold */
+  --magenta:#907aa9;  /* iris */
+  --cyan:  #d7827e;   /* rose */
+  --term-bg: #0d1117; /* light themes keep the app's neutral near-black terminal */
+}
+
+/* Dracula (dark) — dracula/obsidian, MIT, © 2020 Dracula Theme.
+   High-contrast neon classic: background/current-line surfaces, comment as the low-emphasis tone
+   (the upstream borders with current-line too), and the vivid accent set (Dracula's ANSI blue is
+   its purple). */
+:root[data-theme=dracula] {
+  --paper: #282a36;   /* background */
+  --panel: #20212b;   /* background-secondary */
+  --panel2:#44475a;   /* current line */
+  --line:  #44475a;   /* current line — the upstream's own border tone */
+  --ink:   #f8f8f2;   /* foreground */
+  --ink2:  #ffffff;   /* foreground lifted for headings (derived — Dracula's bright white) */
+  --muted: #6272a4;   /* comment */
+  --blue:  #bd93f9;   /* purple — Dracula's blue slot */
+  --green: #50fa7b;
+  --orange:#ffb86c;
+  --red:   #ff5555;
+  --yellow:#f1fa8c;
+  --magenta:#ff79c6;  /* pink */
+  --cyan:  #8be9fd;
+  --term-bg: #20212b; /* background-secondary */
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {

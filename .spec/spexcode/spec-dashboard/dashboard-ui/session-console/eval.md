@@ -512,6 +512,26 @@ scenarios:
       unmarked. An interactive session's pane is byte-for-byte the old behaviour (Terminal label, live
       SessionTerm, `❯` strip), and the phone detail is behaviourally identical to before the extraction —
       the wrapper is thin, the chat body one component.
+  - name: headless-chat-composer-dock
+    tags: [frontend-e2e, desktop, mobile]
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Through the running dashboard in a real browser, open a HEADLESS session in the desktop console and
+      measure the bottom edges of the session content, `.si-term-body`, and the shared chat's `.m-composer`.
+      Then open an INTERACTIVE session and measure its terminal body plus external `❯` dock. Finally, at
+      375x667, 390x844, and the 640x360 mobile breakpoint, open a phone session detail, type a draft, and
+      measure `.m-sessdetail`, `.m-main`, `.m-composer`, `.m-composer-line`, `.m-input`, `.m-send`, and the
+      persistent safe-area-owning `.m-tabbar`. Screenshot the headless desktop and each mobile layout.
+    expected: |
+      The headless chat owns the full right pane: `.si-term-body` and `.m-composer` both end exactly at the
+      session content's bottom (0px gap), with no external `.si-bottom` strip and no terminal inside the
+      active chat layer. The neighboring interactive session is unchanged: its terminal ends 44px above
+      the pane and its external `❯` dock ends flush at the pane bottom. At every phone size, the embedded
+      composer ends exactly at both the session detail and `.m-main` bottoms, directly against the tab bar's
+      top edge; input and send remain aligned, enabled after typing, non-overlapping, and horizontally usable.
+      The tab bar keeps ownership of `safe-area-inset-bottom`, so the existing phone navigation and home-bar
+      clearance do not move into the shared composer or leak into desktop chat.
 ---
 
 # session-console — yatsu

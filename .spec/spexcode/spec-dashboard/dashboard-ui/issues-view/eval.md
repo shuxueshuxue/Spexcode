@@ -150,13 +150,16 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      On the running issues page, open the New form and count its text surfaces; then post an issue whose
+      On the running issues page, open the New form and count its text surfaces and read every store
+      picker's option text; then post an issue whose
       concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
       select the new thread and read its detail meta strip (`.fvd-meta`).
     expected: >-
       The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
       The form carries exactly TWO text surfaces — the concern input and the body textarea — plus one compact
-      store picker for local/configured forge stores; NO node-ids field exists (nothing placeholder-labelled
+      store picker for local/configured forge stores. Each option names its canonical store label exactly
+      once (`local`, `github`, `gitlab` as configured), with no redundant initial/prefix such as `L · local`
+      or `GH · github`; NO node-ids field exists (nothing placeholder-labelled
       "node ids"). Posted local threads show the linked node as a clickable chip — the store inferred
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge

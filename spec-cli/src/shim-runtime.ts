@@ -86,12 +86,9 @@ const spexShimRuntime = (cfg) => {
   // downgrade-to-ask instead of a fresh block). A generative host has no native bit, so the runtime supplies
   // it: false on a natural stop, true on the settle that follows a blocked one, reset by the first allowed
   // stop. Without it every settle reads as a FIRST stop and a gate that can never pass (e.g. the commit gate
-  // on a 0-commit worktree) blocks forever — the measured one-shot wedge: the host disposes its session
-  // while the loop still runs, the next inject throws into the host ("extension ctx is stale"), the
-  // rejection is dropped, and the record wedges undeclared. On block, the host's inject re-enters the
-  // gate's reason as the continuation; an inject that cannot land any more (the disposed one-shot host) is
-  // caught LOUD on stderr — never thrown into the host, never silent — and the out-of-process one-shot
-  // recovery ([[harness-adapter]]) is the layer that survives the process. stopPending exposes whether the
+  // on a 0-commit worktree) blocks forever. On block, the host's inject re-enters the gate's reason as the
+  // continuation; an inject that cannot land is caught LOUD on stderr — never thrown into the host, never
+  // silent. stopPending exposes whether the
   // last Stop verdict was a block still awaiting its continuation's allow — the state a host's backstop
   // binding (pi's agent_settled) keys on to consume exactly one pending blocked stop, never duplicating a
   // naturally-allowed dispatch.
@@ -102,7 +99,7 @@ const spexShimRuntime = (cfg) => {
     if (blocked(r)) {
       stopBlocked = true
       try { await inject(blockReason(r, fallback)) } catch (e) {
-        console.error("spexcode: a blocked stop's continuation could not be re-injected (host session already disposed — one-shot exit?): " + String(e))
+        console.error("spexcode: a blocked stop's continuation could not be re-injected: " + String(e))
       }
     } else stopBlocked = false
     return r

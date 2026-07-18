@@ -20,8 +20,8 @@ import { shimRuntimeSource } from './shim-runtime.js'
 // returns pi's typed { block: true, reason }; a Stop block has no blocking return, so Stop rides the
 // runtime's dispatchStop on a DUAL binding — agent_end (awaited in the run loop: a queued teach drains as
 // the same prompt's continuation, never an orphan) plus agent_settled (fires once per prompt after every
-// drain: the terminal backstop whose flagged dispatch guarantees the gate's escape runs before a one-shot
-// exit) — with stop_hook_active synthesized across both and the gate's reason SENT BACK IN as a user
+// drain: the terminal backstop whose flagged dispatch guarantees the gate's escape runs before settlement
+// completes) — with stop_hook_active synthesized across both and the gate's reason SENT BACK IN as a user
 // message; a no-longer-injectable host is reported loud — never silently dropped (a dropped rejection is
 // a session stuck `active` forever).
 // The rendezvous inject is pi.sendUserMessage({deliverAs: steer}), always able → no canInject gate.
@@ -62,12 +62,11 @@ export default function spexcode(pi: ExtensionAPI) {
   // "extension ctx is stale"), while agent_settled — which fires exactly once per prompt, after every
   // drain — consumes AT MOST ONE PENDING BLOCKED stop (measured gap: in real dispatched runs the drained
   // continuation's own agent_end does not reliably re-reach the extension, so without the backstop the
-  // flagged escape never runs and the one-shot exits undeclared). A naturally allowed agent_end leaves no
+  // flagged escape never runs). A naturally allowed agent_end leaves no
   // pending state and settle dispatches NOTHING (exactly one gate entry per stop); only a blocked
   // agent_end arms it, and the flagged settle dispatch always ends allowed (the gate's continuation paths
-  // terminate), clearing the pending bit — a subprocess write, no inject, so a one-shot process always
-  // exits DECLARED before dispose. An uninjectable host stays caught-loud; the out-of-process recovery
-  // stays the cover.
+  // terminate), clearing the pending bit through a subprocess write with no duplicate inject. An
+  // uninjectable host stays caught-loud.
   const stop = () => rt.dispatchStop(
     async (reason: string) => pi.sendUserMessage(reason, { deliverAs: "steer" }),
     "a SpexCode Stop hook blocked this stop without giving a reason",

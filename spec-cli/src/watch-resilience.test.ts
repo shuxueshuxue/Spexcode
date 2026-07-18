@@ -9,7 +9,7 @@ import { BackendError } from './client.js'
 function mk(id: string, status: Session['status']): Session {
   return {
     id, node: null, branch: null, label: id, headline: id, raw: { name: null, title: null },
-    path: `/wt/${id}`, parent: null, harness: 'claude', launcher: null, mode: 'interactive',
+    path: `/wt/${id}`, parent: null, harness: 'claude', launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status, liveness: 'online', note: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }

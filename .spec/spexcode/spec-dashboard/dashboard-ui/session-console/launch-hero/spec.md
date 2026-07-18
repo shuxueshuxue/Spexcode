@@ -19,7 +19,9 @@ So the hero is **pure text**: an ANSI-Shadow `SPEXCODE` rendered in the app's mo
 a rigid character grid, never an image or SVG, so it scales by font-size alone and stays aligned at any
 width. Its ink is a vertical gradient from the **active theme's** `--blue` to `--magenta` (background-clip:
 text), which keeps the console's rule that re-theming the app re-inks the console with it — light themes
-included, no hero-scoped palette. The `session.ask` line stays beneath it as the prompt's question.
+included, no hero-scoped palette. Beneath it there is deliberately **no caption** — the human retired the
+ask line — but its slot survives as an equal-height spacer, so the wordmark keeps its breathing room above
+the input instead of collapsing onto it.
 
 The wordmark is the [[session-console]] New tab's only decorative element; everything else on that tab
 (input, launcher chip, hint line) belongs to the console's launch grammar, not to this node.

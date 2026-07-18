@@ -385,7 +385,6 @@ export default {
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',
     issuesBodyPlaceholder: 'details (optional)',
-    ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',
     menuPresets: 'command presets',

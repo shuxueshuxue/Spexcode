@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyRouteNav, defaultEvalKey } from './session.js'
+import { applyRouteNav, defaultEvalKey, evalSelectionReport } from './session.js'
 
 // applyRouteNav resolves a per-navigation route directive against the active tab ([[session-eval]] /
 // [[address-routing]]): the URL entrance drives the console's right pane on every real navigation. It targets
@@ -24,6 +24,18 @@ test('applyRouteNav is a no-op for another session or no directive', () => {
   // the 'new' placeholder / no directive → nothing to apply
   assert.equal(applyRouteNav({ session: 'abc', tab: 'terminal' }, 'new'), null)
   assert.equal(applyRouteNav(null, 'abc'), null)
+})
+
+test('evalSelectionReport preserves the route target until the eval model resolves', () => {
+  // Loading is "not known yet", not an empty selection: callers must emit nothing and keep the exact hash.
+  assert.equal(evalSelectionReport(null, null, null), undefined)
+  // The first loaded render may still expose the default before the deep jump effect applies; suppress it
+  // while a real route target is pending so the exact hash never flickers to that default.
+  assert.equal(evalSelectionReport({}, 'ws-sidebar', 'default-fail', true), undefined)
+  // Once loaded, the resolved row replaces the optimistic target; a genuinely empty pane reports null.
+  assert.deepEqual(evalSelectionReport({}, 'session-eval', 'proof-renders'),
+    { node: 'session-eval', scenario: 'proof-renders' })
+  assert.equal(evalSelectionReport(false, null, null), null)
 })
 
 // defaultEvalKey — the bare /eval default selection prefers THIS session's own reading, failing first, over

@@ -9,7 +9,9 @@ scenarios:
       the local thread and read the detail pane; check for raw markdown syntax in the detail.
     expected: >-
       The issue group renders the non-concluded rows in the API's order (no re-sort/rank): one compact
-      line each, LEADING with the issue itself — a status-colored dot, then the concern; the trailing
+      line each, LEADING with the issue itself — open rows use the original 16px GitHub Primer
+      `issue-opened` Octicon geometry (ring + centre) in the theme's semantic open green, never the old
+      8px solid dot, then the concern; the trailing
       edge carries only quiet meta (a compact reply-count pill, and a borderless muted store mini-tag
       present only because the stores are mixed). NO boxed store chip leads any row. Concluded issues
       (any non-open issue: local landed or forge closed) are hidden behind a count chip that reveals them. Selecting the local

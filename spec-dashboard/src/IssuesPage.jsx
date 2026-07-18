@@ -9,7 +9,7 @@ import { liveSession } from './session.js'
 import FoldToggle from './FoldToggle.jsx'
 import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
-import { IconButton } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
@@ -139,13 +139,16 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
             )}
           </header>
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
-          {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —
+          {/* a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
               the store mini-tag renders only while stores are actually mixed ([[issues-view]]). */}
           {issues.map((th) => {
             const k = `issue:${th.id}`
+            const status = th.status || 'open'
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-dot st-${th.status || 'open'}`} data-tip={th.status} />
+                <span className={`fv-dot st-${status}`} data-tip={status}>
+                  {status === 'open' && <Icon name="issue-opened" size={16} />}
+                </span>
                 <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
                 {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}

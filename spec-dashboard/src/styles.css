@@ -1206,10 +1206,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-row.sel, .ef-row.sel { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
 .fv-row .fv-concern { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
-/* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status dot carries the status
-   vocabulary as color (a boxed word on every row was noise)… */
+/* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status mark carries the status
+   vocabulary as icon + color (a boxed word on every row was noise). Open copies Primer's original
+   16px issue-opened Octicon geometry through the shared icon registry; other lifecycle states keep dots. */
 .fv-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.fv-dot.st-open { background: var(--blue); }
+.fv-dot.st-open { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 0; color: var(--green); background: none; }
+.fv-dot.st-open svg { display: block; }
 .fv-dot.st-landed { background: var(--green); }
 .fv-dot.st-closed { background: color-mix(in srgb, var(--muted) 55%, transparent); }
 /* …and the reply count is a compact trailing pill, not a phrase. */

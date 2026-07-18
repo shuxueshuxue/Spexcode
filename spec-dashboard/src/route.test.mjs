@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseRoute, routeHash, sessionTabParam } from './route.js'
+import { addressHash, sessionEvalAddress } from './address.js'
 
 // the session-eval deep link ([[address-routing]] / [[session-eval]]) — the console's in-page eval address.
 test('parseRoute splits a session-eval deep link into id + eval sub-route', () => {
@@ -34,5 +35,20 @@ test('sessionTabParam echoes the bare id when no seed targets this tab', () => {
   assert.equal(sessionTabParam('xyz', { session: 'abc', node: 'n', scenario: 's' }), 'xyz')
   // the 'new' placeholder never carries an eval sub-route
   assert.equal(sessionTabParam('new', { session: 'abc', node: 'n', scenario: 's' }), 'new')
+})
+
+// UNIFICATION guarantee ([[address-routing]]): the tab-echo side (sessionTabParam) and the href side
+// (addressHash of a session-eval address) share ONE param encoder, so both produce the IDENTICAL hash for
+// the same target — no second URL grammar for the eval deep link.
+test('the tab echo and addressHash agree byte-for-byte on the session-eval hash', () => {
+  const echoHash = routeHash('sessions', sessionTabParam('abc', { session: 'abc', node: 'shell-layout', scenario: 'ws-sidebar' }))
+  const linkHash = addressHash(sessionEvalAddress('abc', 'shell-layout', 'ws-sidebar'))
+  assert.equal(echoHash, linkHash)
+  assert.equal(echoHash, '#/sessions/abc/eval/shell-layout/ws-sidebar')
+  // and the bare /eval form agrees too
+  const echoBare = routeHash('sessions', sessionTabParam('abc', { session: 'abc', node: null, scenario: null }))
+  const linkBare = addressHash(sessionEvalAddress('abc', null, null))
+  assert.equal(echoBare, linkBare)
+  assert.equal(echoBare, '#/sessions/abc/eval')
 })
 

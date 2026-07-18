@@ -40,17 +40,21 @@ export function navigate(page, param = null, { replace = false } = {}) {
   else window.location.hash = h
 }
 
+// The ONE encoder for the sessions-page param of a session-eval address: '<id>/eval[/<node>/<scenario>]'
+// ([[address-routing]] / [[session-eval]]). The single source of that sub-route's URL shape — the href side
+// (address.js addressHash) and the tab-echo side (sessionTabParam below) both go through here, so the two
+// can't drift. Lives in route.js (the lower layer) so address.js can import it without a cycle.
+export const sessionEvalParam = (sessionId, nodeId, scenario) =>
+  [sessionId, 'eval', ...(nodeId && scenario ? [nodeId, scenario] : [])].join('/')
+
 // The session-tab hash param ([[address-routing]]): the bare session id, OR the PERSISTENT, refreshable eval
-// sub-route '<id>/eval[/<node>/<scenario>]' when a deep-link seed targets THIS tab ([[session-eval]]). Pure and
-// driven by STATE (the seed), never by re-reading the mutable hash — a transient echo (e.g. the board-load
-// 'new' bounce) can clobber the hash, so reconstructing from it would lose the sub-route; reconstructing from
-// the seed cannot. The shell writes the result with replace. A bare /eval seed (no node/scenario) keeps just
-// '<id>/eval' so the reviewer's root link stays shareable.
+// sub-route when a deep-link seed targets THIS tab ([[session-eval]]). Pure and driven by STATE (the seed),
+// never by re-reading the mutable hash — a transient echo (e.g. the board-load 'new' bounce) can clobber the
+// hash, so reconstructing from it would lose the sub-route; reconstructing from the seed cannot. Routes the
+// sub-route shape through the shared sessionEvalParam (same encoder addressHash uses — no second URL grammar).
+// The shell writes the result with replace.
 export function sessionTabParam(sessionSel, evalSeed) {
-  if (evalSeed && evalSeed.session === sessionSel) {
-    const rest = evalSeed.node && evalSeed.scenario ? `/${evalSeed.node}/${evalSeed.scenario}` : ''
-    return `${sessionSel}/eval${rest}`
-  }
+  if (evalSeed && evalSeed.session === sessionSel) return sessionEvalParam(sessionSel, evalSeed.node, evalSeed.scenario)
   return sessionSel
 }
 

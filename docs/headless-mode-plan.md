@@ -1,8 +1,20 @@
 # 无头模式(launcher 双指令)实现方案
 
-> 状态:设计稿,待人审。产出自 2026-07-17 的调查会话(session 2ca5303c):mbp/z-code 手搓
-> `codex-spex-exec` 无头 launcher 的机制剖析与双跑实证、claude `-p` 下 stop-gate 闭环实测、
-> dashboard 手机端 timeline 通道盘点。
+> 状态:已实现并验证。本文保留 2026-07-17 调查会话(session 2ca5303c)批准后的实施设计;
+> 当前行为合同以 `launcher-select`、`harness-adapter`、`session-console` 及其相关 spec 节点为准。
+> 调查覆盖 mbp/z-code 手搓 `codex-spex-exec` 的机制与双跑实证、claude `-p` 下 stop-gate
+> 闭环实测,以及 dashboard 手机端 timeline 通道盘点。
+
+## 实施结果
+
+五个工作包均已合入 `main`:基础 schema/mode/API/CLI(`8b2b8977`)、Claude 无头适配
+(`e85c3e84`)、Codex 无头适配与双跑根除(`17379882`)、pop-out 模式切换(`e03093f1`),
+以及无头 console 的 TimelineChat 视图(`dcb57c57`)。每个切片都随 governing spec 与 eval reading
+落地;最终使用真实 `reclaude -p` launcher 派发无头会话,15 秒内走完
+`queued -> working -> close-pending`,自主声明并干净退出。`GET /api/settings` 同时验证了
+Claude 双指令与 Codex 服务端无头执行两种能力形态。
+
+这份文档以下保留批准时的完整分解,用于解释设计决策与实施边界,不替代现行 spec。
 
 ## 0. 目标、非目标、原则
 
@@ -218,9 +230,9 @@ Worker 划分(W1 先行,余四并行):
 
 W1 的 `HarnessHeadless` 接口定义即是 W2/W3 的合同,W1 merge 后四路全并行;冲突面(harness.ts 被 W2/W3 同触)由 git 序列化,重合并即可。
 
-## 11. 开放问题(建 node 前定夺)
+## 11. 实施决议与后续
 
-1. **codex thread/read 探活的版本锚**:app-server RPC 形状按 codex-rs 0.142.x 逆向锚定,舰队已 0.144.3——W3 首任务是对 0.144.3 重验。
-2. **headless 会话要不要 tmux 窗口**:方案取"保留"(占位进程;close/终端后门/窗口生命周期语义统一,成本≈0)。若取"无窗口",W2/W3 的 liveness 与 close 路径要改走无窗分支,复杂度略升。
-3. **投递忙时策略**:方案取"拒绝 + 明示"(claude);如要排队语义,得给记录加 pending-inbox,建议二期。
-4. **`defaultMode: headless` 何时翻**:建议等 W1-W5 全绿 + 一轮 dogfood(spexcode 自身用无头跑若干真实 node)再翻,单独一个小 node。
+1. **Codex thread/read 探活**:W3 已按舰队版本重验并实现;Codex 无头不再启动 pane 内第二个 agent,双跑从结构上消失。
+2. **headless 会话保留 tmux 窗口**:已按方案落地,统一 close/窗口生命周期并保留调试后门。
+3. **投递忙时策略**:当前保持"拒绝 + 明示";pending inbox/排队仍是独立二期能力,不混入本轮。
+4. **`defaultMode`**:当前仍为 `interactive`;切换到 headless 默认值需要独立 dogfood 决策。

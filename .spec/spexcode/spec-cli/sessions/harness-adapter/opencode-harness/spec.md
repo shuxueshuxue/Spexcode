@@ -59,6 +59,17 @@ agents materialize under `.opencode/`; trust is a no-op (`--auto` in the default
 the zero-prompt mechanism). Liveness prefers the socket listener and falls back to the launch-registered
 agent pid, so a plugin that failed to load still reads honestly from the process signal.
 
+Headless: `opencode run` is the one-shot form (`opencodeHeadlessOps` — [[harness-adapter]]'s shared
+one-shot builder over opencode DATA, no opencode-specific headless code; the launcher's `headlessCmd` is
+the complete invocation, embedded whole). `run` boots the same server and loads the same project plugin as
+the TUI, so the hook bridge, the minted-id capture, and the stop-gate loop are unchanged; only the
+rendezvous socket is absent (a headless launch omits the env and the runtime's server never binds) —
+delivery is the injected NEXT TURN instead: `opencode run --session <captured id> '<msg>'`, falling to
+`--continue` when the capture never landed, the same discriminator as interactive resume. Live-verified
+(opencode 1.18.3, 2026-07-18): the project plugin loads under `run` and the bus fires
+session.created/chat.message/session.idle; a `--session` turn reattaches the same conversation (no new
+session minted, first-turn content recalled), and `--continue` reattaches the directory's own session.
+
 Verification status: the mechanical layer (materialize artifacts, shim → dispatch.sh event flow, launch
 script shape, clean/dematerialize inverse, deliver under probe pressure, both resume seeds, the
 stop-gate wire shape) is test-covered; the live layer is measured as a behavior matrix through real

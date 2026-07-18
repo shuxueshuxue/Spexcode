@@ -74,3 +74,18 @@ extension for pi), and materialize writes it without knowing which. Launch (`pi 
 session file is gone rather than silently minting an empty one), the `/` menu (built-ins extracted from the
 installed pi's own command table, in `slash-commands.ts`), skills (`.pi/skills`), and the AGENTS.md contract
 file all ride existing seams with one-line adapter answers.
+
+## headless — the one-shot `-p` form
+
+pi's headless capability (`piHeadlessOps`) is [[harness-adapter]]'s shared one-shot builder instantiated
+with pi DATA — no pi-specific headless code exists. The launcher's `headlessCmd` is the complete one-shot
+invocation (`pi -p`), embedded whole; the ordinary launch tail pins `--session-id <record id>` exactly as
+interactive, so an injected next turn continues that same conversation with `--session <record id>` (loud
+failure when the session file is gone — the same semantics interactive resume chose). `--approve` rides the
+launch AND every injected turn: each turn is a FRESH pi process that must load the project extension with
+zero prompts, so the one-run trust defence recurs per process, not per session. The extension itself is
+mode-blind — a headless launch omits the rendezvous env (rvEnv's headless bypass), the runtime's rendezvous
+server simply never binds, and the dispatch events still fire — so hooks, stop-gate, and attribution are
+unchanged. Live-verified (pi 0.80.10, 2026-07-18): the project extension loads under `-p` and fires
+session_start/input/agent_settled; `-p --session-id` creates the pinned session; `-p --session` recalls
+first-turn content (the same conversation); a vanished session id exits non-zero with the error named.

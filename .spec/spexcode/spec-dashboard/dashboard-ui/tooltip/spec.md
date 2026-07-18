@@ -32,8 +32,8 @@ Behaviour, the modern contract:
   the viewport would clip it above, it flips below, and it clamps horizontally with the arrow still
   pointing at the anchor. Fade/slide transition in and out.
 - **Theme-adaptive is a hard requirement.** The bubble styles only through the palette CSS variables
-  (`--panel2 --ink2 --line`) under [[dashboard-shell]]'s `:root` / `:root[data-theme=dark]` scheme, so
-  light and dark each render a native-feeling bubble and a theme flip restyles it with zero component
+  (`--panel2 --ink2 --line`) under [[dashboard-shell]]'s `:root` / `:root[data-theme=<code>]` scheme, so
+  every theme preset renders a native-feeling bubble and a theme flip restyles it with zero component
   logic. No hardcoded colours.
 - **Accessibility keeps both channels.** Existing `aria-label`s stay (the visual tooltip only replaces
   the *visual* `title=`); while shown, the layer stamps `aria-describedby` on the anchor pointing at the

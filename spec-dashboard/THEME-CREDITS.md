@@ -3,8 +3,9 @@
 The dashboard's built-in theme presets port **design tokens only** (color palette values — no CSS
 rules, layout, or other code) from these MIT-licensed themes in the official Obsidian community theme
 catalog ([obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases),
-`community-css-themes.json`). Each preset lives as one `:root[data-theme=<code>]` variable row in
-`src/styles.css`; licenses were verified against each upstream repository (SPDX: MIT, all four) at
+`community-css-themes.json`). Each preset lives as one variable row in `src/styles.css` (Minimal as
+the bare `:root` default, the rest as `:root[data-theme=<code>]` rows); licenses were verified
+against each upstream repository (SPDX: MIT, all four) at
 porting time (2026-07-18). The upstream license notices are preserved in full below.
 
 ## Minimal

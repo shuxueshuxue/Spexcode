@@ -443,7 +443,6 @@ export default {
     close: 'close (esc or ,)',
     secLanguage: 'language',
     secTheme: 'theme',
-    theme: { light: 'light', dark: 'dark' },
     secShortcuts: 'shortcuts',
     bindPrompt: 'press a key…',
     shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (a game controller binds to actions, not keys — rebinding here never touches the pad.)',

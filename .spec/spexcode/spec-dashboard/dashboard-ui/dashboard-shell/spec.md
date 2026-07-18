@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/streamHeartbeat.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
+  - spec-dashboard/THEME-CREDITS.md
 ---
 # dashboard-shell
 
@@ -51,14 +52,15 @@ substrate, references everywhere else.
 session console — draws its colours from one set of CSS custom properties (`--paper --panel --panel2
 --line --ink --ink2 --muted`, the accents `--blue/--green/--red/--yellow/--orange/--magenta/--cyan`,
 `--term-bg`). Because every rule reads through those vars, a
-theme is nothing but another definition of them: `styles.css` keeps the solarized-light set as bare
-`:root`, redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
-near-black palette, and adds one `:root[data-theme=<code>]` row per **community preset** — design
+theme is nothing but another definition of them. Every theme is a **community preset** — design
 tokens ported from MIT-licensed themes in the official Obsidian community catalog (Minimal, Things,
 Tokyo Night, Catppuccin Mocha; palette values only, never upstream CSS rules or per-component
-branches — the upstream license notices are preserved in `spec-dashboard/THEME-CREDITS.md`). Flipping
+branches — the upstream license notices are preserved in `spec-dashboard/THEME-CREDITS.md`).
+**Minimal is the default** and lives as the bare `:root` var set, so even an unthemed `<html>` paints
+Minimal; each other preset is one `:root[data-theme=<code>]` row over the same vars. Flipping
 the one `data-theme` attribute on `<html>` re-skins board and console together, with no per-component
-theme logic. The theme identity stays ONE flat code — no family × light/dark axes. The embedded
+theme logic. The theme identity stays ONE flat code — no family × light/dark axes, and no base
+light/dark pair: the legacy `light`/`dark` themes are retired. The embedded
 terminal stays dark in every theme (the Claude TUI is dark-designed), so `--term-bg` is a neutral
 near-black under light palettes and each dark preset's own deepest surface. Even the
 **scrollbars** read through the palette: `styles.css` themes them globally (a thin, rounded thumb —
@@ -68,14 +70,13 @@ theme with no per-surface rule and no raw-OS default. The terminal is styled onl
 its viewport geometry so scrollback and TUI wheel paths stay truthful.
 
 `theme.js` owns the pick: `getTheme()` returns an explicit saved choice (`localStorage
-spexcode.theme`, validated against the THEMES list — an unknown value falls through) else the system
-preference (`prefers-color-scheme`), and `applyTheme(t)` sets the `data-theme` attribute and persists —
-the same detect-then-defer-to-the-human shape as [[settings]]'s language pick. The system axis only
-ever resolves to the base light/dark pair; a community preset is always an explicit choice. To avoid a
-light-flash before the module boots, `index.html` runs a tiny inline script in `<head>` that applies
-the same choice to `<html data-theme>` before first paint — its inline code list mirrors THEMES and
-must move with it. The [[settings]] page carries the live picker; preset labels are proper nouns and
-deliberately untranslated.
+spexcode.theme`, validated against the THEMES list) and resolves anything else — absent, garbage, or
+a legacy `light`/`dark` value from before those themes were retired — to the Minimal default; there
+is no system `prefers-color-scheme` axis. `applyTheme(t)` sets the `data-theme` attribute and
+persists. To avoid a wrong-palette flash before the module boots, `index.html` runs a tiny inline
+script in `<head>` that applies the same choice (same fallback to Minimal) to `<html data-theme>`
+before first paint — its inline code list mirrors THEMES and must move with it. The [[settings]]
+page carries the live picker; preset labels are proper nouns and deliberately untranslated.
 
 **Fail-loud boot.** A board that never arrives (backend down, proxy dead) shows an **error + retry panel**,
 never an eternal spinner — the pre-first-board window is the only reader; once a board has landed, a failed

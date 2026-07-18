@@ -16,15 +16,18 @@ scenarios:
   - name: theme-toggle-repaints-app
     tags: [frontend-e2e, desktop]
     description: >
-      Through the running dashboard in a real browser, press `,` to open settings. Under THEME, click Dark
-      and watch the whole app — the spec-node board AND (on the sessions view) the console chrome — repaint
-      from the light palette to the dark near-black palette at once. Screenshot before (light) and after
-      (dark). Reload and confirm the choice persisted; click Light to confirm it returns.
+      Through the running dashboard in a real browser, press `,` to open settings. The THEME section
+      lists exactly Minimal, Things, Tokyo Night, and Catppuccin (Minimal marked as the active
+      default; no Light/Dark entries). Click Things and watch the whole app — the spec-node board AND
+      (on the sessions view) the console chrome — repaint from Minimal's graphite palette to Things'
+      white palette at once. Screenshot before (Minimal) and after (Things). Reload and confirm the
+      choice persisted; click Minimal to confirm it returns.
     expected: >
-      Clicking Dark flips the entire app to the dark palette immediately (paper goes near-black, ink goes
-      light) with no per-view refresh, because every surface reads the shared CSS vars redefined under
-      [data-theme=dark]; the choice persists across reload (localStorage spexcode.theme) and Light restores
-      the solarized-light palette. The app stays mounted throughout — no crash, no flash of the wrong theme.
+      Clicking Things flips the entire app to the Things palette immediately (paper goes white, ink
+      goes dark) with no per-view refresh, because every surface reads the shared CSS vars redefined
+      under [data-theme=things]; the choice persists across reload (localStorage spexcode.theme) and
+      clicking Minimal restores the default graphite palette. The app stays mounted throughout — no
+      crash, no flash of the wrong theme.
 ---
 
 # settings — yatsu
@@ -36,7 +39,8 @@ falls back to the source locale per missing key, and NEVER lets a missing key cr
 `resolve` tolerates a non-string key). The same robustness is what kept a stray `t(undefined)` from blanking
 the mobile board — see [[mobile-ui]].
 
-For the **theme** section, YATU is the same shape: open the popup, click Dark, and read the LIVE app — the
-whole board and the console must repaint to the dark palette at once (via the shared `[data-theme=dark]`
-CSS vars — the palette-swap mechanism itself belongs to [[dashboard-shell]]), the choice persists, and
-clicking Light returns it. Screenshot light and dark to prove the swap; never call `applyTheme` directly.
+For the **theme** section, YATU is the same shape: open the popup, click a preset, and read the LIVE app —
+the whole board and the console must repaint to that preset's palette at once (via the shared
+`[data-theme=<code>]` CSS vars — the palette-swap mechanism itself belongs to [[dashboard-shell]]), the
+choice persists, and clicking Minimal returns the default. Screenshot both palettes to prove the swap;
+never call `applyTheme` directly.

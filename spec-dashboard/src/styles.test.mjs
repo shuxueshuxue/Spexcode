@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
+const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
 
 test('evals and issues pages sit flush against the side rail and top edge', () => {
   assert.match(
@@ -34,5 +35,16 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
   assert.doesNotMatch(
     css,
     /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:/s,
+  )
+})
+
+test('headless chat removes the terminal-only dock reserve', () => {
+  assert.match(
+    sessionInterface,
+    /`si-content is-session\$\{isHeadless \? ' is-headless' : ''\}`/,
+  )
+  assert.match(
+    css,
+    /\.si-content\.is-session\.is-headless\s*\{[^}]*--si-dock-h:\s*0px;/s,
   )
 })

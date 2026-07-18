@@ -786,7 +786,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             list is folded to a strip: there's no width to resize when the detail owns it all. */}
         {!showFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
 
-        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
+        <section className={active === 'new' ? 'si-content is-new' : `si-content is-session${isHeadless ? ' is-headless' : ''}`}>
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">

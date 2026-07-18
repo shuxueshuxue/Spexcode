@@ -168,7 +168,9 @@ straight to the trunk.
   selection event at the same unchanged caret must not reopen what Esc dismissed. **New opens as a
   centered pop-out over the page, not as an inline row in the list column**: the left column stays a slim
   picker, the modal carries the same two text surfaces (concern + optional body), a single compact store
-  picker (local plus the configured forge issue stores such as github/gitlab), its own close affordance, and
+  picker (local plus the configured forge issue stores such as github/gitlab) whose options name each
+  store's canonical display label ONCE (`local`, `github`, `gitlab`) — never redundant invented initials
+  such as `L · local` / `GH · github` — its own close affordance, and
   Esc/backdrop close only that layer. The picker selects where the new issue is opened: local writes the
   git-native local store, while a forge choice creates the real forge issue through the same issue port and
   writes a `Spec:` marker from any `[[node]]` links so the tracer links it back on read. The modal's

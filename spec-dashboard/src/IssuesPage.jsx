@@ -144,10 +144,11 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
           {issues.map((th) => {
             const k = `issue:${th.id}`
             const status = th.status || 'open'
+            const statusIcon = status === 'open' ? 'issue-opened' : 'issue-closed'
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-dot st-${status}`} data-tip={status}>
-                  {status === 'open' && <Icon name="issue-opened" size={16} />}
+                <span className={`fv-status-mark ${status === 'open' ? 'open' : 'concluded'}`} data-tip={status}>
+                  <Icon name={statusIcon} size={16} />
                 </span>
                 <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
                 {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}

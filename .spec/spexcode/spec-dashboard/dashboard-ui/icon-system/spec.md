@@ -27,7 +27,7 @@ the accessible name impossible to forget.
   `fill=none`, `stroke=currentColor`, round caps/joins, ~1.4–2 stroke width, `aria-hidden` — so any
   glyph inherits its host's color and hover exactly like text. A definition may declare its official
   fill/stroke geometry as data when fidelity is the point — notably Primer's MIT-licensed 16px
-  `issue-opened` Octicon used by [[issues-view]] — without a component-local SVG or a renderer branch.
+  `issue-opened` and `issue-closed` Octicons used by [[issues-view]] — without a component-local SVG or a renderer branch.
   An unknown name throws (fail loud, no
   silent blank button). The fill-based harness product marks (Claude Code / Codex / opencode / pi,
   re-exported through `harness.jsx`) live here too but deliberately outside the stroke contract — they
@@ -44,8 +44,8 @@ the accessible name impossible to forget.
   lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers ([[event-detail]]), the modal
   close `×`, the issues New `＋`, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
-  drain's open marker also draws from here as the official filled `issue-opened` shape rather than a
-  CSS-made dot.
+  drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`
+  pair rather than mixing one Octicon with CSS-made dots.
 - **Text stays text where text won.** Verb actions with room to breathe (merge/promote/close/resolve/
   retract/send/cancel/save, tab labels, context-menu rows, settings) keep their words — the icon system
   reclaims edge space, it does not iconify prose.

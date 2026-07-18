@@ -83,10 +83,14 @@ straight to the trunk.
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
   hides itself when only one store exists. An issue's ROW is one compact line that leads with the issue
   itself, never its plumbing: a **status mark** (the status vocabulary as icon + color — a boxed "open" on every row
-  was noise). Open work uses GitHub Primer's original 16px `issue-opened` Octicon geometry (ring + centre)
-  in the theme's semantic open green, not an invented solid dot; the other lifecycle states retain their
-  compact status dots. Then
-  comes the concern; the trailing edge carries the quiet meta — a compact reply-count pill and a
+  was noise). The whole lifecycle uses GitHub Primer's original 16px Octicon geometry through the shared
+  icon registry: open work uses `issue-opened` (ring + centre) in the theme's semantic open green; every
+  concluded state (local `landed`, forge `closed`) uses `issue-closed` (ring + check) in the one semantic
+  closed purple. Store vocabulary never changes the mark, and no lifecycle falls back to a CSS dot. Then
+  comes the concern; the row's TYPE SCALE is the SAME as the [[evals-view]] picker, not an Issues-only
+  dialect: concern/scenario titles share the same 12px semibold face, while the trailing quiet metadata
+  uses the eval row's 10.5–11px UI face (no tiny 9px uppercase monospace or added letter-spacing). The
+  trailing edge carries a compact reply-count pill and a
   **store mini-tag** (borderless, muted, and rendered only while stores are actually mixed — a single-store
   list carries no tags, mirroring the filter's own self-hiding). **The store is metadata, never identity: it
   never leads a row and never sits on a title** (the human called the leading boxed chip). The DETAIL opens

@@ -1204,20 +1204,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; font: inherit; font-size: 12px; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 7px 12px; cursor: pointer; }
 .fv-row:hover, .ef-row:hover { background: var(--panel2); }
 .fv-row.sel, .ef-row.sel { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
-.fv-row .fv-concern { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fv-row .fv-concern, .ef-scenario {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600;
+}
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
 /* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status mark carries the status
-   vocabulary as icon + color (a boxed word on every row was noise). Open copies Primer's original
-   16px issue-opened Octicon geometry through the shared icon registry; other lifecycle states keep dots. */
-.fv-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.fv-dot.st-open { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 0; color: var(--green); background: none; }
-.fv-dot.st-open svg { display: block; }
-.fv-dot.st-landed { background: var(--green); }
-.fv-dot.st-closed { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+   vocabulary as icon + color (a boxed word on every row was noise). The full lifecycle copies Primer's
+   original 16px Octicon pair through the shared registry: issue-opened for open, issue-closed for every
+   concluded state (local landed / forge closed). */
+.fv-status-mark { flex: none; display: grid; place-items: center; width: 16px; height: 16px; }
+.fv-status-mark svg { display: block; }
+.fv-status-mark.open { color: var(--green); }
+.fv-status-mark.concluded { color: var(--magenta); }
 /* …and the reply count is a compact trailing pill, not a phrase. */
 /* the reply-count pill must not out-tower the row's text line (else pill-bearing rows read taller and the
    uniform rhythm breaks) — a tight line-height keeps every row on the same 1-line height. */
-.fv-replies { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; line-height: 1.4; }
+.fv-replies { flex: none; font: inherit; font-size: 10.5px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; line-height: 1.35; }
 /* the store is metadata, never identity — a borderless muted mini-tag at a row's trailing edge (only
    while stores are mixed) and in the detail's meta strip; never a leading boxed chip, never on a title. */
 .fv-store {
@@ -1225,7 +1228,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   color: var(--muted);
 }
 .fv-store-local { color: color-mix(in srgb, var(--blue) 65%, var(--muted)); }
-.fv-concern { flex: 1 1 auto; min-width: 80px; color: var(--ink); font-weight: 600; font-size: 12px; }
+.fv-row .fv-store { font-family: inherit; font-size: 10.5px; letter-spacing: 0; text-transform: none; }
+.fv-concern { color: var(--ink); }
 .fv-status {
   flex: none; font-family: var(--mono); font-size: 9px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
 }
@@ -1989,7 +1993,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ef-empty, .ef-miss { color: var(--muted); font-size: 12px; padding: 18px 8px; }
 /* the scenario is the row's title: it grows and TRUNCATES to one line (full text on hover), so the evals
    picker keeps the same uniform single-line rhythm the issues list has — the two never read as two dialects. */
-.ef-scenario { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; }
 .ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; opacity: .9; }
 .ef-kind { flex: none; margin-left: auto; font-size: 11px; color: var(--muted); }
 .ef-time { flex: none; color: var(--muted); font-size: 10.5px; min-width: 26px; text-align: right; }

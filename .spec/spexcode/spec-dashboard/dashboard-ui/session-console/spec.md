@@ -43,7 +43,8 @@ dark terminal, whatever the app theme. Two panes: a left session list (its width
 the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
-**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
+**New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
+input. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
 caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
 contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.

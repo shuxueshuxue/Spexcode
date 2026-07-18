@@ -22,6 +22,21 @@ import { useT } from './i18n/index.jsx'
 const AttachGlyph = () => <Icon name="paperclip" size={15} />
 const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
 
+// @@@ launch-hero — the New-Session splash speaks the terminal language of code-CLI openers: a
+// block-letter ANSI-Shadow "SPEXCODE" wordmark instead of an app-icon glyph. Pure text in the app's
+// mono font; the gradient reads the active theme's --blue→--magenta so re-theming re-inks it.
+const HERO_WORDMARK = [
+  '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
+  '██╔════╝██╔══██╗██╔════╝╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝',
+  '███████╗██████╔╝█████╗   ╚███╔╝ ██║     ██║   ██║██║  ██║█████╗  ',
+  '╚════██║██╔═══╝ ██╔══╝   ██╔██╗ ██║     ██║   ██║██║  ██║██╔══╝  ',
+  '███████║██║     ███████╗██╔╝ ██╗╚██████╗╚██████╔╝██████╔╝███████╗',
+  '╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝',
+].join('\n')
+export function LaunchHero() {
+  return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
+}
+
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
@@ -761,19 +776,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
             <div className="si-new-center">
-              <div className="si-avatar" aria-hidden="true">
-                <svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-                  <path d="M15 35 Q32 44 49 35" strokeWidth="2.8" />
-                  <path d="M32 17 L20 42" strokeWidth="3.2" />
-                  <path d="M32 17 L44 42" strokeWidth="3.2" />
-                  <g fill="currentColor" stroke="none">
-                    <circle cx="32" cy="16.5" r="5" />
-                    <circle cx="20" cy="42.6" r="5" />
-                    <circle cx="44" cy="42.6" r="5" />
-                  </g>
-                </svg>
-              </div>
-              <div className="si-ask">{t('session.ask')}</div>
+              <LaunchHero />
+              {/* the ask line was removed by human direction, but its slot stays — the wordmark keeps its
+                  breathing room above the input (an equal-height spacer, not a collapsed gap) */}
+              <div className="si-ask-gap" aria-hidden="true" />
               <div
                 className={dragTarget === 'new' ? 'si-inputwrap dragover' : 'si-inputwrap'}
                 onDragOver={(e) => onDragOverFiles(e, 'new')}

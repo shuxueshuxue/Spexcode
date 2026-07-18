@@ -16,8 +16,5 @@
       "pi": { "harness": "pi", "cmd": "pi" }
     },
     "defaultLauncher": "claude"
-  },
-  "dashboard": {
-    "icon": "lucide:terminal"
   }
 }

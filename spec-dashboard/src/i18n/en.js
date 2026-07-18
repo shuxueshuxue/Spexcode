@@ -102,6 +102,7 @@ export default {
     anchorTitle: 'anchor this comment to the current frame',
     mentionActor: 'insert @ — mention a session or summon a worker',
     mentionNode: 'insert [[ — link a spec node',
+    reviewCommands: 'insert / — review commands',
     resolved: 'resolved',
     resolvedBy: 'resolved by {by}',
     openRemark: 'open',

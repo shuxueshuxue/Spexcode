@@ -126,10 +126,12 @@ straight to the trunk.
   capped so it never eats the pane; the console's own ❯/prompt boxes keep the single-line floor, this is the
   thread composer's own geometry) and **always displays its compact action row** even while idle —
   the human should never have to click the textarea just to discover or reach the buttons. The row carries
-  ONLY real acts: the ⏱ anchor stamp where a clip supplies one, the host's lifecycle actions (Close issue /
+  ONLY real acts: the grammar's two discoverability buttons — compact `@` / `[[` symbol buttons that insert
+  the exact trigger at the caret so the shared autocomplete opens ([[mentions]]; never a second menu or a
+  dispatch of their own), the ⏱ anchor stamp where a clip supplies one, the host's lifecycle actions (Close issue /
   Promote), and an **icon-only Send** — accessible name and tooltip, never a bare glyph without either —
   pinned at the row's right edge. There is **no permanent hint line**: the `@`/`[[` grammar's
-  discoverability is the autocomplete itself, and an always-on hint text is noise. A failed send
+  discoverability is the autocomplete itself plus those two trigger buttons, and an always-on hint text is noise. A failed send
   surfaces its error in that same visible row (an error must never collapse out of view). It is **keyed to the selected issue**, so
   a half-typed draft dies with its selection instead of leaking onto another issue's thread. The POST goes
   to the one store-routed reply verb ([[issues]]'s

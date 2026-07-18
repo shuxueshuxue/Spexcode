@@ -1284,6 +1284,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    border + the menu's own 4px gap), so the overlay floats ABOVE the quiet box, never into it. */
 .fv-compose .mention-menu.up { bottom: calc(100% + 13px); }
 .fv-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+/* the grammar's discoverability doors ([[mentions]]) — compact symbol buttons that type `@` / `[[` at the
+   caret so the shared autocomplete opens; same 26px footprint as the icon-only Send. */
+.fv-trigger-btn {
+  width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--muted);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.fv-trigger-btn:hover { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 /* the right-pinned group: host lifecycle actions (Close issue / Promote) beside the icon-only Send. */
 .fv-actions-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .fv-cancel {

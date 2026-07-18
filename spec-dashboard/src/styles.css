@@ -42,6 +42,92 @@
   --term-bg: #0d1117;
 }
 
+/* @@@ community theme presets - each preset is ONE more definition of the same var set, ported as
+   design tokens from an MIT-licensed Obsidian community theme (palette values only — no upstream CSS
+   rules). Upstream repos + full license notices: spec-dashboard/THEME-CREDITS.md. theme.js lists the
+   codes; index.html's first-paint script accepts them. */
+
+/* Minimal (dark) — kepano/obsidian-minimal, MIT, © 2020-2024 Steph Ango (@kepano).
+   Neutral graphite: the base-l 15% greyscale ramp + Minimal's shared muted accent set. */
+:root[data-theme=minimal] {
+  --paper: #262626;   /* bg1  hsl(0 0% 15%) */
+  --panel: #212121;   /* bg2  hsl(0 0% 13%) */
+  --panel2:#363636;   /* ui1  hsl(0 0% 21%) */
+  --line:  #454545;   /* ui2  hsl(0 0% 27%) */
+  --ink:   #d1d1d1;   /* tx1  hsl(0 0% 82%) */
+  --ink2:  #ededed;   /* tx1 lifted for headings (derived — Minimal reuses tx1) */
+  --muted: #999999;   /* tx2  hsl(0 0% 60%) */
+  --blue:  #6c99bb;
+  --green: #a8c373;
+  --orange:#d5763f;
+  --red:   #d04255;
+  --yellow:#e5b567;
+  --magenta:#9e86c8; /* Minimal's purple */
+  --cyan:  #73bbb2;
+  --term-bg: #212121;
+}
+
+/* Things (light) — colineckert/obsidian-things, MIT, © 2020-2021 Stephan Ango (@kepano).
+   Clean white + the signature Things blue; text from the hsl(212 …) formulas, accents from the
+   light-mode extended set. */
+:root[data-theme=things] {
+  --paper: #ffffff;   /* base-00 */
+  --panel: #f6f7f8;   /* base-10/20 sidebar */
+  --panel2:#f0f0f0;   /* base-25 */
+  --line:  #d4d4d4;   /* base-35 */
+  --ink:   #555e68;   /* text-muted  hsl(212 10% 37%) — body role */
+  --ink2:  #252b32;   /* text-normal hsl(212 15% 17%) — headings */
+  --muted: #a2aab3;   /* text-faint  hsl(212 10% 67%) */
+  --blue:  #2e80f2;   /* the Things accent */
+  --green: #0cb54f;
+  --orange:#d96c00;
+  --red:   #e4374b;
+  --yellow:#bd8e37;
+  --magenta:#876be0; /* Things' purple */
+  --cyan:  #2db7b5;
+  --term-bg: #0d1117; /* light themes keep the app's neutral near-black terminal */
+}
+
+/* Tokyo Night (dark) — tcmmichaelb139/obsidian-tokyonight, MIT, © 2023 Michael Bao.
+   Deep blue-violet night palette (bg/bg_dark/bg_highlight + fg/comment + the accent set). */
+:root[data-theme=tokyonight] {
+  --paper: #1a1b26;   /* bg */
+  --panel: #16161e;   /* bg_dark */
+  --panel2:#24283b;   /* bg_highlight_dark */
+  --line:  #414868;   /* terminal_black */
+  --ink:   #a9b1d6;   /* fg_dark */
+  --ink2:  #c0caf5;   /* fg */
+  --muted: #565f89;   /* comment */
+  --blue:  #7aa2f7;
+  --green: #9ece6a;
+  --orange:#ff9e64;
+  --red:   #ff757f;
+  --yellow:#e0af68;
+  --magenta:#bb9af7;
+  --cyan:  #7dcfff;
+  --term-bg: #16161e;
+}
+
+/* Catppuccin (Mocha, dark) — catppuccin/obsidian, MIT, © 2021 Catppuccin.
+   Soothing pastel: the Mocha base/mantle/surface ramp + text/overlay + pastel accents. */
+:root[data-theme=catppuccin] {
+  --paper: #1e1e2e;   /* base */
+  --panel: #181825;   /* mantle */
+  --panel2:#313244;   /* surface0 */
+  --line:  #45475a;   /* surface1 */
+  --ink:   #cdd6f4;   /* text */
+  --ink2:  #b4befe;   /* lavender — Catppuccin's UI-emphasis tone */
+  --muted: #7f849c;   /* overlay1 */
+  --blue:  #89b4fa;
+  --green: #a6e3a1;
+  --orange:#fab387;  /* peach */
+  --red:   #f38ba8;
+  --yellow:#f9e2af;
+  --magenta:#cba6f7; /* mauve */
+  --cyan:  #94e2d5;  /* teal */
+  --term-bg: #11111b; /* crust */
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {

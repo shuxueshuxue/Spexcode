@@ -99,6 +99,8 @@ export default {
   thread: {
     anchorNow: '锚定',
     anchorTitle: '把这条评论锚定到当前帧',
+    mentionActor: '插入 @ —— 提及会话或召唤新工作者',
+    mentionNode: '插入 [[ —— 引用规格节点',
     resolved: '已解决',
     resolvedBy: '由 {by} 解决',
     openRemark: '未解决',

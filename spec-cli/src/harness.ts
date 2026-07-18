@@ -1195,6 +1195,11 @@ type OneShotSpec = {
                                            // its one-run project trust — same defence the interactive launch
                                            // carries, so a worktree outside the checkout still loads the shim)
   resumeTurnArg: (rec: SessRec) => string  // the "continue THIS conversation" flag for an injected turn
+  // the SHELL form of the same flag, for the in-script undeclared-exit recovery below (the script must
+  // compute it at RUN time — opencode's captured harness id may not exist when the script is baked): lines
+  // that set `$_res`. claude/pi resume by the RECORD id, known at bake; opencode reads harness_session_id
+  // out of session.json, falling to --continue.
+  resumeTurnShell: (id: string, sessJsonQuoted: string) => string[]
 }
 export type { OneShotSpec }
 // the per-harness DATA the builder consumes — exported as a registry so tests audit each harness's turn
@@ -1211,21 +1216,28 @@ export type { OneShotSpec }
 //            dedicated worktree) for a session whose capture never landed, mirroring the interactive
 //            resumeArg.
 export const ONE_SHOT_HEADLESS: Record<'claude' | 'pi' | 'opencode', OneShotSpec> = {
-  claude: { id: 'claude', agentish: CLAUDEISH, launchArgs: '', resumeTurnArg: (rec) => `--resume ${rec.session}` },
-  pi: { id: 'pi', agentish: PIISH, launchArgs: '--approve', resumeTurnArg: (rec) => `--session ${rec.session}` },
-  opencode: { id: 'opencode', agentish: OPENCODEISH, launchArgs: '', resumeTurnArg: (rec) => (rec.harnessSessionId ? `--session ${rec.harnessSessionId}` : '--continue') },
+  claude: {
+    id: 'claude', agentish: CLAUDEISH, launchArgs: '',
+    resumeTurnArg: (rec) => `--resume ${rec.session}`,
+    resumeTurnShell: (id) => [`_res="--resume ${id}"`],
+  },
+  pi: {
+    id: 'pi', agentish: PIISH, launchArgs: '--approve',
+    resumeTurnArg: (rec) => `--session ${rec.session}`,
+    resumeTurnShell: (id) => [`_res="--session ${id}"`],
+  },
+  opencode: {
+    id: 'opencode', agentish: OPENCODEISH, launchArgs: '',
+    resumeTurnArg: (rec) => (rec.harnessSessionId ? `--session ${rec.harnessSessionId}` : '--continue'),
+    resumeTurnShell: (_id, sessJson) => [
+      `_hsid=$(sed -n 's/.*"harness_session_id": "\\([^"]*\\)".*/\\1/p' ${sessJson} 2>/dev/null | head -1)`,
+      `if [ -n "$_hsid" ]; then _res="--session $_hsid"; else _res="--continue"; fi`,
+    ],
+  },
 }
 const withLaunchArgs = (cmd: string, spec: OneShotSpec) => (spec.launchArgs ? `${cmd} ${spec.launchArgs}` : cmd)
 const tmuxH = async (args: string[], timeoutMs = 4000): Promise<string> =>
   (await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' })).stdout
-// the injected turn's env — the launch env minus the rendezvous pair (mirrors sessions.ts rvEnv's headless
-// bypass): the session id for hooks/CLI attribution, plus the store/config-home propagation so the turn's
-// hook-state lands in the SAME store the backend reads.
-const headlessTurnEnv = (id: string): string => {
-  const parts = [`SPEXCODE_SESSION_ID=${id}`]
-  for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }
-  return parts.join(' ')
-}
 // one-session pane state for the deliver gate: no window / idle shell / an agent-ish turn still running.
 // Deliberately the SAME descendant-tree probe the liveness fallback walks, so deliver and the board can never
 // disagree about "busy".
@@ -1237,11 +1249,64 @@ async function headlessPaneState(id: string, agentish: RegExp): Promise<'no-wind
   return paneTreeRuns({ panePid, procs: await procSnapshot() }, agentish) ? 'running' : 'idle'
 }
 // the injected turn script's content, pure and exported for tests: re-register agent.pid FIRST (its `$$`
-// persists down the exec chain — the born pattern), then exec the WHOLE pinned one-shot command resuming
-// this conversation. The fresh registration is both the hot-tier liveness feed for this turn and the
-// delivery confirmation in deliverOneShotTurn.
+// persists for the script's whole life — the born pattern; the agent runs as the script's child so the pid
+// stays live across the recovery turns too), then run the WHOLE pinned one-shot command resuming this
+// conversation, then the shared undeclared-exit recovery. The fresh registration is both the hot-tier
+// liveness feed for this turn and the delivery confirmation in deliverOneShotTurn.
 export function oneShotTurnScript(spec: OneShotSpec, rec: SessRec, cmd: string, pidPath: string, text: string): string {
-  return `printf %s "$$" > ${shQuote(pidPath)}\nexec env ${headlessTurnEnv(rec.session)} ${withLaunchArgs(cmd, spec)} ${spec.resumeTurnArg(rec)} ${shQuote(text)}\n`
+  const agent = withLaunchArgs(cmd, spec)
+  return [
+    `printf %s "$$" > ${shQuote(pidPath)}`,
+    ...headlessTurnExports(rec.session),
+    `${agent} ${spec.resumeTurnArg(rec)} ${shQuote(text)}`,
+    `_rc=$?`,
+    `[ "$_rc" -ne 0 ] && exit "$_rc"`,
+    ...oneShotRecoveryLines(spec, rec.session, agent),
+    ``,
+  ].join('\n')
+}
+// @@@ one-shot undeclared-exit recovery - the OUT-OF-PROCESS half of the stop-gate contract for one-shot
+// harnesses. The gate's in-process continuation is best-effort on some harnesses: `opencode run` EXITS when
+// its awaited turn completes WITHOUT awaiting the plugin's session.idle handler, so a blocked-stop
+// continuation injected at exit is killed with the process and the record wedges `active` (REPRODUCED live,
+// opencode 1.18.3: forbid-declare worker → gate rejected — teach sentinel planted — yet the process exited
+// to the shell, record stuck active/offline). claude `-p` holds its Stop-block natively; pi re-injects via
+// sendUserMessage at agent_settled. So every one-shot SCRIPT (launch and injected turn alike) closes the
+// gap at the only layer that survives the process: after a CLEAN agent exit (rc=0 — a non-zero exit stays
+// fail-loud, unrecovered), it reads the record's declared state and, while still UNDECLARED (active/queued),
+// fires a bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the
+// gate's own contract restated, never a fabricated task (the mbp "Continue…" lesson bans inventing WORK, not
+// the gate teaching declaration). Two tries then exit 97 loud. A declared/absent record exits 0 untouched,
+// so harnesses whose in-process gate already held (claude, normally pi) never fire it.
+const ONE_SHOT_GATE_CONTINUATION =
+  '[SpexCode stop gate] Your previous stop was blocked: this session is still UNDECLARED. Declare your ' +
+  'true state now by running exactly ONE command: `spex session done --propose merge|nothing|close`, or ' +
+  '`spex session park --note "<what you await>"`, or `spex session ask --note "<your question>"`. Do nothing else.'
+function oneShotRecoveryLines(spec: OneShotSpec, id: string, agent: string): string[] {
+  const sessJson = shQuote(join(sessionStoreDir(id), 'session.json'))
+  const readStatus = `_st=$(sed -n 's/.*"status": "\\([a-z]*\\)".*/\\1/p' ${sessJson} 2>/dev/null | head -1)`
+  return [
+    `for _i in 1 2; do`,
+    `  ${readStatus}`,
+    `  case "$_st" in active|queued) ;; *) exit 0 ;; esac`,   // declared (or record gone) — the ordinary end
+    `  echo "[spex] one-shot agent exited undeclared - firing the stop-gate continuation turn ($_i/2)" >&2`,
+    ...spec.resumeTurnShell(id, sessJson).map((l) => `  ${l}`),
+    `  ${agent} $_res ${shQuote(ONE_SHOT_GATE_CONTINUATION)}`,
+    `  _rc=$?`,
+    `  [ "$_rc" -ne 0 ] && exit "$_rc"`,
+    `done`,
+    `${readStatus}`,
+    `case "$_st" in active|queued) echo "[spex] one-shot agent still undeclared after 2 continuation turns - failing loud" >&2; exit 97 ;; esac`,
+    `exit 0`,
+  ]
+}
+// export lines for the injected turn's env — the launch env minus the rendezvous pair (mirrors sessions.ts
+// rvEnv's headless bypass): the session id for hooks/CLI attribution, plus the store/config-home propagation
+// so the turn's hook-state lands in the SAME store the backend reads.
+const headlessTurnExports = (id: string): string[] => {
+  const lines = [`export SPEXCODE_SESSION_ID=${id}`]
+  for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) lines.push(`export ${v}=${shQuote(val)}`) }
+  return lines
 }
 const HEADLESS_TURN_START_TIMEOUT_MS = 10_000
 async function deliverOneShotTurn(spec: OneShotSpec, rec: SessRec, text: string): Promise<DispatchResult> {
@@ -1277,11 +1342,20 @@ async function deliverOneShotTurn(spec: OneShotSpec, rec: SessRec, text: string)
 function oneShotHeadlessOps(spec: OneShotSpec): HarnessHeadless {
   return {
     needsCmd: true,   // the one-shot invocation IS its own command — the launcher's headlessCmd, written whole
-    launchCmd: (_id, _rt, cmd) => {
+    launchCmd: (id, _rt, cmd) => {
       // the pinned headlessCmd, embedded WHOLE — zero parsing. mode+pin were born together, so a headless
-      // record always carries one; its absence is corruption, not a case to paper over.
+      // record always carries one; its absence is corruption, not a case to paper over. The command runs
+      // inside a small bootstrap script (the codex-launchCmd pattern: the caller's ordinary tail arrives as
+      // "$@") so the undeclared-exit recovery above can run AFTER the agent process is gone.
       if (!cmd) throw new Error(`headless ${spec.id} launch has no pinned headlessCmd — the record carries no launch command (re-create the session)`)
-      return withLaunchArgs(cmd, spec)
+      const agent = withLaunchArgs(cmd, spec)
+      const script = [
+        `${agent} "$@"`,
+        `_rc=$?`,
+        `[ "$_rc" -ne 0 ] && exit "$_rc"`,
+        ...oneShotRecoveryLines(spec, id, agent),
+      ].join('\n')
+      return `bash -c ${shQuote(script)} spexcode-oneshot`
     },
     liveness: (_rec, tmuxAlive, _runtimeDir, pane) => {
       if (!tmuxAlive) return 'offline'

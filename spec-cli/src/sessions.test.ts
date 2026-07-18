@@ -90,7 +90,11 @@ test('headless launchScript: exit 0 is completion (never a retry), non-zero fail
     const body = readFileSync(script, 'utf8')
     assert.doesNotMatch(body, /CLAUDE_BG_BACKEND|CLAUDE_BG_RENDEZVOUS_SOCK/, 'no rendezvous env for a headless launch')
     assert.doesNotMatch(body, /__spex_try|retrying/, 'no fast-exit retry loop for a one-shot agent')
-    assert.match(body, /\/opt\/reclaude --skip -p --session-id x/, 'the pinned headlessCmd is embedded whole')
+    // the pinned headlessCmd is embedded WHOLE inside the one-shot bootstrap (the caller's tail rides "$@"),
+    // and the undeclared-exit recovery closes the script ([[harness-adapter]] one-shot recovery).
+    assert.match(body, /\/opt\/reclaude --skip -p "\$@"/, 'the pinned headlessCmd is embedded whole')
+    assert.match(body, /spexcode-oneshot --session-id x/, 'the ordinary launch tail rides the script tail')
+    assert.match(body, /exited undeclared/, 'the undeclared-exit recovery rides the launch script')
     assert.match(body, /agent\.pid/, 'the turn process is still birth-registered')
 
     // EXECUTE the template: a completing agent (`true`) exits 0 immediately — completion, not a fast-fail.

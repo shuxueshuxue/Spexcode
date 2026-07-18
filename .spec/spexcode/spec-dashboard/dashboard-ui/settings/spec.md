@@ -35,10 +35,11 @@ keypress as that action's new binding, saved per-user and reset to defaults on d
 different entry points. (Game-controller mapping is **not** here — the pad binds to action ids, not keys, in
 [[game-controller]]'s controller mode; see [[keyboard-nav]].)
 
-Its third accreted section is **Theme**: a Light/Dark picker mirroring the language section, following
-the same detect-then-defer shape (system `prefers-color-scheme` default, explicit pick overrides and
-persists) — it flips the whole app live. Only the picker lives here; the palette-swap mechanism it
-drives belongs to [[dashboard-shell]].
+Its third accreted section is **Theme**: a preset picker mirroring the language section, listing the
+community presets (Minimal — the default, Things, Tokyo Night, Catppuccin) as proper-noun labels. An
+explicit pick persists and flips the whole app live; absent a valid saved choice the app is simply
+Minimal — there is no system `prefers-color-scheme` detection and no light/dark pair. Only the picker
+lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
 
 ## expanded spec
 
@@ -64,7 +65,7 @@ drives belongs to [[dashboard-shell]].
   React context, no reload.
 - **The settings page** is a routed page (`#/settings`, [[side-nav]]) — reached from the rail's bottom
   entry or the `,` hotkey, rendered as a centered readable column in the main area, and the single home
-  for future settings. Today it owns the language picker, the shortcuts editor, and the light/dark theme
+  for future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset
   picker. `Esc` (or `,` again) routes home to the graph.
 
 ### the hotkey

@@ -7,10 +7,12 @@ scenarios:
       a real plugin-surface read through the CLI (`spex materialize` is the sharpest: it renders the
       contract block from the gathered system surface). Also drive the inverse skew (a `.plugins`-only
       tree under a loader that reads the other root) to see what silence costs: the contract block
-      materializes with ZERO plugin bodies and no error.
+      materializes with ZERO plugin bodies and no error. Invoke the repair spelling with the current CLI too.
     expected: >
       The loader REFUSES loudly: the command exits non-zero with an error naming the v0.3.0 rename
-      (`.config` → `.plugins`) and pointing at `spex doctor --migrate`. Silence is the failure mode —
+      (`.config` → `.plugins`) and pointing at `spex doctor --migrate`. That spelling exits 2 without
+      writing and explains that a 0.2.x tree must pass through a 0.3.x SpexCode release before using the
+      current release; the current CLI exposes no permanent migrator. Silence is the failure mode —
       a run that exits 0 and quietly proceeds (or quietly renders an empty/plugin-less contract) means
       every launched agent runs ungoverned with no signal that the plugins were dropped.
     tags: [cli]
@@ -23,13 +25,11 @@ scenarios:
       children) and NO `.plugins/prompts/core/`; (2) `spex materialize` renders the contract block with
       core's body gathered exactly as any other `surface: system` plugin (the field, not the path, routes);
       (3) a fresh `spex init` on a scratch git repo seeds the same flat-core shape and its contract block
-      carries the core disciplines; (4) the migrate table keys core assets by the shelf-less `core/*` rel
-      with the shipped template at the flat location, so a 0.2.x `.config/core` adopter maps to
-      `.plugins/core` in ONE hop.
+      carries the core disciplines.
     expected: >
       Both trees and a fresh init show core flat beside the prompts shelf (prompts holds only the auxiliary
       single-body system contracts); the materialized contract block is unchanged by the node's position
-      (a pure move diffs to nothing); every `core/*` migrate-table row points at the flat template path.
+      (a pure move diffs to nothing). No release-migration table participates in the current gather path.
     tags: [cli]
     code: spec-cli/src/specs.ts
 ---

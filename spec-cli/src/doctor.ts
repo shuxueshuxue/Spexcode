@@ -5,8 +5,8 @@
 // "is this agent actually governed, or silently running free?" — diagnosing that materialized contract per
 // LAYER, looping the same HARNESSES adapter materialize delivers through (so claude AND codex are covered
 // with no hardcoded paths). It catches the SILENT failure: a shim whose handler is missing, a PATH that
-// can't resolve `spex`, a contract that never landed. Read-only today: the bare report, `contract` (print
-// the surface:system text any agent reads), `conflicts`. install/uninstall are STAGED (noteStaged).
+// can't resolve `spex`, a contract that never landed. The surface is deliberately read-only: the bare
+// report, `--contract` (print the system text any agent reads), and `--conflicts`.
 import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -170,9 +170,9 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
   if (conflict) {
     L.push('Repair — SpexCode is reaching this agent through MORE THAN ONE discovery channel. Keep exactly one:')
     L.push('  • remove the independently-installed plugin bundle (delete its dir, or `claude plugin uninstall spexcode`); or')
-    L.push('  • if you WANT the plugin, stop the native delivery: set spexcode.json "harnesses" to a plugin target')
-    L.push('    (e.g. ["plugin",{"plugin":".claude"}] → {"plugin":".claude"}) so `spex materialize` prunes the loose shim/contract/skills; or')
-    L.push('  • remove the loose copy directly (`spex doctor uninstall` [staged] / `spex uninstall`).')
+    L.push('  • if you WANT the plugin, stop the native delivery: set spexcode.json to')
+    L.push('    `"harnesses": [{"plugin":".claude"}]`, then run `spex materialize` to prune the loose shim/contract/skills; or')
+    L.push('  • remove SpexCode\'s generated delivery with `spex uninstall`.')
   } else {
     L.push('No double-delivery: each harness is reached by at most one spexcode-stamped channel.')
   }
@@ -347,14 +347,8 @@ async function conflicts(): Promise<number> {
   return conflict ? 1 : 0
 }
 
-
-// install/uninstall are STAGED: wiring layer-3 hooks into a standalone repo is only SAFE once the hooks
-// detect a missing managed session and degrade. So the diagnosis ships first; the installer lands behind it.
-function noteStaged(verb: string): number {
-  console.error(`spex doctor ${verb} is not available yet — it is staged behind the hook-degradation prerequisite
-(the live hooks must detect a missing managed session and degrade before they can be safely wired into your
-own agent's config). Meanwhile: \`spex doctor\` reports your coverage, and \`spex doctor --contract\` prints
-the workflow text you can hand any agent.`)
+function migrationRemoved(): number {
+  console.error('spex: `spex doctor --migrate` was removed in v0.4.0 — migrate this tree with a 0.3.x SpexCode release, then reinstall the current release. Nothing was changed.')
   return 2
 }
 
@@ -362,22 +356,14 @@ function usage(): number {
   console.error(`spex doctor — diagnose how the SpexCode workflow reaches your agent
   (bare)         per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
   --contract     print the surface:system contract text (hand it to any agent)
-  --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
-  --migrate      one-shot 0.2.x → 0.3.0 vocabulary migration for an adopter repo (renames + hook-asset
-                 upgrade + body rewrites; refuses on a dirty tree / undrained sessions / an already-migrated
-                 tree; stages everything, commits nothing; removed in 0.4.0)
-  install        [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
-  uninstall      [staged] reverse exactly what install wrote`)
+  --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)`)
   return 0
 }
 
 export async function runDoctor(args: string[]): Promise<number> {
   // contract/conflicts are FLAGS, not subcommands ([[cli-surface]] §4: another representation of the same
   // diagnosis read, not a distinct action). The old positional spellings signpost — report, never run.
-  // --migrate is the one MUTATING flag: the term-limited 0.2.x→0.3.0 adopter migrator ([[migrate]],
-  // ships with 0.3.0, deleted in 0.4.0) — dispatched first so its refusal/summary is never diluted
-  // by the diagnosis report.
-  if (args.includes('--migrate')) return await (await import('./migrate.js')).runMigrate()
+  if (args.includes('--migrate')) return migrationRemoved()
   if (args.includes('--contract')) return contract()
   if (args.includes('--conflicts')) return await conflicts()
   switch (args[0]) {
@@ -385,8 +371,6 @@ export async function runDoctor(args: string[]): Promise<number> {
     case 'contract': case 'conflicts':
       console.error(`spex: \`spex doctor ${args[0]}\` was removed in v0.3.0 — use: spex doctor --${args[0]}`)
       return 2
-    case 'install': return noteStaged('install')
-    case 'uninstall': return noteStaged('uninstall')
     case 'help': case '--help': case '-h': return usage()
     default: console.error(`spex doctor: unknown subcommand "${args[0]}"`); usage(); return 2
   }

@@ -21,7 +21,7 @@ node is the cure: ONE embedded runtime source every generative shim composes, so
 but its event-name mapping and its host API bindings — the socket protocol and the verdict parse are never
 rewritten. That is the acceptance test for any future harness of this kind.
 
-The runtime owns four shared contracts:
+The runtime owns five shared contracts:
 
 - **dispatch** — synthesize the claude-shaped payload (`session_id`, `cwd`, `hook_event_name`, extras) and
   pipe it to `dispatch.sh <harnessId> <Event>`, the id baked as argv[1] (the shell-side detector), returning
@@ -38,6 +38,19 @@ The runtime owns four shared contracts:
   PARSED, synchronously — repaint-done flushes before any injection (a whole model turn on some hosts) runs;
   a known-unable inject answers reply-rejected before that barrier so the sender fails loud instead of
   confirming an undeliverable prompt.
+- **the stop-gate loop closure** (`dispatchStop`) — a blocked Stop's continuation is a LOOP, and the loop
+  needs a termination bit: claude's native Stop payload carries `stop_hook_active=true` inside a
+  hook-forced continuation, and the stop-gate's escape paths (auto-declare / downgrade-to-ask) key on
+  exactly that bit to guarantee the loop ends. A generative host has no native bit, so the runtime supplies
+  it — false on a natural stop, true on the settle that follows a blocked one, reset by the first allowed
+  stop — and on block re-enters the gate's parsed reason through the host's inject. Without the bit every
+  settle reads as a FIRST stop, a gate that can never pass (the commit gate on a 0-commit worktree) blocks
+  forever, and the loop ends only when the host process dies — the measured one-shot wedge: pi's print
+  mode disposes its session while the loop still runs, the next inject throws "extension ctx is stale"
+  into the host, the rejection is dropped, and the record wedges `active` (rc=97 through both recovery
+  turns). So an inject the host can no longer take is caught LOUD on stderr, never thrown into the host
+  and never silent — the out-of-process one-shot recovery ([[harness-adapter]]) is the layer that survives
+  the process.
 - **tool-input normalization** — the host's file-path spelling (pi `path`, opencode `filePath`) is moved
   onto claude's `file_path`, the key every claude-family handler reads.
 

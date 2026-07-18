@@ -49,7 +49,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--mode', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -58,6 +58,19 @@ function positionals(from: number): string[] {
     out.push(t)
   }
   return out
+}
+
+function rejectUnknownFlags(command: string, from: number, allowed: readonly string[]): void {
+  const known = new Set(allowed.map((name) => `--${name}`))
+  for (let i = from; i < process.argv.length; i++) {
+    const token = process.argv[i]
+    if (!token.startsWith('--')) continue
+    if (!known.has(token)) {
+      console.error(`${command}: unknown flag ${token}`)
+      process.exit(2)
+    }
+    if (VALUE_FLAGS.has(token)) i++
+  }
 }
 
 // @@@ signposts (one version only — delete in 0.4.0) - every spelling v0.3.0 removed maps to its new home.
@@ -610,8 +623,8 @@ if (cmd === 'serve') {
     // <path>|- so a long multi-paragraph prompt never fights shell quoting — [[prompt-file]]).
     // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
     // it falls back to an in-process launch only when no backend answers.
+    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'node', 'launcher', 'api', 'port'])
     const { createSession } = await import('./sessions.js')
-    if (has('harness')) { console.error('spex session new: --harness was removed; use --launcher <name> (for example --launcher codex)'); process.exit(2) }
     const promptFile = flag('prompt-file')
     const inline = flag('prompt') ?? positionals(4)[0]
     let prompt = inline ?? ''
@@ -624,15 +637,7 @@ if (cmd === 'serve') {
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
     const nodeArg = flag('node')
-    // the session MODE: --headless is sugar for --mode headless; an explicit --mode interactive overrides a
-    // configured sessions.defaultMode. A conflicting pair is a usage error, never a silent pick; validity of
-    // the value itself (and the launcher's headless capability) is the backend's fail-loud check.
-    const modeFlag = flag('mode')
-    if (has('headless') && modeFlag !== undefined && modeFlag !== 'headless') {
-      console.error(`spex session new: --headless conflicts with --mode ${modeFlag} — give one of them`); process.exit(2)
-    }
-    const mode = has('headless') ? 'headless' : modeFlag
-    const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined, mode)
+    const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined)
     console.log(JSON.stringify(created, null, 2))
     await launchMonitorReminder(created.id)
   } else if (sub === 'ls') {
@@ -831,7 +836,6 @@ if (cmd === 'serve') {
           console.log(`  node     : ${x.node ?? '—'}`)
           console.log(`  branch   : ${x.branch ?? '—'}`)
           console.log(`  launcher : ${x.launcher ?? '—'}  (harness ${x.harness})`)
-          console.log(`  mode     : ${x.mode ?? 'interactive'}${x.mode === 'headless' ? ' ◇' : ''}`)
           console.log(`  worktree : ${x.path}`)
           console.log(`  created  : ${new Date(x.created).toISOString()}`)
           if (x.note) console.log(`  note     : ${x.note}`)

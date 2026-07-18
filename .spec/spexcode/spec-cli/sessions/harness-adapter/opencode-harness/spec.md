@@ -35,7 +35,7 @@ own half plays two roles:
   aborts the tool call), a Stop block re-injects the gate's parsed reason as a follow-up prompt via the
   runtime's `dispatchStop` — the `stop_hook_active` loop-termination bit riding the payload so the gate's
   escape paths end the block loop instead of re-blocking until the host dies ([[shim-runtime]]), a lost
-  inject reported loud with the one-shot recovery as the out-of-process cover. Tool events from a non-root
+  inject reported loud. Tool events from a non-root
   opencode session are stamped `agent_id` so the subagent
   discriminator keeps a parent's declared state safe, same as claude.
 - **rendezvous daemon** — the runtime's server binds SpexCode's per-session rendezvous socket (the path
@@ -61,28 +61,6 @@ with zero manual pokes. Contract file is `AGENTS.md` (native); skills and
 agents materialize under `.opencode/`; trust is a no-op (`--auto` in the default launcher command is
 the zero-prompt mechanism). Liveness prefers the socket listener and falls back to the launch-registered
 agent pid, so a plugin that failed to load still reads honestly from the process signal.
-
-Headless: `opencode run` is the one-shot form (`opencodeHeadlessOps` — [[harness-adapter]]'s shared
-one-shot builder over opencode DATA, no opencode-specific headless code; the launcher's `headlessCmd` is
-the complete invocation, embedded whole). `run` boots the same server and loads the same project plugin as
-the TUI, so the hook bridge, the minted-id capture, and the PreToolUse/Stop dispatches are unchanged; only
-the rendezvous socket is absent (a headless launch omits the env and the runtime's server never binds) —
-delivery is the injected NEXT TURN instead: `opencode run --session <captured id> '<msg>'`, falling to
-`--continue` when the capture never landed, the same discriminator as interactive resume. One run-mode
-fact shapes the design (REPRODUCED live: a forbid-declare worker's gate rejection planted the teach
-sentinel, yet the process exited and the record wedged `active`): `opencode run` EXITS when its awaited
-turn completes WITHOUT awaiting the plugin's session.idle handler, so the in-process blocked-stop
-continuation can die with the process. The stop-gate contract is therefore closed OUT of process by
-[[harness-adapter]]'s shared one-shot undeclared-exit recovery: the launch/turn script, after a clean
-agent exit, reads the record and — while still undeclared — fires a bounded continuation turn on the
-SAME conversation (the captured `--session` id, resolved at run time) carrying the gate's declare
-instruction; two tries then exit 97 loud. Live-verified end to end through REAL dispatched headless
-workers on fresh-init adopters (opencode 1.18.3, 2026-07-18): launch pins `opencode run` verbatim, the
-plugin loads and captures the minted id onto the record, mark-active/stop-gate/commit-trailer all fire,
-a follow-up send reattaches the captured conversation with first-turn context intact, close leaves zero
-residue — and the recovery's A/B pair is filed on [[harness-adapter]]'s headless-lifecycle-opencode
-scenario (A: the pre-recovery wedge; B: the same forbid-declare worker driven to a real declaration by
-the continuation turn).
 
 Verification status: the mechanical layer (materialize artifacts, shim → dispatch.sh event flow, launch
 script shape, clean/dematerialize inverse, deliver under probe pressure, both resume seeds, the

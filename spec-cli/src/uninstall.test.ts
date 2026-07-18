@@ -134,4 +134,15 @@ test('public init → uninstall --hooks removes exact generated hooks and preser
   assert.equal(readFileSync(join(hooks, unrelatedName), 'utf8'), unrelated, 'unrelated user hook preserved byte-for-byte')
   assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), prose, 'materialized block removed at the exact user-prose boundary')
   assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'user spec asset survives the lifecycle')
+
+  const second = spex('uninstall', '.', '--hooks')
+  assert.match(second, /no spexcode git hooks to remove/, 'second --hooks run reports an empty clean no-op')
+  assert.doesNotMatch(second, /removed git hooks \(/, 'second --hooks run reports no removal set')
+  for (const name of generated.filter((name) => name !== modifiedName)) {
+    assert.ok(!existsSync(join(hooks, name)), `second run leaves generated ${name} absent`)
+  }
+  assert.ok(readFileSync(join(hooks, modifiedName)).equals(modified), 'second run keeps the modified generated hook')
+  assert.equal(readFileSync(join(hooks, unrelatedName), 'utf8'), unrelated, 'second run keeps the unrelated user hook')
+  assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), prose, 'second run keeps user prose')
+  assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'second run keeps the user spec asset')
 })

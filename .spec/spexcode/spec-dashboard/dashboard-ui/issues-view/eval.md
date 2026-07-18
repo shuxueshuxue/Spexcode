@@ -42,6 +42,24 @@ scenarios:
       UPWARD outside the New pop-out itself, never inserted into or clipped by the modal body and never
       covering the store/concern controls. Esc closes the menu, keeps the draft, and stays on #/issues. Plain text never opens a menu. The
       console's `@`/`[[` menus are unchanged. No page errors.
+  - name: composer-trigger-buttons
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
+    description: >-
+      On the running issues page, select a LOCAL issue. In the reply composer's action row read the two
+      symbol buttons (`@` and `[[`): their aria-labels/tooltips. Seed a draft with prose, place the caret
+      mid-draft (after a space), click the `@` button, and read the textarea's value, focus, selectionStart,
+      and any open menu; Esc, then SELECT a span of the draft and click the `[[` button and re-read. Check
+      no reply was posted. Re-read the action row's child geometry at desktop and at a ~780px window
+      (bounding rects: no overlap, nothing outside the composer).
+    expected: >-
+      Each button inserts its EXACT trigger at the caret — `@` between the prose halves, `[[` replacing the
+      selected span — preserving the rest of the draft; the textarea is focused with the caret right after
+      the inserted trigger, and the ONE shared autocomplete opens naturally over it (the SAME `.mention-menu`
+      typing the trigger opens: sessions + `@new` for `@`, spec nodes for `[[`) — no second menu
+      implementation, no dispatch, no post. Both buttons are compact symbol-only toolbar buttons wearing a
+      localized aria-label and the shared `data-tip` tooltip. At desktop and ~780px the row's controls
+      (triggers, lifecycle actions, Send) all render without overlap or spill. No page errors.
   - name: issue-reply-video-plays
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/Evidence.jsx]

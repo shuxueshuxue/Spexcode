@@ -153,6 +153,22 @@ scenarios:
       mergedIssues drops isEvalConcern); it surfaces only under its eval, never as an Issues-page row.
       The '@new' comment dispatches a fresh worker through the same write path — the one-line outcome
       ('@ new→<session>') echoes on the page.
+  - name: composer-trigger-buttons
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
+    description: >-
+      On #/evals, select a reading and unfold the remark rail. In the rail composer's action row read the
+      `@` and `[[` symbol buttons (aria-labels/tooltips). Seed a draft, place the caret mid-draft, click
+      `@` and read the textarea's value/focus/selectionStart and any open menu; Esc, select a span, click
+      `[[` and re-read. Confirm no remark was posted, then re-read the row's child geometry at desktop and
+      at a ~780px window.
+    expected: >-
+      The eval rail composer carries the SAME two discoverability buttons the issues composer does (one
+      shared Thread composer): each inserts its EXACT trigger at the caret/selection, preserves the rest of
+      the draft, refocuses with the caret right after the trigger, and the ONE shared autocomplete opens
+      upward over the rail (sessions + `@new` for `@`, spec nodes — the eval's node leading — for `[[`);
+      no second menu, no dispatch, no post. Localized aria-label + shared `data-tip` on both. At desktop
+      and ~780px the row (triggers, ⏱ where a clip supplies one, Send) fits without overlap. No page errors.
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >
@@ -254,7 +270,8 @@ scenarios:
     expected: >-
       ONE shared composer shape on both homes: a quiet bordered rounded container holding a BORDERLESS
       writing surface (computed border-style none) floored at TWO lines idle (~40px, never a one-line
-      sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — ⏱ anchor
+      sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — the two
+      `@`/`[[` trigger-insert buttons ([[mentions]] discoverability, on every home), ⏱ anchor
       on the eval rail's clip composer, Promote/Close issue on an open issue — and an ICON-ONLY Send
       (an SVG glyph with an aria-label/tooltip, no bare unlabeled icon) pinned at the row's right edge;
       none of the reference app's tools (attach, web, model pickers …) appear. NO always-visible hint

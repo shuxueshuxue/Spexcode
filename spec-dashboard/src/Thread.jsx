@@ -281,6 +281,27 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     taRef.current?.focus()
   }
 
+  // the grammar's two discoverability doors ([[mentions]]): insert the EXACT trigger (`@` / `[[`) at the
+  // caret — replacing any selection, preserving the rest of the draft — then refocus with the caret right
+  // after it and re-run the ONE shared autocomplete sync, so the same menu typing the trigger opens opens
+  // here too. No second menu, no dispatch: the button only types what the hand would.
+  const insertTrigger = (trigger) => {
+    const el = taRef.current
+    if (!el || busy) return
+    const start = el.selectionStart ?? body.length
+    const end = el.selectionEnd ?? start
+    setBody(body.slice(0, start) + trigger + body.slice(end))
+    const caret = start + trigger.length
+    requestAnimationFrame(() => {
+      const ta = taRef.current
+      if (!ta) return
+      ta.focus()
+      ta.setSelectionRange(caret, caret)
+      ac.sync(ta)
+      syncSlash(ta)
+    })
+  }
+
   const send = async () => {
     const text = body.trim()
     if (!text || busy) return
@@ -309,6 +330,10 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       </div>
       {/* the buttons swallow mousedown so a click never blurs the textarea; the row itself is persistent. */}
       <div className="fv-actions">
+        <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')}
+          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
+        <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')}
+          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
         {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
         {err && <span className="fv-error">{err}</span>}
         <div className="fv-actions-end">

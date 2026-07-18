@@ -5,6 +5,7 @@ import EventDetail from './EventDetail.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+import { apiUrl } from './project.js'
 
 // The session Eval tab ([[session-eval]]'s interactive face): the THIRD home of the ONE EventDetail
 // component ([[event-detail]], U1) — node popup (one node) · Evals page (project) · here (this session's
@@ -31,7 +32,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   // SSE, so the write path pulls this explicitly). A seq guard drops a stale response from a prior session.
   const loadModel = useCallback(() => {
     const mine = ++seq.current
-    return fetch(`/api/sessions/${encodeURIComponent(sessionId)}/evals`)
+    return fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((m) => { if (mine === seq.current) setModel(m) })
       .catch(() => { if (mine === seq.current) setModel(false) })
@@ -132,7 +133,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
             {t('sessionEval.sessionN', { n: sessionTotal })}
           </button>
         )}
-        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
+        <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
           <Icon name="download" size={13} />
         </a>
       </div>

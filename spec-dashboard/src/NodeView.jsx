@@ -6,6 +6,7 @@ import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
+import { apiUrl } from './project.js'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -425,7 +426,7 @@ function useEditDiff(source, path, enabled) {
     const cached = editDiffCache.get(key)
     if (cached) setDiff(cached)   // show the last diff at once; the fetch below refreshes it (the change is live)
     let on = true
-    fetch(`/api/edit?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`)
+    fetch(apiUrl(`/api/edit?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`))
       .then((r) => r.json())
       .then((d) => { editDiffCache.set(key, d); if (on) setDiff(d) })
       .catch(() => on && setDiff((prev) => prev ?? { patch: '' }))

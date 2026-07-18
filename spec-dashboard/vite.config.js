@@ -20,5 +20,14 @@ const target = process.env.API_URL || projectApiUrl() || 'http://localhost:8787'
 
 export default defineConfig({
   plugins: [react()],
-  server: { proxy: { '/api': { target, ws: true } } },
+  server: {
+    proxy: {
+      '/api': { target, ws: true },
+      // dev twin of the multi-project gateway's /p/:projectId/api/* scope ([[projects-hub]]): strip the
+      // scope prefix and hand the same backend the plain /api path, so a scoped page (/p/<id>/#/graph)
+      // is drivable in dev without a gateway. Every id maps to the one dev backend — scope semantics
+      // (per-project routing, credentials) live in the real gateway, never here.
+      '^/p/[^/]+/api': { target, ws: true, rewrite: (p) => p.replace(/^\/p\/[^/]+/, '') },
+    },
+  },
 })

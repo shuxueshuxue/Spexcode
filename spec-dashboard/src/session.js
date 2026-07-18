@@ -157,6 +157,14 @@ export function applyRouteNav(nav, active) {
     : { tab: 'terminal', jump: null }
 }
 
+// A session-eval model that is still loading has no selection answer yet. `undefined` tells the parent to
+// preserve the route's optimistic deep target; only a loaded model may report a resolved selection or an
+// honest null for an empty pane. This keeps an exact deep-link stable across the loading window.
+export function evalSelectionReport(model, node, scenario, routeTargetPending = false) {
+  if (model === null || routeTargetPending) return undefined
+  return node && scenario ? { node, scenario } : null
+}
+
 // @@@ the default eval-tab selection ([[session-eval]]) for a BARE /eval landing (no scenario named). The
 // visual order LEADS with blind spots (declared-but-unmeasured — outstanding loss), so the first visible row
 // is the wrong default: a reviewer opening a session's eval wants what THIS session MEASURED. Prefer an

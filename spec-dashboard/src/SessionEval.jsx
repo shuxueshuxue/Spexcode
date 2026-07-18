@@ -3,7 +3,7 @@ import { EvalRow, entryKey } from './EvalsFeed.jsx'
 import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
-import { defaultEvalKey } from './session.js'
+import { defaultEvalKey, evalSelectionReport } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -100,9 +100,17 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   // default a bare /eval resolves to). null when nothing is selected (empty pane).
   const selNode = selEntry?.item?.node ?? null
   const selScenario = selEntry?.item?.scenario ?? null
+  const initialTargetExists = Boolean(initialSel && groups.some((g) =>
+    g.rows.some((r) => r.scenario === initialSel.scenario && g.node.id === initialSel.node)
+    || g.blind.some((b) => b.scenario === initialSel.scenario && g.node.id === initialSel.node)))
+  // On the first loaded render, effSel still falls back to the default until the jump effect above applies.
+  // Suppress that one stale render when the requested target exists; otherwise it would briefly replace the
+  // exact hash with the default row. Unknown targets deliberately report the default immediately.
+  const initialTargetPending = Boolean(initialSel && jumpedRef.current !== initialSel && initialTargetExists)
   useEffect(() => {
-    onSelChange?.(selNode && selScenario ? { node: selNode, scenario: selScenario } : null)
-  }, [selNode, selScenario]) // eslint-disable-line react-hooks/exhaustive-deps
+    const report = evalSelectionReport(model, selNode, selScenario, initialTargetPending)
+    if (report !== undefined) onSelChange?.(report)
+  }, [model, selNode, selScenario, initialTargetPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // the selected reading's WORKTREE-rooted A/B history (newest-first): the session model already carries EVERY
   // reading per node ([[session-eval]] — rooted at this branch's worktree), so hand the detail this scenario's

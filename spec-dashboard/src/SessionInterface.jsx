@@ -279,6 +279,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     appliedNavRef.current = routeNav
     setRightTab(r.tab)
     setEvalJump(r.tab === 'eval' ? r.jump : null)
+    // The route target is also the optimistic outbound view while SessionEval loads. Without this, the
+    // newly-mounted pane reports its initial "selection unknown" as null and the shell briefly rewrites an
+    // exact deep link to bare /eval; refreshing in that window permanently loses the requested reading.
+    setEvalSel(r.tab === 'eval' ? r.jump : null)
     onRouteNavConsumed?.()
   }, [active, routeNav])
   // report the console's REAL eval view UP ([[session-eval]] / [[address-routing]]): the Eval tab's selected

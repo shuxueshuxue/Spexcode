@@ -1491,6 +1491,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
 .si-content.is-session { --si-dock-h: 44px; }
+/* A headless chat owns its composer inside .si-term-body, so there is no external ❯ strip to reserve.
+   Keep the interactive terminal's 44px dock unchanged; only the existing mode boundary removes it. */
+.si-content.is-session.is-headless { --si-dock-h: 0px; }
 /* horizontal TAB BAR in place of the old title/action strip: the two tabs (Terminal | Proof) on the left,
    the state-narrowed lifecycle actions on the right. It wears the app-chrome `--panel` background + a bottom
    separator so it reads VISIBLY APART from the dark terminal below it, in both light and dark themes (the old

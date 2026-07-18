@@ -129,7 +129,9 @@ persisted timeline as the transcript, refreshed by a poll plus the board push pl
 docked composer. Every dispatch from that composer carries `replyVia:'note'` **silently** — a terminal-free
 reader can only ever read declaration notes, so asking for the reply there is the surface's fixed property,
 exactly as on the phone. Because the chat owns input, the `❯` strip does not render for a headless session and
-**type mode does not exist there** (no button, and the reserved chord is inert) — the tab-bar's other lifecycle
+the terminal's reserved input-strip height is absent too — the embedded composer reaches the pane's bottom
+instead of stopping above an invisible dock. **Type mode does not exist there** (no button, and the reserved
+chord is inert) — the tab-bar's other lifecycle
 actions (merge, relaunch) keep working unchanged. Headless chats join the warm-mount contract like terminals
 (draft and scroll survive tab switches) but only the *shown* chat polls. On every session-row surface a headless
 session wears the muted **◇** mode mark beside its status glyph — the `MODE_MARK` vocabulary in `harness.jsx`,

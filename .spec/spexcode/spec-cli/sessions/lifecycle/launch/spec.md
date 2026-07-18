@@ -43,6 +43,16 @@ Codex's app-server launch is project-idempotent: simultaneous `spexcode serve` p
 share the runtime socket and take a per-project launch lock before starting the server, so they do not fan out
 one app-server per session or cross into another project's socket.
 
+**A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
+`SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,
+query, and fragment — never the supervisor's ephemeral child port or PID (a direct server falls back to its
+public `PORT`). Creation stamps the lease before the queue entry becomes visible; only an exact authority match
+may drain it, and launch or close consumes it.
+A hot-reloaded/restarted child at the SAME public URL therefore takes over automatically. A DIFFERENT endpoint
+may display the row but never claims it; recovery is restart the owner or close and re-dispatch there. Existing
+unowned `queued` records remain adoptable for compatibility, while new leased entries use a raw-state fence that
+current code presents as `queued` but a legacy drainer cannot recognize as launchable.
+
 **Materialized delivery, not injection:** the spec-discipline contract is NOT pushed on the command line.
 Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), writing the `surface: system`
 bodies (name order — the `core` node + rules like `memory-hygiene` alongside it) into the `<spexcode>`

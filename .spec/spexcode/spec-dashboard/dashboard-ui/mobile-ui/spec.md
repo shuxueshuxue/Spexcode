@@ -52,7 +52,9 @@ The two planes, made native to touch:
   is touch-sized. Opening one is the terminal-free conversation: a header (current status +
   liveness are the board row's, present-tense), the timeline — day-separated, each status event a
   colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
-  (you / the sending session) — and a docked composer. Every dispatch from this surface carries
+  (you / the sending session) — and a docked composer whose input and send action share one stable
+  vertical box (matching top and bottom edges). The composer stops at the tab bar; `.m-tabbar` alone
+  owns the viewport-bottom safe-area inset. Every dispatch from this surface carries
   `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
   asking for the reply there is the surface's fixed property, never a per-message option and never
   a visible control (an earlier toggle chip read as unexplained noise and was deleted). The

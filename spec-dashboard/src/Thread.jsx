@@ -211,8 +211,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
   // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
   // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
-  // a BUILT-IN verb (`run`) fires the SAME closure its header button calls (reviewCommands.js, so button
-  // and command never drift) after the typed token is removed; a PRESET (`prefill`) replaces the draft
+  // a BUILT-IN verb (`run`) fires its one host-bound runner after the typed token is removed; a PRESET
+  // (`prefill`) replaces the draft
   // with its filled template, keeping a stamped `▶` anchor head (the anchor line + its own riding frame).
   const [slash, setSlash] = useState(null)
   const syncSlash = (el) => setSlash(el && commands?.length ? slashAt(el.value, el.selectionStart, commands) : null)
@@ -281,8 +281,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     taRef.current?.focus()
   }
 
-  // the grammar's two discoverability doors ([[mentions]]): insert the EXACT trigger (`@` / `[[`) at the
-  // caret — replacing any selection, preserving the rest of the draft — then refocus with the caret right
+  // the grammar's discoverability doors ([[mentions]] / [[review-commands]]): insert the EXACT trigger
+  // (`@` / `[[` / `/`) at the caret — replacing any selection, preserving the rest of the draft — then refocus with the caret right
   // after it and re-run the ONE shared autocomplete sync, so the same menu typing the trigger opens opens
   // here too. No second menu, no dispatch: the button only types what the hand would.
   const insertTrigger = (trigger) => {
@@ -334,6 +334,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
           onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
         <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')}
           onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
+        {commands?.length > 0 && <button type="button" className="fv-trigger-btn" data-tip={t('thread.reviewCommands')} aria-label={t('thread.reviewCommands')}
+          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>}
         {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
         {err && <span className="fv-error">{err}</span>}
         <div className="fv-actions-end">

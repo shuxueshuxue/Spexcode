@@ -17,8 +17,11 @@ scenarios:
       title); the meta strip under it carries status, the store tag, author, clickable node
       chips; the body and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes
       visible), and a reply composer. A forge selection renders the SAME way — its GitHub comments as
-      the reply thread, its permalink in the meta strip, and the SAME composer (no read-only note
-      exists) — store never changes the thread's shape. No page errors.
+      the reply thread, its permalink in the meta strip labeled with the store's concrete display name
+      ("Open on GitHub" for a github issue, "Open on GitLab" for a gitlab issue — derived from the
+      issue's `store` identity, never the internal word "forge"), and the SAME composer (no read-only
+      note exists) — store never changes the thread's shape. A local issue shows no permalink. No page
+      errors.
   - name: composer-mention-autocomplete
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/mentions.jsx]

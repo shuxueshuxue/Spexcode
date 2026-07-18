@@ -4,7 +4,9 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, claudeHeadlessOps, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, harnessOps, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
+import { spawnSync } from 'node:child_process'
+import { sessionStoreDir } from './layout.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, claudeHeadlessOps, piHeadlessOps, opencodeHeadlessOps, piHarness, opencodeHarness, ONE_SHOT_HEADLESS, oneShotTurnScript, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, launcherModes, harnessOps, resolveLauncher, defaultLauncher, defaultSessionMode, launcherDefault, pinnedLaunchCmd, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous, HARNESSES, type Harness, type HarnessHeadless } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -255,10 +257,10 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
 
 // [[launcher-select]] headless — a launcher may carry TWO complete commands (`cmd` interactive, `headlessCmd`
 // one-shot). The parse layer passes headlessCmd through untouched (whole command, never rewritten), reads an
-// empty string as absent, and computes each row's `modes` from the ADAPTER capability — claude carries
-// claudeHeadlessOps (needsCmd), so a claude launcher offers headless exactly when a headlessCmd is configured;
-// codex's capability is server-side (!needsCmd), so it offers headless with no headlessCmd at all;
-// pi/opencode carry null and stay interactive-only.
+// empty string as absent, and computes each row's `modes` from the ADAPTER capability — claude, pi, and
+// opencode carry needsCmd one-shot capabilities (the shared oneShotHeadlessOps builder), so their launchers
+// offer headless exactly when a headlessCmd is configured; codex's capability is server-side (!needsCmd), so
+// it offers headless with no headlessCmd at all.
 test('launchers parse headlessCmd (empty string = absent) and carry backend-computed modes', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-headless-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
@@ -275,14 +277,18 @@ test('launchers parse headlessCmd (empty string = absent) and carry backend-comp
   // resolveLauncher returns the same extended shape (no headless validation here — that is create-time).
   assert.equal(resolveLauncher('reclaude', root).headlessCmd, '/opt/reclaude --dangerously-skip-permissions -p')
   assert.equal(resolveLauncher('codex', root).headlessCmd, null)
-  // capability state: claude ships claudeHeadlessOps (a needsCmd one-shot form); codex's is LIVE and
-  // server-side (`needsCmd:false` — the executor is the app-server, derived from the pinned interactive cmd);
-  // pi/opencode still null (each capability flips in its own harness's implementation, never here).
+  // capability state: ALL FOUR harnesses ship a live headless capability. claude/pi/opencode are needsCmd
+  // one-shot forms (built by the shared oneShotHeadlessOps builder from per-harness data); codex's is
+  // server-side (`needsCmd:false` — the executor is the app-server, derived from the pinned interactive cmd).
   assert.equal(claudeHarness.headless, claudeHeadlessOps)
+  assert.equal(piHarness.headless, piHeadlessOps)
+  assert.equal(opencodeHarness.headless, opencodeHeadlessOps)
   assert.equal(claudeHarness.headless?.needsCmd, true)
+  assert.equal(piHarness.headless?.needsCmd, true)
+  assert.equal(opencodeHarness.headless?.needsCmd, true)
   assert.equal(codexHarness.headless?.needsCmd, false)
-  for (const h of HARNESSES) if (h.id !== 'claude' && h.id !== 'codex') assert.equal(h.headless, null, `${h.id} still ships headless: null`)
-  // so modes: a claude launcher WITH headlessCmd offers both; without one (needsCmd unmet) it stays
+  for (const h of HARNESSES) assert.ok(h.headless, `${h.id} ships a live headless capability`)
+  // so modes: a needsCmd launcher WITH headlessCmd offers both; without one (needsCmd unmet) it stays
   // interactive-only; a codex launcher offers both even with NO headlessCmd.
   assert.deepEqual(reclaude.modes, ['interactive', 'headless'])
   assert.deepEqual(blank.modes, ['interactive'])
@@ -290,14 +296,24 @@ test('launchers parse headlessCmd (empty string = absent) and carry backend-comp
   assert.deepEqual(launcherModes('claude', 'anything -p'), ['interactive', 'headless'])
   assert.deepEqual(launcherModes('claude', null), ['interactive'])
   assert.deepEqual(launcherModes('codex', null), ['interactive', 'headless'])
+  assert.deepEqual(launcherModes('pi', 'pi -p'), ['interactive', 'headless'])
+  assert.deepEqual(launcherModes('pi', null), ['interactive'])
+  assert.deepEqual(launcherModes('opencode', 'opencode run'), ['interactive', 'headless'])
+  assert.deepEqual(launcherModes('opencode', null), ['interactive'])
   assert.deepEqual(launcherModes('no-such-harness', 'x'), ['interactive'])   // unknown harness contributes no headless, list stays renderable
 })
 
-test('pinnedLaunchCmd: interactive pins cmd; claude headless pins headlessCmd; codex headless pins the interactive cmd', () => {
+test('pinnedLaunchCmd: interactive pins cmd; needsCmd headless pins headlessCmd; codex headless pins the interactive cmd', () => {
   const l = { name: 'reclaude', harness: 'claude', cmd: '/opt/reclaude --skip', headlessCmd: '/opt/reclaude --skip -p' }
   assert.equal(pinnedLaunchCmd(claudeHarness, l, 'interactive'), '/opt/reclaude --skip')
   // claude's capability is live (claudeHeadlessOps, needsCmd) → the pin IS the headlessCmd, verbatim.
   assert.equal(pinnedLaunchCmd(claudeHarness, l, 'headless'), '/opt/reclaude --skip -p')
+  // pi/opencode are needsCmd too: headless pins their headlessCmd verbatim; missing → fail loud naming the
+  // config repair, never a silent fall-through to the interactive TUI command.
+  assert.equal(pinnedLaunchCmd(piHarness, { name: 'pi', harness: 'pi', cmd: 'pi', headlessCmd: 'pi -p' }, 'headless'), 'pi -p')
+  assert.equal(pinnedLaunchCmd(opencodeHarness, { name: 'oc', harness: 'opencode', cmd: 'opencode --auto', headlessCmd: 'opencode run' }, 'headless'), 'opencode run')
+  assert.throws(() => pinnedLaunchCmd(piHarness, { name: 'pi', harness: 'pi', cmd: 'pi', headlessCmd: null }, 'headless'), /has no headlessCmd/)
+  assert.throws(() => pinnedLaunchCmd(opencodeHarness, { name: 'oc', harness: 'opencode', cmd: 'opencode --auto', headlessCmd: null }, 'headless'), /has no headlessCmd/)
   // codex's live capability is server-side (!needsCmd): headless pins the INTERACTIVE cmd — the app-server
   // binary derives from its first token (version parity) — and headlessCmd is ignored.
   const cx = { name: 'codex', harness: 'codex', cmd: 'codex --yolo', headlessCmd: null }
@@ -354,9 +370,12 @@ test('harnessOps routes per mode, falling through when the harness has no headle
   assert.equal(harnessOps(codexHarness, undefined), codexHarness)
   assert.equal(harnessOps(codexHarness, 'headless'), codexHarness.headless)
   assert.equal(harnessOps(claudeHarness, 'headless'), claudeHeadlessOps)
-  // pi has no headless form → a (theoretical) headless record falls through to the interactive adapter.
-  const pi = HARNESSES.find((h) => h.id === 'pi')!
-  assert.equal(harnessOps(pi, 'headless'), pi)
+  assert.equal(harnessOps(piHarness, 'headless'), piHeadlessOps)
+  assert.equal(harnessOps(opencodeHarness, 'headless'), opencodeHeadlessOps)
+  // a harness with no headless form (none ship one today — the null contract stays for future adapters):
+  // a headless record falls through to the interactive adapter instead of crashing the router.
+  const bare: Harness = { ...piHarness, headless: null }
+  assert.equal(harnessOps(bare, 'headless'), bare)
 })
 
 // codex headless liveness is TURN-scoped: online iff the window is up AND the caller's app-server sweep found
@@ -376,12 +395,18 @@ test('codex headless liveness: window + in-progress turn, placeholder pid ignore
 })
 
 // [[harness-adapter]] claude headless ops — the capability object's pure surface. launchCmd embeds the pinned
-// headlessCmd WHOLE (zero parsing; a headless record without a pin is corruption → fail loud, never a silent
-// interactive fallback); resumeArg is empty (a headless session's continuation is its next delivery, so
-// reopen must never hand the one-shot command a fabricated prompt tail).
-test('claudeHeadlessOps: launchCmd embeds the pinned headlessCmd whole (missing → fail loud); resumeArg is empty', () => {
+// headlessCmd WHOLE inside the one-shot bootstrap script (zero parsing; the caller's tail arrives as "$@"; a
+// headless record without a pin is corruption → fail loud, never a silent interactive fallback); the script
+// carries the undeclared-exit recovery (bounded stop-gate continuation turns); resumeArg is empty (a
+// headless session's continuation is its next delivery, so reopen must never hand the one-shot command a
+// fabricated prompt tail).
+test('claudeHeadlessOps: launchCmd embeds the pinned headlessCmd whole in the recovery script (missing → fail loud); resumeArg is empty', () => {
   assert.equal(claudeHeadlessOps.needsCmd, true)
-  assert.equal(claudeHeadlessOps.launchCmd('some-id', undefined, '/opt/reclaude --skip -p'), '/opt/reclaude --skip -p')
+  const script = claudeHeadlessOps.launchCmd('some-id', undefined, '/opt/reclaude --skip -p')
+  assert.match(script, /^bash -c /)
+  assert.ok(script.includes(`/opt/reclaude --skip -p "$@"`), 'pinned cmd embedded whole, tail on "$@"')
+  assert.ok(script.includes('exited undeclared'), 'the undeclared-exit recovery rides the launch script')
+  assert.ok(script.includes('--resume some-id'), 'recovery turns resume the pinned record id')
   assert.throws(() => claudeHeadlessOps.launchCmd('some-id', undefined, undefined), /no pinned headlessCmd/)
   assert.equal(claudeHeadlessOps.resumeArg({} as never), '')
 })
@@ -402,6 +427,98 @@ test('claudeHeadlessOps liveness is turn-scoped: pidAlive verdict wins; fallback
   const idle = new Map([[100, { ppid: 1, comm: 'bash' }]])
   assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: idle }), 'offline')
   assert.equal(claudeHeadlessOps.liveness(rec, true, undefined, {}), 'offline')                    // nothing to probe = not provably running
+})
+
+// [[harness-adapter]] one-shot headless — pi and opencode ride the SAME builder as claude, differing only in
+// data. pi's script appends `--approve` (adapter-owned one-run trust — each one-shot process must load
+// the project extension with zero prompts; appending is not rewriting, the pinned cmd stays whole);
+// opencode's is the pinned cmd untouched. Both fail loud on a missing pin and never fabricate a resume prompt.
+test('pi/opencode headless ops: launchCmd embeds the pin whole (pi + --approve); missing pin fails loud; resumeArg empty', () => {
+  assert.equal(piHeadlessOps.needsCmd, true)
+  const piScript = piHeadlessOps.launchCmd('some-id', undefined, 'pi -p')
+  assert.ok(piScript.includes(`pi -p --approve "$@"`), 'pi: pinned cmd + adapter-owned trust flag, tail on "$@"')
+  assert.ok(piScript.includes('--session some-id'), 'pi recovery turns resume the pinned record id')
+  assert.throws(() => piHeadlessOps.launchCmd('some-id', undefined, undefined), /headless pi launch has no pinned headlessCmd/)
+  assert.equal(piHeadlessOps.resumeArg({} as never), '')
+  assert.equal(opencodeHeadlessOps.needsCmd, true)
+  const ocScript = opencodeHeadlessOps.launchCmd('some-id', undefined, 'opencode run')
+  assert.ok(ocScript.includes(`opencode run "$@"`), 'opencode: pinned cmd whole, tail on "$@"')
+  assert.ok(ocScript.includes('harness_session_id'), 'opencode recovery resolves the captured id at RUN time')
+  assert.ok(ocScript.includes('--continue'), 'opencode recovery falls to --continue when no capture landed')
+  assert.throws(() => opencodeHeadlessOps.launchCmd('some-id', undefined, undefined), /headless opencode launch has no pinned headlessCmd/)
+  assert.equal(opencodeHeadlessOps.resumeArg({} as never), '')
+})
+
+// same TURN-scoped shape as claude: pidAlive verdict wins; the legacy fallback walks each harness's OWN
+// agent-ish matcher (pi = pi/node under the pane; opencode = opencode/node/bun — its compiled binary or the
+// npm shim's runtime). A stranger process (`ping` under pi) never reads as the agent.
+test('pi/opencode headless liveness: turn-scoped pidAlive, per-harness tree fallback', () => {
+  const rec = {} as never
+  for (const ops of [piHeadlessOps, opencodeHeadlessOps]) {
+    assert.equal(ops.liveness(rec, false, undefined, { pidAlive: true }), 'offline')   // window gone trumps everything
+    assert.equal(ops.liveness(rec, true, undefined, { pidAlive: true }), 'online')     // a turn is executing
+    assert.equal(ops.liveness(rec, true, undefined, { pidAlive: false }), 'offline')   // between turns — declared lifecycle rules
+  }
+  const tree = (comm: string) => new Map([[100, { ppid: 1, comm: 'bash' }], [200, { ppid: 100, comm }]])
+  assert.equal(piHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: tree('pi') }), 'online')
+  assert.equal(piHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: tree('node') }), 'online')
+  assert.equal(piHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: tree('ping') }), 'offline')   // pi\b — a tool subprocess is not the agent
+  assert.equal(opencodeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: tree('opencode-linux-x64') }), 'online')
+  assert.equal(opencodeHeadlessOps.liveness(rec, true, undefined, { panePid: 100, procs: tree('sleep') }), 'offline')
+})
+
+// the injected NEXT-TURN composition, audited through the same ONE_SHOT_HEADLESS data the adapters are built
+// from: agent.pid re-registration first (the born pattern), then the WHOLE pinned command with each
+// harness's continue-this-conversation flag — claude `--resume <record id>`, pi `--session <record id>` (+
+// --approve), opencode `--session <captured harness id>` falling to `--continue` — the message quoted
+// whole, never parsed, and the undeclared-exit recovery closing the script.
+test('oneShotTurnScript composes each harness\'s resume turn from the pinned cmd + adapter data', () => {
+  const rec = (over = {}) => ({ session: 'rec-1', harnessSessionId: null, ...over }) as never
+  const msg = `fix the "bug" — then re-run`
+  const claude = oneShotTurnScript(ONE_SHOT_HEADLESS.claude, rec(), '/opt/reclaude --skip -p', '/tmp/agent.pid', msg)
+  assert.match(claude, /^printf %s "\$\$" > '\/tmp\/agent\.pid'\n/)                     // born registration first
+  assert.match(claude, /export SPEXCODE_SESSION_ID=rec-1/)
+  assert.match(claude, /\/opt\/reclaude --skip -p --resume rec-1 /)
+  assert.ok(claude.includes(`'fix the "bug" — then re-run'`), 'message quoted whole')
+  assert.ok(claude.includes('exited undeclared'), 'the undeclared-exit recovery rides every injected turn too')
+  const pi = oneShotTurnScript(ONE_SHOT_HEADLESS.pi, rec(), 'pi -p', '/tmp/agent.pid', msg)
+  assert.match(pi, /pi -p --approve --session rec-1 /)                                  // exact pinned id; trust rides every turn
+  const ocCaptured = oneShotTurnScript(ONE_SHOT_HEADLESS.opencode, rec({ harnessSessionId: 'ses_abc' }), 'opencode run', '/tmp/agent.pid', msg)
+  assert.match(ocCaptured, /opencode run --session ses_abc /)
+  const ocUncaptured = oneShotTurnScript(ONE_SHOT_HEADLESS.opencode, rec(), 'opencode run', '/tmp/agent.pid', msg)
+  assert.match(ocUncaptured, /opencode run --continue /)                                // capture never landed → opencode's own last-session-here
+})
+
+// the recovery's terminal behaviour, executed for real: a DECLARED record exits 0 without firing anything; an
+// UNDECLARED one fires the bounded continuation (here a stub that logs its args) and, still undeclared after
+// 2 tries, fails loud with exit 97 — never a silent wedge, never an unbounded loop.
+test('one-shot undeclared-exit recovery: declared → no-op; undeclared → bounded continuation turns then exit 97', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-oneshot-rec-'))
+  const prev = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try {
+    const id = 'rec-test-1'
+    const script = claudeHeadlessOps.launchCmd(id, undefined, `bash -c 'echo agent-ran'`)
+    // materialize the store dir + record the script reads (the same path sessionStoreDir computes).
+    const dir = sessionStoreDir(id)
+    mkdirSync(dir, { recursive: true })
+    const run = () => spawnSync('bash', ['-c', `${script} ''`], { encoding: 'utf8' })
+    // declared record → the agent runs once, recovery sees the declared state, exit 0.
+    writeFileSync(join(dir, 'session.json'), JSON.stringify({ status: 'awaiting' }, null, 2))
+    let r = run()
+    assert.equal(r.status, 0)
+    assert.doesNotMatch(r.stderr ?? '', /undeclared/)
+    // undeclared record → two continuation turns fire (the stub agent just echoes), then exit 97 loud.
+    writeFileSync(join(dir, 'session.json'), JSON.stringify({ status: 'active' }, null, 2))
+    r = run()
+    assert.equal(r.status, 97)
+    assert.equal(((r.stderr ?? '').match(/firing the stop-gate continuation turn/g) || []).length, 2)
+    assert.match(r.stderr ?? '', /still undeclared/)
+  } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prev
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('defaultSessionMode: absent → interactive; explicit headless honored; an unrecognized value fails loud', () => {

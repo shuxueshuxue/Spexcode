@@ -4,10 +4,10 @@
   },
   "sessions": {
     "launchers": {
-      "claude": { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" },
+      "claude": { "harness": "claude", "cmd": "claude --dangerously-skip-permissions", "headlessCmd": "claude --dangerously-skip-permissions -p" },
       "codex": { "harness": "codex", "cmd": "codex --yolo" },
-      "opencode": { "harness": "opencode", "cmd": "opencode --auto" },
-      "pi": { "harness": "pi", "cmd": "pi" }
+      "opencode": { "harness": "opencode", "cmd": "opencode --auto", "headlessCmd": "opencode run" },
+      "pi": { "harness": "pi", "cmd": "pi", "headlessCmd": "pi -p" }
     },
     "defaultLauncher": "claude"
   }

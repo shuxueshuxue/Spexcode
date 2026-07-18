@@ -258,8 +258,9 @@ surface:
   JSON-RPC turn delivery live in the Codex adapter.
 - **headless (`HarnessHeadless` + `harnessOps`)** — a harness's HEADLESS (one-shot turn) capability object,
   mirroring `agentDir`'s "null = no such primitive" pattern: `{ needsCmd, launchCmd, liveness, deliver,
-  resumeArg }`, or null when the harness has no headless form (pi/opencode today — a headless create on
-  them fails loud at the create path). A session's `mode` is a PRODUCT dimension, so the ONE router
+  resumeArg }`, or null when the harness has no headless form (none today — all four ship one; the null
+  contract stays for future adapters, whose headless create fails loud at the create path). A session's
+  `mode` is a PRODUCT dimension, so the ONE router
   `harnessOps(h, mode)` (a mode branch, never a harness branch) picks the capability object for a headless
   record and the interactive adapter for everything else; sessions.ts's launch/liveness/occupancy/waitForReady/
   send/reopen all route through it, and `rvEnv` omits the rendezvous vars for any headless launch (no daemon
@@ -286,6 +287,39 @@ surface:
   resume must never hand the one-shot command a fabricated prompt (the mbp wrapper's "Continue…" lesson —
   the system never invents instructions on the human's behalf), so resumeSession's headless-with-empty-tail
   path just ensures the window (the next turn's injection target) and points the caller at send.
+  **pi's and opencode's headless forms are live** and are the SAME one-shot shape, produced by the ONE
+  shared builder (`oneShotHeadlessOps` over the `ONE_SHOT_HEADLESS` data registry): the whole machinery —
+  pinned-headlessCmd-whole launch, turn-scoped pid liveness, injected-turn delivery with its born
+  re-registration and busy/no-window refusals, empty resumeArg — is written ONCE (claude's ops are the same
+  builder over claude data), and each harness contributes only DATA: its agent-ish process matcher (the busy
+  gate + legacy liveness fallback; pi's is `pi\b|node` so a tool subprocess named `ping` never reads as the
+  agent), its adapter-owned launch flags, and its continue-this-conversation turn flag — so adding a
+  one-shot harness adds a data row, never code. pi is claude-shaped end to end (`needsCmd:true`,
+  `headlessCmd` e.g. `pi -p`): the launch tail already pins `--session-id <record id>`, a turn resumes
+  exactly that id with `--session <record id>` (which FAILS LOUD when the session file is gone — never a
+  silent fresh mint, the same choice as interactive resume), and `--approve` (pi's one-run project trust)
+  rides the launch AND every injected turn, because each turn is a FRESH pi process that must load the
+  project extension — the hook shim — with zero prompts (appending an adapter-owned flag is not rewriting
+  the pinned command, which stays whole). opencode (`needsCmd:true`, `headlessCmd` e.g. `opencode run`)
+  mints its own session id headless exactly as interactive: `run` boots the same server and loads the same
+  project plugin as the TUI, so the minted-id capture (`harness_session_id`) and every hook fire unchanged;
+  a turn resumes `--session <captured id>`, falling to `--continue` (opencode's own
+  last-session-in-this-directory — this worker's, in a dedicated worktree) when no capture ever landed,
+  mirroring the interactive resumeArg. The one-shot scripts (launch and injected turn alike) also close the
+  stop-gate contract OUT of process — the **undeclared-exit recovery**: some one-shot harnesses drop the
+  gate's in-process continuation at exit (`opencode run` returns without awaiting the plugin's session.idle
+  handler — REPRODUCED: gate rejected, teach sentinel planted, process gone, record wedged `active`), so
+  after a CLEAN agent exit the script reads the record and, while still UNDECLARED (active/queued), fires a
+  bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the gate's
+  own contract restated, never a fabricated task; two tries then exit 97 loud. A declared/absent record
+  exits 0 untouched, so harnesses whose in-process gate held (claude's native Stop-block; pi's
+  settle-inject, normally) never fire it. All three one-shot substrates are LIVE-verified (2026-07-18, pi
+  0.80.10 / opencode 1.18.3): the shim extension/plugin loads in the one-shot mode, the lifecycle events
+  fire, the resume turn provably continues the SAME conversation, and pi's `--session` on a vanished id
+  fails loud — and the dispatched-lifecycle scenarios below carry real product-loop readings (pi: full
+  pass; opencode: the recovery's A/B pair) — while the full eight-behavior matrix through real DISPATCHED
+  headless workers remains the merge-acceptance bar for reworking any of these adapters (the acceptance
+  section above).
   **codex's headless form is live** and is the interactive launch MINUS the
   TUI attach: `needsCmd:false` — the executor already IS the shared app-server (the task runs as the
   backend-owned thread's FIRST turn on both paths; the interactive pane TUI only renders it), so `headlessCmd`

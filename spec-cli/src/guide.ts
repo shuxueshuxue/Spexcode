@@ -311,20 +311,26 @@ A named launcher profile fixes BOTH a session's harness AND its exact launch com
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
 reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordinary named launcher for each
 harness the adopter SELECTED (--harness), from the template pool
-  "claude" → { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" }
-  "codex"  → { "harness": "codex",  "cmd": "codex --yolo" }
+  "claude"   → { "harness": "claude",   "cmd": "claude --dangerously-skip-permissions",
+                 "headlessCmd": "claude --dangerously-skip-permissions -p" }
+  "codex"    → { "harness": "codex",    "cmd": "codex --yolo" }
+  "opencode" → { "harness": "opencode", "cmd": "opencode --auto", "headlessCmd": "opencode run" }
+  "pi"       → { "harness": "pi",       "cmd": "pi", "headlessCmd": "pi -p" }
 after which they are edited (or removed) exactly like any launcher you add. To run workers under an auth
 wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
 override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir
 variants. Shape:
-  "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>",
+  "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi",
+                             "cmd": "<launch command>",
                              "headlessCmd": "<headless launch command>" } }
 \`harness\` defaults to "claude"; \`cmd\` is required and stays the INTERACTIVE (TUI) command — existing
 configs need zero migration. \`headlessCmd\` is the OPTIONAL second complete command for HEADLESS (one-shot
 turn) sessions (\`spex session new --headless\` / the dashboard mode switch): write the FULL invocation
-(e.g. the same wrapper plus \`-p\`) — the system embeds it whole and never parses or rewrites it. An empty
+(claude: the same wrapper plus \`-p\`; pi: \`pi -p\`; opencode: \`opencode run\`) — the system embeds it
+whole and never parses, rewrites, or derives it from \`cmd\`. An empty
 string reads as absent. Whether a launcher can go headless is the harness's capability: a harness whose
-headless executor is server-side needs no headlessCmd at all, one that runs a one-shot agent process
+headless executor is server-side (codex — its app-server already runs the task) needs no headlessCmd at
+all, one that runs a one-shot agent process (claude, pi, opencode)
 requires it — a headless create missing it FAILS LOUD at create time, naming this section. Because a
 \`cmd\`/\`headlessCmd\` is a machine fact (an abs wrapper path), the DEFINITION lives in the gitignored
 spexcode.local.json, while the portable defaultLauncher NAME sits in the committed spexcode.json — the
@@ -411,7 +417,8 @@ Example — govern your own source dir and loosen the altitude budget:
 ── OTHER (spexcode.json unless noted) ──
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
-  harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
+  harnesses   which harness targets \`spex materialize\` delivers into — native ids
+              ("claude"|"codex"|"opencode"|"pi") or a
               { "plugin": "<folder>" } bundle. REQUIRED — there is no default set: \`spex init --harness\`
               stamps the explicit choice, and a missing field fails materialize loud. PERSISTENT and
               git-transactional: the edit takes effect at the next git-native materialize anchor (the commit

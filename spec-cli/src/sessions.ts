@@ -233,9 +233,34 @@ export type SessRec = {
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   mode: SessionMode         // the session's MODE, pinned at creation alongside the command it selected; records predating modes read interactive
+  launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
+export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
+
+// @@@ stable launch authority - the supervisor injects its PUBLIC proxy URL into every replaceable child.
+// That URL survives child hot reload/restart; PORT inside a supervised child is private and ephemeral, so it
+// is only the fallback for a directly-run server with no injected API URL. Credentials/query/fragment are
+// not authority and may contain secrets, so they are stripped before the value reaches session.json.
+export function backendLaunchAuthority(env: { SPEXCODE_API_URL?: string; PORT?: string } = process.env): string {
+  const raw = env.SPEXCODE_API_URL?.trim() || `http://127.0.0.1:${env.PORT?.trim() || '8787'}`
+  const url = new URL(raw)
+  url.username = ''
+  url.password = ''
+  url.search = ''
+  url.hash = ''
+  url.pathname = url.pathname.replace(/\/+$/, '') || '/'
+  return url.toString().replace(/\/$/, '')
+}
+
+export function rawLifecycleStatus(rec: Pick<SessRec, 'status' | 'launchOwner'>): string {
+  return rec.status === 'queued' && rec.launchOwner ? OWNED_QUEUE_RAW_STATUS : rec.status
+}
+
+export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner'>, authority = backendLaunchAuthority()): boolean {
+  return rec.status === 'queued' && (rec.launchOwner === null || rec.launchOwner === authority)
+}
 
 // typed read of a session's record from the global store (null if it has none — a self-launched session that
 // only ever wrote spec-discipline sentinels has a store dir but no session.json). Goes through layout's
@@ -248,8 +273,11 @@ function readRecord(id: string): SessRec | null {
 }
 // the loose on-disk fields validated into the typed shape. Exported so the old-record defaults (harness →
 // claude, mode → interactive, absent pin → null) are unit-auditable without a store on disk.
-export function fromRaw(raw: RawRecord): SessRec {
-  const status = LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
+export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
+  const ownedQueue = raw.status === OWNED_QUEUE_RAW_STATUS
+  const status = ownedQueue ? 'queued' : LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
+  const launchOwner = ownedQueue ? raw.launch_owner?.trim() : null
+  if (ownedQueue && !launchOwner) throw new Error(`owned queue record '${raw.session_id}' has no launch_owner`)
   const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
   const sk = raw.sortkey
   const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
@@ -262,6 +290,7 @@ export function fromRaw(raw: RawRecord): SessRec {
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     mode: raw.mode === 'headless' ? 'headless' : 'interactive',   // records written before modes (or carrying junk) read interactive — every old path unchanged
+    launchOwner: launchOwner || null,
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -278,7 +307,10 @@ function writeRecord(rec: SessRec): void {
     title: rec.title ?? '',
     name: rec.name ?? '',
     parent: rec.parent ?? '',
-    status: rec.status,
+    // A leased queue uses a raw token older drainers do not recognize as `queued`; current readers map it
+    // back to the unchanged public lifecycle. This version fence is what keeps an orphaned old backend from
+    // stealing the entry before it can even inspect the new launch_owner field.
+    status: rawLifecycleStatus(rec),
     proposal: rec.proposal ?? '',
     merges: rec.merges,
     note: rec.note ?? '',
@@ -289,6 +321,7 @@ function writeRecord(rec: SessRec): void {
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     mode: rec.mode || 'interactive',
+    launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -1096,6 +1129,7 @@ let draining = false   // re-entrancy guard: only one drain pass runs at a time 
 async function startQueued(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
+  if (!canDrainQueued(wt.rec)) return false
   const launchPrompt = readLaunchFile(id)
   if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
@@ -1108,7 +1142,7 @@ async function startQueued(id: string): Promise<boolean> {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
   }
-  writeRecord({ ...wt.rec, status: 'active', proposal: null })
+  writeRecord({ ...wt.rec, status: 'active', proposal: null, launchOwner: null })
   removeLaunchFile(id)   // consumed
   // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
   // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
@@ -1135,7 +1169,12 @@ export async function drainQueue(): Promise<void> {
       if (snap.probeFailed) break
       const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, snap) ? 1 : 0), 0)
       if (occupied >= cap) break
-      const next = sessions.find((s) => s.status === 'queued' && !launching.has(s.id))
+      const authority = backendLaunchAuthority()
+      const next = sessions.find((s) => {
+        if (s.status !== 'queued' || launching.has(s.id)) return false
+        const rec = readRecord(s.id)
+        return !!rec && canDrainQueued(rec, authority)
+      })
       if (!next) break
       if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
     }
@@ -1284,6 +1323,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
     // everything else pins the interactive cmd.
     launchCmd: pinned,
     mode: m,
+    launchOwner: backendLaunchAuthority(),
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)

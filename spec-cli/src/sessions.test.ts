@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness } from './harness.js'
-import { bootstrapMaterialize, fromRaw, launchScript, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, fromRaw, launchScript, rawLifecycleStatus, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, type RawRecord } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -127,7 +127,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', mode: 'interactive',
+      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', mode: 'interactive', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
 
@@ -160,4 +160,34 @@ test('old records without a mode field read interactive; only an explicit headle
   assert.equal(fromRaw(raw({ mode: '' })).mode, 'interactive')              // empty value → interactive
   assert.equal(fromRaw(raw({ mode: 'garbage' })).mode, 'interactive')       // junk never becomes a mode
   assert.equal(fromRaw(raw({ mode: 'headless' })).mode, 'headless')         // the one explicit opt-in
+})
+
+test('owned queues are public-authority leased and raw-state fenced from legacy drainers', () => {
+  const publicAuthority = backendLaunchAuthority({
+    SPEXCODE_API_URL: 'https://operator:secret@127.0.0.1:8787/api/?token=private#fragment',
+    PORT: '44725',
+  })
+  assert.equal(publicAuthority, 'https://127.0.0.1:8787/api')
+  assert.doesNotMatch(publicAuthority, /operator|secret|token|44725/)
+
+  const base: SessRec = {
+    session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
+    name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
+    createdAt: 1, harness: 'codex', harnessSessionId: null, launcher: 'codex', launchCmd: 'codex',
+    mode: 'headless', launchOwner: publicAuthority,
+  }
+  assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)
+  assert.notEqual(rawLifecycleStatus(base), 'queued', 'a legacy status === queued selector cannot claim it')
+
+  const reread = fromRaw({
+    session_id: base.session, governed: true, worktree_path: base.worktreePath, branch: base.branch, node: null,
+    title: null, name: null, status: OWNED_QUEUE_RAW_STATUS, proposal: null, merges: 0, note: null,
+    sortkey: null, createdAt: 1, harness: 'codex', launcher: 'codex', launch_cmd: 'codex', mode: 'headless',
+    launch_owner: publicAuthority,
+  })
+  assert.equal(reread.status, 'queued', 'the current public record still reports queued before launch')
+  assert.equal(reread.mode, 'headless')
+  assert.equal(canDrainQueued(reread, publicAuthority), true, 'a replacement child at the same public authority takes over')
+  assert.equal(canDrainQueued(reread, 'http://127.0.0.1:8956'), false, 'a different backend authority cannot claim it')
+  assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')
 })

@@ -7,8 +7,8 @@ scenarios:
       <link rel="icon"> href; then set dashboard.icon to an emoji and to an Iconify name, reload, and
       re-inspect — the favicon must change to match each.
     expected: |
-      With nothing configured, the tab shows the default SpexCode mark (a spec-tree glyph over a compass
-      arc) shipped by index.html (the <link rel="icon"> resolves to that inline SVG data-URI). Setting dashboard.icon to an emoji
+      With nothing configured, the tab shows the default SpexCode mark (a tidy-tree glyph — a root node
+      bezier-linked to two children — on a violet→fuchsia gradient tile) shipped by index.html (the <link rel="icon"> resolves to that inline SVG data-URI). Setting dashboard.icon to an emoji
       (e.g. "🛰️") makes the runtime swap the favicon to that emoji's inline SVG; setting it to an Iconify
       name (e.g. "mdi:rocket-launch") points the favicon at https://api.iconify.design/mdi/rocket-launch.svg.
       No vendored/downloaded asset is involved in any case.

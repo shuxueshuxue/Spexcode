@@ -18,9 +18,10 @@ implementation of one: the in-tree/global-config backout **is dematerialize, the
 asserted against the empty policy** (the forgetting law's materialize(∅), [[harness-delivery]]). Whatever
 any policy — harness set, the retired render vote, or an older legacy mode — ever wrote, the same
 identity-stamped erase forgets it; uninstall adds only what a per-run materialize never owns. It is **surgical,
-never destructive**: every removal is gated on a SpexCode **identity stamp** (the managed-block sentinels,
+never destructive**: every removal is gated on SpexCode **ownership identity** (the managed-block sentinels,
 the shim's own `dispatch.sh` command line, the trust sentinels, the generated mark / name-scoped on-demand
-paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated.
+paths, the plugin name stamp, or byte-identity with a canonical hook template), so it can only ever delete what
+SpexCode itself generated and the user has not modified.
 
 **The one inviolable rule — the user's spec ASSET is never touched.** `.spec` and `.plugins` are the user's own
 spec data (the whole point of adopting the tool); uninstall **never** deletes or edits them. Nor does it touch
@@ -49,8 +50,9 @@ It removes, for the resolved project:
 
 **Git hooks are preserved by default.** The pre-commit / prepare-commit-msg hooks are per-clone (never committed),
 and a user may have layered their own logic; silently deleting them on uninstall would be the opposite of surgical.
-So uninstall leaves them in place unless `--hooks` is passed, and even then removes a hook **only** when its
-content carries a SpexCode identity marker (so a user's own pre-commit is never deleted).
+So uninstall leaves them in place unless `--hooks` is passed, and even then removes a hook **only** when it is
+byte-identical to one of the canonical generated hook templates. This covers every hook init can plant without a
+name list drifting out of sync; a modified generated hook and every unrelated user hook survive.
 
 Like `init`, it resolves the target with cwd set to the project so the `.plugins` loaders read the right tree, and
 reports exactly what it removed. It is idempotent: a second run finds nothing left and is a clean no-op.

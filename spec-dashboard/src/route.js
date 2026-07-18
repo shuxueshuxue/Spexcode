@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 // as a static dist behind plain file servers/gateways with no index.html fallback, and a hash route needs
 // nothing from the server. No router dependency for five pages.
 
-export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
+export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'projects', 'settings']
 
 // '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval address — each segment decoded; the page splits on the first '/').

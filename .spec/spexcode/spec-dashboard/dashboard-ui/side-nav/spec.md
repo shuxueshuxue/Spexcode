@@ -55,6 +55,12 @@ pages**, side by side with the graph and the board.
   board's live terminals) stay mounted and display-toggled — a route change may never cost a terminal
   its socket. True transient overlays (help, search, the node popup) remain modals *within* a page and
   close when the page changes.
+- **Catalog-gated multi-project chrome.** Under the multi-project gateway ([[projects-hub]]) the rail
+  carries two more pieces, both rendered only from a SUCCESSFUL catalog probe: a `#/projects` entry for
+  the catalog page, and — on a `/p/<id>/` scoped page — the persistent current-project chip pinned above
+  the page entries, whose menu lists the catalog for same-tab switching plus an "All projects" door to
+  the hub. When the catalog is denied the chip still names the current project but carries no menu, so a
+  direct-project guest never sees the fleet: the gate is absence of data, not a hidden element.
 - **One global ⌥ vocabulary; Esc never switches pages.** Page switching is the **⌥ command family**,
   window-global on every page: `⌥1..⌥5` jump straight to a page in rail order (graph · sessions · evals ·
   issues · settings — the rail tooltips carry the hints), `⌥N` to the New Session composer, `⌥F` to the

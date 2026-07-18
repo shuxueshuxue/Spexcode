@@ -49,6 +49,11 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><path d="M2.5 3.5 h13 v8.4 h-7 l-3.6 3 v-3 h-2.4 z" /><path d="M5.4 6.7 h7.2 M5.4 9.2 h4.8" /></>,
   },
+  // the projects catalog ([[projects-hub]]) — a layers stack: many projects, one gateway.
+  projects: {
+    vb: 18, sw: 1.4,
+    node: <><path d="M9 2.2 16 5.8 9 9.4 2 5.8Z" /><path d="M2 9.4 9 13 16 9.4" /><path d="M2 12.8 9 16.4 16 12.8" /></>,
+  },
 
   // ——— 16-grid utility glyphs kept at their drawn size ———
   lock: {

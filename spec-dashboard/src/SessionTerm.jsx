@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
+import { apiUrl } from './project.js'
 
 // heuristic: a select-caret line (`❯ <option>`) plus a hint line mentioning Esc + Enter/arrows distinguishes
 // an interactive menu (e.g. `/model`'s list) from the bare `❯` prompt, which carries no such hint line.
@@ -111,7 +112,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     // the WebGL addon is loaded/disposed by the active-driven effect below (one context for the visible pane only), not here.
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    const base = `${proto}://${location.host}/api/sessions/${sessionId}/socket`
+    const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
     // size-first handshake: carry the pane's real dimensions on the connect URL so the server draws its
     // first frame at THAT size — no guessed-size full frame to scramble the still-default xterm and need a
     // corrective second frame. Recomputed on every (re)connect (resilientSocket re-resolves it), so a

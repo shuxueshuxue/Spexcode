@@ -32,6 +32,7 @@ const SessionInterface = lazy(() => import('./SessionInterface.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
+const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
 const nodeTypes = { spec: SpecNode }
 // node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
@@ -49,7 +50,7 @@ const CHORDS = {
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues }) {
+function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues, catalog }) {
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
@@ -530,7 +531,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
-      <SideBar page={page} onNav={navigate} />
+      <SideBar page={page} onNav={navigate} project={project} catalog={catalog} />
       <div className="app-main">
       <div className="page-graph" style={{ '--fp-w': `${fpW}px`, display: page === 'graph' ? undefined : 'none' }}>
       <div className="graph" ref={graphRef}>
@@ -645,6 +646,13 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       {page === 'settings' && (
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
           <Settings />
+        </Suspense>
+      )}
+      {/* the projects catalog ([[projects-hub]]) as a routed page inside a scoped dashboard — the same
+          component the hub face mounts standalone; it fetches and gates itself. */}
+      {page === 'projects' && (
+        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+          <ProjectsPage />
         </Suspense>
       )}
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadPlugins, loadSettings } from './data.js'
 import { MENTION_RE, specPath } from './mentions.jsx'
+import { apiUrl } from './project.js'
 
 // The dashboard's ONE session-launch path, shared by every face that can start a worker — the desktop
 // console's New Session tab (SessionInterface.jsx) and the phone's composer (MobileApp.jsx). The grammar,
@@ -36,7 +37,7 @@ export const composeLaunch = (raw, presets, specs) => {
 // double-create. Returns { ok, error? }.
 export async function createSession(prompt, launcher, mode) {
   try {
-    const res = await fetch('/api/sessions', {
+    const res = await fetch(apiUrl('/api/sessions'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, ...(launcher ? { launcher } : {}), ...(mode ? { mode } : {}) }),
     })

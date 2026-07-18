@@ -44,7 +44,8 @@ dark terminal, whatever the app theme. Two panes: a left session list (its width
 the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
-**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
+**New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
+input. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the
 config-preset palette; the two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the
 server derives the node (the first `[[<id>]]`). Both menus only insert text; the New prompt has **no** `/`

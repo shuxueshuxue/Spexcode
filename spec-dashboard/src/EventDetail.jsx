@@ -4,6 +4,7 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
+import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 
@@ -114,6 +115,9 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   const [seeking, setSeeking] = useState(false)  // dragging the scrubber
   const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
   const [selIdx, setSelIdx] = useState(null)     // index (into comments) of the explicitly-selected comment
+  // the remark rail is default-FOLDED to the shared fold strip ([[fold-toggle]]); a mark gesture (circle /
+  // `a` / selecting a remark) unfolds it, and the state persists across selection switches (no per-entry reset).
+  const [railFolded, setRailFolded] = useState(true)
 
   // A/B history: this scenario's WHOLE reading history (newest-first). The SOURCE is HOME-provided so it shares
   // each home's ROOT ([[event-detail]]): the session eval tab hands down its WORKTREE-rooted readings
@@ -287,7 +291,8 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
 
   const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
   const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
-  const selectComment = (i, tMs) => { setSelIdx(i); if (tMs != null) seekMs(tMs) }
+  // selecting a remark is a review act on the rail — it unfolds a folded rail so the selection is visible.
+  const selectComment = (i, tMs) => { setRailFolded(false); setSelIdx(i); if (tMs != null) seekMs(tMs) }
   // the ONE frame grab all three mark gestures share (circle / ⏱ / `a`): capture the current frame at
   // natural resolution (a circle burns its rect in), stash it in the blob store, return the hash — null
   // when there is no decodable frame or the store refuses, so callers degrade to a text-only anchor
@@ -337,6 +342,9 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   const annotate = useCallback(async (rect) => {
     const v = vid.current
     if (!v) return
+    // the mark lands in the rail's composer — unfold NOW (same commit as the draft), so the composer is
+    // visible when the draft's focus effect runs, never focused while display:none.
+    setRailFolded(false)
     v.pause()
     const tMs = Math.round((v.currentTime || 0) * 1000)
     const st = stepAt(events, tMs)
@@ -359,7 +367,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     }
     pos = Math.min(anchored.length - 1, Math.max(0, pos + dir))
     const a = anchored[pos]
-    setSelIdx(a.i); seekMs(a.tMs)
+    setRailFolded(false); setSelIdx(a.i); seekMs(a.tMs)
   }, [anchored, selIdx, seekMs])
 
   // the whole player is keyboard-driven; typing in a field (the composer) is never hijacked.
@@ -501,8 +509,10 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
       </header>
 
       {/* the workspace — media STAGE center, remark RAIL right, both full-height; each scrolls itself, so
-          circling on the stage and remarking in the rail never scroll each other out of view. */}
-      <div className="an-work">
+          circling on the stage and remarking in the rail never scroll each other out of view. The rail is
+          default-folded to the shared strip; the rail itself stays MOUNTED (display:none) so a typed
+          draft survives a fold, mirroring the master-list fold. */}
+      <div className={`an-work ${railFolded ? 'rail-folded' : ''}`}>
         <div className="an-stage-col">
           {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
           {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
@@ -588,10 +598,20 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
             : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
         </div>
 
+        {/* the folded rail's whole strip is the unfold affordance — the SAME shared strip every master
+            list folds to, wearing the remark count (accented while any remark is still open). */}
+        {railFolded && (
+          <FoldToggle className="fv-unfold an-rail-unfold" folded label={t('annotator.railUnfold')}
+            onToggle={() => setRailFolded(false)}>
+            {comments.length > 0 && (
+              <span className={`an-rail-count ${comments.some((c) => !c.resolved) ? 'open' : ''}`}>{comments.length}</span>
+            )}
+          </FoldToggle>
+        )}
         <EvalRemarks entry={entry} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
           codeSha={viewing.codeSha} seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
           selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null}
-          commands={composerCommands} />
+          commands={composerCommands} folded={railFolded} onFold={() => setRailFolded(true)} />
       </div>
     </div>
   )
@@ -608,12 +628,16 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
 // circled frame; the selected and playhead-active remarks highlight in sync with the scrubber's markers; a
 // resolved remark renders settled ([[remark-teeth]]). Rendered on EVERY eval home — a fresh scenario shows
 // an empty track with a live composer.
-function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events, commands = null }) {
+function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events, commands = null, folded = false, onFold = null }) {
   const t = useT()
   const send = (text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha, evidence })
   return (
-    <aside className="an-rail">
-      <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
+    <aside className={`an-rail ${folded ? 'folded' : ''}`}>
+      <div className="an-comments-head">
+        <span>{t('annotator.comments', { n: comments.length })}</span>
+        {/* the same shared inline fold badge the master lists wear — folds the rail back to the strip. */}
+        {onFold && <FoldToggle className="fv-fold-inline" label={t('annotator.railFold')} onToggle={onFold} />}
+      </div>
       <div className="an-rail-list">
         {/* threadId + onRemarkChange arm the rows' resolve/retract verbs (CLI-parity, [[remark-substrate]]):
             the human resolves an agent's unresolved remark (second-party judgment) or retracts their own —

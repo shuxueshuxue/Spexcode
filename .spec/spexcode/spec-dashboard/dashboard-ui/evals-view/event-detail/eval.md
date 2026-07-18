@@ -3,20 +3,43 @@ scenarios:
   - name: workspace-no-pingpong
     tags: [frontend-e2e, desktop]
     description: >
-      On #/evals, select a video reading whose thread holds several anchored remarks. Measure the detail
-      pane's geometry: the header band's height and contents; whether the media stage AND the remark
-      rail's composer are BOTH within the viewport at once (getBoundingClientRect on the video and on the
-      composer textarea); scroll the rail's remark list and read whether the video moved; type into the
-      composer and read whether the stage scrolled. Then narrow the window under the breakpoint and
-      re-read the layout.
+      On #/evals, select a video reading whose thread holds several anchored remarks. Unfold the remark
+      rail (click its folded strip), then measure the detail pane's geometry: the header band's height
+      and contents; whether the media stage AND the remark rail's composer are BOTH within the viewport
+      at once (getBoundingClientRect on the video and on the composer textarea); scroll the rail's remark
+      list and read whether the video moved; type into the composer and read whether the stage scrolled.
+      Then narrow the window under the breakpoint and re-read the layout.
     expected: |
       The detail is a WORKSPACE, not a scroll stack: a slim header (scenario · node · verdict badge ·
-      A/B strip), then the media stage and the remark rail SIDE BY SIDE — the video and the composer are
-      simultaneously visible with NO scrolling (the composer is docked at the rail's foot, never below
-      the media/gallery/thread stack). Scrolling the rail's remark list never moves the stage; the stage
-      scrolls itself when its gallery overflows. Circle→remark→circle needs zero vertical travel — the
-      old top-bottom ping-pong is gone. Under the narrow breakpoint the workspace degrades to one
-      stacked column (stage over rail) instead of clipping.
+      A/B strip), then the media stage and the remark rail SIDE BY SIDE once the rail is unfolded — the
+      video and the composer are simultaneously visible with NO scrolling (the composer is docked at the
+      rail's foot, never below the media/gallery/thread stack). Scrolling the rail's remark list never
+      moves the stage; the stage scrolls itself when its gallery overflows. Circle→remark→circle needs
+      zero vertical travel — the old top-bottom ping-pong is gone. Under the narrow breakpoint the
+      workspace degrades to one stacked column (stage over rail) instead of clipping.
+  - name: rail-default-folded
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/FoldToggle.jsx]
+    description: >
+      On #/evals, select a video reading whose thread holds remarks (at least one unresolved). Read the
+      workspace's initial state: is the remark rail hidden behind a thin right-edge strip (the shared
+      fold-strip affordance, `.an-rail-unfold`), and does the strip carry the remark count? Click the
+      strip and read the rail (list + composer + a fold badge in its head). Click the head's fold badge
+      and re-read. Unfold again is NOT clicked — instead drag-circle a region on the paused frame and
+      read whether the rail opened on its own with the prefilled composer focused. Then click a scrubber
+      comment marker while the rail is folded and read the rail. Switch selection to another row and
+      read whether the fold state persisted.
+    expected: |
+      The remark rail is FOLDED BY DEFAULT on both eval homes: the workspace opens as stage + a thin
+      right strip — the SAME shared FoldToggle strip the master lists fold to (one component, one glyph),
+      wearing the remark count (accented while any remark is unresolved), so the outstanding loss stays
+      glanceable through the fold. Clicking the strip unfolds the full rail — remark list, docked
+      composer, and the shared inline fold badge in the rail head, which folds it back to the strip. The
+      review act unfolds it WITHOUT the strip: a drag-circle (or `a`) opens the rail with the anchored
+      draft prefilled and the composer focused; clicking a scrubber marker (or ↑/↓ jump) opens it with
+      that remark selected. The fold state persists across selection switches — a new selection neither
+      re-folds an opened rail nor re-opens a folded one. On the phone eval host the fold retires and the
+      rail stays open.
   - name: stale-reading-readout
     tags: [frontend-e2e]
     description: >

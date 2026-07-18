@@ -93,7 +93,12 @@ straight to the trunk.
   panes use, so local-issue markdown and spec markdown read as one dialect (raw `##`/table pipes never show),
   and a forge issue's GitHub comments render as the SAME reply thread a local issue thread gets ([[issues]]
   maps them into `replies[]` — one thread type, one renderer). Store never changes the shape; the only
-  store-specific affordances are metadata (a forge issue's permalink) — the
+  store-specific affordances are metadata (a forge issue's permalink — its label names the CONCRETE store,
+  "Open on GitHub" / "Open on GitLab", derived from the issue's own `store` identity through ONE
+  interpolated label over canonical store display-name data: never a URL sniff, never a per-host branch in
+  the component, and never the internal word "forge" in the user-facing copy — a future store adds a data
+  row, not a condition; a store without a row falls back to its raw id. A local issue has no external
+  permalink, so the affordance simply doesn't render) — the
   thread itself reads and writes identically.
 - **The originator's session is on the header.** A local thread's `by` is a session id, so the detail header
   renders it as a compact session chip with a liveness dot: **alive** when that session is listed on the

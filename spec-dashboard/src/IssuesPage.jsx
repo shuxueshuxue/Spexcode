@@ -218,7 +218,7 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
           {nodes.map((id) => (
             <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} data-tip={t('session.issuesFocusNode')}>{id}</button>
           ))}
-          {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
+          {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })}</a>}
         </div>
         {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
         {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
@@ -248,6 +248,13 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
     </div>
   )
 }
+
+// canonical store display names — the permalink label derives from the issue's OWN `store` identity
+// ([[issues-view]]): one data row per forge store, never a URL sniff and never a per-host branch in the
+// component; a store without a row falls back to its raw id, so a new driver reads honestly before its
+// row lands.
+const STORE_DISPLAY_NAMES = { github: 'GitHub', gitlab: 'GitLab' }
+const storeDisplayName = (id) => STORE_DISPLAY_NAMES[id] || id
 
 const storeGlyph = (s) => s.id === 'local' ? 'L' : s.id === 'github' ? 'GH' : s.id === 'gitlab' ? 'GL' : (s.id || '?').slice(0, 2).toUpperCase()
 

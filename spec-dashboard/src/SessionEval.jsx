@@ -3,6 +3,7 @@ import { EvalRow, entryKey } from './EvalsFeed.jsx'
 import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
+import { defaultEvalKey } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -88,7 +89,11 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
     ...g.rows.filter((r) => r.inSession || (!onlySession && openInherited.has(g.node.id)))
       .map((r) => ({ kind: 'eval', key: entryKey(r), item: r })),
   ]), [groups, onlySession, openInherited])
-  const effSel = sel && visible.some((v) => v.key === sel) ? sel : visible[0]?.key ?? null
+  // effSel resolves the selection: an explicit `sel` (a click or a deep-link jump) if it's still visible,
+  // else the DEFAULT — this session's own reading, failing first ([[session-eval]]'s defaultEvalKey), NOT the
+  // blind-spot row that merely leads the visual order. So a bare '#/sessions/<id>/eval' lands on the measured
+  // loss a reviewer wants, and a scenario deep link (which sets `sel` via the jump effect) still wins.
+  const effSel = sel && visible.some((v) => v.key === sel) ? sel : defaultEvalKey(visible)
   const selEntry = visible.find((v) => v.key === effSel)
 
   // the selected reading's WORKTREE-rooted A/B history (newest-first): the session model already carries EVERY

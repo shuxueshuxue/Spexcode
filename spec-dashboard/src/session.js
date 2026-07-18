@@ -141,3 +141,31 @@ export function sessionForest(sessions, isExpanded) {
   }
   return items
 }
+
+// @@@ eval deep-link seed ([[session-eval]] / [[address-routing]]) — a '#/sessions/<id>/eval[/<node>/<scenario>]'
+// landing seeds the console with its target session id + optional (node, scenario). The console flips to the
+// Eval tab and selects the reading, but the board loads ASYNC: the target tab settles in from the 'new'
+// placeholder a render or two later, and the per-tab reset that fires on that settle would clobber the tab
+// back to the terminal. So resolve the seed against the CURRENTLY-active tab and apply it ONLY once its own
+// session is active — 'wait' while the board is still settling (keep the seed), 'apply' (with the jump row)
+// when the deep-linked session is the active tab, 'drop' (consume without applying) once the user has moved to
+// a DIFFERENT real session, so a stale seed never leaks onto another tab. A bare /eval carries no jump — the
+// pane picks its own default. Pure; the effect that runs it lives in the console.
+export function resolveEvalSeed(seed, active) {
+  if (!seed || active === 'new') return { action: 'wait' }
+  if (seed.session !== active) return { action: 'drop' }
+  const jump = seed.node && seed.scenario ? { node: seed.node, scenario: seed.scenario } : null
+  return { action: 'apply', jump }
+}
+
+// @@@ the default eval-tab selection ([[session-eval]]) for a BARE /eval landing (no scenario named). The
+// visual order LEADS with blind spots (declared-but-unmeasured — outstanding loss), so the first visible row
+// is the wrong default: a reviewer opening a session's eval wants what THIS session MEASURED. Prefer an
+// in-session FAILING reading first (the loss most worth seeing), then any in-session reading; only a session
+// with no reading of its own falls back to the first visible row. `visible` is the flat row list the pane
+// walks — each {kind:'blind'|'eval', key, item}; an eval item carries `inSession` and `state`.
+export function defaultEvalKey(visible) {
+  const mine = (visible || []).filter((v) => v.kind === 'eval' && v.item?.inSession)
+  const fail = mine.find((v) => v.item.state === 'fail' || v.item.state === 'staleFail')
+  return (fail || mine[0])?.key ?? (visible || [])[0]?.key ?? null
+}

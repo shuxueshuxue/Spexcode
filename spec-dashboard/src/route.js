@@ -40,6 +40,20 @@ export function navigate(page, param = null, { replace = false } = {}) {
   else window.location.hash = h
 }
 
+// The session-tab hash param ([[address-routing]]): the bare session id, OR the PERSISTENT, refreshable eval
+// sub-route '<id>/eval[/<node>/<scenario>]' when a deep-link seed targets THIS tab ([[session-eval]]). Pure and
+// driven by STATE (the seed), never by re-reading the mutable hash — a transient echo (e.g. the board-load
+// 'new' bounce) can clobber the hash, so reconstructing from it would lose the sub-route; reconstructing from
+// the seed cannot. The shell writes the result with replace. A bare /eval seed (no node/scenario) keeps just
+// '<id>/eval' so the reviewer's root link stays shareable.
+export function sessionTabParam(sessionSel, evalSeed) {
+  if (evalSeed && evalSeed.session === sessionSel) {
+    const rest = evalSeed.node && evalSeed.scenario ? `/${evalSeed.node}/${evalSeed.scenario}` : ''
+    return `${sessionSel}/eval${rest}`
+  }
+  return sessionSel
+}
+
 // the live route — one hashchange subscription, parsed. replaceState doesn't fire hashchange, which is
 // fine: replace() is only used to echo state the app already holds.
 export function useRoute() {

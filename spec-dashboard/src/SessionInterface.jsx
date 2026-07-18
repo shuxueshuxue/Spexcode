@@ -3,7 +3,7 @@ import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
 import { composeLaunch, createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
-import { sessionForest } from './session.js'
+import { sessionForest, resolveEvalSeed } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
@@ -164,7 +164,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, mod
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, evalSeed, onEvalSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, evalSeed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -225,9 +225,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
   // is showing — a background board refresh must not clobber the remembered tab (or the URL echo) mid-boot.
+  // Guarded on `sessions.length`: an EMPTY board is still LOADING, not proof the tab is gone — resetting a
+  // freshly deep-linked id to New there would strand its eval seed (which waits for its own tab to go active).
   useEffect(() => {
-    if (open && !validIds.has(sel)) setSel('new')
-  }, [open, validIds, sel, setSel])
+    if (open && sessions.length && !validIds.has(sel)) setSel('new')
+  }, [open, sessions.length, validIds, sel, setSel])
   // the session list is a user-resizable pane ([[resizable-panes]]): drag the divider, width persists.
   const [listW, listDrag] = useResizable('spex.siListWidth', 240, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
@@ -257,18 +259,27 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // into the launch prompt (see submit); listing is display-only, like the slash menu. Shared fetch (./launch.js).
   const commandPresets = useCommandPresets()
 
-  // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
-  // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal'); setEvalJump(null) }, [active])
-  // the eval deep link ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]' seeds this one-shot —
-  // flip the right pane to the Eval tab and hand the pane its target reading. Declared AFTER the [active]
-  // reset above so a deep load applies on top of it (effects run in declaration order within a commit).
+  // per-tab console reset AND the eval deep-link landing, in ONE effect so they can never race across
+  // commits ([[session-eval]]). On the active tab changing (or an eval seed arriving), clear the per-tab
+  // input state; then, if a deep-link seed ('#/sessions/<id>/eval[/<node>/<scenario>]') targets THIS tab,
+  // land on the Eval tab + its reading — otherwise reset to the terminal. The board loads ASYNC (the tab
+  // settles in from the 'new' placeholder a render or two after the seed), so resolveEvalSeed gates the apply
+  // on the tab actually being active; folding the reset and the apply together means the settle can't leave a
+  // separately-timed reset to clobber the tab back to the terminal. The jump is applied once per seed (the
+  // ref), so a later MANUAL switch to Terminal isn't fought (this effect only fires on active/seed change, not
+  // on a manual tab click); a fresh deep link is a new seed object and re-lands. The seed stays alive as the
+  // URL's source — Dashboard clears it on a real tab switch, never here.
+  const appliedSeedRef = useRef(null)
   useEffect(() => {
-    if (evalSeed == null) return
-    setRightTab('eval')
-    setEvalJump(evalSeed.node && evalSeed.scenario ? { node: evalSeed.node, scenario: evalSeed.scenario } : null)
-    onEvalSeedConsumed?.()
-  }, [evalSeed]) // eslint-disable-line react-hooks/exhaustive-deps
+    setTypeMode(false); setSendErr(false); setMenu(null)
+    const r = resolveEvalSeed(evalSeed, active)
+    if (r.action === 'apply') {
+      setRightTab('eval')
+      if (appliedSeedRef.current !== evalSeed) { appliedSeedRef.current = evalSeed; setEvalJump(r.jump) }
+    } else {
+      setRightTab('terminal'); setEvalJump(null)
+    }
+  }, [active, evalSeed])
   // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
   // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
   useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])

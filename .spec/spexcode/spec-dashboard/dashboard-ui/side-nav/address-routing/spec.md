@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/address.js
 related:
   - spec-dashboard/src/route.js
+  - spec-dashboard/src/route.test.mjs
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/FocusPanel.jsx
@@ -24,9 +25,11 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 - `session` opens `#/sessions/<id>`.
 - `session-eval` opens `#/sessions/<id>/eval[/<node>/<scenario>]` — the console with the **Eval tab**
   active, optionally landed on one scenario's in-session reading ([[session-eval]]). This is the address an
-  MR/CI note pastes so a reviewer one-clicks into the live, remarkable reading of an un-merged branch — the
-  sub-route is an *entrance*, applied once and then normalized back to `#/sessions/<id>` (the tab and the
-  selection stay shell/pane view state, exactly like graph focus).
+  MR/CI note pastes so a reviewer one-clicks into the live, remarkable reading of an un-merged branch — and
+  it is a **persistent, refreshable** sub-route, NOT a one-shot entrance normalized away: the Eval tab and
+  the deep-linked reading stay in the hash while that session's tab is the one showing, so a reload reopens
+  the same reading and the pasted link stays shareable. Switching to another session tab drops the sub-route
+  back to the bare `#/sessions/<id>`; the deep link is preserved only for its own session's tab.
 - `issue` opens `#/issues/<issue-id>` and lets [[issues-view]] select the detail.
 - `eval` opens `#/evals/<node>/<scenario>` and lets [[evals-view]] select the detail — the TRUNK-rooted
   timeline; a not-yet-merged session reading's address is `session-eval`, not this.

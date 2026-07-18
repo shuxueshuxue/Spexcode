@@ -105,4 +105,21 @@ scenarios:
       Zero residue: the tmux window is gone, no process of that worktree survives, worktree and
       branch are retired, and the session's record/store dir is swept (durable history lives in git
       and the eval filings, not the record).
+  - name: pi-headless-one-shot-substrate
+    tags: [cli]
+    description: >-
+      The harness-side substrate of pi's headless capability (piHeadlessOps — [[harness-adapter]]'s shared
+      one-shot builder over pi data), measured through the REAL pi CLI in a scratch project carrying a probe
+      extension under .pi/extensions and any working model provider: (1) `pi -p --approve '<prompt>'`;
+      (2) `pi -p --approve --session-id <fresh uuid> '<prompt>'` (the governed launch shape); (3)
+      `pi -p --approve --session <that uuid> '<recall prompt>'` (the injected-turn resume shape); (4)
+      `pi -p --approve --session <nonexistent uuid> '<prompt>'`. Read the probe's event log, stdout, and
+      exit codes. Sanitize any provider identity out of the filed transcript.
+    expected: >-
+      The project extension (the hook shim's delivery form) LOADS under `-p` and fires
+      session_start/input/agent_settled — so hooks, stop-gate, and attribution have their full substrate in
+      one-shot mode; the pinned-id launch creates that exact session (rc=0); the `--session` turn recalls
+      first-turn content (the SAME conversation, never a fresh mint); the vanished id exits non-zero naming
+      the missing session. The failure this locks: pi silently skipping project extensions in print mode —
+      every hook inert, workers stuck `active` forever with all mechanical proofs green.
 ---

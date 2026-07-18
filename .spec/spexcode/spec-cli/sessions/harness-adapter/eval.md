@@ -247,6 +247,48 @@ scenarios:
       contains exactly ONE user turn per delivered prompt and NO pane-origin turn at all — a double execution
       is structurally impossible because the headless pane holds no agent, not merely avoided by wrapper
       discipline.
+  - name: headless-lifecycle-pi
+    tags: [backend-api]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Through a REAL throwaway backend on a fresh-init pi adopter project, dispatch `spex session new
+      "<small real task>" --headless` under a pi launcher carrying a `headlessCmd` (`pi -p`-class), let the
+      one-shot turn run to its declaration, `spex session send` a follow-up turn, then close. Read the
+      record, the board row mid-turn AND between turns, the timeline, the worktree commits, and the pane
+      text.
+    expected: >-
+      The record pins mode=headless with the launcher's headlessCmd VERBATIM (needsCmd:true), the launch pane
+      runs `<headlessCmd> --approve --session-id <record id> '<prompt>'`, and the generated `.pi/extensions`
+      shim loads in `-p` mode with ZERO trust prompts (project trust + the per-process `--approve` defence) —
+      mark-active flips the record, the stop-gate forces the declaration, so the board reads working/online
+      exactly while the one-shot process runs (turn-scoped agent.pid liveness) and the DECLARED status (with
+      honest between-turn `offline`) once it exits 0, no fast-exit respray. The send lands as an injected
+      `--session <record id>` one-shot turn on the SAME pi conversation (the turn script's fresh agent.pid
+      registration is the delivery proof; the resumed turn provably carries the first turn's context), the
+      record re-declares, every worker commit carries the `Session:` trailer, and close leaves zero residue
+      (window, record, worktree, branch). The failure this locks is pi's own precedent: extension artifacts
+      green while a real dispatched worker fires zero hooks or loses its follow-up turn to a fresh session.
+  - name: headless-lifecycle-opencode
+    tags: [backend-api]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Through a REAL throwaway backend on a fresh-init opencode adopter project, dispatch `spex session new
+      "<small real task>" --headless` under an opencode launcher carrying a `headlessCmd` (`opencode run`-class),
+      let the one-shot turn run to its declaration, `spex session send` a follow-up turn, then close. Read
+      the record, the board row mid-turn AND between turns, the timeline, the worktree commits, and the pane
+      text.
+    expected: >-
+      The record pins mode=headless with the launcher's headlessCmd VERBATIM (needsCmd:true); `opencode run`
+      loads the generated project plugin exactly as the TUI does, so mark-active flips the record, the
+      minted root session id is captured onto the record as harness_session_id, and the stop-gate forces the
+      declaration; the board reads working/online exactly while the one-shot process runs (turn-scoped
+      agent.pid liveness) and the DECLARED status between turns, no fast-exit respray. The send lands as an
+      injected `--session <captured id>` one-shot turn that REATTACHES the same opencode conversation (no
+      new session minted; first-turn context provably carried) — and with the capture artificially withheld,
+      the turn falls to `--continue` and still reattaches this worktree's own session; the record
+      re-declares, every worker commit carries the `Session:` trailer, and close leaves zero residue
+      (window, record, worktree, branch). The failure this locks: `run`-mode plugin or capture silently
+      inert — hooks dead, follow-up turns landing on fresh conversations — while TUI-path proofs stay green.
 ---
 # eval.md — harness-adapter
 

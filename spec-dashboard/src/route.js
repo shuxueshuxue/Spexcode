@@ -48,14 +48,12 @@ export const sessionEvalParam = (sessionId, nodeId, scenario) =>
   [sessionId, 'eval', ...(nodeId && scenario ? [nodeId, scenario] : [])].join('/')
 
 // The session-tab hash param ([[address-routing]]): the bare session id, OR the PERSISTENT, refreshable eval
-// sub-route when a deep-link seed targets THIS tab ([[session-eval]]). Pure and driven by STATE (the seed),
-// never by re-reading the mutable hash — a transient echo (e.g. the board-load 'new' bounce) can clobber the
-// hash, so reconstructing from it would lose the sub-route; reconstructing from the seed cannot. Routes the
-// sub-route shape through the shared sessionEvalParam (same encoder addressHash uses — no second URL grammar).
-// The shell writes the result with replace.
-export function sessionTabParam(sessionSel, evalSeed) {
-  if (evalSeed && evalSeed.session === sessionSel) return sessionEvalParam(sessionSel, evalSeed.node, evalSeed.scenario)
-  return sessionSel
+// sub-route when the console's Eval tab is showing ([[session-eval]]). Driven by `evalView` — the console's
+// REAL selection ({node,scenario}|null), reported up — so the address always matches what's on screen: a
+// non-null evalView (Eval tab) yields '<id>/eval[/<node>/<scenario>]' via the shared sessionEvalParam encoder;
+// null (Terminal / New) yields the bare id. Pure; the shell writes the result with replace.
+export function sessionTabParam(sessionSel, evalView) {
+  return evalView ? sessionEvalParam(sessionSel, evalView.node, evalView.scenario) : sessionSel
 }
 
 // the live route — one hashchange subscription, parsed. replaceState doesn't fire hashchange, which is

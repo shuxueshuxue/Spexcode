@@ -19,7 +19,7 @@ import { Icon } from './icons.jsx'
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
 // inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
-export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession, initialSel = null }) {
+export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession, onSelChange, initialSel = null }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
@@ -95,6 +95,14 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
   // loss a reviewer wants, and a scenario deep link (which sets `sel` via the jump effect) still wins.
   const effSel = sel && visible.some((v) => v.key === sel) ? sel : defaultEvalKey(visible)
   const selEntry = visible.find((v) => v.key === effSel)
+  // report the current selection's {node,scenario} UP ([[session-eval]] / [[address-routing]]): the console
+  // folds it into the evalView it echoes to the URL, so the address tracks the shown reading (including the
+  // default a bare /eval resolves to). null when nothing is selected (empty pane).
+  const selNode = selEntry?.item?.node ?? null
+  const selScenario = selEntry?.item?.scenario ?? null
+  useEffect(() => {
+    onSelChange?.(selNode && selScenario ? { node: selNode, scenario: selScenario } : null)
+  }, [selNode, selScenario]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // the selected reading's WORKTREE-rooted A/B history (newest-first): the session model already carries EVERY
   // reading per node ([[session-eval]] — rooted at this branch's worktree), so hand the detail this scenario's

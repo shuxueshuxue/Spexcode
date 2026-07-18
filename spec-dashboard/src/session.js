@@ -142,20 +142,19 @@ export function sessionForest(sessions, isExpanded) {
   return items
 }
 
-// @@@ eval deep-link seed ([[session-eval]] / [[address-routing]]) — a '#/sessions/<id>/eval[/<node>/<scenario>]'
-// landing seeds the console with its target session id + optional (node, scenario). The console flips to the
-// Eval tab and selects the reading, but the board loads ASYNC: the target tab settles in from the 'new'
-// placeholder a render or two later, and the per-tab reset that fires on that settle would clobber the tab
-// back to the terminal. So resolve the seed against the CURRENTLY-active tab and apply it ONLY once its own
-// session is active — 'wait' while the board is still settling (keep the seed), 'apply' (with the jump row)
-// when the deep-linked session is the active tab, 'drop' (consume without applying) once the user has moved to
-// a DIFFERENT real session, so a stale seed never leaks onto another tab. A bare /eval carries no jump — the
-// pane picks its own default. Pure; the effect that runs it lives in the console.
-export function resolveEvalSeed(seed, active) {
-  if (!seed || active === 'new') return { action: 'wait' }
-  if (seed.session !== active) return { action: 'drop' }
-  const jump = seed.node && seed.scenario ? { node: seed.node, scenario: seed.scenario } : null
-  return { action: 'apply', jump }
+// @@@ per-navigation route directive ([[session-eval]] / [[address-routing]]) — the URL entrance drives the
+// console's right pane on EVERY real navigation (deep link, history, an openSession): '#/sessions/<id>/eval
+// [/<node>/<scenario>]' → the Eval tab (+ a jump to that reading), a bare '#/sessions/<id>' → the Terminal.
+// Between navigations the console's own manual tab clicks drive the URL instead (the echo), so this is applied
+// ONCE per navigation. Apply it only when its session is the active tab; a directive for another session
+// returns null (leave this tab alone). The board is already loaded when the console mounts (App gates Dashboard
+// on a non-null board), so `active` resolves in the mount commit — no async settle to guard against. Pure; the
+// effect that runs it lives in the console.
+export function applyRouteNav(nav, active) {
+  if (!nav || nav.session !== active) return null
+  return nav.tab === 'eval'
+    ? { tab: 'eval', jump: nav.node && nav.scenario ? { node: nav.node, scenario: nav.scenario } : null }
+    : { tab: 'terminal', jump: null }
 }
 
 // @@@ the default eval-tab selection ([[session-eval]]) for a BARE /eval landing (no scenario named). The

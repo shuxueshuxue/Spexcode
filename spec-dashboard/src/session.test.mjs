@@ -1,29 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveEvalSeed, defaultEvalKey } from './session.js'
+import { applyRouteNav, defaultEvalKey } from './session.js'
 
-// resolveEvalSeed gates an eval deep-link seed against the async board load ([[session-eval]]): it must not
-// apply before its own session tab is active (the [active] reset would clobber it), and never leak onto
-// another tab.
-test('resolveEvalSeed waits while the target tab is still the loading placeholder', () => {
-  assert.deepEqual(resolveEvalSeed({ session: 'abc', node: 'n', scenario: 's' }, 'new'),
-    { action: 'wait' })
-  // no seed at all → nothing to do (wait)
-  assert.deepEqual(resolveEvalSeed(null, 'abc'), { action: 'wait' })
+// applyRouteNav resolves a per-navigation route directive against the active tab ([[session-eval]] /
+// [[address-routing]]): the URL entrance drives the console's right pane on every real navigation. It targets
+// only its own session — a directive for another tab is a no-op (null).
+test('applyRouteNav opens the Eval tab and jumps for an /eval entrance on the active session', () => {
+  assert.deepEqual(applyRouteNav({ session: 'abc', tab: 'eval', node: 'shell-layout', scenario: 'ws-sidebar' }, 'abc'),
+    { tab: 'eval', jump: { node: 'shell-layout', scenario: 'ws-sidebar' } })
+  // a bare /eval entrance (no node/scenario) opens the Eval tab with NO jump — the pane picks its own default
+  assert.deepEqual(applyRouteNav({ session: 'abc', tab: 'eval', node: null, scenario: null }, 'abc'),
+    { tab: 'eval', jump: null })
 })
 
-test('resolveEvalSeed applies once the deep-linked session IS the active tab', () => {
-  assert.deepEqual(resolveEvalSeed({ session: 'abc', node: 'shell-layout', scenario: 'ws-sidebar' }, 'abc'),
-    { action: 'apply', jump: { node: 'shell-layout', scenario: 'ws-sidebar' } })
-  // a bare /eval seed (no node/scenario) applies with NO jump — the pane picks its own default
-  assert.deepEqual(resolveEvalSeed({ session: 'abc', node: null, scenario: null }, 'abc'),
-    { action: 'apply', jump: null })
+test('applyRouteNav shows the Terminal for a bare tab entrance (a bare return resets a warm Eval tab)', () => {
+  assert.deepEqual(applyRouteNav({ session: 'abc', tab: 'terminal', node: null, scenario: null }, 'abc'),
+    { tab: 'terminal', jump: null })
 })
 
-test('resolveEvalSeed drops a stale seed once the user moved to a different session', () => {
-  // active settled on a DIFFERENT real session → consume without applying, so it never flips the wrong tab
-  assert.deepEqual(resolveEvalSeed({ session: 'abc', node: 'n', scenario: 's' }, 'xyz'),
-    { action: 'drop' })
+test('applyRouteNav is a no-op for another session or no directive', () => {
+  // a directive for a DIFFERENT session must not touch this tab
+  assert.equal(applyRouteNav({ session: 'abc', tab: 'eval', node: 'n', scenario: 's' }, 'xyz'), null)
+  // the 'new' placeholder / no directive → nothing to apply
+  assert.equal(applyRouteNav({ session: 'abc', tab: 'terminal' }, 'new'), null)
+  assert.equal(applyRouteNav(null, 'abc'), null)
 })
 
 // defaultEvalKey — the bare /eval default selection prefers THIS session's own reading, failing first, over

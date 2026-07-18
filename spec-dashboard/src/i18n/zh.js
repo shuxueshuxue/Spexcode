@@ -398,7 +398,6 @@ export default {
     tabTerminal: '终端',
     tabChat: '聊天',
     tabEval: '评测',
-    modeHeadless: '无头会话——聊天视图',
     typeBtn: '终端交互',
     typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',

@@ -40,8 +40,10 @@ scenarios:
       <node>`, `spex issue ls`, `spex evidence put -`, `spex internal commit-gate`); (3) every
       REMOVED spelling signposts — one stderr line naming the replacement, non-zero exit, verb never
       executed: bare `lint`/`tree`/`board`/`new`/`ls`/`watch`/`wait`/`review`/`merge`/`send`,
-      `blob …`, `issues …`, `forge …`, `dashboard`, `resolve`/`retract`,
-      `session rawkey`, `session state`, `doctor contract`. The `yatsu` tombstone was retired EARLY
+      `blob …`, `issues …`, `forge …`, `resolve`/`retract`,
+      `session rawkey`, `session state`, `doctor contract`. (`dashboard` left this list when the name
+      was reclaimed as a live project verb — the host gateway, [[host-gateway]]; probe that it RUNS
+      a gateway now, e.g. `spex dashboard --help` prints usage, not a signpost.) The `yatsu` tombstone was retired EARLY
       by human ruling (ahead of its 0.4.0 schedule): `yatsu …` now exits 2 as a plain unknown
       command pointing at `spex help` — no replacement line. A signposted verb must produce no side
       effect (e.g. `spex board` writes no JSON to stdout).

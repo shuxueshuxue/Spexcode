@@ -54,8 +54,10 @@ session console — draws its colours from one set of CSS custom properties (`--
 `--term-bg`). Because every rule reads through those vars, a
 theme is nothing but another definition of them. Every theme is a **community preset** — design
 tokens ported from MIT-licensed themes in the official Obsidian community catalog (Minimal, Things,
-Tokyo Night, Catppuccin Mocha; palette values only, never upstream CSS rules or per-component
-branches — the upstream license notices are preserved in `spec-dashboard/THEME-CREDITS.md`).
+Tokyo Night, Catppuccin Mocha, Everforest, Gruvbox, Rosé Pine Dawn, Dracula; palette values only,
+never upstream CSS rules or per-component
+branches — every upstream license is independently verified at porting time and the notices are
+preserved in `spec-dashboard/THEME-CREDITS.md`).
 **Minimal is the default** and lives as the bare `:root` var set, so even an unthemed `<html>` paints
 Minimal; each other preset is one `:root[data-theme=<code>]` row over the same vars. Flipping
 the one `data-theme` attribute on `<html>` re-skins board and console together, with no per-component

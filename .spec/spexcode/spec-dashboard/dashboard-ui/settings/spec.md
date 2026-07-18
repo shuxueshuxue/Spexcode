@@ -36,7 +36,8 @@ different entry points. (Game-controller mapping is **not** here — the pad bin
 [[game-controller]]'s controller mode; see [[keyboard-nav]].)
 
 Its third accreted section is **Theme**: a preset picker mirroring the language section, listing the
-community presets (Minimal — the default, Things, Tokyo Night, Catppuccin) as proper-noun labels. An
+community presets (Minimal — the default, Things, Tokyo Night, Catppuccin, Everforest, Gruvbox,
+Rosé Pine Dawn, Dracula) as proper-noun labels. An
 explicit pick persists and flips the whole app live; absent a valid saved choice the app is simply
 Minimal — there is no system `prefers-color-scheme` detection and no light/dark pair. Only the picker
 lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { codexAppServerSock, codexThreadsInProgress, defaultHarness, defaultLauncher, defaultSessionMode, harnessById, harnessOps, pinnedLaunchCmd, procSnapshot, resolveLauncher, rvSock, rendezvousListening, SESSION_MODES, type Harness, type HarnessOps, type DispatchResult, type PaneProbe, type ProcTable, type SessionMode } from './harness.js'
+import { defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, lastHumanSendVia } from './session-timeline.js'
@@ -81,17 +81,15 @@ function maxActive(): number {
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
-const rvEnv = (id: string, harness = HARNESS, mode: SessionMode = 'interactive') => {
+const rvEnv = (id: string, harness = HARNESS) => {
   // SPEXCODE_SESSION_ID is the governed record id. Claude's harness id is the same value, so hooks and CLI
   // calls can use it directly. Codex cannot trust this env inside the long-lived shared app-server; codex hooks
   // start from the payload thread id and alias through harness_session_id, while the short-lived codex-launch
   // process uses this env only to store the freshly started thread id on the governed record. The CLAUDE_BG
   // rendezvous control socket is the reclaude prompt-delivery path and exists ONLY for harnesses that own one
-  // (claude) — codex has no such daemon, so it's omitted there. A HEADLESS session omits it too, whatever the
-  // harness: a one-shot turn runs no rendezvous daemon, and injecting the vars would make the record LOOK
-  // socket-addressable to every rendezvous consumer (liveness, deliver) when nothing will ever listen.
+  // (claude/pi/opencode) — codex has no such daemon, so it is omitted there.
   const parts = [`SPEXCODE_SESSION_ID=${id}`]
-  if (harness.ownsRendezvous && mode !== 'headless') parts.push(`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`)
+  if (harness.ownsRendezvous) parts.push(`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`)
   for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }
   return parts.join(' ')
 }
@@ -120,7 +118,6 @@ export type Session = {
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
-  mode: SessionMode   // interactive (a TUI in the pane) or headless (one-shot turns) — pinned at creation with the command it selects; old records read interactive
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
@@ -232,7 +229,6 @@ export type SessRec = {
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
-  mode: SessionMode         // the session's MODE, pinned at creation alongside the command it selected; records predating modes read interactive
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
@@ -272,7 +268,7 @@ function readRecord(id: string): SessRec | null {
   return fromRaw(raw)
 }
 // the loose on-disk fields validated into the typed shape. Exported so the old-record defaults (harness →
-// claude, mode → interactive, absent pin → null) are unit-auditable without a store on disk.
+// claude, absent pin → null) are unit-auditable without a store on disk.
 export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   const ownedQueue = raw.status === OWNED_QUEUE_RAW_STATUS
   const status = ownedQueue ? 'queued' : LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
@@ -289,7 +285,6 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     harnessSessionId: raw.harness_session_id || null,
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
-    mode: raw.mode === 'headless' ? 'headless' : 'interactive',   // records written before modes (or carrying junk) read interactive — every old path unchanged
     launchOwner: launchOwner || null,
   }
 }
@@ -320,7 +315,6 @@ function writeRecord(rec: SessRec): void {
     harness_session_id: rec.harnessSessionId ?? '',
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
-    mode: rec.mode || 'interactive',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
@@ -471,41 +465,7 @@ async function liveSnapshot(): Promise<LiveSnap> {
     if (listening[i] === 'live') sockets.add(id)
     else if (listening[i] === 'unproven') unproven.add(id)
   })
-  // @@@ codex headless turn sweep - turn-scoped liveness for headless codex ([[harness-adapter]] headless):
-  // every WINDOWED codex-headless session with an owned thread id joins ONE batched thread/read{includeTurns}
-  // sweep of the project app-server per snapshot (TTL-cached — the warm tier snapshots every second, the sweep
-  // is a real RPC round-trip). A thread with an in-progress turn lands its session in `sockets` — the SAME
-  // caller-probed online-signal channel the rendezvous listener fills for claude — so the headless adapter's
-  // liveness stays a pure function of the snapshot. A sweep TIMEOUT lands them in `unproven` (a busy server is
-  // not a dead one → 'unknown', never a false offline); a DEAD socket lands them nowhere — the app-server IS
-  // the headless executor, so its death honestly reads offline past the boot grace. Store-enumerated (ids are
-  // record keys — direct hits, no alias grep), windows-gated so a closed pane never probes.
-  const cxHeadless: { id: string; tid: string }[] = []
-  for (const id of listSessionIds()) {
-    if (!windows.has(id)) continue
-    const rec = readRecord(id)
-    if (rec?.harness === 'codex' && rec.mode === 'headless' && rec.harnessSessionId) cxHeadless.push({ id, tid: rec.harnessSessionId })
-  }
-  if (cxHeadless.length) {
-    const sweep = await codexHeadlessSweep(cxHeadless.map((x) => x.tid))
-    if (sweep.kind === 'ok') { for (const x of cxHeadless) if (sweep.inProgress.has(x.tid)) sockets.add(x.id) }
-    else if (sweep.kind === 'timeout') for (const x of cxHeadless) unproven.add(x.id)
-  }
   return { probeFailed: false, windows, titles, sockets, unproven }
-}
-
-// the TTL cache around codexThreadsInProgress: one sweep result serves every snapshot inside the window, keyed
-// by the exact thread-id set so a session appearing/closing busts it immediately. 3s trades staleness bounded
-// well under the human's perception of "working" against hammering the app-server from the 1s warm tier.
-const CODEX_SWEEP_TTL_MS = 3000
-let codexSweepCache: { at: number; key: string; result: { kind: 'ok'; inProgress: Set<string> } | { kind: 'timeout' } | { kind: 'dead' } } | null = null
-async function codexHeadlessSweep(tids: string[]): Promise<{ kind: 'ok'; inProgress: Set<string> } | { kind: 'timeout' } | { kind: 'dead' }> {
-  const key = [...tids].sort().join(',')
-  if (codexSweepCache && codexSweepCache.key === key && Date.now() - codexSweepCache.at < CODEX_SWEEP_TTL_MS) return codexSweepCache.result
-  const r = await codexThreadsInProgress(codexAppServerSock(runtimeRoot()), tids)
-  const result = r.ok ? { kind: 'ok' as const, inProgress: r.inProgress } : r.timeout ? { kind: 'timeout' as const } : { kind: 'dead' as const }
-  codexSweepCache = { at: Date.now(), key, result }
-  return result
 }
 
 // @@@ hotSignature - the 100ms zero-spawn death detector ([[state]] hot tier). NO child processes, NO async
@@ -606,17 +566,12 @@ const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it 
 export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   if (!rec.session) return 'offline'
   if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
-  // ask the ADAPTER ([[harness-adapter]]), routed per the record's MODE (harnessOps — a product-dimension
-  // branch, not a harness one): claude = tmux up AND a live listener on its rendezvous socket; codex = tmux up
-  // AND a codex-ish process live among the pane pid's descendants; HEADLESS = TURN-scoped — claude-headless =
-  // tmux up AND its registered one-shot turn process (agent.pid) alive; codex-headless = tmux up AND an
-  // in-progress turn on the owned thread (the snapshot's turn sweep, carried on the same online-signal
-  // channel). Between headless turns the record's declared lifecycle is the truth and reconcile shows it, so
-  // the honest between-turn 'offline' here only surfaces on an undeclared crash. The 'starting' grace stays
-  // here (a launcher concern): a just-launched agent whose online-signal hasn't appeared yet reads 'starting'
-  // for the boot window, only past it 'offline'.
+  // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
+  // codex proves its launch-registered pid (with the legacy descendant-tree fallback). The 'starting' grace
+  // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
+  // 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (harnessOps(h, rec.mode).liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
+  if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
   // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
   // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
   // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
@@ -656,7 +611,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const act = showActivity ? activity : null
   const pp = prompt ? promptPreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, launcher: rec.launcher, mode: rec.mode, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -1066,17 +1021,14 @@ export function launcherCmd(rec: SessRec): string | undefined {
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
 const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
-export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string, mode: SessionMode = 'interactive'): string {
+export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
   // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
   // ambient default so resume reuses the same auth. Undefined is only for old records before launch_cmd existed.
-  // The launch command routes per the record's MODE (harnessOps): a headless session runs the harness's
-  // headless launch form (claude: the pinned headlessCmd, whole; codex: the interactive bootstrap minus the
-  // TUI attach) under the SAME pinned cmd, with the rendezvous env bypassed (rvEnv's mode arg).
-  const invocation = `${rvEnv(id, harness, mode)} ${harnessOps(harness, mode).launchCmd(id, runtimeRoot(), cmd)} ${tail}`
+  const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
   // @@@ birth registration - record the AGENT's real pid BEFORE exec, the anchor of the 100ms hot death tier
   // ([[state]]). Each attempt runs `sh -c '<pid-write>; exec env <invocation>'`: the sh writes its own `$$` to
   // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
@@ -1087,20 +1039,6 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
   const born = `sh -c ${shq1(`printf %s "$$" > ${shq1(pidPath)}; exec env ${invocation}`)}`
-  // HEADLESS template: the agent is a ONE-SHOT process, so a fast exit is NOT a failure to retry — exit 0 IS
-  // the turn completing (a small task finishes in seconds; re-running it would double the work). Zero retries:
-  // a non-zero exit prints the rc and fails loud (the record's declared/undeclared state tells the rest).
-  if (mode === 'headless') {
-    writeFileSync(file, [
-      born,
-      `__spex_rc=$?`,
-      `[ "$__spex_rc" -eq 0 ] && exit 0`,
-      `printf '[spex launch] headless agent exited rc=%s\\n' "$__spex_rc" >&2`,
-      `exit $__spex_rc`,
-      ``,
-    ].join('\n'))
-    return file
-  }
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -1122,9 +1060,9 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   ].join('\n'))
   return file
 }
-async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string, mode: SessionMode = 'interactive'): Promise<void> {
+async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd, mode)}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -1144,7 +1082,7 @@ function isOccupying(s: Session, snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
   const rec = readRecord(s.id)
   if (!rec) return false
-  return harnessOps(harnessById(rec.harness || defaultHarness.id), rec.mode).liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online'  // and only while the agent is genuinely live (its adapter's channel; headless = a turn actually executing, so between-turn gaps free the slot — deliberate: see [[harness-adapter]] headless)
+  return harnessById(rec.harness || defaultHarness.id).liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online'
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -1165,10 +1103,9 @@ async function startQueued(id: string): Promise<boolean> {
   if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
-  const ops = harnessOps(h, wt.rec.mode)                       // mode-routed runtime ops ([[harness-adapter]] headless)
   try {
     const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec), wt.rec.mode)
+    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
@@ -1177,7 +1114,7 @@ async function startQueued(id: string): Promise<boolean> {
   removeLaunchFile(id)   // consumed
   // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
   // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
-  void waitForReady(id, ops).finally(() => launching.delete(id))
+  void waitForReady(id, h).finally(() => launching.delete(id))
   return true
 }
 
@@ -1262,6 +1199,30 @@ export async function assertProjectMatch(verb: string): Promise<void> {
   }
 }
 
+type SessionCreateFn = (node: string | null, prompt: string, parent: string | null, launcher?: string) => Promise<Session>
+export type SessionCreateRequestResult =
+  | { status: 201; session: Session }
+  | { status: 400; error: string }
+
+// The API create boundary accepts one small, closed object shape. Unknown fields fail through this generic
+// contract before any worktree is made; removed or misspelled inputs never disappear into defaults.
+export async function sessionCreateRequest(body: unknown, create: SessionCreateFn = newSession): Promise<SessionCreateRequestResult> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
+  const input = body as Record<string, unknown>
+  const unknown = Object.keys(input).filter((key) => !['node', 'prompt', 'parent', 'launcher'].includes(key)).sort()
+  if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
+  const prompt = typeof input.prompt === 'string' ? input.prompt : ''
+  if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
+  const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
+  const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  const node = typeof input.node === 'string' ? input.node : null
+  try {
+    return { status: 201, session: await create(node, prompt, parent, launcher) }
+  } catch (e) {
+    return { status: 400, error: String((e as Error).message || e) }
+  }
+}
+
 // @@@ createSession (dispatch via backend) - `spex session new` must launch the worker in the
 // BACKEND's process, not the caller's, because the backend is the single owner of the concurrency cap and the
 // launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex session new` (e.g. a supervisor) would
@@ -1270,7 +1231,7 @@ export async function assertProjectMatch(verb: string): Promise<void> {
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
-export async function createSession(node: string | null, prompt: string, launcher?: string, mode?: string): Promise<Session> {
+export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
   await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
@@ -1282,11 +1243,11 @@ export async function createSession(node: string | null, prompt: string, launche
     res = await fetch(`${await apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt, parent, launcher, mode }),
+      body: JSON.stringify({ node, prompt, parent, launcher }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt, parent, launcher, mode)
+    return newSession(node, prompt, parent, launcher)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -1306,7 +1267,7 @@ export async function createSession(node: string | null, prompt: string, launche
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
 // only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
 // programmatic surface, every other surface is prompt only).
-export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string, mode?: string): Promise<Session> {
+export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string): Promise<Session> {
   const id = randomUUID()
   // a launcher ([[launcher-select]]) fixes BOTH the launch command (persisted below) AND the harness — so
   // picking one is the ONLY launch choice. Explicit --launcher wins, else the configured defaultLauncher.
@@ -1314,14 +1275,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const lname = launcher ?? defaultLauncher(mainRoot())
   const chosen = resolveLauncher(lname)
   const h = harnessById(chosen.harness)
-  // the session MODE: the request wins, else sessions.defaultMode, else interactive. Validated fail-loud
-  // HERE — before any worktree exists — so a bad mode, a headless request on a capability-less harness, or a
-  // missing headlessCmd rejects the create (the route's 400) instead of leaking a half-made session. The pin
-  // below already selects the mode's command, so resume replays the SAME command AND mode for the session's
-  // whole life ([[launcher-select]] resume-launcher-pin).
-  const m = (mode ?? defaultSessionMode(mainRoot())) as SessionMode
-  if (!SESSION_MODES.includes(m)) throw new Error(`unknown session mode '${mode}' (valid: ${SESSION_MODES.join(' | ')})`)
-  const pinned = pinnedLaunchCmd(h, chosen, m)
+  const pinned = h.baseCmd(chosen.cmd)
   // Resolve a command preset at the launch owner, before any worktree exists. The RAW prompt remains the
   // identity + originating-prompt source; only `launchPrompt` is expanded for the agent. This preserves the
   // no-target rule even when the plugin body itself contains `[[links]]`.
@@ -1359,10 +1313,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
     // PIN the resolved launch command NOW ([[launcher-select]] resume-launcher-pin) so every future
     // (re)launch replays THIS exact launcher — the one whose config-dir env holds the conversation — instead of
     // re-resolving against a default that may have flipped (a backend restarted under a different launcher).
-    // The pin is MODE-selected (pinnedLaunchCmd above): headless on a needsCmd harness pins headlessCmd,
-    // everything else pins the interactive cmd.
     launchCmd: pinned,
-    mode: m,
     launchOwner: backendLaunchAuthority(),
   }
   writeRecord(rec)
@@ -1371,7 +1322,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
   // shims, manifest to the global store) so the launched agent gets the contract + hooks the SAME way a
   // self-launched one does — by auto-discovery, not CLI injection. This is why the launch line below carries no
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
-  // own memory load too. One delivery path for both launch modes ([[harness-delivery]]).
+  // own memory load too.
   bootstrapMaterialize(rec)
   if (ref) {
     // @@@ spec pointer - the ref (explicit --node, else the prompt's first [[id]] ref) named an EXISTING node.
@@ -1421,17 +1372,12 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, ops: HarnessOps, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const rec = readRecord(id)
-    // HEADLESS: the one-shot turn may complete (and declare, via the stop-gate) before a poll ever catches its
-    // process — a declared record IS "ready" (the boot question is moot; the slot hold must not linger for the
-    // whole timeout on a fast task). While still `active`, readiness is the mode-routed ops' liveness below
-    // (the turn process provably up), exactly like interactive.
-    if (rec?.mode === 'headless' && rec.status !== 'active' && rec.status !== 'queued') return true
     const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
-    if (rec && ops.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
+    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
     if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
@@ -1464,18 +1410,6 @@ export async function resumeSession(id: string, opts: { force?: boolean; guard?:
   const wt = await findWorktree(id)
   if (!wt) return { ok: false, error: `no such session ${id}` }
   const h = harnessById(wt.rec.harness || defaultHarness.id)
-  const ops = harnessOps(h, wt.rec.mode)   // mode-routed runtime ops: a headless resume recreates the agent-free pane on the owned thread, never a TUI
-  // HEADLESS with an EMPTY resume tail (claude always — its continuation IS the next delivery; codex only
-  // when no thread id was ever captured): there is nothing to relaunch — replaying the one-shot command bare
-  // would require a prompt the system must never fabricate on the human's behalf. Resume here means: ensure
-  // the window exists (the pane is the next turn's injection target), touch nothing else, and point the
-  // caller at send. The lifecycle is left wholly untouched (there is no working agent to demote). A headless
-  // session WITH a resume tail (codex's `--resume <tid>` marker) falls through to the normal relaunch, which
-  // recreates the read-only placeholder pane on the owned thread and fires nothing.
-  if (wt.rec.mode === 'headless' && h.headless && !ops.resumeArg(wt.rec).trim()) {
-    if (!(await alive(id))) await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', wt.path])
-    return { ok: true, info: `headless session — window ensured, no agent relaunched (its continuation is the next delivery): spex session send ${id} "<msg>"` }
-  }
   const lv = liveness(wt.rec, await liveSnapshot())   // FRESH, honest liveness (listener-verified) — the guard must not trust a stale board reading
   if (guard && !force && lv === 'online')
     return { ok: false, refused: true, error: `session ${id} is ALIVE — refusing to relaunch, which would kill a live worker mid-work. To steer it, send it a message; use force only for a genuinely wedged (but alive) process.` }
@@ -1486,8 +1420,8 @@ export async function resumeSession(id: string, opts: { force?: boolean; guard?:
   writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
   if (force || lv === 'offline') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
-    await launch(id, wt.path, ops.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec), wt.rec.mode)   // resume under the SAME persisted launcher + mode ([[launcher-select]])
-    await waitForReady(id, ops)   // a relaunched agent is "ready" only once the adapter reads it online
+    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))
+    await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
   }
   return { ok: true }
 }
@@ -1890,8 +1824,7 @@ export function formatTable(sessions: Session[], color = true): string {
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    const modeMark = s.mode === 'headless' ? c('90', ' ◇') : ''   // ◇ = headless; interactive rows stay unmarked (no noise)
-    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}${modeMark}`
+    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
   })
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
@@ -2039,15 +1972,13 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
   const h = harnessById(rec.harness || defaultHarness.id)
-  const ops = harnessOps(h, rec.mode)   // mode-routed delivery ([[harness-adapter]] headless): claude headless = next-turn injection (busy → loud refusal); codex headless = the same app-server channel
   // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
   // prompt its channel confirms (claude's sessions panel), checkable only from the pane — refuse loudly with
   // the recovery named instead of reporting a false success. A missing pane (window gone, probe failure) skips
-  // the guard: the delivery channel itself is the authority on whether the agent is reachable. Headless ops
-  // carry no such predicate (no TUI in the pane), so the guard self-skips there.
-  if ('deliveryBlockedBy' in ops && ops.deliveryBlockedBy) {
+  // the guard: the delivery channel itself is the authority on whether the agent is reachable.
+  if (h.deliveryBlockedBy) {
     try {
-      const blocked = ops.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', id], TMUX_PROBE_TIMEOUT_MS))
+      const blocked = h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', id], TMUX_PROBE_TIMEOUT_MS))
       if (blocked) return { ok: false, error: blocked }
     } catch { /* no pane to consult — let the delivery channel decide */ }
   }
@@ -2057,7 +1988,7 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   // phrase pair and the timeline records the message WITHOUT it (the hint is transport, not conversation).
   const wrapped = opts.replyVia === 'note' ? withNoteReplyHint(text)
     : !from && lastHumanSendVia(id) === 'note' ? withTerminalReplyHint(text) : text
-  const r = await ops.deliver({ ...rec, runtimeDir: runtimeRoot() }, wrapped)
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, wrapped)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)

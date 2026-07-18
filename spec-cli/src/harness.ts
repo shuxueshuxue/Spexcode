@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -9,12 +9,8 @@ import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
-import { runtimeRoot, mainCheckout, readConfig, sessionStoreDir, sessionArtifactPath } from './layout.js'
+import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
-// type-only (erased at runtime, so no import cycle with sessions.ts): the headless capability object speaks
-// in the session vocabulary — the full record (its declared status is headless liveness truth between turns)
-// and the composed Liveness axis.
-import type { SessRec, Liveness } from './sessions.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -43,37 +39,6 @@ export type HarnessLivenessRecord = { session: string; harnessSessionId?: string
 export type ProcTable = Map<number, { ppid: number; comm: string }>
 export type PaneProbe = { panePid?: number; procs?: ProcTable; pidAlive?: boolean }
 
-// @@@ HarnessHeadless - a harness's HEADLESS (one-shot turn) capability object, mirroring agentDir's
-// "null = no such primitive" pattern. A session's `mode` is a PRODUCT dimension; the harness differences of
-// running headless live ENTIRELY behind this object — product code routes per mode
-// (`const ops = rec.mode === 'headless' && h.headless ? h.headless : h`), never per harness. All four
-// harnesses carry a live capability: claude, pi, and opencode are ONE-SHOT-PROCESS-PER-TURN forms built by
-// the shared oneShotHeadlessOps builder from per-harness DATA (each one's busy-process matcher, trust flag,
-// and continue-this-conversation turn flag — see its @@@ block); codex carries its inline ops (the executor
-// already lives in the shared app-server, so the pane never runs a second agent — see the codex adapter's
-// headless block). `null` remains the contract for a future harness with no headless form — a headless
-// create on one fails loud at the create path.
-export interface HarnessHeadless {
-  // whether this harness's headless form needs its OWN agent command (the launcher's `headlessCmd`).
-  // claude/pi/opencode: true — the one-shot invocation (`… -p` / `pi -p` / `opencode run`) IS that command.
-  // codex: false — the executor is the app-server, derived from the pinned interactive `cmd`
-  // (version-parity invariant), so no second command exists and `headlessCmd` is ignored.
-  readonly needsCmd: boolean
-  // the pane-side launch script. The configured command is embedded WHOLE — zero parsing, zero rewriting
-  // (the config author writes the full invocation; the system never edits its internals). Adapter-OWNED
-  // flags (e.g. pi's `--approve` one-run trust) may be APPENDED after it, exactly as the interactive
-  // launchCmd appends them — appending is not rewriting.
-  launchCmd(id: string, runtimeDir: string | undefined, cmd: string | undefined): string
-  // TURN-scoped liveness: online only while a turn is actually executing; between turns the record's
-  // DECLARED lifecycle is the truth (the stop-gate guarantees a non-crash exit declares). Same optionality as
-  // Harness.liveness so the two are callable through the harnessOps union with the caller's ONE snapshot.
-  liveness(rec: SessRec, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): Liveness
-  // headless prompt delivery — the NEXT turn. A still-running turn refuses loud (never a silent queue).
-  deliver(rec: SessRec, text: string): Promise<DispatchResult>
-  // reopen semantics: a headless session's continuation is its next delivery, not a TUI re-attach.
-  resumeArg(rec: SessRec): string
-}
-
 export interface Harness {
   readonly id: HarnessId
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
@@ -91,10 +56,6 @@ export interface Harness {
   // instead of showing the folder name. This is the ONLY harness branch in the headline path: the capability
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
-  // the headless capability object (see HarnessHeadless above), or null when this harness has no headless
-  // form yet — a headless create on it fails loud at the create path.
-  readonly headless: HarnessHeadless | null
-
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
   // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
@@ -463,15 +424,7 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
-// `headless` swaps ONLY the final pane line: instead of attaching the visible `--remote … resume` TUI, the
-// pane holds a READ-ONLY placeholder (a banner + `tail -f` of the shared app-server log). Everything before it
-// — app-server bootstrap, mkdir lock, codex-launch thread/start + first turn + rollout wait, the `--resume`
-// marker branch — is byte-identical, because the task's execution body ALREADY lives in the app-server first
-// turn on both paths. That is the structural no-double-run guarantee: headless has no second agent process to
-// even start (the mbp wrapper incident ran the task prompt AND a pane "Continue…" turn concurrently for 34min;
-// here the pane holds no agent at all). `headlessCmd` never participates — the app-server binary derivation
-// stays on the pinned interactive `cmd`'s first token (the version-parity invariant above).
-export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot(), headless = false): string {
+export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -545,15 +498,7 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serve
     `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
-    // interactive: attach the visible TUI to the thread. headless: NO agent in the pane — a banner naming the
-    // thread, then a read-only tail of the app-server log keeps the pane (and the close/liveness window
-    // semantics) alive without ever running a second executor.
-    ...(headless
-      ? [
-          `printf '[spexcode] headless codex thread %s\\n[spexcode] the agent runs on the project app-server; this pane is a read-only log tail\\n' "$tid"`,
-          `exec tail -f "$log"`,
-        ]
-      : [`exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`]),
+    `exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`,
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -806,67 +751,6 @@ export function codexTurn(sock: string, threadId: string, text: string, cwd?: st
   return sendCodexAppServerTurn(sock, threadId, text, cwd)
 }
 
-// @@@ codexThreadsInProgress - the HEADLESS turn-scoped liveness probe ([[harness-adapter]] headless): one WS
-// connection to the project app-server, one `thread/read{includeTurns}` per owned thread id, answering which
-// threads have an in-progress turn RIGHT NOW. The caller (sessions.ts liveSnapshot) batches every windowed
-// codex-headless session into a single call per snapshot — the headless analog of the rendezvous-listener
-// sweep. Shape re-verified live on codex 0.144.3 (2026-07-17): turns[].status is "inProgress" while running,
-// "completed" after — identical to the 0.142.x pin, so activeTurnIdFromThread decides each read. Outcomes are
-// tri-state like rendezvousListening, because only two prove anything: `ok` (every read answered — a read that
-// ERRORS, e.g. a thread "not materialized before its first user message", proves no turn is running on it, so
-// it counts as idle, not as a probe failure); `dead` (connect refused/ENOENT — the app-server is down, and the
-// app-server IS the headless executor, so its death is the sessions' death); `timeout` (the wall expired on a
-// live connection — a busy server is not a dead one, so the caller renders unknown, never a false offline).
-export function codexThreadsInProgress(sock: string, threadIds: string[], timeoutMs = 4000): Promise<
-  { ok: true; inProgress: Set<string> } | { ok: false; dead?: boolean; timeout?: boolean; error: string }
-> {
-  return new Promise((resolve) => {
-    if (!threadIds.length) return resolve({ ok: true, inProgress: new Set() })
-    const conn: Socket = createConnection(sock)
-    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
-    const inProgress = new Set<string>()
-    let answered = 0, upgraded = false, settled = false
-    const BASE = 100   // request ids 100+i → threadIds[i]; keeps clear of the initialize handshake's id 1
-    const done = (r: { ok: true; inProgress: Set<string> } | { ok: false; dead?: boolean; timeout?: boolean; error: string }) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      try { conn.destroy() } catch { /* */ }
-      resolve(r)
-    }
-    const timer = setTimeout(() => done({ ok: false, timeout: true, error: `codex app-server did not answer ${threadIds.length} thread reads within ${timeoutMs}ms` }), timeoutMs)
-    conn.on('error', (e) => done({ ok: false, dead: true, error: `codex app-server connection failed: ${rpcError(e)}` }))
-    conn.on('close', () => done({ ok: false, dead: true, error: 'codex app-server closed before the thread reads were answered' }))
-    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
-    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
-    const handle = (json: string) => {
-      let m: JsonRpc
-      try { m = JSON.parse(json) } catch { return }
-      if (m.id === 1 && m.result) {
-        send({ method: 'initialized', params: {} })
-        threadIds.forEach((tid, i) => send({ id: BASE + i, method: 'thread/read', params: { threadId: tid, includeTurns: true } }))
-        return
-      }
-      if (typeof m.id !== 'number' || m.id < BASE || m.id >= BASE + threadIds.length) return
-      if (!m.error && m.result && activeTurnIdFromThread(m.result)) inProgress.add(threadIds[m.id - BASE])
-      if (++answered === threadIds.length) done({ ok: true, inProgress })
-    }
-    conn.on('data', (chunk: Buffer) => {
-      fs.buf = Buffer.concat([fs.buf, chunk])
-      if (!upgraded) {
-        const i = fs.buf.indexOf('\r\n\r\n')
-        if (i < 0) return
-        const head = fs.buf.slice(0, i).toString('utf8')
-        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, dead: true, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
-        upgraded = true
-        fs.buf = fs.buf.slice(i + 4)
-        send(wsInitialize)
-      }
-      if (drainWsFrames(fs, conn, handle)) done({ ok: false, dead: true, error: 'codex app-server sent a WebSocket close before the thread reads were answered' })
-    })
-  })
-}
-
 // @@@ codex rollout on disk - the visible TUI resumes a thread via `codex --remote resume <tid>`, which reads
 // the thread's ROLLOUT FILE (`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<ts>-<tid>.jsonl`) — so a thread the
 // TUI can render is exactly one whose rollout exists on disk. VERIFIED live (real codex 0.142.5): `thread/start`
@@ -1110,16 +994,6 @@ function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
 // (tmux/ps couldn't report) is not-live, and the caller's boot grace still shows a fresh launch — whose tree
 // may not yet contain codex — as 'starting', not 'offline'.
 const CODEXISH = /^(codex|node)/i   // the vendored binary ('codex', 'codex-x86_64…') or the CLI's node runtime
-// claude's one-shot process tree: the CLI runs as `claude` or as its node runtime (a wrapper like reclaude is
-// bash and execs down to it). Used by the HEADLESS claude liveness/busy probe only — interactive claude's
-// truth stays the rendezvous socket.
-const CLAUDEISH = /^(claude|node)/i
-// pi's / opencode's one-shot process trees, same role for THEIR headless probes (interactive pi/opencode
-// liveness stays the rendezvous socket): each CLI runs as its own binary or under its JS runtime — pi is an
-// npm bin (node), opencode ships compiled bun binaries (`opencode`, `opencode-linux-x64`, …). `pi\b` so a
-// tool subprocess named `ping`/`pip` under the pane never reads as the agent.
-const PIISH = /^(pi\b|node|bun)/i
-const OPENCODEISH = /^(opencode|node|bun)/i
 // the shared descendant-tree walk: does a process matching `re` live BELOW the pane pid? (The pane pid itself
 // is the shell, so descendants only.) Pure over the caller's one ps snapshot.
 function paneTreeRuns(pane: PaneProbe | undefined, re: RegExp): boolean {
@@ -1152,223 +1026,6 @@ export async function procSnapshot(timeoutMs = 4000): Promise<ProcTable> {
   }
   return t
 }
-
-// ---------------------------------------------------------------------------------------------------------
-// @@@ one-shot headless ops - the SHARED headless capability builder ([[harness-adapter]] HarnessHeadless)
-// for every harness whose headless form is a ONE-SHOT PROCESS PER TURN, not a resident TUI: claude (`… -p`),
-// pi (`pi -p`), and opencode (`opencode run`). The machinery — launch embedding the pinned headlessCmd
-// whole, turn-scoped liveness, next-turn delivery via an injected turn script, empty resumeArg — is written
-// ONCE here; what differs per harness is pure DATA (a OneShotSpec), so adding a one-shot harness adds a
-// spec object, never a code branch. Everything is TURN-scoped:
-//
-//   launch    — the pinned `headlessCmd` runs WHOLE in the pane (`<headlessCmd> [trust args] <tail>`, the
-//               caller appends the tail exactly as interactive); no rendezvous env is injected (there is
-//               no daemon to rendezvous with) and the launch template treats exit 0 as COMPLETION, never a
-//               fast-fail to retry (sessions.ts launchScript, the mode branch).
-//   liveness  — online only WHILE a turn executes. Primary signal: the launch/turn-registered `agent.pid`
-//               hot-tier verdict (`pidAlive` — both the launch script and the injected turn script re-register
-//               it, so every turn is covered); legacy fallback: an agent-ish process (the spec's matcher)
-//               among the pane pid's descendants. Between turns the process is GONE and liveness honestly
-//               reads offline — the record's DECLARED lifecycle is the between-turn truth (the stop-gate
-//               guarantees a non-crash exit declares), so reconcile shows the declaration; a session still
-//               `active` with no process is a genuine crash and reads offline. NO harness `if` anywhere:
-//               product code reaches this only through the mode-routed ops object.
-//   deliver   — the NEXT turn: when the pane is idle, inject `bash <turn.sh>` where turn.sh re-registers
-//               agent.pid then execs the pinned headlessCmd with the spec's continue-this-conversation flag
-//               (claude `--resume <record id>`; pi `--session <record id>` — the id we pinned at launch;
-//               opencode `--session <captured harness id>`, falling to `--continue`, opencode's own
-//               last-session-in-this-directory, which in a dedicated worktree is this worker's) — the SAME
-//               script-file + born-registration shape as the launch, never a bare send-keys paste. A
-//               still-running turn REFUSES loud (two concurrent one-shot turns on one conversation are
-//               undefined behaviour); a missing window refuses loud naming `spex session resume` (which
-//               recreates it). Delivery is confirmed when the turn PROCESS provably started (agent.pid
-//               freshly re-registered) — the hooks then advance the record and the timeline exactly as at
-//               launch.
-//   resume    — a headless session's continuation IS its next delivery: resumeArg is empty and sessions.ts
-//               never relaunches the one-shot command bare (it would fabricate no prompt — the system never
-//               invents an instruction on the human's behalf).
-type OneShotSpec = {
-  id: HarnessId                            // names the harness in fail-loud messages
-  agentish: RegExp                         // the turn-process matcher (deliver's busy gate + liveness fallback)
-  launchArgs: string                       // adapter-owned flags appended after the pinned cmd on BOTH the
-                                           // launch and every injected turn ('' for most; pi: '--approve',
-                                           // its one-run project trust — same defence the interactive launch
-                                           // carries, so a worktree outside the checkout still loads the shim)
-  resumeTurnArg: (rec: SessRec) => string  // the "continue THIS conversation" flag for an injected turn
-  // the SHELL form of the same flag, for the in-script undeclared-exit recovery below (the script must
-  // compute it at RUN time — opencode's captured harness id may not exist when the script is baked): lines
-  // that set `$_res`. claude/pi resume by the RECORD id, known at bake; opencode reads harness_session_id
-  // out of session.json, falling to --continue.
-  resumeTurnShell: (id: string, sessJsonQuoted: string) => string[]
-}
-export type { OneShotSpec }
-// the per-harness DATA the builder consumes — exported as a registry so tests audit each harness's turn
-// composition through the same objects the adapters are built from (one truth, no duplicate fixtures).
-//   claude — the launch tail pinned `--session-id <record id>`, so a turn resumes it with `--resume`.
-//   pi     — claude-shaped: the tail pinned `--session-id <record id>` too, and a turn resumes that exact id
-//            with `--session` (which FAILS LOUD when the session file is gone, never silently minting an
-//            empty one — same choice as the interactive resumeArg). `--approve` rides launch AND every turn:
-//            each turn is a fresh pi process that must load the project extension (the hook shim) with zero
-//            prompts.
-//   opencode — it mints its own session id; the plugin (which opencode loads in `run` mode exactly as in the
-//            TUI) captures it onto the record as harness_session_id, so a turn resumes the captured id — or
-//            falls to `--continue` (opencode's own "last session in this directory", this worker's in a
-//            dedicated worktree) for a session whose capture never landed, mirroring the interactive
-//            resumeArg.
-export const ONE_SHOT_HEADLESS: Record<'claude' | 'pi' | 'opencode', OneShotSpec> = {
-  claude: {
-    id: 'claude', agentish: CLAUDEISH, launchArgs: '',
-    resumeTurnArg: (rec) => `--resume ${rec.session}`,
-    resumeTurnShell: (id) => [`_res="--resume ${id}"`],
-  },
-  pi: {
-    id: 'pi', agentish: PIISH, launchArgs: '--approve',
-    resumeTurnArg: (rec) => `--session ${rec.session}`,
-    resumeTurnShell: (id) => [`_res="--session ${id}"`],
-  },
-  opencode: {
-    id: 'opencode', agentish: OPENCODEISH, launchArgs: '',
-    resumeTurnArg: (rec) => (rec.harnessSessionId ? `--session ${rec.harnessSessionId}` : '--continue'),
-    resumeTurnShell: (_id, sessJson) => [
-      `_hsid=$(sed -n 's/.*"harness_session_id": "\\([^"]*\\)".*/\\1/p' ${sessJson} 2>/dev/null | head -1)`,
-      `if [ -n "$_hsid" ]; then _res="--session $_hsid"; else _res="--continue"; fi`,
-    ],
-  },
-}
-const withLaunchArgs = (cmd: string, spec: OneShotSpec) => (spec.launchArgs ? `${cmd} ${spec.launchArgs}` : cmd)
-const tmuxH = async (args: string[], timeoutMs = 4000): Promise<string> =>
-  (await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' })).stdout
-// one-session pane state for the deliver gate: no window / idle shell / an agent-ish turn still running.
-// Deliberately the SAME descendant-tree probe the liveness fallback walks, so deliver and the board can never
-// disagree about "busy".
-async function headlessPaneState(id: string, agentish: RegExp): Promise<'no-window' | 'idle' | 'running'> {
-  let out: string
-  try { out = await tmuxH(['list-panes', '-t', id, '-F', '#{pane_pid}']) } catch { return 'no-window' }
-  const panePid = Number(out.split('\n')[0]?.trim())
-  if (!Number.isFinite(panePid) || panePid <= 0) return 'no-window'
-  return paneTreeRuns({ panePid, procs: await procSnapshot() }, agentish) ? 'running' : 'idle'
-}
-// the injected turn script's content, pure and exported for tests: re-register agent.pid FIRST (its `$$`
-// persists for the script's whole life — the born pattern; the agent runs as the script's child so the pid
-// stays live across the recovery turns too), then run the WHOLE pinned one-shot command resuming this
-// conversation, then the shared undeclared-exit recovery. The fresh registration is both the hot-tier
-// liveness feed for this turn and the delivery confirmation in deliverOneShotTurn.
-export function oneShotTurnScript(spec: OneShotSpec, rec: SessRec, cmd: string, pidPath: string, text: string): string {
-  const agent = withLaunchArgs(cmd, spec)
-  return [
-    `printf %s "$$" > ${shQuote(pidPath)}`,
-    ...headlessTurnExports(rec.session),
-    `${agent} ${spec.resumeTurnArg(rec)} ${shQuote(text)}`,
-    `_rc=$?`,
-    `[ "$_rc" -ne 0 ] && exit "$_rc"`,
-    ...oneShotRecoveryLines(spec, rec.session, agent),
-    ``,
-  ].join('\n')
-}
-// @@@ one-shot undeclared-exit recovery - the OUT-OF-PROCESS half of the stop-gate contract for one-shot
-// harnesses. The gate's in-process continuation is best-effort on some harnesses: `opencode run` EXITS when
-// its awaited turn completes WITHOUT awaiting the plugin's session.idle handler, so a blocked-stop
-// continuation injected at exit is killed with the process and the record wedges `active` (REPRODUCED live,
-// opencode 1.18.3: forbid-declare worker → gate rejected — teach sentinel planted — yet the process exited
-// to the shell, record stuck active/offline). claude `-p` holds its Stop-block natively; pi's awaited
-// agent_end inject drains inside the same prompt ([[pi-harness]]). So every one-shot SCRIPT (launch and injected turn alike) closes the
-// gap at the only layer that survives the process: after a CLEAN agent exit (rc=0 — a non-zero exit stays
-// fail-loud, unrecovered), it reads the record's declared state and, while still UNDECLARED (active/queued),
-// fires a bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the
-// gate's own contract restated, never a fabricated task (the mbp "Continue…" lesson bans inventing WORK, not
-// the gate teaching declaration). Two tries then exit 97 loud. A declared/absent record exits 0 untouched,
-// so harnesses whose in-process gate already held (claude, normally pi) never fire it.
-const ONE_SHOT_GATE_CONTINUATION =
-  '[SpexCode stop gate] Your previous stop was blocked: this session is still UNDECLARED. Declare your ' +
-  'true state now by running exactly ONE command: `spex session done --propose merge|nothing|close`, or ' +
-  '`spex session park --note "<what you await>"`, or `spex session ask --note "<your question>"`. Do nothing else.'
-function oneShotRecoveryLines(spec: OneShotSpec, id: string, agent: string): string[] {
-  const sessJson = shQuote(join(sessionStoreDir(id), 'session.json'))
-  const readStatus = `_st=$(sed -n 's/.*"status": "\\([a-z]*\\)".*/\\1/p' ${sessJson} 2>/dev/null | head -1)`
-  return [
-    `for _i in 1 2; do`,
-    `  ${readStatus}`,
-    `  case "$_st" in active|queued) ;; *) exit 0 ;; esac`,   // declared (or record gone) — the ordinary end
-    `  echo "[spex] one-shot agent exited undeclared - firing the stop-gate continuation turn ($_i/2)" >&2`,
-    ...spec.resumeTurnShell(id, sessJson).map((l) => `  ${l}`),
-    `  ${agent} $_res ${shQuote(ONE_SHOT_GATE_CONTINUATION)}`,
-    `  _rc=$?`,
-    `  [ "$_rc" -ne 0 ] && exit "$_rc"`,
-    `done`,
-    `${readStatus}`,
-    `case "$_st" in active|queued) echo "[spex] one-shot agent still undeclared after 2 continuation turns - failing loud" >&2; exit 97 ;; esac`,
-    `exit 0`,
-  ]
-}
-// export lines for the injected turn's env — the launch env minus the rendezvous pair (mirrors sessions.ts
-// rvEnv's headless bypass): the session id for hooks/CLI attribution, plus the store/config-home propagation
-// so the turn's hook-state lands in the SAME store the backend reads.
-const headlessTurnExports = (id: string): string[] => {
-  const lines = [`export SPEXCODE_SESSION_ID=${id}`]
-  for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) lines.push(`export ${v}=${shQuote(val)}`) }
-  return lines
-}
-const HEADLESS_TURN_START_TIMEOUT_MS = 10_000
-async function deliverOneShotTurn(spec: OneShotSpec, rec: SessRec, text: string): Promise<DispatchResult> {
-  const id = rec.session
-  const state = await headlessPaneState(id, spec.agentish)
-  if (state === 'no-window')
-    return { ok: false, error: `headless session ${id} has no tmux window — run \`spex session resume ${id}\` to recreate it, then resend` }
-  if (state === 'running')
-    return { ok: false, error: `headless session ${id} is still executing its current turn — refusing to inject a second concurrent one-shot turn (undefined behaviour on one conversation); wait for the turn to finish, then resend` }
-  const cmd = rec.launchCmd
-  if (!cmd) return { ok: false, error: `headless session ${id} has no pinned launch command — cannot build the resume turn (re-create the session)` }
-  const pidPath = sessionArtifactPath(id, 'agent.pid')
-  const prevMtime = (() => { try { return statSync(pidPath).mtimeMs } catch { return 0 } })()
-  const file = join(sessionStoreDir(id), 'turn.sh')
-  writeFileSync(file, oneShotTurnScript(spec, rec, cmd, pidPath, text))
-  try {
-    await tmuxH(['send-keys', '-t', id, '-l', '--', `bash ${file}`])
-    await tmuxH(['send-keys', '-t', id, 'Enter'])
-  } catch (e) {
-    return { ok: false, error: `could not type the turn into the session pane: ${e instanceof Error ? e.message : String(e)} — prompt NOT delivered` }
-  }
-  // delivered = the turn PROCESS provably started: the injected script's first act is the agent.pid
-  // re-registration, so a fresh mtime is proof the injection ran (the hooks take the record from here).
-  // Never seeing it means the pane swallowed the line (not at a shell prompt) — fail loud, never a false sent.
-  const deadline = Date.now() + HEADLESS_TURN_START_TIMEOUT_MS
-  for (;;) {
-    try { if (statSync(pidPath).mtimeMs !== prevMtime) return { ok: true } } catch { /* not registered yet */ }
-    if (Date.now() >= deadline)
-      return { ok: false, error: `injected headless turn did not start within ${HEADLESS_TURN_START_TIMEOUT_MS / 1000}s (agent.pid was never re-registered) — the pane is likely not at a shell prompt; inspect it and resend` }
-    await new Promise((r) => setTimeout(r, 200))
-  }
-}
-function oneShotHeadlessOps(spec: OneShotSpec): HarnessHeadless {
-  return {
-    needsCmd: true,   // the one-shot invocation IS its own command — the launcher's headlessCmd, written whole
-    launchCmd: (id, _rt, cmd) => {
-      // the pinned headlessCmd, embedded WHOLE — zero parsing. mode+pin were born together, so a headless
-      // record always carries one; its absence is corruption, not a case to paper over. The command runs
-      // inside a small bootstrap script (the codex-launchCmd pattern: the caller's ordinary tail arrives as
-      // "$@") so the undeclared-exit recovery above can run AFTER the agent process is gone.
-      if (!cmd) throw new Error(`headless ${spec.id} launch has no pinned headlessCmd — the record carries no launch command (re-create the session)`)
-      const agent = withLaunchArgs(cmd, spec)
-      const script = [
-        `${agent} "$@"`,
-        `_rc=$?`,
-        `[ "$_rc" -ne 0 ] && exit "$_rc"`,
-        ...oneShotRecoveryLines(spec, id, agent),
-      ].join('\n')
-      return `bash -c ${shQuote(script)} spexcode-oneshot`
-    },
-    liveness: (_rec, tmuxAlive, _runtimeDir, pane) => {
-      if (!tmuxAlive) return 'offline'
-      if (pane?.pidAlive !== undefined) return pane.pidAlive ? 'online' : 'offline'
-      return paneTreeRuns(pane, spec.agentish) ? 'online' : 'offline'
-    },
-    deliver: (rec, text) => deliverOneShotTurn(spec, rec, text),
-    resumeArg: () => '',   // continuation is the next deliver — never a bare relaunch with a fabricated prompt
-  }
-}
-export const claudeHeadlessOps: HarnessHeadless = oneShotHeadlessOps(ONE_SHOT_HEADLESS.claude)
-export const piHeadlessOps: HarnessHeadless = oneShotHeadlessOps(ONE_SHOT_HEADLESS.pi)
-export const opencodeHeadlessOps: HarnessHeadless = oneShotHeadlessOps(ONE_SHOT_HEADLESS.opencode)
 
 // ---------------------------------------------------------------------------------------------------------
 // the two implementations.
@@ -1423,7 +1080,6 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
-  headless: claudeHeadlessOps,                       // the one-shot `-p` capability ([[harness-adapter]] claude headless ops above)
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
@@ -1460,31 +1116,6 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  // @@@ codex headless - the app-server IS the executor on the interactive path already (the task runs as the
-  // backend-owned thread's FIRST turn; the pane TUI only renders it), so codex's headless form is the
-  // interactive launch minus the final attach: the pane holds a read-only placeholder, and a second agent
-  // process is STRUCTURALLY impossible — nothing in the pane can start a turn (the mbp double-run fix).
-  headless: {
-    // the executor is the shared app-server, derived from the pinned interactive `cmd`'s first token (the
-    // version-parity invariant) — there is no second command, `headlessCmd` is ignored.
-    needsCmd: false,
-    launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot(), true),
-    // TURN-scoped: online iff the window is up AND the caller's app-server sweep (codexThreadsInProgress, fed
-    // through the snapshot's online-signal channel as `socketLive`) found an in-progress turn on the owned
-    // thread. Between turns the caller's reconcile lets the DECLARED lifecycle rule (the stop-gate guarantees a
-    // non-crash turn end declares); a still-`active` record with no running turn honestly reads offline. The
-    // pane probe (`pidAlive` = the placeholder tail) is deliberately ignored — a live placeholder proves
-    // nothing about the executor.
-    liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
-    // delivery is the interactive channel verbatim — app-server JSON-RPC steer-vs-start on the owned thread
-    // (it never depended on the pane). The record's runtime dir is the ambient project's, same as the
-    // interactive call site passes.
-    deliver: (rec, text) => deliverViaCodexAppServer({ session: rec.session, worktreePath: rec.worktreePath, harnessSessionId: rec.harnessSessionId, runtimeDir: runtimeRoot() }, text),
-    // same marker as interactive: reopen re-runs the launch script, which resumes the OWNED thread directly
-    // (tid=$2 — no codex-launch, no new thread, no re-fired prompt) and lands on the placeholder line — so a
-    // headless reopen recreates the read-only pane and nothing else; the conversation continues via deliver.
-    resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
-  },
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
@@ -1566,10 +1197,6 @@ export const piHarness: Harness = {
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
-  // the one-shot `pi -p` capability, built from the shared builder's pi data (ONE_SHOT_HEADLESS.pi): launch
-  // pins `--session-id <record id>` via the ordinary tail, a turn resumes it with `--session <record id>`,
-  // and `--approve` rides every process so the extension (the hook shim) loads with zero prompts.
-  headless: piHeadlessOps,
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
@@ -1604,11 +1231,6 @@ export const opencodeHarness: Harness = {
   // parse-confirmed write) and socket-listener liveness are reused verbatim — no opencode transport code.
   ownsRendezvous: true,
   paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
-  // the one-shot `opencode run` capability, built from the shared builder's opencode data
-  // (ONE_SHOT_HEADLESS.opencode): opencode loads the project plugin in `run` mode exactly as in the TUI, so
-  // the minted-id capture and every hook fire unchanged; a turn resumes `--session <captured id>`, falling
-  // to `--continue` when no capture ever landed (mirroring the interactive resumeArg).
-  headless: opencodeHeadlessOps,
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)
@@ -1657,56 +1279,22 @@ export function harnessById(id: string): Harness {
   return h
 }
 
-// @@@ harnessOps - the ONE mode router product code branches on: a headless-mode record routes its runtime
-// (launchCmd / liveness / deliver / resumeArg) through the harness's headless capability object; everything
-// else — an interactive record, an old pre-mode record, or a harness with no headless form — stays on the
-// interactive adapter. This is a PRODUCT-dimension branch (`mode`), never a harness branch, so it lives here
-// once instead of an `if (headless)` per call site. A headless record on a null-capability harness cannot
-// exist past create (the create path fails loud), so the fallthrough is old-record safety, not a feature.
-export type HarnessOps = Harness | HarnessHeadless
-export function harnessOps(h: Harness, mode?: SessionMode | null): HarnessOps {
-  return mode === 'headless' && h.headless ? h.headless : h
-}
-
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
-// a launcher = a `{ harness, cmd, headlessCmd? }` entry in spexcode.json's `sessions.launchers`, keyed by a
+// a launcher = a `{ harness, cmd }` entry in spexcode.json's `sessions.launchers`, keyed by a
 // human-chosen name. `claude` and `codex` are NOT special built-ins — `spex init` SEEDS them as ordinary named
 // launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
 // auth) and validates the harness id. There is NO env-derived built-in fallback: the dropdown lists exactly
 // the config's real launchers.
-//
-// A launcher may carry TWO complete commands, one per session MODE: `cmd` (the interactive TUI — the field's
-// meaning is unchanged, existing configs need zero migration) and the optional `headlessCmd` (the one-shot
-// headless invocation). Both are written WHOLE by the config author; the system never parses or rewrites
-// their internals. An empty-string headlessCmd reads as absent; its absence is validated at USE time (a
-// headless create on a needsCmd harness fails loud), never at list time.
-export type SessionMode = 'interactive' | 'headless'
-export const SESSION_MODES: readonly SessionMode[] = ['interactive', 'headless']
-export type Launcher = { name: string; harness: string; cmd: string; headlessCmd: string | null }
+export type Launcher = { name: string; harness: string; cmd: string }
 export type LauncherDefault = { default: string | null; error: string | null }
 
-// the modes a launcher can create sessions in — computed BACKEND-side from the adapter's headless capability
-// object, so adapter knowledge never leaks to the frontend (which only consumes this list). interactive is
-// always offered; headless requires the harness's `headless` capability AND, when that capability needs its
-// own command (needsCmd), a configured headlessCmd. An unknown harness id contributes no headless here (the
-// list stays renderable; resolveLauncher fails loud on it later).
-export function launcherModes(harness: string, headlessCmd: string | null): SessionMode[] {
-  const cap = HARNESSES.find((x) => x.id === harness)?.headless ?? null
-  return cap && (!cap.needsCmd || !!headlessCmd) ? ['interactive', 'headless'] : ['interactive']
-}
-
-// the configured named launchers from spexcode.json, as a stable name-sorted list (for the dashboard dropdown +
-// the CLI), each with its computed `modes`. Picking a launcher is the ONLY launch choice; the old separate
-// harness pick is gone.
-export function launcherList(root = mainCheckout()): (Launcher & { modes: SessionMode[] })[] {
+// the configured named launchers from spexcode.json, as a stable name-sorted list (for the dashboard dropdown
+// + the CLI). Picking a launcher is the ONLY launch choice; the old separate harness pick is gone.
+export function launcherList(root = mainCheckout()): Launcher[] {
   const m = readConfig(root).sessions?.launchers || {}
   return Object.keys(m)
-    .map((name) => {
-      const harness = m[name].harness || defaultHarness.id
-      const headlessCmd = m[name].headlessCmd?.trim() || null   // empty string reads as absent
-      return { name, harness, cmd: m[name].cmd, headlessCmd, modes: launcherModes(harness, headlessCmd) }
-    })
+    .map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -1736,42 +1324,7 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
-  // no headless validation here — mode availability is decided at CREATE time (pinnedLaunchCmd), where the
-  // requested mode is known; resolve stays the pure name→profile lookup.
-  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd, headlessCmd: l.headlessCmd?.trim() || null }
+  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
   harnessById(resolved.harness)   // validate the harness id fail-loud
   return resolved
-}
-
-// the configured default session MODE ([[launcher-select]] headless): the mode a create with no explicit
-// --mode/--headless choice uses. Absent → interactive (headless is opt-in, never a silent default flip); an
-// unrecognized value is a config error reported loud with the repair, exactly like a malformed JSON file —
-// never silently coerced.
-export function defaultSessionMode(root = mainCheckout()): SessionMode {
-  const raw = readConfig(root).sessions?.defaultMode?.trim()
-  if (!raw) return 'interactive'
-  if (!(SESSION_MODES as readonly string[]).includes(raw))
-    throw new Error(`sessions.defaultMode '${raw}' is not a session mode (valid: ${SESSION_MODES.join(' | ')}) — fix it in spexcode.json or spexcode.local.json`)
-  return raw as SessionMode
-}
-
-// the launch command a NEW session PINS on its record, per its mode ([[launcher-select]] resume-launcher-pin):
-//   interactive                → the launcher's interactive `cmd` (unchanged behavior).
-//   headless, needsCmd harness → the launcher's `headlessCmd` verbatim (the one-shot invocation IS that
-//                                command); missing → fail loud naming the config repair, never a silent
-//                                fall-through to the interactive cmd (which would boot a TUI nobody attends).
-//   headless, !needsCmd        → still the interactive `cmd` — the server-side executor (codex app-server) is
-//                                DERIVED from it (the version-parity invariant), so it is what must freeze.
-// A harness with no headless capability rejects headless outright, naming what does support it. Pure and
-// exported so the pin decision is unit-auditable without a git worktree.
-export function pinnedLaunchCmd(h: Harness, launcher: Launcher, mode: SessionMode): string {
-  if (mode !== 'headless') return h.baseCmd(launcher.cmd)
-  if (!h.headless) {
-    const capable = HARNESSES.filter((x) => x.headless).map((x) => x.id).join(', ')
-    throw new Error(`launcher '${launcher.name}' runs harness '${h.id}', which has no headless capability (headless-capable: ${capable || 'none yet'}) — create the session without --headless`)
-  }
-  if (!h.headless.needsCmd) return h.baseCmd(launcher.cmd)
-  if (!launcher.headlessCmd)
-    throw new Error(`launcher '${launcher.name}' has no headlessCmd — headless mode on harness '${h.id}' needs one; add "headlessCmd" to sessions.launchers.${launcher.name} in spexcode.json or spexcode.local.json (spex guide settings → LAUNCHERS)`)
-  return launcher.headlessCmd
 }

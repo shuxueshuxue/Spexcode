@@ -135,23 +135,6 @@ scenarios:
       Zero residue: the tmux window is gone, no process of that worktree survives, worktree and
       branch are retired, and the session's record/store dir is swept (durable history lives in git
       and the eval filings, not the record).
-  - name: opencode-headless-one-shot-substrate
-    tags: [cli]
-    description: >-
-      The harness-side substrate of opencode's headless capability (opencodeHeadlessOps —
-      [[harness-adapter]]'s shared one-shot builder over opencode data), measured through the REAL opencode
-      CLI in a scratch project carrying a probe plugin under .opencode/plugins and any working model
-      provider: (1) `opencode run '<prompt>'` (the governed launch shape — opencode mints the session);
-      (2) `opencode run --session <the minted id> '<recall prompt>'` (the injected-turn resume shape);
-      (3) `opencode run --continue '<recall prompt>'` (the capture-never-landed fallback). Read the probe's
-      bus-event log, stdout, and exit codes. Sanitize any provider identity out of the filed transcript.
-    expected: >-
-      The project plugin (the hook shim) LOADS under `run` and the bus fires
-      session.created(root)/chat.message/session.idle — the sources of SessionStart/UserPromptSubmit/Stop,
-      with the minted root id observable for harness_session_id capture; the `--session` turn reattaches
-      that conversation (ZERO new session.created, first-turn content recalled); `--continue` reattaches
-      the directory's own session. The failure this locks: `run` skipping project plugins — every hook and
-      the minted-id capture silently inert in headless mode while the TUI path stays green.
 ---
 
 Measured YATU through the generated artifacts and the real CLI: the plugin file the adapter actually

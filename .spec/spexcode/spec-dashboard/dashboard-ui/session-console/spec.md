@@ -45,11 +45,13 @@ the `＋` New Session button and a **Search** button, the click twin of the ⌘/
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
-node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the
-config-preset palette; the two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the
-server derives the node (the first `[[<id>]]`). Both menus only insert text; the New prompt has **no** `/`
-slash-command menu (presets only). A preset launched with **no node target** never assumes a node — the agent
-takes scope from the prompt, else asks first.
+node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
+caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
+contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.
+The two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the server derives the node
+(the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
+only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
+else asks first.
 **Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to

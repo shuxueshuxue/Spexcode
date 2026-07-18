@@ -4,7 +4,7 @@ import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
 import { sessionForest } from './session.js'
-import { MENTION_RE, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
+import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon } from './icons.jsx'
@@ -402,12 +402,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const am = actorMentionAt(value, caret, sessions)
     if (am) return am
     if (active === 'new') {
-      const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
-      if (cm) {
-        const items = matchSlash(commandPresets, cm[1])
-        if (!items.length) return null
-        return { kind: 'config', items, index: 0, start: 0, end: value.length, query: cm[1] }
-      }
+      const cm = slashTokenAt(value, caret, commandPresets)
+      if (cm) return { kind: 'config', ...cm }
       return null
     }
     const sm = value.match(/^\/(\S*)$/)
@@ -445,8 +441,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
     // active: the New prompt (resolved at launch) or a running session's ❯ inbox (resolved at send). An
     // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
-    const insert = menu.kind === 'config' ? `/${item.name} `
-      : menu.kind === 'actor' ? `@${item.id} `
+    if (menu.kind === 'config') {
+      // A preset governs the whole launch, so a token picked anywhere in an existing draft becomes its
+      // leading command. This is still an authoring edit only: Enter sends the normalized raw grammar through
+      // createSession, and the backend remains the sole plugin-body interpreter.
+      const rest = [prompt.slice(0, menu.start).trim(), prompt.slice(menu.end).trim()].filter(Boolean).join(' ')
+      const next = `/${item.name}${rest ? ` ${rest}` : ''} `
+      setPrompt(next)
+      setMenu(null)
+      requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
+      return
+    }
+    const insert = menu.kind === 'actor' ? `@${item.id} `
       : `[[${item.id}]] `
     const onMsg = (menu.kind === 'mention' || menu.kind === 'actor') && active !== 'new'
     const ref = onMsg ? msgRef : taRef

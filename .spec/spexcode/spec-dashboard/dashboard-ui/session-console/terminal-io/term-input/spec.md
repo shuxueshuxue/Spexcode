@@ -33,11 +33,11 @@ realised wherever a live terminal sits beside spec navigation.
 
 ## completion menus answer different questions
 
-A leading token opens a dropdown. For **authoring** rows — `[[` nodes, config presets, Claude Code's
-own commands — a row **only ever inserts its token text** and **never runs anything**; they are authoring
-aids, not a second control plane. The **one exception** is a **board command** (below): its row is the
-typed twin of a header button, so accepting it **runs the action** — it *is* the board's control plane,
-not a hint toward one.
+A trigger token under the caret opens a dropdown. For **authoring** rows — `[[` nodes, config presets,
+Claude Code's own commands — a row **only ever edits token text** and **never runs anything**; they are
+authoring aids, not a second control plane. The **one exception** is a **board command** (below): its row
+is the typed twin of a header button, so accepting it **runs the action** — it *is* the board's control
+plane, not a hint toward one.
 
 - **`[[` — spec nodes (a topic), on every prompt.** Which node does this target? Typing `[[` opens the
   node dropdown (the focused node leads it, the convenient default); accepting inserts `[[<id>]]`. It is the
@@ -48,7 +48,10 @@ not a hint toward one.
   the composer/inbox the token expands to prompt text (the agent reads it); only in an issue thread does `@` also
   programmatically dispatch.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
-  Code's palette.
+  Code's palette. Like `[[` and `@`, this trigger is positional: a `/query` token at the caret, starting
+  at the draft's beginning or after whitespace, opens even when prose already exists before it. Accepting
+  a preset removes that local trigger and makes `/<preset>` the draft's leading launch token while
+  preserving the prose around it; a URL or slash inside a word stays inert.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
   board's own commands (`/stop`·`/close`·`/merge`·`/type`·`/eval`) **lead** the list, each in its **identity
   colour** with a `[board]` tag, visibly apart from CC's blue command rows below — because there you talk
@@ -56,12 +59,13 @@ not a hint toward one.
 
 ## the New Session `/` composes at launch
 
-The dropdown stays decoupled: picking a preset only inserts `/<name> `. The raw invocation enters the ordinary
-create request only at **Enter**; [[launch]]'s backend owner then resolves it, rather than this input growing a
-second command interpreter. The grammar `/<preset> [[node]]… <free text>` assembles **one** prompt — the preset's body
-with its targets placeholder filled by the `[[…]]`-resolved nodes, then the free text appended. No node ref
-leaves a "current/focused node" note for the body to handle. A leading `/` naming no known preset, and
-any plain or node-only prompt, launch verbatim — the existing paths are untouched.
+The dropdown stays decoupled: picking a preset only normalizes the authored draft to
+`/<name> <existing draft>`; it does not launch or interpret the plugin body. The raw invocation enters the
+ordinary create request only at **Enter**; [[launch]]'s backend owner then resolves it, rather than this input
+growing a second command interpreter. The grammar `/<preset> [[node]]… <free text>` assembles **one** prompt —
+the preset's body with its targets placeholder filled by the `[[…]]`-resolved nodes, then the free text
+appended. No node ref leaves a "current/focused node" note for the body to handle. A leading `/` naming no
+known preset, and any plain or node-only prompt, launch verbatim — the existing paths are untouched.
 
 ## the running session's `[[node]]` resolves at send
 

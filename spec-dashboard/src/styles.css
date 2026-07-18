@@ -1875,7 +1875,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
 .m-senderr { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
-.m-composer-line { display: flex; align-items: flex-end; gap: 8px; }
+.m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {
   flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: 14px;
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;

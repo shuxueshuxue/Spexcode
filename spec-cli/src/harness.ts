@@ -1270,8 +1270,8 @@ export function oneShotTurnScript(spec: OneShotSpec, rec: SessRec, cmd: string, 
 // its awaited turn completes WITHOUT awaiting the plugin's session.idle handler, so a blocked-stop
 // continuation injected at exit is killed with the process and the record wedges `active` (REPRODUCED live,
 // opencode 1.18.3: forbid-declare worker → gate rejected — teach sentinel planted — yet the process exited
-// to the shell, record stuck active/offline). claude `-p` holds its Stop-block natively; pi re-injects via
-// sendUserMessage at agent_settled. So every one-shot SCRIPT (launch and injected turn alike) closes the
+// to the shell, record stuck active/offline). claude `-p` holds its Stop-block natively; pi's awaited
+// agent_end inject drains inside the same prompt ([[pi-harness]]). So every one-shot SCRIPT (launch and injected turn alike) closes the
 // gap at the only layer that survives the process: after a CLEAN agent exit (rc=0 — a non-zero exit stays
 // fail-loud, unrecovered), it reads the record's declared state and, while still UNDECLARED (active/queued),
 // fires a bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the
@@ -1376,8 +1376,9 @@ export const opencodeHeadlessOps: HarnessHeadless = oneShotHeadlessOps(ONE_SHOT_
 const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'Notification'] as const
 const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 // the five claude-shaped events pi's generated extension SYNTHESIZES from its own lifecycle (session_start →
-// SessionStart, input → UserPromptSubmit, tool_call → PreToolUse, tool_result → PostToolUse, agent_settled →
-// Stop). pi has no idle/attention or failed-stop event → no Notification/StopFailure, same real gap as codex.
+// SessionStart, input → UserPromptSubmit, tool_call → PreToolUse, tool_result → PostToolUse, agent_end +
+// agent_settled → Stop). pi has no idle/attention or failed-stop event → no Notification/StopFailure, same
+// real gap as codex.
 const PI_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by

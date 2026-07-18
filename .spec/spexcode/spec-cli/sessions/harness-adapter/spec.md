@@ -308,16 +308,22 @@ surface:
   mirroring the interactive resumeArg. The one-shot scripts (launch and injected turn alike) also close the
   stop-gate contract OUT of process — the **undeclared-exit recovery**: some one-shot harnesses drop the
   gate's in-process continuation at exit (`opencode run` returns without awaiting the plugin's session.idle
-  handler — REPRODUCED: gate rejected, teach sentinel planted, process gone, record wedged `active`), so
+  handler — REPRODUCED: gate rejected, teach sentinel planted, process gone, record wedged `active`; `pi -p`
+  disposes its session once the initial prompt resolves, so a gate continuation orphaned past that point
+  throws "extension ctx is stale" into the host — REPRODUCED the same way, and closed IN process by pi's
+  Stop binding pair (awaited `agent_end` drain + the consume-once `agent_settled` backstop) with
+  [[shim-runtime]]'s `dispatchStop`: the `stop_hook_active` termination bit lets the gate's escape paths end
+  the loop before disposal, a lost inject reported loud), so
   after a CLEAN agent exit the script reads the record and, while still UNDECLARED (active/queued), fires a
   bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the gate's
   own contract restated, never a fabricated task; two tries then exit 97 loud. A declared/absent record
-  exits 0 untouched, so harnesses whose in-process gate held (claude's native Stop-block; pi's
-  settle-inject, normally) never fire it. All three one-shot substrates are LIVE-verified (2026-07-18, pi
+  exits 0 untouched, so harnesses whose in-process gate held (claude's native Stop-block; pi's/opencode's
+  flagged settle-inject, normally) never fire it. All three one-shot substrates are LIVE-verified (2026-07-18, pi
   0.80.10 / opencode 1.18.3): the shim extension/plugin loads in the one-shot mode, the lifecycle events
   fire, the resume turn provably continues the SAME conversation, and pi's `--session` on a vanished id
-  fails loud — and the dispatched-lifecycle scenarios below carry real product-loop readings (pi: full
-  pass; opencode: the recovery's A/B pair) — while the full eight-behavior matrix through real DISPATCHED
+  fails loud — and the dispatched-lifecycle scenarios below carry real product-loop readings (pi: the
+  stop-gate wedge's A/B pair + the full lifecycle; opencode: the recovery's A/B pair) — while the full
+  eight-behavior matrix through real DISPATCHED
   headless workers remains the merge-acceptance bar for reworking any of these adapters (the acceptance
   section above).
   **codex's headless form is live** and is the interactive launch MINUS the

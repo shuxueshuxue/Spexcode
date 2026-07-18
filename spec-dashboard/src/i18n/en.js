@@ -406,7 +406,6 @@ export default {
     tabTerminal: 'terminal',
     tabChat: 'chat',
     tabEval: 'eval',
-    modeHeadless: 'headless — chat view',
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

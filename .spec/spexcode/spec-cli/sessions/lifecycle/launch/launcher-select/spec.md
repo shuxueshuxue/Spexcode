@@ -14,6 +14,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/ModeToggle.jsx
+  - spec-dashboard/src/i18n/modeLabel.test.mjs
   - spec-dashboard/src/harness.jsx
 ---
 
@@ -49,7 +50,10 @@ launcher's harness vendor mark + name (no caret, no label — plus a quiet small
 armed; its tooltip names `spexcode.json` / `spexcode.local.json` as where launchers change) that opens a
 **viewport-centred pop-out card** over a light backdrop (not an anchored dropdown). The card leads with
 the session-MODE segmented switch — `⌨ interactive | ◇ headless`, the shared `ModeToggle` the phone
-composer renders too (aria-pressed marks the armed segment; ←/→ flips it) — then
+composer renders too (aria-pressed marks the armed segment; ←/→ flips it). The mode's visible label is
+plainly **"headless"** everywhere the mode is presented — the segment, the armed pill's `◇` mark, the
+board row's `◇` mark tooltip — never suffixed with a console-face name ("— chat view"): which face a
+headless console wears is [[session-console]]'s fact, not the mode's name. Then
 **one row per launcher** (its harness glyph + its name, and beneath them the command THE ARMED MODE
 would run — `cmd` in interactive, `headlessCmd` in headless, shown in full as read-only display text; a
 headless-capable launcher with no own command shows a "runs server-side" placeholder instead of a blank).

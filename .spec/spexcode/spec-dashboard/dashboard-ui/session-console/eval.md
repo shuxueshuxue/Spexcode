@@ -22,15 +22,16 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) and land on the
-      New Session tab. Type `/tidy`, accept its command-preset row (which only inserts the token), append
-      `[[session-console]] quick smoke test`, and press Enter to submit through a fixture launcher that records
-      the prompt it receives. Observe the create request, the new session record, and the fixture's agent
-      prompt: this proves the input did not interpret the plugin body on its own. Without clicking anything,
+      New Session tab. First type the existing prose `quick smoke test`, then type ` /tidy`; confirm the
+      command-preset menu opens despite the non-empty draft and accept its row. Confirm the draft becomes
+      `/tidy quick smoke test`, append ` [[session-console]]`, and press Enter to submit through a fixture
+      launcher that records the prompt it receives. Observe the create request, the new session record, and
+      the fixture's agent prompt: this proves the input did not interpret the plugin body on its own. Without clicking anything,
       watch the active tab and session list until the new row appears. Crucially, check `document.activeElement`
       (or type a second prompt blind) BOTH while launch is in flight AND after it settles, to confirm the box
       never loses focus. Then type a second plain prompt and submit again. Record the whole interaction as video.
     expected: |
-      The browser's one `POST /api/sessions` carries the RAW `/tidy [[session-console]] quick smoke test`;
+      The browser's one `POST /api/sessions` carries the RAW `/tidy quick smoke test [[session-console]]`;
       the resulting session is bound to `session-console` and keeps that raw invocation as its prompt preview,
       while the fixture agent receives tidy's expanded body + a `session-console` target + `quick smoke test`.
       No `[[links]]` inside tidy's own body becomes session scope. Unknown slash names would pass through raw.

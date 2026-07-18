@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
-import { createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
+import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
@@ -15,7 +14,6 @@ import { useResizable } from './useResizable.js'
 import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
-import ModeToggle from './ModeToggle.jsx'
 import { useT } from './i18n/index.jsx'
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
@@ -70,22 +68,15 @@ function typeKeyToken(e) {
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
 // @@@launcher pop-out picker ([[launcher-select]]) — the desktop launch choice: a clean pill button (the
-// selected launcher's harness vendor mark + name, no caret, no label; a small ◇ joins it while headless
-// is armed) that opens a CENTRED pop-out card — a viewport-centred dialog over a light backdrop,
-// deliberately not an anchored dropdown. The card leads with the session-MODE segmented switch
-// (⌨ interactive | ◇ headless — the shared ModeToggle), then one row per configured launcher: its harness
-// glyph + name, and beneath them the command THE ARMED MODE would run — `cmd` in interactive, `headlessCmd`
-// in headless (a headless-capable launcher with no own command runs server-side; its row says so as a
-// placeholder) — in full as PLAIN READ-ONLY display text. A row the armed mode can't launch greys out
-// (aria-disabled — the real `disabled` attr would mute the hover events the config-repair tooltip needs)
-// and refuses the pick. Otherwise the WHOLE row is one pick target — the row itself is the button, so a
+// selected launcher's harness vendor mark + name, no caret, no label) that opens a CENTRED pop-out card —
+// a viewport-centred dialog over a light backdrop, deliberately not an anchored dropdown. The card has one
+// row per configured launcher: its harness glyph + name, and beneath them its command in full as PLAIN
+// READ-ONLY display text. The WHOLE row is one pick target — the row itself is the button, so a
 // click anywhere on it (the cmd line included) picks the launcher; the cmd never forms an independent
 // selection/control surface that could swallow the pick. The
 // trigger's tooltip points at spexcode.json / spexcode.local.json as the one place launchers change.
-// Selecting closes the pop; backdrop click or Esc closes it too. `modeNotice` (a remembered/attempted
-// headless pick bounced back to interactive) renders as an inline alert — in the card when open, beside
-// the pill otherwise — so the fallback is visible wherever it happens.
-function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, modeNotice }) {
+// Selecting closes the pop; backdrop click or Esc closes it too.
+function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
   useEffect(() => {
@@ -99,9 +90,6 @@ function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, mod
   const selected = launchers.find((l) => l.name === launcher)
   const selHarness = HARNESS_BY_ID[selected?.harness || 'claude'] || HARNESS_BY_ID.claude
   const SelGlyph = selHarness.Glyph
-  const notice = modeNotice
-    ? <span className="si-mode-notice" role="alert">{t('session.modeFellBack', { name: modeNotice })}</span>
-    : null
   return (
     <div className="si-launcher-picker">
       <button
@@ -115,35 +103,24 @@ function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, mod
       >
         <span className="si-launcher-harness" aria-hidden="true"><SelGlyph /></span>
         <span className="si-launcher-name">{launcher}</span>
-        {mode === 'headless' && <span className="si-launcher-mode-mark" title={t('session.modeHeadless')}>◇</span>}
       </button>
-      {!pop && notice}
       {pop && (
         <>
           {/* full-viewport backdrop — the outside-click close surface; a mousedown here is inert chrome
               under the panel's keepFocus blanket, so the composer keeps focus while the pop closes. */}
           <div className="si-launcher-backdrop" onMouseDown={() => setPop(false)} />
           <div className="si-launcher-pop" role="dialog" aria-modal="true" aria-label={t('session.launcherLabel')}>
-            <ModeToggle mode={mode} pickMode={pickMode} headlessOk={launcherModes(selected).includes('headless')} />
-            {notice}
             {launchers.map((l) => {
               const h = HARNESS_BY_ID[l.harness] || HARNESS_BY_ID.claude
               const HGlyph = h.Glyph
-              const avail = launcherModes(l).includes(mode)
-              // headless-capable with no own headlessCmd = the executor is server-side (backend `modes`
-              // said yes without a command) — the cmd line shows that as a placeholder, not a blank.
-              const serverSide = mode === 'headless' && avail && !l.headlessCmd
-              const cmdText = mode === 'headless' ? l.headlessCmd : l.cmd
               return (
                 <button
                   key={l.name}
                   type="button"
                   role="menuitemradio"
                   aria-checked={l.name === launcher}
-                  aria-disabled={!avail}
-                  data-tip={avail ? undefined : t('session.modeUnavailableTip')}
-                  className={`si-launcher-row${l.name === launcher ? ' on' : ''}${avail ? '' : ' off'}`}
-                  onClick={() => { if (!avail) return; pickLauncher(l.name); setPop(false) }}
+                  className={`si-launcher-row${l.name === launcher ? ' on' : ''}`}
+                  onClick={() => { pickLauncher(l.name); setPop(false) }}
                 >
                   <span className="si-launcher-row-main">
                     <span className="si-launcher-harness" data-tip={h.label} aria-hidden="true"><HGlyph /></span>
@@ -151,9 +128,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher, mode, pickMode, mod
                     {l.name === launcher && <Icon name="check" size={13} className="si-launcher-check" />}
                   </span>
                   {/* the cmd — read-only display text; part of the same pick target, never its own surface. */}
-                  {serverSide
-                    ? <span className="si-launcher-cmd si-launcher-cmd-ph">{t('session.headlessServerSide')}</span>
-                    : cmdText ? <span className="si-launcher-cmd">{cmdText}</span> : null}
+                  {l.cmd ? <span className="si-launcher-cmd">{l.cmd}</span> : null}
                 </button>
               )
             })}
@@ -176,9 +151,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
-  // launch choice; the fetch + default resolution live in the shared launch path (./launch.js), as does
-  // the session-mode axis (interactive | headless) and its illegal-combo fallback.
-  const { launchers, launcher, pickLauncher, mode, pickMode, modeNotice } = useLaunchers()
+  // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
+  const { launchers, launcher, pickLauncher } = useLaunchers()
   const [sendErr, setSendErr] = useState(false)   // last text dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [typeMode, setTypeMode] = useState(false)
@@ -236,11 +210,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
   const showRelaunch = noLivePane && selSession?.status !== 'queued'
-  // mode dispatch ([[session-console]] × the headless mode): an interactive session's right pane is the
-  // live tmux terminal; a HEADLESS session has no TUI to watch — its pane is the shared TimelineChat
-  // ([[mobile-ui]]'s terminal-free conversation), whose composer owns input (replyVia:'note' fixed), so
-  // the ❯ strip and type mode don't apply. Old records carry no mode and read interactive — unchanged.
-  const isHeadless = selSession?.mode === 'headless'
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -390,7 +359,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const raw = prompt.trim()
     if (!raw) return
     setPrompt('')
-    createSession(raw, launcher, mode).then(() => reload?.())
+    createSession(raw, launcher).then(() => reload?.())
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)
@@ -598,22 +567,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const uiCmds = uiCommandsFor(selSession?.status, runners)
-    // a headless session has no terminal to take over — the type channel doesn't exist there, so its
-    // button/command drop off (the chord below is guarded the same way).
-    .filter((c) => !(isHeadless && c.name === 'type'))
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey, isHeadless }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey, isHeadless } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles type mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
       // let it through so the console opens rather than toggling type mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey !== e.metaKey) && isI && active !== 'new' && !isHeadless) {
+      if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation(); setTypeMode((v) => !v); return
       }
       // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
@@ -792,7 +758,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             list is folded to a strip: there's no width to resize when the detail owns it all. */}
         {!showFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
 
-        <section className={active === 'new' ? 'si-content is-new' : `si-content is-session${isHeadless ? ' is-headless' : ''}`}>
+        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">
@@ -840,9 +806,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
-                  (LauncherPicker above) with the mode toggle, per-launcher harness marks and read-only
-                  per-mode cmd details. */}
-              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} mode={mode} pickMode={pickMode} modeNotice={modeNotice} /> : null}
+                  (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
+              {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>
@@ -860,9 +825,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div className="si-tabbar">
                 {/* two tabs on the left: the live terminal (default) and the always-available eval. */}
                 <div className="si-tabs" role="tablist">
-                  {/* the first tab reads by the session's MODE: Terminal for an interactive pane, Chat for a
-                      headless session's terminal-free conversation — same slot, same tab state. */}
-                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t(isHeadless ? 'session.tabChat' : 'session.tabTerminal')}</button>
+                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
                   <button role="tab" aria-selected={rightTab === 'eval'} className={rightTab === 'eval' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('eval')}>{t('session.tabEval')}</button>
                 </div>
                 {/* no headline here: the left sidebar already identifies the session; the tab bar is just the
@@ -888,21 +851,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
                   Eval tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
               <div className="si-term-body" ref={termRef} style={{ position: 'relative', display: rightTab === 'terminal' ? undefined : 'none' }}>
-                {/* every opened session's pane stays mounted; only the active one is shown. The pane is
-                    dispatched by the session's MODE: interactive → the live tmux terminal; headless → the
-                    shared TimelineChat (no TUI exists to watch — the timeline IS the conversation). The
-                    chat polls only while it is the shown pane (`active`); its draft/scroll stay warm. */}
-                {[...opened].map((id) => {
-                  const sess = sessions.find((x) => x.id === id)
-                  return (
-                    <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                      {sess?.mode === 'headless'
-                        ? <TimelineChat s={sess} sessions={sessions} active={id === active && rightTab === 'terminal'} />
-                        // active → this pane is the only one that holds a WebGL context (see SessionTerm).
-                        : <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />}
-                    </div>
-                  )
-                })}
+                {/* every opened session's pane stays mounted; only the active one is shown. */}
+                {[...opened].map((id) => (
+                  <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
+                    {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
+                    <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
+                  </div>
+                ))}
                 {showRelaunch && (
                   <div className="si-offline">
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
@@ -912,9 +867,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 )}
               </div>
-              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at) —
-                  and to the INTERACTIVE mode only: a headless session's chat carries its own composer. */}
-              {rightTab === 'terminal' && !isHeadless && (typeMode ? (
+              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
+              {rightTab === 'terminal' && (typeMode ? (
                 // type mode replaces the prompt box: keys go straight to the pane (handled at the window level).
                 <div className="si-bottom type" onClick={() => setTypeMode(false)} data-tip={t('session.typeExit')}>
                   <span className="si-type-ind">{t('session.typeInd')}</span>

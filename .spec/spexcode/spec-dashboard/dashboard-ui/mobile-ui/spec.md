@@ -72,7 +72,8 @@ The two planes, made native to touch:
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
 - **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out
-  of the desktop console for exactly this reuse): the `/preset [[node]]…` grammar composition, the
+  of the desktop console for exactly this reuse): the raw `/preset [[node]]…` grammar request (resolved by
+  [[launch]]'s backend owner for every caller), the
   launcher fetch + default resolution + the per-browser remembered picks — launcher AND session
   mode, one localStorage key per axis, so phone and desktop agree, with [[launcher-select]]'s
   illegal-combo fallback surfacing its notice here too — and the one `POST /api/sessions`. Only

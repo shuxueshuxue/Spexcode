@@ -78,12 +78,17 @@ scenarios:
       On a PHONE viewport (≤ 640px), open the Sessions tab. Above the session list sits the create
       row — tap it: a full-screen composer opens (back chevron, prompt textarea, native launcher
       select, one launch button). Verify the select lists the SAME launcher profiles /api/settings
-      serves and pre-selects the same default the desktop New tab would. Type a task, tap launch,
-      and wait through the button's busy state. Record the whole interaction as a video.
+      serves and pre-selects the same default the desktop New tab would. Type
+      `/tidy [[mobile-ui]] phone smoke`, tap launch, and observe the raw create request plus the fixture
+      agent's expanded prompt while waiting through the button's busy state. Record the whole interaction
+      as a video.
     expected: |
       The composer is the desktop New Session tab's touch twin with all substance shared (the one
-      launch path launch.js: /preset grammar, launcher fetch + default resolution + the per-browser
-      remembered pick, the one POST /api/sessions). The launch button reads busy while the backend
+      client launch path launch.js: raw prompt, launcher fetch + default resolution + the per-browser
+      remembered pick, the one POST /api/sessions; backend newSession invokes /preset grammar for every
+      caller). The POST carries raw `/tidy [[mobile-ui]] phone smoke`; the resulting row belongs to
+      `mobile-ui`, while the fixture agent receives tidy's expanded body, target, and free text. The launch
+      button reads busy while the backend
       builds worktree+agent (the double-tap guard), then the surface returns to the sessions list
       where the NEW session's row — the shared SessionRow face — appears within one board push. A
       failed create keeps the draft and shows a loud error in the composer.

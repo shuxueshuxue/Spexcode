@@ -56,8 +56,9 @@ not a hint toward one.
 
 ## the New Session `/` composes at launch
 
-The dropdown stays decoupled: picking a preset only inserts `/<name> `. The body is woven in only at
-**Enter**. The grammar `/<preset> [[node]]… <free text>` assembles **one** prompt — the preset's body
+The dropdown stays decoupled: picking a preset only inserts `/<name> `. The raw invocation enters the ordinary
+create request only at **Enter**; [[launch]]'s backend owner then resolves it, rather than this input growing a
+second command interpreter. The grammar `/<preset> [[node]]… <free text>` assembles **one** prompt — the preset's body
 with its targets placeholder filled by the `[[…]]`-resolved nodes, then the free text appended. No node ref
 leaves a "current/focused node" note for the body to handle. A leading `/` naming no known preset, and
 any plain or node-only prompt, launch verbatim — the existing paths are untouched.

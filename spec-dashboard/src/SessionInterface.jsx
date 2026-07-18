@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
-import { composeLaunch, createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
+import { createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
@@ -368,10 +368,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fitTextarea(ta, maxH)
   }, [msg, active, open, rightTab, typeMode])
 
-  // the launch grammar composition (`/<preset> [[node]]… <free text>` → one prompt) is the SHARED
-  // composeLaunch from ./launch.js — one implementation for this tab and the phone's composer.
+  // New-session command invocation is backend-owned: this surface and the phone send the raw
+  // `/<preset> [[node]]… <free text>` through the ordinary create request, and newSession expands it for
+  // every caller (dashboard, phone, CLI, direct API) on the one launch path.
 
-  // the running-session twin of composeLaunch's mention resolution: expand each `[[<id>]]` in a keyed message
+  // the running-session twin of the launch owner's mention resolution: expand each `[[<id>]]` in a keyed message
   // to an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is aimed at that
   // contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids pass through.
   const expandMentions = (text) =>
@@ -388,9 +389,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const submit = () => {
     const raw = prompt.trim()
     if (!raw) return
-    const text = composeLaunch(raw, commandPresets, specs)
     setPrompt('')
-    createSession(text, launcher, mode).then(() => reload?.())
+    createSession(raw, launcher, mode).then(() => reload?.())
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)

@@ -74,8 +74,10 @@ zero-config project, and configured profiles add more names. The launcher pick i
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
-one `POST /api/sessions` — lives in the shared `launch.js`, one path for this tab and the phone's composer
-([[mobile-ui]]); this tab owns only the desktop chrome around it (menus, focus discipline, background fire).
+one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
+through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,
+including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
+background fire) and never expands a plugin body itself.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live

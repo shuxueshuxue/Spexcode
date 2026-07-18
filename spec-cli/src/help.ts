@@ -108,6 +108,24 @@ projects coexist on one host). Loopback-only by default; --host 0.0.0.0 opens it
 still plain HTTP with no gate, so bind wide only on a network you trust.`,
     see: 'GET /health (backend liveness probe)',
   },
+  dashboard: {
+    line: 'dashboard             ONE dashboard for every project you serve — no --api-port pairing  [--port N=5173]',
+    body: `Usage: spex dashboard [--port N=5173] [--host H=127.0.0.1]
+
+The HOST gateway: serves the built dashboard once and routes to EVERY backend the current user runs.
+It continuously reconciles the per-project endpoint records each \`spex serve\` publishes (validating
+each against the live backend's /api/instance identity), keeps a durable known-project catalog, and
+proxies each project's API + SSE + terminal socket under /p/<projectId>/* — the project is named in
+the path, so nothing is "current" and no pairing flag exists.
+
+Host surface: GET /api/host/projects (the validated list) · /api/host/projects/stream (SSE) ·
+POST /api/host/projects {root} (register an existing repo) · POST /api/host/projects/<id>/init|doctor|serve
+(run the real \`spex init\`/\`spex doctor\`, or start an offline project's backend, detached — a
+backend never depends on this gateway staying up).
+
+Loopback-only by default; --host widens the bind (announced OPEN — there is no auth layer).`,
+    see: 'spex serve (each project\'s backend) · spex serve ui (explicit one-backend pairing)',
+  },
 
   // ── the noun drawers ──────────────────────────────────────────────────────
   spec: {
@@ -375,6 +393,7 @@ Project verbs (implicit object = this project)
   ${ENTRIES.doctor.line}
   ${ENTRIES.uninstall.line}
   ${ENTRIES.serve.line}
+  ${ENTRIES.dashboard.line}
 
 Noun drawers
   ${ENTRIES.spec.line}

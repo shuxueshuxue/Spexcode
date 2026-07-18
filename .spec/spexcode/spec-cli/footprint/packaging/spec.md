@@ -48,7 +48,7 @@ The natural way to run the installed tool is **two commands on two ports, delibe
 starting the backend never drags the UI along:
 
 - `spex serve` — the backend (API + sessions). `--port N` sets its listen port (sugar over the `PORT` env).
-- `spex dashboard` — the UI on its own port, serving the bundled dist and proxying `/api` + the terminal
+- `spex serve ui` — the UI on its own port, serving the bundled dist and proxying `/api` + the terminal
   socket to a running `spex serve` (`--api-port N` names that backend). The post-install replacement for the
   dogfood-only `npm run web` (a vite dev server against a source tree an installed user has no copy of).
   Loopback by default; `--host H` widens the bind for private-network viewing (a LAN or tailnet), still
@@ -56,11 +56,12 @@ starting the backend never drags the UI along:
   startup, never silent. The internet face stays `spex serve --public`.
 
 Both ports are **explicit flags**, which is what lets several projects coexist on one host:
-`spex serve --port 8788` beside `spex dashboard --port 5174 --api-port 8788` runs a second instance next
+`spex serve --port 8788` beside `spex serve ui --port 5174 --api-port 8788` runs a second instance next
 to the dogfood's 8787/5173, with cwd choosing which project's `.spec` each serves — no shared default
-silently collides two projects.
+silently collides two projects. (The pairing is the *explicit* multi-project story; the zero-pairing one —
+one `spex dashboard` reaching every backend the user runs — is [[host-gateway]]'s contract.)
 
-`spex dashboard` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
+`spex serve ui` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
 same gateway with no TLS and no password, on loopback unless `--host` widens it. The dogfood monorepo is unaffected: its root keeps
 the `npm run api`/`npm run web` dev loop, and the dist resolver falls back to the sibling
 `spec-dashboard/dist` whenever no bundled copy is present. Those root scripts delegate into a sibling

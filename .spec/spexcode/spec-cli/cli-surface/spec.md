@@ -24,8 +24,9 @@ dead-end, and no removed spelling may fail mutely: it names its replacement.
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
 after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
 (`spec` · `session` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
-`init` · `materialize` · `doctor` · `serve` · `uninstall`) allowed only because their object is
-invariably THIS project, plus the two help surfaces (`help` · `guide`). A bare noun prints its
+`init` · `materialize` · `doctor` · `serve` · `dashboard` · `uninstall`) allowed only because their
+object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
+object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
 drawer's help and exits clean — there is no implicit default action. A verb reused across drawers
 must mean the same thing everywhere (`ls` lists a collection, `add` appends a record, `open`/`close`
 are lifecycle, `retract` is the author withdrawing their own record). Sub-command vs flag follows one
@@ -43,7 +44,7 @@ entry, the contract block) must mark it unstable and say "try a plain send first
 key path can confirm dangerous dialogs.
 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
-session subs, `yatsu`/`blob`/`issues`/`forge`/`dashboard`/`tree`/`board`, top-level
+session subs, `yatsu`/`blob`/`issues`/`forge`/`tree`/`board`, top-level
 `search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, `session exit|reopen` (respelled
 `stop`/`resume`), `session capture|prompt` (folded into `show`), the hook verbs
 `session state|fail|idle|commit-gate`, positional `doctor contract|conflicts`, `review proof`) maps

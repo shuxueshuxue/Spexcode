@@ -2,15 +2,17 @@
 // runs the Hono server as a child on a private port (raw piping carries WS upgrades too).
 import net from 'node:net'
 import http from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { statSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, type Dirent } from 'node:fs'
+import { statSync, readdirSync, type Dirent } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
 import { listenOrExit } from './listen.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 import { tsxBin } from './tsx-bin.js'
-import { runtimeRoot } from './layout.js'
+import { mainCheckout } from './layout.js'
+import { publishEndpoint, dropOwnEndpoint } from './host.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -39,6 +41,14 @@ const watchRoots = [
   join(repoRoot, 'spec-forge', 'src'),
   join(repoRoot, 'spec-eval', 'src'),
 ]
+
+// @@@ instance identity - one id for this serve's whole lifetime, minted at supervisor start and handed to
+// every child via env, so the endpoint record and the live backend answer with the SAME identity across
+// zero-downtime reloads. The host gateway ([[host-gateway]]) validates a record by comparing this id (and the
+// served root) against the live /api/instance answer — a recycled port serving a DIFFERENT project or a
+// different serve generation fails the match and is treated as offline, never proxied to.
+const instanceId = randomUUID()
+const projectRoot = mainCheckout()   // the served project's main checkout — the identity the record claims
 
 type Backend = { port: number; child: ChildProcess }
 let current: Backend | null = null   // which internal port new proxy connections forward to
@@ -79,7 +89,7 @@ async function boot(): Promise<Backend | null> {
   // process.env.SPEXCODE_API_URL: the env this serve itself inherited may carry ANOTHER project's backend
   // (the exact misroute [[remote-client]]'s ladder exists to kill), and a worker's env is its routing
   // LIFELINE — it must be a deterministic backend-injected fact, not an inheritance gamble.
-  const child = spawn(process.execPath, [tsx, entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase } })
+  const child = spawn(process.execPath, [tsx, entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase, SPEXCODE_INSTANCE_ID: instanceId } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.
@@ -134,24 +144,26 @@ const proxy = net.createServer((client) => {
   client.pipe(up); up.pipe(client)
 })
 
-// @@@ endpoint record - this project's live backend endpoint, written into the per-project runtime tier
+// @@@ endpoint record - this project's live backend endpoint, published into the per-project runtime tier
 // (~/.spexcode/projects/<enc>/backend.json) only AFTER the public bind succeeds. It's what lets a bare
 // `spex` run from this project's tree find ITS OWN backend instead of an env URL inherited from another
-// project's ([[remote-client]]'s resolution ladder). Readers /health-probe before trusting, so a crash
-// leaves at worst a dead record that is ignored — never followed. The recorded URL is the LOOPBACK face
-// local agents reach (equals the public port when public mode is off), never the password-gated gateway.
-const backendRecordPath = () => join(runtimeRoot(), 'backend.json')
+// project's ([[remote-client]]'s resolution ladder), and what the host gateway ([[host-gateway]]) reconciles
+// its project list from. The write is ATOMIC (tmp + rename) and carries the serve's identity —
+// {url, pid, instanceId, root} — so a reader can VALIDATE the record against the live /api/instance answer,
+// never just trust a URL. Readers health-probe before trusting, so a crashed serve leaves at worst a dead
+// record that is ignored — never followed. The recorded URL is the LOOPBACK face local agents reach (equals
+// the public port when public mode is off), never the password-gated gateway.
 function recordEndpoint(url: string): void {
   try {
-    mkdirSync(runtimeRoot(), { recursive: true })
-    writeFileSync(backendRecordPath(), JSON.stringify({ url, pid: process.pid, startedAt: new Date().toISOString() }, null, 2) + '\n')
+    publishEndpoint({ url, pid: process.pid, instanceId, root: projectRoot, startedAt: new Date().toISOString() })
   } catch (e) {
     console.error(`[supervisor] could not record the backend endpoint (${(e as Error).message}) — cwd-based \`spex\` discovery won't find this backend`)
   }
 }
-// best-effort removal on a clean stop, only if the record is OURS (a newer serve may have overwritten it).
+// best-effort removal on a clean stop, only if the record is OURS — matched by instanceId, so a newer serve
+// that already overwrote the record (or another project's) is never deleted by a retiring one.
 function dropEndpoint(): void {
-  try { if (JSON.parse(readFileSync(backendRecordPath(), 'utf8'))?.pid === process.pid) rmSync(backendRecordPath()) } catch { /* not ours / already gone */ }
+  try { dropOwnEndpoint(instanceId, projectRoot) } catch { /* not ours / already gone */ }
 }
 
 const shutdown = () => { dropEndpoint(); try { current?.child.kill('SIGTERM') } catch { /* */ } process.exit(0) }

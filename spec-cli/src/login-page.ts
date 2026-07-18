@@ -1,8 +1,15 @@
 // @@@ login page - the gateway's gate is a DESIGNED page, not the browser's Basic-auth dialog (which can't
 // be styled and feels like a 1998 intranet). Self-contained: inline CSS + SVG, zero external assets, so it
 // renders before anything is authorised. Dark, calm, a single password field; an error state when the
-// password is wrong. The form POSTs to /login (same-origin), which mints the auth cookie and redirects.
-export function loginPage(error = false): string {
+// password is wrong. The form POSTs to `action` (same-origin), which mints the auth cookie and redirects.
+// One page serves every gate: the single-project gateway's /login (the defaults) and the multi-project
+// hub's admin + per-project logins ([[gateway-hub]] passes action/heading/sub). Every option is
+// HTML-escaped at this sink — projectIds are path-derived, attacker-influencable strings.
+export function loginPage(error = false, opts: { action?: string; heading?: string; sub?: string } = {}): string {
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+  const action = esc(opts.action ?? '/login')
+  const heading = esc(opts.heading ?? 'Restricted access')
+  const sub = esc(opts.sub ?? 'This is a private agent workspace. Enter the access password to continue.')
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -58,7 +65,7 @@ export function loginPage(error = false): string {
 </style>
 </head>
 <body>
-  <form class="card" method="POST" action="/login" autocomplete="off">
+  <form class="card" method="POST" action="${action}" autocomplete="off">
     <div class="mark">
       <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="28" height="28" rx="8" fill="#0e1626" stroke="#3f6fe0" stroke-opacity="0.5"/>
@@ -66,8 +73,8 @@ export function loginPage(error = false): string {
       </svg>
       <b>Spex<span>Code</span></b>
     </div>
-    <h1>Restricted access</h1>
-    <p class="sub">This is a private agent workspace. Enter the access password to continue.</p>
+    <h1>${heading}</h1>
+    <p class="sub">${sub}</p>
     ${error ? '<div class="err">Incorrect password — try again.</div>' : ''}
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autofocus required placeholder="••••••••••">

@@ -5,8 +5,7 @@ import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, pane
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
-import { createSession, useLaunchers, launcherModes } from './launch.js'
-import ModeToggle from './ModeToggle.jsx'
+import { createSession, useLaunchers } from './launch.js'
 import { useT } from './i18n/index.jsx'
 
 // the session's evaluation ([[session-eval]]) — the SAME pane the desktop console's Eval tab mounts,
@@ -102,8 +101,7 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
 
 // @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail, now a THIN
 // wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
-// is the SHARED TimelineChat ([[session-console]] mounts the same component for a headless session's Chat
-// tab). What stays here is the phone chrome: the identity card with its back control, and the header's one
+// is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the header's one
 // extra control that flips the detail to the session's evaluation ([[session-eval]] — the shared
 // SessionEvalPane, restacked by CSS).
 function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
@@ -140,29 +138,26 @@ function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
 
 // @@@ the phone's create entry — the desktop New Session tab's touch twin, all substance shared: the SAME
 // launch path (./launch.js — raw grammar POST, launcher fetch + default resolution + the remembered
-// per-browser pick AND the remembered session mode with its illegal-combo fallback, the one POST
-// /api/sessions; backend newSession invokes command presets for every caller) and the SAME mode switch
-// (the shared ModeToggle, touch-sized by CSS). Only the chrome is
-// phone-shaped: a full-screen composer (textarea + native launcher <select> — a launcher the armed mode
-// can't launch is a disabled option — + one launch button). Unlike the desktop's fire-in-the-background
+// per-browser launcher pick, the one POST /api/sessions; backend newSession invokes command presets for
+// every caller). Only the chrome is phone-shaped: a full-screen composer (textarea + native launcher
+// <select> + one launch button). Unlike the desktop's fire-in-the-background
 // box (type-ready for the next launch at once), the phone AWAITS the create — the button reads busy while
 // the backend builds worktree+branch+agent (seconds) — because busy-gating is also the double-tap guard a
 // touch surface needs; success returns to the list, where the new session lands on the next board push.
 function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
   const t = useT()
-  const { launchers, launcher, pickLauncher, mode, pickMode, modeNotice } = useLaunchers()
+  const { launchers, launcher, pickLauncher } = useLaunchers()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const launch = async () => {
     const raw = draft.trim()
     if (!raw || busy) return
     setBusy(true); setErr(null)
-    const r = await createSession(raw, launcher, mode)
+    const r = await createSession(raw, launcher)
     setBusy(false)
     if (r.ok) { setDraft(''); onLaunched() }
     else setErr(r.error || t('mobile.launchFailed'))   // fail loud, keep the draft — same rule as the send composer
   }
-  const selected = launchers.find((l) => l.name === launcher)
   return (
     <div className="m-sessdetail m-new">
       <div className="m-sess-card">
@@ -180,18 +175,12 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
           onChange={(e) => setDraft(e.target.value)}
         />
         {launchers.length > 0 && (
-          <>
-            <ModeToggle mode={mode} pickMode={pickMode} headlessOk={launcherModes(selected).includes('headless')} />
-            {modeNotice && <div className="si-mode-notice" role="alert">{t('session.modeFellBack', { name: modeNotice })}</div>}
-            <label className="m-new-launcher">
-              <span className="m-new-launcher-label">{t('session.launcherLabel')}</span>
-              <select className="m-new-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)}>
-                {launchers.map((l) => (
-                  <option key={l.name} value={l.name} disabled={!launcherModes(l).includes(mode)}>{l.name}</option>
-                ))}
-              </select>
-            </label>
-          </>
+          <label className="m-new-launcher">
+            <span className="m-new-launcher-label">{t('session.launcherLabel')}</span>
+            <select className="m-new-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)}>
+              {launchers.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+            </select>
+          </label>
         )}
         {err && <div className="m-senderr">{err}</div>}
         <button className="m-send m-new-go" disabled={!draft.trim() || busy} onClick={launch}>

@@ -3,7 +3,7 @@ title: mobile-ui
 status: active
 session: e335f3af-0695-488c-b12e-5fd1299e8b6a
 hue: 210
-desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a TERMINAL-FREE session surface (the persisted timeline as the conversation, a composer that asks for note replies), reusing the same polled data, the same API routes, and the same panes as the desktop.
+desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a terminal-free session surface (the persisted timeline as the conversation, a composer that asks for note replies), reusing the same polled data and API routes as the desktop.
 code:
   - spec-dashboard/src/MobileApp.jsx#MobileApp
   - spec-dashboard/src/MobileApp.jsx#MobileSessionDetail
@@ -25,14 +25,14 @@ query, reactive so a rotate or resize flips it with no reload); both faces read 
 board, so nothing about the data or the backend forks. The phone face is its **own lazy chunk**
 ([[dashboard-shell]]): a phone downloads none of the desktop's graph/terminal/annotator libraries.
 
-**Not a degraded desktop — a different interaction mode: the terminal-free mode.** The desktop's
+**Not a degraded desktop — a purpose-built terminal-free surface.** The desktop's
 session surface is a live pane; the phone deliberately mounts none. What replaces it is the
 persisted **[[session-timeline]]**: without a pane, the agent's declaration notes ARE its replies,
-and the timeline of status transitions + delivered prompts IS the conversation. The mode is
-phone-first but not phone-bound — the chat body lives in the shared **`TimelineChat`** component
-(timeline poll + board-push refresh + send-then-refresh, `replyVia:"note"` fixed), which the desktop
-console also mounts as a headless session's Chat tab ([[session-console]]); this node's
-`MobileSessionDetail` is the thin phone wrapper around it (identity card, back control, eval entry).
+and the timeline of status transitions + delivered prompts IS the conversation. This is a property
+of the phone surface, never a session type selected at launch. The chat body lives in
+**`TimelineChat`** (timeline poll + board-push refresh + send-then-refresh,
+`replyVia:"note"` fixed); this node's `MobileSessionDetail` is the thin phone wrapper around it
+(identity card, back control, eval entry).
 
 **One API, never its own.** Every read/write the phone makes is a route the desktop already
 uses, through the shared `data.js` helpers: the pushed/polled board for both planes, the
@@ -74,12 +74,11 @@ The two planes, made native to touch:
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out
   of the desktop console for exactly this reuse): the raw `/preset [[node]]…` grammar request (resolved by
   [[launch]]'s backend owner for every caller), the
-  launcher fetch + default resolution + the per-browser remembered picks — launcher AND session
-  mode, one localStorage key per axis, so phone and desktop agree, with [[launcher-select]]'s
-  illegal-combo fallback surfacing its notice here too — and the one `POST /api/sessions`. Only
-  the chrome is phone-shaped — textarea, the shared session-mode toggle at touch size
-  ([[launcher-select]]'s ⌨/◇ switch, the same component the desktop pop card mounts), native
-  launcher `<select>` (an option the armed mode can't launch is disabled), one launch button.
+  launcher fetch + default resolution + the per-browser remembered launcher choice, so phone and
+  desktop agree — and the one `POST /api/sessions`. Launching has one choice — the launcher — and every
+  configured profile appears as an ordinary option, with no capability filtering, disabled
+  compatibility row, or placeholder. Only the chrome is phone-shaped — textarea, native launcher
+  `<select>`, one launch button.
   Where the desktop box fires in the
   background and stays type-ready, the phone AWAITS the create with a busy button: the wait is
   honest (worktree+agent take seconds) and busy-gating doubles as the double-tap guard a touch

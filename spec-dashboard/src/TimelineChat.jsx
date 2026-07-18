@@ -14,16 +14,13 @@ const dayKey = (ts) => new Date(ts).toDateString()
 const sameEvents = (a, b) => a != null && a.length === b.length
   && (a.length === 0 || JSON.stringify(a[a.length - 1]) === JSON.stringify(b[b.length - 1]))
 
-// @@@ the terminal-free conversation body ([[session-timeline]]) — ONE chat component for every no-pane
-// surface: the phone's session detail ([[mobile-ui]]) and the desktop console's headless Chat tab
-// ([[session-console]]). Without a pane to read, the persisted timeline IS the interaction record: every
+// @@@ the terminal-free conversation body ([[session-timeline]]) — the phone's session detail
+// ([[mobile-ui]]). Without a pane to read, the persisted timeline IS the interaction record: every
 // authored status transition (with the full declaration note — the agent's reply) and every delivered
 // prompt, timestamped, oldest first, with the composer docked below. Freshness: an 8s poll while shown,
 // plus an immediate refetch whenever the board push moves this session's status/note (the board stream is
-// already live in the host app), plus one after every send. `active` gates the poll only — a warm-mounted
-// but hidden chat (the desktop keeps panes mounted across tab switches) keeps its draft and scroll without
-// polling for nothing.
-export default function TimelineChat({ s, sessions, active = true }) {
+// already live in the host app), plus one after every send.
+export default function TimelineChat({ s, sessions }) {
   const t = useT()
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
@@ -38,11 +35,9 @@ export default function TimelineChat({ s, sessions, active = true }) {
   }), [s.id])
   useEffect(() => { setEvents(null); setDetail(null); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
   useEffect(() => {
-    if (!active) return
-    load()   // becoming the shown chat re-reads at once — the hidden stretch polled nothing
     const iv = setInterval(load, 8000)
     return () => clearInterval(iv)
-  }, [active, load])
+  }, [load])
   useEffect(() => { load() }, [s.status, s.note, load])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.

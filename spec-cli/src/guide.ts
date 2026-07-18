@@ -366,9 +366,11 @@ resolves its backend per this ladder, flag first:
                              sugar for --api http://127.0.0.1:<n>).
   2a. worker (SPEXCODE_SESSION_ID set): env SPEXCODE_API_URL — the backend-injected lifeline; cwd
                              discovery never steals it.
-  2b. human (no session id): the cwd project's RECORDED live backend — \`spex serve\` records {url,pid}
-                             in ~/.spexcode/projects/<enc>/backend.json at bind time; the reader
-                             health-probes before trusting (a dead record is ignored).
+  2b. human (no session id): the cwd project's RECORDED live backend — \`spex serve\` publishes
+                             {url,pid,instanceId,root} atomically to ~/.spexcode/projects/<enc>/backend.json
+                             at bind time; the reader health-probes before trusting (a dead record is
+                             ignored). The same record is what \`spex dashboard\` reconciles its
+                             host-wide project list from.
   3.  the other side as fallback (human with no live record → env; worker with no env → record).
   4.  default http://127.0.0.1:$PORT||8787.
 WRITES are project-bound: every mutating verb (new/merge/send/close/rename/resume/stop) refuses

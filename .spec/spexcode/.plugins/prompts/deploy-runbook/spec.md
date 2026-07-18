@@ -42,7 +42,8 @@ Both run `/home/jeffry/spexcode` directly (tsx, no build step for the backend).
    adopter repos have no `npm run hooks`.
 8. `spex materialize`.
 9. **Full restart**: `tmux -L spexcode kill-session -t <name>-backend/-web` + `bash ~/spex-boot.sh`.
-   Launch scripts must say `spex serve ui` (the 0.3.0 spelling; `spex dashboard` signposts and dies).
+   Launch scripts must say `spex serve ui` (the 0.3.0 spelling); `spex dashboard` is the host-level
+   multi-project gateway, not a per-project UI.
 10. **Verify**: `/health` ok · `/api/plugins` 200 · `/api/graph` 200 · web 200.
 
 ## Iron ordering + verification

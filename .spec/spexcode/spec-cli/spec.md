@@ -65,10 +65,14 @@ agent's own `spex` calls reach the stable public endpoint instead of chasing a r
 That injected URL is **deterministic — always the supervisor's own loopback face, never the ambient
 `SPEXCODE_API_URL` this serve itself inherited** (which may carry another project's backend): a worker's
 env is its routing lifeline ([[remote-client]]'s ladder), a backend-owned fact rather than an inheritance
-gamble. And once the public bind succeeds, the supervisor **records its endpoint** (`{url,pid}` in the
-per-project runtime tier, removed on a clean stop) — the record a bare human `spex` in this project's
-tree discovers its backend by; readers health-probe it first, so a crashed serve leaves only a dead
-record that is ignored, never followed.
+gamble. And once the public bind succeeds, the supervisor **publishes its endpoint** — atomically, in
+the per-project runtime tier, as an instance-validated record (`{url, pid, instanceId, root}`; the
+`instanceId` is minted per serve lifetime, handed to every child via env, and answered live at
+`GET /api/instance`) — the record a bare human `spex` in this project's tree discovers its backend by,
+and the record the host-level `spex dashboard` ([[host-gateway]]) reconciles its project list from. On a
+clean stop it removes only a record still carrying its own `instanceId`. Readers validate before
+trusting (a health/identity probe), so a crashed serve leaves only a dead record that is ignored, never
+followed.
 
 **Owning the public port is the contract: if I cannot bind it, I have failed.** Keeping-serving is for
 *transient* throws once the port is held — never for *failing to acquire* it. So a bind failure (port in

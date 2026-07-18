@@ -73,7 +73,6 @@ const SIGNPOSTS: Record<string, string> = {
   blob: 'spex evidence put|get',
   issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
-  dashboard: 'spex serve ui',
   new: 'spex session new',
   ls: 'spex session ls',
   watch: 'spex session watch',
@@ -309,6 +308,17 @@ if (cmd === 'serve') {
     console.error(`spex serve: unknown target '${target}' — spex serve [api] (the backend) | spex serve ui (the dashboard)`)
     process.exit(2)
   }
+} else if (cmd === 'dashboard') {
+  // the HOST-level dashboard ([[host-gateway]]): one gateway for every project this user serves — it
+  // reconciles the per-user endpoint records into a live project list and proxies each project's API,
+  // SSE, and terminal socket through /p/<projectId>/*. No --api-port pairing: which backend a request
+  // reaches is named in its path, resolved per request. `spex serve ui` remains the explicit
+  // one-backend pairing; this verb is the zero-config many-project face.
+  const { startHostGateway } = await import('./host.js')
+  const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
+  const host = flag('host') ?? '127.0.0.1'
+  if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
+  startHostGateway({ port, host })
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
   const { commandHelp, overviewHelp } = await import('./help.js')

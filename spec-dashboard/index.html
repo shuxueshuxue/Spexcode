@@ -15,7 +15,7 @@
       (function () {
         try {
           var t = localStorage.getItem('spexcode.theme')
-          if (['minimal', 'things', 'tokyonight', 'catppuccin'].indexOf(t) < 0) t = 'minimal'
+          if (['minimal', 'things', 'tokyonight', 'catppuccin', 'everforest', 'gruvbox', 'rosepine', 'dracula'].indexOf(t) < 0) t = 'minimal'
           document.documentElement.setAttribute('data-theme', t)
         } catch (e) { /* localStorage unavailable — the bare :root default (Minimal) stands */ }
       })()

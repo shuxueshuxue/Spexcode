@@ -15,6 +15,10 @@ export const THEMES = [
   { code: 'things', label: 'Things' },
   { code: 'tokyonight', label: 'Tokyo Night' },
   { code: 'catppuccin', label: 'Catppuccin' },
+  { code: 'everforest', label: 'Everforest' },
+  { code: 'gruvbox', label: 'Gruvbox' },
+  { code: 'rosepine', label: 'Rosé Pine Dawn' },
+  { code: 'dracula', label: 'Dracula' },
 ]
 const CODES = new Set(THEMES.map((t) => t.code))
 const DEFAULT = 'minimal'

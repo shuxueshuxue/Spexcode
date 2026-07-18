@@ -17,7 +17,8 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, press `,` to open settings. The THEME section
-      lists exactly Minimal, Things, Tokyo Night, and Catppuccin (Minimal marked as the active
+      lists exactly Minimal, Things, Tokyo Night, Catppuccin, Everforest, Gruvbox, Rosé Pine Dawn,
+      and Dracula (Minimal marked as the active
       default; no Light/Dark entries). Click Things and watch the whole app — the spec-node board AND
       (on the sessions view) the console chrome — repaint from Minimal's graphite palette to Things'
       white palette at once. Screenshot before (Minimal) and after (Things). Reload and confirm the

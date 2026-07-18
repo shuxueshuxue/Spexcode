@@ -118,7 +118,8 @@ scenarios:
     code: [spec-dashboard/src/theme.js, spec-dashboard/src/styles.css, spec-dashboard/index.html]
     description: >-
       Real browser against a live backend, starting with no saved theme choice. Open Settings: the
-      theme section must list exactly the four presets (Minimal, Things, Tokyo Night, Catppuccin) —
+      theme section must list exactly the eight presets (Minimal, Things, Tokyo Night, Catppuccin,
+      Everforest, Gruvbox, Rosé Pine Dawn, Dracula) —
       no Light, no Dark. Click each preset in turn and visit the graph page under it; then reload
       under the last pick; then clear the saved choice and reload (also under an emulated dark
       prefers-color-scheme to prove the system axis is gone); finally plant a garbage value and each

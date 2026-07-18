@@ -4,13 +4,15 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Run the dashboard in a real browser. Hover (or keyboard-focus) the same data-tip control — e.g. a
-      side-rail button — once under the light theme and once under dark (flip via the settings picker or
-      document.documentElement data-theme). Screenshot the visible bubble in each theme.
+      side-rail button — once under the default Minimal preset and once under Things (a dark and a light
+      palette; flip via the settings picker or document.documentElement data-theme). Screenshot the
+      visible bubble in each theme.
     expected: >
-      Both themes show the app-drawn .ui-tip bubble, never the browser-default title box: light renders
-      the light palette (paper-family background, dark ink, hairline border), dark the near-black
-      palette — background, text, border, and shadow all legible in both. Zero loss = one tooltip, two
-      correct skins, purely from the CSS variables.
+      Both presets show the app-drawn .ui-tip bubble, never the browser-default title box: Minimal
+      renders the graphite palette (panel-family background, light ink, hairline border), Things the
+      white palette (paper-family background, dark ink) — background, text, border, and shadow all
+      legible in both. Zero loss = one tooltip, correctly skinned per preset, purely from the CSS
+      variables.
     code: [spec-dashboard/src/Tooltip.jsx, spec-dashboard/src/styles.css]
   - name: hover-delay-and-edge-flip
     tags: [frontend-e2e, desktop]

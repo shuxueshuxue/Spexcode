@@ -118,6 +118,18 @@ test('codexRolloutExists finds a thread by id only once its rollout file lands o
   assert.equal(codexRolloutExists('nonexistent-thread', join(home, 'sessions')), false)
 })
 
+test('codexRolloutExists is immune to future-dated junk day-dirs above the real rollout', () => {
+  // live failure shape: a test planted 2099/12/{29,30,31} in the real CODEX_HOME; those sort above every real
+  // day-dir, and a newest-3 cap made the scan miss ALL real rollouts — every codex launch died "no rollout".
+  const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
+  const tid = '019f70f2-6182-7a32-ac76-c85910c90fe2'
+  for (const d of ['29', '30', '31']) mkdirSync(join(home, 'sessions', '2099', '12', d), { recursive: true })
+  writeFileSync(join(home, 'sessions', '2099', '12', '29', 'rollout-2099-12-29-junk-e2e-1.jsonl'), '{}\n')
+  mkdirSync(join(home, 'sessions', '2026', '07', '18'), { recursive: true })
+  writeFileSync(join(home, 'sessions', '2026', '07', '18', `rollout-2026-07-18T00-39-20-${tid}.jsonl`), '{}\n')
+  assert.equal(codexRolloutExists(tid, join(home, 'sessions')), true)
+})
+
 test('codex app-server runs the SAME install as the launcher/resume (version parity across the one socket)', () => {
   // The app-server binary is DERIVED from codexCmd's binary (its first shell token), not a bare `codex` off
   // PATH: on a multi-install host a bare `codex` app-server can be a DIFFERENT version than the launcher's

@@ -871,13 +871,18 @@ export function codexThreadsInProgress(sock: string, threadIds: string[], timeou
 // rollout just lands a few seconds LATE (not lost). Handing the id to `resume` before then is the "no rollout
 // found for thread id" failure, so codex-launch WAITS for the rollout to land before it trusts the id.
 const codexSessionsDir = () => join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')
-// does a rollout file for this thread id exist yet? Rollouts are grouped by date, so scan only the newest few
-// day-dirs (lexical order = chronological on zero-padded YYYY/MM/DD) — clock-agnostic and cheap on a big history.
+// does a rollout file for this thread id exist yet? Rollouts are grouped by date; walk day-dirs newest-first
+// (lexical order = chronological on zero-padded YYYY/MM/DD) and return on first hit — the fresh rollout lives in
+// the newest real dir, so the common case reads one dir. The walk is exhaustive, never capped at "the newest few
+// dirs": future-dated junk under sessions/ (a test once planted 2099/12/* in the real CODEX_HOME) sorts above
+// every real day-dir, and a cap let three such dirs mask ALL real rollouts — every codex launch then failed
+// "persisted no rollout" with the rollout sitting on disk. A full walk is a readdir per day-dir — still cheap.
 export function codexRolloutExists(threadId: string, root = codexSessionsDir()): boolean {
   const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
-  const days: string[] = []
-  for (const y of kids(root)) { for (const m of kids(join(root, y))) { for (const d of kids(join(root, y, m))) { days.push(join(root, y, m, d)); if (days.length >= 3) break } if (days.length >= 3) break } if (days.length >= 3) break }
-  return days.some((d) => kids(d).some((f) => f.includes(threadId)))
+  for (const y of kids(root)) for (const m of kids(join(root, y))) for (const d of kids(join(root, y, m))) {
+    if (kids(join(root, y, m, d)).some((f) => f.includes(threadId))) return true
+  }
+  return false
 }
 // poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
 // caller can FAIL LOUD instead of handing `resume` / the stored record a non-resumable id. The budget must

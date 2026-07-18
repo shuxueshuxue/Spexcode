@@ -16,5 +16,5 @@ gathers nothing itself. Discovery is recursive and field-driven ([[surface]]), s
 exactly as it would at the root — the gather set is path-independent, so shelving a command changes
 nothing about what `/api/plugins` and the launcher offer. A plugin that serves BOTH surfaces (e.g.
 [[distill]], skill and command) shelves once by its primary identity, never duplicated. The init
-templates mirror this layout, and the shelf stays pure presentation for [[migrate]]'s asset table — a
-resident's identity rel is shelf-less, so a flat adopter tree hashes against the same rows.
+templates mirror this layout. The shelf stays pure presentation: moving a resident beneath it changes
+neither that plugin's identity nor the surfaces gathered from its frontmatter.

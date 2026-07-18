@@ -20,6 +20,5 @@ This node is a **shelf, not a surface**: it declares no `surface` field and gath
 Discovery is recursive and field-driven ([[surface]]), so residents plug in exactly as they would at the
 root — nothing about materialization order (name order, unchanged names) or gathering changes with the
 path. The init templates mirror this layout — a fresh `spex init` (per [[init-preset]]) seeds `core`
-flat and its auxiliary system plugins under the same `prompts/` shelf — while the shelf stays pure
-presentation for [[migrate]]'s asset table: an asset's identity rel is shelf-less, so a 0.2.x adopter's
-flat tree hashes against the same rows.
+flat and its auxiliary system plugins under the same `prompts/` shelf. The shelf stays pure presentation:
+changing this path changes neither a plugin's identity nor its gathered surface.

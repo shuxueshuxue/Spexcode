@@ -24,8 +24,8 @@ Both run `/home/jeffry/spexcode` directly (tsx, no build step for the backend).
   the reaper, or spawned-env need a **full restart**: kill both tmux sessions, re-run `spex-ensure.sh`.
 - Frontend changes reach the gateway ONLY via a dist rebuild: `cd spec-dashboard && npm run build`,
   then restart the gateway.
-- rocket per release: in the workspace run `spex doctor --migrate` (only when the release changed
-  vocabulary/layout) → `spex materialize` → refresh git hooks → restart its tmux pair.
+- rocket per release: follow any migration procedure named by that release, then in the workspace run
+  `spex materialize` → refresh git hooks → restart its tmux pair.
 
 ## Supply chain B — local tarball to npm-global (Macs): gugu (macmini) + z-code (mbp)
 
@@ -34,11 +34,10 @@ Both run `/home/jeffry/spexcode` directly (tsx, no build step for the backend).
 3. **z-code checkout too** (mbp keeps a source checkout at `~/spexcode`, GitHub-blocked):
    `git bundle create <b> main ^<their-head>` → scp → on mbp `git fetch <b> main && git merge --ff-only FETCH_HEAD`.
 4. **Install**: macmini needs `source ~/.nvm/nvm.sh && nvm use 22` first; then `npm i -g ~/spexcode-<ver>.tgz`.
-5. **Drain check**: `spex session ls` in the adopter repo — active sessions are merged-then-closed
-   first (`doctor --migrate` refuses on live sessions and on a dirty tree; that refusal is correct).
-6. **Migrate** (vocabulary/layout releases only): `spex doctor --migrate` → review the staged diff and
-   every NEEDS-REVIEW line → `SPEXCODE_ALLOW_MAIN=1 git commit` → clear any lint errors the new rules
-   surface (real fixes, not bypasses) → push.
+5. **Drain check**: `spex session ls` in the adopter repo — active sessions are merged-then-closed first.
+6. **Release migration** (only when that release ships one): follow that release's exact procedure,
+   review every staged byte and warning, commit it, then clear any lint errors the new rules surface
+   (real fixes, not bypasses) and push. There is no permanent generic migration verb.
 7. **Hooks per clone**: `cp $(npm root -g)/spexcode/spec-cli/templates/hooks/* $(git rev-parse --git-path hooks)/ && chmod +x` —
    adopter repos have no `npm run hooks`.
 8. `spex materialize`.
@@ -48,7 +47,7 @@ Both run `/home/jeffry/spexcode` directly (tsx, no build step for the backend).
 
 ## Iron ordering + verification
 
-drain → toolchain → migrate → hooks → materialize → **full restart** → verify. Never reorder.
+drain → toolchain → release migration (when present) → hooks → materialize → **full restart** → verify. Never reorder.
 The acceptance for the ThinkPad deploy is the gateway full loop: headless browser through the public
 URL — login → graph renders → create a session from the UI → the worker actually runs and declares.
 File it as an eval reading (`public-mode` / `gateway-full-loop`). Restarting the backend mid-fleet

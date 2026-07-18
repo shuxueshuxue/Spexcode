@@ -61,25 +61,28 @@ scenarios:
     description: >-
       On the running issues page, select an issue whose thread is LONG (body + replies overflow the
       detail pane). WITHOUT scrolling, read the reply composer's geometry (getBoundingClientRect on
-      `.fvd-compose` and its textarea) against the viewport; read the IDLE textarea's height (before any
-      click/focus) and whether the actions row (`.fv-actions`) is present. Focus the textarea and
-      re-read; type several lines and read the height after each; clear and blur and re-read. Then scroll
-      the thread region and read whether the composer moved. Repeat the idle/engaged reading on an eval
-      detail's rail composer (#/evals).
+      `.fvd-compose` and its textarea) against the viewport; read the composer container's computed
+      border/radius and the textarea's computed border-style; read the IDLE textarea's height (before any
+      click/focus) and whether the actions row (`.fv-actions`) is present, what it contains, and whether
+      any always-visible hint text renders. Focus the textarea and re-read; type several lines and read
+      the height after each; clear and blur and re-read. Then scroll the thread region and read whether
+      the composer moved. Repeat the idle/engaged reading on an eval detail's rail composer (#/evals).
     expected: >-
       The composer is DOCKED at the detail pane's foot — visible in the viewport immediately on
       selection, no scrolling needed even on a long thread; the thread scrolls in its own region
-      (`.fvd-scroll`) behind it and the composer never moves. IDLE, the writing surface is ALREADY
-      USABLE — a multi-line textarea (a few lines tall, ~3), never a one-line ~26px sliver, and it needs
-      NO click/focus to reach that height: the box you land on is the box you can write in. Focus does
-      not change the textarea's height (there is no click-to-expand), and the actions row is already
-      visible with a disabled Send button plus any clip/lifecycle action supplied by the host. Typing still AUTO-GROWS it beyond
-      that idle floor, line by line, capped so it never eats the pane; an emptied, blurred composer
-      settles back to the same usable idle floor, never collapsing to a hairline line, and the action row
-      stays visible throughout; for a non-concluded issue it shows disabled Send + Close issue side by
-      side, and for a home with no lifecycle action, such as the eval rail composer, idle still shows hint
-      + disabled Send. Switching to another issue clears the draft (keyed to the selection). One shared
-      composer, every home. No page errors.
+      (`.fvd-scroll`) behind it and the composer never moves. The composer is ONE quiet bordered rounded
+      container; the textarea inside it is BORDERLESS (computed border-style none) and IDLE it is
+      ALREADY USABLE — a two-line floor (~40px, never a one-line ~26px sliver), needing NO click/focus to
+      reach that height: the box you land on is the box you can write in. Focus does not change the
+      textarea's height (there is no click-to-expand), and the compact action row is already visible with
+      a disabled icon-only Send (an accessible name/tooltip, at the row's RIGHT edge) plus any
+      clip/lifecycle action supplied by the host; NO always-visible hint line renders anywhere in the
+      composer. Typing still AUTO-GROWS it beyond that idle floor, line by line, capped so it never eats
+      the pane; an emptied, blurred composer settles back to the same usable idle floor, never collapsing
+      to a hairline line, and the action row stays visible throughout; for a non-concluded issue it shows
+      Promote/Close issue beside the disabled Send, and for a home with no lifecycle action, such as the
+      eval rail composer, idle still shows the disabled Send (plus ⏱ over a clip). Switching to another
+      issue clears the draft (keyed to the selection). One shared composer, every home. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

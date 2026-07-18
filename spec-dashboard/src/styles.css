@@ -1201,7 +1201,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fvd-scroll > * { max-width: 860px; }
 /* the docked composer bar — the issues-detail sibling of .an-rail-compose / the console's ❯ bar. */
 .fvd-compose { flex: none; border-top: 1px solid var(--line); padding: 8px 16px 12px; background: var(--panel); }
-.fvd-compose .fv-compose { margin-top: 0; padding-top: 0; border-top: none; max-width: 860px; }
+.fvd-compose .fv-compose { margin-top: 0; max-width: 860px; }
 .fvd-head { margin-bottom: 4px; }
 .fvd-concern { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.35; }
 .fv-close-issue {
@@ -1286,18 +1286,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-new-btn:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fv-new-modal { width: min(520px, 92vw); overflow: visible; }
 .fv-new-modal .legend-body { padding: 0; }
-.fv-hint { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 /* a brief @-dispatch summary echoed after a write. */
 .fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: 11px; color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
 .fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--red); }
 .fv-actions .fv-error { margin: 0; }
-/* the compose blocks — the docked reply composer and the New-thread form. The reply composer is the
-   console-❯-shaped bar whose writing surface is ALREADY USABLE at idle: min-height floors it at ~3 lines
-   (no click-to-expand — the box you land on is the box you write in), fitTextarea auto-grows it above that
-   floor and caps it at max-height, and its actions row reveals when engaged or when a host lifecycle
-   action pins it visible. */
-.fv-compose { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
-.fv-compose .fv-textarea { resize: none; min-height: 56px; max-height: 38vh; }
+/* the compose blocks — the docked reply composer and the New-thread form. The reply composer is ONE
+   shared shape on every home ([[issues-view]] / [[event-detail]]): a QUIET BORDERED container holding a
+   BORDERLESS writing surface floored at TWO lines (already usable at idle, no click-to-expand —
+   fitTextarea auto-grows it above that floor, max-height caps it), over a PERSISTENT compact action row
+   (contextual ⏱/lifecycle actions left, the icon-only Send pinned at the right edge). */
+.fv-compose { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 8px 10px 6px; }
+.fv-compose:focus-within { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+.fv-compose .fv-textarea { border: none; border-radius: 0; background: transparent; padding: 2px 2px 4px; resize: none; line-height: 1.5; min-height: 42px; max-height: 38vh; }
 .fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .fv-store-pick {
   display: flex; align-items: center; gap: 8px; align-self: flex-start;
@@ -1315,19 +1315,30 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the composer textarea's mention-menu anchor — the shared .mention-menu is absolute to its wrapper. */
 .fv-tawrap { position: relative; }
 .fv-tawrap .fv-textarea { display: block; }
-.fv-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+/* inside the bordered composer the upward menu clears the container's top edge (8px padding + 1px
+   border + the menu's own 4px gap), so the overlay floats ABOVE the quiet box, never into it. */
+.fv-compose .mention-menu.up { bottom: calc(100% + 13px); }
+.fv-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+/* the right-pinned group: host lifecycle actions (Close issue / Promote) beside the icon-only Send. */
+.fv-actions-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .fv-cancel {
   margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--paper);
   border: 1px solid var(--line); padding: 4px 12px; border-radius: 4px; cursor: pointer;
 }
 .fv-cancel:hover { color: var(--orange); border-color: var(--orange); }
 .fv-cancel:disabled { opacity: .5; cursor: default; }
-.fv-send {
-  margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);
+/* the New-form's text submit button. */
+.fv-post {
+  font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);
   border: 1px solid var(--blue); padding: 4px 14px; border-radius: 4px; cursor: pointer;
 }
-.fv-cancel + .fv-send { margin-left: 0; }
-.fv-send:disabled { opacity: 0.5; cursor: default; }
+.fv-post:disabled { opacity: 0.5; cursor: default; }
+/* the composer's icon-only Send — a small round affordance at the row's right edge. */
+.fv-send {
+  width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; color: var(--paper); background: var(--blue); border: 1px solid var(--blue); border-radius: 50%; cursor: pointer;
+}
+.fv-send:disabled { opacity: 0.45; cursor: default; }
 
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
@@ -1982,7 +1993,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-rail-list .fv-reply { margin-top: 8px; }
 /* the composer is DOCKED at the rail's foot — always on screen, never scrolled to. */
 .an-rail-compose { flex: none; border-top: 1px solid var(--line); padding: 0 12px 10px; background: var(--panel); }
-.an-rail-compose .fv-compose { margin-top: 8px; padding-top: 0; border-top: none; }
+.an-rail-compose .fv-compose { margin-top: 8px; }
 /* narrow: the workspace stacks — stage over rail — and the pane scrolls as one column again; the composer
    stays a sticky bar at the column's foot, so the write affordance floats over the scroll. */
 @media (max-width: 900px) {
@@ -2073,8 +2084,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the human sign-off in the header band ([[human-ok]]): settled mark / the deliberate ok button —
    offered only while the viewed reading IS the scenario's latest. */
 .an-okd { font-size: 11px; color: var(--green); white-space: nowrap; }
-.an-okbtn { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 2px 8px; cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s; }
-.an-okbtn:hover { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
 
 /* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
    oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim

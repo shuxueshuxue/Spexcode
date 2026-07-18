@@ -1,13 +1,12 @@
 // The review-track command registry ([[review-commands]]) — the sessionCommands.js pattern on the eval
 // detail: each BUILT-IN review verb holds only its static identity + `when` gate here; the closure that
-// DOES the thing is bound per-render by the host (EventDetail), and the header BUTTON and the composer's
-// typed `/<name>` run that SAME closure through this one registry, so button and command can never drift.
-// `when` gates on the viewed reading: /ok is offered exactly where the ok button renders — the viewed
-// reading is the scenario's latest effective one and not yet human-ok'd ([[human-ok]] binds to one
-// immutable reading; older A/B poles are history). Typed anywhere the button is disabled, it offers nothing.
+// DOES the thing is bound per-render by the host (EventDetail), and the composer's typed `/<name>` is the
+// ONE dashboard door to the act — the gate lives in this registry alone, so every door (typed today, any
+// future one) reads the same judgment. `when` gates on the viewed reading: /ok is offered exactly where
+// the sign-off is legal — the viewed reading is the scenario's latest effective one and not yet human-ok'd
+// ([[human-ok]] binds to one immutable reading; older A/B poles are history). Elsewhere it offers nothing.
 export const REVIEW_COMMANDS = [
-  { name: 'ok', color: 'green', when: (v) => !v.okd && v.isLatest,
-    labelKey: 'annotator.ok', titleKey: 'annotator.okTitle', descKey: 'annotator.cmd.okDesc' },
+  { name: 'ok', color: 'green', when: (v) => !v.okd && v.isLatest, descKey: 'annotator.cmd.okDesc' },
 ]
 
 // bind the static registry to the live per-render runners, keeping only the commands the viewed reading

@@ -5,19 +5,21 @@ scenarios:
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/reviewCommands.js, spec-dashboard/src/mentions.jsx]
     description: >
       In a real browser at a live backend: open #/evals, select a reading whose scenario is NOT yet
-      human-ok'd (its header shows the ☑ ok button), focus the remark composer and type '/'. Read the
-      dropdown: which commands list, their tags, and the row markup vs the session ❯ box's / menu. Type
-      'o' and read the filtered list; Esc closes. Then view a reading where the ok button is absent (an
-      ok'd latest, or an older A/B pole) and type '/ok' — read what the menu offers. Finally type '/'
-      mid-prose (not at line start) and read whether a menu opens.
+      human-ok'd (the /ok gate is open: the viewed reading is the scenario's latest), focus the remark
+      composer and type '/'. Read the dropdown: which commands list, their tags, where it opens relative
+      to the composer container, and the row markup vs the session ❯ box's / menu. Type 'o' and read the
+      filtered list; Esc closes. Then view a reading OUTSIDE the gate (an ok'd latest, or an older A/B
+      pole) and type '/ok' — read what the menu offers. Finally type '/' mid-prose (not at line start)
+      and read whether a menu opens.
     expected: >
-      Typing '/' at the start of the composer's line opens a small command dropdown in the same
-      interaction grammar as the session input's / menu (same row shape: /name · description · tag;
-      ↑↓ · ⏎ pick · Esc closes). It lists /ok tagged [ui] (offered ONLY under the button's own when-gate:
-      viewed reading is the scenario's latest effective one and not yet ok'd) and /refuse tagged
-      [review] (from the .plugins/review surface). Where the ok button is absent, the menu offers no
-      /ok — same gate, never a second judgment. A '/' that is not at its line's start opens nothing.
-      Zero loss = the typed trigger and the button are one surface, not two drifting ones.
+      Typing '/' at the start of the composer's line opens a small command dropdown ABOVE the composer,
+      in the same interaction grammar as the session input's / menu (same row shape: /name · description
+      · tag; ↑↓ · ⏎ pick · Esc closes). It lists /ok tagged [ui] — offered ONLY under the registry's
+      when-gate: the viewed reading is the scenario's latest effective one and not yet ok'd — and /refuse
+      tagged [review] (from the .plugins/review surface). Outside the gate the menu offers no /ok — one
+      gate in one registry, never a second judgment (and no header ok button exists anywhere). A '/'
+      that is not at its line's start opens nothing. Zero loss = the typed trigger is the ONE sign-off
+      door, gated in exactly one place.
   - name: ok-via-command
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/reviewCommands.js, spec-dashboard/src/EventDetail.jsx]
@@ -28,11 +30,12 @@ scenarios:
       reveals it. Cross-check the sidecar: the node's evals.ndjson gained a human-ok event bound to that
       reading's ts.
     expected: >
-      Accepting /ok fires the SAME human-ok runner the header ☑ button calls (one closure — the
-      sessionCommands one-runner pattern): the header flips to the settled ☑ human-ok mark, the sidecar
-      carries one kind:human-ok event anchored to the viewed reading, and the evals feed default-hides
-      the now fresh-AND-ok'd scenario (reappearing under show-all). Zero loss = /ok is the button's typed
-      twin — same write, same gate, same feed semantics, no dashboard-only path.
+      Accepting /ok fires THE human-ok runner (the registry's one closure, the sessionCommands
+      one-runner pattern): the header shows the settled ☑ human-ok mark (the typed command is the only
+      write door — no header button ever renders), the sidecar carries one kind:human-ok event anchored
+      to the viewed reading, and the evals feed default-hides the now fresh-AND-ok'd scenario
+      (reappearing under show-all). Zero loss = /ok is the sign-off's one dashboard surface — same write,
+      same gate, same feed semantics, no dashboard-only path.
   - name: refuse-prefill-ages
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/reviewCommands.js]
@@ -58,6 +61,7 @@ scenarios:
 YATU through the REAL running product, never the code: worktree backend + dashboard, a headless Chromium
 typing '/' into the live composer (`.fv-textarea` in the event-detail rail) and reading the real dropdown,
 the real header band, the real feed. The loss is the gap between that reading and the spec: one closure
-per built-in verb (button ≡ command), the preset prose arriving through the `surface: review` plugin
-gather, and every send remaining an ordinary remark. Menu interactions are DYNAMIC — record video of the
-type→menu→accept flows; end states (prefilled composer, ok'd header, hidden feed row) may add stills.
+per built-in verb gated in one registry (the typed command the sole dashboard door), the preset prose
+arriving through the `surface: review` plugin gather, and every send remaining an ordinary remark. Menu
+interactions are DYNAMIC — record video of the type→menu→accept flows; end states (prefilled composer,
+ok'd header, hidden feed row) may add stills.

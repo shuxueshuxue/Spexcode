@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer — a collapsed auto-growing bar DOCKED at the detail's foot — routes by store (local-store commit or real forge comment).
+desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer — the ONE shared quiet-bordered thread composer, DOCKED at the detail's foot — routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesPage.jsx#IssuesPage
   - spec-dashboard/src/IssuesPage.jsx#IssueDetail
@@ -117,16 +117,20 @@ straight to the trunk.
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same
   docked-bar shape as the eval rail's composer and the console's ❯ box, one write-affordance geometry across
-  the review surfaces). The composer is the console-❯-box SHAPE, but its **writing surface is already usable at idle** — a
-  **multi-line textarea (a few lines tall), never a one-line sliver you must click to expand**: the box you
-  land on is the box you can write in, and focus changes nothing about its height. It still
+  the review surfaces). The composer is the ONE shared thread-composer shape ([[event-detail]] docks the
+  SAME component): a **quiet bordered container** holding a **borderless writing surface that is already
+  usable at idle** — **floored at two lines, never a one-line sliver you must click to expand**: the box
+  you land on is the box you can write in, and focus changes nothing about its height. It still
   **auto-grows with the draft** ABOVE that idle floor (the shared `textarea.js` fitTextarea — one grow
   routine for the console's boxes and the thread composers, floored at the composer's usable height and
   capped so it never eats the pane; the console's own ❯/prompt boxes keep the single-line floor, this is the
-  thread composer's own geometry) and **always displays its actions row** (hint + Send,
-  the ⏱ where a clip supplies one, plus any host lifecycle action such as Close issue) even while idle —
-  the human should never have to click the textarea just to discover or reach the buttons. A failed send
-  still replaces the hint in that visible row (an error must never collapse out of view). It is **keyed to the selected issue**, so
+  thread composer's own geometry) and **always displays its compact action row** even while idle —
+  the human should never have to click the textarea just to discover or reach the buttons. The row carries
+  ONLY real acts: the ⏱ anchor stamp where a clip supplies one, the host's lifecycle actions (Close issue /
+  Promote), and an **icon-only Send** — accessible name and tooltip, never a bare glyph without either —
+  pinned at the row's right edge. There is **no permanent hint line**: the `@`/`[[` grammar's
+  discoverability is the autocomplete itself, and an always-on hint text is noise. A failed send
+  surfaces its error in that same visible row (an error must never collapse out of view). It is **keyed to the selected issue**, so
   a half-typed draft dies with its selection instead of leaking onto another issue's thread. The POST goes
   to the one store-routed reply verb ([[issues]]'s
   `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's

@@ -441,12 +441,11 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   }
 
   // the review-track commands ([[review-commands]]): the BUILT-IN verbs bind the registry's when-gates to
-  // per-render runners — okRun is THE human-ok closure, called by the header button AND the typed /ok, so
-  // the two can never drift; the gate mirrors the button exactly (viewed reading is the scenario's latest
+  // per-render runners — okRun is THE human-ok closure, fired by the typed /ok, the ONE dashboard door to
+  // the sign-off (no header button); the gate is the registry's (viewed reading is the scenario's latest
   // and not yet ok'd). The presets ride behind them, each prefilling its placeholder-filled body.
   const okRun = async () => { const r = await postEvalOk(entry.node, entry.scenario).catch((err) => ({ error: String(err) })); onWrite?.(r?.error || '') }
   const reviewCmds = reviewCommandsFor({ okd: !!viewing.humanOk, isLatest: !history || histIdx === 0 }, { ok: okRun })
-  const okCmd = reviewCmds.find((c) => c.name === 'ok') || null
   const composerCommands = [
     ...reviewCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color, run: c.run })),
     ...reviewPresets.map((p) => ({
@@ -468,18 +467,12 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
             through to their session-board tab. */}
         <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" onOpenSession={onOpenSession} />
 
-        {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark; an un-ok'd one offers
-            the ok ONLY while the viewed reading IS the scenario's latest — the ok binds to one immutable
-            reading, so blessing an older A/B pole would claim a reading the feed no longer scores. Same
-            server write as `spex eval ok`. The button IS the registry's /ok command ([[review-commands]]):
-            one when-gate, one runner — typing /ok in the composer fires this exact closure. */}
-        {viewing.humanOk
-          ? <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>
-          : okCmd && (
-            <button type="button" className="an-okbtn" data-tip={t(okCmd.titleKey)} onClick={okCmd.run}>
-              ☑ {t(okCmd.labelKey)}
-            </button>
-          )}
+        {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark. The header carries
+            NO write button — the ONE dashboard door to the ok is the composer's typed /ok
+            ([[review-commands]]), gated exactly as the CLI: offered only while the viewed reading IS the
+            scenario's latest and not yet ok'd. Same server write as `spex eval ok`. */}
+        {viewing.humanOk &&
+          <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>}
 
         {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
             repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one

@@ -50,11 +50,13 @@ frame, the keyboard's `a`, selecting a remark via a scrubber marker or the ↑/�
 so the gesture unfolds it on its own. The unfolded rail head carries the same shared inline fold badge
 to fold it back, and the fold state persists across selection switches — a new selection neither
 re-folds an opened rail nor re-opens a folded one. On the phone eval host, where the desktop folds
-retire (stacking already gives the detail the full width), the rail simply stays open. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
-composer): its writing surface is already usable at idle — a multi-line box a few lines tall, never a
-one-line sliver you must click to expand (the box you land on is the box you write in) — that auto-grows
-with the draft above that floor and reveals its actions row (⏱ / Send) only while engaged, so the write
-affordance is permanent, usable on sight, but never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
+retire (stacking already gives the detail the full width), the rail simply stays open. The docked composer is [[issues-view]]'s ONE shared thread
+composer: a QUIET BORDERED container whose BORDERLESS writing surface is already usable at idle —
+floored at two lines, never a one-line sliver you must click to expand (the box you land on is the box
+you write in) — auto-growing with the draft above that floor (capped so it never eats the rail), over a
+PERSISTENT compact action row carrying only real acts: the contextual ⏱ anchor stamp and the icon-only
+Send pinned at the row's right edge. The `@`/`[[`/`/` menus open as overlays ABOVE the container, never
+inside it — so the write affordance is permanent, usable on sight, and never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
 stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the
@@ -194,8 +196,9 @@ session tab through the proof model. The composer authors a **remark** through t
 (find-or-create by (node, scenario) — no thread id or concern needed on the write side; identity is
 server-derived `'human'`, L: no dashboard-only write): the first remark mints the thread, every later one
 appends; an `@session`/`@new` typed in it dispatches ([[mentions]]), and a `/` at the line's start opens the
-review track's typed command menu ([[review-commands]] — /ok as the header sign-off's typed twin, `surface:
-review` presets as prefills; the send stays this same remark write). Because the write path needs no resident
+review track's typed command menu ([[review-commands]] — /ok as the ONE dashboard door to the [[human-ok]]
+sign-off (the header carries only the settled ok'd mark, no button), `surface: review` presets as prefills;
+the send stays this same remark write). Because the write path needs no resident
 list, the pane renders on **EVERY** eval home — a fresh scenario shows an empty track with a live composer,
 and the session eval tab's old "no resident issues list" degradation is gone (it now renders the full thread
 + composer like the issues page). The reply list and composer are the SAME shared thread UI the issue detail

@@ -7,7 +7,7 @@ import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
 import { useT } from './i18n/index.jsx'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -185,16 +185,18 @@ function slashAt(value, caret, commands) {
   return { items, index: 0, start: lineStart, end: caret, query: m[1] }
 }
 
-// the docked composer bar — the console-❯-box shape, shared by every home: its writing surface is
-// ALREADY USABLE at idle — a multi-line textarea floored at ~3 lines, never a hairline one-line sliver and
-// never a click-to-expand — and it auto-grows with the draft ABOVE that floor (the shared fitTextarea,
-// floored by CSS min-height, capped by CSS max-height). Its actions row (⏱ / hint / Send, plus any
-// host-supplied lifecycle action) is always visible, so the composer never changes shape just because it
-// gains or loses focus.
+// the ONE docked composer, shared by every home ([[issues-view]] / [[event-detail]]): a QUIET BORDERED
+// container holding a BORDERLESS writing surface over a PERSISTENT compact action row. The writing
+// surface is already usable at idle — floored at two lines, never a one-line sliver and never a
+// click-to-expand — and auto-grows with the draft ABOVE that floor (the shared fitTextarea, floored by
+// CSS min-height, capped by CSS max-height so it never eats the pane). The action row is always visible
+// and carries only real acts: the contextual ⏱ anchor stamp (where a clip supplies one), any
+// host-supplied lifecycle action (Close issue / Promote via `actionsEnd`), and the icon-only Send pinned
+// at the right edge; a failed send surfaces its error in the same row, never out of view.
 // Posts through the caller's `onSend(text, evidence)` as 'human'. An @-mention in the text summons a worker; the returned outcomes
 // string surfaces via onDone. The textarea carries the SAME `[[node]]`/`@session` autocomplete as the
 // console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
-// so its menu opens UPWARD. The thread's own node leads the `[[` list. Over a clip the home passes
+// so its menu opens UPWARD, as an overlay above the container. The thread's own node leads the `[[` list. Over a clip the home passes
 // `anchorNow()` (async → { tMs, step, frame }) → a ⏱ button stamps the current moment's `▶m:ss · step`
 // AND its captured frame at the body's head; a circle pushes a `draft` (prefilled anchored body + the
 // rect-burned frame link) — either way a mark is thereafter an ordinary — replyable, @-able — reply,
@@ -204,7 +206,6 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
-  const [focused, setFocused] = useState(false)
   const taRef = useRef(null)
   const { launchers } = useLaunchers()
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
@@ -239,13 +240,11 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     return false
   }
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
-  const engaged = focused || !!body || frames.length > 0 || !!err
 
-  // auto-grow like the ❯ box, but floored at a USABLE idle height: refit on every draft change AND on the
-  // stable mounted action row. The floor (CSS min-height) is the idle writing surface — a few lines tall,
-  // already usable with no click-to-expand; autogrow lives above it, capped by CSS max-height so it never
-  // eats the pane. Both bounds are read from the textarea's own CSS, so the composer's geometry stays one
-  // source of truth.
+  // auto-grow like the ❯ box, but floored at a USABLE idle height: refit on every draft change. The floor
+  // (CSS min-height) is the idle writing surface — two lines, already usable with no click-to-expand;
+  // autogrow lives above it, capped by CSS max-height so it never eats the pane. Both bounds are read from
+  // the textarea's own CSS, so the composer's geometry stays one source of truth.
   useEffect(() => {
     const ta = taRef.current
     if (!ta) return
@@ -293,7 +292,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     } finally { setBusy(false) }
   }
   return (
-    <div className={`fv-compose${engaged ? ' engaged' : ''}`}>
+    <div className="fv-compose">
       {frames.length > 0 && (
         <div className="fv-frames">
           {frames.map((h) => <BlobMedia hash={h} alt="frame" key={h} />)}
@@ -302,20 +301,21 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       <div className="fv-tawrap">
         <textarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
           disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target); syncSlash(e.target) }}
-          onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); ac.close(); setSlash(null) }}
+          onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onBlur={() => { ac.close(); setSlash(null) }}
           onKeyDown={(e) => { if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
         {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('annotator.menuReview')}
           onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
       </div>
-      {/* the buttons swallow mousedown so a click never blurs the textarea; the row itself stays mounted. */}
+      {/* the buttons swallow mousedown so a click never blurs the textarea; the row itself is persistent. */}
       <div className="fv-actions">
         {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
-        <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
-        <button type="button" className="fv-send" disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send}>
-          {busy ? t('session.issuesSending') : t('session.issuesSend')}
-        </button>
-        {actionsEnd}
+        {err && <span className="fv-error">{err}</span>}
+        <div className="fv-actions-end">
+          {actionsEnd}
+          <IconButton icon="send" size={14} className="fv-send" label={busy ? t('session.issuesSending') : t('session.issuesSend')}
+            disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send} />
+        </div>
       </div>
     </div>
   )

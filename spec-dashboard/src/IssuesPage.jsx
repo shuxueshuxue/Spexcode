@@ -298,9 +298,9 @@ function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
         {ac.menuEl}
       </div>
       <div className="fv-actions">
-        <span className={err ? 'fv-error' : 'fv-hint'}>{err || t('session.issuesMentionHint')}</span>
+        {err && <span className="fv-error">{err}</span>}
         <button type="button" className="fv-cancel" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
-        <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>
+        <button type="button" className="fv-post" disabled={busy || !concern.trim()} onClick={submit}>
           {busy ? t('session.issuesSending') : t('session.issuesPost')}
         </button>
       </div>

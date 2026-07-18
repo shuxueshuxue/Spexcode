@@ -5,7 +5,7 @@ import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, pane
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
-import { composeLaunch, createSession, useLaunchers, useCommandPresets, launcherModes } from './launch.js'
+import { createSession, useLaunchers, launcherModes } from './launch.js'
 import ModeToggle from './ModeToggle.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -139,25 +139,25 @@ function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
 }
 
 // @@@ the phone's create entry — the desktop New Session tab's touch twin, all substance shared: the SAME
-// launch path (./launch.js — composeLaunch grammar, launcher fetch + default resolution + the remembered
+// launch path (./launch.js — raw grammar POST, launcher fetch + default resolution + the remembered
 // per-browser pick AND the remembered session mode with its illegal-combo fallback, the one POST
-// /api/sessions) and the SAME mode switch (the shared ModeToggle, touch-sized by CSS). Only the chrome is
+// /api/sessions; backend newSession invokes command presets for every caller) and the SAME mode switch
+// (the shared ModeToggle, touch-sized by CSS). Only the chrome is
 // phone-shaped: a full-screen composer (textarea + native launcher <select> — a launcher the armed mode
 // can't launch is a disabled option — + one launch button). Unlike the desktop's fire-in-the-background
 // box (type-ready for the next launch at once), the phone AWAITS the create — the button reads busy while
 // the backend builds worktree+branch+agent (seconds) — because busy-gating is also the double-tap guard a
 // touch surface needs; success returns to the list, where the new session lands on the next board push.
-function MobileNewSession({ specs, draft, setDraft, onBack, onLaunched }) {
+function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
   const t = useT()
   const { launchers, launcher, pickLauncher, mode, pickMode, modeNotice } = useLaunchers()
-  const presets = useCommandPresets()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const launch = async () => {
     const raw = draft.trim()
     if (!raw || busy) return
     setBusy(true); setErr(null)
-    const r = await createSession(composeLaunch(raw, presets, specs), launcher, mode)
+    const r = await createSession(raw, launcher, mode)
     setBusy(false)
     if (r.ok) { setDraft(''); onLaunched() }
     else setErr(r.error || t('mobile.launchFailed'))   // fail loud, keep the draft — same rule as the send composer
@@ -210,7 +210,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
-  if (creating) return <MobileNewSession specs={specs} draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
+  if (creating) return <MobileNewSession draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
   if (open) return <MobileSessionDetail s={open} sessions={sessions} specs={specs} onOpenSession={setOpenId} onBack={() => setOpenId(null)} />
   return (
     <div className="m-sesslist">

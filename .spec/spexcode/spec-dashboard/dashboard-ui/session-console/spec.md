@@ -45,11 +45,13 @@ the `＋` New Session button and a **Search** button, the click twin of the ⌘/
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
-node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the
-config-preset palette; the two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the
-server derives the node (the first `[[<id>]]`). Both menus only insert text; the New prompt has **no** `/`
-slash-command menu (presets only). A preset launched with **no node target** never assumes a node — the agent
-takes scope from the prompt, else asks first.
+node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
+caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
+contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.
+The two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the server derives the node
+(the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
+only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
+else asks first.
 **Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
@@ -74,8 +76,10 @@ zero-config project, and configured profiles add more names. The launcher pick i
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
-one `POST /api/sessions` — lives in the shared `launch.js`, one path for this tab and the phone's composer
-([[mobile-ui]]); this tab owns only the desktop chrome around it (menus, focus discipline, background fire).
+one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
+through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,
+including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
+background fire) and never expands a plugin body itself.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live

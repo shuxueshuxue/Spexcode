@@ -5,10 +5,35 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, fromRaw, launchScript, rawLifecycleStatus, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, type RawRecord } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+test('command presets compose once at the launch owner while unknown slash text passes through', () => {
+  const presets = [
+    { name: 'tidy', body: 'Tidy these targets:\n\n{{targets}}\n\nSee [[links]] for context.' },
+    { name: 'report', body: 'Report clearly.' },
+  ]
+  const specs = [{ id: 'alpha', path: '.spec/project/alpha/spec.md' }]
+
+  assert.equal(
+    composeCommandPrompt('/tidy [[alpha]] keep the edge cases', presets, specs),
+    'Tidy these targets:\n\n- [[alpha]] — project/alpha\n\nSee [[links]] for context.\n\nkeep the edge cases',
+  )
+  assert.equal(
+    composeCommandPrompt('/report', presets, specs, 'alpha'),
+    'Report clearly.\n\n- [[alpha]] — project/alpha',
+    'an explicit create node supplies targets when the raw invocation has no mention',
+  )
+  assert.match(
+    composeCommandPrompt('/tidy', presets, specs),
+    /No target was mentioned/,
+    'plugin-body links do not become implicit invocation targets',
+  )
+  assert.equal(composeCommandPrompt('/missing [[alpha]]', presets, specs), '/missing [[alpha]]')
+  assert.equal(composeCommandPrompt('plain prompt', presets, specs), 'plain prompt')
+})
 
 // @@@ birth registration — EXECUTE a generated launch.sh whose agent command is a stub, and prove the wrapper
 // writes the REAL agent pid to agent.pid before exec (the anchor of the 100ms hot death tier), AND that an

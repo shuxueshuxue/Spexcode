@@ -6,7 +6,7 @@ import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
-import { loadSpecs } from './specs.js'
+import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
 import { codexAppServerSock, codexThreadsInProgress, defaultHarness, defaultLauncher, defaultSessionMode, harnessById, harnessOps, pinnedLaunchCmd, procSnapshot, resolveLauncher, rvSock, rendezvousListening, SESSION_MODES, type Harness, type HarnessOps, type DispatchResult, type PaneProbe, type ProcTable, type SessionMode } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
@@ -999,6 +999,37 @@ export const slugify = (s: string | null) =>
 // node-agnostic.
 const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
+
+type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
+type CommandSpec = Pick<SpecLite, 'id' | 'path'>
+
+// @@@ command invocation - turn the raw `/<preset> [[node]]… free text` into the ONE launch payload.
+// This is deliberately server-side: dashboard, phone, CLI, direct API, and the in-process fallback all call
+// newSession, so no client gets its own command interpreter. The caller keeps the RAW prompt for session
+// identity/history; only the agent payload uses this expansion, preventing a plugin body's own [[links]] from
+// becoming the session node. An explicit create node fills an otherwise-empty target list.
+export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[], explicitNode?: string | null): string {
+  const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
+  if (!match) return raw
+  const preset = presets.find((p) => p.name === match[1])
+  if (!preset) return raw
+
+  const ids: string[] = []
+  const allMentions = new RegExp(MENTION.source, 'gu')
+  const free = match[2].replace(allMentions, (_, id: string) => { ids.push(id); return '' }).trim()
+  if (!ids.length && explicitNode) ids.push(explicitNode)
+  const targets = ids.length
+    ? ids.map((id) => {
+        const spec = specs.find((s) => s.id === id)
+        const path = spec?.path.replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
+        return path ? `- [[${id}]] — ${path}` : `- [[${id}]]`
+      }).join('\n')
+    : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
+  const body = preset.body.includes('{{targets}}')
+    ? preset.body.replace('{{targets}}', targets)
+    : `${preset.body}\n\n${targets}`
+  return free ? `${body}\n\n${free}` : body
+}
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
 // board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
@@ -1291,10 +1322,19 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const m = (mode ?? defaultSessionMode(mainRoot())) as SessionMode
   if (!SESSION_MODES.includes(m)) throw new Error(`unknown session mode '${mode}' (valid: ${SESSION_MODES.join(' | ')})`)
   const pinned = pinnedLaunchCmd(h, chosen, m)
-  // node identity + label: explicit --node wins, else the prompt's first `[[id]]` topic ref; a prompt with
-  // none is node-agnostic and labeled by its first few words.
-  const ref = node || mentionedNode(prompt)
-  const title = ref ? null : titleFromPrompt(prompt)
+  // Resolve a command preset at the launch owner, before any worktree exists. The RAW prompt remains the
+  // identity + originating-prompt source; only `launchPrompt` is expanded for the agent. This preserves the
+  // no-target rule even when the plugin body itself contains `[[links]]`.
+  const rawPrompt = prompt
+  const commandName = rawPrompt.match(/^\/(\S+)/)?.[1]
+  const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
+  let launchSpecs: Awaited<ReturnType<typeof loadSpecs>> | null = null
+  if (preset && (mentionedNode(rawPrompt) || node)) launchSpecs = await loadSpecs()
+  let launchPrompt = preset ? composeCommandPrompt(rawPrompt, [preset], launchSpecs ?? [], node) : rawPrompt
+  // node identity + label: explicit --node wins, else the RAW prompt's first `[[id]]` topic ref; expanded
+  // plugin prose is payload only and can never invent scope.
+  const ref = node || mentionedNode(rawPrompt)
+  const title = ref ? null : titleFromPrompt(rawPrompt)
   const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
@@ -1326,22 +1366,21 @@ export async function newSession(node: string | null, prompt: string, parent: st
     launchOwner: backendLaunchAuthority(),
   }
   writeRecord(rec)
-  writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
+  writePromptFile(id, rawPrompt)   // capture the ORIGINATING prompt (the human/manager's ask), not expanded plugin prose
   // materialize the harness-discovered artifacts INTO the worktree (CLAUDE.md/AGENTS.md contract block, .claude/.codex
   // shims, manifest to the global store) so the launched agent gets the contract + hooks the SAME way a
   // self-launched one does — by auto-discovery, not CLI injection. This is why the launch line below carries no
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
   // own memory load too. One delivery path for both launch modes ([[harness-delivery]]).
   bootstrapMaterialize(rec)
-  let launchPrompt = prompt
   if (ref) {
     // @@@ spec pointer - the ref (explicit --node, else the prompt's first [[id]] ref) named an EXISTING node.
     // Append ONE line pointing the agent at that node's spec.md as an ABSOLUTE path INSIDE its own worktree, so
     // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
     // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only
     // a real node gets a pointer; an unknown id resolves to nothing and we fail quiet (no pointer appended).
-    const spec = (await loadSpecs()).find((n) => n.id === ref)
-    if (spec) launchPrompt = `${prompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
+    const spec = (launchSpecs ?? await loadSpecs()).find((n) => n.id === ref)
+    if (spec) launchPrompt = `${launchPrompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
   }
   writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot

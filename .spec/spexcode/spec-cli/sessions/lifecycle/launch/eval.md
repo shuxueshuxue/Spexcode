@@ -59,6 +59,21 @@ scenarios:
       and no inferred `error` status is written (status stays agent-authored).
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/sessions.test.ts
+  - name: command-preset-has-one-launch-owner
+    tags: [backend-api]
+    description: >
+      In an isolated real project with a `surface: command` preset whose body contains its own `[[links]]`
+      and a launcher stub that records the agent argv, create a session through the real `POST /api/sessions`
+      using raw `/tidy [[session-console]] quick smoke test`. Read the resulting session through
+      `/api/sessions` and the prompt the launched stub receives. Then create raw `/tidy` with no target.
+    expected: |
+      The API accepts raw invocation text; the targeted session is bound to `session-console` and stores the
+      raw slash line as its originating prompt/preview, while the launcher receives the expanded preset body,
+      the resolved target path, free text, and the ordinary spec pointer. For targetless `/tidy`, the session
+      stays node-agnostic and its identity comes from raw `/tidy`; the plugin body's own `[[links]]` never
+      becomes scope. This same `newSession` seam serves dashboard, phone, CLI, direct API, and in-process launch.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
 ---
 
 # launch — yatsu

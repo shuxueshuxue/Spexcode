@@ -5,6 +5,16 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 
+function terminalTypography() {
+  const styles = getComputedStyle(document.documentElement)
+  const fontSize = Number.parseFloat(styles.getPropertyValue('--type-terminal'))
+  const fontFamily = styles.getPropertyValue('--mono').trim()
+  if (!Number.isFinite(fontSize) || !fontFamily) {
+    throw new Error('Terminal typography tokens are missing or invalid')
+  }
+  return { fontSize, fontFamily }
+}
+
 // heuristic: a select-caret line (`❯ <option>`) plus a hint line mentioning Esc + Enter/arrows distinguishes
 // an interactive menu (e.g. `/model`'s list) from the bare `❯` prompt, which carries no such hint line.
 function looksLikeMenu(term) {
@@ -79,7 +89,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     connectedWithSizeRef.current = false
     firstFrameCleanedRef.current = false
     const term = new Terminal({
-      fontSize: 11, fontFamily: 'Menlo, monospace',
+      ...terminalTypography(),
       cursorBlink: false, disableStdin: true, scrollback: 0,  // tmux owns history; xterm renders only the pane view
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,

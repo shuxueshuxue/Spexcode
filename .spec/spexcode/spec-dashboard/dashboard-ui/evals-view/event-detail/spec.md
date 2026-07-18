@@ -54,7 +54,9 @@ retire (stacking already gives the detail the full width), the rail simply stays
 composer: a QUIET BORDERED container whose BORDERLESS writing surface is already usable at idle —
 floored at two lines, never a one-line sliver you must click to expand (the box you land on is the box
 you write in) — auto-growing with the draft above that floor (capped so it never eats the rail), over a
-PERSISTENT compact action row carrying only real acts: the contextual ⏱ anchor stamp and the icon-only
+PERSISTENT compact action row carrying only real acts: the grammar's `@` / `[[` discoverability buttons
+(each types its exact trigger at the caret so the shared autocomplete opens — [[mentions]], no second
+menu), the contextual ⏱ anchor stamp and the icon-only
 Send pinned at the row's right edge. The `@`/`[[`/`/` menus open as overlays ABOVE the container, never
 inside it — so the write affordance is permanent, usable on sight, and never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.

@@ -100,6 +100,8 @@ export default {
   thread: {
     anchorNow: 'anchor',
     anchorTitle: 'anchor this comment to the current frame',
+    mentionActor: 'insert @ — mention a session or summon a worker',
+    mentionNode: 'insert [[ — link a spec node',
     resolved: 'resolved',
     resolvedBy: 'resolved by {by}',
     openRemark: 'open',

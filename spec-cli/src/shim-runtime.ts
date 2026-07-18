@@ -80,6 +80,34 @@ const spexShimRuntime = (cfg) => {
     return (r.err || "").trim() || fallback
   }
 
+  // the Stop dispatch with the gate's LOOP-TERMINATION bit. Claude's native Stop payload carries
+  // stop_hook_active=true when the stop happens inside a continuation a Stop-hook block itself forced, and
+  // the stop-gate's escape paths key on exactly that bit to guarantee the loop ends (auto-declare /
+  // downgrade-to-ask instead of a fresh block). A generative host has no native bit, so the runtime supplies
+  // it: false on a natural stop, true on the settle that follows a blocked one, reset by the first allowed
+  // stop. Without it every settle reads as a FIRST stop and a gate that can never pass (e.g. the commit gate
+  // on a 0-commit worktree) blocks forever — the measured one-shot wedge: the host disposes its session
+  // while the loop still runs, the next inject throws into the host ("extension ctx is stale"), the
+  // rejection is dropped, and the record wedges undeclared. On block, the host's inject re-enters the
+  // gate's reason as the continuation; an inject that cannot land any more (the disposed one-shot host) is
+  // caught LOUD on stderr — never thrown into the host, never silent — and the out-of-process one-shot
+  // recovery ([[harness-adapter]]) is the layer that survives the process. stopPending exposes whether the
+  // last Stop verdict was a block still awaiting its continuation's allow — the state a host's backstop
+  // binding (pi's agent_settled) keys on to consume exactly one pending blocked stop, never duplicating a
+  // naturally-allowed dispatch.
+  let stopBlocked = false
+  const stopPending = () => stopBlocked
+  const dispatchStop = async (inject, fallback) => {
+    const r = await dispatchEvent("Stop", { stop_hook_active: stopBlocked })
+    if (blocked(r)) {
+      stopBlocked = true
+      try { await inject(blockReason(r, fallback)) } catch (e) {
+        console.error("spexcode: a blocked stop's continuation could not be re-injected (host session already disposed — one-shot exit?): " + String(e))
+      }
+    } else stopBlocked = false
+    return r
+  }
+
   // normalize a host tool-input onto the claude accessor shape: mirror the host's file-path spelling onto
   // file_path (the key harness.sh and every claude-family handler read), dropping the host spelling.
   const toolInput = (input, fileAlias) => {
@@ -138,7 +166,7 @@ const spexShimRuntime = (cfg) => {
     } }
   }
 
-  return { dispatchEvent, blocked, blockReason, toolInput, serveRendezvous }
+  return { dispatchEvent, dispatchStop, stopPending, blocked, blockReason, toolInput, serveRendezvous }
 }
 // ---- end spexcode shared shim runtime ----`
 }

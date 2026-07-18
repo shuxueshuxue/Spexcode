@@ -32,8 +32,11 @@ own half plays two roles:
   normalized onto `file_path`. Because the payload is claude-family by construction, `harness.sh` needs
   no opencode parse arm — the default (claude) branch handles it, exactly like the `plugin` bundle form.
   The runtime's verdict is consumed through opencode's own channels: a PreToolUse block throws (opencode
-  aborts the tool call), a Stop block re-injects the gate's parsed reason as a follow-up prompt, closing
-  the stop-gate loop. Tool events from a non-root opencode session are stamped `agent_id` so the subagent
+  aborts the tool call), a Stop block re-injects the gate's parsed reason as a follow-up prompt via the
+  runtime's `dispatchStop` — the `stop_hook_active` loop-termination bit riding the payload so the gate's
+  escape paths end the block loop instead of re-blocking until the host dies ([[shim-runtime]]), a lost
+  inject reported loud with the one-shot recovery as the out-of-process cover. Tool events from a non-root
+  opencode session are stamped `agent_id` so the subagent
   discriminator keeps a parent's declared state safe, same as claude.
 - **rendezvous daemon** — the runtime's server binds SpexCode's per-session rendezvous socket (the path
   the launch env hands every rendezvous-owning harness) and answers the reply/repaint mini-protocol; the

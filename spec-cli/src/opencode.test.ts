@@ -182,6 +182,12 @@ test('block semantics: a PreToolUse block THROWS (aborts the tool call); a Stop 
   const p = t.prompts[0] as { path: { id: string }; body: { parts: { text: string }[] } }
   assert.equal(p.path.id, 'oc_root')
   assert.match(p.body.parts[0].text, /gate says no: Stop/)
+  // the loop-termination bit ([[shim-runtime]] dispatchStop): the idle AFTER a blocked one is the gate's own
+  // continuation settling, so its Stop payload carries stop_hook_active=true — the gate's escape paths key
+  // on it, which is what guarantees the block loop ends instead of re-blocking until the host dies.
+  assert.equal(t.payload('Stop').stop_hook_active, false, 'natural stop → bit false')
+  await t.hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'oc_root' } } })
+  assert.equal(t.payload('Stop').stop_hook_active, true, 'post-block settle → bit true')
   rmSync(t.dir, { recursive: true, force: true })
 })
 

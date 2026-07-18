@@ -113,6 +113,25 @@ scenarios:
       zero wakeups while the link is healthy, and a silent stream death still reopens within one dead
       window (the same census rig, with the backend's pings frozen, must show a replacement
       /api/graph/stream connection).
+  - name: theme-preset-switching
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/theme.js, spec-dashboard/src/styles.css, spec-dashboard/index.html]
+    description: >-
+      Real browser against a live backend, starting with no saved theme choice and a LIGHT system
+      preference. Open Settings: the theme section must list the base pair (light/dark) plus every
+      community preset (Minimal, Things, Tokyo Night, Catppuccin). Click each preset in turn and visit
+      the graph page under it; then reload under the last pick; then clear the saved choice and reload
+      under an emulated DARK system preference; finally plant a garbage localStorage value and reload.
+      Watch the console throughout.
+    expected: >-
+      Each preset click re-skins the WHOLE app at once (html[data-theme] flips, the body/graph
+      background is that preset's ported --paper value, the settings echo marks the pick) and persists
+      as one named code in localStorage spexcode.theme. After a reload the FIRST-PAINT inline script
+      has already applied the saved preset before the app module boots (no light-flash). An unset
+      choice resolves from prefers-color-scheme to the base light/dark only — never to a preset — and
+      an unknown saved value falls back to the system pick instead of a broken skin. No console
+      errors. Zero loss = the presets are pure palette rows over the one shared var set: switching,
+      persistence, and system fallback all work with no per-component theme logic.
 ---
 # dashboard-shell — measurement
 

@@ -47,27 +47,35 @@ after that reload surfaces as the normal error instead of a reload loop. The boa
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
 
-**One palette, two themes.** The whole app — the spec-node board, the react-flow canvas, AND the
+**One palette, many themes.** The whole app — the spec-node board, the react-flow canvas, AND the
 session console — draws its colours from one set of CSS custom properties (`--paper --panel --panel2
 --line --ink --ink2 --muted`, the accents `--blue/--green/--red/--yellow/--orange/--magenta/--cyan`,
 `--term-bg`). Because every rule reads through those vars, a
-theme is nothing but a second definition of them: `styles.css` keeps the solarized-light set as bare
-`:root`, and redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
-near-black palette — so flipping the one `data-theme` attribute on `<html>` re-skins board and console
-together, with no per-component theme logic. The embedded terminal stays dark in both themes (the
-Claude TUI is dark-designed), so `--term-bg` is a neutral near-black in light *and* dark. Even the
+theme is nothing but another definition of them: `styles.css` keeps the solarized-light set as bare
+`:root`, redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
+near-black palette, and adds one `:root[data-theme=<code>]` row per **community preset** — design
+tokens ported from MIT-licensed themes in the official Obsidian community catalog (Minimal, Things,
+Tokyo Night, Catppuccin Mocha; palette values only, never upstream CSS rules or per-component
+branches — the upstream license notices are preserved in `spec-dashboard/THEME-CREDITS.md`). Flipping
+the one `data-theme` attribute on `<html>` re-skins board and console together, with no per-component
+theme logic. The theme identity stays ONE flat code — no family × light/dark axes. The embedded
+terminal stays dark in every theme (the Claude TUI is dark-designed), so `--term-bg` is a neutral
+near-black under light palettes and each dark preset's own deepest surface. Even the
 **scrollbars** read through the palette: `styles.css` themes them globally (a thin, rounded thumb —
 `--line` at rest, `--muted` on hover, over a transparent track) via `::-webkit-scrollbar*` for Blink/WebKit
-and `scrollbar-color`/`scrollbar-width` for Firefox, so every scrollable pane matches the app in both
-themes with no per-surface rule and no raw-OS default. The terminal is styled only at its edge; xterm keeps
+and `scrollbar-color`/`scrollbar-width` for Firefox, so every scrollable pane matches the app in every
+theme with no per-surface rule and no raw-OS default. The terminal is styled only at its edge; xterm keeps
 its viewport geometry so scrollback and TUI wheel paths stay truthful.
 
 `theme.js` owns the pick: `getTheme()` returns an explicit saved choice (`localStorage
-spexcode.theme`) else the system preference (`prefers-color-scheme`), and `applyTheme(t)` sets the
-`data-theme` attribute and persists — the same detect-then-defer-to-the-human shape as [[settings]]'s
-language pick. To avoid a light-flash before the module boots, `index.html` runs a tiny inline script
-in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
-page carries the live toggle.
+spexcode.theme`, validated against the THEMES list — an unknown value falls through) else the system
+preference (`prefers-color-scheme`), and `applyTheme(t)` sets the `data-theme` attribute and persists —
+the same detect-then-defer-to-the-human shape as [[settings]]'s language pick. The system axis only
+ever resolves to the base light/dark pair; a community preset is always an explicit choice. To avoid a
+light-flash before the module boots, `index.html` runs a tiny inline script in `<head>` that applies
+the same choice to `<html data-theme>` before first paint — its inline code list mirrors THEMES and
+must move with it. The [[settings]] page carries the live picker; preset labels are proper nouns and
+deliberately untranslated.
 
 **Fail-loud boot.** A board that never arrives (backend down, proxy dead) shows an **error + retry panel**,
 never an eternal spinner — the pre-first-board window is the only reader; once a board has landed, a failed

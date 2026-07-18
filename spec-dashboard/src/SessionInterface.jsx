@@ -805,7 +805,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {active === 'new' && (
             <div className="si-new-center">
               <LaunchHero />
-              <div className="si-ask">{t('session.ask')}</div>
+              {/* the ask line was removed by human direction, but its slot stays — the wordmark keeps its
+                  breathing room above the input (an equal-height spacer, not a collapsed gap) */}
+              <div className="si-ask-gap" aria-hidden="true" />
               <div
                 className={dragTarget === 'new' ? 'si-inputwrap dragover' : 'si-inputwrap'}
                 onDragOver={(e) => onDragOverFiles(e, 'new')}

@@ -377,7 +377,6 @@ export default {
     issuesReplyPlaceholder: '回复……',
     issuesConcernPlaceholder: '关切 —— 一行概述',
     issuesBodyPlaceholder: '详情（可选）',
-    ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
     menuCommands: '命令',
     menuPresets: '命令预设',

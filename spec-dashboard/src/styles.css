@@ -1406,7 +1406,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    scales the whole grid (clamp keeps it inside narrow panes), gradient inked from the theme palette. */
 .si-hero { margin: 0 0 2px; font-family: var(--mono); font-size: clamp(5.5px, 1.15vw, 9.5px); line-height: 1.06; white-space: pre; user-select: none;
   background: linear-gradient(180deg, var(--blue), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.si-ask { font-size: 15px; color: var(--ink2); }
+.si-ask-gap { height: 21px; } /* the retired ask line's slot — keeps the hero↔input spacing it occupied */
 .si-inputwrap {
   position: relative;
   width: 100%; display: flex; border: 1px solid var(--blue); border-radius: 6px;

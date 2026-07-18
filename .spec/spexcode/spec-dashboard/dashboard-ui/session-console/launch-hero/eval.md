@@ -10,7 +10,8 @@ scenarios:
       The splash is a block-letter ASCII "SPEXCODE" wordmark (ANSI-Shadow style █/╔╝ characters) rendered
       as text in the app's mono font — not an SVG or image — with a vertical blue→magenta gradient taken
       from the active theme's palette. Switching the theme re-inks the wordmark (light themes keep it
-      legible on their paper). The "What would you like to do?" ask line sits beneath it, and the rows of
+      legible on their paper). No caption line renders beneath it, but the spacing between the wordmark
+      and the input keeps the retired ask line's slot (no collapsed gap), and the rows of
       the wordmark stay a rigidly aligned character grid at any window width.
     code: spec-dashboard/src/SessionInterface.jsx
 ---

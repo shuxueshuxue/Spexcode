@@ -2,7 +2,7 @@
 title: review-commands
 status: active
 hue: 200
-desc: The review track's typed command surface — '/' at the start of the eval-detail composer's line opens a command menu. Built-in verbs (/ok) share ONE closure and when-gate with their header button (the sessionCommands one-runner pattern); `surface: review` plugin presets (/refuse) prefill the composer, and the send stays an ordinary remark.
+desc: The review track's typed command surface — '/' at the start of the eval-detail composer's line opens a command menu. Built-in verbs (/ok) hold their when-gate in ONE registry (the sessionCommands pattern) and are the sole dashboard door to their act; `surface: review` plugin presets (/refuse) prefill the composer, and the send stays an ordinary remark.
 code:
   - spec-dashboard/src/reviewCommands.js
 related:
@@ -19,9 +19,10 @@ related:
 ## raw source
 
 The review act is fastest when the hands never leave the composer: the human watches a reading, and the
-judgment — "agreed" or "disputed" — is a typed `/` command in the same box the remark goes in. The shipped
-human-ok BUTTON was a scope cut; the typed trigger is the design. No new verbs, no new writes: the
-commands are doors onto acts the pane already has.
+judgment — "agreed" or "disputed" — is a typed `/` command in the same box the remark goes in. The
+interim standalone human-ok button was retired for exactly this: the typed trigger is the design, and it
+is the ONE dashboard door. No new verbs, no new writes: the commands are doors onto acts the pane
+already has.
 
 ## expanded spec
 
@@ -32,12 +33,13 @@ below is the natural flow. Matching, row markup, and keys (↑↓ · ⏎/Tab · 
 the shared `matchSlash`/`SlashMenu` in [[mentions]]'s module, never a fork. The menu is armed only where
 the home passes a command list; the issue composers pass none and are untouched.
 
-**Kind 1 — built-in review verbs, one closure with their button.** The registry (`reviewCommands.js`,
+**Kind 1 — built-in review verbs, one registry, one door.** The registry (`reviewCommands.js`,
 the [[session-console]] `sessionCommands.js` precedent) holds each verb's static identity + `when` gate;
-the host binds the runner per render, and the header BUTTON and the typed command are the SAME entry —
-they can never drift. First member: **/ok** fires the exact [[human-ok]] runner the header affordance
-uses, under the exact gate (the viewed reading is the scenario's latest effective one and not yet ok'd);
-anywhere the button is absent, typing /ok offers nothing.
+the host binds the runner per render, and the typed command is the ONE dashboard entry to the act — the
+gate lives in the registry alone, never re-judged at a call site. First member: **/ok** fires the exact
+[[human-ok]] runner under the registry's gate (the viewed reading is the scenario's latest effective one
+and not yet ok'd — the header shows only the settled ok'd mark, no button); outside the gate, typing /ok
+offers nothing.
 
 **Kind 2 — preset prose from the `review` plugin surface.** `surface: review` is one more value in
 [[surface]]'s field-driven enum, gathered by the same recursive loadSurface and served at

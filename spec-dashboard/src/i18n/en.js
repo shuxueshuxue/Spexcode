@@ -90,13 +90,11 @@ export default {
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    ok: 'ok',
-    okTitle: 'human-ok this reading — you reviewed it and agree with its verdict. Binds to THIS latest reading only; monotonic (no un-ok) — a newer reading arrives unblessed.',
     okd: 'human-ok',
     okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     menuReview: 'review commands',
     cmd: {
-      okDesc: 'sign off this reading — the same act as the ☑ ok button (one runner, one gate)',
+      okDesc: 'sign off this reading — you reviewed it and agree with its verdict; binds to THIS latest reading only, monotonic (no un-ok)',
     },
   },
   thread: {
@@ -382,7 +380,6 @@ export default {
     issuesActing: 'working…',
     issuesPromote: 'Promote',
     issuesPromoteTitle: 'promote this local issue to the forge — create the real forge issue first, then close the local thread with the permalink',
-    issuesMentionHint: '@session to summon · [[node]] to link',
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',
     issuesBodyPlaceholder: 'details (optional)',

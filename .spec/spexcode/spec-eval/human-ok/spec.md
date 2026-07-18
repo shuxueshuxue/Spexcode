@@ -2,7 +2,7 @@
 title: human-ok
 status: active
 hue: 140
-desc: The human sign-off on an eval reading — a monotonic, append-only 'human-ok' event binding ONE immutable reading (the scenario's latest at ok-time); the evals feed default-hides a fresh, ok'd scenario until a newer reading or live staleness releases it. CLI `spex eval ok` and the dashboard affordances share one server write; on the trunk checkout it commits straight to trunk under the local-issues discipline.
+desc: The human sign-off on an eval reading — a monotonic, append-only 'human-ok' event binding ONE immutable reading (the scenario's latest at ok-time); the evals feed default-hides a fresh, ok'd scenario until a newer reading or live staleness releases it. CLI `spex eval ok` and the dashboard's typed /ok share one server write; on the trunk checkout it commits straight to trunk under the local-issues discipline.
 code:
   - spec-eval/src/humanok.ts#fileHumanOk
 related:
@@ -52,11 +52,12 @@ the dashboard's shared stroke check inside a quiet green certification ring — 
 Unicode checkbox — and the reveal chip uses the same glyph. Feed rows are STATUS-ONLY: they never offer
 the write before sign-off, because human-ok certifies that the reading's evidence was actually reviewed.
 
-**One write, CLI parity (LAW L).** The verb is `spex eval ok <node> --scenario <s>`; the dashboard's
-event-detail header affordance (offered only while the viewed reading IS the scenario's latest; older A/B
-poles are history) and its typed `/ok` twin call the same runner and server route, whose identity is
-**server-derived `human`**, never the request body. The header is the one visible write door; `/ok` is its
-keyboard grammar, not a second button. A **governed session is refused the CLI verb**:
+**One write, CLI parity (LAW L).** The verb is `spex eval ok <node> --scenario <s>`; the dashboard's ONE
+door is the event-detail composer's typed **`/ok`** ([[review-commands]]) — offered only while the viewed
+reading IS the scenario's latest and not yet ok'd (older A/B poles are history) — calling the same runner
+and server route, whose identity is **server-derived `human`**, never the request body. The header carries
+no write button, only the settled ok'd mark once the sign-off lands: the review track's typed grammar is
+the sign-off's whole dashboard surface. A **governed session is refused the CLI verb**:
 an agent blessing a reading would hide it from exactly the review the ok certifies — the no-self-resolve
 analogue; an agent's judgment on a reading is a remark. No review-track dropdown or queue here — a
 separate future lane.

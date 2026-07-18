@@ -5,17 +5,17 @@ scenarios:
     code: [spec-dashboard/src/EvalsFeed.jsx]
     description: >-
       Through the real product — a running backend and a real browser on the Evals page: pick a
-      scenario whose latest reading is FRESH and un-ok'd. Confirm its feed row offers no ok action, then
-      click the detail header's ok affordance (offered only on the viewed latest reading) and watch the
-      feed. Then open the show-all chip. Then file a NEWER reading for the same scenario through
-      `spex eval add` and reload.
+      scenario whose latest reading is FRESH and un-ok'd. Confirm its feed row offers no ok action and
+      the detail header carries no ok write button, then sign the reading off through the detail
+      composer's typed /ok (the one dashboard door) and watch the feed. Then open the show-all chip.
+      Then file a NEWER reading for the same scenario through `spex eval add` and reload.
     expected: >-
-      The feed row is status-only before sign-off: no ok button appears beside the same detail header
-      action. Clicking that ONE visible action makes the ok'd row leave the default feed (it is fresh AND
-      human-ok'd — reviewed loss), and the head grows
+      The feed row is status-only before sign-off, and the detail header carries NO ok button — the
+      composer's typed /ok is the one dashboard write door. Accepting /ok makes the ok'd row leave the
+      default feed (it is fresh AND human-ok'd — reviewed loss), and the head grows
       a "N ok'd" chip whose toggle reveals the hidden row wearing its settled green certification ring:
       a real shared stroke SVG check, never a Unicode checkbox. The reveal chip uses that same SVG. The
-      detail header shows "human-ok" with the signer instead of the ok button. The moment a newer reading
+      detail header shows the settled "human-ok" mark with the signer. The moment a newer reading
       lands, the scenario reappears in the default feed unblessed — the ok stayed bound to the older
       reading and transferred to nothing.
   - name: ok-durable-and-monotonic

@@ -238,6 +238,31 @@ scenarios:
       (checkVisibility=false) so it never pushes the clip/gallery off the stage; clicking the header opens it
       (▾ + the pretty-printed block). A data-ONLY reading renders the block OPEN (it IS the evidence). Only
       the `data` kind folds — a transcript is unaffected — and the fold is native HTML, no JS state.
+  - name: composer-shared-shape
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/EventDetail.jsx]
+    description: >-
+      In a real browser, open #/evals, select a video reading and unfold the remark rail; then open
+      #/issues and select an open local issue. On BOTH composers read the rendered DOM and computed
+      styles: the `.fv-compose` container's border/radius, the textarea's computed border-style and idle
+      height, the action row's idle presence and contents (every control's accessible name), whether any
+      always-visible hint text renders, and — on the eval detail — whether the header band carries any
+      human-ok WRITE button. Type `@` and `/` and read where the menus open relative to the composer.
+      Repeat both pages at a NARROW desktop width (~780px — under the 900px stacked-workspace
+      breakpoint, above the phone app's 640px takeover) and check for overlap or clipped text around
+      the composer.
+    expected: >-
+      ONE shared composer shape on both homes: a quiet bordered rounded container holding a BORDERLESS
+      writing surface (computed border-style none) floored at TWO lines idle (~40px, never a one-line
+      sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — ⏱ anchor
+      on the eval rail's clip composer, Promote/Close issue on an open issue — and an ICON-ONLY Send
+      (an SVG glyph with an aria-label/tooltip, no bare unlabeled icon) pinned at the row's right edge;
+      none of the reference app's tools (attach, web, model pickers …) appear. NO always-visible hint
+      line ('@session to summon · [[node]] to link' is gone) — while the `@`/`[[` autocomplete and the
+      `/` command menu still open, as overlays ABOVE the composer container, never inside or under it.
+      The eval header carries NO standalone human-ok button — the typed /ok is the only dashboard door,
+      and an ok'd reading shows only the settled ☑ mark. At the narrow width both composers keep the
+      same shape with no overlapping controls and no clipped text. No page errors.
 ---
 # event-detail loss
 

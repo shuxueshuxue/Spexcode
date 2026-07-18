@@ -89,13 +89,11 @@ export default {
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    ok: '签核',
-    okTitle: '人工签核这条读数 — 你已复核并认可其判定。只绑定当前这条最新读数；单调（无撤销）— 新读数落地时不继承签核。',
     okd: '已签核',
     okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
     menuReview: '评审命令',
     cmd: {
-      okDesc: '签核这条读数 — 与 ☑ 签核按钮同一个动作（同一 runner、同一门槛）',
+      okDesc: '签核这条读数 — 你已复核并认可其判定；只绑定当前最新读数，单调（无撤销）',
     },
   },
   thread: {
@@ -374,7 +372,6 @@ export default {
     issuesActing: '处理中……',
     issuesPromote: '升级',
     issuesPromoteTitle: '升级到 forge —— 先创建真实 forge issue，再用永久链接关闭本地线程',
-    issuesMentionHint: '@会话 召唤 · [[节点]] 关联',
     issuesReplyPlaceholder: '回复……',
     issuesConcernPlaceholder: '关切 —— 一行概述',
     issuesBodyPlaceholder: '详情（可选）',

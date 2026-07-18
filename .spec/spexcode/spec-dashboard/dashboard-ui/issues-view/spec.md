@@ -82,8 +82,11 @@ straight to the trunk.
   hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
   hides itself when only one store exists. An issue's ROW is one compact line that leads with the issue
-  itself, never its plumbing: a **status DOT** (the status vocabulary as color — a boxed "open" on every row
-  was noise), then the concern; the trailing edge carries the quiet meta — a compact reply-count pill and a
+  itself, never its plumbing: a **status mark** (the status vocabulary as icon + color — a boxed "open" on every row
+  was noise). Open work uses GitHub Primer's original 16px `issue-opened` Octicon geometry (ring + centre)
+  in the theme's semantic open green, not an invented solid dot; the other lifecycle states retain their
+  compact status dots. Then
+  comes the concern; the trailing edge carries the quiet meta — a compact reply-count pill and a
   **store mini-tag** (borderless, muted, and rendered only while stores are actually mixed — a single-store
   list carries no tags, mirroring the filter's own self-hiding). **The store is metadata, never identity: it
   never leads a row and never sits on a title** (the human called the leading boxed chip). The DETAIL opens

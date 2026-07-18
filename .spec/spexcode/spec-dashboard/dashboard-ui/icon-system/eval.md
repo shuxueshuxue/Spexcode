@@ -8,10 +8,12 @@ scenarios:
       New pill (.si-pill.new) and search pill draw the plus/magnifier from the same set; a modal's close
       control (.legend-close) is an × icon with the close label; the annotator's A/B walkers (.an-ab-nav)
       are chevron icons and its play control (.an-play) a play/pause icon; the side rail still shows its
-      five page glyphs via <Icon>.
+      five page glyphs via <Icon>. The Issues page's open rows use that same registry for Primer's original
+      filled 16px `issue-opened` Octicon, not a component-local SVG or CSS dot.
     expected: >
       Screenshots show each converted control rendering its SVG glyph (no unicode text ＋ × ⏸ ▶ ‹ › in
-      the buttons), and DOM reads confirm every icon-only button carries both title and aria-label.
+      the buttons), and DOM reads confirm every icon-only button carries both title and aria-label. Open
+      issue rows render the shared registry's two-path 16px `issue-opened` fill geometry in semantic green.
     tags: [frontend-e2e]
     code: [spec-dashboard/src/icons.jsx]
   - name: harness-product-marks

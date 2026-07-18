@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
@@ -61,9 +61,62 @@ test('pi extension: dispatch exit 2 bridges to { block, reason } on tool_call an
   factory(api)
   const verdict = await handlers.get('tool_call')!({ toolName: 'bash', input: { command: 'ls' } }, ctx) as { block: boolean; reason: string }
   assert.deepEqual(verdict, { block: true, reason: 'not yet — commit first' }, 'exit 2 + stderr → pi block contract')
-  await handlers.get('agent_settled')!({}, ctx)
+  await handlers.get('agent_end')!({}, ctx)
   assert.equal(sent.length, 1, 'the stop gate speaks back as a user message')
   assert.equal(sent[0].text, 'not yet — commit first')
+})
+
+// the one-shot wedge regression (session c20abe54): without the loop-termination bit every settle read as a
+// FIRST stop, a gate that can never pass (commit gate on a 0-commit worktree) blocked forever, and pi's
+// print-mode disposed the session mid-loop — the next inject threw "extension ctx is stale" into the host
+// and the record wedged `active` (rc=97 after both recovery turns). The bit is what lets the gate's own
+// continuation paths terminate; the throw-through is what dropped the rejection.
+test('pi extension: dual Stop binding never duplicates — allowed agent_end = ONE gate entry; settle consumes one pending blocked stop', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
+  const log = join(dir, 'stops.ndjson')
+  const gate = join(dir, 'block-on')
+  writeFileSync(gate, '')
+  // production-shaped stub: block only an UNFLAGGED Stop (the real gate's continuation paths always allow)
+  const { factory } = await loadExtension(dir, [
+    `[ "$2" = Stop ] || exit 0`,
+    `cat > ${dir}/last.json; cat ${dir}/last.json >> ${log}; echo >> ${log}`,
+    `grep -q '"stop_hook_active":true' ${dir}/last.json && exit 0`,
+    `if [ -f ${gate} ]; then echo "declare it" >&2; exit 2; fi`,
+    `exit 0`,
+  ].join('\n'))
+  const { api, handlers, sent, ctx } = stubPi()
+  factory(api)
+  assert.ok(handlers.get('agent_end') && handlers.get('agent_settled'), 'Stop binds agent_end + the settle backstop')
+  const entries = () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l).stop_hook_active)
+  // (2) a blocked agent_end leaves pending state; settle consumes it ONCE (flagged), and only once
+  await handlers.get('agent_end')!({}, ctx)       // blocked (bit false on the wire) → pending armed
+  await handlers.get('agent_settled')!({}, ctx)   // consume: flagged dispatch, gate allows → pending cleared
+  await handlers.get('agent_settled')!({}, ctx)   // nothing pending → NO dispatch
+  assert.deepEqual(entries(), [false, true], 'blocked end + settle = exactly two entries, the consume flagged; a second settle adds none')
+  assert.equal(sent.length, 1, 'only the blocked stop injected its reason')
+  // (1) a naturally allowed agent_end produces exactly ONE gate entry total — settle stays silent
+  unlinkSync(gate)
+  await handlers.get('agent_end')!({}, ctx)       // allowed → no pending
+  await handlers.get('agent_settled')!({}, ctx)   // nothing to consume
+  assert.deepEqual(entries(), [false, true, false], 'allowed end + settle = one new entry only — no duplicate Stop semantics')
+})
+
+test('pi extension: an inject the host can no longer take (disposed ctx) is caught loud, never thrown into the host', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
+  const { factory } = await loadExtension(dir, `echo "declare it" >&2\nexit 2`)
+  const handlers = new Map<string, Handler>()
+  const api = {
+    on: (e: string, h: Handler) => handlers.set(e, h),
+    sendUserMessage: () => { throw new Error('This extension ctx is stale after session replacement or reload.') },
+  }
+  factory(api)
+  const errs: string[] = []
+  const orig = console.error
+  console.error = (m: unknown) => { errs.push(String(m)) }
+  try {
+    await assert.doesNotReject(() => handlers.get('agent_end')!({}, { sessionManager: { getSessionId: () => 'rec-pi-x' } }) as Promise<unknown>)
+  } finally { console.error = orig }
+  assert.ok(errs.some((m) => m.includes('could not be re-injected')), 'the dropped rejection is reported loud, not silent')
 })
 
 test('pi extension: a stdout decision:block JSON (the stop-gate shape — exit 2, stderr EMPTY) carries its reason through', async () => {
@@ -78,7 +131,7 @@ test('pi extension: a stdout decision:block JSON (the stop-gate shape — exit 2
   const expected = 'undeclared stop — declare it: run `spex session <choice>`.\nSee "help session".'
   const verdict = await handlers.get('tool_call')!({ toolName: 'bash', input: { command: 'ls' } }, ctx) as { block: boolean; reason: string }
   assert.deepEqual(verdict, { block: true, reason: expected }, 'PreToolUse block reads the stdout JSON reason, unescaped')
-  await handlers.get('agent_settled')!({}, ctx)
+  await handlers.get('agent_end')!({}, ctx)
   assert.equal(sent.length, 1, 'the Stop rejection is injected, never silently dropped')
   assert.equal(sent[0].text, expected)
 })

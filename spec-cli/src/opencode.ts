@@ -120,9 +120,10 @@ export const SpexcodePlugin = async (ctx) => {
         const sid = p.sessionID || ""
         if (sid && rootSession && sid !== rootSession) return   // a subagent going idle is not this worker's Stop
         adopt(sid)
-        const r = await rt.dispatchEvent("Stop", {})
-        // the stop-gate loop closes in-process: the gate's parsed reason re-enters as a follow-up prompt.
-        if (rt.blocked(r)) { try { await injectPrompt(rt.blockReason(r, "blocked by a spexcode hook")) } catch { /* gate reason lost; next idle re-fires it */ } }
+        // the stop-gate loop closes in-process via the runtime's dispatchStop: stop_hook_active rides the
+        // payload (the gate's loop-termination bit) and the gate's parsed reason re-enters as a follow-up
+        // prompt; an inject the host can no longer take is reported loud, and the one-shot recovery covers it.
+        await rt.dispatchStop((reason) => injectPrompt(reason), "blocked by a spexcode hook")
       }
     },
     "chat.message": async (input, output) => {

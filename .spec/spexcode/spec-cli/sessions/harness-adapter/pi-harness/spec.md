@@ -30,7 +30,8 @@ socket server are the runtime's, one source shared with every generative shim. W
 is pi's OWN half, chosen so the rest of the product needs NO pi branch:
 
 - **The event mapping.** pi's five lifecycle events onto the claude vocabulary — `session_start`→SessionStart,
-  `input`→UserPromptSubmit, `tool_call`→PreToolUse, `tool_result`→PostToolUse, `agent_settled`→Stop — with
+  `input`→UserPromptSubmit, `tool_call`→PreToolUse, `tool_result`→PostToolUse, `agent_end`→Stop (with
+  `agent_settled` as the consume-once backstop for a pending blocked Stop, never a duplicate) — with
   `tool_name` capitalized to Claude's names and pi's `path` normalized onto `file_path`. Because every payload
   arrives claude-shaped, `hooks/harness.sh` needs no pi parse arm — `pi` joins the claude family through the
   default case, exactly like `plugin`. pi has no idle/attention or failed-stop event, so
@@ -38,10 +39,19 @@ is pi's OWN half, chosen so the rest of the product needs NO pi branch:
 - **The verdict consumers.** The runtime decides blocked (exit 2) and extracts the reason (stdout
   decision:block JSON, stderr for a bare exit-2 handler — [[shim-runtime]]'s one contract); pi consumes that
   verdict through its own two channels. `tool_call` blocks via pi's typed return (`{ block: true, reason }`).
-  For Stop there is no blocking return — `agent_settled` fires after the run is already settled — so the
-  gate's reason is instead **sent back in as a user message** (`pi.sendUserMessage`), never silently dropped,
-  which triggers a new turn carrying the gate's instruction: pi's equivalent of claude's Stop-hook
-  continuation. The gate exits 0 once satisfied, so the loop terminates the same way claude's does.
+  For Stop there is no blocking return, so Stop rides the runtime's `dispatchStop` from **`agent_end`** (the
+  normal dispatch: pi awaits agent_end listeners inside the run loop and a message they queue drains as the
+  SAME awaited prompt's continuation — so a block's teach re-enters before a one-shot host disposes, never
+  as the orphaned settle-time prompt whose late inject threw "extension ctx is stale", the reproduced
+  wedge), with **`agent_settled`** as the CONSUME-ONCE backstop: a naturally allowed agent_end leaves no
+  pending state and settle dispatches nothing (exactly one gate entry per stop); only a blocked agent_end
+  arms the pending bit (`stopPending`), and settle — which fires exactly once per prompt, after every
+  drain — consumes it with one `stop_hook_active`-flagged dispatch whose escape paths always allow (a
+  subprocess write, no inject), so a one-shot process exits DECLARED even when the drained continuation's
+  own agent_end never re-reaches the extension (the measured dispatched-run gap). On block the gate's
+  reason is **sent back in as a user message** (awaited `pi.sendUserMessage`, deliverAs steer) — pi's
+  equivalent of claude's Stop-hook continuation — and a genuinely uninjectable host is reported loud by
+  the runtime, with the one-shot recovery as the out-of-process cover.
 - **The rendezvous inject.** sessions.ts already exports `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>` to every
   `ownsRendezvous` launch; the runtime's server binds it and pi supplies only the inject —
   `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. claude's delivery
@@ -86,6 +96,16 @@ launch AND every injected turn: each turn is a FRESH pi process that must load t
 zero prompts, so the one-run trust defence recurs per process, not per session. The extension itself is
 mode-blind — a headless launch omits the rendezvous env (rvEnv's headless bypass), the runtime's rendezvous
 server simply never binds, and the dispatch events still fire — so hooks, stop-gate, and attribution are
-unchanged. Live-verified (pi 0.80.10, 2026-07-18): the project extension loads under `-p` and fires
-session_start/input/agent_settled; `-p --session-id` creates the pinned session; `-p --session` recalls
-first-turn content (the same conversation); a vanished session id exits non-zero with the error named.
+unchanged. One print-mode fact shapes the Stop path (REPRODUCED through a real dispatched worker, pi
+0.80.10: record wedged `active`, rc=97 after both recovery turns, "This extension ctx is stale after
+session replacement or reload" on every inject past the first): `pi -p` disposes its session once the
+initial prompt resolves, so any gate continuation not part of that awaited prompt is an orphan that loses
+its inject — which is what the Stop binding pair closes: agent_end drains the teach inside the awaited
+prompt, and the settle backstop consumes a still-pending block with one flagged dispatch (a subprocess
+write, no inject) so disposal only ever happens after the record is declared; a lost inject is still
+reported loud instead of thrown into the host, and the shared one-shot undeclared-exit recovery remains
+the out-of-process cover.
+Live-verified (pi 0.80.10, 2026-07-18): the project extension loads under `-p` and fires
+session_start/input/agent_end/agent_settled; `-p --session-id` creates the pinned session; `-p --session`
+recalls first-turn content (the same conversation); a vanished session id exits non-zero with the error
+named.

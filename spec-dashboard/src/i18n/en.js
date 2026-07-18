@@ -365,7 +365,7 @@ export default {
     issuesLoading: 'loading issues…',
     issuesFocusNode: 'focus this node on the graph',
     issuesReplies: ({ n }) => `${n} ${n === 1 ? 'reply' : 'replies'}`,
-    issuesOpenOnForge: 'open on forge ↗',
+    issuesOpenOnStore: 'Open on {store} ↗',
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
     issuesThreadsTitle: 'threads',
     issuesStoreAll: 'all',

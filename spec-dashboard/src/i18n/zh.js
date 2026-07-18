@@ -357,7 +357,7 @@ export default {
     issuesLoading: '正在加载 issues……',
     issuesFocusNode: '在看板上聚焦此节点',
     issuesReplies: ({ n }) => `${n} 条回复`,
-    issuesOpenOnForge: '在 forge 上打开 ↗',
+    issuesOpenOnStore: '在 {store} 上打开 ↗',
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
     issuesThreadsTitle: '讨论帖',
     issuesStoreAll: '全部',

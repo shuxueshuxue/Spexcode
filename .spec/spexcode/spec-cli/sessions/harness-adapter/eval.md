@@ -185,6 +185,24 @@ scenarios:
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
       reading session.json + the commit trailer.
     code: spec-cli/src/harness.ts
+  - name: codex-launch-ignores-future-dated-rollout-dirs
+    tags: [backend-api]
+    code: spec-cli/src/harness.ts
+    test:
+      path: spec-cli/src/harness.test.ts
+      name: codexRolloutExists is immune to future-dated junk day-dirs above the real rollout
+    description: >-
+      Through the REAL governed Codex launch path on a running backend, temporarily seed three future-dated
+      day directories under the active CODEX_HOME sessions tree so they sort above every real rollout day,
+      then dispatch a Codex worker with `spex session new`. Observe the public session record, its owned
+      `harness_session_id`, liveness, and visible TUI; remove the seeded directories and close the throwaway
+      session after the observation.
+    expected: >-
+      The worker advances from starting to online with a nonempty owned Codex thread id, and the visible TUI
+      attaches to that same thread. The launch never reports `persisted no rollout within 20s`: rollout
+      discovery walks the date tree newest-first but exhaustively, so future-dated junk cannot mask the real
+      current-day rollout. No duplicate prompt/thread retry is created, and cleanup leaves no seeded directory,
+      session record, tmux window, worktree, or branch behind.
   - name: headless-lifecycle-claude
     tags: [backend-api]
     code: spec-cli/src/harness.ts

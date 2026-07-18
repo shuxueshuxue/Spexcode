@@ -11,6 +11,8 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
   - spec-dashboard/src/SessionEval.jsx
+  - spec-dashboard/src/session.js
+  - spec-dashboard/src/session.test.mjs
 ---
 # session-eval
 
@@ -66,12 +68,19 @@ does, and a count chip still narrows the list to the session's own alone (while 
 divider withdraws with its rows). The rows are the DECLARED scenarios' current score, the same
 latest-per-scenario computation every eval face reads (each row carrying its ✓/✗, muted when stale) — a
 retired scenario's residual reading contributes no row. The tab is **addressable**
-(`#/sessions/<id>/eval[/<node>/<scenario>]`, [[address-routing]]'s `session-eval` address): the sub-route is
-a one-shot entrance that flips the console to this tab and, given a node + scenario, selects that reading's
-row and opens its detail — unfolding the inherited baseline when the target lives there, and falling back to
-the default first row when the name matches nothing. This is what a CI/MR note links so a reviewer lands on
-the live, remarkable, worktree-rooted reading of a still-open branch — merging first is not required, and
-the inert `?format=html` export is not the link (it can't be commented on). A gates strip (the same
+(`#/sessions/<id>/eval[/<node>/<scenario>]`, [[address-routing]]'s `session-eval` address): a **persistent,
+refreshable** sub-route — not a one-shot entrance — that flips the console to this tab and, given a node +
+scenario, selects that reading's row and opens its detail, unfolding the inherited baseline when the target
+lives there and degrading to the default selection when the name matches nothing. The **bare `/eval` form**
+(no node/scenario) defaults to THIS session's own reading — a failing one first (the loss a reviewer most
+needs to see), then any in-session reading — never the blind-spot row that merely LEADS the visual order;
+only a session with no reading of its own falls back to the first visible row. The sub-route stays in the
+hash while its session tab shows and survives a reload, so a CI/MR note lands a reviewer on the live,
+remarkable, worktree-rooted reading of a still-open branch and a refresh reopens the same one — merging
+first is not required, and the inert `?format=html` export is not the link (it can't be commented on). The
+deep-link selection must also not be clobbered by the console's async board-load: the seed applies only once
+its own session is the active tab, so a session settling in from the loading placeholder can never reset the
+tab back to the terminal underneath it. A gates strip (the same
 `reviewPayload` numbers `spex session review` prints — lint memoized on the checkout fingerprint,
 [[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
 measuring the real product, not by a language-specific checker. When the session has no worktree/diff the

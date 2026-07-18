@@ -11,7 +11,7 @@ import SpecSearch from './SpecSearch.jsx'
 import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
-import { useRoute, navigate } from './route.js'
+import { useRoute, navigate, sessionTabParam } from './route.js'
 import { navigateAddress } from './address.js'
 import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
@@ -150,18 +150,31 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (no history
   // entry per tab-hop — pages push, tabs replace, see route.js).
   // the sessions param is '<id>' or '<id>/eval[/<node>/<scenario>]' (the page splits, like evals): the id
-  // applies to the selection; the segments past it are a ONE-SHOT deep link ([[session-eval]]) seeding the
-  // console's Eval tab (and optionally one scenario's reading), then the echo below normalizes the hash
-  // back to the plain tab address — the link is an entrance, not a synced view state.
+  // applies to the selection; the segments past it seed the console's Eval tab (and optionally one scenario's
+  // reading). Unlike the old one-shot entrance, the sub-route is a PERSISTENT, refreshable address
+  // ([[session-eval]]) — the seed stays alive as the URL's source (below), so a reload reopens the same reading.
   useLayoutEffect(() => {
     if (page !== 'sessions' || !param) return
     const [id, entrance, node, ...scen] = param.split('/')
     if (id && id !== sessionSel) setSessionSel(id)
-    if (entrance === 'eval') setEvalSeed({ node: node || null, scenario: scen.join('/') || null })
+    // bind the seed to ITS session id so the console applies it only once that tab is active (no leak onto
+    // another tab, no clobber by the async board-load settle) — see resolveEvalSeed / SessionInterface.
+    if (entrance === 'eval') setEvalSeed({ session: id, node: node || null, scenario: scen.join('/') || null })
   }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
+  // drop a live eval seed once the user actually switches to a DIFFERENT session tab, so the echo below stops
+  // writing the stale sub-route. Guarded against the 'new' board-load placeholder (a transient, not a switch).
   useEffect(() => {
-    if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
-  }, [page, sessionSel])
+    if (evalSeed && sessionSel !== 'new' && sessionSel !== evalSeed.session) setEvalSeed(null)
+  }, [sessionSel, evalSeed])
+  useEffect(() => {
+    // echo the selected tab into the hash, keeping the eval sub-route addressable (refreshable/shareable).
+    // Driven by the seed STATE (sessionTabParam), not by re-reading the hash — the board-load 'new' bounce
+    // can clobber the hash, and reconstructing from it would lose the sub-route. Hold off entirely while a
+    // seed targets a session that ISN'T the selected tab yet (still adopting): writing the placeholder then
+    // would overwrite the deep link the layout effect just parsed.
+    if (page !== 'sessions' || (evalSeed && evalSeed.session !== sessionSel)) return
+    navigate('sessions', sessionTabParam(sessionSel, evalSeed), { replace: true })
+  }, [page, sessionSel, evalSeed])
 
   // a transient graph overlay never outlives the graph page — navigating away closes it, so a return
   // lands on the plain page (the session interface is a page now, not part of this overlay set).
@@ -617,7 +630,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           seed={seed}
           onSeedConsumed={() => setSeed(null)}
           evalSeed={evalSeed}
-          onEvalSeedConsumed={() => setEvalSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
           onOpenSession={openSession}

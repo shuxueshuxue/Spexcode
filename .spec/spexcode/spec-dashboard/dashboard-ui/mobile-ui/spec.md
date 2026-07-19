@@ -69,7 +69,8 @@ The two planes, made native to touch:
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
   a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that
-  navigates to the session-scoped Evals list (`#/evals?session=<id>`, [[session-eval]] — gates strip,
+  navigates to the session-scoped Evals list (`#/evals?q=is:eval state:current scope:<id>`,
+  [[session-eval]] — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,
   lazily loaded and reflowed to one column. Reading the measured loss is exactly what a
   phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped

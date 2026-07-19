@@ -376,6 +376,12 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
         return
       }
       if (overlay) {
+        // a focused form field, an OPEN MENU, or a menu TRIGGER inside the popup owns its unmodified keys
+        // ([[keyboard-nav]]'s native-control restraint, extended for the embedded review filters): typing
+        // (h/j/l/digits), caret arrows, menu roving, and ArrowDown-to-open must never become pane switches
+        // or scrolls. Escape still falls through — the esc stack peels the menu first, then this branch
+        // closes the popup.
+        if (e.key !== 'Escape' && e.target?.closest?.('input, textarea, select, [role="menu"], [role="menuitemradio"], [aria-haspopup="menu"]')) return
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         // the popup is a LENS, not a modal ([[keyboard-nav]]): Shift+nav (⇧h/j/k/l, ⇧arrows) walks the
         // tree exactly like the bare board — the popup stays open and follows the new focus (NodeView is

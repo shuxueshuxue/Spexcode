@@ -148,27 +148,23 @@ export default {
     closed: 'Closed',
     current: 'Current',
     reviewed: 'Reviewed',
-    live: 'Live session',
     moreFilters: 'More filters',
-    facetAuthor: 'Author',
     facetStore: 'Store',
-    facetNode: 'Spec node',
-    facetLive: 'Live',
     facetVerdict: 'Verdict',
     facetFreshness: 'Freshness',
     facetKind: 'Evidence',
+    facetAuthor: 'Author',
+    facetNode: 'Spec node',
     facetFiler: 'Filer',
-    facetScope: 'Scope',
     facetState: 'State',
     facetReview: 'Review',
+    facetSession: 'Source session',
+    sessionPresent: 'Present',
+    sessionMissing: 'Missing',
     openedBy: ({ by }) => `opened by ${by}`,
     openedAt: ({ at }) => `opened ${at} ago`,
     verdict: { pass: 'Pass', fail: 'Fail', unscored: 'Unscored' },
     freshness: { fresh: 'Fresh', stale: 'Stale' },
-  },
-
-  evals: {
-    scopeMerged: 'merged',
   },
 
   reviewShell: {
@@ -185,11 +181,6 @@ export default {
     sideStore: 'store',
     sideOriginator: 'opened by',
     sideNodes: 'spec nodes',
-  },
-
-  masterList: {
-    liveChip: ({ n }) => `${n} live`,
-    liveChipTitle: 'only issues/evals a LIVE session is behind',
   },
 
   annotator: {

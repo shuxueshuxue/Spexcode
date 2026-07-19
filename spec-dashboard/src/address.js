@@ -1,11 +1,13 @@
 import { navigate, parseRoute, routeHash } from './route.js'
+import { scopedEvalQuery } from './reviewQuery.js'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const evalAddress = (nodeId, scenario) => ({ kind: 'eval', nodeId, scenario })
-// a session's SCOPED eval address ([[session-eval]]): the Evals pages carrying ?session=<id> — the list,
-// or one scenario's worktree-rooted reading — the address an MR/CI note pastes for one-click review.
+// a session's SCOPED eval address ([[session-eval]]): the Evals pages carrying the `scope:<id>` token —
+// the scoped default list, or one scenario's worktree-rooted reading (`?q=scope:<id>` alone, never list
+// filters) — the address an MR/CI note pastes for one-click review.
 export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'session-eval', sessionId, nodeId, scenario })
 
 export function addressHash(address) {
@@ -14,7 +16,7 @@ export function addressHash(address) {
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
     const param = address.nodeId && address.scenario ? `${address.nodeId}/${address.scenario}` : null
-    return routeHash('evals', param, { session: address.sessionId })
+    return routeHash('evals', param, { q: param ? `scope:${address.sessionId}` : scopedEvalQuery(address.sessionId) })
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)

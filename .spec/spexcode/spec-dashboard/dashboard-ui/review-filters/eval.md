@@ -14,10 +14,12 @@ scenarios:
       include both themes in the recording. File the dynamic run as video evidence.
     expected: >-
       Canonical and embedded Issues/Evals filtering agree for query, lifecycle/verdict, freshness,
-      evidence, author/filer, store, node, and Live wherever those real fields exist. Canonical actions
+      evidence, author/filer, store, node, and source-session presence wherever those real fields exist.
+      Canonical actions
       remain hash-query history pushes and Back restores their exact view; embedded actions leave the hash
       untouched and survive Spec Information tab switches. Node/scope and every other one-value dimension
-      stay absent rather than becoming fake facets. The compact face is one shallow sticky search row plus
+      stay absent rather than becoming fake facets — except an ACTIVE fixed-enum value, which stays a real
+      checked row with All releasable even at zero data. The compact face is one shallow sticky search row plus
       one accessible overflow whose named radio groups, checked focus, arrow/Home/End roving, Escape return,
       active-value off-switch, and filtered-empty copy match the shared review primitives at desktop and
       390px without horizontal overflow in either theme. History has no expand-all control or replacement:

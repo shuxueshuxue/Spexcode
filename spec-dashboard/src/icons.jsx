@@ -29,6 +29,11 @@ const ICONS = {
   download: { node: <><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></> },
   clock: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></> },
   search: { node: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></> },
+  info: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></>, sw: 2 },
+  pencil: { node: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></> },
+  terminal: { node: <><path d="m4 17 6-6-6-6" /><path d="M12 19h8" /></>, sw: 2 },
+  'list-checks': { node: <><path d="m3 7 2 2 4-4" /><path d="m3 17 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></> },
+  trash: { node: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5" /><path d="M14 11v5" /></> },
   play: { node: <path d="M6 3.5 19.5 12 6 20.5Z" /> },
   pause: { node: <><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></> },
   settings: {

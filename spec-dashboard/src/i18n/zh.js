@@ -294,6 +294,7 @@ export default {
   },
 
   sessionWindow: {
+    menuLabel: '会话操作',
     rowTitle: '单击将图锁定到此会话 · 双击打开它',
     lockedTitle: '图已锁定到此会话——再次单击解除',
     emptyBefore: '没有活动的工作树——按 ',
@@ -446,6 +447,7 @@ export default {
 
   // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。
   nodeMenu: {
+    menuLabel: '节点操作',
     info: '查看详情',
     newSession: '新建会话',
     newChild: '新建子节点…',

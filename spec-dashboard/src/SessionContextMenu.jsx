@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
 import { apiFetch, loadSettings } from './data.js'
@@ -104,16 +105,21 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   return (
     <>
       {menu && (
-        <div className="sess-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-          <button className="sess-menu-item" onClick={lockOnGraph}>{t('sessionWindow.lock')}</button>
-          <button className="sess-menu-item" onClick={startRename}>{t('sessionWindow.rename')}</button>
-          {/* attach only when a live tmux window exists to join — offline/queued rows have none. */}
-          {menu.session.liveness !== 'offline' && menu.session.status !== 'queued' && (
-            <button className="sess-menu-item" onClick={startAttach}>{t('sessionWindow.attach')}</button>
-          )}
-          <button className="sess-menu-item" onClick={startSelect}>{t('sessionWindow.select')}</button>
-          <button className="sess-menu-item danger" onClick={startClose}>{t('sessionWindow.close')}</button>
-        </div>
+        <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.session.id} label={t('sessionWindow.menuLabel')}>
+          <ContextMenuGroup>
+            <ContextMenuItem icon="lock" onClick={lockOnGraph}>{t('sessionWindow.lock')}</ContextMenuItem>
+            <ContextMenuItem icon="pencil" onClick={startRename}>{t('sessionWindow.rename')}</ContextMenuItem>
+            {/* attach only when a live tmux window exists to join — offline/queued rows have none. */}
+            {menu.session.liveness !== 'offline' && menu.session.status !== 'queued' && (
+              <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
+            )}
+            <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
+          </ContextMenuGroup>
+          <ContextMenuSeparator />
+          <ContextMenuGroup>
+            <ContextMenuItem icon="trash" danger onClick={startClose}>{t('sessionWindow.close')}</ContextMenuItem>
+          </ContextMenuGroup>
+        </ContextMenu>
       )}
       <SessionAttach session={attaching} socket={tmuxSocket} onClose={() => setAttaching(null)} />
       {/* rename + close modals below share the sess-rename chrome. */}

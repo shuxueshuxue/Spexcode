@@ -53,4 +53,5 @@ the accessible name impossible to forget.
   pair rather than mixing one Octicon with CSS-made dots.
 - **Text stays text where text won.** Verb actions with room to breathe (merge/promote/close/resolve/
   retract/send/cancel/save, tab labels, context-menu rows, settings) keep their words — the icon system
-  reclaims edge space, it does not iconify prose.
+  does not replace prose with mystery glyphs. Context-menu rows pair those labels with a small leading
+  icon from this registry, the Obsidian/Lucide grammar that makes a scan faster without hiding the command.

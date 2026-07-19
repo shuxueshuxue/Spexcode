@@ -45,3 +45,6 @@ behind it), picking an item closes it before the action fires, and a right-click
 open dismisses it — on another node that re-aims the menu there; anywhere else the browser's default
 menu takes over. It reuses the session menu's `.sess-menu` visual vocabulary rather than introducing a
 second menu style. Only spec nodes claim right-click; the rest of the board keeps the default menu.
+
+That vocabulary is [[context-menu-chrome]]. This node supplies the fixed verbs and overlay-session rows;
+the shared shell supplies compact icon-led geometry, groups, separators, theme states, and menu semantics.

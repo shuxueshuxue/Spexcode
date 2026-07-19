@@ -1,141 +1,169 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
-import FoldToggle from './FoldToggle.jsx'
-import { navigate, useRoute } from './route.js'
+import FilterSelect from './FilterSelect.jsx'
+import { DetailShell } from './ReviewShell.jsx'
+import { navigate, routeHash, useRoute } from './route.js'
+import { scenarioStates } from './score.jsx'
+import { sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
+import { apiUrl } from './project.js'
 
-// The ONE eval master-detail SHELL ([[evals-view]]): the split, the fold, the j/k walk, and the detail
-// slot — shared by BOTH eval master-detail homes (the Evals page below, and the session console's Eval
-// tab, [[session-eval]]'s SessionEval), so the two surfaces cannot drift apart on geometry or keys.
-// Controlled: the parent owns the selection (`sel` already fallback-resolved) and the visible key list;
-// the shell owns only what is purely shell — fold state, the j/k binding (capture; a key typed into an
-// input or carrying a modifier is never ours), and keeping the selected row scrolled into view.
-export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
-  const [folded, setFolded] = useState(false)   // the master list folded to a strip — the detail owns the width
-  const stateRef = useRef({})
-  stateRef.current = { rowKeys, sel }
-  useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key !== 'j' && e.key !== 'k') return
-      e.preventDefault(); e.stopPropagation()
-      const { rowKeys: rows, sel: cur } = stateRef.current
-      if (!rows.length) return
-      const i = rows.indexOf(cur)
-      const next = i < 0 ? (e.key === 'j' ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, i + (e.key === 'j' ? 1 : -1)))
-      onSel(rows[next])
+// The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
+// page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, every filter in the URL
+// query; `#/evals/<node>/<scenario>` is the standalone DETAIL page — the [[event-detail]] workspace in the
+// shared DetailShell. A row click is a real-anchor history PUSH; browser Back restores the exact filtered
+// list URL; both pages are directly openable. The `?session=<id>` query scopes EITHER page to one
+// session's WORKTREE-rooted model ([[session-eval]] — un-merged evals live here now; the legacy
+// `#/sessions/<id>/eval` address normalizes to this family at the route layer).
+
+// the session scope's worktree-rooted lean model (`GET /api/sessions/:id/evals`, [[session-eval]]) —
+// null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
+// A seq guard drops a stale response; `reload` is the write path's refresh (a remark/ok lands in the
+// worktree store, which fires no board SSE).
+function useSessionEvals(sessionId) {
+  const [model, setModel] = useState(null)
+  const [error, setError] = useState(null)
+  const seq = useRef(0)
+  const load = useCallback(() => {
+    if (!sessionId) return Promise.resolve()
+    const mine = ++seq.current
+    setError(null)
+    return fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
+      .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((m) => { if (mine === seq.current) setModel(m) })
+      .catch((err) => {
+        if (mine !== seq.current) return
+        setModel(false)
+        setError(err instanceof Error ? err.message : String(err))
+      })
+  }, [sessionId])
+  useEffect(() => { setModel(null); setError(null); if (sessionId) load() }, [sessionId, load])
+  return { model, error, reload: load }
+}
+
+// flatten the session model → the list's rows, the session-eval attention order: blind spots lead
+// (declared, never measured — outstanding loss), then the session's own ✦-marked readings, then the
+// inherited baseline (other sessions' latest), each newest-first; the ONE latest-per-scenario computation
+// (scenarioStates) throughout.
+function sessionRows(model) {
+  const blind = []
+  const own = []
+  const inherited = []
+  for (const n of model.nodes) {
+    for (const s of scenarioStates(n.scenarios, n.evals)) {
+      if (!s.reading) { blind.push({ scenario: s.name, expected: s.expected, node: n.id, hue: n.hue }); continue }
+      const e = { ...s.reading, expected: s.expected ?? s.reading.expected, state: s.state, node: n.id, hue: n.hue }
+      ;(e.inSession ? own : inherited).push(e)
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onSel])
-  useEffect(() => {
-    document.querySelector('.fv-list-col .sel')?.scrollIntoView({ block: 'nearest' })
-  }, [sel])
-  // the fold toggle is an ANCHORED control, not a floating badge: the shell owns the fold state, but the
-  // button renders inside the list's own head row (function children receive it as `foldBtn`), a normal
-  // flex sibling of the filters — never absolutely positioned over the list's scrollbar. A plain-children
-  // home (the session Eval tab's multi-group list, which has no single head row) keeps the floating badge.
-  const foldBtn = <FoldToggle className="fv-fold-inline" onToggle={() => setFolded(true)} />
+  }
+  const byTs = (a, b) => (a.ts < b.ts ? 1 : -1)
+  return { blind, entries: [...own.sort(byTs), ...inherited.sort(byTs)] }
+}
+
+// The LIST page (`#/evals[?query]`): the session scope's gates strip + export door above the one
+// [[evals-feed]] list. All filter state is the URL's; the scope picker (default off = the merged trunk)
+// is the easy door into any session's un-merged worktree evals.
+export function EvalsListPage({ scope, sessionId, model, error, sessions, query, hrefFor, scopePick, notice }) {
+  const t = useT()
+  const onQuery = (next) => navigate('evals', null, { query: next })
+  const empty = sessionId && model === null
+    ? t('common.loading')
+    : sessionId && error
+      ? t('sessionEval.unavailable')
+      : sessionId && model === false
+        ? t('sessionEval.none')
+        : null
   return (
-    <div className={`fv-master ${folded ? 'folded' : ''}`}>
-      {/* the list column stays MOUNTED while folded (its filter state + the j/k row report live in it) —
-          the fold is pure CSS; the thin strip is the unfold affordance. */}
-      {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
-      <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        {typeof children === 'function'
-          ? children(foldBtn)
-          : <><FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />{children}</>}
-      </div>
-      <div className="fv-detail">{detail}</div>
+    <>
+      {/* the session scope's gates strip — the same reviewPayload numbers `spex session review` prints
+          ([[session-eval]]), plus the self-contained HTML export door. */}
+      {sessionId && model && (
+        <div className="se-gates">
+          {model.gates.map((g) => (
+            <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}>{g.ok ? '✓' : '✗'} {g.label}</span>
+          ))}
+          <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
+            <Icon name="download" size={13} />
+          </a>
+        </div>
+      )}
+      <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
+        query={query} onQuery={onQuery} hrefFor={hrefFor} lead={scopePick} notice={notice}
+        error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
+    </>
+  )
+}
+
+// The DETAIL page (`#/evals/<node>/<scenario>[?session=<id>]`): the [[event-detail]] workspace for one
+// scenario, standalone — directly openable, browser Back the return path. The session scope hands the
+// WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
+export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, onOpenSession, onWrite, notice }) {
+  const t = useT()
+  const i = param.indexOf('/')
+  const node = i > 0 ? param.slice(0, i) : param
+  const scenario = i > 0 ? param.slice(i + 1) : null
+  // The session scope's A/B history is WORKTREE-rooted. Memoizing the slice makes its identity stable
+  // across unrelated board poll/SSE repaints, so EventDetail keeps the A/B cursor, timeline, and draft.
+  const history = useMemo(
+    () => (sessionId && model && model !== false
+      ? (model.nodes.find((n) => n.id === node)?.evals || []).filter((e) => e.scenario === scenario)
+      : undefined),
+    [sessionId, model, node, scenario],
+  )
+  if (sessionId && error) {
+    return <DetailShell failure={t('sessionEval.loadFailed', { reason: error })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
+  }
+  if (sessionId && model === null) return <div className="fv-note">{t('common.loading')}</div>
+  const entry = scope.entries.find((e) => entryKey(e) === `eval:${node}·${scenario}`) || null
+  if (!entry) {
+    return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
+  }
+  return (
+    <div className="lp-page">
+      {notice && <div className="fv-notice">{notice}</div>}
+      <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
+        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} />
     </div>
   )
 }
 
-// The Evals page ([[evals-view]]): a top-level page (#/evals, [[side-nav]]), peer of the graph, the
-// session board, and the Issues page — the project's CURRENT measured loss, leading the surfaces (the
-// board's `f` and ⌥F land here). MASTER-DETAIL over one full routed page: the LEFT column is the SLIM
-// [[evals-feed]] list (latest reading per scenario, fresh first, video first — its own filter chips),
-// the RIGHT pane the full-height [[event-detail]] of the selection. Selection IS the detail (no Enter,
-// no in-place expansion), and the selection HAS an address: `#/evals/<node>/<scenario>` is the canonical
-// eval URL — a deep link selects that eval (widening the feed's default kind filter if it would hide it),
-// and every selection echoes back into the hash with replace (tabs replace, pages push — [[side-nav]]),
-// so the shown eval is always shareable. A remark write refreshes the board (the eval thread rides the
-// board overlay, not the issues list).
 export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession }) {
   const t = useT()
-  const { page, param } = useRoute()
-  const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
+  const { param, query } = useRoute()
+  const sessionId = query.session || null
+  const { model, error, reload: reloadSession } = useSessionEvals(sessionId)
   const [notice, setNotice] = useState('')
-  const [evalRows, setEvalRows] = useState([])    // the feed's visible entries (its filters are its own)
-  const rowsRef = useRef([])                      // the visible eval key list, for j/k
-  const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
-  rowsRef.current = evalRows.map(entryKey)
-  // default selection: the feed's first row — the detail pane is never idle by default.
-  const effSel = sel && evalByKey.has(sel) ? sel : rowsRef.current[0] ?? null
-
-  // deep link → selection: '#/evals/<node>/<scenario>' applies its address to the selection (the
-  // sessions-page param sync's twin). The target may be hidden by the feed's default kind filter —
-  // `mustShow` hands it to the feed, which widens its own filter (the filter stays the feed's state).
-  const urlSel = useMemo(() => {
-    if (!param) return null
-    const i = param.indexOf('/')
-    return i > 0 ? `eval:${param.slice(0, i)}·${param.slice(i + 1)}` : null
-  }, [param])
-  // the widen handshake is ONE-SHOT per arrival: `deepWant` carries the address to the feed's mustShow
-  // only until the entry is visible, then clears. A later chip click that hides the selection is a filter
-  // decision the human just made — never a reason to snap the filter back ([[evals-feed]]: the chips are
-  // the group's own state; the page widens only for a deep-link ARRIVAL). The hidden selection instead
-  // falls to the first visible row (below), and the URL re-canonicalizes to it.
-  const [deepWant, setDeepWant] = useState(null)
-  useEffect(() => { if (page === 'evals' && urlSel) { setSel(urlSel); setDeepWant(urlSel) } }, [page, urlSel])
-  useEffect(() => { if (deepWant && evalByKey.has(deepWant)) setDeepWant(null) }, [deepWant, evalByKey])
-  // selection → URL echo with replace (no history entry per row-hop). While a deep-linked selection is
-  // still pending (its row not yet in the visible list), hold the echo — never canonicalize AWAY from an
-  // address the user just arrived on before the feed has had the chance to show it. An address naming an
-  // eval that does not EXIST (checked against the same latest-per-scenario computation the feed renders)
-  // is dropped instead: the page falls back to the first row and the URL canonicalizes to it.
-  const pending = sel && !evalByKey.has(sel)
-  const selExists = useMemo(
-    () => !pending || currentEntries(specs).some((e) => entryKey(e) === sel),
-    [pending, specs, sel],
-  )
-  useEffect(() => { if (pending && !selExists) { setSel(null); setDeepWant(null) } }, [pending, selExists])
-  // a selection hidden by the human's OWN filtering (no deep-link in flight): drop it so effSel + the echo
-  // re-anchor on the first visible row instead of freezing the URL on a hidden entry.
-  useEffect(() => {
-    if (sel && !deepWant && evalRows.length && !evalByKey.has(sel)) setSel(null)
-  }, [sel, deepWant, evalRows, evalByKey])
-  useEffect(() => {
-    if (page !== 'evals' || !effSel || pending) return
-    const m = /^eval:([^·]+)·(.+)$/.exec(effSel)
-    if (m) navigate('evals', `${m[1]}/${m[2]}`, { replace: true })
-  }, [page, effSel, pending])
-
-  const onRows = useCallback((rows) => setEvalRows(rows), [])
 
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
   // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
+  const onWrite = async (outcomes) => {
+    flash(outcomes)
+    await (sessionId ? reloadSession() : reloadBoard?.())
+  }
 
-  const selEval = effSel ? evalByKey.get(effSel) : null
-
-  return (
-    <EvalMasterDetail
-      rowKeys={rowsRef.current}
-      sel={effSel}
-      onSel={setSel}
-      detail={selEval
-        ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
-        : <div className="fv-note">{t('evalsFeed.empty')}</div>}
-    >
-      {(foldBtn) => (
-        <>
-          {notice && <div className="fv-notice">{notice}</div>}
-          <EvalsGroup nodes={specs} sessions={sessions} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} lead={foldBtn} />
-        </>
-      )}
-    </EvalMasterDetail>
+  const scope = useMemo(
+    () => (sessionId ? (model && model !== false ? sessionRows(model) : { blind: [], entries: [] }) : { blind: [], entries: currentEntries(specs) }),
+    [sessionId, model, specs],
   )
+  const sessionQ = sessionId ? { session: sessionId } : null
+  const hrefFor = (e) => routeHash('evals', `${e.node}/${e.scenario}`, sessionQ)
+  const listHref = routeHash('evals', null, sessionQ)
+
+  // the session-scope picker — DEFAULT OFF (the merged trunk), the easy door into any session's un-merged
+  // worktree evals ([[session-eval]]). Changing scope drops the kind/live/ok state with it (a new scope is
+  // a new list, and its default filters are the honest start).
+  const scopePick = (
+    <FilterSelect value={sessionId || ''} onChange={(v) => navigate('evals', null, { query: v ? { session: v } : {} })}
+      options={[{ value: '', label: t('evals.scopeMerged') },
+        ...sessions.map((s) => ({ value: s.id, label: sessionHeadline(s) }))]} />
+  )
+
+  return param
+    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
+        sessions={sessions} listHref={listHref} onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
+    : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
+        query={query} hrefFor={hrefFor} scopePick={scopePick} notice={notice} />
 }

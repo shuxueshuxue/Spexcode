@@ -1,11 +1,11 @@
-import { navigate, parseRoute, routeHash, sessionEvalParam } from './route.js'
+import { navigate, parseRoute, routeHash } from './route.js'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const evalAddress = (nodeId, scenario) => ({ kind: 'eval', nodeId, scenario })
-// a session's IN-SESSION eval detail ([[session-eval]]): the console with the Eval tab active, optionally
-// landed on one scenario's worktree-rooted reading — the address an MR/CI note pastes for one-click review.
+// a session's SCOPED eval address ([[session-eval]]): the Evals pages carrying ?session=<id> — the list,
+// or one scenario's worktree-rooted reading — the address an MR/CI note pastes for one-click review.
 export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'session-eval', sessionId, nodeId, scenario })
 
 export function addressHash(address) {
@@ -13,9 +13,8 @@ export function addressHash(address) {
   if (address.kind === 'graph-node') return routeHash('graph')
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
-    // the ONE session-eval param encoder (route.sessionEvalParam) — same shape the tab echo writes, so the
-    // href side and the echo side share one URL grammar ([[address-routing]]).
-    return routeHash('sessions', sessionEvalParam(address.sessionId, address.nodeId, address.scenario))
+    const param = address.nodeId && address.scenario ? `${address.nodeId}/${address.scenario}` : null
+    return routeHash('evals', param, { session: address.sessionId })
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)
@@ -32,7 +31,7 @@ export function navigateAddress(address, { onFocusNode, onOpenSession } = {}) {
     if (onOpenSession) onOpenSession(address.sessionId)
     else navigate('sessions', address.sessionId)
   } else {
-    const { page, param } = parseRoute(addressHash(address))
-    navigate(page, param)
+    const { page, param, query } = parseRoute(addressHash(address))
+    navigate(page, param, { query })
   }
 }

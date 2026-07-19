@@ -11,7 +11,7 @@ import SpecSearch from './SpecSearch.jsx'
 import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
-import { useRoute, navigate, sessionTabParam } from './route.js'
+import { useRoute, navigate } from './route.js'
 import { navigateAddress } from './address.js'
 import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
@@ -72,9 +72,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
-  const [routeNav, setRouteNav] = useState(null)  // per-navigation route directive ({session,tab,node,scenario}) driving the console's right pane
-  const [evalView, setEvalView] = useState(null)  // the console's REAL eval-tab selection ({node,scenario}|null), reported up — the URL's source
-  const firstEchoRef = useRef(true)               // the echo effect's mount run predates the URL parse — skipped (see below)
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
@@ -128,7 +125,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     [sessions],
   )
 
-  const openSession = useCallback((id) => { setSessionSel(id); setEvalView(null); navigate('sessions', id) }, [])
+  const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onFocusNode: setFocusId, onOpenSession: openSession })
@@ -151,45 +148,19 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     onNavigateAddress(e.address)
   }, [onNavigateAddress])
 
-  // URL ↔ console, converging one-way syncs. INBOUND (this effect): every real navigation to
-  // '#/sessions/<id>[/eval[/<node>/<scenario>]]' selects the tab AND emits a one-shot routeNav that sets the
-  // console's right pane — '/eval' → Eval tab (+ jump to the reading), bare → Terminal. OUTBOUND (echo below):
-  // between navigations the console reports its REAL view (evalView) and THAT drives the hash. So the address
-  // always matches what's on screen ([[session-eval]] persistent contract): a deep link opens the reading, a
-  // manual Eval entry becomes addressable, a switch to Terminal — or a bare return — drops the sub-route.
+  // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
+  // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (the tab
+  // echo is automatic state-naming — pages and details push, see route.js). The legacy
+  // `#/sessions/<id>/eval[/…]` shape never reaches here — the route layer normalizes it to the Evals
+  // family ([[session-eval]]) before any parse lands.
   useLayoutEffect(() => {
     if (page !== 'sessions' || !param) return
-    const [id, entrance, node, ...scen] = param.split('/')
+    const id = param.split('/')[0]
     if (id && id !== sessionSel) setSessionSel(id)
-    const isEval = entrance === 'eval'
-    const nd = isEval ? (node || null) : null
-    const sc = isEval ? (scen.join('/') || null) : null
-    setRouteNav({ session: id, tab: isEval ? 'eval' : 'terminal', node: nd, scenario: sc })
-    setEvalView(isEval ? { node: nd, scenario: sc } : null)   // optimistic echo source until the console reports
   }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
-  // a dead/unknown navigation target — Dashboard mounts only on a LOADED board (App gates it), so absence from
-  // `sessions` is real (a stale link or a genuinely empty project), not loading: drop the directive and its
-  // optimistic view so nothing waits on a tab that never appears.
   useEffect(() => {
-  }, [routeNav, sessions])
-  // a directive not yet applied is dropped once the selection has manually moved to a DIFFERENT session —
-  // otherwise it would sit dormant and apply a stale entrance if the user later returns to that tab. (The
-  // 'new' placeholder mid-parse is not a switch.)
-  useEffect(() => {
-    if (routeNav && sessionSel !== 'new' && sessionSel !== routeNav.session) setRouteNav(null)
-  }, [routeNav, sessionSel])
-  useEffect(() => {
-    // echo the console's REAL view (evalView, reported up by SessionInterface) into the hash with replace: the
-    // address matches the shown tab/selection ([[session-eval]]) — eval → '<id>/eval[/<node>/<scenario>]',
-    // terminal/new → bare '<id>'. Driven by the console's live view, not the inbound directive, so no stale
-    // sub-route survives a tab switch or a bare return, and a manual Eval-tab entry is addressable.
-    // Skipped on its very FIRST run (mount): that run's closure predates the parse above (an effect of the
-    // pre-parse render), so at mount it can only no-op or clobber the entrance the user typed — echoing is
-    // only meaningful for state changes AFTER the app has adopted its initial URL.
-    if (firstEchoRef.current) { firstEchoRef.current = false; return }
-    if (page !== 'sessions') return
-    navigate('sessions', sessionTabParam(sessionSel, evalView), { replace: true })
-  }, [page, sessionSel, evalView])
+    if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
+  }, [page, sessionSel])
 
   // a transient graph overlay never outlives the graph page — navigating away closes it, so a return
   // lands on the plain page (the session interface is a page now, not part of this overlay set).
@@ -645,9 +616,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
           setSel={setSessionSel}
           seed={seed}
           onSeedConsumed={() => setSeed(null)}
-          routeNav={routeNav}
-          onRouteNavConsumed={() => setRouteNav(null)}
-          onEvalViewChange={setEvalView}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
           onOpenSession={openSession}
@@ -667,7 +635,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
       {page === 'issues' && (
         <div className="page-pane page-issues">
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} issueId={param} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
           </Suspense>
         </div>
       )}

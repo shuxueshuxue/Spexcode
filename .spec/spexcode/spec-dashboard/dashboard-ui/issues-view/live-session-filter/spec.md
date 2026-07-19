@@ -23,7 +23,7 @@ the evals feed — to exactly those entries, using the aliveness the originator 
 ## expanded spec
 
 - **One chip, two surfaces, one judgment.** Both the [[issues-view]] list and the [[evals-feed]] carry an
-  **"N live"** toggle chip on their head's CHIP row (second row — the control row is for fold/filter/New).
+  **"N live"** toggle chip on their head's CHIP row (second row — the control row is for filters/New).
   Same `ef-chip` grammar and toggle interaction as the concluded-count chip: click narrows, click again
   releases; the chip hides itself when nothing is live (N = 0), like every self-hiding filter control on
   these bars — **but self-hiding is gated on the filter being OFF**. A live filter drives its own liveness
@@ -40,6 +40,3 @@ the evals feed — to exactly those entries, using the aliveness the originator 
   ('human', a github login) is honestly not live.
 - **N counts what the chip would keep** among the rows the other filters already show, so the label reads
   as "this many of these are live", not a global stat.
-- **A deep link still wins.** An address that names an entry the live chip would hide releases the chip
-  (issues' `issueId` arrival, the evals feed's `mustShow` widen) — the canonical URL always renders its
-  target; a later chip click is the human's own filter decision and stands.

@@ -2,18 +2,17 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest, applyRouteNav } from './session.js'
+import { sessionAncestorIds, sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon } from './icons.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
-import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
 import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
-import FoldToggle from './FoldToggle.jsx'
+import { navigate } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
 
@@ -155,7 +154,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, routeNav, onRouteNavConsumed, onEvalViewChange, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -173,25 +172,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [typeMode, setTypeMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the type button's `.suggest` pulse
-  // which of the right pane's two tabs is showing: the live terminal (default) or the always-available eval.
-  const [rightTab, setRightTab] = useState('terminal')
-  // the Eval tab's deep-link target ({node,scenario}|null) — set by the one-shot evalSeed below, handed to
-  // the pane as its initial selection; cleared on tab switch so a later manual visit opens fresh.
-  const [evalJump, setEvalJump] = useState(null)
-  // the Eval pane's CURRENT selection ({node,scenario}|null), reported back up from SessionEval — the console
-  // folds it into the evalView it reports to the shell (the URL's real source, [[session-eval]]).
-  const [evalSel, setEvalSel] = useState(null)
-  // the Eval tab auto-collapses the session list to a thin strip ([[session-console]] / [[evals-view]]'s
-  // fold-to-strip): the eval tab is itself a master-detail whose scenario list needs the width, so the
-  // console's session list folds out of the way while it's shown and unfolds on the way back to Terminal.
-  const [listFolded, setListFolded] = useState(false)
-  // The fold is only ever visible on the Eval tab. `listFolded` is driven by a LAGGING effect (below) that
-  // fires one render AFTER `rightTab` flips, so gating the render on it alone would, on the way BACK to
-  // Terminal, paint the terminal for one frame at the wide (list-folded) width and then snap it narrow — two
-  // spurious resizes that reflow a NORMAL-screen (codex) pane into a scroll-through-history redraw (an
-  // alternate-screen pane hides it by redrawing in place). Gate the DISPLAY on the tab too, so returning to
-  // Terminal shows the list — and the terminal's real width — synchronously, with no transient reflow.
-  const showFolded = listFolded && rightTab === 'eval'
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -253,57 +233,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // into the launch prompt (see submit); listing is display-only, like the slash menu. Shared fetch (./launch.js).
   const commandPresets = useCommandPresets()
 
-  // per-tab reset: switching the active session tab clears the per-tab input state and drops the right pane
-  // back to the Terminal ([[session-console]]). Keyed on `active` only, declared BEFORE the routeNav apply below
-  // so a navigation's directive applies its tab ON TOP of this reset within the same commit (the board is loaded
-  // when the console mounts — App gates Dashboard on a non-null board — so `active` resolves in the mount commit).
-  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal'); setEvalJump(null) }, [active])
-  // apply the per-navigation route directive ([[session-eval]] / [[address-routing]]): the URL entrance sets the
-  // right pane on EVERY real navigation — '/eval' opens the Eval tab (+ jumps to the reading), a bare tab URL
-  // shows the Terminal — applied ONCE per navigation (the ref). Between navigations the console's own manual tab
-  // clicks drive the URL instead (evalView, reported below); a bare return therefore resets a warm Eval tab to
-  // the Terminal, so the address never diverges from the pane. A directive for another session is a no-op here.
-  const appliedNavRef = useRef(null)
-  useEffect(() => {
-    const r = applyRouteNav(routeNav, active)
-    if (!r || appliedNavRef.current === routeNav) return
-    appliedNavRef.current = routeNav
-    setRightTab(r.tab)
-    setEvalJump(r.tab === 'eval' ? r.jump : null)
-    // The route target is also the optimistic outbound view while SessionEval loads. Without this, the
-    // newly-mounted pane reports its initial "selection unknown" as null and the shell briefly rewrites an
-    // exact deep link to bare /eval; refreshing in that window permanently loses the requested reading.
-    setEvalSel(r.tab === 'eval' ? r.jump : null)
-    onRouteNavConsumed?.()
-  }, [active, routeNav])
-  // report the console's REAL eval view UP ([[session-eval]] / [[address-routing]]): the Eval tab's selected
-  // {node,scenario} while it is showing, else null (Terminal / New). This — not a persisted seed — is what the
-  // shell echoes into the hash, so a manual Eval entry becomes addressable, a switch to Terminal drops the
-  // sub-route, and leaving+returning can't resurrect an old one. `evalSel` is fed by SessionEval below; before
-  // it reports, an open Eval tab still yields {null,null} → the bare `/eval` form.
-  const evalOn = rightTab === 'eval' && active !== 'new'
-  const viewNode = evalOn ? (evalSel?.node ?? null) : null
-  const viewScenario = evalOn ? (evalSel?.scenario ?? null) : null
-  // While a routeNav still PENDS for the active session (mount commit: rightTab is still the initial
-  // 'terminal' until the apply effect lands one commit later), this render's view is transitional — reporting
-  // it would clobber the shell's optimistic deep target with null for one commit, and a refresh inside that
-  // window loses the exact reading. Hold the report until the directive is consumed; a stale directive for
-  // ANOTHER session doesn't gate (it can never apply here).
-  const navPending = !!(routeNav && routeNav.session === active)
-  useEffect(() => {
-    if (navPending || active === 'new') return
-    onEvalViewChange?.(evalOn ? { node: viewNode, scenario: viewScenario } : null)
-  }, [evalOn, viewNode, viewScenario, navPending, active]) // eslint-disable-line react-hooks/exhaustive-deps
-  // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
-  // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
-  useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])
-  // returning to the Terminal tab re-focuses the ❯ input — switching to Proof and back must not strand the
-  // caret. Only when live and not in type mode; rAF waits for the input to (re)mount under the Terminal tab.
-  useEffect(() => {
-    if (rightTab === 'terminal' && active !== 'new' && !typeMode && selSession && selSession.liveness !== 'offline') {
-      requestAnimationFrame(() => msgRef.current?.focus())
-    }
-  }, [rightTab])
+  // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
+  // keystrokes can never leak into the wrong pane.
+  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null) }, [active])
   useEffect(() => { if (selSession?.liveness === 'offline') setTypeMode(false) }, [selSession?.liveness])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
   // leaving type mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
@@ -383,7 +315,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // the ❯ box auto-grows UPWARD (anchored to the wrap's bottom). Its cap is dynamic — half the terminal
   // height — so we set max-height in JS, then hand the same value to fitTextarea. The box UNMOUNTS while
-  // the Eval tab or type mode replaces it and remounts at rows=1, so those flips must re-fit it too — the
+  // type mode replaces it and remounts at rows=1, so that flip must re-fit it too — the
   // draft survives the round-trip and the grown height must survive with it.
   useEffect(() => {
     const ta = msgRef.current
@@ -391,7 +323,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
     ta.style.maxHeight = `${maxH}px`
     fitTextarea(ta, maxH)
-  }, [msg, active, open, rightTab, typeMode])
+  }, [msg, active, open, typeMode])
 
   // New-session command invocation is backend-owned: this surface and the phone send the raw
   // `/<preset> [[node]]… <free text>` through the ordinary create request, and newSession expands it for
@@ -617,7 +549,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // button's onClick fires; `uiCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     type: () => setTypeMode((v) => !v),
-    eval: () => setRightTab('eval'),
+    // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
+    // navigate to the session-scoped list (a real page switch, history-walked), never a console-local pane.
+    eval: () => { if (active !== 'new') navigate('evals', null, { query: { session: active } }) },
     merge: () => act('merge'),
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
@@ -717,9 +651,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (t.closest && t.closest('select')) return
     // the terminal owns its own text selection — preventing default on it would break the drag-select.
     if (t.closest && t.closest('.si-term-body')) return
-    // The Eval tab is an inspection workspace, not inert console chrome; its text must select just like the
-    // top-level Evals page that renders the same components.
-    if (t.closest && t.closest('.se-pane')) return
     e.preventDefault()
   }
 
@@ -753,13 +684,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        {/* folded (Eval tab): the whole strip is the unfold affordance, mirroring the Evals page's master-list
-            fold ([[evals-view]]'s .fv-unfold). The list stays MOUNTED (display:none) behind it, so its zone
-            grouping / nesting-fold / selection survive — the fold is pure geometry. */}
-        {showFolded && (
-          <FoldToggle className="si-list-unfold" folded onToggle={() => setListFolded(false)} />
-        )}
-        <aside className="si-list" style={showFolded ? { display: 'none' } : { flex: `0 0 ${listW}px` }}>
+        <aside className="si-list" style={{ flex: `0 0 ${listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
               a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
@@ -810,9 +735,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           })}
         </aside>
 
-        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. Hidden while the
-            list is folded to a strip: there's no width to resize when the detail owns it all. */}
-        {!showFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
+        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. */}
+        <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
@@ -861,22 +785,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. A horizontal TAB BAR (Terminal | Eval) sits above
-              the pane content — it replaces the old floating title/action strip, is visibly set apart from the
-              dark terminal below (panel background + separator, both themes), and carries the lifecycle actions
-              on its right. */}
+              WebSockets + scroll survive the tab switch. A horizontal TAB BAR sits above the pane content —
+              the Terminal tab plus the Eval DOOR ([[session-console]]: the session's evaluation lives on
+              the Evals route family, so the entry NAVIGATES to `#/evals?session=<id>` instead of mounting a
+              console-local pane) — and carries the lifecycle actions on its right. */}
           <div
             className="si-session-wrap"
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
-                {/* two tabs on the left: the live terminal (default) and the always-available eval. */}
                 <div className="si-tabs" role="tablist">
-                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
-                  <button role="tab" aria-selected={rightTab === 'eval'} className={rightTab === 'eval' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('eval')}>{t('session.tabEval')}</button>
+                  <button role="tab" aria-selected className="si-tab on">{t('session.tabTerminal')}</button>
+                  <button className="si-tab si-tab-door" onClick={() => runners.eval()} data-tip={t('session.tabEvalTitle')}>{t('session.tabEval')} ↗</button>
                 </div>
-                {/* no headline here: the left sidebar already identifies the session; the tab bar is just the
-                    Terminal|Eval tabs (left) + lifecycle actions (right). */}
                 <div className="si-actions">
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
@@ -895,9 +816,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       })}
                 </div>
               </div>
-              {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
-                  Eval tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
-              <div className="si-term-body" ref={termRef} style={{ position: 'relative', display: rightTab === 'terminal' ? undefined : 'none' }}>
+              {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
+                  contract); the routed session page is display-hidden, so socket + scroll survive. */}
+              <div className="si-term-body" ref={termRef} style={{ position: 'relative' }}>
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
                 {[...opened].map((id) => (
                   <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
@@ -914,8 +835,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 )}
               </div>
-              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
-              {rightTab === 'terminal' && (typeMode ? (
+              {/* the docked ❯ input — type mode replaces it with the raw-key indicator. */}
+              {typeMode ? (
                 // type mode replaces the prompt box: keys go straight to the pane (handled at the window level).
                 <div className="si-bottom type" onClick={() => setTypeMode(false)} data-tip={t('session.typeExit')}>
                   <span className="si-type-ind">{t('session.typeInd')}</span>
@@ -957,15 +878,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                   {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
                 </div>
-              ))}
-              {/* Eval tab — the session's derived evaluation rendered INLINE (always available, not
-                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[session-eval]]).
-                  "Open a session" from inside this tab means SHOW ITS CONSOLE: the eval detail's filer chip
-                  routinely names the session already being viewed (its own filed readings), where the plain
-                  openSession would no-op (selection unchanged, hash identical) and leave a dead button —
-                  so flip the right pane to the terminal, and only navigate when the filer is another session. */}
-              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} initialSel={evalJump} onSelChange={setEvalSel}
-                onOpenSession={(id) => { setRightTab('terminal'); if (id !== active) onOpenSession?.(id) }} />}
+              )}
           </div>
         </section>
       </div>

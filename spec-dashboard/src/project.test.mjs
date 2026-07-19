@@ -46,6 +46,6 @@ test('cross-scope hrefs encode the id and land on a hash route', () => {
 
 test('the projects page is a first-class route', () => {
   assert.ok(PAGES.includes('projects'))
-  assert.deepEqual(parseRoute('#/projects'), { page: 'projects', param: null })
+  assert.deepEqual(parseRoute('#/projects'), { page: 'projects', param: null, query: {} })
   assert.equal(parseRoute('#/nonsense').page, 'graph') // unknown still lands home
 })

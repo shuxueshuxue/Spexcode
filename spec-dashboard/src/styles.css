@@ -2234,3 +2234,124 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
+
+/* ================================================================================================
+   projects hub ([[projects-hub]]) — the multi-project catalog page (hub face at `/` AND the routed
+   #/projects page), the unified credential card, and the rail's current-project selector. Everything
+   reads through the shared palette vars, so all themes skin these surfaces with no extra rules. */
+
+/* --- the credential card: ONE visual language for admin sign-in and per-project unlock --- */
+.cred-wrap { flex: 1; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--paper); padding: 24px; box-sizing: border-box; }
+.page-pane .cred-wrap { min-height: 0; }
+.cred-card {
+  width: 320px; max-width: 100%; box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 22px 24px 24px; display: flex; flex-direction: column; gap: 10px;
+  font-family: var(--mono);
+}
+.cred-brand { color: var(--muted); font-size: var(--type-control); letter-spacing: var(--tracking-normal); }
+.cred-title { display: flex; align-items: center; gap: 7px; color: var(--ink2); font-size: var(--type-subtitle); font-weight: var(--weight-bold); overflow-wrap: anywhere; }
+.cred-lock { color: var(--muted); flex: none; }
+.cred-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.cred-err { color: var(--red); font-size: var(--type-meta); }
+.cred-input {
+  font-family: var(--mono); font-size: var(--type-body); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
+}
+.cred-input:focus { outline: none; border-color: var(--blue); }
+.cred-submit {
+  font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); cursor: pointer;
+  color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent);
+  border: 1px solid var(--blue); border-radius: 4px; padding: 6px 12px;
+}
+.cred-submit:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 22%, transparent); }
+.cred-submit:disabled { opacity: 0.5; cursor: default; }
+
+/* --- the catalog page --- */
+.page-projects { overflow-y: auto; }
+.page-projects.standalone { min-height: 100vh; box-sizing: border-box; }
+.proj-body { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; box-sizing: border-box; font-family: var(--mono); }
+.proj-brand { margin-bottom: 14px; }
+.proj-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.proj-count { color: var(--muted); font-size: var(--type-meta); flex: 1; }
+.proj-empty { color: var(--muted); font-size: var(--type-body); line-height: var(--leading-body); border: 1px dashed var(--line); border-radius: 6px; padding: 14px 16px; }
+.proj-empty p { margin: 0; }
+.proj-err { color: var(--red); font-size: var(--type-meta); margin-top: 4px; }
+.proj-dim { color: var(--muted); font-size: var(--type-meta); }
+
+/* the shared compact action button (rows, forms, header) — .set-lang's density, semantic accents */
+.proj-act {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none; box-sizing: border-box;
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--ink); cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; background: var(--paper);
+}
+.proj-act:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.proj-act.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); }
+.proj-act.primary { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); font-weight: var(--weight-semibold); }
+.proj-act.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+.proj-act:disabled { opacity: 0.5; cursor: default; }
+.proj-act.icon { padding: 3px 6px; }
+
+/* the shared inline drawer input (password forms) */
+.proj-add-path {
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--type-control); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px;
+}
+.proj-add-path:focus { outline: none; border-color: var(--blue); }
+
+/* admin-password bootstrap hint + panel */
+.proj-hint { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); border: 1px dashed var(--line); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; }
+.proj-admin-pw { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 4px 12px 10px; margin-bottom: 12px; }
+.proj-admin-pw .proj-drawer { border-top: none; margin-top: 0; padding-top: 6px; }
+
+/* catalog rows */
+.proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.proj-row { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 7px 10px; }
+.proj-row.current { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
+.proj-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.proj-health { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.proj-health.h-probing { background: var(--muted); opacity: 0.45; }
+.proj-health.h-running { background: var(--green); }
+.proj-health.h-stopped { background: var(--muted); }
+.proj-health.h-unreachable { background: var(--red); }
+.proj-name { color: var(--ink2); font-size: var(--type-body); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.proj-locked { color: var(--muted); flex: none; }
+.proj-tag { flex: none; font-size: var(--type-caption); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent); border-radius: 3px; padding: 0 5px; }
+.proj-path { flex: 1 1 120px; min-width: 0; color: var(--muted); font-size: var(--type-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; flex-wrap: wrap; }
+
+/* the row's one-at-a-time drawer (doctor report / password / init) */
+.proj-drawer { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); margin-top: 7px; padding-top: 8px; }
+
+.proj-pw .proj-add-path { flex: 1 1 160px; }
+
+/* --- the rail's current-project selector chip + switcher menu --- */
+.proj-chip-wrap { position: relative; }
+.rail-btn.proj-chip {
+  font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold); color: var(--ink2);
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
+}
+.rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { border-color: var(--blue); color: var(--blue); }
+.proj-menu {
+  position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; gap: 1px; font-family: var(--mono);
+}
+.proj-menu-item {
+  display: flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer;
+  color: var(--ink); font-size: var(--type-control); border-radius: 4px; padding: 5px 8px;
+}
+.proj-menu-item:hover { background: var(--panel2); color: var(--ink2); }
+.proj-menu-item.current { color: var(--blue); }
+.proj-menu-item.all { border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; padding-top: 7px; color: var(--muted); }
+.proj-menu-item.all:hover { color: var(--ink2); }
+.proj-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* narrow viewports: the catalog stays one column; row actions wrap under the name/path line */
+@media (max-width: 640px) {
+  .proj-body { padding: 14px 12px 32px; }
+  .proj-row-main { row-gap: 6px; }
+  .proj-path { flex-basis: 100%; order: 5; }
+  .proj-actions { margin-left: 0; order: 6; }
+}

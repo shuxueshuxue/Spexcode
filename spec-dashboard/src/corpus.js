@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { apiUrl } from './project.js'
 
 // the lazily-fetched prose corpus ([[graph-lean]]): the board omits node `body` and slims `scenarios` to
 // {name, tags}, so every surface that shows or ranks prose joins it from ONE `/api/specs/lite` fetch — off
@@ -16,7 +17,7 @@ export function useSpecCorpus(enabled = true) {
     fetched.current = true
     // no unmount flag: the once-per-mount ref must survive StrictMode's double effect (whose cleanup
     // would strand the resolved corpus), and React 18 no-ops a setState after a real unmount anyway.
-    fetch('/api/specs/lite').then((r) => (r.ok ? r.json() : []))
+    fetch(apiUrl('/api/specs/lite')).then((r) => (r.ok ? r.json() : []))
       .then((rows) => {
         corpusCache = {
           bodies: Object.fromEntries((rows || []).map((r) => [r.id, r.body || ''])),

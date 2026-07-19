@@ -299,6 +299,26 @@ scenarios:
       the paperclip still track the active bottom line ([[dock-prompt-stays-on-active-line]]), never the
       box's vertical middle.
     related: spec-dashboard/src/styles.css
+  - name: rest-strip-immune-to-placeholder-wrap
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session
+      and squeeze the right pane until the EMPTY `❯` box's placeholder no longer fits one line (drag the
+      session list to its max width in a ~800px window, or any narrow-but-still-desktop viewport — the pane
+      goes ~270px). With the draft EMPTY, read the resting geometry: `.si-bottom`'s height, the textarea's
+      inline height/scrollHeight, and the overlap between `.si-term-body`'s bottom edge and `.si-bottom`'s
+      top edge. Screenshot the strip. Then type a line that genuinely wraps at this width and confirm
+      content-driven growth still overlays upward. Repeat in light and dark themes.
+    expected: |
+      The EMPTY resting box is immune to placeholder wrap: the strip stays exactly the reserved 44px
+      (--si-dock-h), the textarea rests at its single 20px line with the `❯` beside it, the placeholder is
+      simply clipped to its first line, and the terminal's bottom edge still abuts the strip's top edge
+      (zero overlap — the pane's bottom status line stays visible). Growth remains content-driven: real
+      typed/wrapped CONTENT still grows the box upward as an overlay. The bug this guards against: the
+      wrapped placeholder inflates scrollHeight, fitTextarea takes it as content, and the "resting" strip
+      grows to 64px — its opaque panel background seeping past the reserved input range and covering the
+      terminal's bottom line while the box is empty, the `❯` sunk to the placeholder's second line.
+    code: spec-dashboard/src/textarea.js
   - name: inbox-mention-dropdown-and-resolution
     tags: [frontend-e2e, desktop]
     description: >

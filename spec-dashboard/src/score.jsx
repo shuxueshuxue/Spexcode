@@ -47,7 +47,7 @@ export function ScenarioCount({ scenarios, evals }) {
 }
 
 // the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
-// scenario surfaces (focus panel, search palette, eval tab), so a tag looks identical wherever it appears.
+// scenario surfaces (search palette and eval tab), so a tag looks identical wherever it appears.
 // Empty/absent → nothing rendered; the tag values are the configured library (lint.scenarioTags).
 export function TagChips({ tags }) {
   if (!tags?.length) return null

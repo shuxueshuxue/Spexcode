@@ -29,31 +29,38 @@ Adopt it in your project — `spex init` is **additive**, it never restructures 
 
 ```sh
 cd ~/my-app
-spex init              # seed .spec/, a starter spexcode.json, and git hooks — nothing destructive
+spex init --harness claude  # seed .spec/, starter config, hooks, and the agent contract
 # 1. edit .spec/project/spec.md to describe your project
 # 2. point spexcode.json's  lint.governedRoots  at your real source dir(s)
-spex lint              # the "coverage" warnings are your adoption TODO list
+spex spec lint         # the "coverage" warnings are your adoption TODO list
 ```
 
-Run it. The backend and the dashboard are **two commands on two ports**, so several projects can run
-side by side on one host (the cwd picks which project is served):
+Run one backend from every project you want online. Each successful `spex serve` publishes its
+endpoint to the current user's host registry; additional projects only need a free backend port:
 
 ```sh
-spex serve --port 8788                       # the backend (API + sessions) for THIS repo
-spex dashboard --port 5174 --api-port 8788   # the board UI, pointed at that backend
+spex serve              # this project's backend (API + sessions), default :8787
+# In another project: spex serve --port 8788
 ```
 
-Then open <http://localhost:5174>. With no flags, `spex serve` defaults to `:8787` and `spex dashboard`
-to `:5173`.
+In another shell, start the host gateway/UI once for the current user:
+
+```sh
+spex dashboard          # shared dashboard, default :5173
+```
+
+Open <http://localhost:5173/projects>. The gateway automatically discovers backends already running
+and those started later. `/projects` is the global project switcher and management surface; project
+dashboards live under `/p/:id/`. There is no per-project UI process or API/UI port pairing.
 
 Day to day:
 
 | command | what it does |
 | --- | --- |
-| `spex lint` | check the spec↔code graph — coverage, drift, and the living-body rules |
-| `spex watch` | stream session / board transitions as they happen |
-| `spex guide` | print the full workflow, plus the `spec.md` / `yatsu.md` file-format manuals |
-| `spex board` | dump the current board state as JSON |
+| `spex spec lint` | check the spec↔code graph — coverage, drift, and the living-body rules |
+| `spex session watch` | stream session transitions as they happen |
+| `spex guide` | print the setup workflow; topics cover the `spec.md` and `eval.md` formats |
+| `spex graph --json` | dump the current assembled view as JSON |
 
 The spec tree is ground truth and git is its database: every change is a `spec.md` node, **rewritten in
 place** (never a `## vN` changelog) and versioned by its commits.
@@ -72,13 +79,15 @@ npm --prefix spec-dashboard install
 npm run hooks          # install the per-clone git hooks (main-guard + the session-stamp hook)
 ```
 
-The development loop runs from source, with hot-reload — this is what `npm run web` is for, as opposed
-to an installed user's `spex dashboard`:
+The development loop runs from source with hot reload:
 
 ```sh
 npm run api            # backend on :8787, hot-reloads on spec-cli/src changes
 npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 ```
+
+These are contributor-only source commands. Installed users run `spex serve` in each project and one
+`spex dashboard` for the host; they do not run the Vite development server.
 
 The contribution ritual in one breath: branch `node/<id>` off `main`, make the code change **and** its
 `spec.md` *together*, commit, then `spex session done --propose merge` — a human performs the `--no-ff`

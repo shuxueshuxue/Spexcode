@@ -80,18 +80,10 @@ export function setToken(text, key, value) {
   return serialize(out)
 }
 
-// the conjunctive matcher over page-supplied field predicates:
-// fields = { <key>: (item, value) => bool, $text: (item, lowercasedWord) => bool }.
-// A qualifier the page defines no field for matches NOTHING — the unknown token is kept, runs, and
-// yields the honest filtered zero; never an error, never stripped, never a full-text fallback.
-export const buildMatcher = (tokens, fields) => {
-  const eff = effectiveTokens(tokens)
-  return (item) => eff.every((t) => (
-    t.key == null
-      ? fields.$text(item, t.value.toLocaleLowerCase())
-      : typeof fields[t.key] === 'function' ? fields[t.key](item, t.value) : false
-  ))
-}
+// MATCHING is deliberately NOT here: this module owns text — scan/serialize/surgery/suggestions and the
+// canonical-address discipline — while the conjunctive field matching (including the unknown-qualifier
+// IMPOSSIBLE state) lives in the ONE [[review-filters]] engine, reached through its tokenFilterState
+// bridge. A second predicate here would be the exact fork the fusion removed.
 
 // canonical address discipline: the default view is the BARE page address; any other state is exactly
 // ?q=<raw text>. An emptied submit falls back to the default (→ bare).

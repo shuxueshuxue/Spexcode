@@ -61,6 +61,12 @@ test('compact groups omit fake one-value facets and retain active off-switches',
   const groups = filterMenuGroups(activeGone, () => {}, ['author'])
   assert.equal(groups.length, 1)
   assert.deepEqual(groups[0].options, [{ value: '', label: 'reviewList.all' }])
+
+  // a fixed-value ENUM facet keeps its ACTIVE value as a real checked row even at zero data — the
+  // Source session group never hides its own off-switch while session:present is active
+  const activePresence = issueFilterModel([{ id: '1', concern: 'only', status: 'open', by: 'human' }], { session: 'present' }, { t, sessions: [] })
+  assert.deepEqual(activePresence.shown, [])
+  assert.deepEqual(activePresence.facets.session.options.map((option) => option.value), ['', 'present', 'missing'])
 })
 
 test('the canonical bridge maps token text into engine state without a second parser', () => {
@@ -72,7 +78,14 @@ test('the canonical bridge maps token text into engine state without a second pa
     { q: [], ok: 'current', session: 'missing', filer: 'w-1' })
   // duplicate qualifiers are last-wins, same as every reader of the text
   assert.deepEqual(tokenFilterState('state:open state:closed', 'issue'), { q: [], state: 'closed' })
+  // a quoted colon phrase stays ONE substring end to end (the migrated legacy free q)
+  const colonItems = [{ id: '1', concern: 'run drift:check now', status: 'open' }, { id: '2', concern: 'other', status: 'open' }]
+  assert.deepEqual(
+    issueFilterModel(colonItems, tokenFilterState('is:issue "drift:check"', 'issue'), { sessions, t }).shown.map((item) => item.id),
+    ['1'],
+  )
   // an unknown qualifier, or the wrong is: identity, is the IMPOSSIBLE state — honest zero downstream
   assert.deepEqual(tokenFilterState('frobnicate:xyz', 'issue'), { impossible: true, q: [] })
   assert.deepEqual(tokenFilterState('is:eval', 'issue'), { impossible: true, q: [] })
+  assert.deepEqual(issueFilterModel(colonItems, tokenFilterState('state:open frobnicate:xyz', 'issue'), { sessions, t }).shown, [])
 })

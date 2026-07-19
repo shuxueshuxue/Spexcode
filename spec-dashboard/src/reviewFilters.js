@@ -24,10 +24,13 @@ export const kindsOf = (reading) => {
 const optionLabel = (t, key, fallback) => t ? t(key) : fallback
 const allOption = (t) => ({ value: '', label: optionLabel(t, 'reviewList.all', 'All') })
 const optionsFor = (items, facet, state, context, t) => {
-  const found = facet.fixedValues
-    ? facet.fixedValues.filter((value) => items.some((item) => values(facet.values(item, context)).map(String).includes(String(value))))
-    : unique(items.map((item) => facet.values(item, context)))
   const active = state[facet.key] != null && String(state[facet.key]) !== ''
+  // a fixed-value ENUM facet keeps its ACTIVE value as a real (checked) row even when no data carries
+  // it — an active facet must never hide its own off-switch; data-valued facets stay data-derived.
+  const found = facet.fixedValues
+    ? facet.fixedValues.filter((value) => (active && String(state[facet.key]) === String(value))
+      || items.some((item) => values(facet.values(item, context)).map(String).includes(String(value))))
+    : unique(items.map((item) => facet.values(item, context)))
   const available = facet.available
     ? facet.available(found, items, state, context)
     : found.length >= (facet.minValues ?? 2)

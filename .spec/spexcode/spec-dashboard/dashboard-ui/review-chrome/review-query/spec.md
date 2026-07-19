@@ -31,10 +31,11 @@ consumer that needs canonical review addresses (e.g. eval anchors on other board
 - **Surgery is the only write.** setToken rewrites a key at its first position, drops later duplicates,
   appends when absent, and removes the key on an empty value; every other token — known or not — keeps
   its order and spelling. Reads and the matcher agree on LAST-occurrence-wins for a duplicated qualifier.
-- **The matcher is conjunctive and honest.** Pages supply field predicates per qualifier plus one $text
-  predicate for lowercased bare words. A qualifier the page defines no field for matches NOTHING — the
-  unknown token is kept, uncolored, runs, and yields the filtered-zero empty face; never an error, never
-  stripped, never a full-text fallback.
+- **Matching is delegated, never duplicated.** This module owns TEXT — scan/serialize, surgery, the
+  canonical-address discipline, suggestions, and last-wins duplicate resolution (effectiveTokens). The
+  conjunctive field matching — bare words as conjunctive substrings, the unknown-qualifier IMPOSSIBLE
+  state that keeps the token verbatim and honestly shows nothing — lives in the ONE [[review-filters]]
+  engine, reached through its token→state bridge; no second predicate exists here.
 - **Default view = bare address.** queryParam compares token-normalized text against the page default
   (Issues `is:issue state:open`, Evals `is:eval state:current`) — equal or empty means the bare page
   address, anything else exactly `?q=<raw text>`. The evidence default is `all` with no hidden

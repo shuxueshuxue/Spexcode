@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/EvalsFeed.jsx
+  - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
 ---
 
@@ -26,7 +27,10 @@ question: does the source session still EXIST on the board?
   [[review-chrome]]'s low-cardinality menu mechanism as the `session:present|missing` token — UI wording
   "Source session / Present / Missing" (中文「来源会话 / 仍在 / 已不在」). The words live/online/offline
   never appear on this facet: it asks presence, not connectivity. Picking a value is token surgery + a
-  history PUSH; All removes the token.
+  history PUSH; All removes the token. Options are data-derived through the [[review-filters]] adapter:
+  a one-sided dataset hides the INACTIVE menu (no fake control), but an ACTIVE value is always a real
+  CHECKED row with All releasable even at zero results — an active facet never hides its own
+  off-switch, and the visible text remains a second, canonical release.
 - **Present means: the source session still resolves on the current board — any zone.** For an issue,
   the source is its originator (`issue.by`) or any reply author; for a reading, its filer (`by`). The
   judgment is the ONE membership join this node owns — `session.js`'s `sessionPresent` — so no surface

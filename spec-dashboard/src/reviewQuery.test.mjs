@@ -1,14 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, buildMatcher, effectiveTokens, hasLegacyParams,
+  EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, effectiveTokens, hasLegacyParams,
   legacyQueryText, normalizeQuery, queryParam, readToken, sameQuery, scanQuery, scopedEvalQuery,
   serialize, setToken, suggestAt, tokenize,
 } from './reviewQuery.js'
 
-// The ONE token-query engine ([[review-query]]): parse loses nothing, surgery preserves strangers,
-// unknown qualifiers match nothing, legacy params replay as the full visible state, and autocomplete
-// stays bounded to page-supplied candidates.
+// The ONE token-text engine ([[review-query]]): parse loses nothing, surgery preserves strangers,
+// legacy params replay as the full visible state, and autocomplete stays bounded to page-supplied
+// candidates. MATCHING lives in [[review-filters]] — its tests own the field semantics.
 
 test('scan preserves every character and tokenize round-trips, quotes included', () => {
   const text = '  is:issue   state:open  "long title"  node:"a b"  frobnicate:xyz bare '
@@ -40,32 +40,10 @@ test('token surgery rewrites in place, dedupes, appends, removes — strangers v
   assert.equal(readToken(setToken('state:open', 'node', 'a b'), 'node'), 'a b')
 })
 
-test('duplicate qualifiers: last wins for reads and the matcher', () => {
+test('duplicate qualifiers: last wins for every reader', () => {
   assert.equal(readToken('state:open state:closed', 'state'), 'closed')
   const eff = effectiveTokens(tokenize('state:open bare state:closed'))
   assert.deepEqual(eff.map((t) => t.raw), ['bare', 'state:closed'])
-
-  const fields = {
-    state: (item, v) => item.state === v,
-    $text: (item, w) => item.title.includes(w),
-  }
-  const match = buildMatcher(tokenize('state:open state:closed'), fields)
-  assert.equal(match({ state: 'closed', title: '' }), true)
-  assert.equal(match({ state: 'open', title: '' }), false)
-})
-
-test('unknown qualifiers match NOTHING; bare words search text, lowercased', () => {
-  const fields = {
-    state: (item, v) => item.state === v,
-    $text: (item, w) => item.title.toLocaleLowerCase().includes(w),
-  }
-  const items = [{ state: 'open', title: 'Terminal Bug' }, { state: 'closed', title: 'other' }]
-  assert.deepEqual(items.filter(buildMatcher(tokenize('state:open TERMINAL'), fields)), [items[0]])
-  // the unknown token is kept and runs — to zero results, never a full-text fallback
-  assert.deepEqual(items.filter(buildMatcher(tokenize('frobnicate:xyz'), fields)), [])
-  assert.deepEqual(items.filter(buildMatcher(tokenize('state:open frobnicate:xyz'), fields)), [])
-  // a quoted phrase is ONE substring
-  assert.deepEqual(items.filter(buildMatcher(tokenize('"terminal bug"'), fields)), [items[0]])
 })
 
 test('default equivalence: bare address for the default view, ?q verbatim otherwise', () => {
@@ -107,9 +85,6 @@ test('legacy structured params replay as the FULL visible token state', () => {
     'is:issue state:open session:present "drift:check"')
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { state: 'open', q: 'say "hi"' }),
     'is:issue state:open "say hi"')
-  const colonFields = { $text: (item, w) => item.title.toLocaleLowerCase().includes(w) }
-  assert.equal(buildMatcher(tokenize('"drift:check"'), colonFields)({ title: 'run drift:check now' }), true)
-  assert.equal(buildMatcher(tokenize('"drift:check"'), colonFields)({ title: 'other' }), false)
 })
 
 test('autocomplete is bounded: keys complete in place, values only from supplied candidates', () => {

@@ -35,9 +35,11 @@ const Settings = lazy(() => import('./Settings.jsx'))
 const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
 const nodeTypes = { spec: SpecNode }
-// node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
+// node box (used only to frame the camera on a node). NW/NH must track the .spec-node size in
 // styles.css: it's now two rows (title line + editor/last-edited line) and a bit wider for longer titles.
 const NW = 220, NH = 46
+// Leave room for the ancestor spine beside the floating session list on narrower desktop screens.
+const FOCUS_X_BIAS = 136
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
@@ -275,15 +277,16 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     animRef.current = requestAnimationFrame(step)
   }, [getViewport, setViewport])
 
-  // recentre on a node; when `zoom` is omitted (arrow-nav) the current zoom is reused, so it's a pure flat-pan
+  // Frame a node slightly right of centre; when `zoom` is omitted (arrow-nav) the current zoom is reused,
+  // so this remains a pure flat-pan.
   const centerOn = useCallback((node, zoom, dur = 300) => {
     const el = graphRef.current
     if (!el) return
     const z = zoom ?? getViewport().zoom
-    animateView({ x: el.clientWidth / 2 - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
+    animateView({ x: el.clientWidth / 2 + FOCUS_X_BIAS - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
   }, [animateView, getViewport])
 
-  // center the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
+  // Frame the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
   // camera. Gated on the route: a deep-load on another page keeps the graph hidden (zero-sized), so framing
   // waits for the first visit instead of measuring a display:none container.
   const framedRef = useRef(false)
@@ -295,7 +298,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   }, [centerOn, focus, page])
 
   // The camera follows the KEYBOARD, not the mouse ([[keyboard-nav]]): a keyboard or programmatic focus move
-  // pans to recenter the new focus; a mouse click expands in place and the board STAYS. Node positions are a
+  // pans to frame the new focus; a mouse click expands in place and the board STAYS. Node positions are a
   // fixed structural embedding — a node's x/y depends only on tree shape, never on which node is focused — so a
   // click's expand shifts nothing already on screen; only the camera would move, and that's the keyboard's alone.
   // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.

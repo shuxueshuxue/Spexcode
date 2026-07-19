@@ -45,12 +45,8 @@ The runtime owns five shared contracts:
   it — false on a natural stop, true on the settle that follows a blocked one, reset by the first allowed
   stop — and on block re-enters the gate's parsed reason through the host's inject. Without the bit every
   settle reads as a FIRST stop, a gate that can never pass (the commit gate on a 0-commit worktree) blocks
-  forever, and the loop ends only when the host process dies — the measured one-shot wedge: pi's print
-  mode disposes its session while the loop still runs, the next inject throws "extension ctx is stale"
-  into the host, the rejection is dropped, and the record wedges `active` (rc=97 through both recovery
-  turns). So an inject the host can no longer take is caught LOUD on stderr, never thrown into the host
-  and never silent — the out-of-process one-shot recovery ([[harness-adapter]]) is the layer that survives
-  the process.
+  forever. An inject the host can no longer take is caught LOUD on stderr, never thrown into the host and
+  never silent.
 - **tool-input normalization** — the host's file-path spelling (pi `path`, opencode `filePath`) is moved
   onto claude's `file_path`, the key every claude-family handler reads.
 

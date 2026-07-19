@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { HARNESSES, type HarnessArtifacts } from './harness.js'
 import { runtimeRoot, readConfig, mainCheckout } from './layout.js'
@@ -18,6 +19,10 @@ import { dematerialize } from './materialize.js'
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex'] as const
+
+// Init and uninstall share one ownership source for generated git hooks: the shipped canonical templates.
+// Exact bytes prove the destination is still our derivative; any user edit withdraws that ownership.
+const HOOK_TEMPLATES = fileURLToPath(new URL('../templates/hooks', import.meta.url))
 
 // is this dir a SpexCode plugin bundle? Either its folder name is the identity stamp, or its
 // `.claude-plugin/plugin.json` declares `name: spexcode`. Read-gated so a user's other plugin is never touched.
@@ -65,18 +70,18 @@ function hooksDir(proj: string): string | null {
   }
 }
 
-// remove the SpexCode git hooks — but ONLY a hook whose content carries a SpexCode identity marker, so a user's
-// own pre-commit is never deleted. Per-clone hooks are preserved by default; this runs only under `--hooks`.
+// Remove only byte-identical products of the canonical hook templates. Enumerating the same template directory
+// init copies keeps every generated hook covered without a second name list; modified and unrelated hooks survive.
 function removeHooks(proj: string): string[] {
   const dir = hooksDir(proj)
   if (!dir) return []
   const removed: string[] = []
-  for (const name of ['pre-commit', 'prepare-commit-msg']) {
-    const f = join(dir, name)
-    if (existsSync(f) && /spexcode/i.test(readFileSync(f, 'utf8'))) {
-      rmSync(f, { force: true })
-      removed.push(name)
-    }
+  for (const e of readdirSync(HOOK_TEMPLATES, { withFileTypes: true })) {
+    if (!e.isFile()) continue
+    const hook = join(dir, e.name)
+    if (!existsSync(hook) || !readFileSync(hook).equals(readFileSync(join(HOOK_TEMPLATES, e.name)))) continue
+    rmSync(hook, { force: true })
+    removed.push(e.name)
   }
   return removed
 }
@@ -128,8 +133,8 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   if (store) console.log(`✓ removed the global per-project store (${store})`)
   if (bundles.length) console.log(`✓ removed plugin bundle(s): ${bundles.join(', ')}`)
 
-  // git hooks are per-clone and may carry user logic → preserved unless --hooks (and even then only a hook that
-  // carries a SpexCode identity marker).
+  // Git hooks are per-clone and may carry user logic → preserved unless --hooks (and even then only while
+  // byte-identical to a canonical generated template; a user edit withdraws our ownership).
   if (opts.hooks) {
     const removed = removeHooks(proj)
     if (removed.length) console.log(`✓ removed git hooks (${removed.join(', ')})`)

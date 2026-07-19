@@ -19,7 +19,7 @@ related:
 
 ## raw source
 
-SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Codex, and pi
+SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Codex, OpenCode, and pi
 ([[pi-harness]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
@@ -255,109 +255,14 @@ surface:
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
-  JSON-RPC turn delivery live in the Codex adapter.
-- **headless (`HarnessHeadless` + `harnessOps`)** — a harness's HEADLESS (one-shot turn) capability object,
-  mirroring `agentDir`'s "null = no such primitive" pattern: `{ needsCmd, launchCmd, liveness, deliver,
-  resumeArg }`, or null when the harness has no headless form (none today — all four ship one; the null
-  contract stays for future adapters, whose headless create fails loud at the create path). A session's
-  `mode` is a PRODUCT dimension, so the ONE router
-  `harnessOps(h, mode)` (a mode branch, never a harness branch) picks the capability object for a headless
-  record and the interactive adapter for everything else; sessions.ts's launch/liveness/occupancy/waitForReady/
-  send/reopen all route through it, and `rvEnv` omits the rendezvous vars for any headless launch (no daemon
-  will listen; injecting them would make the record LOOK socket-addressable to every rendezvous consumer).
-  **claude's headless form is live** and is a ONE-SHOT `-p` PROCESS PER TURN: `needsCmd:true` — the
-  launcher's `headlessCmd` IS the agent command (a complete `… -p` invocation the config author writes;
-  create pins it as the record's launch cmd), and `launchCmd` embeds that pin WHOLE — zero parsing, and a
-  headless record without one is corruption, fail loud, never a silent interactive fallback (which would boot
-  a TUI nobody attends). The launch script template is mode-routed too: a one-shot process's FAST EXIT IS THE
-  TURN COMPLETING, so exit 0 ends the script with no retry (the interactive template's fast-exit-means-failure
-  retry loop would double-run a small task) and a non-zero exit prints the rc and fails loud. The hook path
-  is ZERO-CHANGE (verified live): `-p` mode fires the same hooks — mark-active flips the record, the
-  stop-gate's decision:block forces the continuation, declarations land — so the state machine never knows
-  the mode. Liveness is TURN-scoped: online iff the window is up AND the registered `agent.pid` is alive
-  (both launch.sh and each injected turn re-register it; legacy fallback = the claude-ish descendant tree
-  walk), so between turns the record's DECLARED lifecycle rules the display and an undeclared `active` with
-  no process honestly reads offline (a crash, since the stop-gate guarantees a non-crash exit declares).
-  `deliver` is the NEXT TURN: a still-registered live pid refuses loud (two concurrent `-p --resume` on one
-  claude session is undefined behavior — never a silent queue); idle, it writes a turn script (first act:
-  re-register `agent.pid`; then `exec env … <pinned headlessCmd> --resume <id> '<msg>'`) and types it into
-  the session pane — delivered = the pid file's fresh re-registration proves the turn PROCESS started (the
-  hooks take the record from there); a pane that swallows the line (not at a shell prompt) times out loud,
-  never a false `sent`. `resumeArg` is EMPTY: a headless session's continuation IS its next delivery, and
-  resume must never hand the one-shot command a fabricated prompt (the mbp wrapper's "Continue…" lesson —
-  the system never invents instructions on the human's behalf), so resumeSession's headless-with-empty-tail
-  path just ensures the window (the next turn's injection target) and points the caller at send.
-  **pi's and opencode's headless forms are live** and are the SAME one-shot shape, produced by the ONE
-  shared builder (`oneShotHeadlessOps` over the `ONE_SHOT_HEADLESS` data registry): the whole machinery —
-  pinned-headlessCmd-whole launch, turn-scoped pid liveness, injected-turn delivery with its born
-  re-registration and busy/no-window refusals, empty resumeArg — is written ONCE (claude's ops are the same
-  builder over claude data), and each harness contributes only DATA: its agent-ish process matcher (the busy
-  gate + legacy liveness fallback; pi's is `pi\b|node` so a tool subprocess named `ping` never reads as the
-  agent), its adapter-owned launch flags, and its continue-this-conversation turn flag — so adding a
-  one-shot harness adds a data row, never code. pi is claude-shaped end to end (`needsCmd:true`,
-  `headlessCmd` e.g. `pi -p`): the launch tail already pins `--session-id <record id>`, a turn resumes
-  exactly that id with `--session <record id>` (which FAILS LOUD when the session file is gone — never a
-  silent fresh mint, the same choice as interactive resume), and `--approve` (pi's one-run project trust)
-  rides the launch AND every injected turn, because each turn is a FRESH pi process that must load the
-  project extension — the hook shim — with zero prompts (appending an adapter-owned flag is not rewriting
-  the pinned command, which stays whole). opencode (`needsCmd:true`, `headlessCmd` e.g. `opencode run`)
-  mints its own session id headless exactly as interactive: `run` boots the same server and loads the same
-  project plugin as the TUI, so the minted-id capture (`harness_session_id`) and every hook fire unchanged;
-  a turn resumes `--session <captured id>`, falling to `--continue` (opencode's own
-  last-session-in-this-directory — this worker's, in a dedicated worktree) when no capture ever landed,
-  mirroring the interactive resumeArg. The one-shot scripts (launch and injected turn alike) also close the
-  stop-gate contract OUT of process — the **undeclared-exit recovery**: some one-shot harnesses drop the
-  gate's in-process continuation at exit (`opencode run` returns without awaiting the plugin's session.idle
-  handler — REPRODUCED: gate rejected, teach sentinel planted, process gone, record wedged `active`; `pi -p`
-  disposes its session once the initial prompt resolves, so a gate continuation orphaned past that point
-  throws "extension ctx is stale" into the host — REPRODUCED the same way, and closed IN process by pi's
-  Stop binding pair (awaited `agent_end` drain + the consume-once `agent_settled` backstop) with
-  [[shim-runtime]]'s `dispatchStop`: the `stop_hook_active` termination bit lets the gate's escape paths end
-  the loop before disposal, a lost inject reported loud), so
-  after a CLEAN agent exit the script reads the record and, while still UNDECLARED (active/queued), fires a
-  bounded continuation turn on the SAME conversation carrying the gate's declare instruction — the gate's
-  own contract restated, never a fabricated task; two tries then exit 97 loud. A declared/absent record
-  exits 0 untouched, so harnesses whose in-process gate held (claude's native Stop-block; pi's/opencode's
-  flagged settle-inject, normally) never fire it. All three one-shot substrates are LIVE-verified (2026-07-18, pi
-  0.80.10 / opencode 1.18.3): the shim extension/plugin loads in the one-shot mode, the lifecycle events
-  fire, the resume turn provably continues the SAME conversation, and pi's `--session` on a vanished id
-  fails loud — and the dispatched-lifecycle scenarios below carry real product-loop readings (pi: the
-  stop-gate wedge's A/B pair + the full lifecycle; opencode: the recovery's A/B pair) — while the full
-  eight-behavior matrix through real DISPATCHED
-  headless workers remains the merge-acceptance bar for reworking any of these adapters (the acceptance
-  section above).
-  **codex's headless form is live** and is the interactive launch MINUS the
-  TUI attach: `needsCmd:false` — the executor already IS the shared app-server (the task runs as the
-  backend-owned thread's FIRST turn on both paths; the interactive pane TUI only renders it), so `headlessCmd`
-  never participates and the app-server binary still derives from the pinned interactive `cmd`'s first token
-  (the version-parity invariant). `launchCmd` reuses `codexLaunchCommand` byte-for-byte — app-server bootstrap,
-  mkdir lock, `codex-launch` thread/start + first turn + rollout wait, the `--resume` marker branch — except
-  the final line: instead of `codex --remote … resume`, the pane prints a thread banner and `exec tail -f`s the
-  app-server log, a read-only placeholder that keeps the pane/close/terminal-backdoor semantics at zero cost.
-  That makes a DOUBLE EXECUTION structurally impossible — the pane holds no agent to fire a second turn (the
-  mbp wrapper incident this answers: a hand-built headless launcher ran the task prompt AND a pane "Continue…"
-  turn concurrently for 34 minutes, double task_complete in one rollout; here there is no process that could).
-  Headless liveness is TURN-scoped: the caller's snapshot batches every windowed codex-headless session's owned
-  thread id into ONE `codexThreadsInProgress` sweep (`thread/read{includeTurns}` per id over one WS connection,
-  TTL-cached against the 1s warm tier) and carries the verdict on the snapshot's online-signal channel — an
-  `inProgress` turn reads online/working; an idle thread reads not-online so the DECLARED lifecycle rules the
-  display (the stop-gate guarantees a non-crash turn end declares, and a still-`active` idle thread honestly
-  reads offline); a probe TIMEOUT lands in `unproven` → `unknown` (a busy server is not a dead one), while a
-  DEAD socket reads offline — the app-server IS the executor, so its death is the session's. The placeholder
-  pid is deliberately ignored. RPC shapes re-verified live against codex 0.144.3 (2026-07-17): identical to the
-  0.142.x pin (`turns[].status: "inProgress"→"completed"`, `thread/loaded/list → result.data`; 0.144 adds a
-  thread-level `status.type: active|idle` we don't yet consume), so the target-state probe shipped directly,
-  no degraded path. `deliver` and the first-turn/hook paths are the interactive channel VERBATIM (app-server
-  JSON-RPC steer-vs-start on the owned thread; hooks fire from the shared server and never depended on the
-  pane); `resumeArg` is the same `--resume <tid>` marker, which on the headless script resumes the owned
-  thread directly and lands on the placeholder — a headless reopen recreates the read-only pane, fires
-  nothing, and the conversation's continuation is simply the next delivery. One deliberate occupancy
-  consequence: a headless session holds a `maxActive` slot only while a turn actually executes, so
-  between-turn gaps free concurrency — intended, not a leak.
+  JSON-RPC turn delivery live in the Codex adapter. Launch also registers the interactive agent process in
+  `agent.pid`; adapters may use that per-session signal alongside their native transport proof. OpenCode
+  prefers its rendezvous listener and falls back to the registered pid, so a plugin-load failure still reads
+  honestly. Claude/pi use their live listener, while Codex uses the visible pane's descendant process tree.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-`slash-commands.ts`. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
+`slash-commands.ts`. They now live in `harness.ts` (four interactive adapters gathered in `HARNESSES`),
 which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
 `if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.

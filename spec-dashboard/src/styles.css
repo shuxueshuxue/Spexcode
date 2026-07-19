@@ -2196,19 +2196,26 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-path { flex: 1 1 120px; min-width: 0; color: var(--muted); font-size: var(--type-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; flex-wrap: wrap; }
 
-/* the row's one-at-a-time drawer (doctor report / password / init) */
+/* the row's one-at-a-time drawer (portable config / doctor report / password / init) */
 .proj-drawer { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); margin-top: 7px; padding-top: 8px; }
 
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 
-/* the register drawer and the per-row setup drawer ([[projects-hub]]) — same drawer bones, palette
+/* the register, config, and setup drawers ([[projects-hub]]) — same drawer bones, palette
    tokens only, so every theme preset skins them for free. The transcript block is the spawned spex
    verb's honest output: monospace, scrollable, never truncated by the UI. */
 .proj-add .proj-add-path { flex: 1 1 220px; }
 .proj-full { flex-basis: 100%; }
-.proj-setup { flex-direction: column; align-items: stretch; gap: 6px; }
+.proj-setup, .proj-config { flex-direction: column; align-items: stretch; gap: 6px; }
 .proj-setup-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.proj-preset { flex: 1 1 140px; }
+.proj-config-head { min-height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink2); font-size: var(--type-meta); }
+.proj-config-editor {
+  box-sizing: border-box; width: 100%; min-height: 220px; resize: vertical; margin: 0; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 4px; outline: none; background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-relaxed); tab-size: 2;
+}
+.proj-config-editor:focus { border-color: var(--blue); }
+.proj-config-editor.invalid { border-color: var(--red); }
 .proj-op-status { font-size: var(--type-meta); }
 .proj-op-status.ok { color: var(--green); }
 .proj-op-status.fail { color: var(--red); }

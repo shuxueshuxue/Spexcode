@@ -13,6 +13,7 @@ import { useResizable } from './useResizable.js'
 import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import { navigate } from './route.js'
+import { scopedEvalQuery } from './reviewQuery.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
 
@@ -551,7 +552,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     type: () => setTypeMode((v) => !v),
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
     // navigate to the session-scoped list (a real page switch, history-walked), never a console-local pane.
-    eval: () => { if (active !== 'new') navigate('evals', null, { query: { session: active } }) },
+    eval: () => { if (active !== 'new') navigate('evals', null, { query: { q: scopedEvalQuery(active) } }) },
     merge: () => act('merge'),
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
@@ -785,7 +786,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
               WebSockets + scroll survive the tab switch. A horizontal TAB BAR sits above the pane content —
               the Terminal tab plus the Eval DOOR ([[session-console]]: the session's evaluation lives on
-              the Evals route family, so the entry NAVIGATES to `#/evals?session=<id>` instead of mounting a
+              the Evals route family, so the entry NAVIGATES to the scoped default list (`?q=is:eval
+              state:current scope:<id>`) instead of mounting a
               console-local pane) — and carries the lifecycle actions on its right. */}
           <div
             className="si-session-wrap"

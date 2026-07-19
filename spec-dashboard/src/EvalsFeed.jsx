@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { scenarioStates } from './score.jsx'
-import { liveSession, sessionHeadline } from './session.js'
-import { FacetMenu, FacetOverflow, ListPage, nextQuery, ReviewListRow, ReviewState } from './ReviewShell.jsx'
+import { sessionHeadline } from './session.js'
+import { FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState } from './ReviewShell.jsx'
+import { EVAL_QUERY_DEFAULT, readToken, setToken } from './reviewQuery.js'
+import { evalFilterModel, kindsOf, tokenFilterState } from './reviewFilters.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -9,29 +11,16 @@ import { Icon } from './icons.jsx'
 // through the shared [[review-chrome]] ListPage. The unit is the SCENARIO, never the reading — latest
 // reading per (node, scenario), fresh AND stale mixed newest-first — so the list is bounded by declared
 // scenarios, not by measurement count (and needs no pagination). Rows use the shared two-level ListView
-// primitive and remain REAL anchors; media loads only on the detail page. Query, Current/Reviewed section,
-// and every real data facet are URL state written as a history PUSH, so Back replays the whole face.
+// primitive and remain REAL anchors; media loads only on the detail page. The WHOLE face is ONE visible
+// token query ([[review-query]]) bridged into the ONE field-semantics engine ([[review-filters]]):
+// sections and low-cardinality menus are pure builders doing token surgery + PUSH, node/filer/scope are
+// token-only, and Back replays text + results exactly.
 
 const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
-const shortId = (value) => String(value || '').length > 22 ? `${String(value).slice(0, 8)}…` : value
 
-// normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
-// present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
-// the same scalar→list bridge the eval sidecar's evidenceOf does, so a legacy reading still renders.
-export const evidenceList = (r) =>
-  r.evidence?.length ? r.evidence
-  : r.blob != null ? [{ hash: r.blob, kind: r.blobKind || 'image', state: r.blobState || 'present' }]
-  : []
-
-// a reading's evidence kinds as a SET (video-first), or ['note'] when it carries no blob at all. Kinds stay
-// HONEST: a MIXED reading (images + a video) belongs to EVERY kind it contains — it advertises all its media
-// and none it lacks; a blob-less verdict is a 'note', never a media kind. 'note' is a data-level kind only —
-// it is not a filter option and carries no row tag; such readings surface under the 'all' filter.
-export const kindsOf = (r) => {
-  const ev = evidenceList(r)
-  if (!ev.length) return ['note']
-  return ['video', 'image', 'transcript', 'data'].filter((k) => ev.some((e) => e.kind === k))
-}
+// the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
+// autocomplete offers; anything else stays plain and matches nothing.
+export const EVAL_QUERY_KEYS = ['is', 'state', 'verdict', 'freshness', 'evidence', 'node', 'filer', 'session', 'scope']
 
 // flatten board nodes → list entries via the ONE latest-per-scenario computation (scenarioStates).
 export function currentEntries(nodes) {
@@ -86,59 +75,34 @@ const rel = (ts) => {
   return `${Math.floor(s / 86400)}d`
 }
 
-// Blind spots have scenario/node/query identity and the unscored verdict, but no reading facts. Keeping
-// this predicate pure makes that absence explicit and testable instead of letting inert rows bypass facets.
-export const blindMatchesFilters = (blind, { kind, verdict, freshness, node, filer, liveOnly, q }) => (
-  kind === 'all'
-  && (!verdict || verdict === 'unscored')
-  && !freshness
-  && (!node || blind.node === node)
-  && !filer
-  && !liveOnly
-  && (!q || [blind.scenario, blind.node].some((value) => String(value).toLocaleLowerCase().includes(q)))
-)
-
 // `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
 // scope from the board prop, the session scope from the worktree-rooted model). `blind`: the session
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
-// reading to open). `query`/`onQuery`: the URL-held filter state and its push writer ([[evals-view]]).
-// `hrefFor`: an entry's detail address. Session scope is another real overflow facet over this same model.
-export default function EvalsGroup({ entries = [], blind = [], sessions = [], query = {}, onQuery, hrefFor, notice = null, error = null, empty = null }) {
+// reading to open) — they travel through the SAME engine as reading:false items, so they honestly own
+// only their node/unscored/query/section facts. `queryText`/`onQueryText`: the URL's raw token text and
+// its push writer ([[evals-view]] — the writer owns the default↔bare equivalence).
+export default function EvalsGroup({ entries = [], blind = [], sessions = [], queryText = '', onQueryText, hrefFor, notice = null, error = null, empty = null }) {
   const t = useT()
-  const hasVideo = entries.some((e) => kindsOf(e).includes('video'))
-  const hasImage = entries.some((e) => kindsOf(e).includes('image'))
-  const kind = ['video', 'image', 'all'].includes(query.kind) ? query.kind : (hasVideo ? 'video' : hasImage ? 'image' : 'all')
-  const liveOnly = query.live === '1'
-  const reviewedSection = query.ok === '1'
-  const q = (query.q || '').trim().toLocaleLowerCase()
-  const verdict = query.verdict || ''
-  const freshness = query.freshness || ''
-  const node = query.node || ''
-  const filer = query.filer || ''
-  const set = (patch) => onQuery(nextQuery(query, patch))
+  const text = String(queryText ?? '').trim() || EVAL_QUERY_DEFAULT
+  // every control is a BUILDER over the committed text: token surgery, then one history PUSH.
+  const surgery = (key, value) => onQueryText(setToken(text, key, value))
 
-  // [[live-session-filter]]: a reading is LIVE while its filer session (e.by) is still alive — the same
-  // liveSession join the filer chip renders, so the facet and the dots can never disagree.
-  const isLive = (e) => !!liveSession(sessions, e.by)
-  const verdictOf = (e) => e.verdict?.status || 'unscored'
-  const reviewed = (e) => !!(e.fresh && e.humanOk)
-  const matches = (e) => (
-    (kind === 'all' || kindsOf(e).includes(kind))
-    && (!verdict || verdictOf(e) === verdict)
-    && (!freshness || (freshness === 'fresh' ? e.fresh === true : e.fresh !== true))
-    && (!node || e.node === node)
-    && (!filer || e.by === filer)
-    && (!liveOnly || isLive(e))
-    && (!q || [e.scenario, e.node, e.by, e.evaluator].filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(q)))
+  const filterItems = useMemo(() => [
+    ...entries.map((entry) => ({ ...entry, reading: true, filterKind: 'reading', source: entry })),
+    ...blind.map((entry) => ({ ...entry, reading: false, filterKind: 'blind', source: entry })),
+  ], [entries, blind])
+  // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
+  // engine state; tab counts come out computed under the REST of the query (sections never see their
+  // own token), so switching tabs can never make the other tab's number jump.
+  const filters = useMemo(
+    () => evalFilterModel(filterItems, tokenFilterState(text, 'eval'), { sessions, t, defaultKind: 'all', defaultSection: '' }),
+    [filterItems, text, sessions, t],
   )
-  const faceted = useMemo(() => entries.filter(matches), [entries, kind, verdict, freshness, node, filer, liveOnly, q, sessions])
-  const currentCount = faceted.filter((e) => !reviewed(e)).length
-  const reviewedCount = faceted.filter(reviewed).length
-  const shown = faceted.filter((e) => reviewed(e) === reviewedSection)
-
-  const shownBlind = reviewedSection ? [] : blind.filter((b) => blindMatchesFilters(b, {
-    kind, verdict, freshness, node, filer, liveOnly, q,
-  }))
+  const shown = filters.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
+  const shownBlind = filters.shown.filter((item) => item.filterKind === 'blind').map((item) => item.source)
+  const currentCount = filters.sections.current || 0
+  const reviewedCount = filters.sections['1'] || 0
+  const section = readToken(text, 'state')
 
   const rows = [
     ...shownBlind.map((b) => ({
@@ -152,56 +116,52 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
     ...shown.map((e) => ({ key: entryKey(e), href: hrefFor(e), content: <EvalRow e={e} /> })),
   ]
 
-  const allOption = { value: '', label: t('reviewList.all') }
-  const verdictValues = [...new Set(entries.map(verdictOf))]
-  const verdictOptions = [allOption, ...verdictValues.map((value) => ({ value, label: t(`reviewList.verdict.${value}`) }))]
-  const freshnessValues = [...new Set(entries.map((e) => (e.fresh === true ? 'fresh' : 'stale')))]
-  const freshnessOptions = freshnessValues.length > 1
-    ? [allOption, ...freshnessValues.map((value) => ({ value, label: t(`reviewList.freshness.${value}`) }))]
-    : []
-  const nodeValues = [...new Set(entries.map((e) => e.node).filter(Boolean))]
-  const nodeOptions = nodeValues.length > 1 ? [allOption, ...nodeValues.map((value) => ({ value, label: value }))] : []
-  const filerValues = [...new Set(entries.map((e) => e.by).filter(Boolean))]
-  const filerOptions = filerValues.length ? [allOption, ...filerValues.map((value) => ({
-    value,
-    label: sessions.find((session) => session.id === value) ? sessionHeadline(sessions.find((session) => session.id === value)) : shortId(value),
-  }))] : []
-  const scopeOptions = sessions.length
-    ? [{ value: '', label: t('evals.scopeMerged') }, ...sessions.map((session) => ({ value: session.id, label: sessionHeadline(session) }))]
-    : []
-  const liveCount = entries.filter(isLive).length
-  const liveOptions = (liveOnly || liveCount > 0) ? [allOption, { value: '1', label: t('reviewList.live') }] : []
-  const kindOptions = [
-    { value: 'all', label: t('evalsFeed.kind.all') },
-    { value: 'video', label: t('evalsFeed.kind.video') },
-    { value: 'image', label: t('evalsFeed.kind.image') },
-  ]
+  // menus are pure query builders over the ADAPTER's data-derived options — zero private state; the
+  // evidence default is `all` (a plain enum default, never data-dependent) and All removes the token.
+  const verdictFacet = filters.facets.verdict
+  const freshnessFacet = filters.facets.freshness
+  const kindFacet = filters.facets.kind
+  const sessionFacet = filters.facets.session
+  const evidenceToken = readToken(text, 'evidence')
 
   return (
     <ListPage
       notice={notice}
       error={error}
       title={t('evalsFeed.title')}
-      search={{ value: query.q || '', onSubmit: (value) => set({ q: value || null }), placeholder: t('reviewList.searchEvals'), label: t('reviewList.search') }}
+      search={{
+        value: String(queryText ?? '').trim() ? queryText : EVAL_QUERY_DEFAULT,
+        onSubmit: onQueryText,
+        placeholder: t('reviewList.searchEvals'),
+        label: t('reviewList.search'),
+        keys: EVAL_QUERY_KEYS,
+        // bounded autocomplete candidates: values present in the DATA — and scope, board sessions ONLY.
+        suggest: {
+          node: [...new Set(entries.map((e) => e.node).filter(Boolean))].map((value) => ({ value })),
+          filer: [...new Set(entries.map((e) => e.by).filter(Boolean))].map((value) => {
+            const s = sessions.find((session) => session.id === value)
+            return { value, label: s ? sessionHeadline(s) : null }
+          }),
+          scope: sessions.map((session) => ({ value: session.id, label: sessionHeadline(session) })),
+        },
+      }}
       sections={[
-        { key: 'current', label: t('reviewList.current'), count: currentCount + shownBlind.length, active: !reviewedSection, onSelect: () => set({ ok: null }) },
-        { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: reviewedSection, onSelect: () => set({ ok: '1' }) },
+        // Current is the DEFAULT section: with no (or an unknown) state: token it stays the active tab,
+        // so the tablist always exposes one roving tab stop and the panel is labelled by a selected tab.
+        { key: 'current', label: t('reviewList.current'), count: currentCount, active: section !== 'reviewed', onSelect: () => surgery('state', 'current') },
+        { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: section === 'reviewed', onSelect: () => surgery('state', 'reviewed') },
       ]}
       facets={
         <>
-          <FacetMenu label={t('reviewList.facetVerdict')} value={verdict} options={verdictOptions} clearLabel={allOption.label} onChange={(value) => set({ verdict: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetFreshness')} value={freshness} options={freshnessOptions} clearLabel={allOption.label} onChange={(value) => set({ freshness: value || null })} />
-          <FacetMenu label={t('reviewList.facetKind')} value={kind} options={kindOptions} onChange={(value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value })} />
-          <FacetMenu label={t('reviewList.facetNode')} value={node} options={nodeOptions} clearLabel={allOption.label} onChange={(value) => set({ node: value || null })} />
+          <FacetMenu label={verdictFacet.label} value={verdictFacet.value} options={verdictFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('verdict', value)} mobile />
+          <FacetMenu label={freshnessFacet.label} value={freshnessFacet.value} options={freshnessFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('freshness', value)} />
+          <FacetMenu label={kindFacet.label} value={kindFacet.value} options={kindFacet.options} onChange={(value) => surgery('evidence', value === 'all' ? '' : value)} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
-        { label: t('reviewList.facetFiler'), value: filer, active: !!filer, options: filerOptions, onChange: (value) => set({ filer: value || null }) },
-        { label: t('reviewList.facetScope'), value: query.session || '', active: !!query.session, options: scopeOptions, onChange: (value) => set({ session: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetFreshness'), value: freshness, active: !!freshness, options: freshnessOptions, onChange: (value) => set({ freshness: value || null }), mobileOnly: true },
-        { label: t('reviewList.facetKind'), value: kind, active: !!query.kind, options: kindOptions, clearLabel: null, onChange: (value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value }), mobileOnly: true },
-        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }), mobileOnly: true },
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+        { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
+        { label: freshnessFacet.label, value: freshnessFacet.value, active: !!freshnessFacet.value, options: freshnessFacet.options, onChange: (value) => surgery('freshness', value), mobileOnly: true },
+        { label: kindFacet.label, value: kindFacet.value, active: !!evidenceToken, options: kindFacet.options, clearLabel: null, onChange: (value) => surgery('evidence', value === 'all' ? '' : value), mobileOnly: true },
       ]} />}
       rows={rows}
       empty={empty || {

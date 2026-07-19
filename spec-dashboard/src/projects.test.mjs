@@ -3,14 +3,14 @@ import assert from 'node:assert/strict'
 import {
   normalizeProject, normalizeProjects, loadProjects, probeProjectHealth,
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
-  addProject, runProjectOp, initProject, doctorProject, startProjectBackend,
+  addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
 // contract ([[gateway-hub]] / [[host-gateway]]) — the catalog shape, the status-code denial reasons
 // (401 admin-login / 403 locked), the PUT/DELETE password writes, the health probe's redirect
 // blindness, the credential post's routing, and the management verbs (register / init / doctor /
-// start-backend) with their transcript passthrough. The HTTP layer is stubbed; the real gateway
+// config source / start-backend) with their transcript passthrough. The HTTP layer is stubbed; the real gateway
 // round-trip is the YATU rig.
 
 const jsonRes = (status, body, extra = {}) => ({
@@ -147,14 +147,39 @@ test('addProject surfaces the host refusal verbatim (400 not-a-repo), tolerates 
   assert.deepEqual(dead, { ok: false, error: 'network' })
 })
 
-test('initProject carries the EXPLICIT harness choice (+ optional preset) in the body; op url encoded', async () => {
+test('project config loads and revision-guarded saves the raw source; ids encoded', async () => {
+  const calls = []
+  const impl = async (url, init) => {
+    calls.push({ url, method: init?.method, body: init?.body && JSON.parse(init.body) })
+    return jsonRes(200, init?.method === 'PUT'
+      ? { ok: true, content: '{"preset":"default"}\n', revision: 'rev-2' }
+      : { content: '{}\n', revision: 'rev-1' })
+  }
+  const loaded = await withFetch(impl, () => loadProjectConfig('a b'))
+  const saved = await withFetch(impl, () => saveProjectConfig('a b', '{"preset":"default"}', loaded.revision))
+  assert.deepEqual(calls[0], { url: '/projects/a%20b/config', method: undefined, body: undefined })
+  assert.deepEqual(calls[1], {
+    url: '/projects/a%20b/config', method: 'PUT',
+    body: { content: '{"preset":"default"}', revision: 'rev-1' },
+  })
+  assert.deepEqual(saved, { ok: true, content: '{"preset":"default"}\n', revision: 'rev-2' })
+})
+
+test('project config surfaces conflicts and rejects malformed server answers', async () => {
+  const conflict = await withFetch(async () => jsonRes(409, { error: 'spexcode.json changed on disk — reload before saving' }),
+    () => saveProjectConfig('a', '{}', 'old'))
+  assert.equal(conflict.status, 409)
+  assert.match(conflict.error, /changed on disk/)
+  const malformed = await withFetch(async () => jsonRes(200, { content: '{}' }), () => loadProjectConfig('a'))
+  assert.deepEqual(malformed, { ok: false, error: 'unexpected answer' })
+})
+
+test('initProject carries only the EXPLICIT harness choice in the body; preset lives in spexcode.json', async () => {
   const calls = []
   const impl = async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return jsonRes(200, { ok: true, code: 0, output: '✓ done' }) }
-  await withFetch(impl, () => initProject('a b', 'claude,codex', 'default'))
-  await withFetch(impl, () => initProject('a b', 'claude'))
+  await withFetch(impl, () => initProject('a b', 'claude,codex'))
   assert.equal(calls[0].url, '/projects/a%20b/init')
-  assert.deepEqual(calls[0].body, { harness: 'claude,codex', preset: 'default' })
-  assert.deepEqual(calls[1].body, { harness: 'claude' })   // no preset key when not chosen
+  assert.deepEqual(calls[0].body, { harness: 'claude,codex' })
 })
 
 test('runProjectOp: truth is the exit code + transcript — a 200 with a non-zero code is a FAILED run', async () => {

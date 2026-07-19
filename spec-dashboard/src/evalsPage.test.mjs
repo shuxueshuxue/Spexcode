@@ -38,26 +38,29 @@ test('opening a filer or originator session uses no retired eval-view state', ()
   assert.doesNotMatch(callback, /\b(?:setEvalView|evalView)\b/)
 })
 
-test('blind eval rows obey every reading-only facet and remain inert', () => {
-  const source = feed.match(/export const blindMatchesFilters = ([\s\S]*?\n\))\n\n\/\//)?.[1]
-  assert.ok(source, 'blindMatchesFilters stays a directly testable pure predicate')
-  const matches = Function(`return (${source})`)()
-  const blind = { node: 'alpha', scenario: 'never measured' }
-  const base = { kind: 'all', verdict: '', freshness: '', node: '', filer: '', liveOnly: false, q: '' }
+test('blind eval rows obey every reading-only token and remain inert', async () => {
+  // the FUSED path: token text ([[review-query]]) bridged into the one engine ([[review-filters]])
+  const { evalFilterModel, tokenFilterState } = await import('./reviewFilters.js')
+  const blind = { node: 'alpha', scenario: 'never measured', reading: false }
+  const matches = (text) => evalFilterModel([blind], tokenFilterState(text, 'eval'), { sessions: [], defaultKind: 'all' }).shown.length === 1
 
-  assert.equal(matches(blind, base), true)
-  assert.equal(matches(blind, { ...base, verdict: 'unscored' }), true)
-  assert.equal(matches(blind, { ...base, node: 'alpha' }), true)
-  assert.equal(matches(blind, { ...base, q: 'never' }), true)
-  assert.equal(matches(blind, { ...base, kind: 'video' }), false)
-  assert.equal(matches(blind, { ...base, kind: 'image' }), false)
-  assert.equal(matches(blind, { ...base, freshness: 'fresh' }), false)
-  assert.equal(matches(blind, { ...base, freshness: 'stale' }), false)
-  assert.equal(matches(blind, { ...base, filer: 'session-id' }), false)
-  assert.equal(matches(blind, { ...base, liveOnly: true }), false)
-  assert.equal(matches(blind, { ...base, verdict: 'pass' }), false)
-  assert.equal(matches(blind, { ...base, node: 'beta' }), false)
-  assert.equal(matches(blind, { ...base, q: 'absent' }), false)
+  assert.equal(matches('is:eval state:current'), true)
+  assert.equal(matches('verdict:unscored'), true)
+  assert.equal(matches('node:alpha'), true)
+  assert.equal(matches('never'), true)
+  assert.equal(matches('scope:s-1 state:current'), true)
+  assert.equal(matches('state:reviewed'), false)
+  assert.equal(matches('evidence:video'), false)
+  assert.equal(matches('evidence:image'), false)
+  assert.equal(matches('freshness:fresh'), false)
+  assert.equal(matches('freshness:stale'), false)
+  assert.equal(matches('filer:session-id'), false)
+  assert.equal(matches('session:present'), false)
+  assert.equal(matches('session:missing'), false)
+  assert.equal(matches('verdict:pass'), false)
+  assert.equal(matches('node:beta'), false)
+  assert.equal(matches('absent'), false)
+  assert.equal(matches('frobnicate:xyz'), false)
 
   const blindRows = feed.slice(feed.indexOf('...shownBlind.map'), feed.indexOf('...shown.map'))
   assert.match(blindRows, /cls: 'se-blind'/)

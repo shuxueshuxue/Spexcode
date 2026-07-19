@@ -1,16 +1,18 @@
 import { navigate, parseRoute, routeHash } from './route.js'
+import { nodeEvalQuery, scopedEvalQuery } from './reviewQuery.js'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
-// with a scenario: the canonical full-page eval DETAIL. Without one: the node's AGGREGATE entry — the
-// Evals LIST filtered to that node. Every aggregate score/count affordance mints its href through THIS
-// helper, so the list-filter grammar lives in exactly one place: today it is the list's structured
-// `node` facet; when the token-query grammar lands ([[review-chrome]] — `q=is:eval state:current
-// node:<id>`) the swap happens here and nowhere else.
+// with a scenario: the canonical full-page eval DETAIL (path only — the detail hash carries no list
+// filters). Without one: the node's AGGREGATE entry — the Evals LIST filtered to that node
+// (`?q=is:eval state:current node:<id>`, [[review-query]]'s canonical token text). Every aggregate
+// score/count affordance mints its href through THIS helper, so the list-filter grammar lives in
+// exactly one place.
 export const evalAddress = (nodeId, scenario = null) => ({ kind: 'eval', nodeId, scenario })
-// a session's SCOPED eval address ([[session-eval]]): the Evals pages carrying ?session=<id> — the list,
-// or one scenario's worktree-rooted reading — the address an MR/CI note pastes for one-click review.
+// a session's SCOPED eval address ([[session-eval]]): the Evals pages carrying the `scope:<id>` token —
+// the scoped default list, or one scenario's worktree-rooted reading (`?q=scope:<id>` alone, never list
+// filters) — the address an MR/CI note pastes for one-click review.
 export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'session-eval', sessionId, nodeId, scenario })
 
 export function addressHash(address) {
@@ -19,13 +21,13 @@ export function addressHash(address) {
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
     const param = address.nodeId && address.scenario ? `${address.nodeId}/${address.scenario}` : null
-    return routeHash('evals', param, { session: address.sessionId })
+    return routeHash('evals', param, { q: param ? `scope:${address.sessionId}` : scopedEvalQuery(address.sessionId) })
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') {
     return address.scenario
       ? routeHash('evals', `${address.nodeId}/${address.scenario}`)
-      : routeHash('evals', null, { node: address.nodeId })
+      : routeHash('evals', null, { q: nodeEvalQuery(address.nodeId) })
   }
   return routeHash('graph')
 }

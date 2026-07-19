@@ -4,6 +4,7 @@
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
 //   POST /projects {root}                register an existing repo into the durable catalog
+//   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
 //   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)
 //   POST /login · POST /p/:id/login      the credential posts (JSON {password}; success 302s, wrong 401)
@@ -125,10 +126,40 @@ export async function addProject(root) {
   return project ? { ok: true, project } : { ok: false, error: 'unexpected answer' }
 }
 
+// Raw portable project settings — the host fixes the file at <root>/spexcode.json and serves it even
+// while the project's backend is offline. `revision` is echoed on save to prevent lost concurrent edits.
+// The host-specific spexcode.local.json never crosses this browser surface.
+export async function loadProjectConfig(id) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}/config`, {
+      cache: 'no-store', headers: { Accept: 'application/json' },
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  if (typeof data?.content !== 'string' || typeof data?.revision !== 'string') return { ok: false, error: 'unexpected answer' }
+  return { ok: true, content: data.content, revision: data.revision }
+}
+
+export async function saveProjectConfig(id, content, revision) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}/config`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ content, revision }),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  if (typeof data?.content !== 'string' || typeof data?.revision !== 'string') return { ok: false, error: 'unexpected answer' }
+  return { ok: true, content: data.content, revision: data.revision }
+}
+
 // run a host operation in a registered repo — POST /projects/:id/(init|doctor). These spawn the REAL
 // spex verb with cwd = the project root; the HTTP answer is 200 whether the verb succeeded or not, and
 // truth is the exit code + transcript: { ok, code, output }. init carries the EXPLICIT harness choice
-// (a comma list of ids — the CLI refuses to run without one) and the optional preset tier.
+// (a comma list of ids — the CLI refuses to run without one); preset policy stays in spexcode.json.
 export async function runProjectOp(id, op, body = {}) {
   let res
   try {
@@ -142,8 +173,7 @@ export async function runProjectOp(id, op, body = {}) {
   if (!data || typeof data !== 'object') return { ok: false, error: 'unexpected answer' }
   return { ok: data.ok === true, code: data.code ?? null, output: String(data.output ?? '') }
 }
-export const initProject = (id, harness, preset) =>
-  runProjectOp(id, 'init', { harness, ...(preset ? { preset } : {}) })
+export const initProject = (id, harness) => runProjectOp(id, 'init', { harness })
 export const doctorProject = (id) => runProjectOp(id, 'doctor')
 
 // start an OFFLINE project's backend — POST /projects/:id/serve. The host spawns a detached `spex

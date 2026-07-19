@@ -3,7 +3,8 @@ import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import {
   loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
-  setAdminPassword, clearAdminPassword, addProject, initProject, doctorProject, startProjectBackend,
+  setAdminPassword, clearAdminPassword, addProject, loadProjectConfig, saveProjectConfig,
+  initProject, doctorProject, startProjectBackend,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -15,10 +16,12 @@ import CredentialGate from './CredentialGate.jsx'
 // shows liveness (the host's instance-validated `online` refined by a probed /p/:id/health dot for the
 // end-to-end truth), the gating state, a password set/clear drawer, and either Open (online — a plain
 // project-scoped link, `/p/<id>/#/graph`) or Start (offline — POST /projects/:id/serve boots the real
-// detached `spex serve` and resolves only when its record reconciles online). The setup drawer runs the
-// REAL spex verbs in the repo (POST /projects/:id/init|doctor): init demands the explicit harness
-// choice (the CLI refuses without one) with the optional preset tier alongside; every run renders its
-// exit code + full transcript in place, a failure stays visible and the button is the retry. The header
+// detached `spex serve` and resolves only when its record reconciles online). The settings gear edits
+// the raw committed spexcode.json through the host admin surface, even while the backend is offline;
+// saves are JSON-validated and revision-guarded. A separate setup drawer runs the REAL spex verbs in
+// the repo (POST /projects/:id/init|doctor): init demands the explicit harness choice (the CLI refuses
+// without one), while preset stays in spexcode.json; every run renders its exit code + full transcript
+// in place, a failure stays visible and the button is the retry. The header
 // carries the ADMIN password control: `adminGated:false` means management is implicit-loopback-only, so
 // the page offers the bootstrap (the hub keeps the setter signed in by rotating their cookie). It
 // renders only as the global `/projects` hub face. Freshness is a plain poll (catalog every few seconds;
@@ -87,13 +90,85 @@ function AddProjectForm({ onAdded, t }) {
   )
 }
 
+// The settings gear means settings: edit the ONE portable source file verbatim. Missing files arrive as
+// `{}`; the revision returned by the host makes a concurrent disk edit a visible conflict on save.
+function ConfigDrawer({ p, t }) {
+  const [loaded, setLoaded] = useState(null) // { content, revision } | null
+  const [content, setContent] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(false)
+  const [reload, setReload] = useState(0)
+
+  useEffect(() => {
+    let live = true
+    setLoaded(null); setError(null); setSaved(false)
+    loadProjectConfig(p.id).then((r) => {
+      if (!live) return
+      if (!r.ok) { setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+      setLoaded({ content: r.content, revision: r.revision }); setContent(r.content)
+    })
+    return () => { live = false }
+  }, [p.id, reload, t])
+
+  let invalid = false
+  try {
+    const parsed = JSON.parse(content)
+    invalid = !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+  } catch { invalid = true }
+  const dirty = !!loaded && content !== loaded.content
+
+  const save = async () => {
+    if (!loaded || invalid || !dirty || busy) return
+    setBusy(true); setError(null); setSaved(false)
+    const r = await saveProjectConfig(p.id, content, loaded.revision)
+    setBusy(false)
+    if (!r.ok) { setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    setLoaded({ content: r.content, revision: r.revision }); setContent(r.content); setSaved(true)
+  }
+
+  return (
+    <div className="proj-drawer proj-config">
+      <div className="proj-config-head">
+        <code>spexcode.json</code>
+        {saved && <span className="proj-op-status ok">{t('projects.configSaved')}</span>}
+      </div>
+      {!loaded ? (
+        <div className="proj-setup-row">
+          {!error && <span className="proj-dim">{t('projects.configLoading')}</span>}
+          {error && <>
+            <span className="proj-err">{error}</span>
+            <button className="proj-act" type="button" onClick={() => setReload((n) => n + 1)}>{t('projects.configReload')}</button>
+          </>}
+        </div>
+      ) : <>
+        <textarea
+          className={invalid ? 'proj-config-editor invalid' : 'proj-config-editor'}
+          value={content}
+          onChange={(e) => { setContent(e.target.value); setSaved(false); setError(null) }}
+          aria-label={t('projects.configEditor')}
+          spellCheck={false}
+          disabled={busy}
+        />
+        <div className="proj-setup-row">
+          <button className="proj-act primary" type="button" disabled={!dirty || invalid || busy} onClick={save}>
+            {busy ? t('projects.configSaving') : t('projects.configSave')}
+          </button>
+          <button className="proj-act" type="button" disabled={busy} onClick={() => setReload((n) => n + 1)}>{t('projects.configReload')}</button>
+          {invalid && <span className="proj-err">{t('projects.configInvalid')}</span>}
+          {error && <span className="proj-err">{error}</span>}
+        </div>
+      </>}
+    </div>
+  )
+}
+
 // the setup drawer — the real management verbs for one registered repo. init requires the explicit
 // harness choice (multi-select chips over the native vocabulary; none picked = the button stays dark),
-// the preset stays optional; doctor is one press. The result block is the spawned verb's honest
+// while preset stays in spexcode.json; doctor is one press. The result block is the spawned verb's honest
 // answer: exit code + transcript, kept on screen (success or failure), the same button the retry.
 function SetupDrawer({ p, busyOp, run, result, t }) {
   const [harnesses, setHarnesses] = useState([])
-  const [preset, setPreset] = useState('')
   const toggle = (id) => setHarnesses((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]))
   return (
     <div className="proj-drawer proj-setup">
@@ -111,21 +186,12 @@ function SetupDrawer({ p, busyOp, run, result, t }) {
         ))}
       </div>
       <div className="proj-setup-row">
-        <input
-          className="proj-add-path proj-preset"
-          value={preset}
-          onChange={(e) => setPreset(e.target.value)}
-          placeholder={t('projects.presetPlaceholder')}
-          aria-label={t('projects.presetPlaceholder')}
-          spellCheck={false}
-          disabled={!!busyOp}
-        />
         <button
           className="proj-act primary"
           type="button"
           disabled={!!busyOp || !harnesses.length}
           title={harnesses.length ? undefined : t('projects.harnessRequired')}
-          onClick={() => run('init', () => initProject(p.id, harnesses.join(','), preset.trim() || undefined))}
+          onClick={() => run('init', () => initProject(p.id, harnesses.join(',')))}
         >{busyOp === 'init' ? t('projects.running') : t('projects.init')}</button>
         <button
           className="proj-act"
@@ -149,7 +215,7 @@ function SetupDrawer({ p, busyOp, run, result, t }) {
 }
 
 function ProjectRow({ p, health, onRefresh, t }) {
-  const [panel, setPanel] = useState(null)   // 'pw' | 'setup' | null
+  const [panel, setPanel] = useState(null)   // 'config' | 'setup' | 'pw' | null
   const [busy, setBusy] = useState(false)    // password writes
   const [busyOp, setBusyOp] = useState(null) // 'init' | 'doctor' | 'serve' | null
   const [error, setError] = useState(null)
@@ -189,6 +255,13 @@ function ProjectRow({ p, health, onRefresh, t }) {
         <span className="proj-actions">
           <IconButton
             icon="settings"
+            label={t('projects.configTitle')}
+            className={panel === 'config' ? 'proj-act icon on' : 'proj-act icon'}
+            size={13}
+            onClick={() => { setPanel((v) => (v === 'config' ? null : 'config')); setError(null) }}
+          />
+          <IconButton
+            icon="terminal"
             label={t('projects.setupTitle')}
             className={panel === 'setup' ? 'proj-act icon on' : 'proj-act icon'}
             size={13}
@@ -223,6 +296,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
           onClear={() => run(() => clearProjectPassword(p.id))}
         />
       )}
+      {panel === 'config' && <ConfigDrawer p={p} t={t} />}
       {panel === 'setup' && <SetupDrawer p={p} busyOp={busyOp} run={runOp} result={result} t={t} />}
     </li>
   )

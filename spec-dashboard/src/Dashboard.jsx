@@ -32,11 +32,8 @@ const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
 
 const nodeTypes = { spec: SpecNode }
-// node box (used only to frame the camera on a node). NW/NH must track the .spec-node size in
-// styles.css: it's now two rows (title line + editor/last-edited line) and a bit wider for longer titles.
-const NW = 220, NH = 46
-// Leave room for the ancestor spine beside the floating session list on narrower desktop screens.
-const FOCUS_X_BIAS = 136
+// Layout coordinates name the node centre, so camera framing never needs to duplicate the rendered tile size.
+const NODE_ORIGIN = [0.5, 0.5]
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
@@ -270,13 +267,13 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     animRef.current = requestAnimationFrame(step)
   }, [getViewport, setViewport])
 
-  // Frame a node slightly right of centre; when `zoom` is omitted (arrow-nav) the current zoom is reused,
+  // Frame a node at the graph pane's geometric centre; when `zoom` is omitted (arrow-nav) the current zoom is reused,
   // so this remains a pure flat-pan.
   const centerOn = useCallback((node, zoom, dur = 300) => {
     const el = graphRef.current
     if (!el) return
     const z = zoom ?? getViewport().zoom
-    animateView({ x: el.clientWidth / 2 + FOCUS_X_BIAS - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
+    animateView({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z }, dur)
   }, [animateView, getViewport])
 
   // Frame the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
@@ -285,8 +282,10 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   const framedRef = useRef(false)
   useEffect(() => {
     if (framedRef.current || page !== 'graph') return
-    framedRef.current = true
-    const id = requestAnimationFrame(() => centerOn(focus, undefined, 0))
+    const id = requestAnimationFrame(() => {
+      framedRef.current = true
+      centerOn(focus, undefined, 0)
+    })
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus, page])
 
@@ -377,6 +376,12 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
         return
       }
       if (overlay) {
+        // a focused form field, an OPEN MENU, or a menu TRIGGER inside the popup owns its unmodified keys
+        // ([[keyboard-nav]]'s native-control restraint, extended for the embedded review filters): typing
+        // (h/j/l/digits), caret arrows, menu roving, and ArrowDown-to-open must never become pane switches
+        // or scrolls. Escape still falls through — the esc stack peels the menu first, then this branch
+        // closes the popup.
+        if (e.key !== 'Escape' && e.target?.closest?.('input, textarea, select, [role="menu"], [role="menuitemradio"], [aria-haspopup="menu"]')) return
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         // the popup is a LENS, not a modal ([[keyboard-nav]]): Shift+nav (⇧h/j/k/l, ⇧arrows) walks the
         // tree exactly like the bare board — the popup stays open and follows the new focus (NodeView is
@@ -535,6 +540,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={onNodeContextMenu}
+          nodeOrigin={NODE_ORIGIN}
           zoomOnDoubleClick={false}
           nodesDraggable={false}
           nodesFocusable={false}
@@ -593,7 +599,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
-      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
+      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} onClose={() => setOverlay(false)} />}
       {/* the console mounts immediately (warm terminals) — its chunk just arrives a beat after the shell;
           nothing renders in its place while it loads (it's hidden unless routed to anyway). */}
       <Suspense fallback={null}>

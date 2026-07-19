@@ -105,7 +105,7 @@ an EMPTY box always rests at its single line, its placeholder clipping rather th
 strip taller than the space the terminal reserved. Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying the **Terminal** tab on the left plus an **Eval door**: Terminal shows the live
 pane with the docked `❯` input; the Eval entry is a **DOOR, not a tab** — clicking it (or the typed
-`/eval`) NAVIGATES to the session-scoped Evals list (`#/evals?session=<id>`, [[session-eval]] /
+`/eval`) NAVIGATES to the session-scoped Evals list (the scoped default query, [[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
 see [[live-view]]). The bar wears the app-chrome background with a bottom separator, so it reads

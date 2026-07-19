@@ -5,9 +5,10 @@ import { useLaunchers } from './launch.js'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { liveSession } from './session.js'
 import Modal from './Modal.jsx'
-import { DetailShell, FacetMenu, FacetOverflow, ListPage, nextQuery, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
+import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
+import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
+import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { Icon } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
@@ -36,11 +37,15 @@ const issueNumber = (id) => {
   return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
 }
 
-const actorName = (actor) => String(actor || '').length > 22 ? `${String(actor).slice(0, 8)}…` : actor
+// the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
+// autocomplete offers; anything else stays plain and matches nothing.
+export const ISSUE_QUERY_KEYS = ['is', 'state', 'store', 'author', 'node', 'session']
 
-// The LIST page (`#/issues[?query]`): RESIDENT data — the page renders instantly from app-held state
-// ([[issues-view]]); query, Open/Closed section, and real model facets are URL-query state, re-derived on
-// every hashchange so Back replays them exactly.
+// The LIST page (`#/issues[?q=<raw tokens>]`): RESIDENT data — the page renders instantly from app-held
+// state ([[issues-view]]); the WHOLE face is ONE visible token query ([[review-query]]) bridged into the
+// ONE field-semantics engine ([[review-filters]]): sections and low-cardinality menus are pure builders
+// doing token surgery + PUSH over the COMMITTED text, author/node are token-only, and the list
+// re-derives everything from the URL on every hashchange so Back replays it exactly.
 export function IssuesListPage({ data, reloadIssues, specs, sessions, query, notice, flash }) {
   const t = useT()
   const [composing, setComposing] = useState(false)
@@ -49,33 +54,23 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
   const all = Array.isArray(data.issues) ? data.issues : []
-  const storeFilter = query.store || ''
-  const closedSection = query.state === 'closed' || query.concluded === '1'
-  const liveOnly = query.live === '1'
-  const author = query.author || ''
-  const node = query.node || ''
-  const q = (query.q || '').trim().toLocaleLowerCase()
-  // a human's filter pick PUSHES the new list address (GitHub's semantics — Back walks filter history).
-  const set = (patch) => navigate('issues', null, { query: nextQuery(query, patch) })
+  const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
+  // a human's edit/tab/menu action PUSHES the canonical address — bare for the default view, exactly
+  // ?q=<raw text> otherwise (GitHub's semantics — Back walks filter history).
+  const push = (nextText) => navigate('issues', null, { query: queryParam(nextText, ISSUE_QUERY_DEFAULT) })
+  const surgery = (key, value) => push(setToken(text, key, value))
 
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
   const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  // [[live-session-filter]]: an issue is LIVE while a session behind it is still alive — its originator
-  // (i.by) or any reply author; the join is session.js's liveSession, the same judgment the originator
-  // chip's dot renders, so the chip-filtered list and the dots can never disagree.
-  const isLive = (i) => !!liveSession(sessions, i.by) || (Array.isArray(i.replies) && i.replies.some((r) => liveSession(sessions, r.by)))
-  const faceted = all.filter((issue) => (
-    (!storeFilter || issue.store === storeFilter)
-    && (!author || issue.by === author)
-    && (!node || issue.nodes?.includes(node))
-    && (!liveOnly || isLive(issue))
-    && (!q || [issue.id, issue.concern, issue.by, ...(issue.nodes || [])].filter(Boolean)
-      .some((value) => String(value).toLocaleLowerCase().includes(q)))
-  ))
-  const openCount = faceted.filter((issue) => !concluded(issue)).length
-  const closedCount = faceted.filter(concluded).length
-  const issues = faceted.filter((issue) => concluded(issue) === closedSection)
+  // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
+  // engine state; tab counts come out computed under the REST of the query (the section never sees its
+  // own token), and the presence facet is the adapter's session:present|missing.
+  const filters = issueFilterModel(all, tokenFilterState(text, 'issue'), { sessions, t, defaultSection: '' })
+  const issues = filters.shown
+  const openCount = filters.sections.open || 0
+  const closedCount = filters.sections.closed || 0
+  const section = readToken(text, 'state')
 
   // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
   // the store mini-tag renders only while stores are actually mixed ([[issues-view]]).
@@ -92,7 +87,7 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
             meta={(
               <>
                 <span data-tip={th.id}>{issueNumber(th.id)}</span>
-                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: actorName(th.by) })}</span>}
+                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: reviewActorName(th.by) })}</span>}
                 {th.created && <span>{t('reviewList.openedAt', { at: age(th.created) })}</span>}
               </>
             )}
@@ -109,35 +104,39 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
     }
   })
 
-  const allOption = { value: '', label: t('reviewList.all') }
-  const authorValues = [...new Set(all.map((issue) => issue.by).filter(Boolean))]
-  const authorOptions = authorValues.length ? [allOption, ...authorValues.map((value) => ({ value, label: actorName(value) }))] : []
-  const storeOptions = stores.length > 1 ? [allOption, ...stores.map((value) => ({ value, label: value }))] : []
-  const nodeValues = [...new Set(all.flatMap((issue) => issue.nodes || []).filter(Boolean))]
-  const nodeOptions = nodeValues.length > 1 ? [allOption, ...nodeValues.map((value) => ({ value, label: value }))] : []
-  const liveCount = all.filter(isLive).length
-  const liveOptions = (liveOnly || liveCount > 0) ? [allOption, { value: '1', label: t('reviewList.live') }] : []
+  // menus are pure query builders over the ADAPTER's data-derived options — zero private state.
+  const storeFacet = filters.facets.store
+  const sessionFacet = filters.facets.session
 
   return (
     <ListPage
       notice={notice}
       title={t('reviewList.issuesTitle')}
       action={<button type="button" className="rl-new" onClick={() => setComposing(true)}><Icon name="plus" size={14} />{t('session.issuesNew')}</button>}
-      search={{ value: query.q || '', onSubmit: (value) => set({ q: value || null }), placeholder: t('reviewList.searchIssues'), label: t('reviewList.search') }}
+      search={{
+        value: String(query.q ?? '').trim() ? query.q : ISSUE_QUERY_DEFAULT,
+        onSubmit: push,
+        placeholder: t('reviewList.searchIssues'),
+        label: t('reviewList.search'),
+        keys: ISSUE_QUERY_KEYS,
+        // bounded autocomplete candidates for the HIGH-cardinality tokens: values present in the data
+        // only; an unknown or historical value still submits verbatim.
+        suggest: {
+          author: [...new Set(all.map((issue) => issue.by).filter(Boolean))].map((value) => ({ value })),
+          node: [...new Set(all.flatMap((issue) => issue.nodes || []).filter(Boolean))].map((value) => ({ value })),
+        },
+      }}
       sections={[
-        { key: 'open', label: t('reviewList.open'), count: openCount, active: !closedSection, onSelect: () => set({ state: null, concluded: null }) },
-        { key: 'closed', label: t('reviewList.closed'), count: closedCount, active: closedSection, onSelect: () => set({ state: 'closed', concluded: null }) },
+        // Open is the DEFAULT section: with no state: token it stays the active tab, so the tablist
+        // always exposes one roving tab stop; every non-open state spelling belongs to Closed.
+        { key: 'open', label: t('reviewList.open'), count: openCount, active: section === '' || section === 'open', onSelect: () => surgery('state', 'open') },
+        { key: 'closed', label: t('reviewList.closed'), count: closedCount, active: section !== '' && section !== 'open', onSelect: () => surgery('state', 'closed') },
       ]}
       facets={
-        <>
-          <FacetMenu label={t('reviewList.facetAuthor')} value={author} options={authorOptions} clearLabel={allOption.label} onChange={(value) => set({ author: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetStore')} value={storeFilter} options={storeOptions} clearLabel={allOption.label} onChange={(value) => set({ store: value || null })} />
-        </>
+        <FacetMenu label={storeFacet.label} value={storeFacet.value} options={storeFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('store', value)} mobile />
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
-        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetStore'), value: storeFilter, active: !!storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+        { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
       ]} />}
       rows={rows}
       empty={{

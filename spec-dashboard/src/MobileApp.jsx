@@ -7,7 +7,9 @@ import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './s
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
 import { navigate, useRoute } from './route.js'
+import { scopedEvalQuery } from './reviewQuery.js'
 import { useT } from './i18n/index.jsx'
+import { nextQuery } from './ReviewShell.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
 // reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
@@ -58,7 +60,12 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
     ...base.map((p) => ({ key: p.key, label: t(PANE_T[p.key]) })),
   ]
   const [pane, setPane] = useState(null)
-  useEffect(() => { setPane(null) }, [node.id])   // a fresh screen always opens on its first tab
+  const [filters, setFilters] = useState({ issues: {}, eval: {} })
+  useEffect(() => { setPane(null); setFilters({ issues: {}, eval: {} }) }, [node.id])   // a fresh screen always opens on its first tab
+  const updateFilter = (kind, patch) => setFilters((current) => ({
+    ...current,
+    [kind]: nextQuery(current[kind], patch),
+  }))
   const active = pane && tabs.some((p) => p.key === pane) ? pane : tabs[0].key
   // fetch the version log only when the history tab is actually up (same gate as the desktop popup)
   const rows = useHistory(node.id, active === 'history')
@@ -94,8 +101,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
         )}
         {active === 'spec' && <SpecPane node={node} />}
         {active === 'history' && <HistoryPane node={node} rows={rows} />}
-        {active === 'issues' && <IssuesPane node={node} />}
-        {active === 'eval' && <EvalPane node={node} />}
+        {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
+        {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}
         {active === 'edit' && <EditPane node={node} />}
       </div>
     </div>
@@ -106,7 +113,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
 // wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
 // is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the
 // header's one extra control — the eval DOOR that navigates to the session-scoped Evals list
-// ([[session-eval]]: `#/evals?session=<id>`, the same canonical pages the desktop uses).
+// ([[session-eval]]: the scoped default query `is:eval state:current scope:<id>`, the same canonical
+// pages the desktop uses).
 function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
   return (
@@ -119,7 +127,7 @@ function MobileSessionDetail({ s, sessions, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
-        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { session: s.id } })} title={t('sessionEval.btnTitle')}>
+        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { q: scopedEvalQuery(s.id) } })} title={t('sessionEval.btnTitle')}>
           {t('sessionEval.btn')}
         </button>
       </div>

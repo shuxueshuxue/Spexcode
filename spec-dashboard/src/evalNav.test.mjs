@@ -23,8 +23,11 @@ test('aggregate counts are anchors minted by the scenario-less evalAddress form 
   // ScenarioCount renders a REAL anchor when given the href, a passive span otherwise (the graph tile)
   assert.match(score, /if \(!href\) return <span className={`scenario-count/)
   assert.match(score, /return <a className={`scenario-count \$\{state\}`} href=\{href\}/)
-  // the list-filter grammar lives in address.js alone — no component hand-rolls the aggregate query
-  assert.match(address, /routeHash\('evals', null, \{ node: address\.nodeId \}\)/)
+  // the list-filter grammar lives in the address/query layer alone — the aggregate href is the
+  // canonical token text (default view + node qualifier), never hand-rolled in a component
+  assert.match(address, /routeHash\('evals', null, \{ q: nodeEvalQuery\(address\.nodeId\) \}\)/)
+  const reviewQuery = read('reviewQuery.js')
+  assert.match(reviewQuery, /export const nodeEvalQuery = \(nodeId\) => setToken\(EVAL_QUERY_DEFAULT, 'node', nodeId\)/)
   for (const source of [nodeView, score]) {
     assert.doesNotMatch(source, /#\/evals\?/, 'no hand-rolled evals-list hash outside address.js')
   }

@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals ListView rows and facets through [[review-chrome]] — latest reading per scenario, structured state/title/filer/time/kind rows, Current/Reviewed sections, and real verdict/freshness/kind/node/filer/scope query facets; media stays strictly lazy.
+desc: The Evals ListView rows and filters through [[review-chrome]] — latest reading per scenario, structured state/title/filer/time/kind rows, Current/Reviewed sections as state: tokens, low-cardinality verdict/freshness/evidence/presence menus and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
@@ -29,17 +29,24 @@ Default view: **latest reading per scenario, newest first — fresh and stale mi
 real measured loss and remains in the default Current section; freshness is now an honest facet, never a
 default hide. A fresh human-ok'd reading belongs to the Reviewed section while everything else belongs to
 Current, preserving the existing default attention boundary as GitHub-style mutually exclusive tabs with
-counts. The query field and verdict, freshness, evidence-kind, node, filer/live, and session-scope facets
-all travel through [[review-filters]]'s Eval adapter; page code only maps canonical hash query state to the
-shared engine, so the embedded node list cannot acquire different parsing or matching semantics. The kind
-values remain exactly video | image | all and keep the existing
-video→image→all default. Common facets stay visible on desktop, low-frequency/width-displaced facets move
+counts — `state:current` / `state:reviewed` tokens the tabs rewrite by surgery, counts computed under the
+rest of the query. Every filter is a token in [[review-chrome]]'s ONE visible query ([[review-query]]),
+and matching travels through [[review-filters]]'s Eval adapter — page code only bridges the parsed text
+into the shared engine, so the embedded node list cannot acquire different parsing or matching semantics:
+`verdict:`, `freshness:`, and `evidence:` (values exactly video | image | all; the default is `all`,
+with NO data-dependent fallback) keep low-cardinality menus that are pure query builders; the
+source-session presence facet is `session:present|missing` ([[live-session-filter]]); `node:` and
+`filer:` are HIGH-cardinality token-only dimensions — hand-typed or completed from the input's bounded
+autocomplete, never an enumerating dropdown — and `scope:` sources the worktree model ([[evals-view]]).
+Bare words search scenario/node/filer/evaluator; an unknown qualifier matches nothing, honestly. Common
+menus stay visible on desktop, low-frequency/width-displaced ones move
 to the functional overflow, and only the primary facet survives beside the tabs at 390px. **Every pick is
-URL-query state**: a human's action pushes, reload/Back fully replay, and no local filter state survives.
-If live data contracts, an active facet keeps its All off-switch. Even a missing session id under
-failed/loading/404 scope remains clearable in-page.
+URL-query state**: a human's action pushes `?q=<raw text>` (the default view stays bare), reload/Back
+fully replay, and no local filter state survives. If live data contracts, an active menu value keeps its
+All off-switch — and the visible text is always the canonical release, whatever state the scope is in.
 An inert blind-spot row participates in that SAME conjunctive contract: it can match its real node,
-unscored verdict, and query text, but a selected evidence kind, freshness, filer, or Live facet excludes it
+unscored verdict, and query text, but a selected evidence kind, freshness, filer, or source-session
+presence value excludes it
 because an unmeasured scenario owns none of those reading facts. Blind rows never leak into a filtered
 reading population and never gain an href just to satisfy list structure.
 
@@ -50,7 +57,7 @@ lists its kinds video-first (`vid·img`); it never advertises media it lacks. `n
 data-level kinds only, never filter options — they surface under `all`.
 
 **Rows use the shared two-level primitive, and each row is a REAL `<a>`** to
-`#/evals/<node>/<scenario>` (the session scope's rows carry `?session=<id>`) — shared verdict visual +
+`#/evals/<node>/<scenario>` (the worktree scope's rows carry `?q=scope:<id>` and nothing else) — shared verdict visual +
 wrapping scenario title; node, filer, and filed time below; evidence kind/scope at the right (joining the
 secondary line at 390px). No media request of any kind occurs in the list, no per-row write affordance
 (reviewing + signing lives on the detail page). A human-ok'd row adds the one settled certification mark
@@ -60,7 +67,7 @@ history PUSH onto the detail page; `j`/`k` move the cursor and Enter opens it ([
 **One data path, one computation.** The project scope's nodes arrive as a prop from the app's single
 board poll + SSE — the list fetches nothing of its own — and latest-per-scenario is `scenarioStates`, the
 same computation behind the node badge, graph stats, search, and the node eval tab; the feed never re-derives
-the current score its own way. The `?session=<id>` scope rides the one session model the page fetches
+the current score its own way. The `scope:<id>` token rides the one session model the page fetches
 ([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
 spots as inert unmeasured lines. Loading, empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

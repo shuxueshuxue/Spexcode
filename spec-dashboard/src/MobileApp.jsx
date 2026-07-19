@@ -7,6 +7,7 @@ import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './s
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
 import { navigate, useRoute } from './route.js'
+import { scopedEvalQuery } from './reviewQuery.js'
 import { useT } from './i18n/index.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
@@ -106,7 +107,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
 // wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
 // is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the
 // header's one extra control — the eval DOOR that navigates to the session-scoped Evals list
-// ([[session-eval]]: `#/evals?session=<id>`, the same canonical pages the desktop uses).
+// ([[session-eval]]: the scoped default query `is:eval state:current scope:<id>`, the same canonical
+// pages the desktop uses).
 function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
   return (
@@ -119,7 +121,7 @@ function MobileSessionDetail({ s, sessions, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
-        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { session: s.id } })} title={t('sessionEval.btnTitle')}>
+        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { q: scopedEvalQuery(s.id) } })} title={t('sessionEval.btnTitle')}>
           {t('sessionEval.btn')}
         </button>
       </div>

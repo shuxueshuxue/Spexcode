@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
+import { scanQuery, suggestAt } from './reviewQuery.js'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
 // overflow, row, and state primitives; both detail pages consume the same standalone shell.
@@ -37,12 +38,6 @@ export function ReviewState({ kind, state, showLabel = false, size = 16, classNa
       {showLabel && <span className="review-state-label">{label}</span>}
     </span>
   )
-}
-
-export function nextQuery(query, patch) {
-  const next = { ...query, ...patch }
-  for (const [key, value] of Object.entries(next)) if (value == null || value === '') delete next[key]
-  return next
 }
 
 export const listEmptyText = (empty) => (
@@ -234,12 +229,79 @@ export function ReviewListRow({ state, title, meta, aside }) {
   )
 }
 
-function QueryBar({ value = '', onSubmit, placeholder, label }) {
-  const [draft, setDraft] = useState(value)
-  useEffect(() => setDraft(value || ''), [value])
+// The token query combobox ([[review-query]] is the engine; the chrome is GitHub-measured): ONE native
+// input whose raw text is the whole list state, an aria-hidden syntax-highlight overlay UNDER it —
+// recognized qualifiers color, unknown ones stay honestly plain; the input's own glyphs are transparent
+// so caret/selection/editing stay native, never contenteditable — and a bounded inline-autocomplete
+// listbox: a KEY pick completes `key:` in place and typing continues, a VALUE pick completes the token
+// and submits immediately. Plain Enter submits the typed text verbatim.
+export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys = [], suggest = {} }) {
+  const [draft, setDraft] = useState(value || '')
+  const [caret, setCaret] = useState(-1)      // -1 = suggestions closed
+  const [active, setActive] = useState(-1)    // listbox cursor; -1 = typing, Enter submits
+  const inputRef = useRef(null)
+  const hlRef = useRef(null)
+  const listId = useId()
+  useEffect(() => { setDraft(value || ''); setCaret(-1); setActive(-1) }, [value])
+  const sug = caret >= 0 ? suggestAt(draft, caret, keys, suggest) : { start: 0, end: 0, items: [] }
+  const open = sug.items.length > 0
+  useEscLayer(open, () => setCaret(-1))
+  const syncScroll = () => { if (hlRef.current && inputRef.current) hlRef.current.scrollLeft = inputRef.current.scrollLeft }
+  useEffect(syncScroll)
+  const submit = (text) => { setCaret(-1); setActive(-1); onSubmit(text.trim()) }
+  const pick = (item) => {
+    const next = `${draft.slice(0, sug.start)}${item.insert}${draft.slice(sug.end)}`
+    setDraft(next)
+    if (item.type === 'value') { submit(next); return }
+    const pos = sug.start + item.insert.length
+    setCaret(pos)
+    setActive(-1)
+    requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.setSelectionRange(pos, pos) })
+  }
   return (
-    <form className="rl-query" role="search" onSubmit={(event) => { event.preventDefault(); onSubmit(draft.trim()) }}>
-      <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={placeholder} aria-label={label} />
+    <form className="rl-query rq" role="search" onSubmit={(event) => { event.preventDefault(); submit(draft) }}>
+      <div className="rq-wrap">
+        <div className="rq-hl" aria-hidden="true" ref={hlRef}>
+          {scanQuery(draft).map((seg, index) => (
+            seg.ws || seg.key == null || !keys.includes(seg.key)
+              ? <span key={index}>{seg.raw}</span>
+              : (
+                <span key={index} className="rq-tok">
+                  <span className="rq-tok-key">{seg.raw.slice(0, seg.key.length + 1)}</span>
+                  <span className="rq-tok-val">{seg.raw.slice(seg.key.length + 1)}</span>
+                </span>
+              )
+          ))}
+        </div>
+        <input ref={inputRef} role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list"
+          aria-activedescendant={open && active >= 0 ? `${listId}-o${active}` : undefined}
+          value={draft} spellCheck={false} autoComplete="off" placeholder={placeholder} aria-label={label}
+          onChange={(event) => { setDraft(event.target.value); setCaret(event.target.selectionStart ?? event.target.value.length); setActive(-1) }}
+          onScroll={syncScroll}
+          onKeyDown={(event) => {
+            if (!open) return
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              setActive(rovingIndex(active, sug.items.length, event.key))
+            } else if (event.key === 'Enter' && active >= 0) {
+              event.preventDefault()
+              pick(sug.items[active])
+            }
+          }}
+          onBlur={() => setCaret(-1)} />
+      </div>
+      {open && (
+        <div className="rl-menu rq-list" role="listbox" id={listId} aria-label={label}>
+          {sug.items.map((item, index) => (
+            <div key={item.insert} id={`${listId}-o${index}`} role="option" aria-selected={index === active}
+              className={`rq-opt ${index === active ? 'active' : ''}`}
+              onPointerDown={(event) => { event.preventDefault(); pick(item) }}>
+              <span className="rq-opt-token">{item.insert.trim()}</span>
+              {item.label && item.label !== item.value && <span className="rq-opt-label">{item.label}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       <button type="submit" className="rl-query-submit" data-tip={label} aria-label={label}><Icon name="search" size={16} /></button>
     </form>
   )
@@ -283,7 +345,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
           <h1>{title}</h1>
           {action}
         </div>
-        {search && <QueryBar {...search} />}
+        {search && <TokenQueryInput {...search} />}
         {error && <div className="fv-error lp-error" role="alert">{error}</div>}
         <section className="rl-list">
           <header className="lp-head">

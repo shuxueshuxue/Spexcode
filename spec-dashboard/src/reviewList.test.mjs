@@ -8,6 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const read = (name) => readFileSync(join(here, name), 'utf8')
 const shell = read('ReviewShell.jsx')
 const evals = read('EvalsFeed.jsx')
+const page = read('EvalsPage.jsx')
 const detail = read('EventDetail.jsx')
 const issues = read('IssuesPage.jsx')
 const css = read('styles.css')
@@ -25,11 +26,77 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   const issueList = issues.slice(0, issues.indexOf('export function IssueDetailPage'))
   assert.doesNotMatch(issueList, /<select\b/)
   assert.doesNotMatch(evals, /<select\b/)
-  assert.match(shell, /className="rl-query"/)
+  assert.match(shell, /className="rl-query rq"/)
   assert.match(shell, /className="rl-sections" role="tablist"/)
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
+})
+
+test('one visible token query is the whole list state — combobox, overlay, bounded listbox', () => {
+  // the native input stays native: combobox semantics, transparent glyphs, aria-hidden highlight UNDER it
+  assert.match(shell, /role="combobox" aria-expanded=\{open\} aria-controls=\{listId\} aria-autocomplete="list"/)
+  assert.match(shell, /className="rq-hl" aria-hidden="true"/)
+  assert.doesNotMatch(shell, /contentEditable=/)
+  assert.match(css, /\.rl-query input \{[^}]*color: transparent; caret-color: var\(--ink\);/)
+  assert.match(css, /\.rq-hl \{[^}]*pointer-events: none;/)
+  // recognized qualifiers color; unknown ones stay plain — the keys list is the judgment
+  assert.match(shell, /seg\.ws \|\| seg\.key == null \|\| !keys\.includes\(seg\.key\)/)
+  assert.match(shell, /className="rq-tok-key"/)
+  // the suggestion listbox: options, roving active descendant, value picks submit immediately
+  assert.match(shell, /role="listbox" id=\{listId\}/)
+  assert.match(shell, /role="option" aria-selected=\{index === active\}/)
+  assert.match(shell, /if \(item\.type === 'value'\) \{ submit\(next\); return \}/)
+  // plain Enter submits the typed text; only an ARROWED-TO option intercepts it
+  assert.match(shell, /event\.key === 'Enter' && active >= 0/)
+})
+
+test('every control is a token BUILDER over the committed text — no private filter state', () => {
+  for (const source of [evals, issues]) {
+    assert.match(source, /const surgery = \(key, value\) => /)
+    assert.match(source, /setToken\(text, key, value\)/)
+    // tab counts under the REST of the query: every token but the section's own state:
+    assert.match(source, /tokens\.filter\(\(tk\) => tk\.key !== 'state'\)/)
+  }
+  assert.match(issues, /surgery\('state', 'open'\)/)
+  assert.match(issues, /surgery\('state', 'closed'\)/)
+  assert.match(evals, /surgery\('state', 'current'\)/)
+  assert.match(evals, /surgery\('state', 'reviewed'\)/)
+  // the default view is the BARE address; anything else exactly ?q=<raw text>
+  assert.match(issues, /queryParam\(nextText, ISSUE_QUERY_DEFAULT\)/)
+  assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
+})
+
+test('high-cardinality dimensions are token-only: no enumerating dropdowns, bounded suggestions', () => {
+  // the big-list Author/Filer/Spec-node/session-scope menus are GONE
+  for (const source of [evals, issues]) {
+    assert.doesNotMatch(source, /facetAuthor|facetNode|facetFiler|facetScope/)
+    assert.doesNotMatch(source, /authorOptions|nodeOptions|filerOptions|scopeOptions/)
+  }
+  // suggestions come only from the data — and scope only from the board's sessions
+  assert.match(issues, /suggest: \{\s*author: \[\.\.\.new Set\(all\.map\(\(issue\) => issue\.by\)/)
+  assert.match(evals, /scope: sessions\.map\(\(session\) => \(\{ value: session\.id/)
+  // the evidence default is a plain enum default, never data-dependent
+  assert.doesNotMatch(evals, /hasVideo|hasImage/)
+})
+
+test('the source-session facet speaks presence, never liveness', () => {
+  for (const source of [evals, issues]) {
+    assert.match(source, /reviewList\.facetSession/)
+    assert.match(source, /sessionPresent/)
+    assert.doesNotMatch(source, /liveSession|liveOnly|'live'/)
+  }
+  const enBlock = en.slice(en.indexOf('reviewList: {'), en.indexOf('reviewShell: {'))
+  const zhBlock = zh.slice(zh.indexOf('reviewList: {'), zh.indexOf('reviewShell: {'))
+  for (const block of [enBlock, zhBlock]) {
+    assert.match(block, /facetSession:/)
+    assert.match(block, /sessionPresent:/)
+    assert.match(block, /sessionMissing:/)
+    assert.doesNotMatch(block, /live|online|offline/i)
+  }
+  assert.match(zhBlock, /来源会话/)
+  assert.match(zhBlock, /仍在/)
+  assert.match(zhBlock, /已不在/)
 })
 
 test('shared list key ownership preserves native controls and focused anchors', () => {
@@ -63,7 +130,7 @@ test('facet primitives keep an active missing value clearable', () => {
   assert.deepEqual(options([{ value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.deepEqual(options([all, { value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
-  assert.match(evals, /label: t\('reviewList\.facetScope'\), value: query\.session \|\| ''/)
+  assert.match(evals, /label: t\('reviewList\.facetSession'\), value: sessionValue/)
   assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
 })
 

@@ -46,7 +46,6 @@ export default {
     evals: 'Evals (⌥3 / ⌥F)',
     issues: 'Issues (⌥4)',
     settings: 'Settings (⌥5)',
-    projects: 'Projects',
     projectChip: 'project: {name} — switch project',
     allProjects: 'All projects',
   },
@@ -296,10 +295,11 @@ export default {
   },
 
   sessionWindow: {
-    rowTitle: 'click to lock the graph onto this session · double-click to open it · right-click to rename or close',
+    rowTitle: 'click to lock the graph onto this session · double-click to open it',
     lockedTitle: 'graph locked to this session — click again to release',
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
+    lock: 'lock on graph',
     rename: 'rename',
     attach: 'open in terminal…',
     select: 'select…',
@@ -461,8 +461,8 @@ export default {
   },
 
   session: {
-    opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
-    lockTitle: 'double-click the tab to lock this session on the graph',
+    opsTitle: 'nodes this session is changing — right-click for session actions',
+    lockTitle: 'right-click for session actions, including lock on graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
     searchTitle: 'Search (⌘+/)',

@@ -32,7 +32,6 @@ const SessionInterface = lazy(() => import('./SessionInterface.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
-const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
 const nodeTypes = { spec: SpecNode }
 // node box (used only to frame the camera on a node). NW/NH must track the .spec-node size in
@@ -513,7 +512,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   // spine open). A session with no pending ops still locks — the top banner explains the empty grip;
   // releasing (clicking again) leaves focus where it is.
   // toggle=true (the graph's session rows): a click on the locked session releases it. toggle=false (the
-  // session-board tab's DOUBLE click): always GRIP — switch back to the graph already locked + focused,
+  // session-board row's context-menu action): always GRIP — switch back to the graph already locked + focused,
   // never accidentally release. Either way, locking auto-focuses the session's first changed node.
   const onPickSession = useCallback((s, toggle = true) => {
     const releasing = toggle && highlightId === s.source
@@ -618,7 +617,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
           onSeedConsumed={() => setSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
-          onOpenSession={openSession}
           onOpenSearch={() => setSearch('sessions')}
           reload={reload}
         />
@@ -643,13 +641,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
       {page === 'settings' && (
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
           <Settings />
-        </Suspense>
-      )}
-      {/* the projects catalog ([[projects-hub]]) as a routed page inside a scoped dashboard — the same
-          component the hub face mounts standalone; it fetches and gates itself. */}
-      {page === 'projects' && (
-        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-          <ProjectsPage />
         </Suspense>
       )}
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a

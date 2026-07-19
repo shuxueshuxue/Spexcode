@@ -6,7 +6,7 @@ import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSelect }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -38,6 +38,12 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSe
 
   // select the prefilled name when the prompt opens, so a human can just type the replacement.
   useEffect(() => { if (renaming) requestAnimationFrame(() => inputRef.current?.select()) }, [renaming])
+
+  const lockOnGraph = (e) => {
+    e.stopPropagation()
+    onLock?.(menu.session)
+    onClose()
+  }
 
   const startRename = (e) => {
     e.stopPropagation()
@@ -99,6 +105,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSe
     <>
       {menu && (
         <div className="sess-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+          <button className="sess-menu-item" onClick={lockOnGraph}>{t('sessionWindow.lock')}</button>
           <button className="sess-menu-item" onClick={startRename}>{t('sessionWindow.rename')}</button>
           {/* attach only when a live tmux window exists to join — offline/queued rows have none. */}
           {menu.session.liveness !== 'offline' && menu.session.status !== 'queued' && (

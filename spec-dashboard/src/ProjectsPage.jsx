@@ -21,11 +21,10 @@ import CredentialGate from './CredentialGate.jsx'
 // exit code + full transcript in place, a failure stays visible and the button is the retry. The header
 // carries the ADMIN password control: `adminGated:false` means management is implicit-loopback-only, so
 // the page offers the bootstrap (the hub keeps the setter signed in by rotating their cookie). It
-// renders in two places from one component: as the hub face at `/` (standalone) and as the `#/projects`
-// routed page inside a scoped dashboard. Freshness is a plain poll (catalog every few seconds; health
-// re-probed per row), so registration, disappearance, and health flips land on their own. An
+// renders only as the global `/projects` hub face. Freshness is a plain poll (catalog every few seconds;
+// health re-probed per row), so registration, disappearance, and health flips land on their own. An
 // 'admin-login'/'locked' catalog answer renders the shared CredentialGate in place, and a project-scope
-// visitor never reaches this page at all (the rail hides it when the catalog is denied), so neither the
+// visitor never reaches this page at all (the scoped shell never mounts it), so neither the
 // catalog nor any management control is ever revealed to a direct-project guest.
 
 const POLL_MS = 5000
@@ -229,7 +228,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
   )
 }
 
-export default function ProjectsPage({ standalone = false }) {
+export default function ProjectsPage() {
   const t = useT()
   const [state, setState] = useState({ kind: 'loading' }) // loading | ok | denied | absent
   const [health, setHealth] = useState({})                // id → 'running' | 'unreachable' (probed)
@@ -325,9 +324,9 @@ export default function ProjectsPage({ standalone = false }) {
   })()
 
   return (
-    <div className={standalone ? 'page-pane page-projects standalone' : 'page-pane page-projects'}>
+    <div className="page-pane page-projects">
       <div className="proj-body">
-        {standalone && <div className="cred-brand proj-brand">$ spexcode</div>}
+        <div className="cred-brand proj-brand">$ spexcode</div>
         <h1 className="page-title">{t('projects.title')}</h1>
         {body}
       </div>

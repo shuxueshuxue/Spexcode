@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 // the QUERY carries view state (a list's filters, the evals session scope) — so a filtered list is a
 // copyable, Back-restorable address and every consumer re-derives its whole state from the URL.
 
-export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'projects', 'settings']
+export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // canonical query serialization: fixed key order, so the same state always prints the same address
 // (hash comparisons in navigate() and tests stay byte-stable).

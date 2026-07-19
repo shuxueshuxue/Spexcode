@@ -27,8 +27,10 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   assert.match(shell, /className="rl-sections" role="tablist"/)
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
-  assert.match(shell, /tag === 'INPUT' \|\| tag === 'TEXTAREA' \|\| tag === 'SELECT'/)
-  assert.doesNotMatch(shell, /tag === 'BUTTON'/)
+  assert.match(shell, /const typingControl = tag === 'INPUT' \|\| tag === 'TEXTAREA' \|\| tag === 'SELECT'/)
+  assert.match(shell, /const nativeButtonKey = tag === 'BUTTON' && \(event\.key === 'Enter' \|\| event\.key === ' '\)/)
+  assert.match(shell, /if \(typingControl \|\| nativeButtonKey \|\| event\.metaKey \|\| event\.ctrlKey \|\| event\.altKey\) return/)
+  assert.match(shell, /if \(event\.key !== 'j' && event\.key !== 'k' && event\.key !== 'Enter'\) return/)
 })
 
 test('one icon-label-tone mapping drives every review state home', () => {

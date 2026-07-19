@@ -362,9 +362,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
 .graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
-/* gentle focus grouping. Structural movement lives in React Flow's controlled node positions so its
-   edges share the same geometry on every frame; a CSS transform transition would detach the two. */
-.react-flow__node { transition: opacity .18s ease; }
 .react-flow__node.is-far { opacity: .35; }
 
 /* react-flow zoom controls, themed through the palette vars */
@@ -378,7 +375,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .spec-node {
   position: relative;
   display: flex; flex-direction: column; justify-content: center; gap: 3px;
-  width: 176px; min-height: 46px; padding: 5px 9px;
+  width: 176px; height: 50px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }

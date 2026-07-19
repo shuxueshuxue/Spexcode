@@ -11,6 +11,7 @@ code:
 related:
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/textarea.js
 ---
@@ -44,8 +45,9 @@ verbs the CLI uses.
   a remark and lives on the Evals pages). It is app-held state beside the board: the page renders
   instantly from it; freshness inherits the board's pattern (push-signal throttled refetch that DEFERS,
   never drops; the 15s cold lane; ETag 304s), and a write forces the refetch. Rows render **in API
-  order** — stores interleaved newest first, no salience ranking. The shared ListView query searches the
-  concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
+  order** — stores interleaved newest first, no salience ranking. The [[review-filters]] Issue adapter
+  supplies the shared ListView query over concern/id/originator/node facts and every real facet; page code
+  only maps its canonical hash query to that engine. The metadata header's **Open / Closed sections + counts** are the
   lifecycle switch (default Open; every non-open state belongs to Closed). Real facets cover only data the
   issue model actually has: originator, store, spec node, and live-session involvement. Spec node is the
   desktop overflow facet; at 390px originator stays directly reachable while store/live join that same

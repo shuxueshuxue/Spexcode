@@ -45,7 +45,6 @@ export default {
     evals: 'Evals（⌥3 / ⌥F）',
     issues: '议题（⌥4）',
     settings: '设置（⌥5）',
-    projects: '项目',
     projectChip: '项目：{name} — 切换项目',
     allProjects: '全部项目',
   },

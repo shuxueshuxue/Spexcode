@@ -40,7 +40,7 @@ export default function App() {
   // renders the shared CredentialGate instead of the load-error panel; cleared the moment a board lands.
   const [authNeeded, setAuthNeeded] = useState(null)
   // the one boot-time catalog probe ([[projects-hub]]): null while in flight, then loadProjects()'s
-  // result. It decides the hub face at the root address and feeds the rail's Projects entry + selector;
+  // result. It decides the global /projects face and feeds the scoped rail's project selector;
   // the ProjectsPage keeps its own live poll — this probe is a snapshot, not a subscription.
   const [projAccess, setProjAccess] = useState(null)
   useEffect(() => { loadProjects().then(setProjAccess).catch(() => setProjAccess({ state: 'absent' })) }, [])
@@ -87,7 +87,7 @@ export default function App() {
   // dead stream (half-open tunnel, sleep-resume) looks exactly like a healthy quiet one and a detector that
   // trusts it freezes the board. The poll's cost is zeroed instead: loadGraph sends If-None-Match and an
   // unchanged board answers 304 → null → no repaint. Push dead in ANY mode = at most one poll period stale.
-  // the hub face ([[projects-hub]]): the root address with no board but a live /projects surface. Once
+  // the hub face ([[projects-hub]]): the global /projects address with no board but a live catalog. Once
   // it resolves, the board machinery below stands down — the hub has no board, so its stream/poll would
   // only hammer a surface that answers HTML.
   const hub = !PROJECT_ID && !board && !!projAccess && projAccess.state !== 'absent'
@@ -131,7 +131,7 @@ export default function App() {
     if (hub) {
       return (
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-          <ProjectsPage standalone />
+          <ProjectsPage />
         </Suspense>
       )
     }

@@ -62,7 +62,8 @@ restores the list.
   close when the page changes.
 - **Catalog-gated project switching, never project management.** Under the multi-project gateway
   ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
-  project-owned page entries. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
+  project-owned page entries. Its mark and label come from the route-matched [[project-identity]], never
+  an initial derived from whichever board loaded last. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
   switching plus an "All projects" door to the global `/projects` hub; it never adds a Projects rail page
   or mounts project management inside the scoped shell. When the catalog is denied the chip still names
   the current project but carries no menu, so a direct-project guest never sees the fleet or any global

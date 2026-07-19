@@ -47,9 +47,10 @@ the agent from one verb, picked by an optional topic:
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
   secrets). The sessions section names the worker cap's default, precedence, and the important meaning of
   "active": it counts compute slots, not total session rows, so human-waiting sessions do not block launches.
-  It **mirrors the `Config` type** in `layout.ts` (the single source of truth — the manual
+  It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields, and it omits fields the type keeps
-  only as retired compat for the loud notice), so an agent can configure SpexCode
+  only as retired compat for the loud notice), and names [[identity-config]]'s one separate host-level
+  gateway icon at `SPEXCODE_HOME/config.json`, so an agent can configure SpexCode
   for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
   `spex config set` — the guide + a direct edit is the whole surface.
 - **`footprint` → the residence MODEL manual.** The [[residence]] model as an operator's handbook: the

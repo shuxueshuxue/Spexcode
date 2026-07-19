@@ -69,6 +69,8 @@ export default {
     configReload: 'reload',
     configSaved: 'saved',
     configInvalid: 'top level must be a valid JSON object',
+    gatewayIcon: 'gateway icon',
+    projectIcon: 'project icon',
     setupTitle: 'setup — init / doctor',
     harnessLabel: 'harness:',
     harnessRequired: 'pick at least one harness target — init refuses to guess',

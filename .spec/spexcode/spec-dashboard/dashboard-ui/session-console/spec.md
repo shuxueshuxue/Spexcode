@@ -14,6 +14,7 @@ related:
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
+  - spec-dashboard/src/textarea.test.mjs
 ---
 
 # session-console
@@ -97,7 +98,9 @@ centred** in the strip (equal space above and below), never sunk toward its bott
 it) — the terminal's own bottom status line is therefore never hidden. Only when the box grows multi-line
 does it **overlay** the terminal, expanding
 **upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
-reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
+reserves space — growth overlays), and growth is **content-driven**: only real draft content grows the box —
+an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
+strip taller than the space the terminal reserved. Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
 pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
 view — the shared eval components, session-scoped; below and [[session-eval]]). Inside the Eval tab,

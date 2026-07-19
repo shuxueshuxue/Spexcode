@@ -4,15 +4,20 @@ scenarios:
     tags: [frontend-e2e, desktop, mobile]
     description: >-
       Drive an isolated real gateway and two real project backends in Chromium. As admin, use the visual
-      gateway and per-project preset pickers by mouse and keyboard; switch projects; reload; restart the
+      gateway and per-project icon disclosures by mouse and keyboard; confirm every full chooser is absent
+      on initial `/projects`, reveal its compact searchable/source-filtered browser, and select both a
+      featured preset and Iconify values outside that featured set. Switch projects; reload; restart the
       gateway and backends; stop one backend and edit its icon offline; revisit `/projects` and each scoped
       route at desktop and 390px under multiple themes. Also open a project-only guest session.
     expected: >-
-      Preset radios have accessible names and native arrow-key movement; successful saves settle from the
-      canonical response. Gateway edits touch only the host config; project edits touch only that project's
-      `dashboard.icon`, including offline. Picker choices survive reload/restart, catalog/rows/rail/title/
-      favicon all agree by route, themes remain legible, narrow layout does not overlap, project switching
-      never leaks the last identity, and a guest sees neither catalog nor management controls.
+      Initial project and gateway controls show only compact current-icon previews plus named edit buttons;
+      no `fieldset.identity-picker` exists until disclosure. The revealed browser is compact and
+      non-overlapping, its result radios have accessible names and native arrow-key movement, and a
+      successful canonical save re-collapses it. Gateway edits touch only the host config; project edits
+      touch only that project's `dashboard.icon`, including offline. Iconify choices outside the featured
+      eight survive reload/restart and drive the same project row, switcher, rail, and favicon value; the
+      gateway choice drives its tab too. Themes remain legible, the 390px layout does not overlap, project
+      switching never leaks the last identity, and a guest sees neither catalog nor management controls.
     test: spec-dashboard/test/identity-chain.e2e.mjs
     related:
       - spec-cli/src/host.test.ts

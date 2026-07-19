@@ -7,6 +7,7 @@ export const IDENTITY_PRESETS: readonly IdentityPreset[]
 export const IDENTITY_PRESET_IDS: readonly string[]
 export function resolvedIdentityIcon(value: unknown, fallback?: string): string
 export function identityPreset(value: unknown): IdentityPreset | null
-export function requireIdentityPreset(value: unknown): string
+export function isIconifyIcon(value: unknown): boolean
+export function requireIdentityChoice(value: unknown): string
 export function identitySvg(value: unknown, fallback?: string): string
 export function identityFaviconHref(value: unknown, fallback?: string): string

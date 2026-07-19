@@ -46,7 +46,8 @@ const CHORDS = {
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues, catalog }) {
+function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues, catalog }) {
+  const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
@@ -523,7 +524,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
-      <SideBar page={page} onNav={navigate} project={project} catalog={catalog} />
+      <SideBar page={page} onNav={navigate} identity={identity} catalog={catalog} />
       <div className="app-main">
       <div className="page-graph" style={{ display: page === 'graph' ? undefined : 'none' }}>
       <div className="graph" ref={graphRef}>

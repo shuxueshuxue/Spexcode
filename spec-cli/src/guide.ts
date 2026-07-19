@@ -248,7 +248,7 @@ code file or the scenario (the eval.md) moves since it was filed.
 
 const SETTINGS = `spex guide settings — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
 
-SpexCode reads its runtime settings from TWO optional JSON files at the repo root. There is no imperative
+SpexCode reads PROJECT runtime settings from TWO optional JSON files at the repo root. There is no imperative
 settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
 PORTABILITY, and picking the right one is the whole discipline:
 
@@ -265,6 +265,9 @@ PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored s
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
 
+The host-wide gateway has one separate per-user setting, \`gateway.icon\` in
+\`$SPEXCODE_HOME/config.json\`. It is documented below and never belongs to either project file.
+
 MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
 sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
 pass through untouched. This is exactly what lets a launcher's portable NAME reference (defaultLauncher)
@@ -280,12 +283,22 @@ Example — a repo whose trunk is \`staging\`, not \`main\`:
 
 ── DASHBOARD (spexcode.json — portable project identity) ──
   dashboard.title   browser-tab name. Default: the repo-root basename.
-  dashboard.icon    browser-tab favicon: an emoji ("🔭") OR an Iconify name ("mdi:rocket-launch").
+  dashboard.icon    the project's icon identity. The Projects UI writes one shared preset id:
+                    spexcode | gateway | mdi:rocket-launch | compass | terminal | package | database | spark.
+                    Existing emoji ("🔭"), arbitrary Iconify names ("lucide:radar"), and full URLs remain
+                    supported; picking a preset migrates that one existing field, never creates another.
   dashboard.apiUrl  the per-project backend the dashboard proxies to (read frontend-side). For a SHARED
                     install prefer the API_URL env var; apiUrl here is the default only when the dashboard
                     lives inside the project.
 Example:
   { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
+
+── HOST GATEWAY ($SPEXCODE_HOME/config.json — per-user host identity, never a project file) ──
+  gateway.icon      the global /projects icon, using the same preset ids above. Default: "gateway".
+                    The admin-only Projects picker writes this field atomically. It is the gateway's ONE
+                    authored icon setting and is never copied into spexcode.json or spexcode.local.json.
+Example:
+  { "gateway": { "icon": "database" } }
 
 ── SESSIONS / WORKERS ──
   sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 8;

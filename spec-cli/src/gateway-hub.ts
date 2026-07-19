@@ -29,8 +29,9 @@ import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
 import { spexcodeHome, encodeProject } from './layout.js'
 import { readEndpointRecord } from './host.js'
+import { readGatewayIdentity, type ResolvedIdentity } from './project-identity.js'
 
-export type HubProject = { id: string; name: string; url: string; port: number; gated: boolean }
+export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }
 // @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
 // ([[host-gateway]]'s `spex dashboard`) plugs richer behavior in here instead of running a second
 // gateway beside it. All three hooks are optional; bare startHubGateway behavior is unchanged.
@@ -56,7 +57,7 @@ export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: 
 // honored — the hub proxies into this machine's trust boundary, never out to an arbitrary host a crafted
 // record names.
 
-function upstreamOf(id: string): { url: string; port: number } | null {
+function upstreamOf(id: string): { url: string; port: number; identity: ResolvedIdentity } | null {
   const rec = readEndpointRecord(join(spexcodeHome(), 'projects', id, 'backend.json'))
   if (!rec || encodeProject(rec.root) !== id) return null
   let u: URL
@@ -67,7 +68,7 @@ function upstreamOf(id: string): { url: string; port: number } | null {
   }
   const port = Number(u.port || 80)
   if (!Number.isInteger(port) || port <= 0) return null
-  return { url: rec.url, port }
+  return { url: rec.url, port, identity: rec.identity }
 }
 
 // a projectId arrives as ONE url path segment; reject anything that could re-shape the registry path.
@@ -84,9 +85,7 @@ export function listHubProjects(store: AuthStore): HubProject[] {
   for (const id of entries) {
     const up = upstreamOf(id)
     if (!up) continue
-    // cosmetic display name: the last path-ish segment of the encoded root
-    const name = id.split('-').filter(Boolean).pop() ?? id
-    out.push({ id, name, url: up.url, port: up.port, gated: !!store.projects[id] })
+    out.push({ id, identity: up.identity, url: up.url, port: up.port, gated: !!store.projects[id] })
   }
   return out.sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -188,7 +187,12 @@ export function startHubGateway(opts: HubOpts): http.Server {
           : sendJson(res, 401, { error: 'authentication required', login: '/login' })
       }
       if (path === '/projects' && req.method === 'GET') {
-        return sendJson(res, 200, { adminGated: !!store.admin, projects: await (ext.listProjects ? ext.listProjects(store) : listHubProjects(store)) })
+        const gateway = readGatewayIdentity()
+        return sendJson(res, 200, {
+          adminGated: !!store.admin,
+          gateway: { ...gateway.identity, revision: gateway.revision },
+          projects: await (ext.listProjects ? ext.listProjects(store) : listHubProjects(store)),
+        })
       }
       if (path === '/projects/admin-password') {
         if (req.method === 'PUT') {

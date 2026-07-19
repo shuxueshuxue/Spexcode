@@ -1,33 +1,23 @@
 ---
 scenarios:
-  - name: tab-and-board-header-name-the-backend
+  - name: route-selected-title-and-brand
     tags: [frontend-e2e, desktop]
     description: >-
-      Through the running dashboard (a real browser pointed at a backend), read `document.title` and the
-      graph HUD brand (the shell-prompt line pinned top-left over the node graph) after the first
-      `/api/graph` poll lands. Do it twice: once for a project whose `spexcode.json` sets NO
-      `dashboard.title` (so the name defaults to the backend repo root's folder basename), and once with
-      `dashboard.title` set. Also load the page with the backend unreachable to see the pre-board
-      fallback, and with a board that carries no project name to see the HUD's own fallback label.
+      Through an isolated real gateway with two differently titled projects, load `/projects` and both
+      `/p/<id>/#/graph` URLs. Read `document.title`, the global Projects heading/brand, and each scoped graph
+      HUD/rail label after catalog and board settle; deliberately make one backend board report the other
+      project's title as a negative control.
     expected: >-
-      With no configured title, `document.title` is `<folder-basename> · SpexCode` and the HUD brand
-      reads `$ <folder-basename>` (both from the shared `projectTitle` helper). With `dashboard.title`
-      set, they become `<configured-title> · SpexCode` and `$ <configured-title>` — the override names
-      the project, the `· SpexCode` suffix stays. Before any board (or with the backend unreachable —
-      the fail-loud panel showing) the tab reads the plain `SpexCode` fallback from index.html; a board
-      that arrives without a project name mounts the HUD with its plain `spec-dashboard` label.
-      Pointing the same board at a different `API_URL` re-derives title and brand from whichever
-      backend it reached.
+      The global tab is `Projects · SpexCode`. Each scoped tab, HUD, rail mark label, and switcher row use
+      the matching URL/catalog identity. A wrong or last-loaded board cannot rename a scoped catalog route;
+      a catalog-denied direct-project guest uses only its authorized board identity and sees no fleet.
     code: spec-dashboard/index.html
     related:
-      - spec-dashboard/src/data.js
       - spec-dashboard/src/App.jsx
-      - spec-dashboard/src/SessionInterface.jsx
+      - spec-dashboard/src/SideBar.jsx
+      - spec-dashboard/src/Dashboard.jsx
 ---
-# eval.md — tab-title
+# tab-title loss
 
-Measured through the real rendered dashboard (YATU): load it against a backend and read the actual
-`document.title` and the board header the user sees, comparing to the project name the backend reports in
-its `/api/graph` `project` field. The loss watched is indistinguishable tabs/headers when several
-per-project boards are open at once — every viewer must self-identify which backend it serves, defaulting to
-the launch folder and overridable by `dashboard.title`.
+Measure the actual browser title and rendered identity surfaces through `/projects` and `/p/<id>/`, not a
+helper or an unscoped dev shortcut.

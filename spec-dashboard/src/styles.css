@@ -2147,7 +2147,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* --- the catalog page --- */
 .page-projects { min-height: 100vh; box-sizing: border-box; overflow-y: auto; }
 .proj-body { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; box-sizing: border-box; font-family: var(--mono); }
-.proj-brand { margin-bottom: 14px; }
+.proj-brand { margin-bottom: 14px; display: flex; align-items: center; gap: 9px; }
 .proj-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .proj-count { color: var(--muted); font-size: var(--type-meta); flex: 1; }
 .proj-empty { color: var(--muted); font-size: var(--type-body); line-height: var(--leading-body); border: 1px dashed var(--line); border-radius: 6px; padding: 14px 16px; }
@@ -2180,11 +2180,30 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-admin-pw { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 4px 12px 10px; margin-bottom: 12px; }
 .proj-admin-pw .proj-drawer { border-top: none; margin-top: 0; padding-top: 6px; }
 
+/* One preset control renders gateway and project identity. Native radios retain arrow-key movement;
+   :has only supplies the visible focus/checked projection. */
+.identity-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.identity-picker legend { margin: 0 0 6px; color: var(--muted); font-size: var(--type-meta); }
+.identity-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); gap: 6px; }
+.identity-choice {
+  position: relative; min-width: 0; min-height: 58px; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: var(--type-caption); overflow-wrap: anywhere; text-align: center;
+}
+.identity-choice:hover { border-color: var(--blue); color: var(--ink2); }
+.identity-choice:has(input:checked) { border-color: var(--blue); background: var(--panel2); color: var(--blue); font-weight: var(--weight-semibold); }
+.identity-choice:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.identity-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.identity-picker:disabled .identity-choice { opacity: .55; cursor: default; }
+.proj-gateway-identity { margin: 2px 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+
 /* catalog rows */
 .proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .proj-row { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 7px 10px; }
 .proj-row.current { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .proj-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.proj-row-main > svg { flex: none; }
 .proj-health { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .proj-health.h-probing { background: var(--muted); opacity: 0.45; }
 .proj-health.h-running { background: var(--green); }
@@ -2229,7 +2248,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* --- the rail's current-project selector chip + switcher menu --- */
 .proj-chip-wrap { position: relative; }
 .rail-btn.proj-chip {
-  font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold); color: var(--ink2);
+  padding: 4px; color: var(--ink2); overflow: hidden;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
 }
 .rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { border-color: var(--blue); color: var(--blue); }
@@ -2252,6 +2271,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* narrow viewports: the catalog stays one column; row actions wrap under the name/path line */
 @media (max-width: 640px) {
   .proj-body { padding: 14px 12px 32px; }
+  .identity-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .identity-choice { min-height: 54px; font-size: var(--type-caption); }
   .proj-row-main { row-gap: 6px; }
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }

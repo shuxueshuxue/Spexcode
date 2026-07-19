@@ -3,6 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { PAGES } from './route.js'
+import { IdentityIcon } from './IdentityIcon.jsx'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
 // always visible, one entry per top-level page (graph · sessions · evals · issues, settings pinned at the
@@ -32,7 +33,7 @@ function RailButton({ page, active, onNav, label }) {
 
 // the current-project chip + switcher menu. `projects` is the catalog list when the admin scope holds,
 // else null (chip only). Navigation is a plain same-tab location change — the pathname carries the scope.
-function ProjectChip({ name, projects, t }) {
+function ProjectChip({ identity, projects, t }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -43,8 +44,7 @@ function ProjectChip({ name, projects, t }) {
     window.addEventListener('keydown', onKey, true)
     return () => { document.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
   }, [open])
-  const label = name || PROJECT_ID || ''
-  const initial = (label || '?').trim().charAt(0).toUpperCase()
+  const label = identity?.title || PROJECT_ID || ''
   return (
     <div className="proj-chip-wrap" ref={ref}>
       <button
@@ -56,7 +56,7 @@ function ProjectChip({ name, projects, t }) {
         aria-expanded={projects ? open : undefined}
         onClick={() => { if (projects) setOpen((v) => !v) }}
       >
-        {initial}
+        <IdentityIcon icon={identity?.icon} size={26} />
       </button>
       {open && projects && (
         <div className="proj-menu" role="menu">
@@ -68,7 +68,8 @@ function ProjectChip({ name, projects, t }) {
               href={projectHref(p.id)}
             >
               {p.gated && <Icon name="lock" size={11} />}
-              <span className="proj-menu-name">{p.name}</span>
+              <IdentityIcon icon={p.identity.icon} size={20} />
+              <span className="proj-menu-name">{p.identity.title}</span>
               {p.id === PROJECT_ID && <Icon name="check" size={12} />}
             </a>
           ))}
@@ -82,12 +83,12 @@ function ProjectChip({ name, projects, t }) {
   )
 }
 
-export default function SideBar({ page, onNav, project, catalog }) {
+export default function SideBar({ page, onNav, identity, catalog }) {
   const t = useT()
   const catalogOk = catalog?.state === 'ok'
   return (
     <nav className="side-rail" aria-label={t('nav.railLabel')}>
-      {PROJECT_ID && <ProjectChip name={project} projects={catalogOk ? catalog.projects : null} t={t} />}
+      {PROJECT_ID && <ProjectChip identity={identity} projects={catalogOk ? catalog.projects : null} t={t} />}
       {ENTRIES.map((p) => (
         <RailButton key={p} page={p} active={page === p} onNav={onNav} label={t(`nav.${p}`)} />
       ))}

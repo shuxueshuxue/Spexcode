@@ -36,6 +36,9 @@ the accessible name impossible to forget.
   sourced from AionUi's multi-CLI icon set and monochrome-adapted: hardcoded brand fills stripped so
   the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
   tone as an opacity step.
+- **Identity marks are a data adapter, not scattered glyphs.** [[project-identity]] renders the named
+  [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
+  is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.
 - **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping composes this
   registry's Primer issue pair with Lucide circle-check/circle-x/circle-minus/circle-dashed verdict marks.
   The same mapping feeds eval list, detail status, and every A/B selector, plus issue list/detail. ListView

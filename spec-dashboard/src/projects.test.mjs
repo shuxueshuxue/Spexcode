@@ -4,6 +4,8 @@ import {
   normalizeProject, normalizeProjects, loadProjects, probeProjectHealth,
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
+  saveGatewayIcon, saveProjectIcon,
+  selectGatewayIdentity, selectProjectIdentity,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
@@ -46,10 +48,11 @@ const withFetch = async (impl, fn) => {
   try { return await fn() } finally { globalThis.fetch = orig }
 }
 
-test('normalizeProject carries the hub row (id/name/root/online/url/port/gated), defaults tolerant', () => {
-  const p = normalizeProject({ id: '-home-me-repo', name: 'repo', root: '/home/me/repo', online: true, url: 'http://127.0.0.1:8787', port: 8787, gated: true })
-  assert.deepEqual(p, { id: '-home-me-repo', name: 'repo', root: '/home/me/repo', online: true, url: 'http://127.0.0.1:8787', port: 8787, gated: true })
-  assert.equal(normalizeProject({ id: 'x' }).name, 'x')
+test('normalizeProject carries one resolved identity projection and tolerates old name/icon rows', () => {
+  const p = normalizeProject({ id: '-home-me-repo', identity: { title: 'Repo', icon: 'compass' }, configRevision: 'r1', root: '/home/me/repo', online: true, url: 'http://127.0.0.1:8787', port: 8787, gated: true })
+  assert.deepEqual(p, { id: '-home-me-repo', identity: { title: 'Repo', icon: 'compass' }, configRevision: 'r1', root: '/home/me/repo', online: true, url: 'http://127.0.0.1:8787', port: 8787, gated: true })
+  assert.deepEqual(normalizeProject({ id: 'x', name: 'legacy', icon: '🔭' }).identity, { title: 'legacy', icon: '🔭' })
+  assert.equal(normalizeProject({ id: 'x' }).identity.title, 'x')
   assert.equal(normalizeProject({ id: 'x' }).gated, false)
   assert.equal(normalizeProject({ id: 'x' }).online, null)   // a hub without the host extension: unknown, not false
   assert.equal(normalizeProject({ id: 'x', online: false }).online, false)
@@ -66,11 +69,28 @@ test('normalizeProjects accepts the hub envelope or a bare array, rejects anythi
   assert.equal(normalizeProjects('<!doctype html>'), null)
 })
 
+test('pathname-selected catalog identity cannot be replaced by the last board that loaded', () => {
+  const catalog = {
+    state: 'ok', gateway: { identity: { title: 'Fleet', icon: 'gateway' } },
+    projects: [
+      { id: 'spex', identity: { title: 'SpexCode', icon: 'compass' } },
+      { id: 'rocket', identity: { title: 'Rocket', icon: 'mdi:rocket-launch' } },
+    ],
+  }
+  const wrongLastBoard = { title: 'Rocket', icon: 'mdi:rocket-launch' }
+  assert.deepEqual(selectProjectIdentity('spex', catalog, wrongLastBoard), { title: 'SpexCode', icon: 'compass' })
+  assert.deepEqual(selectProjectIdentity('rocket', catalog, { title: 'SpexCode', icon: 'compass' }), { title: 'Rocket', icon: 'mdi:rocket-launch' })
+  assert.deepEqual(selectGatewayIdentity(catalog), { title: 'Fleet', icon: 'gateway' })
+  assert.deepEqual(selectProjectIdentity('spex', null, wrongLastBoard), { title: 'spex', icon: 'spexcode' }, 'pending catalog never flashes the board identity')
+  assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
+})
+
 test('loadProjects: 200 hub envelope → ok with adminGated', async () => {
-  const r = await withFetch(async () => jsonRes(200, { adminGated: false, projects: [{ id: 'a', gated: true }] }), loadProjects)
+  const r = await withFetch(async () => jsonRes(200, { adminGated: false, gateway: { title: 'Projects', icon: 'gateway', revision: 'g1' }, projects: [{ id: 'a', gated: true }] }), loadProjects)
   assert.equal(r.state, 'ok')
   assert.equal(r.adminGated, false)
   assert.equal(r.projects[0].gated, true)
+  assert.deepEqual(r.gateway, { identity: { title: 'Projects', icon: 'gateway' }, revision: 'g1' })
 })
 
 test('loadProjects: the denial reason is the STATUS — 401 admin-login, 403 locked', async () => {
@@ -172,6 +192,25 @@ test('project config surfaces conflicts and rejects malformed server answers', a
   assert.match(conflict.error, /changed on disk/)
   const malformed = await withFetch(async () => jsonRes(200, { content: '{}' }), () => loadProjectConfig('a'))
   assert.deepEqual(malformed, { ok: false, error: 'unexpected answer' })
+})
+
+test('structured icon writes use canonical responses and encode project ids', async () => {
+  const calls = []
+  const impl = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) })
+    return url === '/projects/icon'
+      ? jsonRes(200, { ok: true, gateway: { identity: { title: 'Projects', icon: 'compass' }, revision: 'g2' } })
+      : jsonRes(200, { ok: true, identity: { title: 'Repo', icon: 'spark' }, content: '{"dashboard":{"icon":"spark"}}\n', revision: 'p2' })
+  }
+  const gateway = await withFetch(impl, () => saveGatewayIcon('compass', 'g1'))
+  const project = await withFetch(impl, () => saveProjectIcon('a b', 'spark', 'p1'))
+  assert.deepEqual(calls, [
+    { url: '/projects/icon', body: { icon: 'compass', revision: 'g1' } },
+    { url: '/projects/a%20b/icon', body: { icon: 'spark', revision: 'p1' } },
+  ])
+  assert.equal(gateway.gateway.identity.icon, 'compass')
+  assert.equal(project.identity.icon, 'spark')
+  assert.match(project.content, /"spark"/)
 })
 
 test('initProject carries only the EXPLICIT harness choice in the body; preset lives in spexcode.json', async () => {

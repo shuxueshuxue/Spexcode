@@ -7,7 +7,7 @@ scenarios:
       path: spec-cli/src/gateway-hub.test.ts
       name: full lifecycle story (all tests in the file)
     description: >
-      Run a real hub over HTTP fronting two loopback echo backends (plus a hostile non-loopback record) and
+      Run a real hub over HTTP fronting two loopback echo backends with distinct identity projections (plus a hostile non-loopback record) and
       walk the operator lifecycle as a visitor: open passthrough, the no-admin-password bootstrap (implicit
       loopback vs. a genuinely non-loopback connection with spoofed forwarding headers), setting the admin
       and project passwords through the gateway APIs, both designed login flows, cross-project and
@@ -16,7 +16,7 @@ scenarios:
     expected: |
       An ungated project proxies straight through, prefix stripped, query preserved, spex_* cookies removed
       while foreign cookies pass. /projects answers a loopback caller with the registry (non-loopback
-      records excluded) — as JSON even for a text/html GET, since the bare hub mounts no shell to
+      records excluded), one identity per id, and the distinct gateway identity — as JSON even for a text/html GET, since the bare hub mounts no shell to
       negotiate toward — but 403s a non-loopback caller regardless of X-Forwarded-For; after
       PUT /projects/admin-password the caller holds an HttpOnly session and implicit loopback is over.
       Wrong passwords re-render the designed page 401; right ones 302 with an HttpOnly cookie. A project

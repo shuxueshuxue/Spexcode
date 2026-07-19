@@ -17,7 +17,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   adminCookieName, authorize, clearAdminPassword, clearProjectPassword, loadAuthStore, mintToken,
@@ -26,21 +26,40 @@ import {
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
-import { spexcodeHome } from './layout.js'
+import { spexcodeHome, encodeProject } from './layout.js'
+import { readEndpointRecord } from './host.js'
 
 export type HubProject = { id: string; name: string; url: string; port: number; gated: boolean }
-export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void }
+// @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
+// ([[host-gateway]]'s `spex dashboard`) plugs richer behavior in here instead of running a second
+// gateway beside it. All three hooks are optional; bare startHubGateway behavior is unchanged.
+export type HubExtensions = {
+  // enriched GET /projects rows (reconciled online/offline entries + the durable catalog); the hub
+  // still owns the envelope ({adminGated, projects}) and the admin gate in front of it.
+  listProjects?: (store: AuthStore) => Promise<object[]> | object[]
+  // extra ADMIN-scope routes under /projects/* (stream, registration, project operations) — called only
+  // AFTER admin authorization, for /projects paths the hub itself doesn't handle. True = handled.
+  adminRoute?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => Promise<boolean> | boolean
+  // paths the hub would 404 (everything outside /projects, /p, /login) — the dashboard SPA shell +
+  // assets. Unauthorized by design: the shell is code, not data; every data call it makes re-enters
+  // the authorized routes.
+  fallback?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => void
+}
+export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; extensions?: HubExtensions }
 
 // ---- registry ---------------------------------------------------------------------------------------
 // A project = a live backend record under ~/.spexcode/projects/<enc>/backend.json (written by supervise.ts
-// at bind time). The <enc> dir name is the projectId. Only LOOPBACK upstream urls are honored — the hub
-// proxies into this machine's trust boundary, never out to an arbitrary host a crafted record names.
+// at bind time). The <enc> dir name is the projectId. ONE record-read seam ([[host-gateway]]'s
+// readEndpointRecord — the identity-carrying shape): a legacy or torn record is not routable, and a record
+// sitting in a slot its own root does not encode to is not trusted. Only LOOPBACK upstream urls are
+// honored — the hub proxies into this machine's trust boundary, never out to an arbitrary host a crafted
+// record names.
 
 function upstreamOf(id: string): { url: string; port: number } | null {
-  let rec: any
-  try { rec = JSON.parse(readFileSync(join(spexcodeHome(), 'projects', id, 'backend.json'), 'utf8')) } catch { return null }
+  const rec = readEndpointRecord(join(spexcodeHome(), 'projects', id, 'backend.json'))
+  if (!rec || encodeProject(rec.root) !== id) return null
   let u: URL
-  try { u = new URL(String(rec?.url ?? '')) } catch { return null }
+  try { u = new URL(rec.url) } catch { return null }
   if (u.protocol !== 'http:' || (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost')) {
     console.error(`[hub] ignoring project '${id}': backend url ${rec.url} is not a loopback http endpoint`)
     return null
@@ -121,6 +140,7 @@ function cookieAttrs(secure: boolean): string {
 export function startHubGateway(opts: HubOpts): http.Server {
   const secure = !!opts.tls
   const port = opts.port
+  const ext = opts.extensions ?? {}
   const attrs = cookieAttrs(secure)
   const clearCookie = (name: string) => `${name}=; HttpOnly; Path=/; Max-Age=0`
 
@@ -159,7 +179,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
           : sendJson(res, 401, { error: 'authentication required', login: '/login' })
       }
       if (path === '/projects' && req.method === 'GET') {
-        return sendJson(res, 200, { adminGated: !!store.admin, projects: listHubProjects(store) })
+        return sendJson(res, 200, { adminGated: !!store.admin, projects: await (ext.listProjects ? ext.listProjects(store) : listHubProjects(store)) })
       }
       if (path === '/projects/admin-password') {
         if (req.method === 'PUT') {
@@ -195,6 +215,9 @@ export function startHubGateway(opts: HubOpts): http.Server {
         }
         return sendJson(res, 405, { error: 'PUT or DELETE' })
       }
+      // host-level admin routes ([[host-gateway]]: /projects/stream, registration, project operations)
+      // ride the SAME admin gate — the extension only ever sees an authorized request.
+      if (ext.adminRoute && await ext.adminRoute(req, res, path)) return
       return sendJson(res, 404, { error: 'not found' })
     }
 
@@ -228,6 +251,8 @@ export function startHubGateway(opts: HubOpts): http.Server {
       return proxyTo(req, res, up.port, sub + query)
     }
 
+    // outside /projects and /p/: the dashboard shell + assets when a host extension serves them, 404 bare.
+    if (ext.fallback) return ext.fallback(req, res, path)
     return sendJson(res, 404, { error: 'not found' })
   }
 
@@ -267,6 +292,12 @@ export function startHubGateway(opts: HubOpts): http.Server {
     })
     const bail = () => { socket.destroy(); upstream.destroy() }
     socket.on('error', bail); upstream.on('error', bail)
+    // pair the halves fully (the supervisor's rule): an http server's sockets are allowHalfOpen, so a bare
+    // client FIN ('end') would otherwise leave a zombie socket the server can never close — an upgraded
+    // stream never half-closes legitimately, so either half's FIN or close tears down both.
+    socket.on('end', bail); upstream.on('end', bail)
+    socket.once('close', () => upstream.destroy())
+    upstream.once('close', () => socket.destroy())
   })
 
   const onListen = () => {

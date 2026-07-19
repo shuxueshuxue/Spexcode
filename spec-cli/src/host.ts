@@ -2,11 +2,11 @@
 // Each `spex serve` stays scoped to ONE repo, loopback-only and auth-unaware; what it contributes to the
 // host is a single instance-validated endpoint record in the per-user global store. THIS module is the
 // other half: the durable known-project catalog, the reconciler that turns records into a validated live
-// project list, and the `spex dashboard` gateway that serves the built dashboard once for the whole host
-// and proxies per-project traffic through explicit /p/:projectId/* routes — no mutable current-project
-// state anywhere: every request names its project in the path and is routed off the latest reconciled
-// snapshot. Backends never depend on the gateway: they publish records and serve loopback whether or not
-// a gateway is running, and direct CLI discovery (sessions.ts's ladder) keeps reading the same records.
+// project list, and the host operations (register/init/doctor/start) — mounted as [[gateway-hub]]'s
+// extension by `spex dashboard` (startHostDashboard below), so routing, /p/:projectId proxying, and
+// authorization ([[gateway-auth]]) stay the hub's single seam and are never duplicated here. Backends
+// never depend on the gateway: they publish records and serve loopback whether or not a gateway is
+// running, and direct CLI discovery (sessions.ts's ladder) keeps reading the same records.
 import http from 'node:http'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
@@ -15,9 +15,8 @@ import { dirname, join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spexcodeHome, encodeProject } from './layout.js'
 import { git } from './git.js'
-import { listenOrExit } from './listen.js'
-import { installConnectionReaper } from './reaper.js'
-import { proxyHttp, serveStatic, rawHeaders, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
+import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
+import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { tsxBin } from './tsx-bin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -239,9 +238,20 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
   throw new Error(`backend for ${root} did not come online within ${Math.round(waitMs / 1000)}s — see ${logFile}`)
 }
 
-// ── the gateway server ───────────────────────────────────────────────────────────────────────────────
-export type HostGatewayOpts = { port: number; host?: string; distDir?: string }
-export type HostGateway = { server: http.Server; close: () => Promise<void> }
+
+// ── the operator verb: `spex dashboard` = the hub + the host extensions ─────────────────────────────
+// The hub ([[gateway-hub]]) is the ONE routing + authorization server; this layer never runs a second
+// gateway or a second auth check beside it. What the host adds rides the hub's extension seam:
+//   listProjects — GET /projects rows come from the instance-validated reconciler + the durable catalog
+//                  (online/offline/root), each carrying the hub's gating state.
+//   adminRoute   — /projects/stream (SSE), POST /projects (register a repo), and
+//                  POST /projects/:id/(init|doctor|serve) — all behind the hub's admin scope
+//                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
+//   fallback     — the dashboard SPA shell + assets for paths the hub doesn't own.
+// /p/:projectId/* routing (HTTP, SSE, WS; prefix strip; cookie strip) belongs entirely to the hub.
+
+export type HostDashboardOpts = { port: number; host?: string; distDir?: string }
+export type HostDashboard = { server: http.Server; close: () => Promise<void> }
 
 const json = (res: http.ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -255,24 +265,13 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   })
 }
 
-// /p/:projectId/<rest> — the explicit per-project route. Returns null when the url is not project-scoped.
-function parseProjectPath(url: string): { projectId: string; rest: string } | null {
-  const m = url.match(/^\/p\/([^/?]+)([/?].*)?$/)
-  if (!m) return null
-  let rest = m[2] ?? '/'
-  if (rest.startsWith('?')) rest = '/' + rest
-  return { projectId: decodeURIComponent(m[1]), rest }
-}
-const upstreamPort = (url: string): number => Number(new URL(url).port || 80)
-
-export function startHostGateway(opts: HostGatewayOpts): HostGateway {
+export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   const distDir = opts.distDir ?? resolveDistDir()
   if (!opts.distDir) ensureDashboardBuilt(join(here, '..', '..'), distDir)
-  const host = opts.host ?? '127.0.0.1'
 
   const sseClients = new Set<http.ServerResponse>()
   let lastBroadcast = ''
-  // reconcile → push the fresh list to every /api/host/projects/stream subscriber when it changed.
+  // reconcile → push the fresh list to every /projects/stream subscriber when it changed.
   async function tick(): Promise<ProjectEntry[]> {
     const list = await reconcileNow()
     const j = JSON.stringify(list)
@@ -280,114 +279,66 @@ export function startHostGateway(opts: HostGatewayOpts): HostGateway {
     return list
   }
 
-  const handler = async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    const full = req.url || '/'
-    const path = full.split('?')[0]
+  const extensions: HubExtensions = {
+    // the hub's GET /projects rows, host-enriched: every cataloged/claimed project (not only live
+    // records), instance-validated online state, and the hub's own gating flag per row. `id` mirrors
+    // projectId — the hub's documented row key, kept so both shapes read the same list.
+    listProjects: async (store) => (await tick()).map((p) => ({ id: p.projectId, ...p, gated: !!store.projects[p.projectId] })),
 
-    if (path === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok') }
-
-    // host surface: the live project list, its stream, and the /projects operations.
-    if (path === '/api/host/projects' && req.method === 'GET') return json(res, 200, await tick())
-    if (path === '/api/host/projects/stream') {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
-      res.write(`data: ${JSON.stringify(await tick())}\n\n`)
-      sseClients.add(res)
-      req.on('close', () => sseClients.delete(res))
-      return
-    }
-    if (path === '/api/host/projects' && req.method === 'POST') {
-      let root = ''
-      try { root = String(JSON.parse(await readBody(req) || '{}')?.root ?? '').trim() } catch { /* malformed body */ }
-      if (!root) return json(res, 400, { error: 'body must be {"root": "/abs/path/to/repo"}' })
-      try {
-        const normalized = addKnownProject(root)
-        const entry = (await tick()).find((p) => p.root === normalized)
-        return json(res, 200, entry ?? { projectId: encodeProject(normalized), root: normalized, name: basename(normalized), online: false, url: null })
-      } catch (e) { return json(res, 400, { error: (e as Error).message }) }
-    }
-    const op = path.match(/^\/api\/host\/projects\/([^/]+)\/(init|doctor|serve)$/)
-    if (op && req.method === 'POST') {
-      const projectId = decodeURIComponent(op[1])
-      const entry = (await reconcileNow()).find((p) => p.projectId === projectId)
-      if (!entry) return json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /api/host/projects)` })
-      if (op[2] === 'serve') {
-        if (entry.online) return json(res, 409, { error: `backend already online at ${entry.url}`, project: entry })
-        try { return json(res, 200, { ok: true, project: await startBackend(entry.root) }) }
-        catch (e) { return json(res, 502, { error: (e as Error).message }) }
+    adminRoute: async (req, res, path) => {
+      if (path === '/projects/stream') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+        res.write(`data: ${JSON.stringify(await tick())}\n\n`)
+        sseClients.add(res)
+        req.on('close', () => sseClients.delete(res))
+        return true
       }
-      let body: any = {}
-      try { body = JSON.parse(await readBody(req) || '{}') } catch { /* malformed body → defaults */ }
-      const args = op[2] === 'init'
-        ? ['init', ...(body?.harness ? ['--harness', String(body.harness)] : []), ...(body?.preset ? ['--preset', String(body.preset)] : [])]
-        : ['doctor']
-      const r = await runSpex(entry.root, args)
-      return json(res, 200, { ok: r.code === 0, code: r.code, output: r.output })
-    }
-
-    // per-project traffic: /p/:projectId/api/* proxies to that project's validated backend (HTTP + SSE
-    // ride the same streaming pipe); any other /p/ path serves the SPA shell, so a project-scoped URL
-    // loads the dashboard. Routing is per-request off the latest snapshot — no current-project state.
-    const pp = parseProjectPath(full)
-    if (pp) {
-      const restPath = pp.rest.split('?')[0]
-      if (restPath === '/api' || restPath.startsWith('/api/')) {
-        let entry = snapshot.find((p) => p.projectId === pp.projectId)
-        if (!entry || !entry.online) entry = (await reconcileNow()).find((p) => p.projectId === pp.projectId)
-        if (!entry) return json(res, 404, { error: `unknown project '${pp.projectId}'` })
-        if (!entry.online || !entry.url) return json(res, 502, { error: `project '${pp.projectId}' has no live backend — start one (POST /api/host/projects/${encodeURIComponent(pp.projectId)}/serve or \`spex serve\` in ${entry.root})` })
-        return proxyHttp(req, res, upstreamPort(entry.url), pp.rest)
+      if (path === '/projects' && req.method === 'POST') {
+        let root = ''
+        try { root = String(JSON.parse(await readBody(req) || '{}')?.root ?? '').trim() } catch { /* malformed body */ }
+        if (!root) { json(res, 400, { error: 'body must be {"root": "/abs/path/to/repo"}' }); return true }
+        try {
+          const normalized = addKnownProject(root)
+          const entry = (await tick()).find((p) => p.root === normalized)
+          json(res, 200, entry ?? { projectId: encodeProject(normalized), root: normalized, name: basename(normalized), online: false, url: null })
+        } catch (e) { json(res, 400, { error: (e as Error).message }) }
+        return true
       }
-      return serveStatic(req, res, distDir, restPath)
-    }
+      const op = path.match(/^\/projects\/([^/]+)\/(init|doctor|serve)$/)
+      if (op && req.method === 'POST') {
+        const projectId = decodeURIComponent(op[1])
+        const entry = (await reconcileNow()).find((p) => p.projectId === projectId)
+        if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
+        if (op[2] === 'serve') {
+          if (entry.online) { json(res, 409, { error: `backend already online at ${entry.url}`, project: entry }); return true }
+          try { json(res, 200, { ok: true, project: await startBackend(entry.root) }) }
+          catch (e) { json(res, 502, { error: (e as Error).message }) }
+          return true
+        }
+        let body: any = {}
+        try { body = JSON.parse(await readBody(req) || '{}') } catch { /* malformed body → defaults */ }
+        const args = op[2] === 'init'
+          ? ['init', ...(body?.harness ? ['--harness', String(body.harness)] : []), ...(body?.preset ? ['--preset', String(body.preset)] : [])]
+          : ['doctor']
+        const r = await runSpex(entry.root, args)
+        json(res, 200, { ok: r.code === 0, code: r.code, output: r.output })
+        return true
+      }
+      return false
+    },
 
-    return serveStatic(req, res, distDir, path)
+    fallback: (req, res, path) => serveStatic(req, res, distDir, path),
   }
 
-  const server = http.createServer((req, res) => {
-    handler(req, res).catch((e) => {
-      console.error(`[host] ${req.method} ${req.url} failed: ${(e as Error).stack ?? e}`)
-      if (!res.headersSent) json(res, 500, { error: (e as Error).message })
-      else res.end()
-    })
-  })
-  installConnectionReaper(server)
+  const server = startHubGateway({ port: opts.port, host: opts.host ?? '127.0.0.1', tls: null, extensions })
 
-  // the terminal WebSocket, per project: gate nothing (auth is out of scope), resolve the target from the
-  // reconciled snapshot, replay the buffered upgrade against the backend and raw-pipe both halves —
-  // the same byte pipe the public gateway uses, with the /p/:projectId prefix stripped.
-  server.on('upgrade', (req, socket, head) => {
-    const pp = parseProjectPath(req.url || '')
-    const entry = pp && snapshot.find((p) => p.projectId === pp.projectId)
-    if (!pp || !entry || !entry.online || !entry.url) { socket.destroy(); return }
-    const up = net.connect(upstreamPort(entry.url), '127.0.0.1', () => {
-      up.write(`${req.method} ${pp.rest} HTTP/1.1\r\n` + rawHeaders(req))
-      if (head && head.length) up.write(head)
-      socket.pipe(up); up.pipe(socket)
-    })
-    const bail = () => { socket.destroy(); up.destroy() }
-    socket.on('error', bail); up.on('error', bail)
-    // an upgraded stream never half-closes legitimately, and an http server's sockets are allowHalfOpen —
-    // a client FIN alone would strand a zombie socket the server can never close. So EITHER half's
-    // FIN ('end') or close tears down BOTH (the supervisor's pairing rule, one layer up).
-    socket.on('end', bail); up.on('end', bail)
-    socket.once('close', () => up.destroy())
-    up.once('close', () => socket.destroy())
-  })
-
-  // continuous reconciliation: the stream stays live without a client-side poll (the SSE broadcast in
-  // tick()), and the snapshot the proxy routes off stays fresh. Heartbeat comments keep intermediaries
-  // from timing the stream out. Both timers unref'd — the SERVER holds the process open, not the loops.
+  // continuous reconciliation: the stream stays live without a client-side poll and the list the hub
+  // serves stays fresh. Heartbeat comments keep intermediaries from timing the stream out. Both timers
+  // unref'd — the SERVER holds the process open, not the loops.
   const loop = setInterval(() => void tick().catch((e) => console.error(`[host] reconcile failed: ${(e as Error).message}`)), 2500)
   loop.unref()
   const ping = setInterval(() => { for (const c of sseClients) c.write(': ping\n\n') }, 10_000)
   ping.unref()
-
-  const isLoopback = host === '127.0.0.1' || host === 'localhost' || host === '::1'
-  listenOrExit(server, opts.port, {
-    host, label: 'host dashboard', onListen: () => {
-      console.log(`[host] dashboard on http://${isLoopback ? 'localhost' : host}:${opts.port} — all projects via /p/<projectId>/, list at /api/host/projects${isLoopback ? '' : ' — OPEN (no auth), bind wide only on a network you trust'}`)
-    },
-  })
 
   return {
     server,

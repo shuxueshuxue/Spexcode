@@ -12,7 +12,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
-  reconcileProjects, reconcileNow, startHostGateway, type EndpointRecord,
+  reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
 import { encodeProject } from './layout.js'
 import { tsxBin } from './tsx-bin.js'
@@ -114,7 +114,7 @@ test('addKnownProject normalizes to the main checkout and requires a git repo', 
   assert.throws(() => addKnownProject(notRepo), /not a git repository/)
 })
 
-test('host gateway: project list + stream, /p/:projectId proxy rewrite, offline 502, static shell, WS pipe', async () => {
+test('host dashboard on the hub: admin list + stream, /p proxy via hub, registration, ops 404, shell fallback, WS pipe', async () => {
   const home = freshHome('gateway')
   const rootLive = '/proj/live-one'
   const backend = await fakeBackend({ instanceId: 'inst-live', root: rootLive })
@@ -130,19 +130,23 @@ test('host gateway: project list + stream, /p/:projectId proxy rewrite, offline 
   writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
 
   const gwPort = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
-  const gw = startHostGateway({ port: gwPort, host: '127.0.0.1', distDir: dist })
+  const gw = startHostDashboard({ port: gwPort, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((res) => gw.server.once('listening', () => res()))
   const base = `http://127.0.0.1:${gwPort}`
   const liveId = encodeProject(rootLive)
   try {
-    // the validated live list, and the SSE stream's immediate snapshot
-    const list = await getJson(`${base}/api/host/projects`)
+    // the hub's admin surface (implicit loopback admin — no admin password yet) serves the HOST list:
+    // reconciled entries incl. the catalog-only offline project, each with the hub's gating flag.
+    const list = await getJson(`${base}/projects`)
     assert.equal(list.status, 200)
-    const live = list.body.find((p: any) => p.projectId === liveId)
+    assert.equal(list.body.adminGated, false)
+    const live = list.body.projects.find((p: any) => p.projectId === liveId)
     assert.equal(live.online, true)
-    assert.equal(list.body.find((p: any) => p.root === '/proj/asleep').online, false)
+    assert.equal(live.id, liveId, 'rows carry the hub row key too')
+    assert.equal(live.gated, false)
+    assert.equal(list.body.projects.find((p: any) => p.root === '/proj/asleep').online, false)
     const streamFirst = await new Promise<string>((res, rej) => {
-      const req = http.get(`${base}/api/host/projects/stream`, (r) => {
+      const req = http.get(`${base}/projects/stream`, (r) => {
         let buf = ''
         r.on('data', (d) => { buf += d; if (buf.includes('\n\n')) { req.destroy(); res(buf) } })
       })
@@ -152,32 +156,35 @@ test('host gateway: project list + stream, /p/:projectId proxy rewrite, offline 
     assert.match(streamFirst, /^data: \[/)
     assert.ok(streamFirst.includes(liveId))
 
-    // proxy: the /p prefix is stripped — the backend must see the bare /api path, query intact
+    // /p routing is the HUB's: prefix stripped, query intact; a project with no live record — unknown
+    // or catalog-only offline alike — answers 404 before any upstream contact.
     const proxied = await getJson(`${base}/p/${liveId}/api/graph?x=1`)
     assert.equal(proxied.status, 200)
     assert.equal(proxied.body.echoedPath, '/api/graph?x=1')
-    // routing is per-request path state: unknown project 404s, offline project 502s with the repair
     assert.equal((await getJson(`${base}/p/no-such/api/graph`)).status, 404)
-    const asleep = await getJson(`${base}/p/${encodeProject('/proj/asleep')}/api/graph`)
-    assert.equal(asleep.status, 502)
-    assert.match(asleep.body.error, /no live backend/)
-    // non-API project-scoped paths (and the root) serve the SPA shell
-    for (const p of ['/', `/p/${liveId}/`, `/p/${liveId}/issues/3`]) {
+    assert.equal((await getJson(`${base}/p/${encodeProject('/proj/asleep')}/api/graph`)).status, 404)
+    // non-/p, non-/projects paths fall back to the dashboard shell; /p non-API paths reach the backend
+    for (const p of ['/index.html', '/somepage']) {
       const r = await fetch(`${base}${p}`)
       assert.equal(r.status, 200)
       assert.match(await r.text(), /shell/)
     }
+    const viaBackend = await getJson(`${base}/p/${liveId}/anything`)
+    assert.equal(viaBackend.body.echoedPath, '/anything')
 
-    // registration: a real git repo adds (offline), a non-repo refuses
+    // registration rides the admin surface: a real git repo adds (offline), a non-repo refuses,
+    // an op on an unknown project 404s with the repair.
     const repo = mkdtempSync(join(tmpdir(), 'spex-host-addrepo-'))
     execFileSync('git', ['init', '-q'], { cwd: repo })
-    const added = await fetch(`${base}/api/host/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
+    const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
     assert.equal(added.status, 200)
     assert.equal((await added.json()).online, false)
-    const refused = await fetch(`${base}/api/host/projects`, { method: 'POST', body: JSON.stringify({ root: join(repo, 'nope') }) })
+    const refused = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: join(repo, 'nope') }) })
     assert.equal(refused.status, 400)
+    const noSuch = await fetch(`${base}/projects/no-such/init`, { method: 'POST', body: '{}' })
+    assert.equal(noSuch.status, 404)
 
-    // the WS upgrade raw-pipes to the project's backend with the same prefix strip
+    // the WS upgrade raw-pipes to the project's backend with the same prefix strip (hub-authorized: open)
     const wsBytes = await new Promise<string>((res, rej) => {
       const sock = net.connect(gwPort, '127.0.0.1', () => {
         sock.write(`GET /p/${liveId}/api/sessions/s1/socket HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`)

@@ -30,15 +30,21 @@ internal services; the hub owns the outside.
 
 **The registry is the endpoint records, not a second config.** A project = a live
 `~/.spexcode/projects/<enc>/backend.json` written by that project's supervisor at bind time; the `<enc>`
-dir name is the projectId. Only loopback `http` upstreams are honored — a record naming any other host is
-ignored loudly and never proxied, so a crafted record cannot turn the hub into an open proxy. A projectId
-arrives as one URL path segment and is validated explicitly (shape + registry membership) before any
-lookup; unknown or hostile ids answer 404 before any upstream contact.
+dir name is the projectId. The hub reads records through the ONE record seam ([[host-gateway]]'s
+identity-carrying shape): a legacy or torn record is not routable, and a record sitting in a slot its own
+root does not encode to is not trusted. Only loopback `http` upstreams are honored — a record naming any
+other host is ignored loudly and never proxied, so a crafted record cannot turn the hub into an open
+proxy. A projectId arrives as one URL path segment and is validated explicitly (shape + registry
+membership) before any lookup; unknown or hostile ids answer 404 before any upstream contact.
 
 **Backends never see the gateway's credentials.** The hub's own cookies (`spex_*`) are stripped from every
 proxied request and upgrade — a visitor's other cookies pass through untouched. Combined with
 [[gateway-auth]]'s store, no password material ever crosses into a repo, a backend, or a backend log.
 
 **Launch seam.** `startHubGateway({port, host, tls})` is the engine, TLS-capable via the same
-resolved-cert posture as [[public-mode]]; the operator verb and the React admin/project UI on top of these
-APIs are the successor lane — this node deliberately ships the contract and its enforcement first.
+resolved-cert posture as [[public-mode]]. The operator verb is `spex dashboard` ([[host-gateway]]), which
+mounts the host registry/catalog/operations onto the hub's **extension seam** — three optional hooks, all
+inert when absent: `listProjects` enriches the `GET /projects` rows (the hub keeps the envelope and the
+admin gate), `adminRoute` handles extra `/projects/*` routes only AFTER admin authorization, and
+`fallback` serves the dashboard shell for paths the hub doesn't own. The React admin/project UI on top of
+these APIs is the successor lane.

@@ -6,6 +6,7 @@ code:
   - spec-cli/src/host.ts
 related:
   - spec-cli/src/supervise.ts
+  - spec-cli/src/gateway-hub.ts
   - spec-cli/src/gateway.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/index.ts
@@ -17,45 +18,47 @@ related:
 The bar: **a user who runs several SpexCode projects on one machine opens ONE dashboard and reaches all
 of them — no `--api-port` pairing, no per-project UI process, no "current project" toggle.** Each
 backend stays exactly what it is — one `spex serve` per repo, loopback-only, auth-unaware, ignorant of
-every other project; the HOST level is where multiplicity lives, and this node is that level.
+every other project; the HOST level is where multiplicity lives.
 
 **The seam between the two levels is the endpoint record.** After its public bind succeeds, a serve
 ATOMICALLY (tmp + rename — a reader never sees a torn record) publishes `{url, pid, instanceId, root,
-startedAt}` into the existing per-user global project store (`~/.spexcode/projects/<enc>/backend.json`)
-and, on a clean stop, removes only a record that still carries its own `instanceId` — never a newer
-serve's, never another project's. The `instanceId` is minted once per serve lifetime and handed to every
-child through env, so the identity is stable across zero-downtime reloads; the child answers it (with the
-root it serves) at `GET /api/instance`. A record is therefore *checkable*, not just present: the reader
-compares the record's `instanceId` + `root` against the live answer at its `url`, and only a full match
-counts as online. A crashed serve, a recycled port now serving something else, or a record copied into
-the wrong store slot (the slot must equal `encodeProject(root)`) all fail the match and degrade to
-"offline project" — never a proxy to the wrong backend.
+startedAt}` into the per-user global project store and, on a clean stop, removes only a record that
+still carries its own `instanceId` — never a newer serve's, never another project's. The `instanceId` is
+minted once per serve lifetime and handed to every child through env, so the identity is stable across
+zero-downtime reloads; the child answers it (with the root it serves) at `GET /api/instance`. A record
+is therefore *checkable*, not just present: the reader compares the record's `instanceId` + `root`
+against the live answer at its `url`, and only a full match counts as online. A crashed serve, a
+recycled port now serving something else, or a record copied into the wrong store slot (the slot must
+equal `encodeProject(root)`) all fail the match and degrade to "offline project" — never a proxy to the
+wrong backend.
 
-**`spex dashboard` is the single host gateway over those records.** It continuously reconciles every
-current-user record (single-flight, a few seconds' cadence plus on-demand), emits the validated project
-list at `GET /api/host/projects` and as a live SSE stream at `/api/host/projects/stream`, and serves the
-built dashboard dist once for the whole host. Per-project traffic rides **explicit paths, never mutable
-state**: `/p/<projectId>/api/*` (HTTP and SSE through the same streaming proxy, gzip riding [[public-mode]]'s
-transport rule) and the terminal WebSocket (the same replay-and-raw-pipe as the public gateway) resolve
-their target from the latest reconciled snapshot per request, where `projectId = encodeProject(root)` —
-the store's own key. A project with no live backend answers 502 naming the repair; an unknown one 404s.
-Non-API `/p/<projectId>/…` paths serve the SPA shell so a project-scoped URL loads the app. The old
-requirement to pair one dashboard with one backend (`--api-port`/API_URL) is gone at this surface;
-`spex serve ui` remains the explicit one-backend pairing.
+**`spex dashboard` is [[gateway-hub]] plus the host registry — one gateway, one seam, nothing duplicated.**
+The hub owns routing, `/p/:projectId/*` proxying (HTTP/SSE/WS, prefix-stripped, gateway cookies
+stripped), and every authorization decision ([[gateway-auth]]: admin scope implicit from
+loopback until an admin password exists; per-project gates as configured). This node mounts the host level
+onto the hub's extension seam: `GET /projects` rows become the **reconciled** list — every cataloged or
+record-claimed project with its instance-validated `online` state, not just the live records — each
+carrying the hub's gating flag; `GET /projects/stream`
+is that list as a live SSE; and paths the hub doesn't own serve the built dashboard dist once for the
+whole host. Per-request routing truth stays the hub's: a record is routable only in the identity shape,
+only in the store slot its own root encodes to, and only to a loopback url — the shared record-read seam
+(`readEndpointRecord`), not a second registry. A project with no record answers 404 before any upstream contact. No
+`--api-port`/API_URL pairing survives at this surface; `spex serve ui` remains the explicit pairing.
 
 **The durable known-project catalog remembers what records cannot.** Records die with their serve; the
 catalog (`~/.spexcode/projects.json`) is the host's memory, populated by explicit registration
-(`POST /api/host/projects {root}` — normalized to the repo's main checkout, git-repo required, matching
-init's own precondition) and by auto-adoption of any validated live record. Its host operations are
-**spawned `spex` verbs, never forked logic**: `/init` and `/doctor` run the real `spex init` /
-`spex doctor` as child processes with cwd = the project root (same git/harness/additive guarantees, exit
-code + transcript returned), and `/serve` starts an offline project's backend as a **detached**
-`spex serve --port <free>` that publishes its own record and outlives the gateway. A malformed catalog
-degrades loud-but-alive on read and refuses writes — live backends still list; nothing clobbers the file.
+(`POST /projects {root}` — normalized to the repo's main checkout, git-repo required, matching init's own
+precondition) and by auto-adoption of any validated live record. Its project operations ride the same
+hub admin scope and are **spawned `spex` verbs, never forked logic**: `/projects/:id/init` and `/doctor`
+run the real `spex init` / `spex doctor` with cwd = the project root (same git/harness/additive
+guarantees, exit code + transcript returned), and `/projects/:id/serve` starts an offline project's
+backend as a **detached** `spex serve` that publishes its own record and outlives the gateway. A
+malformed catalog degrades loud-but-alive on read and refuses writes — nothing clobbers the file.
 
 **Backends never depend on the gateway.** Kill the gateway and every serve keeps serving; direct CLI
 discovery ([[remote-client]]'s ladder) reads the same records straight from the store, gateway or no
 gateway. The gateway obeys the shared port contract (a busy port is a loud non-zero exit via the one bind
-helper) and carries the standard connection reaping. Authentication is explicitly NOT this node's
-concern: loopback by default, `--host` widens the bind and is announced OPEN — the internet face remains
-[[public-mode]].
+helper) and carries the standard connection reaping — both via the hub. Authentication is deliberately NOT
+this node's mechanism: it is [[gateway-auth]]'s, decided once at the hub — this node adds no second gate,
+no second cookie, no bypass. Loopback by default; `--host` widens the bind, behind whatever gates the
+operator configured.

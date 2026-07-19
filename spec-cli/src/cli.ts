@@ -322,16 +322,18 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'dashboard') {
-  // the HOST-level dashboard ([[host-gateway]]): one gateway for every project this user serves — it
-  // reconciles the per-user endpoint records into a live project list and proxies each project's API,
-  // SSE, and terminal socket through /p/<projectId>/*. No --api-port pairing: which backend a request
-  // reaches is named in its path, resolved per request. `spex serve ui` remains the explicit
-  // one-backend pairing; this verb is the zero-config many-project face.
-  const { startHostGateway } = await import('./host.js')
+  // the HOST-level dashboard ([[host-gateway]]): ONE gateway for every project this user serves. The
+  // engine is [[gateway-hub]] (routing + [[gateway-auth]] authorization: admin scope implicit from
+  // loopback until an admin password is set; per-project gates as configured); the host layer mounts the
+  // instance-validated project registry, its SSE stream, the durable catalog, and the /projects
+  // operations (register · init · doctor · start a backend) as the hub's admin extension. No --api-port
+  // pairing: which backend a request reaches is named in its /p/:projectId path, resolved per request.
+  // `spex serve ui` remains the explicit one-backend pairing; this verb is the zero-config many-project face.
+  const { startHostDashboard } = await import('./host.js')
   const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
   const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
-  startHostGateway({ port, host })
+  startHostDashboard({ port, host })
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
   const { commandHelp, overviewHelp } = await import('./help.js')

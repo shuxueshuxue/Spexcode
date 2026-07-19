@@ -509,10 +509,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .ov-tab:hover { color: var(--ink2); }
 .ov-tab.on { color: var(--ink2); border-color: var(--blue); background: var(--paper); }
-.ov-tab kbd {
-  font-family: var(--mono); font-size: var(--type-caption); color: var(--blue);
-  border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 3px; background: var(--paper);
-}
 /* @@@ tab counts - open/closed issue tallies shown on the issues tab face. Compact mono numbers in the
    card vocabulary (green open · magenta closed) so the count reads without opening the tab. */
 .ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
@@ -2111,6 +2107,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .rf-row { position: sticky; top: -16px; z-index: 6; display: flex; align-items: center; gap: 10px; margin: -8px 0 8px; background: var(--paper); }
 .rf-row .rf-compact { position: static; margin: 0 0 0 auto; }
 .rf-summary { flex: none; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); }
+/* screen-reader-only text: rendered for AT, invisible on screen (the one visually-hidden utility). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .rf-summary-compact { display: none; }
 @media (max-width: 640px) {
   .rf-summary-full { display: none; }

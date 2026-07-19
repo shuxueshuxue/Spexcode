@@ -64,8 +64,10 @@ test('popup tab captions: no visible key digits; state counts speak the shared R
 
 test('the compact filter row leads with the one showing-X-of-Y summary from the filter model', () => {
   const shell = read('ReviewShell.jsx')
-  // the primitive renders full words + a phone-width X/Y condensation, words kept in the aria-label
-  assert.match(shell, /className="rf-summary" aria-label=\{label\}/)
+  // the primitive renders full words + a phone-width X/Y condensation, the sentence kept as a real
+  // (visually hidden) text node for assistive tech
+  assert.match(shell, /className="rf-summary" data-tip=\{label\}/)
+  assert.match(shell, /className="sr-only">\{label\}/)
   assert.match(shell, /rf-summary-full/)
   assert.match(shell, /rf-summary-compact/)
   // both popup panes feed it model.shown/total — the SAME filtered result the rows render

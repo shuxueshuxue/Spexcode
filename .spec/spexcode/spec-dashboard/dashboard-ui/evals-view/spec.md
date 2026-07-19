@@ -63,7 +63,8 @@ filter (default off) picking the root.
   session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
-  A/B history walks the worktree-rooted readings. Scope is the DATA SOURCE axis and is never conflated
+  A/B history walks the worktree-rooted readings, while its way BACK to the list is the scoped default
+  view — the same text every door mints. Scope is the DATA SOURCE axis and is never conflated
   with `session:present|missing`, the source-session presence facet. A dead or unknown scope id keeps
   its token and shows the honest empty/error face — the text itself is the off-switch.
   `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route

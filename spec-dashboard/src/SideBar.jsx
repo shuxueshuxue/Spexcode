@@ -33,7 +33,7 @@ function RailButton({ page, active, onNav, label }) {
 
 // the current-project chip + switcher menu. `projects` is the catalog list when the admin scope holds,
 // else null (chip only). Navigation is a plain same-tab location change — the pathname carries the scope.
-function ProjectChip({ identity, projects, t }) {
+function ProjectChip({ identity, projects, gatewayIdentity, t }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -67,14 +67,14 @@ function ProjectChip({ identity, projects, t }) {
               className={p.id === PROJECT_ID ? 'proj-menu-item current' : 'proj-menu-item'}
               href={projectHref(p.id)}
             >
+              <IdentityIcon icon={p.identity.icon} size={16} className="proj-menu-mark" />
               {p.gated && <Icon name="lock" size={11} />}
-              <IdentityIcon icon={p.identity.icon} size={20} />
               <span className="proj-menu-name">{p.identity.title}</span>
               {p.id === PROJECT_ID && <Icon name="check" size={12} />}
             </a>
           ))}
           <a role="menuitem" className="proj-menu-item all" href={hubHref()}>
-            <Icon name="projects" size={13} />
+            <IdentityIcon icon={gatewayIdentity?.icon} fallback="gateway" size={16} className="proj-menu-mark" />
             <span className="proj-menu-name">{t('nav.allProjects')}</span>
           </a>
         </div>
@@ -88,7 +88,12 @@ export default function SideBar({ page, onNav, identity, catalog }) {
   const catalogOk = catalog?.state === 'ok'
   return (
     <nav className="side-rail" aria-label={t('nav.railLabel')}>
-      {PROJECT_ID && <ProjectChip identity={identity} projects={catalogOk ? catalog.projects : null} t={t} />}
+      {PROJECT_ID && <ProjectChip
+        identity={identity}
+        projects={catalogOk ? catalog.projects : null}
+        gatewayIdentity={catalogOk ? catalog.gateway.identity : null}
+        t={t}
+      />}
       {ENTRIES.map((p) => (
         <RailButton key={p} page={p} active={page === p} onNav={onNav} label={t(`nav.${p}`)} />
       ))}

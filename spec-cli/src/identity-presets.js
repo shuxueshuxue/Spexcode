@@ -74,6 +74,7 @@ export const IDENTITY_PRESETS = Object.freeze([
 ])
 
 const BY_ID = new Map(IDENTITY_PRESETS.map((preset) => [preset.id, preset]))
+const ICONIFY_ID = /^[a-z0-9-]+[:/][a-z0-9-]+$/i
 const ALIASES = new Map([
   ['rocket', 'mdi:rocket-launch'],
   ['mdi/rocket-launch', 'mdi:rocket-launch'],
@@ -94,11 +95,16 @@ export function identityPreset(value) {
   return BY_ID.get(ALIASES.get(raw) || raw) || null
 }
 
-export function requireIdentityPreset(value) {
+export function isIconifyIcon(value) {
+  return ICONIFY_ID.test(typeof value === 'string' ? value.trim() : '')
+}
+
+export function requireIdentityChoice(value) {
   const raw = typeof value === 'string' ? value.trim() : ''
   const id = ALIASES.get(raw) || raw
-  if (!BY_ID.has(id)) throw new Error(`unknown identity icon '${raw}' (choose: ${IDENTITY_PRESET_IDS.join(', ')})`)
-  return id
+  if (BY_ID.has(id)) return id
+  if (isIconifyIcon(id)) return id.replace('/', ':')
+  throw new Error(`unknown identity icon '${raw}' (choose a preset or Iconify prefix:name)`)
 }
 
 function attrs(shape) {
@@ -116,7 +122,7 @@ export function identityFaviconHref(value, fallback = DEFAULT_PROJECT_ICON) {
   const resolved = resolvedIdentityIcon(value, fallback)
   if (identityPreset(resolved)) return `data:image/svg+xml,${encodeURIComponent(identitySvg(resolved, fallback))}`
   if (/^https?:\/\//.test(resolved)) return resolved
-  if (/^[a-z0-9-]+[:/][a-z0-9-]+$/i.test(resolved)) return `https://api.iconify.design/${resolved.replace(':', '/')}.svg`
+  if (isIconifyIcon(resolved)) return `https://api.iconify.design/${resolved.replace(':', '/')}.svg`
   const glyph = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y=".86em" font-size="82" text-anchor="middle">${resolved.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(glyph)}`
 }

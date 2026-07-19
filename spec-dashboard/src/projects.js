@@ -4,8 +4,8 @@
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
 //   POST /projects {root}                register an existing repo into the durable catalog
-//   PUT  /projects/icon                   write the host gateway icon preset
-//   PUT  /projects/:id/icon               write one project's dashboard.icon preset
+//   PUT  /projects/icon                   write the host gateway icon choice
+//   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
 //   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)

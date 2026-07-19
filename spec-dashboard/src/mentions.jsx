@@ -113,6 +113,19 @@ export function matchSlash(cmds, query) {
   return scored.slice(0, 10).map((x) => x.c)
 }
 
+// the positional `/` trigger used by launch-preset authoring: scan back from the caret to this
+// whitespace-delimited token, then rank it through the same matcher every slash palette uses. A slash
+// inside a word (URL/email/path prose) is inert; a bare `/` at a token boundary lists every command.
+export function slashTokenAt(value, caret, commands) {
+  let start = caret
+  while (start > 0 && !/\s/.test(value[start - 1])) start--
+  if (value[start] !== '/') return null
+  const query = value.slice(start + 1, caret)
+  const items = matchSlash(commands, query)
+  if (!items.length) return null
+  return { items, index: 0, start, end: caret, query }
+}
+
 // dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
 const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 

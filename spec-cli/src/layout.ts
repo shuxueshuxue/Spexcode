@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
-import { HARNESSES } from './harness.js'
+import { HARNESSES, type HarnessId } from './harness.js'
 
 type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
@@ -20,7 +20,7 @@ type Config = {
   // RETIRED (residence compat): the old private-overlay toggle — ignored with the same loud notice;
   // its data-untrack semantics are long gone. See `spex guide footprint` MIGRATIONS.
   private?: boolean
-  // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
+  // which harness targets `spex materialize` delivers into — a native HarnessId or a {plugin:"<folder>"}
   // bundle; resolved + validated by [[harness-select]] (harness-select.ts). REQUIRED — no default set; `spex init --harness` stamps it.
   harnesses?: (string | { plugin?: string })[]
   dashboard?: {
@@ -33,13 +33,9 @@ type Config = {
     // named launcher profiles: a session picks ONE by name at create time ([[launcher-select]]), fixing both
     // its harness AND its exact launch command; the chosen NAME is persisted on the record so resume reuses the
     // same auth. `harness` defaults to 'claude'. Host-specific `cmd`s (abs wrapper paths) belong in the
-    // gitignored spexcode.local.json — the name is portable, the cmd is a machine fact. `headlessCmd` is the
-    // OPTIONAL second complete command for headless (one-shot) sessions — written whole, never parsed; its
-    // absence is validated at use time (harness.ts pinnedLaunchCmd), and harnesses whose headless executor
-    // is server-side (needsCmd=false) ignore it.
-    launchers?: { [name: string]: { harness?: 'claude' | 'codex'; cmd: string; headlessCmd?: string } }
+    // gitignored spexcode.local.json — the name is portable, the cmd is a machine fact.
+    launchers?: { [name: string]: { harness?: HarnessId; cmd: string } }
     defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
-    defaultMode?: string           // the session mode a create with no explicit --mode uses: 'interactive' (default) | 'headless' (harness.ts defaultSessionMode)
   }
   serve?: {
     // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).
@@ -183,7 +179,6 @@ export type RawRecord = {
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
-  mode?: string       // the session's MODE ('interactive' | 'headless'), pinned at creation with the command it selects; absent → record predates modes → interactive
 }
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
 // Three tiers, in order:

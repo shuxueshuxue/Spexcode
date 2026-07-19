@@ -6,8 +6,7 @@ scenarios:
       On a PHONE viewport (≤ 640px), open the Sessions tab and tap a live worker. The detail is the
       terminal-free conversation ([[session-timeline]]): the timeline of the session's status transitions
       (timestamps + the FULL declaration note text) with the BARE composer docked below — no chips, no
-      mode controls, no note-reply verbiage anywhere. Type a message and send it. Record the whole
-      interaction as a video.
+      note-reply verbiage anywhere. Type a message and send it. Record the whole interaction as a video.
     expected: |
       The timeline renders the session's recorded status events oldest-first (colored status word + HH:MM
       time; a declaration's complete note shows as a block under its status line — not truncated to the
@@ -16,6 +15,20 @@ scenarios:
       and because every dispatch from this surface SILENTLY carries replyVia:"note" (the surface's fixed
       property — no visible control), its next declaration's full note — the reply — appears in the same
       timeline. No terminal is ever mounted.
+  - name: terminal-free-composer-dock
+    tags: [frontend-e2e, mobile]
+    code: spec-dashboard/src/TimelineChat.jsx
+    related: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Through the running dashboard in a real browser, at 375x667, 390x844, and the 640x360 mobile
+      breakpoint, open a phone session detail, type a multi-word draft, and measure `.m-sessdetail`,
+      `.m-main`, `.m-composer`, `.m-composer-line`, `.m-input`, `.m-send`, and the persistent
+      safe-area-owning `.m-tabbar`. Screenshot each mobile layout.
+    expected: |
+      The TimelineChat composer ends exactly at both the session detail and `.m-main` bottoms, directly
+      against the tab bar's top edge. Its input and send action remain aligned, enabled after typing,
+      non-overlapping, and horizontally usable at every phone width. The tab bar keeps ownership of
+      `safe-area-inset-bottom`, so navigation and home-bar clearance never move into the composer.
   - name: node-panes-one-axis
     tags: [frontend-e2e, mobile]
     description: >
@@ -78,12 +91,17 @@ scenarios:
       On a PHONE viewport (≤ 640px), open the Sessions tab. Above the session list sits the create
       row — tap it: a full-screen composer opens (back chevron, prompt textarea, native launcher
       select, one launch button). Verify the select lists the SAME launcher profiles /api/settings
-      serves and pre-selects the same default the desktop New tab would. Type a task, tap launch,
-      and wait through the button's busy state. Record the whole interaction as a video.
+      serves and pre-selects the same default the desktop New tab would. Type
+      `/tidy [[mobile-ui]] phone smoke`, tap launch, and observe the raw create request plus the fixture
+      agent's expanded prompt while waiting through the button's busy state. Record the whole interaction
+      as a video.
     expected: |
       The composer is the desktop New Session tab's touch twin with all substance shared (the one
-      launch path launch.js: /preset grammar, launcher fetch + default resolution + the per-browser
-      remembered pick, the one POST /api/sessions). The launch button reads busy while the backend
+      client launch path launch.js: raw prompt, launcher fetch + default resolution + the per-browser
+      remembered pick, the one POST /api/sessions; backend newSession invokes /preset grammar for every
+      caller). The POST carries raw `/tidy [[mobile-ui]] phone smoke`; the resulting row belongs to
+      `mobile-ui`, while the fixture agent receives tidy's expanded body, target, and free text. The launch
+      button reads busy while the backend
       builds worktree+agent (the double-tap guard), then the surface returns to the sessions list
       where the NEW session's row — the shared SessionRow face — appears within one board push. A
       failed create keeps the draft and shows a loud error in the composer.

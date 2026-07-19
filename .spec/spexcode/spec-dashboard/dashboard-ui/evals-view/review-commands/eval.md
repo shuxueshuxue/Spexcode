@@ -5,21 +5,25 @@ scenarios:
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/reviewCommands.js, spec-dashboard/src/mentions.jsx]
     description: >
       In a real browser at a live backend: open #/evals, select a reading whose scenario is NOT yet
-      human-ok'd (the /ok gate is open: the viewed reading is the scenario's latest), focus the remark
-      composer and type '/'. Read the dropdown: which commands list, their tags, where it opens relative
-      to the composer container, and the row markup vs the session ❯ box's / menu. Type 'o' and read the
-      filtered list; Esc closes. Then view a reading OUTSIDE the gate (an ok'd latest, or an older A/B
-      pole) and type '/ok' — read what the menu offers. Finally type '/' mid-prose (not at line start)
-      and read whether a menu opens.
+      human-ok'd (the /ok gate is open: the viewed reading is the scenario's latest). Read the persistent
+      action row, put the caret at the start of a non-empty draft, click its '/' button, and observe the
+      textarea value, focus, caret, and dropdown. Close
+      it, then focus the composer and type '/'; compare the two dropdowns: which commands list, their tags,
+      where they open relative to the composer container, and the row markup vs the session ❯ box's / menu.
+      Type 'o' and read the filtered list; Esc closes. Then view a reading OUTSIDE the gate (an ok'd latest,
+      or an older A/B pole) and type '/ok' — read what the menu offers. Finally type '/' mid-prose (not at
+      line start) and read whether a menu opens.
     expected: >
-      Typing '/' at the start of the composer's line opens a small command dropdown ABOVE the composer,
-      in the same interaction grammar as the session input's / menu (same row shape: /name · description
-      · tag; ↑↓ · ⏎ pick · Esc closes). It lists /ok tagged [ui] — offered ONLY under the registry's
+      The persistent action row shows a compact '/' button beside '@' and '[[' whenever this home supplies
+      review commands. From a command-eligible line start, clicking it inserts '/' at the caret, preserves
+      the draft, refocuses the textarea, and opens exactly the same small command dropdown ABOVE the
+      composer as typing '/' — one trigger path, not a second menu. It uses the session input's interaction grammar
+      (same row shape: /name · description · tag; ↑↓ · ⏎ pick · Esc closes). It lists /ok tagged [ui] — offered ONLY under the registry's
       when-gate: the viewed reading is the scenario's latest effective one and not yet ok'd — and /refuse
       tagged [review] (from the .plugins/review surface). Outside the gate the menu offers no /ok — one
       gate in one registry, never a second judgment (and no header ok button exists anywhere). A '/'
-      that is not at its line's start opens nothing. Zero loss = the typed trigger is the ONE sign-off
-      door, gated in exactly one place.
+      that is not at its line's start opens nothing. Zero loss = the command remains the ONE sign-off
+      door, visible from the action row and gated in exactly one place.
   - name: ok-via-command
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/reviewCommands.js, spec-dashboard/src/EventDetail.jsx]
@@ -59,9 +63,10 @@ scenarios:
 # measuring review-commands
 
 YATU through the REAL running product, never the code: worktree backend + dashboard, a headless Chromium
-typing '/' into the live composer (`.fv-textarea` in the event-detail rail) and reading the real dropdown,
+clicking the '/' action-row button and typing '/' into the live composer (`.fv-textarea` in the event-detail rail),
+then reading the real dropdown,
 the real header band, the real feed. The loss is the gap between that reading and the spec: one closure
-per built-in verb gated in one registry (the typed command the sole dashboard door), the preset prose
+per built-in verb gated in one registry (the slash command the sole dashboard door), the preset prose
 arriving through the `surface: review` plugin gather, and every send remaining an ordinary remark. Menu
 interactions are DYNAMIC — record video of the type→menu→accept flows; end states (prefilled composer,
 ok'd header, hidden feed row) may add stills.

@@ -1,12 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, chmodSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { writeManagedBlock } from './harness.js'
 import { runtimeRoot, mainCheckout } from './layout.js'
 import { uninstall } from './uninstall.js'
+
+const CLI = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
+const HOOK_TEMPLATES = fileURLToPath(new URL('../templates/hooks', import.meta.url))
 
 function gitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'spex-uninstall-'))
@@ -86,20 +90,59 @@ test('uninstall surgically removes the SpexCode footprint, never the user data',
   }
 })
 
-test('uninstall preserves git hooks by default; --hooks removes ONLY spexcode-stamped ones', () => {
+test('public init → uninstall --hooks removes exact generated hooks and preserves every user byte', () => {
   const proj = gitRepo()
+  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
+  const codexHome = mkdtempSync(join(tmpdir(), 'codexhome-'))
+  const piHome = mkdtempSync(join(tmpdir(), 'pihome-'))
+  const env = { ...process.env, HOME: home, SPEXCODE_HOME: home, CODEX_HOME: codexHome, SPEXCODE_PI_AGENT_DIR: piHome }
   const hooks = join(proj, '.git', 'hooks')
-  mkdirSync(hooks, { recursive: true })
-  writeFileSync(join(hooks, 'pre-commit'), '#!/bin/sh\n# @spexcode/spec-cli main-guard\n')   // ours (stamped)
-  writeFileSync(join(hooks, 'prepare-commit-msg'), '#!/bin/sh\necho user own hook\n')          // user's (no stamp)
-  chmodSync(join(hooks, 'pre-commit'), 0o755)
+  const prose = '# Team notes\nkeep me\n'
+  writeFileSync(join(proj, 'CLAUDE.md'), prose)
 
-  // default: both preserved
-  uninstall(proj)
-  assert.ok(existsSync(join(hooks, 'pre-commit')), 'hooks preserved by default')
+  const spex = (...args: string[]) => execFileSync(process.execPath, [CLI, ...args], {
+    cwd: proj,
+    env,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  spex('init', '.', '--harness', 'claude')
 
-  // --hooks: stamped pre-commit removed, the user's unstamped hook survives
-  uninstall(proj, { hooks: true })
-  assert.ok(!existsSync(join(hooks, 'pre-commit')), 'stamped hook removed under --hooks')
-  assert.ok(existsSync(join(hooks, 'prepare-commit-msg')), 'unstamped user hook kept')
+  const generated = readdirSync(HOOK_TEMPLATES).sort()
+  assert.deepEqual(generated, ['post-checkout', 'post-merge', 'pre-commit', 'prepare-commit-msg'])
+  for (const name of generated) {
+    assert.ok(readFileSync(join(hooks, name)).equals(readFileSync(join(HOOK_TEMPLATES, name))), `${name} installed byte-identically`)
+  }
+
+  spex('uninstall', '.')
+  for (const name of generated) assert.ok(existsSync(join(hooks, name)), `${name} preserved without --hooks`)
+
+  const modifiedName = 'prepare-commit-msg'
+  const modified = Buffer.concat([readFileSync(join(hooks, modifiedName)), Buffer.from('\n# user modification\n')])
+  writeFileSync(join(hooks, modifiedName), modified)
+  const unrelatedName = 'post-rewrite'
+  const unrelated = '#!/bin/sh\nprintf user-hook\\n\n'
+  writeFileSync(join(hooks, unrelatedName), unrelated)
+  chmodSync(join(hooks, unrelatedName), 0o755)
+
+  spex('uninstall', '.', '--hooks')
+
+  for (const name of generated.filter((name) => name !== modifiedName)) {
+    assert.ok(!existsSync(join(hooks, name)), `exact generated ${name} removed`)
+  }
+  assert.ok(readFileSync(join(hooks, modifiedName)).equals(modified), 'modified generated hook preserved byte-for-byte')
+  assert.equal(readFileSync(join(hooks, unrelatedName), 'utf8'), unrelated, 'unrelated user hook preserved byte-for-byte')
+  assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), prose, 'materialized block removed at the exact user-prose boundary')
+  assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'user spec asset survives the lifecycle')
+
+  const second = spex('uninstall', '.', '--hooks')
+  assert.match(second, /no spexcode git hooks to remove/, 'second --hooks run reports an empty clean no-op')
+  assert.doesNotMatch(second, /removed git hooks \(/, 'second --hooks run reports no removal set')
+  for (const name of generated.filter((name) => name !== modifiedName)) {
+    assert.ok(!existsSync(join(hooks, name)), `second run leaves generated ${name} absent`)
+  }
+  assert.ok(readFileSync(join(hooks, modifiedName)).equals(modified), 'second run keeps the modified generated hook')
+  assert.equal(readFileSync(join(hooks, unrelatedName), 'utf8'), unrelated, 'second run keeps the unrelated user hook')
+  assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), prose, 'second run keeps user prose')
+  assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'second run keeps the user spec asset')
 })

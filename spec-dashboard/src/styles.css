@@ -30,6 +30,36 @@
   --cyan:  #73bbb2;
   --term-bg: #212121; /* the embedded terminal is DARK in EVERY theme (the Claude TUI is dark-designed) */
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* @@@ typography tokens - one scale for every dashboard surface. Components select the role their
+     copy performs; raw font metrics stay here so a new view cannot invent a nearby one-off value. */
+  --type-caption: 10px;
+  --type-meta: 11px;
+  --type-control: 12px;
+  --type-body: 13px;
+  --type-subtitle: 14px;
+  --type-title: 16px;
+  --type-heading: 18px;
+  --type-icon-sm: 16px;
+  --type-icon-lg: 24px;
+  --type-hero: clamp(5.5px, 1.15vw, 9.5px);
+  --type-terminal: 11px;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 900;
+
+  --leading-none: 1;
+  --leading-hero: 1.06;
+  --leading-tight: 1.25;
+  --leading-ui: 1.4;
+  --leading-relaxed: 1.5;
+  --leading-body: 1.6;
+  --line-input: 20px;
+  --line-badge: 16px;
+  --tracking-normal: 0;
 }
 
 /* Things (light) — colineckert/obsidian-things, MIT, © 2020-2021 Stephan Ango (@kepano).
@@ -183,7 +213,9 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--type-body);
+  line-height: var(--leading-ui);
+  letter-spacing: var(--tracking-normal);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -226,7 +258,7 @@ body {
 .page-evals, .page-issues { overflow: hidden; padding: 0 14px 10px 0; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }
 .settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
-.page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
+.page-title { font-size: var(--type-heading); font-weight: var(--weight-bold); color: var(--ink2); margin: 6px 2px 14px; }
 
 /* ---- pane resizers ([[resizable-panes]]) - an invisible col-resize strip straddling a pane border; a
    center line shows on hover/drag so the affordance appears exactly when reached for. ---- */
@@ -266,7 +298,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   position: absolute; top: 16px; left: 18px; z-index: 5;
   display: flex; flex-direction: row; align-items: center; gap: 8px; pointer-events: none;
 }
-.brand { color: var(--ink2); font-weight: 700; letter-spacing: .5px; }
+.brand { color: var(--ink2); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); }
 /* the HUD button sits on ONE horizontal line beside the brand (align-items centres it against it). */
 .hud .hud-help { align-self: center; }
 /* discreet `?` affordance — the only HUD hint; opens the full keymap/legend modal. The HUD itself is
@@ -274,7 +306,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .hud-help {
   pointer-events: auto; align-self: flex-start; cursor: pointer;
   width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 13px; line-height: 1; color: var(--blue);
+  font-family: var(--mono); font-size: var(--type-body); line-height: var(--leading-none); color: var(--blue);
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
 }
 .hud-help:hover { border-color: var(--blue); color: var(--orange); }
@@ -287,22 +319,22 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 5px 8px 5px 11px;
   background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--ov, var(--blue));
   border-radius: 6px; box-shadow: 0 6px 22px rgba(101,123,131,.16);
-  font-family: var(--mono); font-size: 12px; color: var(--ink);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink);
 }
 .lock-hint-lead {
-  font-weight: 700; flex: none; max-width: 200px;
+  font-weight: var(--weight-bold); flex: none; max-width: 200px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lock-hint-body { color: var(--ink2); flex: 1; min-width: 0; }
 .lock-hint kbd {
   border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin: 0 1px;
-  color: var(--blue); font-family: var(--mono); font-size: 11px;
+  color: var(--blue); font-family: var(--mono); font-size: var(--type-meta);
 }
 .lock-hint-sep { color: var(--muted); }
 .lock-hint-release {
   flex: none; cursor: pointer; padding: 1px 8px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
-  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-meta);
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
 
@@ -316,13 +348,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   max-width: calc(100% - 36px); padding: 4px 9px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 4px 18px rgba(101,123,131,.12);
-  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
-.bstat-total { font-weight: 700; color: var(--ink); padding-right: 1px; }
+.bstat-total { font-weight: var(--weight-bold); color: var(--ink); padding-right: 1px; }
 .bstat {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 1px 4px; border: 0; border-radius: 4px; background: none;
-  font-family: var(--mono); font-size: 12px; line-height: 1.4; color: inherit; cursor: pointer;
+  font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-ui); color: inherit; cursor: pointer;
 }
 .bstat:hover:not(:disabled) { background: var(--panel2); color: var(--ink); }
 .bstat:disabled { opacity: .38; cursor: default; }
@@ -330,7 +362,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .bstat-drift { color: var(--yellow); }                                   /* matches .drift-badge */
 .bstat-issue { color: var(--magenta); }                                  /* matches .issue-badge */
 .bstat-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
-.graph-stats .score-badge { width: 13px; height: 13px; font-size: 8px; }
+.graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
 .graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
 /* gentle focus grouping — only opacity changes, positions never move */
@@ -366,9 +398,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
-.node-title { font-size: 12px; font-weight: 600; color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-ago { font-size: 10px; color: var(--muted); flex: none; white-space: nowrap; }
-.node-ver { font-size: 10px; color: var(--muted); flex: none; }
+.node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-ago { font-size: var(--type-caption); color: var(--muted); flex: none; white-space: nowrap; }
+.node-ver { font-size: var(--type-caption); color: var(--muted); flex: none; }
 
 /* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
    on a collapsed node so a leaf and a closed branch are never confused. Muted by default; on the focused
@@ -376,7 +408,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-expand {
   position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 1px;
-  font-size: 9px; font-weight: 700; line-height: 1; color: var(--muted);
+  font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--muted);
   background: var(--paper); border: 1px solid var(--line); border-radius: 7px;
   padding: 2px 4px; pointer-events: none;
 }
@@ -384,13 +416,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* ---- row 2: marks · editor avatars ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }
-.av-more { font-size: 9px; font-weight: 700; color: var(--muted); margin-left: 1px; }
+.av-more { font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--muted); margin-left: 1px; }
 
 /* @@@ avatar - the generated face (avatar.jsx). `av-face` is the coloured tile; shape variants change
    only the corner radius. The wrapper carries a liveness ring (av-st-working/idle/offline) so the row
    reads "who is here, and are they live" at a glance. A future kind:'image' provider reuses .av-face. */
 .avatar { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--panel); }
-.av-face { display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-weight: 700; overflow: hidden; }
+.av-face { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); font-weight: var(--weight-bold); overflow: hidden; }
 .av-circle  { border-radius: 50%; }
 .av-rounded { border-radius: 5px; }
 .av-square  { border-radius: 1px; }
@@ -412,45 +444,45 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* ---- sidebar ---- */
 .side { padding: 18px 18px 24px; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); }
 
-.trail { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 16px; font-size: 11px; }
+.trail { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 16px; font-size: var(--type-meta); }
 .trail .sep { color: var(--muted); margin: 0 3px; }
-.crumb { background: none; border: none; padding: 1px 3px; cursor: pointer; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.crumb { background: none; border: none; padding: 1px 3px; cursor: pointer; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
 .crumb:hover { color: var(--blue); }
-.crumb.here { color: var(--ink2); font-weight: 700; }
+.crumb.here { color: var(--ink2); font-weight: var(--weight-bold); }
 
-.side h1 { font-size: 17px; color: var(--ink2); margin: 0 0 8px; }
-.side h2 { font-size: 11px; color: var(--muted); margin: 24px 0 10px; font-weight: 500; }
+.side h1 { font-size: var(--type-heading); color: var(--ink2); margin: 0 0 8px; }
+.side h2 { font-size: var(--type-meta); color: var(--muted); margin: 24px 0 10px; font-weight: var(--weight-medium); }
 .side h2:first-child { margin-top: 0; }
 
 .stats { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
-.stats div { display: flex; justify-content: space-between; font-size: 12px; padding: 7px 10px; }
+.stats div { display: flex; justify-content: space-between; font-size: var(--type-control); padding: 7px 10px; }
 .stats div:nth-child(odd) { background: var(--panel2); }
 .stats span { color: var(--muted); }
-.stats b { color: var(--ink2); font-weight: 600; }
+.stats b { color: var(--ink2); font-weight: var(--weight-semibold); }
 .c-merged { color: var(--green); }
 .c-active { color: var(--orange); }
 .c-drift { color: var(--yellow); }
 .c-pending { color: var(--muted); }
 
-.badge { display: inline-block; font-size: 11px; padding: 2px 0; border: none; background: none; }
+.badge { display: inline-block; font-size: var(--type-meta); padding: 2px 0; border: none; background: none; }
 .badge.merged  { color: var(--green); }
 .badge.active  { color: var(--orange); }
 .badge.drift   { color: var(--yellow); }
 .badge.pending { color: var(--muted); }
 
-.desc { color: var(--ink); line-height: 1.55; font-size: 12.5px; margin: 12px 0 4px; }
+.desc { color: var(--ink); line-height: var(--leading-relaxed); font-size: var(--type-control); margin: 12px 0 4px; }
 
 .meta { margin-top: 14px; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
-.meta div { display: flex; justify-content: space-between; font-size: 12px; padding: 7px 10px; }
+.meta div { display: flex; justify-content: space-between; font-size: var(--type-control); padding: 7px 10px; }
 .meta div:nth-child(odd) { background: var(--panel2); }
 .meta span { color: var(--muted); }
-.meta b { color: var(--ink2); font-weight: 600; }
+.meta b { color: var(--ink2); font-weight: var(--weight-semibold); }
 
 .peek-btn {
   margin-top: 22px; width: 100%; padding: 9px;
   background: var(--paper); color: var(--blue);
   border: 1px solid var(--blue); border-radius: 4px;
-  font-family: var(--mono); font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-semibold); cursor: pointer;
 }
 .peek-btn:hover:not(:disabled) { background: var(--blue); color: var(--paper); }
 .peek-btn:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
@@ -471,27 +503,27 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: flex; align-items: center; gap: 14px;
   padding: 7px 12px; background: var(--panel2); border-bottom: 1px solid var(--line);
 }
-.ov-title { font-size: 13px; font-weight: 700; color: var(--ink2); }
+.ov-title { font-size: var(--type-body); font-weight: var(--weight-bold); color: var(--ink2); }
 .ov-tabs { display: flex; gap: 4px; }
 .ov-tab {
   background: none; border: 1px solid transparent; border-radius: 4px;
   padding: 3px 8px; cursor: pointer; color: var(--muted);
-  font-family: var(--mono); font-size: 12px;
+  font-family: var(--mono); font-size: var(--type-control);
 }
 .ov-tab:hover { color: var(--ink2); }
 .ov-tab.on { color: var(--ink2); border-color: var(--blue); background: var(--paper); }
 .ov-tab kbd {
-  font-family: var(--mono); font-size: 10px; color: var(--blue);
+  font-family: var(--mono); font-size: var(--type-caption); color: var(--blue);
   border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 3px; background: var(--paper);
 }
 /* @@@ tab counts - open/closed issue tallies shown on the issues tab face. Compact mono numbers in the
    card vocabulary (green open · magenta closed) so the count reads without opening the tab. */
 .ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
-.ovc { font-family: var(--mono); font-size: 9px; font-weight: 700; line-height: 1.5; padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); }
+.ovc { font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-relaxed); padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); }
 .ovc.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .ovc.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
 .ovc.st-edit { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, transparent); }
-.ov-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
+.ov-hint { margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
 /* the panel is a fixed-size pop-out; each pane scrolls its OWN content (doc/hist below).
    the body itself never scrolls, so the work pane can't push a horizontal bar onto the window. */
 .ov-body { flex: 1; min-width: 0; overflow: hidden; display: flex; }
@@ -499,10 +531,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* pane: spec doc */
 .pane-doc { flex: 1; padding: 22px 26px; overflow: auto; }
-.pane-doc h1 { font-size: 18px; color: var(--ink2); margin: 0 0 14px; }
+.pane-doc h1 { font-size: var(--type-heading); color: var(--ink2); margin: 0 0 14px; }
 .pane-doc blockquote {
   margin: 0 0 16px; padding: 8px 14px; border-left: 3px solid var(--blue);
-  background: var(--panel2); color: var(--ink); line-height: 1.6; font-size: 13px;
+  background: var(--panel2); color: var(--ink); line-height: var(--leading-body); font-size: var(--type-body);
 }
 /* @@@ stat bar - the node's at-a-glance signal line: status (the tile's dot+colour vocabulary) · version
    · eval score · drift, with the last-editing session pushed to the end. A compact panel strip that wraps
@@ -512,44 +544,44 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   margin: 0 0 16px; padding: 6px 10px;
   background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
 }
-.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); }
 .stat-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; background: var(--muted); } /* square tick, like the node */
 .stat-status.st-merged  { color: var(--green);  } .stat-status.st-merged  .stat-dot { background: var(--green); }
 .stat-status.st-active  { color: var(--orange); } .stat-status.st-active  .stat-dot { background: var(--orange); }
 .stat-status.st-drift   { color: var(--yellow); } .stat-status.st-drift   .stat-dot { background: var(--yellow); }
 .stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
-.stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; }
-.stat-chip.stat-drift { color: var(--yellow); font-weight: 700; border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
-.stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); min-width: 0; }
-.stat-sess b { color: var(--ink2); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; }
+.stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-bold); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
+.stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* @@@ governs - the node's owned files as a counted row of wrapping chips (compact, vs the old one-per-line
    vertical stack); a pure-prose node (no code:) shows a muted 'no file owned' marker instead of nothing. */
 .pane-doc .doc-gov { margin: 0 0 16px; }
-.doc-gov-h { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 6px; }
-.doc-gov-h b { color: var(--ink2); font-weight: 700; }
+.doc-gov-h { display: block; font-size: var(--type-meta); color: var(--muted); margin-bottom: 6px; }
+.doc-gov-h b { color: var(--ink2); font-weight: var(--weight-bold); }
 .doc-gov-files { display: flex; flex-wrap: wrap; gap: 5px; }
-.gov-f { font-size: 11px; color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: 3px; }
+.gov-f { font-size: var(--type-meta); color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: 3px; }
 .doc-gov.prose .doc-gov-h { font-style: italic; }
 
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
-.doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; line-height: 1.65; color: var(--ink); }
+.doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: var(--type-body); line-height: var(--leading-body); color: var(--ink); }
 .doc-body p { margin: 0 0 10px; }
 /* the lazy spec-body loading spinner ([[graph-lean]]): a thin ring in the palette, centred where the body will land */
 .pane-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink2); animation: si-attach-spin .7s linear infinite; }
 .doc-body ul { margin: 0 0 10px; padding-left: 18px; }
 .doc-body li { margin: 2px 0; }
-.doc-body code { font-size: 12px; background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: 3px; }
+.doc-body code { font-size: var(--type-control); background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: 3px; }
 .doc-body strong { color: var(--ink2); }
-.doc-h { font-size: 12px; color: var(--ink2); font-weight: 700; margin: 14px 0 6px; }
-.doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.doc-h { font-size: var(--type-control); color: var(--ink2); font-weight: var(--weight-bold); margin: 14px 0 6px; }
+.doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: 4px; overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
 /* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
-.doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: 12px; display: block; overflow-x: auto; }
+.doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: var(--type-control); display: block; overflow-x: auto; }
 .doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
-.doc-table th { background: var(--panel2); color: var(--ink2); font-weight: 700; }
+.doc-table th { background: var(--panel2); color: var(--ink2); font-weight: var(--weight-bold); }
 .doc-table code { white-space: nowrap; }
 
 /* three-part spec body — raw source (human) / expanded spec (agent) / current state (agent).
@@ -560,39 +592,39 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .spec-part.part-expanded { border-left-color: var(--blue); }
 .spec-part.part-state { border-left-color: var(--orange); }
 .part-head { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; background: var(--panel2); flex-wrap: wrap; }
-.part-title { font-size: 12px; font-weight: 700; color: var(--ink2); text-transform: uppercase; letter-spacing: 0.04em; }
-.part-owner { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9px; text-transform: uppercase; letter-spacing: 0.03em; }
+.part-title { font-size: var(--type-control); font-weight: var(--weight-bold); color: var(--ink2); text-transform: uppercase; letter-spacing: var(--tracking-normal); }
+.part-owner { font-size: var(--type-caption); font-weight: var(--weight-bold); padding: 1px 7px; border-radius: 9px; text-transform: uppercase; letter-spacing: var(--tracking-normal); }
 .part-owner.owner-human { background: rgba(133,153,0,0.18); color: var(--green); }
 .part-owner.owner-agent { background: rgba(38,139,210,0.18); color: var(--blue); }
-.part-note { font-size: 11px; color: var(--muted); margin-left: auto; }
+.part-note { font-size: var(--type-meta); color: var(--muted); margin-left: auto; }
 .part-body { padding: 4px 14px 12px; }
 .part-body .doc-body { border-top: none; padding-top: 8px; }
 .cs-sub + .cs-sub { margin-top: 6px; }
-.cs-label { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 0; }
+.cs-label { font-size: var(--type-meta); font-weight: var(--weight-bold); color: var(--orange); text-transform: uppercase; letter-spacing: var(--tracking-normal); margin: 12px 0 0; }
 
 /* a version row in the history tab — header always shown, proof revealed when `.open` */
 .ver-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .ver-row.latest { border-left: 2px solid var(--blue); padding-left: 12px; margin-left: -14px; }
 /* the whole header is the expand/collapse toggle — strip the native button chrome so it reads as the row */
 .rec-toggle { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; font: inherit; color: inherit; }
-.rec-caret { color: var(--muted); font-size: 9px; width: 9px; flex: none; }
-.rec-head { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
-.rec-v { color: var(--ink2); font-weight: 700; }
-.rec-hash { color: var(--muted); font-size: 11px; }
+.rec-caret { color: var(--muted); font-size: var(--type-caption); width: 9px; flex: none; }
+.rec-head { display: flex; align-items: baseline; gap: 10px; font-size: var(--type-control); }
+.rec-v { color: var(--ink2); font-weight: var(--weight-bold); }
+.rec-hash { color: var(--muted); font-size: var(--type-meta); }
 .rec-date { color: var(--muted); }
-.rec-diff { margin-left: auto; display: flex; gap: 8px; font-size: 12px; }
+.rec-diff { margin-left: auto; display: flex; gap: 8px; font-size: var(--type-control); }
 .rec-add { color: var(--green); }
 .rec-del { color: var(--orange); }
-.rec-msg { color: var(--ink2); font-size: 13px; margin-top: 5px; word-break: break-word; }
-.rec-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.rec-msg { color: var(--ink2); font-size: var(--type-body); margin-top: 5px; word-break: break-word; }
+.rec-sub { color: var(--muted); font-size: var(--type-meta); margin-top: 3px; }
 .rec-msg.muted { color: var(--muted); }
 
 /* an expanded item's proof: the version's spec.md line diff */
 .rec-evidence { margin: 12px 0 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
-.ev-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
+.ev-note { font-size: var(--type-meta); color: var(--muted); text-align: center; margin-top: 12px; }
 /* the version's spec.md line diff — its proof-of-change. */
-.ev-difflabel { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-.ev-diff { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.55; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 0; overflow-x: auto; }
+.ev-difflabel { font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
+.ev-diff { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 0; overflow-x: auto; }
 .ev-diff .dl { padding: 0 12px; white-space: pre; }
 .dl-hunk { color: var(--blue); opacity: .75; }
 .dl-add { color: var(--green); background: rgba(133,153,0,0.10); }
@@ -601,7 +633,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* pane: history — the full version log */
 .pane-hist { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
-.pane-hist.empty { color: var(--muted); font-size: 13px; }
+.pane-hist.empty { color: var(--muted); font-size: var(--type-body); }
 
 /* the node popup is now reference-only: a single scrolling spec doc fills the body. */
 .pane-solo { flex: 1; min-width: 0; display: flex; }
@@ -617,12 +649,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .spec-node.deleted .node-title { text-decoration: line-through; color: var(--muted); }
 
 /* drift badge: governed code is N commits ahead of this spec (rigorous, via git rev-list) */
-.drift-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--yellow); border: 1px solid var(--yellow); border-radius: 3px; padding: 0 3px; line-height: 1.4; }
+.drift-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--yellow); border: 1px solid var(--yellow); border-radius: 3px; padding: 0 3px; line-height: var(--leading-ui); }
 
 /* @@@ issue badge - the at-a-glance count of OPEN issues the forge linked to this node. Magenta,
    deliberately distinct from the status dot AND the yellow drift-badge so the three signals never blur.
    Just the glance — the detail card (.issue-popover) is now anchored to the WHOLE node, not this marker. */
-.issue-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: 1.4; cursor: default; }
+.issue-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: var(--leading-ui); cursor: default; }
 
 /* @@@ score badge - the eval SCORE at a glance (score.jsx). A RINGED circle with a centred ✓/✗ glyph, made
    round-and-outlined on purpose so it never reads as the filled square status dot. Colour carries freshness
@@ -631,7 +663,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .score-badge {
   flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
   width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
-  font-size: 9px; font-weight: 900; line-height: 1; cursor: default;
+  font-size: var(--type-caption); font-weight: var(--weight-black); line-height: var(--leading-none); cursor: default;
 }
 .score-badge.pass      { color: var(--green); }
 .score-badge.fail      { color: var(--red); }
@@ -642,7 +674,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* @@@ scenario count - the per-scenario tally on a node tile (score.jsx ScenarioCount): ✓ satisfied/total,
    replacing the single fuzzy score circle. A tiny outlined pill in the worst-first colour (green all-pass,
    red any fresh fail, grey stale/blind-spot), so a board sweep reads HOW MANY scenarios a node satisfies. */
-.scenario-count { flex: none; font-family: var(--mono); font-size: 10px; font-weight: 700; line-height: 1.4;
+.scenario-count { flex: none; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-ui);
   border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; cursor: default; }
 .scenario-count.pass { color: var(--green); }
 .scenario-count.fail { color: var(--red); }
@@ -660,58 +692,58 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    kicker and no closing hairline — the section heads below carry their own underlines, so a head rule would
    just double the line; the inter-section gap is the only separator the head needs. */
 .fp-head { display: flex; flex-direction: column; gap: 3px; }
-.fp-title { font-size: 15px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
+.fp-title { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink2); word-break: break-word; line-height: var(--leading-tight); }
 /* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
-.fp-desc { color: var(--ink); font-size: 11px; line-height: 1.4; margin-top: 3px;
+.fp-desc { color: var(--ink); font-size: var(--type-meta); line-height: var(--leading-ui); margin-top: 3px;
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .fp-sec { display: flex; flex-direction: column; gap: 5px; }
 .fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted);
   border-bottom: 1px solid var(--line); padding-bottom: 5px; }
-.fp-count { font-family: var(--mono); font-size: 10px; }
+.fp-count { font-family: var(--mono); font-size: var(--type-caption); }
 .fp-count.pass { color: var(--green); } .fp-count.fail { color: var(--red); }
 .fp-count.stalePass, .fp-count.staleFail, .fp-count.empty { color: var(--muted); }
-.fp-empty { color: var(--muted); font-size: 11px; font-style: italic; padding: 3px 2px; }
+.fp-empty { color: var(--muted); font-size: var(--type-meta); font-style: italic; padding: 3px 2px; }
 /* a scenario row is a BUTTON (drills into the eval tab); reset the native button chrome to read as a row. */
 .fp-scenario { position: relative; display: block; width: 100%; padding: 6px 6px; text-align: left;
   background: none; border: none; border-radius: 5px; font: inherit; color: inherit; cursor: pointer; }
 .fp-scenario:hover { background: var(--panel2); }
 /* the mark HANGS on the first line (absolute) so the body fills full width and lines 2+ (tags/expected/code)
    sit flush-left against the column, not indented under the mark. */
-.fp-sc-mark { position: absolute; left: 6px; top: 6px; width: 12px; text-align: center; font-weight: 900; font-size: 11px; line-height: 1.5; }
+.fp-sc-mark { position: absolute; left: 6px; top: 6px; width: 12px; text-align: center; font-weight: var(--weight-black); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
 .fp-scenario.pass .fp-sc-mark { color: var(--green); }
 .fp-scenario.fail .fp-sc-mark { color: var(--red); }
 .fp-scenario.stalePass .fp-sc-mark, .fp-scenario.staleFail .fp-sc-mark { color: var(--muted); }
 .fp-scenario.empty .fp-sc-mark, .fp-scenario.missing .fp-sc-mark { color: var(--muted); opacity: .55; }
 .fp-sc-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 /* only the name line clears the hanging mark (12px + 8px gap); tags/expected/code stay flush-left. */
-.fp-sc-name { padding-left: 20px; font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink2); }
+.fp-sc-name { padding-left: 20px; font-family: var(--mono); font-size: var(--type-meta); font-weight: var(--weight-bold); color: var(--ink2); }
 /* a clamped preview — the full `expected` prose lives one click away in the eval tab. */
-.fp-sc-expected { color: var(--ink); font-size: 11px; line-height: 1.4;
+.fp-sc-expected { color: var(--ink); font-size: var(--type-meta); line-height: var(--leading-ui);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.fp-sc-code { color: var(--muted); font-family: var(--mono); font-size: 9px; opacity: .85; }
+.fp-sc-code { color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); opacity: .85; }
 
 /* @@@ tag chips — the ONE element (score.jsx TagChips) for a scenario's classification tags, used wherever a
    scenario surfaces (focus panel, search palette, eval tab). Paper chip + mono, the SAME minimal vocabulary as
    .stat-chip, so a tag reads identically everywhere; flex-wrap keeps a multi-tag cloud from overflowing. */
 .tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
-.tag-chip { font-family: var(--mono); font-size: 9px; line-height: 1.5; color: var(--ink2);
+.tag-chip { font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); color: var(--ink2);
   background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
 /* in the search row the chips sit between title and path — keep them from being squeezed out. */
 .search-item .tag-chips { flex: none; }
-.fp-issue-counts { display: flex; gap: 6px; font-size: 9px; }
-.focus-panel .issue-group-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 8px 2px 3px; }
+.fp-issue-counts { display: flex; gap: 6px; font-size: var(--type-caption); }
+.focus-panel .issue-group-head { font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted); margin: 8px 2px 3px; }
 .focus-panel .issue-card { padding: 6px 6px; border-radius: 5px; }
 
 .issue-card { display: block; max-width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }
 .issue-card-top { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 2px; }
-.issue-num { font-size: 10px; font-weight: 700; color: var(--magenta); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
-.issue-state { font-size: 8px; color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: .04em; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; line-height: 1.5; }
+.issue-num { font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--magenta); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.issue-state { font-size: var(--type-caption); color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: var(--tracking-normal); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; line-height: var(--leading-relaxed); }
 .issue-state.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .issue-state.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
-.issue-card-title { display: block; font-size: 11px; line-height: 1.35; color: var(--ink2);
+.issue-card-title { display: block; font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* @@@ issues pane - the node-info popup's third tab: the FULL bound-work ledger (open + closed), grouped
@@ -719,22 +751,22 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    title is un-clamped (a tab has room for the whole title, unlike the tight hover card). Scrolls its own
    content like the spec/history panes (j/k drives it — see App.jsx bumpScroll). */
 .pane-issues { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
-.pane-issues.empty { color: var(--muted); font-size: 13px; }
-.pane-issues .issue-group-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 2px 6px; }
+.pane-issues.empty { color: var(--muted); font-size: var(--type-body); }
+.pane-issues .issue-group-head { font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted); margin: 0 2px 6px; }
 .pane-issues .issue-group-head.closed { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
-.pane-issues .issue-card-title { font-size: 12px; }
+.pane-issues .issue-card-title { font-size: var(--type-control); }
 /* edit pane — the node's pending change, reusing the history tab's .ev-diff renderer */
 .pane-edit { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
-.pane-edit.empty { color: var(--muted); font-size: 13px; }
+.pane-edit.empty { color: var(--muted); font-size: var(--type-body); }
 .edit-rev { margin: 0 0 18px; }
-.edit-by { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-.edit-by-label { font-weight: 600; }
-.edit-state { margin-left: auto; font-family: var(--mono); font-size: 10px; }
+.edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
+.edit-by-label { font-weight: var(--weight-semibold); }
+.edit-state { margin-left: auto; font-family: var(--mono); font-size: var(--type-caption); }
 
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }
-.ov-mark { font-size: 11px; font-weight: 700; line-height: 1; color: var(--ov, var(--blue)); }
+.ov-mark { font-size: var(--type-meta); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--ov, var(--blue)); }
 .ov-mark.ov-deleted { color: var(--orange); }
 
 /* session highlight: clicking a session in the top-right window glows its nodes, fades the rest. */
@@ -752,15 +784,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 22px rgba(101,123,131,.16);
   overflow-y: auto; overflow-x: hidden;
-  font-size: 12px;
+  font-size: var(--type-control);
 }
-.sesswin-empty { padding: 12px 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.sesswin-empty { padding: 12px 10px; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
 .sesswin-empty kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--blue); }
 .sess-row {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 7px 9px; background: none; border: none; border-bottom: 1px solid var(--line);
   border-left: 2px solid var(--ov, transparent); cursor: pointer; text-align: left;
-  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
   user-select: none; /* double-click opens — don't let it select the row text */
   transition: background .12s, border-left-width .12s;
 }
@@ -770,12 +802,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    spine in the session colour, a tinted fill, and the same lock the cursor is told about. */
 .sess-row.locked {
   background: color-mix(in srgb, var(--ov) 12%, var(--panel2));
-  border-left-width: 4px; color: var(--ink); font-weight: 600;
+  border-left-width: 4px; color: var(--ink); font-weight: var(--weight-semibold);
 }
 /* row 1, the headline: the session's live self-summary (or prompt placeholder). flex:1 eats the line so the
    ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
 .sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sess-lock { font-size: 10px; flex: none; line-height: 1; filter: saturate(0); }
+.sess-lock { font-size: var(--type-caption); flex: none; line-height: var(--leading-none); filter: saturate(0); }
 /* @@@ the status line - ROW 2: the small badges that used to crowd the headline (status word · op tally),
    now on their own line. flex-basis:100% forces it onto a wrapped line spanning the WHOLE row (under the
    avatar too); smaller + dimmer than the headline so it reads as a subtitle. The line has slack on the
@@ -787,15 +819,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   order: 1;
   flex: 0 0 100%; width: 100%; min-width: 0; margin-top: 1px;
   display: flex; align-items: center; column-gap: 7px;
-  font-size: 10px; line-height: 1.3; opacity: .9; overflow: hidden;
+  font-size: var(--type-caption); line-height: var(--leading-tight); opacity: .9; overflow: hidden;
 }
-.sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
-/* ◇ headless mode mark ([[session-console]] — harness.jsx MODE_MARK): a muted one-glyph tell beside the
-   status glyph; interactive rows render nothing here. */
-.sess-mode { flex: none; color: var(--muted); font-size: 10px; line-height: 1; }
+.sess-ops { color: var(--ov, var(--blue)); font-weight: var(--weight-bold); flex: none; }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
-.sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
+.sess-glyph { flex: none; width: 12px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
 /* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` holds the
    file-tree connector RAILS (one 14px `.sess-rail` per depth level, drawn with thin borders like a notes-app
    file tree) and then, for a parent, the fold POD. `.sess-lead` stretches to the row's full height so a
@@ -823,7 +852,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    outline = expanded. A bigger, legible target than the old triangle; same informational colour language. */
 .sess-fold.pod {
   min-width: 16px; width: auto; height: 14px; padding: 0 4px; border-radius: 999px; border: 1px solid;
-  font-size: 9.5px; font-weight: 700; line-height: 1; color: var(--paper);
+  font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--paper);
 }
 .sess-fold.pod.open { background: transparent; }
 .sess-fold.pod:hover { filter: brightness(1.25); }
@@ -834,7 +863,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sesswin-zone {
   --zh: var(--muted);
   display: flex; align-items: center; gap: 7px; padding: 8px 9px 2px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; user-select: none;
+  font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; user-select: none;
   color: var(--zh);
 }
 .sesswin-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
@@ -854,7 +883,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sess-menu-item {
   display: block; width: 100%; text-align: left; background: none; border: none;
   border-radius: 3px; padding: 5px 9px; cursor: pointer;
-  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
 .sess-menu-item:hover { background: var(--blue); color: var(--paper); }
 /* close is destructive — tinted orange like the header's kill button, inverting on hover. */
@@ -869,14 +898,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sess-rename-modal { width: min(360px, 92vw); }
 .sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }
 .sess-rename-input {
-  font-family: var(--mono); font-size: 13px; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-body); color: var(--ink2);
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
 }
 .sess-rename-input:focus { outline: none; border-color: var(--blue); }
 .sess-rename-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .sess-rename-btn {
   background: var(--paper); border: 1px solid var(--line); color: var(--ink);
-  border-radius: 4px; padding: 4px 12px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+  border-radius: 4px; padding: 4px 12px; cursor: pointer; font-family: var(--mono); font-size: var(--type-control);
 }
 .sess-rename-btn:hover { background: var(--panel); }
 .sess-rename-save { border-color: var(--blue); color: var(--blue); }
@@ -890,17 +919,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .sess-attach { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 2px; }
 .sess-attach-row { display: flex; align-items: center; gap: 8px; }
 .sess-attach-label {
-  flex: none; width: 34px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right;
+  flex: none; width: 34px; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); text-align: right;
 }
 .sess-attach-cmd {
-  flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; color: var(--ink2);
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
 }
 .sess-attach-cmd:focus { outline: none; border-color: var(--blue); }
 .sess-attach-copy { flex: none; }
 /* close-confirm prompt: shares the rename modal chrome; the confirm button is the destructive (orange) verb. */
 .sess-confirm { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 2px; }
-.sess-confirm-msg { margin: 0; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.sess-confirm-msg { margin: 0; color: var(--ink); font-size: var(--type-control); line-height: var(--leading-ui); }
 .sess-rename-btn.danger { border-color: var(--orange); color: var(--orange); }
 .sess-rename-btn.danger:hover { background: var(--orange); color: var(--paper); }
 .sess-rename-btn.danger:disabled { opacity: .5; cursor: default; }
@@ -918,38 +947,38 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .legend {
   position: relative; width: min(660px, 92vw); max-height: 86vh; overflow-y: auto;
   background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
-  box-shadow: 0 12px 40px rgba(101,123,131,.25); font-size: 12px;
+  box-shadow: 0 12px 40px rgba(101,123,131,.25); font-size: var(--type-control);
 }
 .legend-head {
   position: sticky; top: 0;
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
 }
-.legend-title { color: var(--muted); font-size: 11px; letter-spacing: .5px; }
+.legend-title { color: var(--muted); font-size: var(--type-meta); letter-spacing: var(--tracking-normal); }
 .legend-close {
   background: none; border: none; color: var(--muted); cursor: pointer;
-  display: inline-flex; align-items: center; line-height: 1; padding: 2px;
+  display: inline-flex; align-items: center; line-height: var(--leading-none); padding: 2px;
 }
 .legend-close:hover { color: var(--orange); }
 .legend-body { padding: 4px 10px 10px; }
 .legend-sec { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .legend-sec:last-child { border-bottom: none; }
-.legend-h { font-size: 11px; color: var(--ink2); font-weight: 700; margin-bottom: 6px; }
-.legend-sub { color: var(--muted); font-weight: 400; }
+.legend-h { font-size: var(--type-meta); color: var(--ink2); font-weight: var(--weight-bold); margin-bottom: 6px; }
+.legend-sub { color: var(--muted); font-weight: var(--weight-regular); }
 /* keymap rows: a fixed-width cluster of kbd chips, then the description (aligns with the legend rows). */
 .keymap-keys { flex: none; width: 132px; display: flex; flex-wrap: wrap; gap: 4px; }
 /* the settings PAGE shares these chips: it used to sit inside the .legend modal chrome, and its shortcut
    cells are <button>s, whose UA color (black) does not inherit — without this scope the kbds go black-on-dark. */
 .legend kbd, .settings-body kbd {
-  font-family: var(--mono); font-size: 11px; color: var(--blue); line-height: 1.4;
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--blue); line-height: var(--leading-ui);
   border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: var(--paper);
 }
 .legend-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; }
 .legend-row .node-dot { position: relative; top: 1px; }
-.legend-name { color: var(--ink2); font-weight: 600; flex: none; width: 52px; }
-.legend-desc { color: var(--ink); flex: 1; line-height: 1.4; }
-.legend-glyph { color: var(--blue); font-weight: 700; flex: none; width: 18px; text-align: center; }
-.legend-glyph.legend-ver { font-size: 11px; color: var(--muted); }
+.legend-name { color: var(--ink2); font-weight: var(--weight-semibold); flex: none; width: 52px; }
+.legend-desc { color: var(--ink); flex: 1; line-height: var(--leading-ui); }
+.legend-glyph { color: var(--blue); font-weight: var(--weight-bold); flex: none; width: 18px; text-align: center; }
+.legend-glyph.legend-ver { font-size: var(--type-meta); color: var(--muted); }
 .legend .ov-mark { flex: none; width: 18px; text-align: center; }
 .legend .drift-badge { flex: none; }
 /* node-ring swatches: small boxes mirroring the .spec-node border styles. */
@@ -961,17 +990,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* ---- settings page: reuses the legend section vocabulary; only the language picker is bespoke ---- */
 .set-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .set-lang {
-  font-family: var(--mono); font-size: 12px; color: var(--ink); cursor: pointer;
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink); cursor: pointer;
   border: 1px solid var(--line); border-radius: 4px; padding: 4px 12px; background: var(--paper);
 }
 .set-lang:hover { border-color: var(--blue); color: var(--blue); }
-.set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: 600; }
-.set-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: var(--weight-semibold); }
+.set-hint { display: block; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
 
 /* ---- shortcuts editor: one row per action, a click-to-rebind keyboard cell ---- */
 .set-keys { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
 .set-key-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.set-key-row .legend-desc { flex: 1; font-size: 12px; }
+.set-key-row .legend-desc { flex: 1; font-size: var(--type-control); }
 .bind-cell {
   flex: none; min-width: 92px; min-height: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   justify-content: center; cursor: pointer; background: var(--paper);
@@ -982,10 +1011,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .bind-cell.custom { border-color: var(--blue); }
 .bind-cell.fixed { cursor: default; opacity: .6; }
 .bind-cell kbd { border: none; padding: 0 2px; background: transparent; }
-.bind-hint { font-size: 11px; color: var(--blue); }
+.bind-hint { font-size: var(--type-meta); color: var(--blue); }
 .set-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .set-reset {
-  flex: none; font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer;
+  flex: none; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); cursor: pointer;
   border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; background: var(--paper);
 }
 .set-reset:hover { border-color: var(--red); color: var(--red); }
@@ -1005,13 +1034,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
      stay scannable on a very large display; 92vw guards small screens. */
   width: min(92vw, clamp(640px, 50vw, 1100px)); max-height: 72vh; display: flex; flex-direction: column; overflow: hidden;
   background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
-  box-shadow: 0 14px 44px rgba(101,123,131,.28); font-size: 12px;
+  box-shadow: 0 14px 44px rgba(101,123,131,.28); font-size: var(--type-control);
 }
 .search-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--panel2); }
-.search-icon { color: var(--muted); font-size: 14px; flex: none; }
+.search-icon { color: var(--muted); font-size: var(--type-icon-sm); flex: none; }
 .search-input {
   flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-  color: var(--ink2); font-family: var(--mono); font-size: 14px; line-height: 1.4;
+  color: var(--ink2); font-family: var(--mono); font-size: var(--type-subtitle); line-height: var(--leading-ui);
 }
 .search-input::placeholder { color: var(--muted); }
 .search-results { margin: 0; padding: 4px; list-style: none; overflow-y: auto; overflow-x: hidden; }
@@ -1024,7 +1053,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .search-item .node-dot { position: relative; top: 1px; }
 /* a tiny plane tag so a row reads as a node / session / issue at a glance (the dot already carries state). */
 .search-kind {
-  flex: none; font-size: 9px; line-height: 1; letter-spacing: .4px; text-transform: uppercase;
+  flex: none; font-size: var(--type-caption); line-height: var(--leading-none); letter-spacing: var(--tracking-normal); text-transform: uppercase;
   padding: 2px 4px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted);
   position: relative; top: -1px;
 }
@@ -1034,9 +1063,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .search-kind.k-scenario{ color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); }
 /* title and path both shrink-with-ellipsis so a long row truncates instead of forcing a horizontal
    scrollbar; chips + kind stay fixed. */
-.search-title { color: var(--ink2); font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.search-path { color: var(--muted); font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
+.search-title { color: var(--ink2); font-weight: var(--weight-semibold); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-path { color: var(--muted); font-size: var(--type-meta); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: var(--type-meta); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */
 /* @@@ a routed PAGE ([[side-nav]]) - the session board fills the app's main area beside the rail: no
@@ -1070,7 +1099,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);
   border-left: 2px solid var(--ov, transparent); cursor: pointer; text-align: left;
-  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
 .si-item:hover { background: var(--panel2); }
 /* @@@ selected tab — obvious but in-theme: a soft blue WASH (clearly past the plain hover tint), crisp bold
@@ -1078,14 +1107,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    different axis from the thin left stripe, so it never reads as the avatar colour the way the old blue
    border-line did; the stripe itself stays the session's own --ov hue. Mirrors the locked-row mix recipe.
    The :hover override deepens the wash slightly so a hovered selection still gives feedback. */
-.si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
+.si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: var(--weight-semibold); border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
-.si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
+.si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: var(--weight-bold); }
 /* compact one-line face ([[session-console]]) — the console's own list is a dense, terminal-styled sidebar:
    no avatar, headline + a single colour-coded status GLYPH (no word) + op tally on ONE row (nowrap). It uses
    the shared app-theme tokens (var(--panel/--ink2/--blue…)) like every other console surface, so re-theming
    the app re-themes it too. */
-.si-item { flex-wrap: nowrap; padding: 5px 12px; font-size: 11px; }
+.si-item { flex-wrap: nowrap; padding: 5px 12px; font-size: var(--type-meta); }
 .si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
 .si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
@@ -1108,7 +1137,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-zone {
   --zh: var(--muted);
   display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px;
-  font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; user-select: none;
+  font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; user-select: none;
   color: var(--zh);
 }
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
@@ -1121,8 +1150,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* multi-select bar ([[session-multi-select]]) — takes the top row's slot while selecting: a live pick count
    pushes the destructive delete + cancel to the right. Delete reuses the orange `.sess-rename-btn.danger`. */
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.si-selcount { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--ink2); }
-.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: 11px; }
+.si-selcount { flex: 1; font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); }
+.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
 /* row checkbox shown only while selecting — an empty square that fills blue-with-a-tick when picked. */
 .si-check {
   flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: 3px; box-sizing: border-box;
@@ -1138,9 +1167,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill {
   flex: 1; display: flex; align-items: center; justify-content: center;
   padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: 5px;
-  cursor: pointer; font-family: var(--mono); line-height: 1;
+  cursor: pointer; font-family: var(--mono); line-height: var(--leading-none);
 }
-.si-pill-glyph { font-size: 15px; display: flex; }
+.si-pill-glyph { font-size: var(--type-icon-sm); display: flex; }
 .si-pill.new { color: var(--blue); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
@@ -1198,46 +1227,52 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    New) over the small toggle chips ([[issues-view]]). Unhurried padding + a gentle row-gap so the wrap
    on the slim column looks intentional. */
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 5px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
-.fv-group-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
+.fv-group-title { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
 /* the bar's CONTROL row: full-basis so the chip bar always wraps beneath it. */
 .fv-head-row { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
 /* ONE row grammar for BOTH tabs: a compact SINGLE-LINE button (the title truncates, never wraps, so the
    two pickers keep an identical, uniform rhythm) with unhurried vertical air and a hairline-soft divider
    (the old full-strength border on every row read as a dense ledger). `.sel` is the page's one selection. */
-.fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; font: inherit; font-size: 12px; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 7px 12px; cursor: pointer; }
+.fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; font: inherit; font-size: var(--type-control); color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 7px 12px; cursor: pointer; }
 .fv-row:hover, .ef-row:hover { background: var(--panel2); }
 .fv-row.sel, .ef-row.sel { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
-.fv-row .fv-concern { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
-/* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status dot carries the status
-   vocabulary as color (a boxed word on every row was noise)… */
-.fv-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.fv-dot.st-open { background: var(--blue); }
-.fv-dot.st-landed { background: var(--green); }
-.fv-dot.st-closed { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.fv-row .fv-concern, .ef-scenario {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--type-control); font-weight: var(--weight-semibold);
+}
+.fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
+/* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status mark carries the status
+   vocabulary as icon + color (a boxed word on every row was noise). The full lifecycle copies Primer's
+   original 16px Octicon pair through the shared registry: issue-opened for open, issue-closed for every
+   concluded state (local landed / forge closed). */
+.fv-status-mark { flex: none; display: grid; place-items: center; width: 16px; height: 16px; }
+.fv-status-mark svg { display: block; }
+.fv-status-mark.open { color: var(--green); }
+.fv-status-mark.concluded { color: var(--magenta); }
 /* …and the reply count is a compact trailing pill, not a phrase. */
 /* the reply-count pill must not out-tower the row's text line (else pill-bearing rows read taller and the
    uniform rhythm breaks) — a tight line-height keeps every row on the same 1-line height. */
-.fv-replies { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; line-height: 1.4; }
+.fv-replies { flex: none; font: inherit; font-size: var(--type-meta); color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; line-height: var(--leading-ui); }
 /* the store is metadata, never identity — a borderless muted mini-tag at a row's trailing edge (only
    while stores are mixed) and in the detail's meta strip; never a leading boxed chip, never on a title. */
 .fv-store {
-  flex: none; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase;
+  flex: none; font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase;
   color: var(--muted);
 }
 .fv-store-local { color: color-mix(in srgb, var(--blue) 65%, var(--muted)); }
-.fv-concern { flex: 1 1 auto; min-width: 80px; color: var(--ink); font-weight: 600; font-size: 12px; }
+.fv-row .fv-store { font-family: inherit; font-size: var(--type-meta); letter-spacing: var(--tracking-normal); text-transform: none; }
+.fv-concern { color: var(--ink); }
 .fv-status {
-  flex: none; font-family: var(--mono); font-size: 9px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
+  flex: none; font-family: var(--mono); font-size: var(--type-caption); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
 }
 .fv-st-open     { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
 .fv-st-landed   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
-.fv-by { flex: none; color: var(--muted); font-size: 11px; }
+.fv-by { flex: none; color: var(--muted); font-size: var(--type-meta); }
 /* the originator liveness chip ([[mentions]] loop-in): who filed + whether their session is alive. The dot
    takes the board's live STATUS_COLOR (inline style); live chips are buttons into that session's tab. */
-.fv-originator { flex: none; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; padding: 1px 3px; }
+.fv-originator { flex: none; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--type-meta); color: var(--muted); background: transparent; border: 0; border-radius: 4px; padding: 1px 3px; }
 .fv-originator-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.fv-originator-who { color: var(--ink2); font-family: var(--mono); font-size: 10.5px; }
+.fv-originator-who { color: var(--ink2); font-family: var(--mono); font-size: var(--type-meta); }
 .fv-originator.openable { cursor: pointer; background: color-mix(in srgb, var(--green) 8%, transparent); }
 .fv-originator.openable:hover { background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fv-originator.openable:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
@@ -1252,9 +1287,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fvd-compose { flex: none; border-top: 1px solid var(--line); padding: 8px 16px 12px; background: var(--panel); }
 .fvd-compose .fv-compose { margin-top: 0; max-width: 860px; }
 .fvd-head { margin-bottom: 4px; }
-.fvd-concern { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+.fvd-concern { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); }
 .fv-close-issue {
-  flex: none; font-family: var(--mono); font-size: 11px; color: var(--orange);
+  flex: none; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange);
   background: var(--paper); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
   padding: 4px 12px; border-radius: 4px; cursor: pointer;
 }
@@ -1264,20 +1299,20 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-close-issue.fv-life-promote { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
 .fv-close-issue.fv-life-promote:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fvd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.fvd-body { font-size: 13px; }
+.fvd-body { font-size: var(--type-body); }
 
 /* node chips — the doc-link blue vocabulary, but clickable buttons that focus the node on the board. */
 .fv-chip {
-  font-family: var(--mono); font-size: 10.5px; color: var(--blue);
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--blue);
   background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line));
-  padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: 1.5;
+  padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: var(--leading-relaxed);
 }
 .fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-.fv-count { color: var(--muted); font-size: 10.5px; }
+.fv-count { color: var(--muted); font-size: var(--type-meta); }
 /* a forge issue's permalink — read here, discussed there. */
-.fv-link { color: var(--blue); font-size: 10.5px; text-decoration: none; }
+.fv-link { color: var(--blue); font-size: var(--type-meta); text-decoration: none; }
 .fv-link:hover { text-decoration: underline; }
-.fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
+.fv-text { font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; }
 .fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 4px 4px 0; transition: background .15s, border-color .15s; }
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
@@ -1286,23 +1321,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    eval scoreboard is still carrying — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
 .fv-reply.remark.open { border-left-color: var(--orange); border-left-width: 3px; }
 .fv-reply.remark.resolved { opacity: .62; border-left-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
-.fv-remark-state { font-family: var(--mono); font-size: 10px; padding: 0 5px; border-radius: 3px; margin-left: auto; }
-.fv-remark-state.open { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); font-weight: 600; }
+.fv-remark-state { font-family: var(--mono); font-size: var(--type-caption); padding: 0 5px; border-radius: 3px; margin-left: auto; }
+.fv-remark-state.open { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); font-weight: var(--weight-semibold); }
 .fv-remark-state.resolved { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
 /* the remark's ONE applicable verb, in place ([[remark-substrate]] write parity): resolve = the human's
    second-party judgment on an agent's open remark (green — it settles the loss); retract = withdraw one's
    own (muted — an erasure, not a judgment). A resolved remark renders neither (monotonic). */
-.fv-remark-act { font-family: var(--mono); font-size: 10px; padding: 0 6px; border-radius: 3px; cursor: pointer; line-height: 1.6; background: var(--paper); }
+.fv-remark-act { font-family: var(--mono); font-size: var(--type-caption); padding: 0 6px; border-radius: 3px; cursor: pointer; line-height: var(--leading-body); background: var(--paper); }
 .fv-remark-act.resolve { color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 40%, var(--line)); }
 .fv-remark-act.resolve:hover { background: var(--green); color: var(--paper); border-color: var(--green); }
 .fv-remark-act.retract { color: var(--muted); border: 1px solid var(--line); }
 .fv-remark-act.retract:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
 .fv-remark-act:disabled { opacity: .5; cursor: default; }
-.fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
-.fv-reply-by { color: var(--blue); font-weight: 600; }
+.fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: var(--type-meta); }
+.fv-reply-by { color: var(--blue); font-weight: var(--weight-semibold); }
 .fv-reply-at { color: var(--muted); }
 /* a time anchor (`▶m:ss · step`) on a reply — a clickable chip that seeks the clip; static (no video) reads plain. */
-.fv-anchor { font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent);
+.fv-anchor { font-family: var(--mono); font-size: var(--type-meta); color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 3px; padding: 1px 6px; cursor: pointer; }
 .fv-anchor:hover { background: var(--orange); color: var(--paper); }
 .fv-anchor.static { cursor: default; }
@@ -1319,7 +1354,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .fv-frames .an-image, .fv-frames .eval-video { height: 48px; width: auto; max-width: none; }
 /* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
-.fv-anchor-btn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: var(--panel2);
+.fv-anchor-btn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
 
@@ -1336,8 +1371,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-new-modal { width: min(520px, 92vw); overflow: visible; }
 .fv-new-modal .legend-body { padding: 0; }
 /* a brief @-dispatch summary echoed after a write. */
-.fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: 11px; color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
-.fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--red); }
+.fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: var(--type-meta); color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
+.fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: var(--type-meta); color: var(--red); }
 .fv-actions .fv-error { margin: 0; }
 /* the compose blocks — the docked reply composer and the New-thread form. The reply composer is ONE
    shared shape on every home ([[issues-view]] / [[event-detail]]): a QUIET BORDERED container holding a
@@ -1346,18 +1381,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    (contextual ⏱/lifecycle actions left, the icon-only Send pinned at the right edge). */
 .fv-compose { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 8px 10px 6px; }
 .fv-compose:focus-within { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
-.fv-compose .fv-textarea { border: none; border-radius: 0; background: transparent; padding: 2px 2px 4px; resize: none; line-height: 1.5; min-height: 42px; max-height: 38vh; }
+.fv-compose .fv-textarea { border: none; border-radius: 0; background: transparent; padding: 2px 2px 4px; resize: none; line-height: var(--leading-relaxed); min-height: 42px; max-height: 38vh; }
 .fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .fv-store-pick {
   display: flex; align-items: center; gap: 8px; align-self: flex-start;
-  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--muted);
 }
 .fv-store-pick select {
-  font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--paper);
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); background: var(--paper);
   border: 1px solid var(--line); border-radius: 4px; padding: 3px 7px;
 }
 .fv-input, .fv-textarea {
-  width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; color: var(--ink);
+  width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--type-control); color: var(--ink);
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; resize: vertical;
 }
 .fv-input:focus, .fv-textarea:focus { outline: none; border-color: var(--blue); }
@@ -1372,21 +1407,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    caret so the shared autocomplete opens; same 26px footprint as the icon-only Send. */
 .fv-trigger-btn {
   width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  padding: 0; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--muted);
+  padding: 0; font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-none); color: var(--muted);
   background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .fv-trigger-btn:hover { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 /* the right-pinned group: host lifecycle actions (Close issue / Promote) beside the icon-only Send. */
 .fv-actions-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .fv-cancel {
-  margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--paper);
+  margin-left: auto; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); background: var(--paper);
   border: 1px solid var(--line); padding: 4px 12px; border-radius: 4px; cursor: pointer;
 }
 .fv-cancel:hover { color: var(--orange); border-color: var(--orange); }
 .fv-cancel:disabled { opacity: .5; cursor: default; }
 /* the New-form's text submit button. */
 .fv-post {
-  font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);
+  font-family: var(--mono); font-size: var(--type-meta); color: var(--paper); background: var(--blue);
   border: 1px solid var(--blue); padding: 4px 14px; border-radius: 4px; cursor: pointer;
 }
 .fv-post:disabled { opacity: 0.5; cursor: default; }
@@ -1402,8 +1437,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
-.si-avatar { font-size: 30px; color: var(--blue); letter-spacing: 2px; }
-.si-ask { font-size: 15px; color: var(--ink2); }
+/* @@@ launch-hero — the block-letter wordmark must stay a rigid character grid: pre + mono, font-size
+   scales the whole grid (clamp keeps it inside narrow panes), gradient inked from the theme palette. */
+.si-hero { margin: 0 0 2px; font-family: var(--mono); font-size: var(--type-hero); line-height: var(--leading-hero); white-space: pre; user-select: none;
+  background: linear-gradient(180deg, var(--blue), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.si-ask-gap { height: 21px; } /* the retired ask line's slot — keeps the hero↔input spacing it occupied */
 .si-inputwrap {
   position: relative;
   width: 100%; display: flex; border: 1px solid var(--blue); border-radius: 6px;
@@ -1422,27 +1460,27 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .mention-menu.up { top: auto; bottom: calc(100% + 4px); }
 .mention-menu.fixed { position: fixed; top: auto; z-index: 70; }
 .mention-head {
-  padding: 3px 8px 5px; font-size: 10.5px; color: var(--muted); letter-spacing: .02em;
+  padding: 3px 8px 5px; font-size: var(--type-meta); color: var(--muted); letter-spacing: var(--tracking-normal);
   border-bottom: 1px solid var(--line); margin-bottom: 3px; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 .mention-item {
   display: flex; align-items: baseline; gap: 8px; padding: 4px 8px; border-radius: 3px;
-  cursor: pointer; font-size: 12px; white-space: nowrap;
+  cursor: pointer; font-size: var(--type-control); white-space: nowrap;
 }
 .mention-item.on { background: var(--panel2); }
 /* the synthetic `@new` actor row — subtly set apart (spawns a fresh worker, not an existing session). */
 .mention-item.new .mention-id { color: var(--green); font-style: italic; }
 .mention-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; align-self: center; }
 .mention-id { color: var(--blue); flex: none; }
-.mention-id .mention-hit { font-weight: 700; }
-.mention-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mention-id .mention-hit { font-weight: var(--weight-bold); }
+.mention-path { color: var(--muted); font-size: var(--type-meta); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* @@@ slash-command rows - mirror CC's `/` menu: `/name`, a dim description that ellipses, and a
    right-aligned source tag. Same dropdown shell as @-mention (square, hairline, monospace). */
 .slash-name { color: var(--blue); flex: none; }
-.slash-name .mention-hit { font-weight: 700; }
-.slash-desc { color: var(--muted); font-size: 11px; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.slash-src { color: var(--muted); font-size: 10.5px; flex: none; opacity: .7; }
+.slash-name .mention-hit { font-weight: var(--weight-bold); }
+.slash-desc { color: var(--muted); font-size: var(--type-meta); min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.slash-src { color: var(--muted); font-size: var(--type-meta); flex: none; opacity: .7; }
 .slash-src.src-user { color: var(--green); opacity: .85; }
 .slash-src.src-project { color: var(--cyan); opacity: .85; }
 .slash-src.src-skill { color: var(--magenta); opacity: .85; }
@@ -1450,20 +1488,20 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    `/name` and its `[board]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
    the SAME colour as the matching header button — so the menu and the button name one thing in one colour,
    visibly apart from CC's blue `/name` rows. */
-.slash-name.ui { color: var(--sc); font-weight: 700; }
+.slash-name.ui { color: var(--sc); font-weight: var(--weight-bold); }
 .slash-src.src-ui { color: var(--sc); opacity: .9; }
 /* config-preset kinds (new-session `/` palette): a mutating preset edits the graph, a report only reads it. */
 .slash-src.src-mutating { color: var(--yellow); opacity: .85; }
 .slash-src.src-report { color: var(--cyan); opacity: .85; }
 .si-input {
   flex: 1; min-width: 0; resize: none; background: transparent; border: none; outline: none;
-  color: var(--ink2); font-family: var(--mono); font-size: 13px; line-height: 1.5; max-height: 180px;
+  color: var(--ink2); font-family: var(--mono); font-size: var(--type-body); line-height: var(--leading-relaxed); max-height: 180px;
   /* overflow stays HIDDEN below the cap — the auto-grow JS sizes the box to its content, so a scrollbar
      here would only be transition-lag/sub-pixel-rounding noise. JS flips it to `auto` exactly at the cap. */
   overflow-y: hidden; transition: height .12s ease;
 }
 .si-input::placeholder { color: var(--muted); }
-.si-hint { font-size: 11px; color: var(--muted); }
+.si-hint { font-size: var(--type-meta); color: var(--muted); }
 .si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
 /* vendor glyph shared by launcher-derived harness adornments. */
@@ -1477,27 +1515,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: inline-flex; align-items: center; gap: 7px;
   height: 28px; padding: 0 12px; cursor: pointer; color: var(--ink);
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  font-size: 12px; transition: border-color .12s ease, box-shadow .12s ease;
+  font-size: var(--type-control); transition: border-color .12s ease, box-shadow .12s ease;
 }
 .si-launcher-btn:hover, .si-launcher-btn.on { border-color: var(--blue); }
 .si-launcher-btn.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
-/* the pill's headless mark — a quiet small ◇ only while headless is armed (interactive adds no noise). */
-.si-launcher-mode-mark { font-size: 10px; color: var(--ink2); flex: none; }
-/* the session-mode segmented switch (shared ModeToggle: desktop pop card + phone composer) —
-   ⌨ interactive | ◇ headless. The `.dim` segment is the headless-less-selected-launcher state: greyed
-   but still hoverable/clickable so the config-repair tooltip and the loud interactive-fallback fire. */
-.si-mode-toggle { display: flex; gap: 2px; padding: 3px; margin: 2px 2px 8px; background: var(--panel2); border-radius: 9px; }
-.si-mode-seg {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  appearance: none; border: none; background: transparent; font: inherit; font-size: 12px;
-  color: var(--ink2); padding: 5px 10px; border-radius: 6px; cursor: pointer;
-}
-.si-mode-seg.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
-.si-mode-seg.dim { color: var(--muted); opacity: .55; }
-.si-mode-glyph { font-size: 11px; line-height: 1; }
-/* the illegal-combo fallback alert (a headless pick bounced back to interactive) — inline beside the
-   pill / under the card's toggle, same quiet-loud voice as .si-attach-err. */
-.si-mode-notice { color: var(--orange); font-size: 11px; margin: 0 6px 6px; align-self: center; }
 /* the pop-out — a viewport-CENTRED dialog over a light backdrop (not an anchored dropdown), scale-in from
    centre. Sizes to its content so a typical command preview fits on ONE line; the cap guards huge
    commands/viewports, and overflow scrolls when a project has many launchers. */
@@ -1530,7 +1551,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-launcher-row.on { background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .si-launcher-row-main {
   display: flex; align-items: center; gap: 9px; min-width: 0;
-  padding: 8px 10px 2px; color: var(--ink); font-size: 12.5px;
+  padding: 8px 10px 2px; color: var(--ink); font-size: var(--type-control);
 }
 .si-launcher-row:not(.on):not(.off):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 /* a row the ARMED MODE can't launch — greyed, unpickable (aria-disabled in the JSX; no `disabled` attr,
@@ -1545,23 +1566,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    own to swallow the click. */
 .si-launcher-cmd {
   display: block; margin: 0 10px 8px 35px; min-width: 0;
-  font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink2);
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
-/* the server-side-executor placeholder (headless-capable launcher with no own headlessCmd) — prose,
-   not a command, so it de-monospaces and italicizes to read as a note. */
-.si-launcher-cmd-ph { font-family: inherit; font-style: italic; opacity: .6; }
-
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
    strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */
 .si-content.is-session .si-term-body { animation: si-expand .22s ease; }
 /* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
 .si-content.is-session { --si-dock-h: 44px; }
-/* A headless chat owns its composer inside .si-term-body, so there is no external ❯ strip to reserve.
-   Keep the interactive terminal's 44px dock unchanged; only the existing mode boundary removes it. */
-.si-content.is-session.is-headless { --si-dock-h: 0px; }
 /* horizontal TAB BAR in place of the old title/action strip: the two tabs (Terminal | Proof) on the left,
    the state-narrowed lifecycle actions on the right. It wears the app-chrome `--panel` background + a bottom
    separator so it reads VISIBLY APART from the dark terminal below it, in every theme (the old
@@ -1570,12 +1584,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-tabs { flex: none; display: flex; gap: 2px; }
 /* each tab: a flat text button; the active one is inked and underlined in blue (its bottom border overlaps the
    bar's separator via the -1px margin, so the selected tab visually connects to its pane). */
-.si-tab { appearance: none; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.si-tab { appearance: none; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: var(--type-control); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .si-tab:hover { color: var(--ink2); }
 .si-tab.on { color: var(--ink2); border-bottom-color: var(--blue); }
 /* the shared session headline sits between the tabs and the actions, growing to fill and ellipsing when tight
    (session-activity leans on this `flex:1` + ellipsis — same headline, more width). */
-.si-th-name { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; color: var(--ink2); }
+.si-th-name { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); }
 /* the terminal body fills the rest of the pane, edge-to-edge, but ENDS ABOVE the docked ❯ box: its
    margin-bottom reserves the resting input strip (--si-dock-h) as REAL layout height, so the terminal —
    fitted to this box — never renders under the resting input and its bottom status line stays visible.
@@ -1583,9 +1597,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    padding box and IGNORES padding — only a margin actually shortens the box.) It stays a DARK terminal
    (--term-bg) whatever the app theme is. */
 .si-term-body { flex: 1; min-height: 0; overflow: hidden; padding: 6px 10px 0; margin-bottom: var(--si-dock-h); background: var(--term-bg); }
-.si-line { font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
+.si-line { font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
-.si-op { color: var(--blue); font-weight: 700; }
+.si-op { color: var(--blue); font-weight: var(--weight-bold); }
 /* the ❯ box is a bottom-anchored OVERLAY (not in flow): at rest its single line sits in the strip the
    terminal reserved for it (--si-dock-h, above), so the two abut without overlapping. As its textarea wraps
    it grows UPWARD, floating over the terminal's lower edge — its opaque panel background occludes what it
@@ -1596,23 +1610,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    over the terminal's reserved strip), so at one line flex-end and vertical centring coincide — the single
    line sits centred in the strip (12px visual gap each side), not sunk toward its bottom edge. */
 .si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 11px 14px 12px; border-top: 1px solid var(--line); background: var(--panel); }
-.si-prompt { color: var(--blue); flex: none; line-height: 20px; }
+.si-prompt { color: var(--blue); flex: none; line-height: var(--line-input); }
 .si-bottom .si-input:disabled { color: var(--muted); }
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */
 .si-bottom.err { border-color: var(--orange); }
-.si-send-err { flex: none; color: var(--orange); font-size: 11px; white-space: nowrap; }
+.si-send-err { flex: none; color: var(--orange); font-size: var(--type-meta); white-space: nowrap; }
 /* @@@ file attach - the paperclip-glyph button (both input surfaces) opens the picker; a paste/drop attaches
    too. A small, muted inline-SVG affordance (the dashboard's own monochrome glyph vocabulary, currentColor
    stroke — no color emoji) that brightens on hover, sits at the input's bottom edge, and dims while
    disabled/uploading; while uploading it shows a spinning ring. `.dragover` rings the surface green so a
    dragged file reads as droppable; the error chip mirrors .si-send-err. */
-.si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: 1.5; padding: 0 2px; }
+.si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
 .si-attach-busy { animation: si-attach-spin .8s linear infinite; }
 @keyframes si-attach-spin { to { transform: rotate(360deg); } }
 .si-inputwrap.dragover, .si-bottom.dragover { border-color: var(--green); }
-.si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: 11px; white-space: nowrap; }
+.si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: var(--type-meta); white-space: nowrap; }
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* entrance for the session terminal — fade + a small rise, NOT scale(): a scaling transform distorts
@@ -1633,7 +1647,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    settles back. */
 .st-copyhint {
   position: absolute; right: 8px; bottom: 7px; pointer-events: none; z-index: 2;
-  font-family: var(--mono); font-size: 11px; line-height: 1.25; letter-spacing: .2px;
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-tight); letter-spacing: var(--tracking-normal);
   color: #cfe8e8; opacity: .85; background: rgba(7, 54, 66, .92);
   border: 1px solid rgba(131, 148, 150, .35);
   padding: 3px 8px; border-radius: 5px;
@@ -1662,18 +1676,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   overflow-y: auto !important; overflow-x: hidden !important;
   background: var(--term-bg) !important;
 }
-.si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: 20px; padding: 0; }
-.si-bottom .si-attach { height: 20px; line-height: 20px; }
+.si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: var(--line-input); padding: 0; }
+.si-bottom .si-attach { height: 20px; line-height: var(--line-input); }
 
 /* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
    free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact
    `.sess-id` rows, the one display difference between the two surfaces. */
 .si-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 11px; }
+.si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: var(--type-meta); }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
 .si-act.go { border-color: var(--blue); color: var(--blue); }
 .si-act.go:hover { background: var(--blue); color: var(--paper); }
-.si-act.big { padding: 8px 18px; font-size: 13px; margin-top: 8px; }
+.si-act.big { padding: 8px 18px; font-size: var(--type-body); margin-top: 8px; }
 
 /* @@@ board commands - the `/` commands the inbox runs ITSELF (close / merge / type / eval) each own ONE
    identity hue, carried in `--sc`. That same `--sc` paints BOTH places the command appears — this header
@@ -1695,15 +1709,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 @keyframes si-type-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(181, 137, 0, .5); } 50% { box-shadow: 0 0 0 3px rgba(181, 137, 0, 0); } }
 /* type-mode indicator replacing the ❯ box: keys go to the pane, not this box. */
 .si-bottom.type { border-color: var(--yellow); background: var(--panel2); cursor: pointer; gap: 10px; }
-.si-type-ind { color: var(--yellow); font-weight: 700; flex: none; }
-.si-type-help { color: var(--muted); font-size: 11px; }
+.si-type-ind { color: var(--yellow); font-weight: var(--weight-bold); flex: none; }
+.si-type-help { color: var(--muted); font-size: var(--type-meta); }
 
 /* offline / lifecycle placeholder body */
 .si-offline { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; }
-.si-offline-msg { font-size: 15px; color: var(--ink2); }
-.si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
+.si-offline-msg { font-size: var(--type-title); color: var(--ink2); }
+.si-offline-sub { font-size: var(--type-control); color: var(--muted); max-width: 460px; line-height: var(--leading-body); }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
-.si-offline-err { margin-top: 10px; font-size: 12px; color: var(--yellow); max-width: 460px; line-height: 1.55; border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
+.si-offline-err { margin-top: 10px; font-size: var(--type-control); color: var(--yellow); max-width: 460px; line-height: var(--leading-relaxed); border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone
@@ -1749,8 +1763,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .m-crumb { display: inline-flex; align-items: center; gap: 2px; }
 .m-crumb-sep { color: var(--muted); }
-.m-crumb-btn { background: none; border: none; padding: 2px 3px; font-family: var(--mono); font-size: 12px; color: var(--muted); cursor: pointer; }
-.m-crumb-btn.cur { color: var(--ink2); font-weight: 700; }
+.m-crumb-btn { background: none; border: none; padding: 2px 3px; font-family: var(--mono); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
+.m-crumb-btn.cur { color: var(--ink2); font-weight: var(--weight-bold); }
 
 .m-node { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* compact, persistent node header — the row that stays put while you flip tabs below it. */
@@ -1759,11 +1773,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 12px 14px 8px;
 }
 .m-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; }
-.m-node-title { font-size: 16px; font-weight: 700; color: var(--ink2); }
-.m-node-ver { font-size: 12px; color: var(--muted); }
-.m-node-status { font-size: 11px; color: var(--ink); padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.m-node-title { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink2); }
+.m-node-ver { font-size: var(--type-control); color: var(--muted); }
+.m-node-status { font-size: var(--type-meta); color: var(--ink); padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; }
 .m-node-faces { display: inline-flex; gap: 2px; }
-.m-node-desc { flex: none; padding: 0 14px 10px; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.m-node-desc { flex: none; padding: 0 14px 10px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); }
 
 /* segmented control — children · spec · history · issues (· edit), scrollable if it overflows. */
 .m-tabs {
@@ -1774,7 +1788,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .m-tab {
   flex: none; padding: 6px 12px; min-height: 32px; cursor: pointer;
-  font-family: var(--mono); font-size: 12px; color: var(--ink);
+  font-family: var(--mono); font-size: var(--type-control); color: var(--ink);
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
 }
 .m-tab.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
@@ -1801,11 +1815,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .m-row:active { background: var(--panel); }
 .m-row[disabled] { opacity: .5; }
-.m-row-title { flex: 1; min-width: 0; font-size: 14px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-row-title { flex: 1; min-width: 0; font-size: var(--type-subtitle); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-row-faces { flex: none; display: inline-flex; gap: 2px; }
-.m-row-ver { flex: none; font-size: 11px; color: var(--muted); }
-.m-row-kids { flex: none; font-size: 11px; color: var(--blue); }
-.m-row-chev { flex: none; color: var(--muted); font-size: 18px; }
+.m-row-ver { flex: none; font-size: var(--type-meta); color: var(--muted); }
+.m-row-kids { flex: none; font-size: var(--type-meta); color: var(--blue); }
+.m-row-chev { flex: none; color: var(--muted); font-size: var(--type-icon-sm); }
 
 /* bottom tab bar — the two planes (specs / sessions), thumb-reachable, with the device's home-bar inset. */
 .m-tabbar {
@@ -1815,13 +1829,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-tabbar-btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
   height: 52px; cursor: pointer; background: none; border: none;
-  font-family: var(--mono); font-size: 13px; color: var(--muted);
+  font-family: var(--mono); font-size: var(--type-body); color: var(--muted);
 }
-.m-tabbar-btn.on { color: var(--blue); font-weight: 700; box-shadow: inset 0 2px 0 var(--blue); }
-.m-tabbar-ico { font-size: 13px; }
+.m-tabbar-btn.on { color: var(--blue); font-weight: var(--weight-bold); box-shadow: inset 0 2px 0 var(--blue); }
+.m-tabbar-ico { font-size: var(--type-body); }
 .m-tabbar-badge {
   min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--orange); color: var(--paper);
-  font-size: 10px; line-height: 16px; text-align: center;
+  font-size: var(--type-caption); line-height: var(--line-badge); text-align: center;
 }
 
 /* sessions list — the SAME one-line SessionRow face + fold rails the desktop console renders; only the
@@ -1829,17 +1843,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-sesslist { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .m-sess-row {
   display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; width: 100%;
-  padding: 12px 14px; text-align: left; cursor: pointer; font-size: 14px; color: var(--ink2);
+  padding: 12px 14px; text-align: left; cursor: pointer; font-size: var(--type-subtitle); color: var(--ink2);
   background: var(--paper); border: none; border-bottom: 1px solid var(--line); font-family: var(--mono);
 }
 .m-sess-row:active { background: var(--panel); }
-.m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-sess-row .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; font-size: 12px; }
-.m-sess-row .sess-glyph { font-size: 13px; width: 14px; }
+.m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: var(--weight-bold); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-sess-row .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; font-size: var(--type-control); }
+.m-sess-row .sess-glyph { font-size: var(--type-body); width: 14px; }
 .m-sess-row .sess-ops { color: var(--muted); }   /* mobile keeps the tally muted, not the overlay hue */
 
 /* zone headers on the mobile session list — same partition every desktop list draws ([[session-console]]). */
-.m-zone { padding: 10px 14px 4px; font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+.m-zone { padding: 10px 14px 4px; font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
 
 /* session detail — the terminal-free conversation ([[session-timeline]]): identity card, then the
    timeline (status transitions with full notes + delivered prompts) over a docked composer. */
@@ -1848,18 +1862,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-sess-card { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 6px; border-bottom: 1px solid var(--line); }
 .m-sess-back {
   flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-  font-size: 26px; line-height: 1; color: var(--blue); background: none; border: none; cursor: pointer;
+  font-size: var(--type-icon-lg); line-height: var(--leading-none); color: var(--blue); background: none; border: none; cursor: pointer;
 }
 .m-sess-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-sess-status { font-size: 12px; color: var(--muted); }
+.m-sess-name { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-sess-status { font-size: var(--type-control); color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
 
 /* the header's eval entry + the evaluation host ([[session-eval]] on the phone): the SAME SessionEvalPane,
    restacked for one-axis thumb reading — master list ABOVE the detail; the desktop fold toggle retires here
    (stacking already gives the detail the full width). */
 .m-sess-evalbtn {
-  flex: none; margin-left: auto; padding: 6px 13px; font-size: 12px; font-family: var(--mono);
+  flex: none; margin-left: auto; padding: 6px 13px; font-size: var(--type-control); font-family: var(--mono);
   color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: 15px; cursor: pointer;
 }
 .m-sess-evalbtn.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
@@ -1874,69 +1888,63 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
    below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
-/* .tl-chat is the SHARED chat body's root (TimelineChat — the phone detail AND the desktop console's
-   headless Chat tab): a flex column filling whatever host mounts it; the pieces inside keep their m-*
-   classes (one markup, one style). In the console's absolute term layer it needs its own height + the
-   app paper (the layer sits where the dark terminal otherwise paints). */
+/* .tl-chat is the phone session detail's chat root: a flex column filling its host; the pieces inside keep
+   their m-* classes. */
 .tl-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .si-term-layer .tl-chat { height: 100%; background: var(--paper); }
 .m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
-.m-day { text-align: center; margin: 10px 0 6px; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+.m-day { text-align: center; margin: 10px 0 6px; font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
 .m-ev { margin: 8px 0; }
-.m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: 12px; }
+.m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: var(--type-control); }
 .m-ev-glyph { flex: none; }
-.m-ev-word { font-weight: 700; }
-.m-ev-time { margin-left: auto; flex: none; font-size: 10px; color: var(--muted); }
+.m-ev-word { font-weight: var(--weight-bold); }
+.m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
 .m-ev-note {
-  margin: 4px 0 0 14px; padding: 8px 10px; font-size: 13px; line-height: 1.55; color: var(--ink2);
+  margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
   white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
 }
-.m-ev-sent .m-ev-from { font-weight: 700; color: var(--blue); }
+.m-ev-sent .m-ev-from { font-weight: var(--weight-bold); color: var(--blue); }
 .m-ev-text {
-  margin: 4px 0 0 14px; padding: 8px 10px; font-size: 13px; line-height: 1.55; color: var(--ink);
+  margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink);
   white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--blue) 7%, var(--paper));
   border-left: 2px solid color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: 0 6px 6px 0;
 }
-.m-ev-prompt summary { font-family: var(--mono); font-size: 12px; color: var(--muted); cursor: pointer; }
+.m-ev-prompt summary { font-family: var(--mono); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
 
 /* the docked composer — textarea + send, with the note-reply chip above (the terminal-free default ON). */
-.m-offline, .m-senderr { flex: none; padding: 6px 14px; font-size: 12px; }
+.m-offline, .m-senderr { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
 .m-senderr { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
-.m-composer-line { display: flex; align-items: flex-end; gap: 8px; }
+.m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {
-  flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: 14px;
+  flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;
 }
 .m-input:focus { border-color: var(--blue); }
 .m-send {
-  flex: none; height: 38px; padding: 0 16px; font-family: var(--mono); font-size: 13px; font-weight: 700;
+  flex: none; height: 38px; padding: 0 16px; font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold);
   color: var(--paper); background: var(--blue); border: none; border-radius: 8px; cursor: pointer;
 }
 .m-send:disabled { opacity: .45; cursor: default; }
 
-.m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
+.m-empty { padding: 18px 14px; color: var(--muted); font-size: var(--type-body); }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
 
 /* the create entry ([[mobile-ui]]) — a touch-sized row above the session list, and the full-screen
    composer it opens (the desktop New Session tab's phone twin; the substance is the shared launch path). */
 .m-new-btn {
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 14px;
-  font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue); text-align: left;
+  font-family: var(--mono); font-size: var(--type-subtitle); font-weight: var(--weight-bold); color: var(--blue); text-align: left;
   background: var(--paper); border: none; border-bottom: 1px solid var(--line); cursor: pointer;
 }
 .m-new-btn:active { background: var(--panel); }
-.m-new-btn-plus { flex: none; font-size: 16px; line-height: 1; }
+.m-new-btn-plus { flex: none; font-size: var(--type-icon-sm); line-height: var(--leading-none); }
 .m-new-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
 .m-new-input { min-height: 120px; }
-.m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
-/* the shared ModeToggle at phone scale: taller touch segments, no extra margin (m-new-body's gap rules). */
-.m-new .si-mode-toggle { margin: 0; }
-.m-new .si-mode-seg { padding: 10px 12px; font-size: 14px; }
-.m-new .si-mode-notice { margin: 0; }
+.m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: var(--type-body); color: var(--muted); }
 .m-new-launcher-select {
-  flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--mono); font-size: 14px;
+  flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
 }
 .m-new .m-senderr { padding: 0; }
@@ -1947,33 +1955,33 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    pixels on expand. Same scroller shape as the other popup panes (.ov-body is overflow:hidden; the pane
    scrolls itself, and App's bumpScroll targets .pane-eval). */
 .pane-eval { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
-.pane-eval.empty { color: var(--muted); font-size: 13px; }
+.pane-eval.empty { color: var(--muted); font-size: var(--type-body); }
 /* the eval tab surfaces the WHOLE declared set in ONE list: readings ride the timeline, and an unmeasured
    scenario leads it as a blind-spot row — the empty score ring is the only distinction, no fenced-off band
    ([[eval-tab]]). */
-.eval-todo-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.eval-todo-note { color: var(--muted); font-size: var(--type-body); margin: 0 0 14px; }
 .eval-declared-row .eval-expected { padding-left: 23px; margin: 4px 0 0; }
-.eval-tracks { color: var(--muted); font-family: var(--mono); font-size: 10px; opacity: .85; }
+.eval-tracks { color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); opacity: .85; }
 /* a DANGLING remark track (directive 5): the orphaned scenario's name struck-through/gone, its remarks below
    — visible, still resolvable via their refs, ageing nothing. */
 .eval-dangling-badge { color: var(--orange); margin-right: 6px; }
 .eval-dangling-name { text-decoration: line-through; color: var(--muted); }
-.eval-dangling-tag { font-family: var(--mono); font-size: 10px; color: var(--orange); margin-left: 8px;
+.eval-dangling-tag { font-family: var(--mono); font-size: var(--type-caption); color: var(--orange); margin-left: 8px;
   border: 1px dashed color-mix(in srgb, var(--orange) 45%, var(--line)); border-radius: 3px; padding: 0 5px; }
 .eval-dangling-remarks { padding-left: 23px; margin: 6px 0 0; }
 .eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .eval-row:last-child { border-bottom: 0; }
 .eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
 .eval-top { display: flex; align-items: center; gap: 8px; }
-.eval-caret { flex: none; color: var(--muted); font-size: 11px; }
-.eval-scenario { font-size: 13px; font-weight: 600; color: var(--ink2); }
+.eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
+.eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); }
 /* the freshness signal is now the shared .score-badge circle (see score.jsx) — green/red fresh, grey stale,
    empty = no current score — so a reading's row and its node's card badge speak ONE vocabulary (no more ⚠). */
-.eval-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+.eval-meta { display: flex; align-items: center; gap: 10px; font-size: var(--type-meta); color: var(--muted); }
 .eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 /* verdict badge: the loss the agent measured — green ✓ pass / orange ✗ fail / blue ≈ note (hover for the
    how-far-off text) / muted legacy (a reading filed before verdicts existed). */
-.eval-verdict { flex: none; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; line-height: 1.5; }
+.eval-verdict { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); border-radius: 3px; padding: 0 4px; line-height: var(--leading-relaxed); }
 .eval-verdict.pass { color: var(--green); border: 1px solid var(--green); }
 .eval-verdict.fail { color: var(--orange); border: 1px solid var(--orange); }
 .eval-verdict.note { color: var(--blue); border: 1px solid var(--blue); cursor: help; }
@@ -1986,16 +1994,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the shared renderer's inline video — sized like an evidence image WHEREVER it plays (eval tab, eval
    detail gallery, an issue/eval reply's thread). */
 .eval-video { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
-.eval-noimg { font-size: 11px; color: var(--muted); }
-.eval-expected, .eval-note { font-size: 12px; color: var(--ink2); margin: 0 0 6px; }
-.eval-expected-label { color: var(--muted); font-weight: 600; }
-.eval-transcript { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.eval-noimg { font-size: var(--type-meta); color: var(--muted); }
+.eval-expected, .eval-note { font-size: var(--type-control); color: var(--ink2); margin: 0 0 6px; }
+.eval-expected-label { color: var(--muted); font-weight: var(--weight-semibold); }
+.eval-transcript { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-transcript.loading { color: var(--muted); }
 /* structured data ([[evidence-kind-taxonomy]]) — a JSON/metrics block: the transcript's monospace frame with
    a labelled header and an accent border, so a machine export reads as validatable data, not scrolling text. */
 .eval-datawrap { border: 1px solid var(--line); border-left: 3px solid var(--acc, #6b46c1); border-radius: 4px; overflow: hidden; }
-.eval-datahead { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
-.eval-data { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.eval-datahead { font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
+.eval-data { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-data.loading { color: var(--muted); }
 /* folded structured data ([[event-detail]]): the header IS the toggle when a clip/still is the primary evidence */
 .eval-datafold > summary.eval-datahead { cursor: pointer; user-select: none; list-style: none; }
@@ -2010,17 +2018,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    A chip fills with the accent when active, so the picked filter reads at a glance — the same segmented feel
    the New button and store select now share. */
 .ef-chipbar { display: flex; gap: 6px; flex-wrap: wrap; }
-.ef-chip { font: inherit; font-size: 11px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; line-height: 1.35; transition: color .12s, border-color .12s, background .12s; }
+.ef-chip { font: inherit; font-size: var(--type-meta); color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; line-height: var(--leading-ui); transition: color .12s, border-color .12s, background .12s; }
 .ef-chip:hover { color: var(--ink2); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 .ef-chip.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
 .ef-close { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 6px; }
-.ef-empty, .ef-miss { color: var(--muted); font-size: 12px; padding: 18px 8px; }
+.ef-empty, .ef-miss { color: var(--muted); font-size: var(--type-control); padding: 18px 8px; }
 /* the scenario is the row's title: it grows and TRUNCATES to one line (full text on hover), so the evals
    picker keeps the same uniform single-line rhythm the issues list has — the two never read as two dialects. */
-.ef-scenario { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; }
-.ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; opacity: .9; }
-.ef-kind { flex: none; margin-left: auto; font-size: 11px; color: var(--muted); }
-.ef-time { flex: none; color: var(--muted); font-size: 10.5px; min-width: 26px; text-align: right; }
+.ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; }
+.ef-kind { flex: none; margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
+.ef-time { flex: none; color: var(--muted); font-size: var(--type-meta); min-width: 26px; text-align: right; }
 /* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
    hover-revealed ok affordance on an un-ok'd one (a span, not a nested button — the row IS a button). */
 .ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
@@ -2042,8 +2049,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-work.rail-folded { grid-template-columns: minmax(0, 1fr) 22px; }
 .an-rail.folded { display: none; }
 .an-rail-unfold { flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; border-right: none; border-left: 1px solid var(--line); }
-.an-rail-count { font-size: 10px; font-family: var(--mono); line-height: 1; color: var(--muted); }
-.an-rail-count.open { color: var(--orange); font-weight: 700; }
+.an-rail-count { font-size: var(--type-caption); font-family: var(--mono); line-height: var(--leading-none); color: var(--muted); }
+.an-rail-count.open { color: var(--orange); font-weight: var(--weight-bold); }
 .an-rail .an-comments-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid var(--line); }
 .an-rail .an-comments-head .fv-fold-inline { margin-left: auto; }
 .an-rail-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 12px 8px; }
@@ -2064,19 +2071,19 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   .an-rail-unfold { flex-direction: row; justify-content: center; width: 100%; padding: 8px 0;
     border-left: none; border-top: 1px solid var(--line); }
 }
-.an-meta { font-size: 10.5px; color: var(--muted); }
+.an-meta { font-size: var(--type-meta); color: var(--muted); }
 .an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
 /* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
 .lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .82); cursor: zoom-out; }
 .lightbox img { max-width: 96vw; max-height: 96vh; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 48px rgba(0, 0, 0, .6); }
 .an-prior-note { color: var(--muted); }
-.an-stale { color: var(--muted); font-family: var(--mono); font-size: 11px; }
-.an-stale b { color: var(--ink2); font-weight: 700; }
+.an-stale { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.an-stale b { color: var(--ink2); font-weight: var(--weight-bold); }
 .an-stale-files { opacity: 0.85; }
-.an-title { font-weight: 700; font-size: 14px; color: var(--ink); }
-.an-node { font-size: 11px; color: var(--muted); }
-.an-expected { font-size: 12px; color: var(--ink2); padding: 8px 0 0; }
-.an-comments-head { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
+.an-title { font-weight: var(--weight-bold); font-size: var(--type-subtitle); color: var(--ink); }
+.an-node { font-size: var(--type-meta); color: var(--muted); }
+.an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
+.an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
 /* the stage's content caps at a review-comfortable width even when the pane is very wide. */
 .an-stage-col > * { max-width: 1100px; }
 /* the still gallery — every image entry stacked on the stage, each click-to-enlarge. */
@@ -2090,7 +2097,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the paused-state play hint over the frame — a cue, never in the way. */
 .an-bigplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 54px; height: 54px; border-radius: 50%;
   background: rgba(8,12,18,.5); border: 1px solid rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center;
-  font-size: 22px; color: #fff; pointer-events: none; backdrop-filter: blur(3px); }
+  font-size: var(--type-icon-lg); color: #fff; pointer-events: none; backdrop-filter: blur(3px); }
 
 /* the custom control bar — replaces native chrome so the scrubber can carry the review track. */
 .an-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; }
@@ -2109,8 +2116,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-player:-webkit-full-screen .an-stage { margin: 0; max-width: 100vw; max-height: calc(100vh - 38px); }
 .an-player:-webkit-full-screen .an-video { width: auto; max-width: 100vw; max-height: calc(100vh - 38px); border: none; border-radius: 0; }
 .an-player:-webkit-full-screen .an-bar { width: min(100vw, 1100px); border-radius: 0; }
-.an-time { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.an-curstep { flex: 0 0 auto; font-size: 10.5px; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line)); border-radius: 3px; padding: 1px 7px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-time { flex: 0 0 auto; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
+.an-curstep { flex: 0 0 auto; font-size: var(--type-meta); color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line)); border-radius: 3px; padding: 1px 7px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the review-track scrubber: play fill + draggable knob + step bands + one marker per anchored comment. */
 .an-seek { flex: 1 1 auto; position: relative; height: 18px; display: flex; align-items: center; cursor: pointer; }
 .an-seek-trk { position: absolute; left: 0; right: 0; height: 5px; background: var(--line); border-radius: 5px; }
@@ -2123,84 +2130,84 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-mk:hover::after { transform: scaleX(1.8); }
 .an-mk.active::after { background: var(--green); }
 .an-mk.on::after { transform: scaleX(2); background: var(--orange); box-shadow: 0 0 0 1px var(--paper), 0 0 8px color-mix(in srgb, var(--orange) 60%, transparent); }
-.an-seek-hov { position: absolute; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-family: var(--mono); font-size: 10.5px; padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+.an-seek-hov { position: absolute; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-family: var(--mono); font-size: var(--type-meta); padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
 /* a compact shortcut legend under the player. */
-.an-keys { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 4px 0 0; letter-spacing: .2px; }
+.an-keys { font-family: var(--mono); font-size: var(--type-caption); color: var(--muted); padding: 4px 0 0; letter-spacing: var(--tracking-normal); }
 .an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
-.an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.an-step { font: inherit; font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }
-.an-hint { color: var(--muted); font-size: 11px; padding: 8px 0 0; }
-.an-flash { font-size: 12px; color: var(--green); padding: 4px 0 0; }
+.an-hint { color: var(--muted); font-size: var(--type-meta); padding: 8px 0 0; }
+.an-flash { font-size: var(--type-control); color: var(--green); padding: 4px 0 0; }
 
 /* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
-.an-verdict-badge { font-size: 12px; font-weight: 700; line-height: 1; }
+.an-verdict-badge { font-size: var(--type-control); font-weight: var(--weight-bold); line-height: var(--leading-none); }
 .an-verdict-badge.pass { color: var(--green); }
 .an-verdict-badge.fail { color: var(--orange); }
 .an-verdict-badge.legacy { color: var(--muted); }
 
 /* the human sign-off in the header band ([[human-ok]]): settled mark / the deliberate ok button —
    offered only while the viewed reading IS the scenario's latest. */
-.an-okd { font-size: 11px; color: var(--green); white-space: nowrap; }
+.an-okd { font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
 
 /* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
    oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim
    header band, right-aligned. ---- */
 .an-ab { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: 1; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+.an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
 .an-ab-nav:disabled { opacity: .35; cursor: default; }
 .an-ab-track { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
-.an-ab-pip { font: inherit; font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
+.an-ab-pip { font: inherit; font-size: var(--type-meta); font-weight: var(--weight-bold); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
 .an-ab-pip.pass { color: var(--green); }
 .an-ab-pip.fail { color: var(--orange); }
 .an-ab-pip.on { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
-.an-ab-pos { font-size: 10.5px; color: var(--muted); margin-left: 2px; }
+.an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; }
 
 /* ---- the session Eval tab ([[session-eval]]'s interactive face) — gates strip + the shared eval
    master-detail, session-scoped. Rows are tier-1; evidence streams on open. ---- */
 .se-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
-.se-gate { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
+.se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
 /* the master-detail below the gates is the SHARED shell (.fv-master, [[evals-view]]) — no session-only clone. */
 .se-blind .ef-scenario { color: var(--muted); }
-.se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }
-.ef-insession { color: var(--blue); font-size: 10px; flex: none; }
+.se-warn { font-family: var(--mono); font-size: var(--type-caption); color: var(--orange); }
+.ef-insession { color: var(--blue); font-size: var(--type-caption); flex: none; }
 /* the attribution boundary inside a group: ✦ (this session's readings) above, inherited baseline below —
    a BUTTON: the default-collapsed baseline's toggle, carrying its row count. */
-.se-divider { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px 5px; background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+.se-divider { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px 5px; background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); }
 .se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
 .se-divider:hover { color: var(--ink2); }
 .se-divider:hover::before, .se-divider:hover::after { border-top-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
-.se-divider-arrow { flex: none; font-size: 8px; }
-.se-divider-n { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; line-height: 1.5; }
+.se-divider-arrow { flex: none; font-size: var(--type-caption); }
+.se-divider-n { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; line-height: var(--leading-relaxed); }
 
 /* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
    the evals feed's kind filter; one control, one look. */
-.fv-filter { font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
+.fv-filter { font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
 .fv-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
-.loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+.loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }
 .loading.load-error { color: var(--red); }
-.load-retry { font-family: var(--mono); font-size: 12px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.load-retry { font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .load-retry:hover { border-color: var(--muted); }
 
 /* chrono timeline tools ([[work-pane]]): expand-all complements the down-gesture reveal — collapsed rows
    aren't mounted, so find-in-page / jump-to-an-old-version needs this door. */
 .chrono-tools { display: flex; justify-content: flex-end; margin: 0 0 6px; }
-.chrono-all { font-family: var(--mono); font-size: 10px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.chrono-all { font-family: var(--mono); font-size: var(--type-caption); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .chrono-all:hover { color: var(--ink2); border-color: var(--muted); }
 
 /* the long-pane text filter ([[work-pane]]): sticky at the scroller's top, palette-toned like the search bar. */
 .pane-filter { position: sticky; top: -16px; z-index: 2; margin: -8px 0 8px; padding: 6px 0; background: var(--panel); }
-.pane-filter-input { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; outline: none; color: var(--ink2); font-family: var(--mono); font-size: 11px; padding: 4px 8px; }
+.pane-filter-input { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; outline: none; color: var(--ink2); font-family: var(--mono); font-size: var(--type-meta); padding: 4px 8px; }
 .pane-filter-input:focus { border-color: var(--muted); }
 .pane-filter-input::placeholder { color: var(--muted); }
-.pane-filter-none { color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 6px 2px; }
+.pane-filter-none { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); padding: 6px 2px; }
 
 /* ---- shared tooltip ([[tooltip]]): the ONE hover/focus bubble every `data-tip` renders through.
    Palette-only colours (no browser-default yellow box), so light/dark both come from the theme vars;
@@ -2209,7 +2216,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   position: fixed; z-index: 100; pointer-events: none;
   background: var(--panel2); color: var(--ink2);
   border: 1px solid var(--line); border-radius: 6px;
-  padding: 4px 9px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  padding: 4px 9px; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed);
   max-width: 320px; white-space: pre-line; overflow-wrap: break-word;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
   opacity: 0; transition: opacity .14s ease, transform .14s ease;

@@ -122,7 +122,7 @@ export const SpexcodePlugin = async (ctx) => {
         adopt(sid)
         // the stop-gate loop closes in-process via the runtime's dispatchStop: stop_hook_active rides the
         // payload (the gate's loop-termination bit) and the gate's parsed reason re-enters as a follow-up
-        // prompt; an inject the host can no longer take is reported loud, and the one-shot recovery covers it.
+        // prompt; an inject the host can no longer take is reported loud.
         await rt.dispatchStop((reason) => injectPrompt(reason), "blocked by a spexcode hook")
       }
     },

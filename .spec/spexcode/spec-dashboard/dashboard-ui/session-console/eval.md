@@ -22,13 +22,19 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) and land on the
-      New Session tab. Type a short launch prompt (e.g. `@<some-node> quick smoke test`) and press Enter to
-      submit. Without clicking anything, watch the active tab and the session list for several seconds (long
-      enough for at least one 4s board poll, so the new session has surely been listed). Crucially, check
-      `document.activeElement` (or type the second prompt blind) BOTH while the first launch is still in flight
-      AND after it settles, to confirm the box never loses focus at any point. Then type a second prompt and
-      submit again. Screenshot the tab list + active pane mid-launch and right after each submit settles.
+      New Session tab. First type the existing prose `quick smoke test`, then type ` /tidy`; confirm the
+      command-preset menu opens despite the non-empty draft and accept its row. Confirm the draft becomes
+      `/tidy quick smoke test`, append ` [[session-console]]`, and press Enter to submit through a fixture
+      launcher that records the prompt it receives. Observe the create request, the new session record, and
+      the fixture's agent prompt: this proves the input did not interpret the plugin body on its own. Without clicking anything,
+      watch the active tab and session list until the new row appears. Crucially, check `document.activeElement`
+      (or type a second prompt blind) BOTH while launch is in flight AND after it settles, to confirm the box
+      never loses focus. Then type a second plain prompt and submit again. Record the whole interaction as video.
     expected: |
+      The browser's one `POST /api/sessions` carries the RAW `/tidy quick smoke test [[session-console]]`;
+      the resulting session is bound to `session-console` and keeps that raw invocation as its prompt preview,
+      while the fixture agent receives tidy's expanded body + a `session-console` target + `quick smoke test`.
+      No `[[links]]` inside tidy's own body becomes session scope. Unknown slash names would pass through raw.
       Submitting never switches tabs: after each Enter the New Session tab stays the active/selected tab and
       its prompt is cleared, ready for the next launch — the view does NOT jump onto the freshly created
       session, nor does it bounce between New and the new tab. Focus stays in the prompt box across the submit:
@@ -482,56 +488,6 @@ scenarios:
       put since the session is already selected). Clicking a different live session's chip navigates to
       #/sessions/<id> and lands on that session's console. Baseline bug: same-session clicks did nothing —
       setSessionSel was already set and navigate() saw an identical hash, so the openable chip was a no-op.
-  - name: headless-chat-view
-    tags: [frontend-e2e, desktop]
-    description: >
-      Through the running dashboard in a real browser — a DYNAMIC multi-step flow, so record the run as
-      VIDEO. Prepare a session whose record carries `mode: "headless"` (until headless launch capability
-      lands, hand-set the field on a LIVE session's global store record — `session.json` under
-      `~/.spexcode/projects/<enc>/sessions/<id>/` — the board reads it live; close the session after).
-      Open the desktop console on that session and read: (a) the first right-pane tab's label; (b) what the
-      pane mounts — is a `.tl-chat` chat body present, and is there any xterm canvas, docked `❯` strip, or
-      type button for this session (press the reserved ⌥/⌘+I too); (c) the session list rows — which rows
-      wear a `.sess-mode` ◇ mark beside the status glyph. Then send a message from the chat's own composer,
-      observing the `POST /api/sessions/:id/input` body, and WAIT for the agent's next declaration to land
-      in the timeline as a status event with its note. Flip to the Eval tab and back to Chat. Finally the
-      two regressions: select an INTERACTIVE session and confirm its pane is unchanged (Terminal tab label,
-      live terminal, `❯` strip), and load a PHONE-sized viewport on a session detail to confirm the mobile
-      face (header card + timeline + composer) renders exactly as before the TimelineChat extraction —
-      screenshot that.
-    expected: |
-      For the headless session the first tab reads "Chat" (聊天 in zh) and the pane is the shared chat body
-      (`.tl-chat`): the persisted timeline — day separators, status events with their full declaration
-      notes, attributed sent prompts — over its own docked composer. NO terminal canvas mounts for it, NO
-      `❯` strip renders, and type mode does not exist there (no type button; ⌥/⌘+I is inert). The composer's
-      send POSTs the one input route with kind:'text' AND `replyVia:'note'`, the message appears as a sent
-      event, and the agent's subsequent declaration note flows back as a status event in the SAME view — the
-      whole round trip is readable without a terminal. The Eval tab is untouched (flip there and back works,
-      chat state survives). In the session lists only the headless session's row wears the muted ◇ mark
-      (`.sess-mode`, the harness.jsx MODE_MARK / CLI `session ls` vocabulary); interactive rows are
-      unmarked. An interactive session's pane is byte-for-byte the old behaviour (Terminal label, live
-      SessionTerm, `❯` strip), and the phone detail is behaviourally identical to before the extraction —
-      the wrapper is thin, the chat body one component.
-  - name: headless-chat-composer-dock
-    tags: [frontend-e2e, desktop, mobile]
-    code: spec-dashboard/src/SessionInterface.jsx
-    related: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/styles.css]
-    description: >
-      Through the running dashboard in a real browser, open a HEADLESS session in the desktop console and
-      measure the bottom edges of the session content, `.si-term-body`, and the shared chat's `.m-composer`.
-      Then open an INTERACTIVE session and measure its terminal body plus external `❯` dock. Finally, at
-      375x667, 390x844, and the 640x360 mobile breakpoint, open a phone session detail, type a draft, and
-      measure `.m-sessdetail`, `.m-main`, `.m-composer`, `.m-composer-line`, `.m-input`, `.m-send`, and the
-      persistent safe-area-owning `.m-tabbar`. Screenshot the headless desktop and each mobile layout.
-    expected: |
-      The headless chat owns the full right pane: `.si-term-body` and `.m-composer` both end exactly at the
-      session content's bottom (0px gap), with no external `.si-bottom` strip and no terminal inside the
-      active chat layer. The neighboring interactive session is unchanged: its terminal ends 44px above
-      the pane and its external `❯` dock ends flush at the pane bottom. At every phone size, the embedded
-      composer ends exactly at both the session detail and `.m-main` bottoms, directly against the tab bar's
-      top edge; input and send remain aligned, enabled after typing, non-overlapping, and horizontally usable.
-      The tab bar keeps ownership of `safe-area-inset-bottom`, so the existing phone navigation and home-bar
-      clearance do not move into the shared composer or leak into desktop chat.
 ---
 
 # session-console — yatsu

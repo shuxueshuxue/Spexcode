@@ -1,13 +1,14 @@
 // The dashboard's ONE icon vocabulary ([[icon-system]]) — every inline glyph lives here, in the
-// Obsidian/Notion linear style the side rail set: a single stroke-SVG contract (fill=none,
-// stroke=currentColor, round caps/joins, ~1.4–2 stroke, aria-hidden), Lucide-derived paths inlined so
-// there is zero runtime dependency. Components never hand-write an <svg> — they render <Icon name/>
+// Obsidian/Notion linear style the side rail set: stroke-SVG by default (fill=none,
+// stroke=currentColor, round caps/joins, ~1.4–2 stroke, aria-hidden), with official filled geometry
+// declared on the icon's data row when fidelity requires it. Components never hand-write an <svg> — they render <Icon name/>
 // (or <IconButton/> for an icon-only button, which FORCES title+aria-label so no icon button ships
 // without a tooltip/accessible name). The harness product marks (Claude Code / Codex / opencode / pi)
 // are fill-based brand glyphs, deliberately outside the stroke contract but kept here so this file
 // stays the single source; they inherit currentColor via .si-agent-glyph so both themes read them.
 
-// each def: node (the shapes), vb (viewBox, default 24), sw (per-icon strokeWidth, default 1.8)
+// each def: node (the shapes), vb (viewBox, default 24), sw (per-icon strokeWidth, default 1.8),
+// and optional fill/stroke overrides (defaults: none/currentColor).
 const ICONS = {
   // ——— Lucide-derived 24×24 ———
   plus: { node: <><path d="M5 12h14" /><path d="M12 5v14" /></> },
@@ -50,6 +51,17 @@ const ICONS = {
     node: <><path d="M2.5 3.5 h13 v8.4 h-7 l-3.6 3 v-3 h-2.4 z" /><path d="M5.4 6.7 h7.2 M5.4 9.2 h4.8" /></>,
   },
 
+  // GitHub Primer Octicons `issue-opened-16` (MIT) — preserve the official filled ring + centre.
+  'issue-opened': {
+    vb: 16, fill: 'currentColor', stroke: 'none',
+    node: <><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" /><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z" /></>,
+  },
+  // GitHub Primer Octicons `issue-closed-16` (MIT) — the concluded lifecycle's matching ring + check.
+  'issue-closed': {
+    vb: 16, fill: 'currentColor', stroke: 'none',
+    node: <><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z" /><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z" /></>,
+  },
+
   // ——— 16-grid utility glyphs kept at their drawn size ———
   lock: {
     vb: 16, sw: 1.3,
@@ -80,7 +92,7 @@ export function Icon({ name, size = 16, strokeWidth, className, style }) {
   return (
     <svg
       width={size} height={size} viewBox={`0 0 ${vb} ${vb}`}
-      fill="none" stroke="currentColor" strokeWidth={strokeWidth ?? def.sw ?? 1.8}
+      fill={def.fill ?? 'none'} stroke={def.stroke ?? 'currentColor'} strokeWidth={strokeWidth ?? def.sw ?? 1.8}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
       className={className} style={style}
     >

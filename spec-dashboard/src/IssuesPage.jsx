@@ -9,7 +9,7 @@ import { liveSession } from './session.js'
 import FoldToggle from './FoldToggle.jsx'
 import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
-import { IconButton } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
@@ -139,13 +139,17 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
             )}
           </header>
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
-          {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —
+          {/* a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
               the store mini-tag renders only while stores are actually mixed ([[issues-view]]). */}
           {issues.map((th) => {
             const k = `issue:${th.id}`
+            const status = th.status || 'open'
+            const statusIcon = status === 'open' ? 'issue-opened' : 'issue-closed'
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-dot st-${th.status || 'open'}`} data-tip={th.status} />
+                <span className={`fv-status-mark ${status === 'open' ? 'open' : 'concluded'}`} data-tip={status}>
+                  <Icon name={statusIcon} size={16} />
+                </span>
                 <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
                 {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
@@ -256,8 +260,6 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
 const STORE_DISPLAY_NAMES = { github: 'GitHub', gitlab: 'GitLab' }
 const storeDisplayName = (id) => STORE_DISPLAY_NAMES[id] || id
 
-const storeGlyph = (s) => s.id === 'local' ? 'L' : s.id === 'github' ? 'GH' : s.id === 'gitlab' ? 'GL' : (s.id || '?').slice(0, 2).toUpperCase()
-
 // the "New" affordance — a concern line, a body, and one compact store picker. Local posts to the
 // git-native local store; a configured forge store posts a REAL forge issue through the same issue port.
 // A `[[node]]` link in the text IS the node link — local infers `nodes:`, forge writes the `Spec:` marker
@@ -292,7 +294,7 @@ function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
       <label className="fv-store-pick">
         <span>{t('session.issuesStoreLabel')}</span>
         <select value={store} disabled={busy} onChange={(e) => setStore(e.target.value)}>
-          {stores.map((s) => <option key={s.id} value={s.id}>{storeGlyph(s)} · {s.label || s.id}</option>)}
+          {stores.map((s) => <option key={s.id} value={s.id}>{s.label || s.id}</option>)}
         </select>
       </label>
       <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}

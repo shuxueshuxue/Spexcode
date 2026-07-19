@@ -2,7 +2,7 @@
 title: review-commands
 status: active
 hue: 200
-desc: The review track's typed command surface — '/' at the start of the eval-detail composer's line opens a command menu. Built-in verbs (/ok) hold their when-gate in ONE registry (the sessionCommands pattern) and are the sole dashboard door to their act; `surface: review` plugin presets (/refuse) prefill the composer, and the send stays an ordinary remark.
+desc: The review track's slash-command surface — '/' at the start of the eval-detail composer's line opens a command menu, whether typed or inserted by its compact discoverability button. Built-in verbs (/ok) hold their when-gate in ONE registry (the sessionCommands pattern) and are the sole dashboard door to their act; `surface: review` plugin presets (/refuse) prefill the composer, and the send stays an ordinary remark.
 code:
   - spec-dashboard/src/reviewCommands.js
 related:
@@ -18,20 +18,23 @@ related:
 
 ## raw source
 
-The review act is fastest when the hands never leave the composer: the human watches a reading, and the
-judgment — "agreed" or "disputed" — is a typed `/` command in the same box the remark goes in. The
-interim standalone human-ok button was retired for exactly this: the typed trigger is the design, and it
-is the ONE dashboard door. No new verbs, no new writes: the commands are doors onto acts the pane
-already has.
+The review act is fastest in the composer: the human watches a reading, and the judgment — "agreed" or
+"disputed" — is a `/` command in the same box the remark goes in. A compact `/` button beside the
+composer's `@` and `[[` grammar hints makes that command surface visible; it types the same trigger the
+hand would, never opening a second menu or creating another execution path. The interim standalone
+human-ok button was retired because the command is the ONE dashboard door. No new verbs, no new writes:
+the commands are doors onto acts the pane already has.
 
 ## expanded spec
 
 **The trigger.** In [[event-detail]]'s docked remark composer, a `/token` at the start of the caret's
 LINE opens a small command dropdown — the session ❯ box's leading-`/` grammar, per-line so a stamped
 `▶` anchor (or a circled frame) above the caret never disarms it: circle → `/refuse` on the fresh line
-below is the natural flow. Matching, row markup, and keys (↑↓ · ⏎/Tab · Esc) are the console's own —
-the shared `matchSlash`/`SlashMenu` in [[mentions]]'s module, never a fork. The menu is armed only where
-the home passes a command list; the issue composers pass none and are untouched.
+below is the natural flow. The compact `/` action-row button inserts that exact trigger at the caret,
+preserves the draft, refocuses the textarea, and on a command-eligible line opens the SAME dropdown; it
+appears only when that home supplies commands, so issue composers remain untouched. Matching, row markup,
+and keys (↑↓ · ⏎/Tab · Esc) are the console's own — the shared `matchSlash`/`SlashMenu` in [[mentions]]'s
+module, never a fork.
 
 **Kind 1 — built-in review verbs, one registry, one door.** The registry (`reviewCommands.js`,
 the [[session-console]] `sessionCommands.js` precedent) holds each verb's static identity + `when` gate;

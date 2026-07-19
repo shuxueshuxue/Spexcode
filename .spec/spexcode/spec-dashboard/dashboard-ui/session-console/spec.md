@@ -9,7 +9,6 @@ code:
   - spec-dashboard/src/SessionInterface.jsx#typeKeyToken
 related:
   - spec-dashboard/src/SessionTerm.jsx
-  - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
@@ -44,12 +43,15 @@ dark terminal, whatever the app theme. Two panes: a left session list (its width
 the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
-**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
-node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the
-config-preset palette; the two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the
-server derives the node (the first `[[<id>]]`). Both menus only insert text; the New prompt has **no** `/`
-slash-command menu (presets only). A preset launched with **no node target** never assumes a node — the agent
-takes scope from the prompt, else asks first.
+**New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
+input. Nothing is prefilled; typing **`[[`** opens the
+node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
+caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
+contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.
+The two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the server derives the node
+(the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
+only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
+else asks first.
 **Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
@@ -74,8 +76,10 @@ zero-config project, and configured profiles add more names. The launcher pick i
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the
-one `POST /api/sessions` — lives in the shared `launch.js`, one path for this tab and the phone's composer
-([[mobile-ui]]); this tab owns only the desktop chrome around it (menus, focus discipline, background fire).
+one `POST /api/sessions` — is shared with the phone's composer ([[mobile-ui]]): both send the raw grammar
+through `launch.js`, while [[launch]]'s backend owner performs the command-plugin invocation for every caller,
+including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
+background fire) and never expands a plugin body itself.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
@@ -120,22 +124,12 @@ forwarding the wheel to the app ([[live-view]] owns the adapter decision), with 
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
 or plain HTTP** (past the secure-context-only Clipboard API).
 
-**The right pane dispatches on the session's `mode`.** Everything above and below describes an *interactive*
-session — the default, and what every record without a mode reads as. A **headless** session ([[launcher-select]]
-pins the mode at creation) has no TUI worth watching: its first tab reads **Chat** instead of Terminal (same
-slot, same tab state; the Eval tab is untouched), and the pane mounts the shared **TimelineChat** — the SAME
-terminal-free conversation body the phone's session detail wraps ([[mobile-ui]] / [[session-timeline]]): the
-persisted timeline as the transcript, refreshed by a poll plus the board push plus every send, with its own
-docked composer. Every dispatch from that composer carries `replyVia:'note'` **silently** — a terminal-free
-reader can only ever read declaration notes, so asking for the reply there is the surface's fixed property,
-exactly as on the phone. Because the chat owns input, the `❯` strip does not render for a headless session and
-the terminal's reserved input-strip height is absent too — the embedded composer reaches the pane's bottom
-instead of stopping above an invisible dock. **Type mode does not exist there** (no button, and the reserved
-chord is inert) — the tab-bar's other lifecycle
-actions (merge, relaunch) keep working unchanged. Headless chats join the warm-mount contract like terminals
-(draft and scroll survive tab switches) but only the *shown* chat polls. On every session-row surface a headless
-session wears the muted **◇** mode mark beside its status glyph — the `MODE_MARK` vocabulary in `harness.jsx`,
-mirroring the CLI `session ls` glyph — while interactive rows stay unmarked (no noise).
+The desktop right pane has **one session shape**: every launched session is an ordinary interactive session,
+so its first tab is Terminal and mounts the warm `SessionTerm` + `❯` input described here. Launchers choose a
+harness and command/auth profile; they do not change the desktop session shape, hide the terminal behind a
+capability placeholder, or replace it with a timeline chat. The phone's terminal-free conversation is a
+property of that viewport's surface ([[mobile-ui]]), not durable session identity. Session rows therefore
+carry only their status and activity vocabulary — no mode mark or other launch-axis badge.
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. An **Enter that commits an IME

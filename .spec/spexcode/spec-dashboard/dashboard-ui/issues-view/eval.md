@@ -120,10 +120,12 @@ scenarios:
       and the docked composer's quiet bordered box (.ds-compose .fv-compose): left edges and right edges.
       Re-measure at a ~780px window; check document/body horizontal overflow at both widths.
     expected: >-
-      The title, body, replies, and the docked composer's quiet bordered box share ONE main column — the
+      The body, replies, and the docked composer's quiet bordered box share ONE main column — the
       same left edge and the same capped width at every viewport,
       wide or narrow: the writing box sits ON the column the prose above establishes, never offset a
-      few px left/right of it and never stretched past the column while the content is capped. The quiet
+      few px left/right of it and never stretched past the column while the content is capped. The title
+      row is the one deliberate exception: it LEADS with the compact back anchor ([[review-chrome]]), so
+      the title text starts after that anchor while the content column below stays put. The quiet
       1px rounded border belongs to the composer box alone. No horizontal overflow at either width. No
       page errors.
   - name: list-page-skeleton

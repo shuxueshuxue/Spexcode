@@ -2023,8 +2023,10 @@ a.scenario-count:hover { background: var(--panel2); }
    image to the column width — shrink-only via each element's own max-inline-size. */
 .an-gallery { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 0; }
 /* the player + stage shrink-wrap the clip they play — the clip renders at its intrinsic size (capped by
-   the column) and the chrome follows it, never the clip stretched to fill the chrome. */
-.an-player { inline-size: fit-content; max-inline-size: 100%; }
+   the column) and the chrome follows it, never the clip stretched to fill the chrome. The player keeps a
+   small usability FLOOR so the control bar under a tiny clip never crushes the scrubber to a sliver —
+   the floor widens only the bar; the stage (fit-content) keeps the clip at native size. */
+.an-player { inline-size: fit-content; min-inline-size: min(360px, 100%); max-inline-size: 100%; }
 .an-stage { position: relative; inline-size: fit-content; max-inline-size: 100%; margin: 12px 0 0; cursor: crosshair; }
 .an-video { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
@@ -2101,6 +2103,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .an-ab-menuitem { grid-template-columns: 16px auto minmax(0, 1fr); }
 .an-ab-menupos { font-variant-numeric: tabular-nums; }
 .an-ab-menudate { color: var(--muted); font-size: var(--type-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* phone width: the visible position label yields — the widest state ("295 / 302") pushed the strip past
+   the viewport. The position stays readable through the pips' and menu rows' aria-labels. */
+@media (max-width: 760px) {
+  .an-ab-pos { display: none; }
+}
 
 /* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }

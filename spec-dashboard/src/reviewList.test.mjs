@@ -285,7 +285,7 @@ test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced
   // media homes may not stretch their children wide (the flex-column default)
   assert.match(css, /\.an-gallery \{ display: flex; flex-direction: column; align-items: flex-start;/)
   assert.match(css, /\.fv-reply-media \{ display: flex; flex-direction: column; align-items: flex-start;/)
-  // the player chrome shrink-wraps the clip it plays
-  assert.match(css, /\.an-player \{ inline-size: fit-content; max-inline-size: 100%; \}/)
+  // the player chrome shrink-wraps the clip it plays, with only a bar-usability floor
+  assert.match(css, /\.an-player \{ inline-size: fit-content; min-inline-size: min\(360px, 100%\); max-inline-size: 100%; \}/)
   assert.match(css, /\.an-stage \{ position: relative; inline-size: fit-content; max-inline-size: 100%;/)
 })

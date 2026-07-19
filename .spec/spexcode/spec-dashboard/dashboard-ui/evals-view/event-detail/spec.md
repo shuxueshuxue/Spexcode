@@ -57,7 +57,9 @@ its native pixels, never stretched or upscaled to fill the column. That law cove
 (the clip stage, the still gallery, a reply's inline frames), no home may flex-stretch its children wide,
 and no evidence — however oversized or tall, at any viewport down to phone width — ever widens the page.
 A shrunk clip keeps its full custom review-track controls and timeline; the player chrome shrink-wraps
-the clip it plays rather than stretching the clip to fill the column. The
+the clip it plays rather than stretching the clip to fill the column, keeping only a small usability
+floor for the control bar — under a tiny clip the scrubber never crushes to a sliver (the floor widens
+the bar alone; the clip still renders at its native size). The
 ONE deliberate specialization is this workspace's **clip player**: the video plays under a **custom
 review-track scrubber** — native chrome replaced so the timeline can carry the review: anchored remarks
 are **markers** on it, the playhead lights the remark it is inside, and clicking a marker (or an anchored

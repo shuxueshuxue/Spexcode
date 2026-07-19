@@ -82,4 +82,7 @@ test('the A/B strip is bounded: a recent window, the current pip always visible,
   const cssText = readFileSync(join(here, 'styles.css'), 'utf8')
   assert.match(cssText, /\.an-ab \{ display: flex; align-items: center; flex-wrap: nowrap;/)
   assert.match(cssText, /\.an-ab-track \{ display: flex; flex-wrap: nowrap;/)
+  // phone width: the visible position label yields (aria-labels keep the position readable), so the
+  // widest old-index state can never push the strip past the viewport
+  assert.match(cssText, /@media \(max-width: 760px\) \{\s*\n\s*\.an-ab-pos \{ display: none; \}\s*\n\}/)
 })

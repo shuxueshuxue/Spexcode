@@ -39,9 +39,11 @@ shows none), the [[human-ok]] settled mark when signed, and the **stale readout*
 reading — the freshness axes that moved, and for the code axis which governed files drifted by how many
 commits ([[eval-core]]'s `codeDrift`; reporting only, never deciding). At phone width the side metadata
 reflows ABOVE the workspace in one column ([[review-chrome]]), and the composer stays a sticky bar at the
-column's foot. A scope switch (another scenario's page) resets the working state — the composer is keyed
-to the (node, scenario) identity, so a half-typed or circle-prefilled remark dies with its page, never
-posting onto another scenario's thread.
+column's foot. The composer's review identity is the source scope + (node, scenario) + currently viewed
+reading: an unrelated board repaint keeps that identity, the A/B cursor, timeline, ordinary typed prose,
+and anchored prefill intact; changing scope, scenario, or A/B reading changes it and remounts the composer,
+so every kind of draft dies before the new evidence is reviewable. A draft can never post onto another
+scope, scenario, or reading.
 
 A reading's evidence is a **LIST**, so every entry renders on the ONE stage — and U1's "one evidence
 detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`** — one kind-dispatch

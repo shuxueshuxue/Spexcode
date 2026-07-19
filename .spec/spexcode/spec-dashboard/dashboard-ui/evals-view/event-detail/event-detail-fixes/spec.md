@@ -3,6 +3,8 @@ title: event-detail-fixes
 status: active
 hue: 200
 desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and eval-page mention outcomes echo like issue replies.
+code:
+  - spec-dashboard/src/evalsPage.test.mjs
 related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/EventDetail.jsx
@@ -45,3 +47,9 @@ The Evals page handles write outcomes from the shared event detail exactly like 
 thread replies: after a successful write it refreshes the board and briefly flashes any mention outcome the
 server returned. This is host responsibility; the shared detail pane emits the write result and does not
 own page-level notices.
+
+The source-contract guardrail pins the cross-module boundaries behind these flows: session-scoped history
+keeps a stable identity across board-only repaints; the composer reads one scope/scenario/reading identity;
+failed session models stay distinct from genuine missing objects; and the desktop shell's session-opening
+callback selects and routes without touching retired Eval view state. Browser YATU remains the product proof;
+the contract test catches state leaks and deleted-state references before they reach a reviewer.

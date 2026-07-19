@@ -133,14 +133,15 @@ function ConfigDrawer({ p, onRefresh, t }) {
   }
 
   const pickIcon = async (icon) => {
-    if (!loaded || iconBusy) return
+    if (!loaded || iconBusy) return false
     const before = pickedIcon
     setPickedIcon(icon); setIconBusy(true); setIconError(null); setSaved(false)
     const r = await saveProjectIcon(p.id, icon, loaded.revision)
     setIconBusy(false)
-    if (!r.ok) { setPickedIcon(before); setIconError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    if (!r.ok) { setPickedIcon(before); setIconError(r.error === 'network' ? t('projects.actionFailed') : r.error); return false }
     setLoaded({ content: r.content, revision: r.revision }); setContent(r.content); setPickedIcon(r.identity.icon); setSaved(true)
     onRefresh()
+    return true
   }
 
   return (
@@ -158,14 +159,6 @@ function ConfigDrawer({ p, onRefresh, t }) {
           </>}
         </div>
       ) : <>
-        <IdentityPicker
-          value={pickedIcon}
-          onChange={pickIcon}
-          label={t('projects.projectIcon')}
-          name={`project-icon-${p.id}`}
-          disabled={busy || iconBusy}
-        />
-        {iconError && <span className="proj-err">{iconError}</span>}
         <textarea
           className={invalid ? 'proj-config-editor invalid' : 'proj-config-editor'}
           value={content}
@@ -182,6 +175,15 @@ function ConfigDrawer({ p, onRefresh, t }) {
           {invalid && <span className="proj-err">{t('projects.configInvalid')}</span>}
           {error && <span className="proj-err">{error}</span>}
         </div>
+        <IdentityPicker
+          value={pickedIcon}
+          onChange={pickIcon}
+          label={t('projects.projectIcon')}
+          editLabel={t('projects.editProjectIcon')}
+          name={`project-icon-${p.id}`}
+          disabled={busy || iconBusy}
+        />
+        {iconError && <span className="proj-err">{iconError}</span>}
       </>}
     </div>
   )
@@ -333,18 +335,27 @@ function GatewayIdentityEditor({ gateway, onRefresh, t }) {
   const [error, setError] = useState(null)
   useEffect(() => { setIcon(gateway.identity.icon) }, [gateway.identity.icon])
   const pick = async (next) => {
-    if (busy || !gateway.revision) return
+    if (busy || !gateway.revision) return false
     const before = icon
     setIcon(next); setBusy(true); setError(null)
     const r = await saveGatewayIcon(next, gateway.revision)
     setBusy(false)
-    if (!r.ok) { setIcon(before); setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    if (!r.ok) { setIcon(before); setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return false }
     setIcon(r.gateway.identity.icon)
     onRefresh()
+    return true
   }
   return (
     <div className="proj-gateway-identity">
-      <IdentityPicker value={icon} onChange={pick} label={t('projects.gatewayIcon')} name="gateway-icon" disabled={busy || !gateway.revision} />
+      <IdentityPicker
+        value={icon}
+        onChange={pick}
+        label={t('projects.gatewayIcon')}
+        editLabel={t('projects.editGatewayIcon')}
+        name="gateway-icon"
+        fallback="gateway"
+        disabled={busy || !gateway.revision}
+      />
       {error && <span className="proj-err">{error}</span>}
     </div>
   )
@@ -417,7 +428,6 @@ export default function ProjectsPage() {
         {!state.adminGated && (
           <div className="proj-hint">{t('projects.adminUngated')}</div>
         )}
-        <GatewayIdentityEditor gateway={state.gateway} onRefresh={refresh} t={t} />
         {drawer === 'add' && (
           <div className="proj-admin-pw">
             <AddProjectForm t={t} onAdded={() => { setDrawer(null); refresh() }} />
@@ -442,6 +452,9 @@ export default function ProjectsPage() {
         ) : (
           <div className="proj-empty"><p>{t('projects.empty')}</p></div>
         )}
+        <div className="proj-page-details" aria-label={t('projects.gatewaySettings')}>
+          <GatewayIdentityEditor gateway={state.gateway} onRefresh={refresh} t={t} />
+        </div>
       </>
     )
   })()

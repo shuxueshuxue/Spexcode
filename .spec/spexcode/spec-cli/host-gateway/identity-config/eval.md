@@ -10,8 +10,9 @@ scenarios:
       host config, records, live instance answers, offline catalog rows, and admin routes.
     expected: >-
       Project identity resolves from only `dashboard.title/icon`; gateway icon resolves from only the host
-      config. Atomic revision-checked structured writes touch their one source, preserve neighboring data,
-      deny guests, and their returned/catalog projections are canonical across live update and restart.
+      config. Atomic revision-checked structured writes accept featured ids and well-formed Iconify names,
+      touch their one source, preserve neighboring data, deny guests, and their returned/catalog projections
+      are canonical across live update and restart.
 ---
 
 File the real integration transcript, not a mocked config object.

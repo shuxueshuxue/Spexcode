@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { basename, dirname, join } from 'node:path'
 import { spexcodeHome } from './layout.js'
 import {
-  resolvedIdentityIcon, DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, requireIdentityPreset,
+  resolvedIdentityIcon, DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, requireIdentityChoice,
 } from './identity-presets.js'
 
 export type ResolvedIdentity = { title: string; icon: string }
@@ -48,7 +48,7 @@ export function readGatewayIdentity(): GatewayIdentitySource {
 }
 
 export function writeGatewayIcon(icon: unknown, revision: string): GatewayIdentitySource {
-  const canonical = requireIdentityPreset(icon)
+  const canonical = requireIdentityChoice(icon)
   const file = hostConfigPath()
   const current = readObject(file)
   if (revision !== revisionOf(current.raw)) {

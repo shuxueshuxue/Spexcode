@@ -12,15 +12,17 @@ scenarios:
       backend registered/killed OUTSIDE the page appear/flip health without a reload; follow a row's
       Open link.
     expected: >
-      The root address renders the Projects hub: one row per REGISTERED project with a probed health dot
-      (running=green via /p/:id/health, unreachable=red), the gated rows wearing the lock. With no admin
-      password the ungated hint shows; setting one through the UI succeeds and the very next catalog
-      poll still answers (the hub rotated the setter's cookie — no logout). Project password set/clear
-      round-trips (PUT/DELETE) and the row's lock badge follows. A registry change made outside the page
-      lands via the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic
-      dashboard renders that project's board through the scoped /p/<id>/api lane, with the rail carrying
-      the current-project chip and the Projects entry. Zero loss = the whole admin loop (see fleet,
-      gate it, enter a project, come back) works in one tab through shareable pathname URLs, against the
+      The root address renders the Projects hub: one row per KNOWN project with an honest liveness dot
+      (running=green via the probed /p/:id/health; a host-validated dead/stopped backend reads a calm
+      grey 'stopped' with Start as the row's primary action; red is reserved for an online-claimed
+      backend the probe cannot reach), the gated rows wearing the lock. With no admin password the
+      ungated hint shows; setting one through the UI succeeds and the very next catalog poll still
+      answers (the hub rotated the setter's cookie — no logout). Project password set/clear round-trips
+      (PUT/DELETE) and the row's lock badge follows. A registry change made outside the page lands via
+      the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic dashboard renders
+      that project's board through the scoped /p/<id>/api lane, with the rail carrying the
+      current-project chip and the Projects entry. Zero loss = the whole admin loop (see fleet, gate
+      it, enter a project, come back) works in one tab through shareable pathname URLs, against the
       real gateway code.
   - name: project-scope-unlock
     tags: [frontend-e2e, desktop]

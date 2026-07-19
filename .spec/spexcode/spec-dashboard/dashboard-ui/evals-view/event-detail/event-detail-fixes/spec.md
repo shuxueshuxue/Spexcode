@@ -17,11 +17,10 @@ related:
 
 ## raw source
 
-The eval detail workspace is a reviewer surface over one selected scenario. Switching that selection must
-change the whole working context, not only the media: a half-authored or circle-prefilled remark belongs to
-the old `(node, scenario)` thread and must disappear before another scenario's composer can send it. The
-shared thread composer is allowed to keep local editing state only inside the identity of the selected
-thread.
+The eval detail workspace is a reviewer surface over one semantic review identity: source scope,
+`(node, scenario)`, and the currently viewed reading. Local composer state belongs to that whole identity,
+not merely to the server-facing remark thread. An unrelated board repaint preserves it; changing scope,
+scenario, or A/B reading clears ordinary and anchored drafts before another context can send them.
 
 The same surface is also a navigation and dispatch surface. A live filer/originator chip names the session
 that filed or opened the thread, so activating it must open that session's console, not the generic new
@@ -30,11 +29,12 @@ one-line outcome must echo on the Evals page just as it does on the Issues page;
 
 ## expanded spec
 
-The event detail and shared thread components treat selection identity as part of composer state. Clearing
-or changing the selected eval clears the composer body and any staged draft so anchored text, circled-frame
-markdown, and evidence links cannot cross from one eval thread into another. The reset is keyed by the
-server-facing thread concern, not by visual row position, so walking the feed, deep-linking, or flipping
-between eval homes preserves the invariant.
+The event detail derives one review identity from source scope + node/scenario + viewed reading and uses it
+as the shared composer's lifetime. A board poll/SSE repaint that recreates props but names the same identity
+preserves A/B position, timeline, ordinary prose, and anchored prefill. A real scope, scenario, or A/B-reading
+change remounts the composer and clears every child-local draft; returning to an earlier scenario starts
+empty rather than reviving a cached draft. The server-facing thread concern still routes writes, but is not
+wide enough to govern reading- or scope-local editing state.
 
 Live session chips route to `#/sessions/<session-id>` for the specific session they name. The session page
 honors that param before echoing its own selected tab back into the URL, and a valid session remains

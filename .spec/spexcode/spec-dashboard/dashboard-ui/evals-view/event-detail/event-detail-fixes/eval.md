@@ -6,12 +6,15 @@ scenarios:
     description: >
       In a real browser on a session-scoped eval detail with A/B history, type plain prose and stamp or
       circle an anchored prefill. Deliver an unrelated board SSE/poll repaint, then flip to another A/B
-      reading and switch to merged scope without sending. Read the composer after every transition.
+      reading and switch to merged scope without sending. Next create ordinary + anchored prose on scenario
+      A, navigate A→B and read B's composer, then return B→A and read A again. Read the composer after every
+      transition.
     expected: >
       The same scope/scenario/reading survives an unrelated board repaint with its exact plain prose and
       anchored prefill. Changing A/B reading or scope clears the composer immediately: no anchored line,
-      circled-frame markdown, evidence link, or plain typed body appears under the new evidence. A scenario
-      change follows the same identity rule, so no draft can post against the wrong review context.
+      circled-frame markdown, evidence link, or plain typed body appears under the new evidence. Scenario B
+      opens empty after A, and returning to A stays empty rather than restoring its discarded draft, so no
+      draft can post against the wrong review context.
   - name: eval-originator-chip-session-route
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/Thread.jsx]

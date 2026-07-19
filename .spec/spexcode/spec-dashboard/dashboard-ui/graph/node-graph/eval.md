@@ -32,6 +32,18 @@ scenarios:
       A tile's handles are fully invisible (computed style transparent/zero-opacity, no border ring) and
       non-interactive, while the parent→child edges still render anchored at the tile edges. Zero loss =
       no butt-circle on any tile edge, `▸N` tabs intact, edge count unchanged.
+  - name: structural-motion-stays-connected
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the graph and drill right into a collapsed branch so children are newly
+      revealed and the existing neighbourhood re-plots. Record the whole transition and inspect frames
+      from its beginning, middle, and end. Track each visible solid parent→child edge against the source
+      and target tile handles while the tiles are moving, then wait through an unchanged graph refresh.
+    expected: >-
+      Newly revealed children unfold outward from their parent's outgoing side and existing tiles glide
+      to their new slots as one connected structure: throughout the transition every solid edge terminates
+      on both moving tiles, with no detached line or teleporting endpoint. The settled layout is unchanged,
+      and a refresh with unchanged geometry does not replay the motion. The filed reading carries video.
 ---
 # eval.md — node-graph
 
@@ -39,4 +51,5 @@ This view is product surface — it is measured by **looking** (YATU), not by a 
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
 the marks and any live editors' avatars on Row 2 — with focus at the graph pane's geometric centre. The
-recording and screenshot ride together with the verdict.
+recording and screenshot ride together with the verdict. Structural-motion readings sample the moving
+frames themselves: a still of the settled graph cannot prove that edges stayed attached in transit.

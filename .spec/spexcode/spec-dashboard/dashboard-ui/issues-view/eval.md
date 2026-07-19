@@ -109,6 +109,23 @@ scenarios:
       Promote/Close issue beside the disabled Send, and for a home with no lifecycle action, such as the
       eval rail composer, idle still shows the disabled Send (plus ⏱ over a clip). Switching to another
       issue clears the draft (keyed to the selection). One shared composer, every home. No page errors.
+  - name: detail-composer-column-alignment
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]
+    description: >-
+      On the running issues page at a wide desktop viewport (~1600px), select an issue with a body and
+      replies. Measure bounding rects of the detail's title (.fvd-head), meta strip, body, a reply, and
+      the docked composer's quiet bordered box (.fvd-compose .fv-compose): left edges and right edges.
+      Read the dock strip's (.fvd-compose) and the box's computed border/background. Re-measure at a
+      ~780px window; check document/body horizontal overflow at both widths.
+    expected: >-
+      The title, meta, body, replies, and the docked composer's quiet bordered box share ONE content
+      column — the same left edge and the same capped width (identical right edges) at every viewport,
+      wide or narrow: the writing box sits ON the column the prose above establishes, never offset a
+      few px left/right of it and never stretched to the pane edge while the content is capped. The
+      dock strip's full-width hairline top border and panel band are the dock's own chrome (the same
+      docked-bar geometry as the eval rail's composer); the quiet 1px rounded border belongs to the
+      composer box alone. No horizontal overflow at either width. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

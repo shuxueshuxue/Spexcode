@@ -2280,6 +2280,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-menu-item.current { color: var(--blue); }
 .proj-menu-item.all { border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; padding-top: 7px; color: var(--muted); }
 .proj-menu-item.all:hover { color: var(--ink2); }
+.proj-menu-mark { display: block; flex: 0 0 16px; width: 16px; height: 16px; }
 .proj-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* narrow viewports: the catalog stays one column; row actions wrap under the name/path line */

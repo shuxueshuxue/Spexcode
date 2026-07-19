@@ -98,6 +98,25 @@ const getCatalog = async (base) => {
 const configIcon = (project) => JSON.parse(readFileSync(join(project.dir, 'spexcode.json'), 'utf8')).dashboard.icon
 const favicon = (page) => page.locator("link[rel~='icon']").evaluate((link) => link.href)
 
+async function assertSwitcherMarks(page) {
+  const menu = page.locator('.proj-menu')
+  await menu.waitFor()
+  const atlasItem = menu.getByRole('menuitem', { name: 'Atlas Lab', exact: true })
+  const rocketItem = menu.getByRole('menuitem', { name: 'Rocket Yard', exact: true })
+  const allItem = menu.getByRole('menuitem', { name: 'All projects', exact: true })
+  assert.equal(await menu.getByRole('menuitem').count(), 3)
+  for (const item of [atlasItem, rocketItem, allItem]) {
+    const mark = item.locator(':scope > .proj-menu-mark')
+    assert.equal(await mark.count(), 1)
+    const box = await mark.boundingBox()
+    assert.deepEqual(box && { width: box.width, height: box.height }, { width: 16, height: 16 })
+  }
+  assert.equal(await atlasItem.locator(':scope > svg').count(), 2, 'current project keeps its trailing checkmark')
+  assert.notEqual(await atlasItem.locator('.proj-menu-mark').innerHTML(), await rocketItem.locator('.proj-menu-mark').innerHTML())
+  assert.notEqual(await allItem.locator('.proj-menu-mark').innerHTML(), await rocketItem.locator('.proj-menu-mark').innerHTML())
+  return { menu, rocketItem }
+}
+
 const atlas = makeProject('atlas', 'Atlas Lab', 'compass')
 const rocket = makeProject('rocket', 'Rocket Yard', 'mdi:rocket-launch')
 writeFileSync(join(home, 'config.json'), '{\n  "gateway": { "icon": "database" }\n}\n')
@@ -150,9 +169,9 @@ try {
   step('change gateway icon by keyboard')
   const gatewayPicker = page.getByRole('group', { name: 'gateway icon' })
   await gatewayPicker.getByRole('radio', { name: 'Database' }).focus()
-  await page.keyboard.press('ArrowRight')
-  await waitFor(() => gatewayPicker.getByRole('radio', { name: 'Spark' }).isChecked(), 'gateway keyboard pick')
-  await waitFor(() => Promise.resolve(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).gateway.icon === 'spark'), 'gateway config write')
+  await page.keyboard.press('ArrowLeft')
+  await waitFor(() => gatewayPicker.getByRole('radio', { name: 'Package' }).isChecked(), 'gateway keyboard pick')
+  await waitFor(() => Promise.resolve(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).gateway.icon === 'package'), 'gateway config write')
 
   step('change project icon by keyboard')
   const atlasRow = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })
@@ -176,9 +195,13 @@ try {
   assert.notEqual(atlasHref, gatewayBefore)
   assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Atlas Lab/)
 
-  step('switch to rocket')
+  step('switcher identity marks')
   await page.locator('.proj-chip').click()
-  await page.getByRole('menuitem', { name: /Rocket Yard/ }).click()
+  const desktopSwitcher = await assertSwitcherMarks(page)
+  await page.screenshot({ path: join(out, 'atlas-switcher-desktop-dracula.png'), fullPage: true })
+
+  step('switch to rocket')
+  await desktopSwitcher.rocketItem.click()
   await page.locator('.side-rail').waitFor()
   await waitFor(async () => (await page.title()) === 'Rocket Yard · SpexCode', 'rocket title')
   const rocketHref = await favicon(page)
@@ -221,14 +244,24 @@ try {
   await startGateway()
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
-  assert.equal(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).gateway.icon, 'spark')
+  assert.equal(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).gateway.icon, 'package')
   assert.equal(configIcon(atlas), 'spark')
   assert.equal(configIcon(rocket), 'mdi:rocket-launch')
+  const gatewayFinalHref = await favicon(page)
+  assert.notEqual(gatewayFinalHref, gatewayBefore)
+
+  step('narrow themed switcher')
+  await page.setViewportSize({ width: 700, height: 844 })
+  await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'everforest') })
+  await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.side-rail').waitFor()
+  await page.locator('.proj-chip').click()
+  await assertSwitcherMarks(page)
+  await page.screenshot({ path: join(out, 'atlas-switcher-narrow-everforest.png'), fullPage: true })
 
   step('mobile themed views')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'everforest') })
-  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
   await page.screenshot({ path: join(out, 'projects-mobile-everforest.png'), fullPage: true })
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
@@ -262,7 +295,7 @@ try {
     [atlas.id]: 'spark',
     [rocket.id]: 'mdi:rocket-launch',
   })
-  assert.equal(catalog.gateway.icon, 'spark')
+  assert.equal(catalog.gateway.icon, 'package')
 
   step('complete')
   writeFileSync(join(out, 'timeline.json'), `${JSON.stringify({ v: 2, axis: 'time', events }, null, 2)}\n`)
@@ -277,9 +310,16 @@ try {
     `gateway=${catalog.gateway.icon}`,
     `atlas=${atlas.id}:spark`,
     `rocket=${rocket.id}:mdi:rocket-launch`,
+    'gatewayTitle=Projects · SpexCode',
+    'atlasTitle=Atlas Lab · SpexCode',
+    'rocketTitle=Rocket Yard · SpexCode',
+    `gatewayFavicon=${gatewayFinalHref}`,
+    `atlasFavicon=${await favicon(page)}`,
+    `rocketFavicon=${rocketHref}`,
     'desktop=minimal,dracula',
     'mobile=everforest@390px',
     'keyboard=gateway+project native radios',
+    'switcher=project+gateway marks, 16px aligned, current check retained',
     'persistence=offline edit+backend restart+gateway restart',
     'guest=catalog 401, no switcher menu',
   ].join('\n') + '\n')

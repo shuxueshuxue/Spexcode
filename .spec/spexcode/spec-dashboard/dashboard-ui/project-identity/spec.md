@@ -28,4 +28,6 @@ only on the admin Projects face and call the host's structured writes.
 Every visible projection consumes the selected resolved identity: global branding and tab metadata use the
 gateway; project rows, switcher rows, scoped current-project mark, tab metadata, session header, and graph
 brand use the scoped project. A catalog refresh changes those projections live without copying icon state
-into a route or browser preference.
+into a route or browser preference. The project switcher renders each catalog project's identity in one
+fixed mark slot before its name and renders the catalog gateway identity for its global Projects row;
+locks and the current-project check remain independent trailing/adjacent status projections.

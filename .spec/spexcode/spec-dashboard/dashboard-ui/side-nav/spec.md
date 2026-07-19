@@ -68,7 +68,9 @@ restores the list.
   ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
   project-owned page entries. Its mark and label come from the route-matched [[project-identity]], never
   an initial derived from whichever board loaded last. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
-  switching plus an "All projects" door to the global `/projects` hub; it never adds a Projects rail page
+  switching plus an "All projects" door to the global `/projects` hub. Every menu row leads with the
+  catalog identity mark in one aligned slot — project marks for project rows, gateway mark for the global
+  row — while its accessible name and current check remain intact. It never adds a Projects rail page
   or mounts project management inside the scoped shell. When the catalog is denied the chip still names
   the current project but carries no menu, so a direct-project guest never sees the fleet or any global
   admin affordance: the gate is absence of data, not a hidden element.

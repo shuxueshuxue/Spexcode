@@ -1,10 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { loadGraph, subscribeBoardLive, loadIssues, projectTitle, projectIcon, faviconHref } from './data.js'
+import { loadGraph, subscribeBoardLive, loadIssues, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
-import { loadProjects } from './projects.js'
+import { CATALOG_POLL_MS, loadProjects, selectGatewayIdentity, selectProjectIdentity } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { useT } from './i18n/index.jsx'
+import {
+  DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, identityFaviconHref,
+} from './IdentityIcon.jsx'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
@@ -39,11 +42,19 @@ export default function App() {
   // a gated scope's 401 ([[projects-hub]]): the reason string when the board is behind a credential —
   // renders the shared CredentialGate instead of the load-error panel; cleared the moment a board lands.
   const [authNeeded, setAuthNeeded] = useState(null)
-  // the one boot-time catalog probe ([[projects-hub]]): null while in flight, then loadProjects()'s
-  // result. It decides the global /projects face and feeds the scoped rail's project selector;
-  // the ProjectsPage keeps its own live poll — this probe is a snapshot, not a subscription.
+  // the shared catalog projection ([[projects-hub]]): null before the first read, then refreshed on the
+  // same cadence as ProjectsPage. It picks the global face and feeds scoped rail/title/favicon identity,
+  // so an admin edit in another tab arrives live without an icon-specific cache.
   const [projAccess, setProjAccess] = useState(null)
-  useEffect(() => { loadProjects().then(setProjAccess).catch(() => setProjAccess({ state: 'absent' })) }, [])
+  useEffect(() => {
+    let live = true
+    const refresh = () => loadProjects()
+      .then((result) => { if (live) setProjAccess(result) })
+      .catch(() => { if (live) setProjAccess({ state: 'absent' }) })
+    refresh()
+    const id = setInterval(refresh, CATALOG_POLL_MS)
+    return () => { live = false; clearInterval(id) }
+  }, [])
   // the issues list is RESIDENT beside the board (one data path — the issues page renders instantly from
   // app-held state instead of cold-fetching per mount). Freshness inherits the board's own pattern: a
   // push/change signal triggers a throttled refetch, the 15s cold lane backstops (forge-cache updates
@@ -91,8 +102,9 @@ export default function App() {
   // it resolves, the board machinery below stands down — the hub has no board, so its stream/poll would
   // only hammer a surface that answers HTML.
   const hub = !PROJECT_ID && !board && !!projAccess && projAccess.state !== 'absent'
+  const facePending = !PROJECT_ID && !board && projAccess === null
   useEffect(() => {
-    if (hub) return
+    if (hub || facePending) return
     reload()
     reloadIssues(true)
     const unsub = subscribeBoardLive({
@@ -101,28 +113,28 @@ export default function App() {
     })
     const id = setInterval(() => { reload(); reloadIssues() }, 15000)
     return () => { unsub(); clearInterval(id); clearTimeout(issuesTrail.current); issuesTrail.current = null }
-  }, [reload, reloadIssues, hub])
+  }, [reload, reloadIssues, hub, facePending])
+  const boardIdentity = projectIdentity(board)
+  const identity = PROJECT_ID
+    ? selectProjectIdentity(PROJECT_ID, projAccess, boardIdentity)
+    : hub
+      ? selectGatewayIdentity(projAccess)
+      : boardIdentity
   useEffect(() => {
-    const name = projectTitle(board)
-    if (name) document.title = `${name} · SpexCode`
-  }, [board?.project])
-  // the hub face has no board to name the tab from — it titles itself as the catalog.
+    document.title = identity.title ? `${identity.title} · SpexCode` : 'SpexCode'
+  }, [identity.title])
   useEffect(() => {
-    if (!board && !PROJECT_ID && projAccess && projAccess.state !== 'absent') document.title = 'Projects · SpexCode'
-  }, [board, projAccess])
-  useEffect(() => {
-    // [[tab-icon]] - a configured dashboard.icon sets the tab favicon at runtime; empty keeps the html default.
-    const href = faviconHref(projectIcon(board))
-    if (!href) return
+    const fallback = hub ? DEFAULT_GATEWAY_ICON : DEFAULT_PROJECT_ICON
+    const href = identityFaviconHref(identity.icon, fallback)
     let link = document.querySelector("link[rel~='icon']")
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
     link.setAttribute('href', href)
-  }, [board?.projectIcon])
+  }, [identity.icon, hub])
   // a 401'd scope shows the unified credential card, wherever it strikes: pre-board it is the whole
   // face; a mid-session lock (an admin just set a password) also re-gates — a 401 means every surface
   // (poll, stream, terminal socket) is dead until the unlock, so keeping a stale board up would lie.
   if (authNeeded && PROJECT_ID) {
-    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={projectTitle(board) || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={identity.title || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
   }
   if (!board) {
     // the hub face: the catalog page IS the app (see the `hub` pick above). A single-project serve /
@@ -153,7 +165,7 @@ export default function App() {
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesData={issuesData} reloadIssues={reloadIssues} reloadBoard={reload} />
-        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} issuesData={issuesData} reloadIssues={reloadIssues} catalog={projAccess} />}
+        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} identity={identity} issuesData={issuesData} reloadIssues={reloadIssues} catalog={projAccess} />}
     </Suspense>
   )
 }

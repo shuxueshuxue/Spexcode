@@ -142,20 +142,13 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
 }
 
-// the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.
-export const projectTitle = (board) => board?.project || ''
-
-// @@@ favicon source ([[tab-icon]]) - the configured dashboard.icon rides the board as board.projectIcon.
-// Three painless forms, NONE needing a downloaded/vendored asset: a full URL (used as-is), an Iconify
-// name `set:name` → its CDN SVG (api.iconify.design, 200k+ icons), or anything else treated as an emoji/
-// glyph rendered into an inline SVG data-URI (zero network). Empty → '' so the html default stands.
-export const projectIcon = (board) => board?.projectIcon || ''
-export function faviconHref(icon) {
-  if (!icon) return ''
-  if (/^https?:\/\//.test(icon)) return icon
-  if (/^[a-z0-9-]+[:/][a-z0-9-]+$/i.test(icon)) return `https://api.iconify.design/${icon.replace(':', '/')}.svg`
-  return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${icon}</text></svg>`)
-}
+// The backend carries one resolved identity object. Legacy fields remain read-only compatibility for a
+// rolling frontend/backend deploy; every current consumer receives the one {title, icon} projection.
+export const projectIdentity = (board) => ({
+  title: board?.identity?.title || board?.project || '',
+  icon: board?.identity?.icon || board?.projectIcon || 'spexcode',
+})
+export const projectTitle = (board) => projectIdentity(board).title
 
 // the ONE way to build a `/api/sessions/:id/*` URL — the session-side twin of specUrl, same invariant:
 // the id is the sole encoded segment, fixed route words append verbatim.

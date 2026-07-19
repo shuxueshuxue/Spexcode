@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
@@ -51,7 +51,14 @@ export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, on
 export function useFold() {
   const [expanded, setExpanded] = useState(() => new Set())
   const toggle = (id) => setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  return { expanded, toggle }
+  const expand = useCallback((ids) => setExpanded((prev) => {
+    const missing = ids.filter((id) => id && !prev.has(id))
+    if (!missing.length) return prev
+    const next = new Set(prev)
+    missing.forEach((id) => next.add(id))
+    return next
+  }), [])
+  return { expanded, toggle, expand }
 }
 
 // THE session row face — ONE face for every list surface, desktop and mobile: the headline plus a single

@@ -87,6 +87,23 @@ export function nestSessions(sessions) {
   return { roots, childrenOf }
 }
 
+// Present ancestors of one session, nearest first. This mirrors nestSessions' rule that a missing parent
+// makes its child a root, and bounds malformed cycles so an external jump can safely reveal the row.
+export function sessionAncestorIds(sessions, id) {
+  const byId = new Map(sessions.map((s) => [s?.id, s]))
+  const ids = []
+  const seen = new Set([id])
+  let cur = byId.get(id)
+  while (cur?.parent && !seen.has(cur.parent)) {
+    const parent = byId.get(cur.parent)
+    if (!parent) break
+    ids.push(parent.id)
+    seen.add(parent.id)
+    cur = parent
+  }
+  return ids
+}
+
 // @@@ subtree rollup ([[session-nesting]]) — the disclosure-triangle COLOUR: a PURELY informational summary of
 // the hidden subtree that must NOT touch the parent's own status/glyph/zone/sort. Dark-yellow if ANY descendant
 // needs attention (the needs-you zone, error folded in — the widest signal wins); else green if any descendant

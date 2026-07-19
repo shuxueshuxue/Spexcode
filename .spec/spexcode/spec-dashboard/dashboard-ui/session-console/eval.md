@@ -488,6 +488,21 @@ scenarios:
       put since the session is already selected). Clicking a different live session's chip navigates to
       #/sessions/<id> and lands on that session's console. Baseline bug: same-session clicks did nothing —
       setSessionSel was already set and navigate() saw an identical hash, so the openable chip was a no-op.
+  - name: external-open-reveals-nested-session
+    tags: [frontend-e2e, desktop]
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/NodeContextMenu.jsx, spec-dashboard/src/SessionWindow.jsx, spec-dashboard/src/session.js]
+    description: >-
+      Through the running dashboard in a real browser, open a nested child session in the console, then
+      collapse its ancestor so the selected child row is no longer visible. Return to the graph, right-click
+      a spec node carrying that child's overlay, and choose the child's session item from the node menu.
+      Record the whole interaction as video and inspect the console's nesting rows after navigation settles.
+    expected: >-
+      The node-menu pick opens the requested child's console and automatically unfolds every present ancestor
+      in its nesting path. The child row is visible and selected (`.si-item.on`), each ancestor fold pod is
+      open, and the terminal pane belongs to that child. The console never shows a selected session whose row
+      remains hidden behind a collapsed parent. Ordinary ↑/↓ navigation still walks only visible rows, and
+      the user may manually collapse the branch again after the reveal.
 ---
 
 # session-console — yatsu

@@ -1,196 +1,91 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
-import { Icon, IconButton, ClaudeCodeGlyph, CodexGlyph, OpencodeGlyph, PiGlyph } from './icons.jsx'
-import { loadProjects, addProject, initProject, startProject, doctorProject, setProjectPassword, clearProjectPassword } from './projects.js'
+import { Icon, IconButton } from './icons.jsx'
+import { loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword, setAdminPassword, clearAdminPassword } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
 
-// The Projects management page ([[projects-hub]]) — the catalog face of the multi-project gateway: one
-// row per registered project with its live health, plus the graphical management verbs (add-repository
-// with an EXPLICIT harness choice, init, doctor, start, per-project password set/clear) and Open as a
-// plain project-scoped link (`/p/<id>/#/graph` — the address bar stays the shareable URL; switching
-// projects is ordinary same-tab navigation, extra tabs optional, never required). It renders in two
+// The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
+// ([[gateway-hub]]): one row per REGISTERED project (the registry is the machine's live backend records —
+// a project appears by running `spex serve` in its repo, so there is no add/init verb here; the empty
+// state says exactly that), each with a probed health dot, its gating state, a password set/clear drawer
+// (PUT/DELETE, admin scope), and Open as a plain project-scoped link (`/p/<id>/#/graph` — the address bar
+// stays the shareable URL; switching projects is ordinary same-tab navigation, extra tabs optional, never
+// required). The header carries the ADMIN password control: `adminGated:false` means management is
+// implicit-loopback-only, so the page offers the bootstrap ("set an admin password to sign in remotely" —
+// the hub keeps the setter signed in by rotating their cookie in the same response). It renders in two
 // places from one component: as the hub face at `/` (standalone) and as the `#/projects` routed page
-// inside a scoped dashboard. Freshness is a plain poll — the catalog re-reads every few seconds while
-// mounted, so registration, disappearance, and health flips land on their own ([[dashboard-shell]]'s
-// board keeps its heavier push machinery; the catalog is small and root-scoped, a poll is proportionate).
-// An 'admin-login'/'locked' catalog answer renders the shared CredentialGate in place — the same card the
-// project unlock uses — and a project-scope visitor simply never reaches this page (the rail hides it
-// when the catalog is denied), so the catalog is never revealed to a direct-project guest.
-
-const HARNESSES = [
-  { id: 'claude', label: 'Claude Code', Glyph: ClaudeCodeGlyph },
-  { id: 'codex', label: 'Codex', Glyph: CodexGlyph },
-  { id: 'opencode', label: 'opencode', Glyph: OpencodeGlyph },
-  { id: 'pi', label: 'pi', Glyph: PiGlyph },
-]
+// inside a scoped dashboard. Freshness is a plain poll (catalog every few seconds; health re-probed per
+// row through the authorized /p/:id lane), so registration, disappearance, and health flips land on
+// their own. An 'admin-login'/'locked' catalog answer renders the shared CredentialGate in place — the
+// same card the project unlock uses — and a project-scope visitor never reaches this page at all (the
+// rail hides it when the catalog is denied), so the catalog is never revealed to a direct-project guest.
 
 const POLL_MS = 5000
 
-function HarnessPicker({ value, onChange, t }) {
+// a small set/clear password drawer — one shape for the admin credential and every project row.
+function PasswordForm({ onSet, onClear, placeholder, busy, t }) {
+  const [pw, setPw] = useState('')
   return (
-    <div className="proj-harnesses" role="group" aria-label={t('projects.harnessLabel')}>
-      {HARNESSES.map(({ id, label, Glyph }) => {
-        const on = value.includes(id)
-        return (
-          <button
-            key={id}
-            type="button"
-            className={on ? 'proj-harness on' : 'proj-harness'}
-            aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((h) => h !== id) : [...value, id])}
-          >
-            <Glyph />
-            <span>{label}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-// the add-repository form: a path, an explicit harness choice, one POST. Errors render inline and loud.
-function AddForm({ onDone, t }) {
-  const [path, setPath] = useState('')
-  const [harnesses, setHarnesses] = useState(['claude'])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!path.trim() || !harnesses.length || busy) return
-    setBusy(true); setError(null)
-    const r = await addProject(path.trim(), harnesses)
-    setBusy(false)
-    if (r.ok) { setPath(''); onDone() }
-    else setError(r.error || t('projects.addFailed'))
-  }
-  return (
-    <form className="proj-add" onSubmit={submit}>
-      <div className="proj-add-row">
-        <input
-          className="proj-add-path"
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          placeholder={t('projects.pathPlaceholder')}
-          aria-label={t('projects.pathLabel')}
-          spellCheck={false}
-        />
-        <button className="proj-act primary" type="submit" disabled={busy || !path.trim() || !harnesses.length}>
-          {busy ? t('projects.adding') : t('projects.addConfirm')}
-        </button>
-      </div>
-      <HarnessPicker value={harnesses} onChange={setHarnesses} t={t} />
-      {!harnesses.length && <div className="proj-err">{t('projects.harnessRequired')}</div>}
-      {error && <div className="proj-err">{error}</div>}
+    <form
+      className="proj-drawer proj-pw"
+      onSubmit={(e) => { e.preventDefault(); if (pw) { onSet(pw); setPw('') } }}
+    >
+      <input
+        className="proj-add-path"
+        type="password"
+        value={pw}
+        onChange={(e) => setPw(e.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
+      <button className="proj-act primary" type="submit" disabled={!pw || busy}>{t('projects.passwordSet')}</button>
+      <button className="proj-act" type="button" disabled={busy} onClick={onClear}>{t('projects.passwordClear')}</button>
     </form>
   )
 }
 
-// one catalog row. `panel` is the row's single expandable drawer: null | 'doctor' | 'password' | 'init' —
-// one at a time so the list keeps its density.
-function ProjectRow({ p, onRefresh, t }) {
-  const [panel, setPanel] = useState(null)
-  const [busy, setBusy] = useState(null) // the verb in flight, for per-action busy text
-  const [doctorOut, setDoctorOut] = useState(null)
-  const [pw, setPw] = useState('')
-  const [initHarnesses, setInitHarnesses] = useState(['claude'])
+function ProjectRow({ p, health, onRefresh, t }) {
+  const [panel, setPanel] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const current = p.id === PROJECT_ID
-
-  const run = async (verb, fn) => {
-    setBusy(verb); setError(null)
+  const run = async (fn) => {
+    setBusy(true); setError(null)
     const r = await fn()
-    setBusy(null)
-    if (!r.ok) setError(r.error || t('projects.actionFailed', { action: verb }))
+    setBusy(false)
+    if (!r.ok) setError(r.error || t('projects.actionFailed'))
+    else setPanel(false)
     onRefresh()
-    return r
   }
-  const runDoctor = async () => {
-    setPanel('doctor'); setDoctorOut(null)
-    const r = await run('doctor', () => doctorProject(p.id))
-    setDoctorOut(r.output || r.report || (r.ok ? t('projects.doctorEmpty') : ''))
-  }
-  const healthKnown = ['running', 'stopped', 'unreachable'].includes(p.health)
-
   return (
     <li className={current ? 'proj-row current' : 'proj-row'}>
       <div className="proj-row-main">
-        <span className={`proj-health h-${p.health}`} data-tip={healthKnown ? t(`projects.health.${p.health}`) : p.health} />
+        <span className={`proj-health h-${health || 'probing'}`} data-tip={t(`projects.health.${health || 'probing'}`)} />
         <span className="proj-name">{p.name}</span>
-        {p.locked && <Icon name="lock" size={12} className="proj-locked" />}
+        {p.gated && <Icon name="lock" size={12} className="proj-locked" />}
         {current && <span className="proj-tag">{t('projects.current')}</span>}
-        <span className="proj-path" title={p.path}>{p.path}</span>
+        <span className="proj-path" title={p.id}>{p.id}</span>
         <span className="proj-actions">
-          {!p.initialized && (
-            <button className="proj-act" onClick={() => { setPanel(panel === 'init' ? null : 'init'); setError(null) }}>
-              {t('projects.init')}
-            </button>
-          )}
-          {p.health !== 'running' && (
-            <button className="proj-act" disabled={busy === 'start'} onClick={() => run('start', () => startProject(p.id))}>
-              {busy === 'start' ? t('projects.starting') : t('projects.start')}
-            </button>
-          )}
-          <button className="proj-act" disabled={busy === 'doctor'} onClick={runDoctor}>
-            {busy === 'doctor' ? t('projects.doctorRunning') : t('projects.doctor')}
-          </button>
           <IconButton
             icon="lock"
             label={t('projects.passwordTitle')}
-            className={panel === 'password' ? 'proj-act icon on' : 'proj-act icon'}
+            className={panel ? 'proj-act icon on' : 'proj-act icon'}
             size={13}
-            onClick={() => { setPanel(panel === 'password' ? null : 'password'); setError(null) }}
+            onClick={() => { setPanel((v) => !v); setError(null) }}
           />
           <a className="proj-act primary" href={projectHref(p.id)}>{t('projects.open')}</a>
         </span>
       </div>
       {error && <div className="proj-err">{error}</div>}
-      {panel === 'doctor' && (
-        <div className="proj-drawer">
-          {doctorOut === null ? <span className="proj-dim">{t('projects.doctorRunning')}</span> : <pre className="proj-doctor-out">{doctorOut}</pre>}
-          <button className="proj-act" onClick={() => setPanel(null)}>{t('projects.close')}</button>
-        </div>
-      )}
-      {panel === 'password' && (
-        <form
-          className="proj-drawer proj-pw"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (!pw) return
-            const r = await run('password', () => setProjectPassword(p.id, pw))
-            if (r.ok) { setPw(''); setPanel(null) }
-          }}
-        >
-          <input
-            className="proj-add-path"
-            type="password"
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-            placeholder={t('projects.passwordPlaceholder')}
-            aria-label={t('projects.passwordTitle')}
-          />
-          <button className="proj-act primary" type="submit" disabled={!pw || busy === 'password'}>{t('projects.passwordSet')}</button>
-          <button
-            className="proj-act"
-            type="button"
-            disabled={busy === 'password'}
-            onClick={async () => { const r = await run('password', () => clearProjectPassword(p.id)); if (r.ok) setPanel(null) }}
-          >
-            {t('projects.passwordClear')}
-          </button>
-        </form>
-      )}
-      {panel === 'init' && (
-        <div className="proj-drawer proj-init">
-          <HarnessPicker value={initHarnesses} onChange={setInitHarnesses} t={t} />
-          <button
-            className="proj-act primary"
-            disabled={busy === 'init' || !initHarnesses.length}
-            onClick={async () => { const r = await run('init', () => initProject(p.id, initHarnesses)); if (r.ok) setPanel(null) }}
-          >
-            {busy === 'init' ? t('projects.initRunning') : t('projects.initConfirm')}
-          </button>
-        </div>
+      {panel && (
+        <PasswordForm
+          t={t}
+          busy={busy}
+          placeholder={t('projects.passwordPlaceholder')}
+          onSet={(pw) => run(() => setProjectPassword(p.id, pw))}
+          onClear={() => run(() => clearProjectPassword(p.id))}
+        />
       )}
     </li>
   )
@@ -199,15 +94,23 @@ function ProjectRow({ p, onRefresh, t }) {
 export default function ProjectsPage({ standalone = false }) {
   const t = useT()
   const [state, setState] = useState({ kind: 'loading' }) // loading | ok | denied | absent
-  const [adding, setAdding] = useState(false)
+  const [health, setHealth] = useState({})                // id → 'running' | 'unreachable' (probed)
+  const [adminPanel, setAdminPanel] = useState(false)
+  const [adminBusy, setAdminBusy] = useState(false)
+  const [adminErr, setAdminErr] = useState(null)
   const seq = useRef(0)
 
   const refresh = useCallback(async () => {
     const mine = ++seq.current
     const r = await loadProjects()
     if (mine !== seq.current) return // freshest-issued wins, same guard as the board
-    if (r.state === 'ok') setState({ kind: 'ok', projects: r.projects })
-    else if (r.state === 'denied') setState({ kind: 'denied', reason: r.reason })
+    if (r.state === 'ok') {
+      setState({ kind: 'ok', adminGated: r.adminGated, projects: r.projects })
+      // health rides its own probes through the authorized /p/:id lane — concurrent, freshest wins per id
+      r.projects.forEach((p) => {
+        probeProjectHealth(p.id).then((h) => { if (mine === seq.current) setHealth((m) => ({ ...m, [p.id]: h })) })
+      })
+    } else if (r.state === 'denied') setState({ kind: 'denied', reason: r.reason })
     else setState((s) => (s.kind === 'ok' ? s : { kind: 'absent' })) // a transient miss keeps the last catalog
   }, [])
 
@@ -220,6 +123,15 @@ export default function ProjectsPage({ standalone = false }) {
     document.addEventListener('visibilitychange', onVis)
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
   }, [refresh])
+
+  const runAdmin = async (fn) => {
+    setAdminBusy(true); setAdminErr(null)
+    const r = await fn()
+    setAdminBusy(false)
+    if (!r.ok) setAdminErr(r.error || t('projects.actionFailed'))
+    else setAdminPanel(false)
+    refresh()
+  }
 
   const body = (() => {
     if (state.kind === 'loading') return <div className="loading">{t('hud.loading')}</div>
@@ -235,14 +147,28 @@ export default function ProjectsPage({ standalone = false }) {
       <>
         <div className="proj-head">
           <span className="proj-count">{t('projects.count', { n: state.projects.length })}</span>
-          <button className={adding ? 'proj-act on' : 'proj-act'} onClick={() => setAdding((v) => !v)}>
-            <Icon name={adding ? 'x' : 'plus'} size={13} /> {adding ? t('projects.addCancel') : t('projects.add')}
+          <button className={adminPanel ? 'proj-act on' : 'proj-act'} onClick={() => { setAdminPanel((v) => !v); setAdminErr(null) }}>
+            <Icon name="lock" size={12} /> {t('projects.adminPassword')}
           </button>
         </div>
-        {adding && <AddForm t={t} onDone={() => { setAdding(false); refresh() }} />}
+        {!state.adminGated && (
+          <div className="proj-hint">{t('projects.adminUngated')}</div>
+        )}
+        {adminPanel && (
+          <div className="proj-admin-pw">
+            <PasswordForm
+              t={t}
+              busy={adminBusy}
+              placeholder={t('projects.adminPasswordPlaceholder')}
+              onSet={(pw) => runAdmin(() => setAdminPassword(pw))}
+              onClear={() => runAdmin(() => clearAdminPassword())}
+            />
+            {adminErr && <div className="proj-err">{adminErr}</div>}
+          </div>
+        )}
         {state.projects.length ? (
           <ul className="proj-list">
-            {state.projects.map((p) => <ProjectRow key={p.id} p={p} onRefresh={refresh} t={t} />)}
+            {state.projects.map((p) => <ProjectRow key={p.id} p={p} health={health[p.id]} onRefresh={refresh} t={t} />)}
           </ul>
         ) : (
           <div className="proj-empty"><p>{t('projects.empty')}</p></div>

@@ -68,7 +68,7 @@ function ProjectChip({ name, projects, t }) {
               className={p.id === PROJECT_ID ? 'proj-menu-item current' : 'proj-menu-item'}
               href={projectHref(p.id)}
             >
-              <span className={`proj-health h-${p.health}`} />
+              {p.gated && <Icon name="lock" size={11} />}
               <span className="proj-menu-name">{p.name}</span>
               {p.id === PROJECT_ID && <Icon name="check" size={12} />}
             </a>

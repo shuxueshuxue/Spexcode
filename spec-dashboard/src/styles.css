@@ -2289,23 +2289,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-act:disabled { opacity: 0.5; cursor: default; }
 .proj-act.icon { padding: 3px 6px; }
 
-/* add-repository form */
-.proj-add { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
-.proj-add-row { display: flex; gap: 8px; }
+/* the shared inline drawer input (password forms) */
 .proj-add-path {
   flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--type-control); color: var(--ink);
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px;
 }
 .proj-add-path:focus { outline: none; border-color: var(--blue); }
-.proj-harnesses { display: flex; flex-wrap: wrap; gap: 6px; }
-.proj-harness {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  font-family: var(--mono); font-size: var(--type-meta); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; background: var(--paper);
-}
-.proj-harness .si-agent-glyph { width: 13px; height: 13px; fill: currentColor; }
-.proj-harness:hover { border-color: var(--blue); color: var(--blue); }
-.proj-harness.on { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+
+/* admin-password bootstrap hint + panel */
+.proj-hint { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); border: 1px dashed var(--line); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; }
+.proj-admin-pw { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 4px 12px 10px; margin-bottom: 12px; }
+.proj-admin-pw .proj-drawer { border-top: none; margin-top: 0; padding-top: 6px; }
 
 /* catalog rows */
 .proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -2313,6 +2307,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-row.current { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .proj-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .proj-health { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.proj-health.h-probing { background: var(--muted); opacity: 0.45; }
 .proj-health.h-running { background: var(--green); }
 .proj-health.h-stopped { background: var(--muted); }
 .proj-health.h-unreachable { background: var(--red); }
@@ -2324,11 +2319,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* the row's one-at-a-time drawer (doctor report / password / init) */
 .proj-drawer { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); margin-top: 7px; padding-top: 8px; }
-.proj-doctor-out {
-  flex: 1 1 100%; margin: 0; max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink);
-  background: var(--term-bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px;
-}
+
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 
 /* --- the rail's current-project selector chip + switcher menu --- */
@@ -2360,5 +2351,4 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   .proj-row-main { row-gap: 6px; }
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }
-  .proj-add-row { flex-direction: column; }
 }

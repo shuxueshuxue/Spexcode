@@ -35,7 +35,10 @@ export function aggregateState(states) {
   return 'pass'                                     // every declared scenario fresh & passing
 }
 
-export function ScenarioCount({ scenarios, evals }) {
+// `href` turns the count into a REAL anchor — the node's aggregate entry into the Evals LIST filtered to
+// it (the caller mints the href through the one address helper, `evalAddress(nodeId)` with no scenario).
+// Without `href` (the graph tile, whose click belongs to the board) it stays a passive glyph.
+export function ScenarioCount({ scenarios, evals, href }) {
   const t = useT()
   const states = scenarioStates(scenarios, evals)
   if (!states.length) return null
@@ -43,7 +46,10 @@ export function ScenarioCount({ scenarios, evals }) {
   const satisfied = states.filter((s) => s.state === 'pass').length
   const total = states.length
   const label = t('score.count', { satisfied, total, outstanding: total - satisfied })
-  return <span className={`scenario-count ${state}`} data-tip={label} aria-label={label}><Icon name="check" size={11} />{satisfied}/{total}</span>
+  const body = <><Icon name="check" size={11} />{satisfied}/{total}</>
+  if (!href) return <span className={`scenario-count ${state}`} data-tip={label} aria-label={label}>{body}</span>
+  const linked = `${label} — ${t('score.openList')}`
+  return <a className={`scenario-count ${state}`} href={href} data-tip={linked} aria-label={linked}>{body}</a>
 }
 
 // the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a

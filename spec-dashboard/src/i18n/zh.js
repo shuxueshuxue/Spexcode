@@ -144,6 +144,7 @@ export default {
     searchIssues: '搜索 issues',
     searchEvals: '搜索 evals',
     clearSearch: '清除搜索',
+    showing: ({ shown, total }) => `显示 ${shown} / ${total} 条`,
     issuesTitle: 'Issues',
     open: 'Open',
     closed: 'Closed',
@@ -392,6 +393,9 @@ export default {
       miss: '原始文件缺失 —— 证据已从缓存中清除。',
       noImage: '无证据 —— 代理未捕获即作出判定。',
       shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
+      openDetail: '打开该场景的 eval 详情页',
+      passCount: ({ n }) => `${n} 个场景最新且通过`,
+      failCount: ({ n }) => `${n} 个场景最新且未通过`,
     },
   },
 
@@ -421,6 +425,7 @@ export default {
     count: ({ satisfied, total, outstanding }) =>
       `${total} 个场景中有 ${satisfied} 个已满足（最新且通过）` +
       (outstanding ? ` · ${outstanding} 个待处理 —— 未通过、已过期或未测量` : ''),
+    openList: '打开该节点的 Evals 过滤列表',
   },
 
   specNode: {

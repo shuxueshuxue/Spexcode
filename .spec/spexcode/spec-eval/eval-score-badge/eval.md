@@ -11,6 +11,25 @@ scenarios:
       Nodes with scenarios render the ✓X/Y count (a fully-satisfied node green, an outstanding one
       grey/red); the nodes without an eval.md render no count; the count never reads as the status
       dot. Issue badge (◆N) and scenario count sit side by side on a node that has both.
+  - name: score-affordances-navigate
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real browser, focus a node with scenarios and open its Information Board (node-info popup,
+      key `i`). Every eval affordance must be a REAL `<a href>`: the stat-bar aggregate ✓X/Y count
+      links to the node-filtered Evals LIST; each eval-tab reading row carries a sibling anchor to the
+      canonical full-page detail `#/evals/<node>/<scenario>` (no session sub-route, no list filters on
+      the detail hash). Click a reading's anchor → the detail renders; browser Back → the exact
+      `#/graph` hash with the SAME node still focused. Click the aggregate count → the Evals list
+      filtered to the node. Tab + Enter on a row anchor follows its href. No interactive link nests
+      inside another control (the eval-tab expand toggle stays a sibling button; the graph TILE count
+      stays passive — the tile's click belongs to the board). Record the whole loop and file with
+      `spex eval add eval-score-badge --scenario score-affordances-navigate --video <webm>`.
+    expected: >-
+      Concrete reading affordances are real anchors PUSHING to `#/evals/<node>/<scenario>`; the
+      stat-bar aggregate count is a real anchor to the node-filtered Evals list, minted by the ONE
+      shared address helper; browser Back restores the original graph hash and focus; middle-click/
+      copy-link work because the href is real; nothing navigates via a click handler on a bare button,
+      and no anchor nests inside the expand toggle.
   - name: tags-render-as-chips
     tags: [frontend-e2e, desktop]
     description: >-

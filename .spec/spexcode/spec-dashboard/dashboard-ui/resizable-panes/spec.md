@@ -2,7 +2,7 @@
 title: resizable-panes
 status: active
 hue: 210
-desc: Fixed-width side panes are user-resizable — drag the pane border (session list, graph focus panel), width clamps and persists per pane.
+desc: The session console's fixed-width list is user-resizable — drag its border, clamp the width, and persist the choice through one reusable pane mechanism.
 code:
   - spec-dashboard/src/useResizable.js#useResizable
 ---
@@ -11,9 +11,8 @@ code:
 
 ## raw source
 
-The dashboard's side panes shipped at hardcoded widths — the session board's list at 240px, the graph's
-focus panel at 250px — a terminal-era rigidity. A modern app lets the user drag a pane border to fit
-their content (long session titles, a wide monitor) and remembers the choice.
+The session board's list shipped at a hardcoded 240px — a terminal-era rigidity. A modern app lets the user
+drag the pane border to fit long session titles or a wide monitor and remembers the choice.
 
 ## expanded spec
 
@@ -25,6 +24,6 @@ min/max so no pane can crush its neighbor or vanish; release **persists** the wi
 drag is live, text selection is suspended and the resize cursor holds app-wide, so a fast drag never
 smears a selection across the page.
 
-Current panes on the mechanism: the session board's list ([[session-console]]) and the graph page's
-focus panel ([[focus-panel]]). A future pane joins by mounting the same hook + divider, not by writing
-its own drag handling.
+The current pane on the mechanism is the session board's list ([[session-console]]). A future pane joins by
+mounting the same hook + divider, not by writing its own drag handling; the graph remains a full-width canvas
+and therefore mounts no divider.

@@ -36,7 +36,7 @@ newest-first.
 
 The board carries this timeline as a **summary** ([[graph-lean]]): `buildBoard` folds the latest reading per
 scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so every overview surface — the
-[[eval-score-badge]] tile count, the [[focus-panel]] — counts the WHOLE set off the one `/api/graph` poll
+[[eval-score-badge]] tile/stat counts and search — counts the WHOLE set off the one `/api/graph` poll
 (a never-measured scenario still counts as loss). The FULL timeline — each scenario's
 `expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
 opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared eval-file walk.
@@ -65,8 +65,7 @@ The tab surfaces the **whole declared set** in **one list**, not only the readin
 with no reading** leads that list as a **blind-spot row** — the empty score ring over its name, its
 `expected`, and the files it tracks. The ring is the *only* distinction (no fenced-off band, no second
 scrollbar): an unmeasured scenario is outstanding loss and belongs where the attention is, so a node's
-intent is legible **inside the popup** before a reading lands (the only place it shows once the popup
-covers the [[focus-panel]]). No reading at all → those rows under a hint; some measured, some not → those
+intent is legible **inside the popup** before a reading lands. No reading at all → those rows under a hint; some measured, some not → those
 rows lead the timeline. The one presence-distinct empty state survives: a node with **no scenarios**
 (no eval.md → no `evals` field) shows nothing.
 

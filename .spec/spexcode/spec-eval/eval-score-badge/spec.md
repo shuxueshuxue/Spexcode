@@ -40,13 +40,12 @@ folds those per-scenario states to one worst-first colour; `ScenarioCount`
 renders the tile/stat-bar count; `ScoreBadge` delegates the per-reading `icon + label + tone` to
 [[review-chrome]]'s ONE `ReviewState` mapping, so graph/eval-tab glances and the routed Evals list/detail/A-B
 cannot disagree or fall back to Unicode. The node tile ([[node-graph]]) and
-the node-info stat bar render `ScenarioCount`; the [[focus-panel]] renders the same per-scenario states as a
-list; the eval tab ([[eval-tab]]) renders the per-reading circle.
+the node-info stat bar render `ScenarioCount`; the eval tab ([[eval-tab]]) renders the per-reading circle.
 
 **Tags are the second at-a-glance adornment.** Beside the satisfaction count, a scenario carries
 classification [[eval-core]] tags; `score.jsx` exports the one shared **`TagChips`** element that renders
-them as a compact wrapping row of chips. It is the SAME element wherever a scenario surfaces — the
-[[focus-panel]] row, the search palette ([[session-search]]), the eval tab's declared-scenario row —
+them as a compact wrapping row of chips. It is the SAME element wherever a scenario surfaces — the search
+palette ([[session-search]]) and the eval tab's declared-scenario row —
 so a tag looks identical everywhere and reads off the same `.tag-chip` vocabulary the other chips use.
 `scenarioStates` already threads each scenario's `tags` through (it spreads the scenario), so the consumers
 need no extra wiring. This node owns `TagChips` + its `.tag-chip` style slice; it does NOT own the tag

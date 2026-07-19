@@ -408,7 +408,7 @@ export default {
     scoreEmpty: ({ n }) => `${n} 个场景未测量或未评分（盲点）—— 点击逐个走查承载它们的节点`,
   },
 
-  // 评测评分词汇 —— 节点卡片计数、聚焦面板与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
+  // 评测评分词汇 —— 节点卡片计数、搜索与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
   // missing 是已声明但从未测量的场景。
   score: {
     pass: '当前通过 —— 已测量、最新且通过',
@@ -423,27 +423,13 @@ export default {
     openList: '打开该节点的 Evals 过滤列表',
   },
 
-  // 左侧聚焦面板 —— 把当前聚焦节点的 Issue 与 Scenario（及其满足状态）放在一处，让这两种有状态的工作
-  // 共用同一界面，而非在节点上弹窗。
-  focusPanel: {
-    scenarios: '场景',
-    issues: 'issue',
-    noScenarios: '无场景 —— 该节点没有用于测量的 eval.md。',
-    noIssues: '该节点暂无关联 issue。',
-    noFocus: '未聚焦任何节点。',
-    openEval: '打开该 eval 详情 —— 完整的读数时间线',
-    open: ({ n }) => `${n} 个待办`,
-    closed: ({ n }) => `${n} 个已关闭`,
-    tracks: ({ files }) => `跟踪 ${files}`,
-  },
-
   specNode: {
     liveEditors: ({ n }) => `${n} 个实时编辑者`,
     more: ({ n }) => `还有 ${n} 个`,
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
-    openIssues: ({ n }) => `${n} 个待办 issue——聚焦该节点后在面板中查看`,
+    openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
   },
 

@@ -33,14 +33,14 @@ scenarios:
   - name: tags-render-as-chips
     tags: [frontend-e2e, desktop]
     description: >-
-      Focus a node whose scenarios carry tags (e.g. public-mode) and look at the focus-panel scenario
-      rows; then open the search palette and look at the SCENARIO rows. Each scenario shows its
+      Open the search palette and look at SCENARIO rows for a node whose scenarios carry tags (e.g.
+      public-mode); then open that node's eval tab and inspect its declared-scenario rows. Each shows its
       classification tags as a row of compact chips (the shared TagChips / `.tag-chip` element),
       identical across both surfaces; a NODE row in search shows no chips. Capture and file with
       `spex eval add eval-score-badge --scenario tags-render-as-chips --image <png> --pass`.
     expected: >-
-      Every scenario renders its tags as small paper chips wherever it surfaces (focus panel rows,
-      search SCENARIO rows, eval-tab declared rows), reading off the same `.tag-chip` style; a
+      Every scenario renders its tags as small paper chips wherever it surfaces (search SCENARIO rows and
+      eval-tab declared rows), reading off the same `.tag-chip` style; a
       scenario with mixed tags (public-mode: backend-api / frontend-e2e+desktop) shows exactly those;
       NODE rows carry no chips. The chip element and CSS are one shared definition, not per-surface.
 ---

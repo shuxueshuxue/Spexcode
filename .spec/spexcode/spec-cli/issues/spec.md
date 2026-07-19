@@ -60,7 +60,7 @@ network. The **single-thread detail is the same read, narrowed** (`findIssue`): 
 path, so an eval-remark thread is invisible to `show` exactly as it is to the list — with the same
 per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
 slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
-per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
+per-node surface — tile badge, node-info Issues tab, and the [[issues-view]] page — reads the
 same mixed set with no second path; the board also carries ONE top-level freshness stamp over the whole
 merged set (open/thread/reply counts + latest activity), so any thread write — reply, remark, resolve,
 retract, close, on a noded or nodeless thread — moves board bytes and reaches a delta-subscribed viewer

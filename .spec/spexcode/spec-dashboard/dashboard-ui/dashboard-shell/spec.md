@@ -19,7 +19,7 @@ related:
 
 ## raw source
 
-The dashboard's feature nodes (node-graph, focus-panel, keyboard-nav, the session views…) all mount inside
+The dashboard's feature nodes (node-graph, keyboard-nav, the session views…) all mount inside
 one root component, poll through one data layer, and style against one global stylesheet. That substrate
 has no single feature owner, so co-owning it fanned every shell/style edit across all of them. Give it a
 foundation node; features REFERENCE what they touch via `related:` instead of co-owning it.

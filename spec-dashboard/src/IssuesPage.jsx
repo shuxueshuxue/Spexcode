@@ -130,14 +130,14 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
       ]}
       facets={
         <>
-          <FacetMenu label={t('reviewList.facetAuthor')} value={author} options={authorOptions} onChange={(value) => set({ author: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetStore')} value={storeFilter} options={storeOptions} onChange={(value) => set({ store: value || null })} />
+          <FacetMenu label={t('reviewList.facetAuthor')} value={author} options={authorOptions} clearLabel={allOption.label} onChange={(value) => set({ author: value || null })} mobile />
+          <FacetMenu label={t('reviewList.facetStore')} value={storeFilter} options={storeOptions} clearLabel={allOption.label} onChange={(value) => set({ store: value || null })} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} groups={[
-        { label: t('reviewList.facetNode'), value: node, options: nodeOptions, onChange: (value) => set({ node: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetStore'), value: storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
+        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }) },
+        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
+        { label: t('reviewList.facetStore'), value: storeFilter, active: !!storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
       ]} />}
       rows={rows}
       empty={{

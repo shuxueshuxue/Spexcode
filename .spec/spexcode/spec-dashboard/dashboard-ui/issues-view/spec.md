@@ -49,8 +49,10 @@ verbs the CLI uses.
   lifecycle switch (default Open; every non-open state belongs to Closed). Real facets cover only data the
   issue model actually has: originator, store, spec node, and live-session involvement. Spec node is the
   desktop overflow facet; at 390px originator stays directly reachable while store/live join that same
-  functional overflow menu. Every pick
-  is canonical query state and a PUSH. New remains the page-title action. No assignee/labels/project
+  functional overflow menu. Every pick is canonical query state and a PUSH. If resident data changes
+  while a store/originator/node/live value is active, its shared facet remains reachable with an All
+  off-switch until that query is cleared; data disappearance cannot trap the list behind an invisible
+  filter. New remains the page-title action. No assignee/labels/project
   theatre is invented for a model that has none. An actually empty issue store says there are no issues
   yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
   issues, through [[review-chrome]]'s shared empty-state contract.

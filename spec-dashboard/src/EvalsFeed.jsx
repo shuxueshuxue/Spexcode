@@ -189,19 +189,19 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
       ]}
       facets={
         <>
-          <FacetMenu label={t('reviewList.facetVerdict')} value={verdict} options={verdictOptions} onChange={(value) => set({ verdict: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetFreshness')} value={freshness} options={freshnessOptions} onChange={(value) => set({ freshness: value || null })} />
+          <FacetMenu label={t('reviewList.facetVerdict')} value={verdict} options={verdictOptions} clearLabel={allOption.label} onChange={(value) => set({ verdict: value || null })} mobile />
+          <FacetMenu label={t('reviewList.facetFreshness')} value={freshness} options={freshnessOptions} clearLabel={allOption.label} onChange={(value) => set({ freshness: value || null })} />
           <FacetMenu label={t('reviewList.facetKind')} value={kind} options={kindOptions} onChange={(value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value })} />
-          <FacetMenu label={t('reviewList.facetNode')} value={node} options={nodeOptions} onChange={(value) => set({ node: value || null })} />
+          <FacetMenu label={t('reviewList.facetNode')} value={node} options={nodeOptions} clearLabel={allOption.label} onChange={(value) => set({ node: value || null })} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} groups={[
-        { label: t('reviewList.facetFiler'), value: filer, options: filerOptions, onChange: (value) => set({ filer: value || null }) },
-        { label: t('reviewList.facetScope'), value: query.session || '', options: scopeOptions, onChange: (value) => set({ session: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetFreshness'), value: freshness, options: freshnessOptions, onChange: (value) => set({ freshness: value || null }), mobileOnly: true },
-        { label: t('reviewList.facetKind'), value: kind, options: kindOptions, onChange: (value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value }), mobileOnly: true },
-        { label: t('reviewList.facetNode'), value: node, options: nodeOptions, onChange: (value) => set({ node: value || null }), mobileOnly: true },
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
+        { label: t('reviewList.facetFiler'), value: filer, active: !!filer, options: filerOptions, onChange: (value) => set({ filer: value || null }) },
+        { label: t('reviewList.facetScope'), value: query.session || '', active: !!query.session, options: scopeOptions, onChange: (value) => set({ session: value || null }) },
+        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
+        { label: t('reviewList.facetFreshness'), value: freshness, active: !!freshness, options: freshnessOptions, onChange: (value) => set({ freshness: value || null }), mobileOnly: true },
+        { label: t('reviewList.facetKind'), value: kind, active: !!query.kind, options: kindOptions, clearLabel: null, onChange: (value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value }), mobileOnly: true },
+        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }), mobileOnly: true },
       ]} />}
       rows={rows}
       empty={empty || {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
+import { useEscLayer } from './escStack.js'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
 // overflow, row, and state primitives; both detail pages consume the same standalone shell.
@@ -50,40 +51,128 @@ export const listEmptyText = (empty) => (
     : empty
 )
 
+export const facetMenuOptions = (options, value, clearLabel) => {
+  const supplied = Array.isArray(options) ? options : []
+  const active = value != null && String(value) !== ''
+  if (!active || clearLabel == null || supplied.some((option) => String(option.value) === '')) return supplied
+  return [{ value: '', label: clearLabel }, ...supplied]
+}
+
+export const rovingIndex = (index, length, key) => {
+  if (!length) return -1
+  if (key === 'Home') return 0
+  if (key === 'End') return length - 1
+  if (key === 'ArrowDown' || key === 'ArrowRight') return index < 0 ? 0 : (index + 1) % length
+  if (key === 'ArrowUp' || key === 'ArrowLeft') return index < 0 ? length - 1 : (index - 1 + length) % length
+  return index
+}
+
+export const listOwnsKey = (target, key) => {
+  const tag = target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
+  if (tag === 'BUTTON' && (key === 'Enter' || key === ' ')) return false
+  if (key === 'Enter' && target?.closest?.('a[href]')) return false
+  return key === 'j' || key === 'k' || key === 'Enter'
+}
+
+const visibleMenuItems = (menu) => [...(menu?.querySelectorAll('[role="menuitemradio"]') || [])]
+  .filter((item) => item.getClientRects().length > 0)
+
+const focusMenuItem = (items, index) => {
+  const target = items[index]
+  if (!target) return
+  for (const item of items) item.tabIndex = item === target ? 0 : -1
+  target.focus()
+}
+
 function usePopover() {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const menuRef = useRef(null)
+  const triggerRef = useRef(null)
+  const initialFocus = useRef('checked')
+
+  const close = (restoreFocus = false) => {
+    if (restoreFocus) triggerRef.current?.focus()
+    setOpen(false)
+  }
+
+  const openMenu = (trigger, preferred = 'checked') => {
+    triggerRef.current = trigger
+    initialFocus.current = preferred
+    setOpen(true)
+  }
+
+  const toggle = (trigger) => {
+    if (open) close(false)
+    else openMenu(trigger)
+  }
+
+  useEscLayer(open, () => close(true))
+
   useEffect(() => {
     if (!open) return undefined
-    const dismiss = (event) => { if (!ref.current?.contains(event.target)) setOpen(false) }
-    const key = (event) => { if (event.key === 'Escape') setOpen(false) }
+    const dismiss = (event) => { if (!ref.current?.contains(event.target)) close(false) }
     window.addEventListener('pointerdown', dismiss, true)
-    window.addEventListener('keydown', key, true)
-    return () => {
-      window.removeEventListener('pointerdown', dismiss, true)
-      window.removeEventListener('keydown', key, true)
-    }
+    return () => window.removeEventListener('pointerdown', dismiss, true)
   }, [open])
-  return { open, setOpen, ref }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const frame = requestAnimationFrame(() => {
+      const items = visibleMenuItems(menuRef.current)
+      const checked = items.findIndex((item) => item.getAttribute('aria-checked') === 'true')
+      const index = initialFocus.current === 'last'
+        ? items.length - 1
+        : initialFocus.current === 'first' ? 0 : (checked >= 0 ? checked : 0)
+      focusMenuItem(items, index)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [open])
+
+  const onTriggerKeyDown = (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    event.stopPropagation()
+    openMenu(event.currentTarget, event.key === 'ArrowUp' ? 'last' : 'first')
+  }
+
+  const onMenuKeyDown = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    const items = visibleMenuItems(menuRef.current)
+    const index = items.indexOf(document.activeElement)
+    event.preventDefault()
+    event.stopPropagation()
+    focusMenuItem(items, rovingIndex(index, items.length, event.key))
+  }
+
+  const onItemFocus = (event) => {
+    const items = visibleMenuItems(menuRef.current)
+    focusMenuItem(items, items.indexOf(event.currentTarget))
+  }
+
+  return { open, ref, menuRef, close, toggle, onTriggerKeyDown, onMenuKeyDown, onItemFocus }
 }
 
-export function FacetMenu({ label, value = '', options = [], onChange, mobile = false }) {
-  const { open, setOpen, ref } = usePopover()
-  if (!options.length) return null
-  const active = options.find((option) => String(option.value) === String(value))
+export function FacetMenu({ label, value = '', options = [], onChange, mobile = false, clearLabel }) {
+  const popover = usePopover()
+  const usable = facetMenuOptions(options, value, clearLabel)
+  if (!usable.length) return null
+  const active = usable.find((option) => String(option.value) === String(value))
+  const selectedLabel = value ? (active?.label || String(value)) : ''
   return (
-    <div className={`rl-facet-wrap ${mobile ? 'mobile-stay' : ''}`} ref={ref}>
-      <button type="button" className={`rl-facet ${value ? 'active' : ''}`} aria-haspopup="menu" aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}>
-        <span>{active && value ? `${label}: ${active.label}` : label}</span>
+    <div className={`rl-facet-wrap ${mobile ? 'mobile-stay' : ''}`} ref={popover.ref}>
+      <button type="button" className={`rl-facet ${value ? 'active' : ''}`} aria-haspopup="menu" aria-expanded={popover.open}
+        onClick={(event) => popover.toggle(event.currentTarget)} onKeyDown={popover.onTriggerKeyDown}>
+        <span>{selectedLabel ? `${label}: ${selectedLabel}` : label}</span>
         <Icon name="chevron-down" size={12} />
       </button>
-      {open && (
-        <div className="rl-menu" role="menu" aria-label={label}>
-          {options.map((option) => (
+      {popover.open && (
+        <div className="rl-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
+          {usable.map((option) => (
             <button type="button" role="menuitemradio" aria-checked={String(option.value) === String(value)}
-              key={String(option.value)} className="rl-menu-item"
-              onClick={() => { onChange(option.value); setOpen(false) }}>
+              tabIndex={-1} key={String(option.value)} className="rl-menu-item" onFocus={popover.onItemFocus}
+              onClick={() => { popover.close(true); onChange(option.value) }}>
               <Icon name={String(option.value) === String(value) ? 'check' : 'blank'} size={13} />
               <span>{option.label}</span>
               {option.count != null && <span className="rl-menu-count">{option.count}</span>}
@@ -95,24 +184,28 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
   )
 }
 
-export function FacetOverflow({ label, groups = [] }) {
-  const usable = groups.filter((group) => group.options?.length)
+export function FacetOverflow({ label, groups = [], clearLabel }) {
+  const usable = groups
+    .map((group) => ({ ...group, options: facetMenuOptions(group.options, group.value, group.clearLabel === null ? null : (group.clearLabel || clearLabel)) }))
+    .filter((group) => group.options.length)
   const hasDesktop = usable.some((group) => !group.mobileOnly)
-  const { open, setOpen, ref } = usePopover()
+  const hasActive = usable.some((group) => group.active ?? (group.value != null && String(group.value) !== ''))
+  const popover = usePopover()
   if (!usable.length) return null
   return (
-    <div className={`rl-overflow ${hasDesktop ? '' : 'mobile-only'}`} ref={ref}>
+    <div className={`rl-overflow ${hasDesktop ? '' : 'mobile-only'} ${hasActive ? 'active' : ''}`} ref={popover.ref}>
       <IconButton icon="ellipsis" size={16} className="rl-overflow-btn" label={label}
-        aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} />
-      {open && (
-        <div className="rl-menu rl-overflow-menu" role="menu" aria-label={label}>
+        aria-haspopup="menu" aria-expanded={popover.open} onClick={(event) => popover.toggle(event.currentTarget)}
+        onKeyDown={popover.onTriggerKeyDown} />
+      {popover.open && (
+        <div className="rl-menu rl-overflow-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
           {usable.map((group) => (
             <div key={`${group.label}-${group.mobileOnly ? 'mobile' : 'all'}`} className={`rl-menu-group ${group.mobileOnly ? 'mobile-only' : ''}`}>
               <div className="rl-menu-label">{group.label}</div>
               {group.options.map((option) => (
                 <button type="button" role="menuitemradio" aria-checked={String(option.value) === String(group.value || '')}
-                  key={String(option.value)} className="rl-menu-item"
-                  onClick={() => { group.onChange(option.value); setOpen(false) }}>
+                  tabIndex={-1} key={String(option.value)} className="rl-menu-item" onFocus={popover.onItemFocus}
+                  onClick={() => { popover.close(true); group.onChange(option.value) }}>
                   <Icon name={String(option.value) === String(group.value || '') ? 'check' : 'blank'} size={13} />
                   <span>{option.label}</span>
                   {option.count != null && <span className="rl-menu-count">{option.count}</span>}
@@ -158,11 +251,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   stateRef.current = { rows, cur }
   useEffect(() => {
     const onKey = (event) => {
-      const tag = event.target?.tagName
-      const typingControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-      const nativeButtonKey = tag === 'BUTTON' && (event.key === 'Enter' || event.key === ' ')
-      if (typingControl || nativeButtonKey || event.metaKey || event.ctrlKey || event.altKey) return
-      if (event.key !== 'j' && event.key !== 'k' && event.key !== 'Enter') return
+      if (event.metaKey || event.ctrlKey || event.altKey || !listOwnsKey(event.target, event.key)) return
       const nav = stateRef.current.rows.filter((row) => row.href)
       if (!nav.length) return
       if (event.key === 'Enter') {
@@ -195,7 +284,16 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
             <div className="rl-sections" role="tablist">
               {sections.map((section) => (
                 <button type="button" role="tab" aria-selected={section.active} key={section.key}
-                  className={`rl-section ${section.active ? 'active' : ''}`} onClick={section.onSelect}>
+                  tabIndex={section.active ? 0 : -1} className={`rl-section ${section.active ? 'active' : ''}`}
+                  onClick={section.onSelect} onKeyDown={(event) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+                    const tabs = [...event.currentTarget.closest('[role="tablist"]').querySelectorAll('[role="tab"]')]
+                    const next = rovingIndex(tabs.indexOf(event.currentTarget), tabs.length, event.key)
+                    event.preventDefault()
+                    event.stopPropagation()
+                    tabs[next]?.focus()
+                    tabs[next]?.click()
+                  }}>
                   <span>{section.label}</span><span className="rl-section-count">{section.count}</span>
                 </button>
               ))}

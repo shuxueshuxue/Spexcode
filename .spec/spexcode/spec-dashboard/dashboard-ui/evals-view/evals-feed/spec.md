@@ -55,4 +55,5 @@ board poll + SSE — the list fetches nothing of its own — and latest-per-scen
 same computation behind the node badge, the focus panel, and the node eval tab; the feed never re-derives
 the current score its own way. The `?session=<id>` scope rides the one session model the page fetches
 ([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
-spots as inert unmeasured lines.
+spots as inert unmeasured lines. Loading, empty, and failed models do not replace the list shell: the scope
+and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

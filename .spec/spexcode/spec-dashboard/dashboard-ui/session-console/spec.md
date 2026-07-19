@@ -156,9 +156,10 @@ that owns its own mousedown — a native `<select>` *opens* on that default acti
 leave the control dead to the pointer. (No such control currently renders in the panel — the launcher
 picker ([[launcher-select]]) is a button pop-out, whose clicks fire fine under the blanket — but the
 carve-out stays as the rule any future native control relies on.) It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
-round-trip away from the Terminal tab** — the box unmounts while Eval or type mode replaces it, but its height is
-derived from the per-session draft (which persists), so on return it re-fits to that draft instead of collapsing
-back to one line. It carries the same **completion** menus
+round-trip through type mode** — the box unmounts while type mode replaces it, but its height is derived from
+the per-session draft (which persists), so on return it re-fits instead of collapsing to one line. Taking the
+Eval door routes away without unmounting the warm console, preserving the same draft and pane geometry. It
+carries the same **completion** menus
 the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `[[` opens the spec-node
 dropdown — one menu shared with New, not a second copy. A `[[node]]` here **resolves at send**, expanding to
 a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **type mode** — the human-takeover channel, named for
@@ -211,7 +212,7 @@ or the typed `/eval`, each navigating to the session-scoped Evals page. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
-`/exit`·`/close` commands above.
+`/stop`·`/close` commands above.
 **Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
 land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the

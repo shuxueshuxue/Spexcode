@@ -2,7 +2,7 @@
 title: review-chrome
 status: active
 hue: 205
-desc: The ONE shared page chrome both review surfaces render — ListPage (control row + chip row + anchor rows + empty state + j/k cursor) and DetailShell (GitHub-grammar header, main column + metadata side rail, phone reflow with metadata first) in one file, so #/evals and #/issues can never drift into two near-identical dialects.
+desc: The ONE shared page chrome both review surfaces render — ListPage (notice/error, controls, chips, anchor rows, empty state, j/k cursor) and DetailShell (GitHub-grammar header, main + metadata rail, distinct failed/not-found faces, phone metadata-first reflow) in one file, so #/evals and #/issues can never drift into near-identical dialects.
 code:
   - spec-dashboard/src/ReviewShell.jsx#ListPage
   - spec-dashboard/src/ReviewShell.jsx#DetailShell
@@ -24,7 +24,8 @@ share, nothing speculative.
 
 ## expanded spec
 
-- **`ListPage`** is the list page's whole skeleton: an optional notice line, a sticky head — the CONTROL
+- **`ListPage`** is the list page's whole skeleton: an optional notice line, an optional fail-loud alert,
+  then a sticky head — the CONTROL
   row (the shared filter grammar: `FilterSelect` dropdowns and any action button
   sharing one height/radius) over the CHIP row (small count/toggle chips, rendered only while it has
   chips) — then the rows, then the one empty-state note when no row survives the filters. Rows arrive as
@@ -37,8 +38,9 @@ share, nothing speculative.
   product: a HEADER with the title and its trailing identity meta, a STATUS band under it, then a
   two-column body — the MAIN column (the page's content, with an optional composer docked at its foot)
   beside a fixed-width metadata SIDE rail. There is NO fake back button — the browser's history is the
-  return path — but a not-found face (`missing`) renders an honest empty page with a link back to its
-  list. At phone width the SAME markup reflows to ONE column with the side rail's metadata ABOVE the main
+  return path — but an unavailable source (`failure`) renders an alert face distinct from the honest
+  not-found face (`missing`); both can link back to the list, and only the latter claims the object does not
+  exist. At phone width the SAME markup reflows to ONE column with the side rail's metadata ABOVE the main
   column (the 390px GitHub order), styled by the shared theme tokens — never a second mobile component.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute
   content, never layout forks. A change to list rhythm or detail geometry lands HERE once and both pages

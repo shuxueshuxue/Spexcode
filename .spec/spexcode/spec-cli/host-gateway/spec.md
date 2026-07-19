@@ -9,6 +9,7 @@ related:
   - spec-cli/src/gateway-hub.ts
   - spec-cli/src/gateway.ts
   - spec-cli/src/cli.ts
+  - spec-cli/src/help.ts
   - spec-cli/src/index.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/host.test.ts
@@ -49,7 +50,11 @@ only in the store slot its own root encodes to, and only to a loopback url — t
 catalog (`~/.spexcode/projects.json`) is the host's memory, populated by explicit registration
 (`POST /projects {root}` — normalized to the repo's main checkout, git-repo required, matching init's own
 precondition) and by auto-adoption of any validated live record. Its project operations ride the same
-hub admin scope and are **spawned `spex` verbs, never forked logic**: `/projects/:id/init` and `/doctor`
+hub admin scope. `GET|PUT /projects/:id/config` is the narrow source-file seam for the project's raw,
+committed `spexcode.json`: it works while the backend is offline, treats an absent file as `{}`, accepts
+only a top-level JSON object, writes atomically, and rejects a stale revision rather than overwriting a
+concurrent edit. It never exposes `spexcode.local.json`, whose machine-specific layer may carry sensitive
+paths. Operations remain **spawned `spex` verbs, never forked logic**: `/projects/:id/init` and `/doctor`
 run the real `spex init` / `spex doctor` with cwd = the project root (same git/harness/additive
 guarantees, exit code + transcript returned), and `/projects/:id/serve` starts an offline project's
 backend as a **detached** `spex serve` that publishes its own record and outlives the gateway. A

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionForest } from './session.js'
+import { sessionAncestorIds, sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
@@ -205,13 +205,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
   // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
   // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
-  const { expanded, toggle: toggleFold } = useFold()
+  const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const validIds = useMemo(() => new Set(['new', ...sessions.map((s) => s.id)]), [sessions])
   // content mode: 'new' or a session id (the issues list left for its own page — [[issues-view]] / [[side-nav]]).
   const active = validIds.has(sel) ? sel : 'new'
+  // An external jump may select a descendant omitted from the collapsed forest. Reveal its full path before
+  // paint when the page opens or the selected id changes. Board refreshes deliberately do not retrigger this:
+  // once visible, a human may collapse the selected branch again and that local fold choice should stick.
+  useLayoutEffect(() => {
+    if (open && active !== 'new') expandFolds(sessionAncestorIds(sessions, active))
+  }, [open, active, expandFolds]) // eslint-disable-line react-hooks/exhaustive-deps
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
   // is showing — a background board refresh must not clobber the remembered tab (or the URL echo) mid-boot.

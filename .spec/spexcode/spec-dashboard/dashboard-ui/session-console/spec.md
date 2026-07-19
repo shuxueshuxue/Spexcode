@@ -34,7 +34,9 @@ global ⌥2 navigates to it, leaving it is likewise navigation (the rail, ⌥1/�
 which stays inside the console's own stack), and its selected tab echoes into the URL (`#/sessions/<sel>`)
 so a tab can be deep-linked. Selection validity is the real board session set, not only the currently
 visible rows: a session hidden under a collapsed nesting parent can still be opened by URL, search, or an
-originator chip, while ↑/↓ navigation continues to walk only the visible forest rows.
+originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
+hidden session from outside the list — including the graph's node menu — automatically unfolds every present
+ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
 Leaving the page never unmounts it — the terminals keep their sockets and scroll warm. The console **follows
 the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette

@@ -4,7 +4,6 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
-import FocusPanel from './FocusPanel.jsx'
 import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import SpecSearch from './SpecSearch.jsx'
@@ -13,7 +12,6 @@ import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
 import { navigateAddress } from './address.js'
-import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
@@ -523,15 +521,12 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     if (first) setFocusId(first.id)
   }, [highlightId, specs])
 
-  // the graph page's right column is user-resizable ([[resizable-panes]]): drag the divider, width persists.
-  const [fpW, fpDrag] = useResizable('spex.fpWidth', 250, { min: 190, max: 520, dir: -1 })
-
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
       <SideBar page={page} onNav={navigate} project={project} catalog={catalog} />
       <div className="app-main">
-      <div className="page-graph" style={{ '--fp-w': `${fpW}px`, display: page === 'graph' ? undefined : 'none' }}>
+      <div className="page-graph" style={{ display: page === 'graph' ? undefined : 'none' }}>
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -594,9 +589,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
         {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
 
-      {/* the divider the focus panel hangs on — an 8px col-resize hit strip straddling the pane border */}
-      <div className="pane-resizer" onMouseDown={fpDrag} role="separator" aria-orientation="vertical" />
-      <FocusPanel node={focus} onNavigateAddress={onNavigateAddress} />
       </div>
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])

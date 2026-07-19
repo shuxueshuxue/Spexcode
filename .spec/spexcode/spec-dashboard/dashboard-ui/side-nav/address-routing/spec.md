@@ -10,13 +10,12 @@ related:
   - spec-dashboard/src/route.test.mjs
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/SpecSearch.jsx
-  - spec-dashboard/src/FocusPanel.jsx
   - spec-dashboard/src/IssueCard.jsx
 ---
 # address-routing
 
-Clickable references in the dashboard name a product object first and a route second. A search row, a
-FocusPanel scenario, an IssueCard, or any future node/session/review reference should all produce the same
+Clickable references in the dashboard name a product object first and a route second. A search row, an
+IssueCard, or any future node/session/review reference should all produce the same
 small **app address** shape, then let the shared address layer project it to the canonical destination.
 
 The vocabulary is intentionally closed and mirrors the top-level pages [[side-nav]] already owns:

@@ -6,8 +6,7 @@ import { apiUrl } from './project.js'
 // the board's hot poll. `bodies` is {id → spec prose}; `scenarios` is {id → {scenario name → {description,
 // expected, code?}}}. Module-cached stale-while-revalidate: the last corpus seeds instantly (ranking and
 // previews are never cold), and each mount revalidates at most once, the first time `enabled` turns true —
-// so the palette refetches per open (a fresh mount), while the always-mounted focus panel fetches once, on
-// the first focus that actually needs prose.
+// so the palette refetches per open (a fresh mount).
 let corpusCache = null
 export function useSpecCorpus(enabled = true) {
   const [corpus, setCorpus] = useState(corpusCache)

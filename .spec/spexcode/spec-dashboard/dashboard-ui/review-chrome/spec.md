@@ -43,8 +43,10 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   non-empty dataset whose current view matches nothing.
 - **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
   (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
-  list leading marks, detail status, and every A/B reading selector consume it; Issues list and detail do
-  the same. Glyphs come only from [[icon-system]] — no page-local SVG, CSS dot, or Unicode check/cross.
+  list leading marks, detail status, and every A/B reading selector consume it; Issues list/detail and the
+  compact `IssueCard` entries consume the same issue half. Glyphs come only
+  from [[icon-system]] — no page-local SVG, CSS dot, raw status pill, or Unicode check/cross. Small overview
+  surfaces may add counts beside the primitive, but never mint another state mapping.
 - **`DetailShell` follows GitHub's issue grammar:** title/meta HEADER, STATUS band, MAIN content with an
   optional docked composer, and a metadata SIDE rail. Browser history is the return path. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with

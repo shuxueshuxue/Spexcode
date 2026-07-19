@@ -2,7 +2,7 @@
 title: dashboard-issues
 status: active
 hue: 280
-desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge on the tile, plus the full set folded onto the node for the focus panel and the node-info Issues tab. Owns the FORGE slice (a resident ForgeCache) of the board's unified Issue fold; non-blocking and silent without a forge.
+desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge on the tile, plus the full set folded onto the node for its on-demand Issues tab. Owns the FORGE slice (a resident ForgeCache) of the board's unified Issue fold; non-blocking and silent without a forge.
 code:
   - spec-forge/src/resident.ts#refreshIfStale
   - spec-forge/src/resident.ts#refreshForgeNow
@@ -25,8 +25,8 @@ Surface each spec node's bound open issues on the dashboard. Backend: fold each 
 count + list into the board via a resident `ForgeCache`, served on the existing `/api/graph` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge on the tile (count, hue distinct from the status dot, like
-the drift-badge), only when > 0; the issue LIST is read in the [[focus-panel]] for the focused node
-(alongside that node's scenarios — Issues and Scenarios as equal citizens), not in a card popped on the node.
+the drift-badge), only when > 0; the issue LIST is read on demand in the focused node's [[work-pane]] Issues
+tab and on [[issues-view]], not in a persistent sidebar or a card popped on the node.
 The badge is WORK, distinct from the derived status dot.
 
 ## expanded spec
@@ -51,17 +51,17 @@ watermark past it. Read-only throughout — the resident module never writes the
 [[port]] driver's) and never touches a node's git-derived status. Sibling folds ride the same pattern
 (the [[eval-tab]] eval timeline); this node owns only the issues slice.
 
-**Frontend — one glance badge; the list lives in the focus panel.** When a node carries open issues, its
+**Frontend — one glance badge; detail stays on demand.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three
 signals never blur), absent at zero. The detail —
-each issue a card (id, store, status, concern) — is read in the
-[[focus-panel]] for the focused node, **beside that node's scenarios** (the node-info Issues tab keeps the
-same list); no card pops on the node's own hover/focus. These cards are the shared dashboard issue card:
-local and forge use the same markup and truncation, and clicking either opens the internal Issues page with
+each issue a card (id, store, status, concern) — is read in the node-info Issues tab and the routed Issues
+page; no persistent right column or card pops on the node's own hover/focus. These cards are the shared dashboard issue card:
+local and forge use the same markup and truncation, their lifecycle mark consumes [[review-chrome]]'s one
+issue-state mapping, and clicking either opens the internal Issues page with
 that issue selected (`#/issues/<issue-id>`). Forge permalinks are secondary metadata in the Issues detail,
 never the card's primary destination. The badge renders in the node tile
-([[node-graph]]), its copy through the shared translator `t` ([[settings]]); each issue's
-number/state/title stay raw forge data.
+([[node-graph]]), its copy through the shared translator `t` ([[settings]]); each issue's id, store, and
+concern remain the Issue object's data while its lifecycle label is translated by the shared visual.
 
 Out of scope (future siblings): surfacing open **PRs** the same way; any live push of forge deltas
 ([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` eval scenario

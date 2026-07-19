@@ -90,8 +90,8 @@ verbs the CLI uses.
   compact store picker naming each store's canonical label once); a `[[node]]` in the prose IS the node
   link (no separate ids field); a forge pick creates the real forge issue with the `Spec:` marker. The
   modal's autocomplete overlays above the pop-out; Esc/backdrop close only that layer.
-- **Issue cards enter this page, never the forge.** Every compact card elsewhere (focus panel, node
-  Issues tab) is the SAME `IssueCard` whose canonical href is `#/issues/<issue-id>`; a forge permalink is
+- **Issue cards enter this page, never the forge.** Every compact card in the node Issues tab is the SAME
+  `IssueCard` whose canonical href is `#/issues/<issue-id>`; a forge permalink is
   detail-side metadata only. Long content clamps inside the card.
 - **Honors the switch.** When the issues workflow is OFF (`enabled: false`), the page shows the muted
   "off" state — the dashboard reflects the one source of truth.

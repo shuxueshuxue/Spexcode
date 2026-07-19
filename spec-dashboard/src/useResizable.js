@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 
 // Drag-to-resize for a fixed-width pane ([[resizable-panes]]): returns the pane's width and the mousedown
 // handler its divider mounts. One hook for every resizable pane — the session board's list, the graph's
-// focus panel — so they all clamp, persist (localStorage, per pane key), and drag the same way.
+// future side panes — so they all clamp, persist (localStorage, per pane key), and drag the same way.
 // `dir: 1` = pane sits LEFT of its divider (dragging right widens); `dir: -1` = pane sits right.
 export function useResizable(key, initial, { min, max, dir = 1 } = {}) {
   const [width, setWidth] = useState(() => {

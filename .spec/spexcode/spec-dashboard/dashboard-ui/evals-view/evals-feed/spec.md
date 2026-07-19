@@ -56,7 +56,7 @@ history PUSH onto the detail page; `j`/`k` move the cursor and Enter opens it ([
 
 **One data path, one computation.** The project scope's nodes arrive as a prop from the app's single
 board poll + SSE — the list fetches nothing of its own — and latest-per-scenario is `scenarioStates`, the
-same computation behind the node badge, the focus panel, and the node eval tab; the feed never re-derives
+same computation behind the node badge, graph stats, search, and the node eval tab; the feed never re-derives
 the current score its own way. The `?session=<id>` scope rides the one session model the page fetches
 ([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
 spots as inert unmeasured lines. Loading, empty, and failed models do not replace the list shell: the scope

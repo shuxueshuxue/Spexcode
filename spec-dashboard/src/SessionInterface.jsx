@@ -15,6 +15,7 @@ import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
+import { apiUrl } from './project.js'
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -234,7 +235,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Display+insert only; never executed.
   useEffect(() => {
     const harness = selSession?.harness || 'claude'
-    fetch(`/api/slash-commands?harness=${harness}`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
+    fetch(apiUrl(`/api/slash-commands?harness=${harness}`)).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [selSession?.harness])
 
   // the command presets — the New Session box's `/` palette (tidy/health/…). Picking one composes its body
@@ -282,7 +283,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const q = rawKeyQ.current.get(id)
     if (!q || q.busy || q.keys.length === 0) return
     const keys = q.keys; q.keys = []; q.busy = true
-    fetch(`/api/sessions/${id}/input`, {
+    fetch(apiUrl(`/api/sessions/${id}/input`), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'keys', keys }),
     }).catch(() => {}).finally(() => { q.busy = false; flushRawKeys(id) })
   }
@@ -477,7 +478,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setMsg('')
     setSendErr(false)
     try {
-      const res = await fetch(`/api/sessions/${active}/input`, {
+      const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'text', text }),
       })
@@ -491,7 +492,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const uploadFile = async (file) => {
     const fd = new FormData()
     fd.append('file', file, file.name || 'pasted')
-    const res = await fetch('/api/uploads', { method: 'POST', body: fd })
+    const res = await fetch(apiUrl('/api/uploads'), { method: 'POST', body: fd })
     if (!res.ok) throw new Error(`upload ${res.status}`)
     const data = await res.json().catch(() => null)
     if (!data?.path) throw new Error('upload: no path')
@@ -554,7 +555,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const act = async (verb) => {
     setActErr(null)
     try {
-      const res = await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' })
+      const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), { method: 'POST' })
       if (!res.ok) { const j = await res.json().catch(() => null); if (j?.error) setActErr(j.error) }
     } catch { /* network hiccup — the reload below re-reads truth */ }
     await reload?.()

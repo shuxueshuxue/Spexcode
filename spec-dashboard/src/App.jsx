@@ -1,13 +1,18 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { loadGraph, subscribeBoardLive, loadIssues, projectTitle, projectIcon, faviconHref } from './data.js'
+import { PROJECT_ID } from './project.js'
+import { loadProjects } from './projects.js'
+import CredentialGate from './CredentialGate.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { useT } from './i18n/index.jsx'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
 // Which chunk loads is the same viewport-width pick as ever — the split only moves bytes, never behaviour.
+// The projects hub ([[projects-hub]]) is a third lazy face: the catalog page standalone, no board behind it.
 const Dashboard = lazy(() => import('./Dashboard.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
+const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
 // stale-chunk recovery: after a dist rebuild, a page loaded pre-rebuild still asks for the OLD hashed
 // chunks, which the server no longer has (it answers 404) — without this the failed lazy import blanks
@@ -31,6 +36,14 @@ export default function App() {
   // panel, never an eternal spinner. Only the pre-first-board window reads this — once a board has landed,
   // a failed refetch keeps the last good board and the poll/stream keep retrying on their own.
   const [loadFailed, setLoadFailed] = useState(false)
+  // a gated scope's 401 ([[projects-hub]]): the reason string when the board is behind a credential —
+  // renders the shared CredentialGate instead of the load-error panel; cleared the moment a board lands.
+  const [authNeeded, setAuthNeeded] = useState(null)
+  // the one boot-time catalog probe ([[projects-hub]]): null while in flight, then loadProjects()'s
+  // result. It decides the hub face at the root address and feeds the rail's Projects entry + selector;
+  // the ProjectsPage keeps its own live poll — this probe is a snapshot, not a subscription.
+  const [projAccess, setProjAccess] = useState(null)
+  useEffect(() => { loadProjects().then(setProjAccess).catch(() => setProjAccess({ state: 'absent' })) }, [])
   // the issues list is RESIDENT beside the board (one data path — the issues page renders instantly from
   // app-held state instead of cold-fetching per mount). Freshness inherits the board's own pattern: a
   // push/change signal triggers a throttled refetch, the 15s cold lane backstops (forge-cache updates
@@ -60,7 +73,11 @@ export default function App() {
   const reload = useCallback(() => {
     const mine = ++reqSeq.current
     return loadGraph()
-      .then((r) => { if (mine === reqSeq.current && r) { setLoadFailed(false); setBoard(r.board); r.seal() } })
+      .then((r) => {
+        if (mine !== reqSeq.current || !r) return
+        if (r.authRequired) { setAuthNeeded(r.authRequired); return }
+        setAuthNeeded(null); setLoadFailed(false); setBoard(r.board); r.seal()
+      })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [])
   // push-first freshness ([[graph-stream]]/[[graph-delta]]): the delta stream carries whole boards (a full on
@@ -70,7 +87,12 @@ export default function App() {
   // dead stream (half-open tunnel, sleep-resume) looks exactly like a healthy quiet one and a detector that
   // trusts it freezes the board. The poll's cost is zeroed instead: loadGraph sends If-None-Match and an
   // unchanged board answers 304 → null → no repaint. Push dead in ANY mode = at most one poll period stale.
+  // the hub face ([[projects-hub]]): the root address with no board but a live /projects surface. Once
+  // it resolves, the board machinery below stands down — the hub has no board, so its stream/poll would
+  // only hammer a surface that answers HTML.
+  const hub = !PROJECT_ID && !board && !!projAccess && projAccess.state !== 'absent'
   useEffect(() => {
+    if (hub) return
     reload()
     reloadIssues(true)
     const unsub = subscribeBoardLive({
@@ -79,11 +101,15 @@ export default function App() {
     })
     const id = setInterval(() => { reload(); reloadIssues() }, 15000)
     return () => { unsub(); clearInterval(id); clearTimeout(issuesTrail.current); issuesTrail.current = null }
-  }, [reload, reloadIssues])
+  }, [reload, reloadIssues, hub])
   useEffect(() => {
     const name = projectTitle(board)
     if (name) document.title = `${name} · SpexCode`
   }, [board?.project])
+  // the hub face has no board to name the tab from — it titles itself as the catalog.
+  useEffect(() => {
+    if (!board && !PROJECT_ID && projAccess && projAccess.state !== 'absent') document.title = 'Projects · SpexCode'
+  }, [board, projAccess])
   useEffect(() => {
     // [[tab-icon]] - a configured dashboard.icon sets the tab favicon at runtime; empty keeps the html default.
     const href = faviconHref(projectIcon(board))
@@ -92,8 +118,30 @@ export default function App() {
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
     link.setAttribute('href', href)
   }, [board?.projectIcon])
+  // a 401'd scope shows the unified credential card, wherever it strikes: pre-board it is the whole
+  // face; a mid-session lock (an admin just set a password) also re-gates — a 401 means every surface
+  // (poll, stream, terminal socket) is dead until the unlock, so keeping a stale board up would lie.
+  if (authNeeded && PROJECT_ID) {
+    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={projectTitle(board) || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+  }
   if (!board) {
-    if (loadFailed) return (
+    // the hub face: the catalog page IS the app (see the `hub` pick above). A single-project serve /
+    // vite dev answers no catalog (its SPA fallback is not JSON), keeps state 'absent', and boots
+    // exactly as before.
+    if (hub) {
+      return (
+        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+          <ProjectsPage standalone />
+        </Suspense>
+      )
+    }
+    if (authNeeded) {
+      // 401 at the root address (a gateway gating everything behind the admin scope) — same card, admin face.
+      return <CredentialGate scope="admin" locked={authNeeded === 'locked'} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+    }
+    // fail loudly only once both probes have had their say — while the catalog probe is still in flight a
+    // failed board fetch may yet resolve into the hub face, so hold the spinner instead of flashing the panel.
+    if (loadFailed && (PROJECT_ID || (projAccess && projAccess.state === 'absent'))) return (
       <div className="loading load-error">
         <span>{t('hud.loadError')}</span>
         <button className="load-retry" onClick={() => { setLoadFailed(false); reload() }}>{t('hud.retry')}</button>
@@ -105,7 +153,7 @@ export default function App() {
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} />
-        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} issuesData={issuesData} reloadIssues={reloadIssues} />}
+        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} issuesData={issuesData} reloadIssues={reloadIssues} catalog={projAccess} />}
     </Suspense>
   )
 }

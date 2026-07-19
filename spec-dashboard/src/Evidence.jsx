@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+import { apiUrl } from './project.js'
 
 // The ONE evidence renderer ([[event-detail]], U1): a content-addressed blob → the right media element,
 // identical in EVERY home evidence appears — the node eval tab's gallery ([[eval-tab]]), the eval
@@ -11,7 +12,7 @@ import { Icon } from './icons.jsx'
 // from the Content-Type the blob route already serves (one sniff at the server, [[video-evidence]] —
 // the client never grows a parallel magic-number table, and the reply schema never grows a type field).
 
-const blobUrl = (hash) => `/api/evidence/${hash}`
+const blobUrl = (hash) => apiUrl(`/api/evidence/${hash}`)
 
 // click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
 // click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.

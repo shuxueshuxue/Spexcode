@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadPlugins, loadSettings } from './data.js'
+import { apiUrl } from './project.js'
 
 // The dashboard's ONE session-launch CLIENT path, shared by every face that can start a worker — the desktop
 // console's New Session tab (SessionInterface.jsx) and the phone's composer (MobileApp.jsx). Launcher state,
@@ -12,7 +13,7 @@ import { loadPlugins, loadSettings } from './data.js'
 // double-create. Returns { ok, error? }.
 export async function createSession(prompt, launcher) {
   try {
-    const res = await fetch('/api/sessions', {
+    const res = await fetch(apiUrl('/api/sessions'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, ...(launcher ? { launcher } : {}) }),
     })

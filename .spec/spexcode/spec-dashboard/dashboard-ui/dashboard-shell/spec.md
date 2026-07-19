@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/project.js
   - spec-dashboard/src/heartbeat.js
   - spec-dashboard/src/streamHeartbeat.test.mjs
   - spec-dashboard/src/styles.css
@@ -29,7 +30,13 @@ dashboard-shell owns the cross-cutting dashboard files: `App.jsx` (the entry —
 layer, owns the fail-loud boot below, and picks the face by viewport width), `Dashboard.jsx` (the desktop
 root — it mounts the [[side-nav]] rail and swaps the routed page into the main area beside it, keeping the
 warm pages — the graph, the session board — mounted across switches), `data.js` (the shared polled board
-data every view reads), and `styles.css` (the global stylesheet). Route params that belong to a feature
+data every view reads), and `styles.css` (the global stylesheet). **The project scope is a shell concern**
+([[projects-hub]]): `project.js` reads the served pathname once (`/p/<id>/` vs the root) and every `/api`
+URL in the data layer — fetch, SSE, the terminal WebSocket — routes through its one prefixing seam, so a
+scoped page talks to `/p/<id>/api/*` while an unscoped serve stays byte-identical to before; the entry's
+face pick extends the same way (a scoped 401 raises the shared credential gate instead of the error panel,
+and the root address with no board but a live `/projects` surface boots the hub face instead of the
+classic dashboard). Route params that belong to a feature
 (`#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
 owns their meaning. The shell applies an incoming routed selection before it echoes a page's local selection
 back into the hash, so an external door to `#/sessions/<id>` or another detail route is never overwritten by

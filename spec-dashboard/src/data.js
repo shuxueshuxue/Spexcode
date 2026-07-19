@@ -1,4 +1,5 @@
 import { createDeadman } from './heartbeat.js'
+import { apiUrl } from './project.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
@@ -18,11 +19,14 @@ export function layout(nodes, expanded) {
 }
 
 // retry a thrown (transient: refused/reset) fetch with bounded backoff so a zero-downtime backend reload is
-// invisible; an actual HTTP response (even 4xx/5xx) is returned, never retried.
+// invisible; an actual HTTP response (even 4xx/5xx) is returned, never retried. Every `/api` path is
+// scoped through apiUrl ([[dashboard-shell]]'s project-scope seam, project.js), so callers keep writing
+// plain '/api/...' whether the page is the root dashboard or a /p/<id>/ scoped one.
 const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
 export async function apiFetch(input, init) {
+  const url = typeof input === 'string' ? apiUrl(input) : input
   for (let i = 0; ; i++) {
-    try { return await fetch(input, init) }
+    try { return await fetch(url, init) }
     catch (e) {
       if (i >= BACKOFF.length) throw e
       await new Promise((r) => setTimeout(r, BACKOFF[i]))
@@ -47,6 +51,12 @@ const clearBoardTag = () => { boardTag = '' }   // a pushed board took the displ
 export async function loadGraph() {
   const res = await apiFetch('/api/graph', { cache: 'no-store', headers: boardTag ? { 'If-None-Match': boardTag } : {} })
   if (res.status === 304) return null
+  // a gated scope ([[public-mode]]'s project/admin cookie) answers 401/403 with a JSON reason — surface
+  // it as data so the shell can raise the credential gate instead of the generic load-error panel.
+  if (res.status === 401 || res.status === 403) {
+    const body = await res.json().catch(() => null)
+    return { authRequired: body?.reason || 'project-login' }
+  }
   const tag = res.headers.get('etag') || ''
   const board = await res.json()
   return { board, seal: () => { boardTag = tag } }
@@ -58,7 +68,7 @@ export async function loadGraph() {
 // `parts` are trailing path segments (fixed route words like 'content'/'history', or an already-safe git
 // hash) appended verbatim. Ids never contain '/' by construction, but encoding stays the invariant.
 export const specUrl = (id, ...parts) =>
-  `/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
+  apiUrl(`/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`)
 
 // subscribe to the graph's push channel in DELTA mode ([[graph-stream]]/[[graph-delta]]): the server sends a
 // full snapshot on connect (`graph-full {to, graph}`), then hash-chained patches (`graph-delta {from, to,
@@ -104,7 +114,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   const bump = () => deadman.arm()   // heartbeat: every event proves the stream still lives
   const open = () => {
     if (closed) return
-    try { es = new EventSource('/api/graph/stream?mode=delta') } catch { es = null; return }
+    try { es = new EventSource(apiUrl('/api/graph/stream?mode=delta')) } catch { es = null; return }
     es.addEventListener('graph-full', (e) => {
       bump()
       const { to, graph } = JSON.parse(e.data)
@@ -150,7 +160,7 @@ export function faviconHref(icon) {
 // the ONE way to build a `/api/sessions/:id/*` URL — the session-side twin of specUrl, same invariant:
 // the id is the sole encoded segment, fixed route words append verbatim.
 export const sessionUrl = (id, ...parts) =>
-  `/api/sessions/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
+  apiUrl(`/api/sessions/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`)
 
 // a session's persisted interaction history ([[session-timeline]]): authored status transitions (full note
 // text) + delivered prompts, oldest first — what the terminal-free face renders as the conversation.

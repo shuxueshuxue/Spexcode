@@ -7,6 +7,7 @@ import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnch
 import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
+import { apiUrl } from './project.js'
 
 // EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
 // home — the Evals page AND the session eval tab. It renders a selected READING (an "event") as a
@@ -235,7 +236,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     setEvents([]); setAxis('time')
     if (!viewing.timelineBlob) return
     let on = true
-    fetch(`/api/evidence/${viewing.timelineBlob}`)
+    fetch(apiUrl(`/api/evidence/${viewing.timelineBlob}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { const n = on && normalizeTimeline(j); if (n) { setEvents(n.events); setAxis(n.axis) } })
       .catch(() => {})
@@ -527,7 +528,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
             <>
               <div className="an-player" ref={playerRef}>
               <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-                <video className="an-video" ref={vid} src={`/api/evidence/${videoEntry.hash}`} preload="metadata" playsInline />
+                <video className="an-video" ref={vid} src={apiUrl(`/api/evidence/${videoEntry.hash}`)} preload="metadata" playsInline />
                 {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
                 {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
               </div>

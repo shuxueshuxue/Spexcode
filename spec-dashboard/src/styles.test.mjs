@@ -60,3 +60,17 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
     /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:/s,
   )
 })
+
+test('projects hub + credential surfaces read the shared palette, never a one-off color', () => {
+  // the whole appended [[projects-hub]] block themes itself through the var set — a raw hex literal
+  // there would be a palette the eight theme presets cannot re-skin.
+  const start = css.indexOf('projects hub ([[projects-hub]])')
+  assert.ok(start > 0, 'projects-hub style block present')
+  const block = css.slice(start)
+  assert.doesNotMatch(block, /#[0-9a-fA-F]{3,8}\b/)
+  // the health dot maps the probed health onto semantic accents
+  assert.match(block, /\.proj-health\.h-running\s*\{\s*background:\s*var\(--green\);/)
+  assert.match(block, /\.proj-health\.h-unreachable\s*\{\s*background:\s*var\(--red\);/)
+  // the credential card is panel-on-paper like every other card in the app
+  assert.match(block, /\.cred-card\s*\{[^}]*background:\s*var\(--panel\);[^}]*border:\s*1px solid var\(--line\);/s)
+})

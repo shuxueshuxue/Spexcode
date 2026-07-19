@@ -15,8 +15,10 @@ scenarios:
       MAIN column (the evidence workspace, then the remark thread as the page's activity) beside the
       metadata SIDE rail. The composer is DOCKED STICKY at the main column's foot — on screen immediately
       and staying on screen while the thread scrolls behind it, so circle→remark→circle never buries the
-      writer. NO fold strip and NO in-page back button exist. Under the phone breakpoint the SAME markup
-      reflows to one column with the side metadata FIRST, the composer still reachable at the foot.
+      writer. NO fold strip exists; the header leads with the ONE compact back anchor — a real `<a href>`
+      (never a history.back button) whose destination derives from the canonical address. Under the phone
+      breakpoint the SAME markup reflows to one column with the side metadata FIRST, the composer still
+      reachable at the foot.
   - name: mark-lands-in-docked-composer
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EventDetail.jsx]
@@ -181,6 +183,43 @@ scenarios:
       and the position label reads 'latest'. The strip is absent for a single-reading scenario. The eval's
       remark thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
       per-scenario, not per-reading, so the annotation track spans the whole A/B.
+  - name: media-intrinsic-geometry
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/Evidence.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Open detail pages whose readings carry a TINY (e.g. ~160px), a MEDIUM, and an OVERSIZED
+      (wider than the main column) image and video, at a 1440px and a 390px viewport, in light and dark
+      themes. For each media element compare its rendered box (getBoundingClientRect) against its
+      intrinsic size (naturalWidth/videoWidth), read the main column's available width, and check
+      document.documentElement/scrollWidth for horizontal overflow. On the clip, confirm the custom
+      review-track bar and timeline still render and drive the video.
+    expected: |
+      Media renders at INTRINSIC geometry, shrink-only: a tiny image/clip renders at its native pixel
+      size — never stretched to the column width by the stage, the gallery's layout, or a reply's media
+      list; an oversized one scales DOWN proportionally to exactly the main column's available width
+      (aspect ratio kept); at 390px the same law holds and nothing widens the page (no horizontal
+      scrollbar at any viewport). The shrunk clip keeps its full custom controls: the player chrome
+      shrink-wraps the clip rather than stretching the clip, and scrubber/step-rail/keyboard still work.
+      Both themes render the same geometry.
+  - name: ab-strip-bounded
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/EventDetail.jsx]
+    description: >
+      Open the detail page of a scenario with a HUNDREDS-deep synthetic reading history. Measure the
+      status band's height and whether the A/B strip stays one line; count the rendered pips; open the
+      overflow control with mouse and keyboard (Arrow/Home/End roving, Esc restore) and read its rows'
+      icons/labels; pick an old reading from the menu and re-measure the band height, the selected pip,
+      and the position label; walk ‹ › across the window edge; repeat at 390px.
+    expected: |
+      The strip is ONE line at a stable height however many readings exist: at most eight recent readings
+      render as pips (the shared verdict visual, oldest→newest), plus the chevrons, position label, and
+      ONE overflow trigger. Every reading not holding a pip lives in the single accessible overflow menu —
+      menuitemradio rows wearing the same shared ReviewState visual + position + filed time, keyboard
+      roving, Esc restoring the trigger. Picking an old reading views it IN PLACE: the viewed reading
+      always holds a visible pip (when older than the recent window it takes the window's leftmost slot,
+      clearly selected), the band's height does not change, and the chevrons still walk the WHOLE history
+      one step at a time. No reading is unreachable; no wrap ever grows the band. At 390px the strip still
+      fits without widening the page.
   - name: originator-liveness-shown
     tags: [frontend-e2e]
     code: spec-dashboard/src/EventDetail.jsx

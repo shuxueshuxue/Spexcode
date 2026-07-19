@@ -14,6 +14,7 @@ const ICONS = {
   plus: { node: <><path d="M5 12h14" /><path d="M12 5v14" /></> },
   x: { node: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></> },
   'chevron-left': { node: <path d="m15 18-6-6 6-6" />, sw: 2 },
+  'arrow-left': { node: <><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>, sw: 2 },
   'chevron-right': { node: <path d="m9 18 6-6-6-6" />, sw: 2 },
   'chevron-down': { node: <path d="m6 9 6 6 6-6" />, sw: 2 },
   check: { node: <path d="M20 6 9 17l-5-5" />, sw: 2 },

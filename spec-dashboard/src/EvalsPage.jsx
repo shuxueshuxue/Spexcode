@@ -3,6 +3,7 @@ import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken, scopedEvalQuery } from './reviewQuery.js'
+import { detailBackHash } from './address.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
@@ -98,7 +99,7 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, onOpenSession, onWrite, notice }) {
+export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onWrite, notice }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
@@ -123,7 +124,7 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
       <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
-        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} />
+        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel} />
     </div>
   )
 }
@@ -154,13 +155,18 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // the way BACK to the list is a LIST address: the scoped default view, same as every session door —
   // never a scope-only text (which would show both sections and mark no tab active).
   const listHref = routeHash('evals', null, sessionId ? { q: scopedEvalQuery(sessionId) } : null)
+  // the detail chrome's compact back anchor ([[address-routing]]'s return gate): derived ONLY from the
+  // canonical address — a trunk detail returns to #/evals, a scope:<id> detail to that session's console.
+  const backHref = detailBackHash('evals', query.q || '')
+  const backLabel = sessionId ? t('detail.backToSession') : t('detail.backToEvals')
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
   const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })
 
   return param
     ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
-        sessions={sessions} listHref={listHref} onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
+        sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
+        onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
     : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
         queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} />
 }

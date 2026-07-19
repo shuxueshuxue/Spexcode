@@ -75,7 +75,10 @@ verbs the CLI uses.
   title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
   row and never sits on a title.
 - **The detail page is [[review-chrome]]'s GitHub-grammar skeleton.** Header: the concern ALONE as the
-  title. Status band: the same shared issue-state primitive as the list mark, now with its label. MAIN
+  title, led by the shared compact **back anchor** — a REAL `#/issues` href derived from the canonical
+  address ([[address-routing]]'s one back helper), never `history.back`, identical on a pushed visit and
+  a direct open; browser Back still restores the exact filtered list. Status band: the same shared
+  issue-state primitive as the list mark, now with its label. MAIN
   column: the **markdown-rendered body** (SpecBody — the
   one spec dialect, no raw `##`/pipes) then the reply thread, with the **composer docked at the column's
   foot**. SIDE rail: the store tag, the ORIGINATOR + liveness (a local thread's `by` is a session id — a

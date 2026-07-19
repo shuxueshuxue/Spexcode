@@ -45,9 +45,15 @@ filter (default off) picking the root.
 - **List → detail is a history PUSH; Back restores the list exactly.** Clicking a row (or Enter on the
   j/k cursor) navigates to the detail page as a normal hash push — measured on GitHub: history grows by
   one, and Back returns to the previous list URL with its query intact. The detail page renders standalone:
-  a direct open or reload works with no list mounted, and there is NO fake in-app Back button — the
-  browser's history is the return path. An address naming no real eval renders an honest not-found with a
-  link to the list, never a silent rewrite to some other eval.
+  a direct open or reload works with no list mounted. Its chrome carries ONE compact **back anchor** — the
+  shared [[review-chrome]] DetailShell left arrow, a REAL `<a href>` and never a `history.back` button:
+  the destination derives ONLY from the detail's own canonical address ([[address-routing]]'s one back
+  helper) — `#/evals` for a trunk-rooted detail, and for a detail whose canonical query carries
+  `scope:<id>` the scope session's terminal console `#/sessions/<id>` — so a pushed visit, a direct open,
+  and a reload all share one destination, never guessed from a referrer, history state, or the
+  originator's presence. Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
+  push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
+  the list, never a silent rewrite to some other eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
   header naming the scenario (title) and node, a status band (the ONE shared verdict visual + an A/B strip
   whose reading buttons consume that same visual mapping), then a MAIN

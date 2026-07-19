@@ -38,4 +38,4 @@ scenarios:
 
 YATU: drive a real headless browser against the running dashboard — click the actual rail buttons and
 read `location.hash` + the rendered page from the DOM, never from reasoning about the router. File with
-`spex yatsu eval side-nav --scenario rail-routes-pages --image <png> --pass|--fail`.
+`spex eval add side-nav --scenario rail-routes-pages --video <webm> --pass|--fail`.

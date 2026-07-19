@@ -234,9 +234,8 @@ body {
    (graph, session board) are display-toggled in place; forum/settings mount per visit. */
 .app { display: flex; height: 100vh; }
 .app-main { flex: 1; min-width: 0; display: flex; position: relative; }
-/* the graph PAGE = the canvas + the focus panel, the old two-column grid one level down. --fp-w is set
-   inline by the resizable divider ([[resizable-panes]]). */
-.page-graph { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr var(--fp-w, 250px); position: relative; }
+/* the graph page is one full-width canvas; node details stay in routed pages and the on-demand popup. */
+.page-graph { flex: 1; min-width: 0; position: relative; }
 
 /* ---- left navigation rail ---- */
 .side-rail {
@@ -268,8 +267,6 @@ body {
   background: transparent; border-radius: 2px;
 }
 .pane-resizer:hover::after, body.is-resizing .pane-resizer::after { background: color-mix(in srgb, var(--blue) 55%, transparent); }
-/* the graph page's divider rides the focus-panel border (absolute, out of the grid flow) */
-.page-graph > .pane-resizer { position: absolute; top: 0; bottom: 0; width: 9px; right: calc(var(--fp-w, 250px) - 4px); }
 /* the session board's divider sits in the flex row, straddling the list border via negative margins */
 .si-resizer { flex: 0 0 7px; margin: 0 -3.5px; }
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
@@ -287,7 +284,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .app.kbd-mode .react-flow, .app.kbd-mode .react-flow * { pointer-events: none !important; }
 
 /* ---- graph pane ---- */
-.graph { position: relative; background: var(--paper); border-right: 1px solid var(--line); }
+.graph { position: relative; width: 100%; height: 100%; background: var(--paper); }
 .react-flow__attribution { display: none; }
 .react-flow__edge-path { stroke-dasharray: 0; }
 /* reparent preview: a faint dashed arrow node→proposed-parent in the author session's colour, shown
@@ -677,68 +674,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
 .scenario-count.empty { color: var(--muted); opacity: .7; }
 
-/* @@@ focus panel - the RIGHT column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
-   stateful kinds of bound work, in ONE place with their satisfaction status — replacing the on-node issue
-   popover so neither kind is privileged. Scrolls its own content; reuses the .issue-card vocabulary below. */
-/* sits on the SAME paper as the board — the graph's own border-right is the single clean seam (no muddy
-   in-between slab, no double hairline), which also turns the row :hover (panel2) into a real delta. */
-.focus-panel { overflow: auto; background: var(--paper);
-  display: flex; flex-direction: column; gap: 18px; padding: 16px 14px; }
-/* the head is the panel's title band: the focused node's title, then a clamped desc preview. No eyebrow
-   kicker and no closing hairline — the section heads below carry their own underlines, so a head rule would
-   just double the line; the inter-section gap is the only separator the head needs. */
-.fp-head { display: flex; flex-direction: column; gap: 3px; }
-.fp-title { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink2); word-break: break-word; line-height: var(--leading-tight); }
-/* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
-.fp-desc { color: var(--ink); font-size: var(--type-meta); line-height: var(--leading-ui); margin-top: 3px;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.fp-sec { display: flex; flex-direction: column; gap: 5px; }
-.fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted);
-  border-bottom: 1px solid var(--line); padding-bottom: 5px; }
-.fp-count { font-family: var(--mono); font-size: var(--type-caption); }
-.fp-count.pass { color: var(--green); } .fp-count.fail { color: var(--red); }
-.fp-count.stalePass, .fp-count.staleFail, .fp-count.empty { color: var(--muted); }
-.fp-empty { color: var(--muted); font-size: var(--type-meta); font-style: italic; padding: 3px 2px; }
-/* a scenario row is a BUTTON (drills into the eval tab); reset the native button chrome to read as a row. */
-.fp-scenario { position: relative; display: block; width: 100%; padding: 6px 6px; text-align: left;
-  background: none; border: none; border-radius: 5px; font: inherit; color: inherit; cursor: pointer; }
-.fp-scenario:hover { background: var(--panel2); }
-/* the mark HANGS on the first line (absolute) so the body fills full width and lines 2+ (tags/expected/code)
-   sit flush-left against the column, not indented under the mark. */
-.fp-sc-mark { position: absolute; left: 6px; top: 6px; width: 12px; text-align: center; font-weight: var(--weight-black); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
-.fp-scenario.pass .fp-sc-mark { color: var(--green); }
-.fp-scenario.fail .fp-sc-mark { color: var(--red); }
-.fp-scenario.stalePass .fp-sc-mark, .fp-scenario.staleFail .fp-sc-mark { color: var(--muted); }
-.fp-scenario.empty .fp-sc-mark, .fp-scenario.missing .fp-sc-mark { color: var(--muted); opacity: .55; }
-.fp-sc-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-/* only the name line clears the hanging mark (12px + 8px gap); tags/expected/code stay flush-left. */
-.fp-sc-name { padding-left: 20px; font-family: var(--mono); font-size: var(--type-meta); font-weight: var(--weight-bold); color: var(--ink2); }
-/* a clamped preview — the full `expected` prose lives one click away in the eval tab. */
-.fp-sc-expected { color: var(--ink); font-size: var(--type-meta); line-height: var(--leading-ui);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.fp-sc-code { color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); opacity: .85; }
-
 /* @@@ tag chips — the ONE element (score.jsx TagChips) for a scenario's classification tags, used wherever a
-   scenario surfaces (focus panel, search palette, eval tab). Paper chip + mono, the SAME minimal vocabulary as
+   scenario surfaces (search palette and eval tab). Paper chip + mono, the SAME minimal vocabulary as
    .stat-chip, so a tag reads identically everywhere; flex-wrap keeps a multi-tag cloud from overflowing. */
 .tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .tag-chip { font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); color: var(--ink2);
   background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
 /* in the search row the chips sit between title and path — keep them from being squeezed out. */
 .search-item .tag-chips { flex: none; }
-.fp-issue-counts { display: flex; gap: 6px; font-size: var(--type-caption); }
-.focus-panel .issue-group-head { font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted); margin: 8px 2px 3px; }
-.focus-panel .issue-card { padding: 6px 6px; border-radius: 5px; }
-
 .issue-card { display: block; max-width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }
 .issue-card-top { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 2px; }
 .issue-num { font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--magenta); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
-.issue-state { font-size: var(--type-caption); color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: var(--tracking-normal); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; line-height: var(--leading-relaxed); }
-.issue-state.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
-.issue-state.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
+.issue-card-state { gap: 3px; }
+.issue-card-state .review-state-label { font-size: var(--type-caption); text-transform: uppercase; }
 .issue-card-title { display: block; font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 

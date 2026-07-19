@@ -415,8 +415,8 @@ export default {
     scoreEmpty: ({ n }) => `${n} unmeasured or unscored scenario${n === 1 ? '' : 's'} (a blind spot) — click to walk the nodes carrying them`,
   },
 
-  // the eval SCORE vocabulary — one set of words across the node-tile count, the focus panel, and the eval
-  // tab. `count` is the tile/stat-bar tally; `missing` is a declared-but-never-measured scenario.
+  // the eval SCORE vocabulary — one set of words across the node-tile count, search, and the eval tab.
+  // `count` is the tile/stat-bar tally; `missing` is a declared-but-never-measured scenario.
   score: {
     pass: 'current pass — measured, fresh, and passing',
     fail: 'current fail — measured, fresh, and failing',
@@ -429,27 +429,13 @@ export default {
       (outstanding ? ` · ${outstanding} outstanding — failing, stale, or unmeasured` : ''),
   },
 
-  // the left FOCUS PANEL — the focused node's Issues and Scenarios in one place (their satisfaction status),
-  // so the two stateful kinds of bound work share one surface instead of an on-node popup.
-  focusPanel: {
-    scenarios: 'scenarios',
-    issues: 'issues',
-    noScenarios: 'no scenarios — this node declares no eval.md to measure.',
-    noIssues: 'no issues linked to this node.',
-    noFocus: 'no node focused.',
-    openEval: 'open this eval detail — the full eval timeline',
-    open: ({ n }) => `${n} open`,
-    closed: ({ n }) => `${n} closed`,
-    tracks: ({ files }) => `tracks ${files}`,
-  },
-
   specNode: {
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     more: ({ n }) => `${n} more`,
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
-    openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — focus the node to list them in the panel`,
+    openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — open node info to read them`,
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
   },
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,6 +10,8 @@ const shell = read('ReviewShell.jsx')
 const evals = read('EvalsFeed.jsx')
 const detail = read('EventDetail.jsx')
 const issues = read('IssuesPage.jsx')
+const issueCard = read('IssueCard.jsx')
+const dashboard = read('Dashboard.jsx')
 const css = read('styles.css')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
@@ -110,7 +112,18 @@ test('one icon-label-tone mapping drives every review state home', () => {
   assert.match(issues, /<ReviewState kind="issue" state=\{status\} showLabel/)
   assert.match(detail, /<ReviewState kind="eval" state=\{readingScore\(viewing\)\} showLabel/)
   assert.match(detail, /<ReviewState kind="eval" state=\{state\} size=\{13\}/)
+  assert.match(issueCard, /<ReviewState kind="issue" state=\{status\} showLabel/)
   assert.doesNotMatch(`${evals}\n${detail}`, />\s*[✓✗☑]\s*</)
+  assert.doesNotMatch(issueCard, /issue-state|[✓✗○]/)
+  assert.doesNotMatch(css, /\.issue-state/)
+})
+
+test('graph keeps the full canvas and mounts no persistent focus sidebar', () => {
+  assert.equal(existsSync(join(here, 'FocusPanel.jsx')), false)
+  assert.doesNotMatch(dashboard, /FocusPanel|spex\.fpWidth|--fp-w/)
+  assert.doesNotMatch(css, /\.focus-panel|\.fp-sc-|--fp-w/)
+  assert.match(css, /\.page-graph\s*\{[^}]*flex:\s*1;[^}]*position:\s*relative;/s)
+  assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
 })
 
 test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow contract', () => {

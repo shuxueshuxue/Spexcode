@@ -19,7 +19,7 @@ import { git } from './git.js'
 import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { tsxBin } from './tsx-bin.js'
-import { DEFAULT_PROJECT_ICON, requireIdentityPreset } from './identity-presets.js'
+import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from './identity-presets.js'
 import {
   resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
 } from './project-identity.js'
@@ -278,7 +278,7 @@ function writeProjectConfig(root: string, content: string, revision: string): Pr
 }
 
 function writeProjectIcon(root: string, icon: unknown, revision: string): ProjectConfigSource & { identity: ResolvedIdentity } {
-  const canonical = requireIdentityPreset(icon)
+  const canonical = requireIdentityChoice(icon)
   const current = readProjectConfig(root)
   let config: Record<string, any>
   try { config = JSON.parse(current.content) }
@@ -408,9 +408,9 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
       if (path === '/projects/icon' && req.method === 'PUT') {
         let body: any
         try { body = JSON.parse(await readBody(req) || '{}') }
-        catch { json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' }); return true }
+        catch { json(res, 400, { error: 'body must be {"icon":"<choice>","revision":"..."}' }); return true }
         if (typeof body?.icon !== 'string' || typeof body?.revision !== 'string') {
-          json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' })
+          json(res, 400, { error: 'body must be {"icon":"<choice>","revision":"..."}' })
           return true
         }
         try { json(res, 200, { ok: true, gateway: writeGatewayIcon(body.icon, body.revision) }) }
@@ -424,9 +424,9 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
         let body: any
         try { body = JSON.parse(await readBody(req) || '{}') }
-        catch { json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' }); return true }
+        catch { json(res, 400, { error: 'body must be {"icon":"<choice>","revision":"..."}' }); return true }
         if (typeof body?.icon !== 'string' || typeof body?.revision !== 'string') {
-          json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' })
+          json(res, 400, { error: 'body must be {"icon":"<choice>","revision":"..."}' })
           return true
         }
         try { json(res, 200, { ok: true, ...writeProjectIcon(entry.root, body.icon, body.revision) }) }

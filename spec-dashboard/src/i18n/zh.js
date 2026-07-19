@@ -180,6 +180,9 @@ export default {
     sideStore: '存储',
     sideOriginator: '发起者',
     sideNodes: '规格节点',
+    backToEvals: '返回评测列表',
+    backToIssues: '返回 issues 列表',
+    backToSession: '返回会话终端',
   },
 
   annotator: {
@@ -197,6 +200,7 @@ export default {
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
+    abMore: ({ n }) => `更早的读数（${n}）`,
     okd: '已签核',
     okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
     menuReview: '评审命令',

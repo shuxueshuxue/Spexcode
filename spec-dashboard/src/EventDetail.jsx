@@ -4,7 +4,7 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './reviewFilters.js'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
-import { DetailShell, ReviewState, SideSection } from './ReviewShell.jsx'
+import { DetailShell, ReviewState, SideSection, usePopover } from './ReviewShell.jsx'
 import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -82,7 +82,43 @@ function StepRail({ events, axis, extent, activeStepIdx, onSeek }) {
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null }) {
+// the A/B strip's bounded window ([[event-detail]]): at most this many verdict pips render — the strip
+// stays ONE line at a stable height however many readings a scenario accrues.
+export const AB_WINDOW = 8
+
+// the strip's ONE overflow door: every reading not holding a pip, in one accessible menu (the shared
+// popover mechanics — roving menuitemradio rows wearing the same shared ReviewState visual + position +
+// filed time). Picking a row views that reading in place; no reading is ever unreachable.
+function AbOverflow({ hidden, total, histIdx, onPick }) {
+  const t = useT()
+  const popover = usePopover()
+  const label = t('annotator.abMore', { n: hidden.length })
+  return (
+    <div className="an-ab-more" ref={popover.ref}>
+      <IconButton icon="ellipsis" size={14} className="an-ab-morebtn" label={label}
+        aria-haspopup="menu" aria-expanded={popover.open}
+        onClick={(event) => popover.toggle(event.currentTarget)} onKeyDown={popover.onTriggerKeyDown} />
+      {popover.open && (
+        <div className="rl-menu an-ab-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
+          {hidden.map((r) => {
+            const state = readingScore(r)
+            return (
+              <button type="button" role="menuitemradio" aria-checked={r.idx === histIdx} tabIndex={-1}
+                key={`${r.ts}-${r.idx}`} className="rl-menu-item an-ab-menuitem" onFocus={popover.onItemFocus}
+                onClick={() => { popover.close(true); onPick(r.idx) }}>
+                <ReviewState kind="eval" state={state} size={13} />
+                <span className="an-ab-menupos">{total - r.idx}/{total}</span>
+                <span className="an-ab-menudate">{new Date(r.ts).toLocaleString()}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null, backHref = null, backLabel = null }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -455,31 +491,45 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
       {viewing.humanOk &&
         <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}><Icon name="circle-check" size={14} /> {t('annotator.okd')}</span>}
       {/* the A/B history strip — the scenario's fail→pass lifecycle: the ONE shared verdict visual on
-          every reading, the viewed one lit, shared chevrons to walk it. Shown only when there's more than one
-          reading to flip between; a fresh scenario is just its single reading. */}
-      {history && history.length > 1 && (
-        <div className="an-ab">
-          <IconButton icon="chevron-left" size={13} className="an-ab-nav" disabled={histIdx >= history.length - 1}
-            onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} label={t('annotator.abOlder')} />
-          <div className="an-ab-track">
-            {history.slice().reverse().map((r, p) => {
-              const idx = history.length - 1 - p
-              const state = readingScore(r)
-              return (
-                <button type="button" key={`${r.ts}-${idx}`}
-                  className={`an-ab-pip ${idx === histIdx ? 'on' : ''}`}
-                  onClick={() => setHistIdx(idx)}
-                  aria-label={`${t(`score.${state}`)} · ${new Date(r.ts).toLocaleString()}`}>
-                  <ReviewState kind="eval" state={state} size={13} />
-                </button>
-              )
-            })}
+          every reading, the viewed one lit, shared chevrons to walk the WHOLE history. Shown only when
+          there's more than one reading. BOUNDED to one line at a stable height: at most AB_WINDOW recent
+          pips; a viewed reading older than the window takes the leftmost slot; every other reading lives
+          behind the single accessible overflow menu. */}
+      {history && history.length > 1 && (() => {
+        const total = history.length
+        const recent = Math.min(AB_WINDOW, total)
+        // oldest→newest left-to-right (history is newest-first, so indices render descending)
+        const pipIdxs = histIdx < AB_WINDOW
+          ? Array.from({ length: recent }, (_, k) => recent - 1 - k)
+          : [histIdx, ...Array.from({ length: AB_WINDOW - 1 }, (_, k) => AB_WINDOW - 2 - k)]
+        const shown = new Set(pipIdxs)
+        const hidden = history.map((r, idx) => ({ ...r, idx })).filter((r) => !shown.has(r.idx))
+        return (
+          <div className="an-ab">
+            <IconButton icon="chevron-left" size={13} className="an-ab-nav" disabled={histIdx >= history.length - 1}
+              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} label={t('annotator.abOlder')} />
+            {hidden.length > 0 && <AbOverflow hidden={hidden} total={total} histIdx={histIdx} onPick={setHistIdx} />}
+            <div className="an-ab-track">
+              {pipIdxs.map((idx) => {
+                const r = history[idx]
+                const state = readingScore(r)
+                return (
+                  <button type="button" key={`${r.ts}-${idx}`}
+                    className={`an-ab-pip ${idx === histIdx ? 'on' : ''}`}
+                    aria-current={idx === histIdx ? 'true' : undefined}
+                    onClick={() => setHistIdx(idx)}
+                    aria-label={`${total - idx}/${total} · ${t(`score.${state}`)} · ${new Date(r.ts).toLocaleString()}`}>
+                    <ReviewState kind="eval" state={state} size={13} />
+                  </button>
+                )
+              })}
+            </div>
+            <IconButton icon="chevron-right" size={13} className="an-ab-nav" disabled={histIdx <= 0}
+              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} label={t('annotator.abNewer')} />
+            <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
           </div>
-          <IconButton icon="chevron-right" size={13} className="an-ab-nav" disabled={histIdx <= 0}
-            onClick={() => setHistIdx((i) => Math.max(0, i - 1))} label={t('annotator.abNewer')} />
-          <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
-        </div>
-      )}
+        )
+      })()}
     </>
   )
 
@@ -535,6 +585,8 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
       side={side}
       composer={composer}
       listHref={listHref}
+      backHref={backHref}
+      backLabel={backLabel}
     >
       {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
       {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}

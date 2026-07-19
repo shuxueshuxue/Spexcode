@@ -34,12 +34,32 @@ scenarios:
       #/evals/<node>/<scenario> as a STANDALONE full page: header (scenario title + node), status band
       (verdict badge, A/B strip when history exists), the evidence workspace as the MAIN column, the
       reading metadata (evaluator, time, filer liveness, staleness) in the SIDE rail, the remark thread +
-      docked composer below the workspace. NO fake in-app back button. Browser Back restores EXACTLY the
+      docked composer below the workspace. The header leads with the compact back ANCHOR — a real
+      `<a href="#/evals">` (arrow glyph, localized tooltip + aria-label), never a history.back button —
+      and Enter on the focused anchor follows it. Browser Back still restores EXACTLY the
       previous list URL — filters intact — and the list re-renders that state. A direct reload at the
-      detail address renders the same standalone page with no list mounted first. An address naming no
+      detail address renders the same standalone page (same back-anchor href) with no list mounted first.
+      An address naming no
       real eval renders the honest not-found face with a link back to #/evals — never a silent rewrite.
       Zero loss = list→detail is a real navigation, Back is the browser's, and every page is directly
       openable.
+  - name: detail-back-anchor-destinations
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/address.js]
+    description: >
+      Open a trunk eval detail (#/evals/<node>/<scenario>) by row click, by direct URL, and by reload —
+      read the back anchor's href each time. Then open a session-scoped detail
+      (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways and re-read the href; click it and
+      read where it lands. Compare against an issues detail's anchor. Verify browser Back after clicking
+      the anchor still walks the real history.
+    expected: >
+      The back anchor's destination derives ONLY from the canonical address: a trunk detail's anchor is
+      href="#/evals" (the list); a detail whose canonical query carries scope:<id> points at
+      #/sessions/<id> — the scope session's terminal console — and clicking it lands there with the
+      session selected; an issue detail's anchor is #/issues. Row-click, direct open, and reload yield
+      byte-identical hrefs (no referrer/history/presence guessing). The anchor is an ordinary push:
+      after following it, browser Back returns to the detail, and Back again to wherever the visit
+      actually began.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]

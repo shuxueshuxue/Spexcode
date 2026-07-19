@@ -10,6 +10,7 @@ import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewS
 import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
 import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
+import { detailBackHash } from './address.js'
 import { Icon } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
@@ -189,6 +190,8 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
   return (
     <DetailShell
       title={th.concern}
+      backHref={detailBackHash('issues')}
+      backLabel={t('detail.backToIssues')}
       status={
         <ReviewState kind="issue" state={status} showLabel className="ds-status-pill" size={16} />
       }

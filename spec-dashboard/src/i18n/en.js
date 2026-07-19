@@ -181,6 +181,9 @@ export default {
     sideStore: 'store',
     sideOriginator: 'opened by',
     sideNodes: 'spec nodes',
+    backToEvals: 'back to evals',
+    backToIssues: 'back to issues',
+    backToSession: 'back to the session console',
   },
 
   annotator: {
@@ -198,6 +201,7 @@ export default {
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
     abPos: ({ i, n }) => `${i} / ${n}`,
+    abMore: ({ n }) => `older readings (${n})`,
     okd: 'human-ok',
     okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     menuReview: 'review commands',

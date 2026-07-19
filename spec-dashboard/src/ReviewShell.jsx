@@ -88,7 +88,9 @@ const focusMenuItem = (items, index) => {
   target.focus()
 }
 
-function usePopover() {
+// the ONE accessible popover mechanics (menu focus discipline, roving menuitemradio, LIFO Esc, outside
+// dismiss) — shared by the facet menus here and by any detail-context overflow (the A/B strip's).
+export function usePopover() {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const menuRef = useRef(null)
@@ -406,8 +408,10 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
 }
 
 // DetailShell is the standalone detail page's GitHub grammar. At phone width the same markup reflows to
-// one column with side metadata first; failure and not-found remain distinct honest faces.
-export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, children }) {
+// one column with side metadata first; failure and not-found remain distinct honest faces. `backHref` is
+// the compact back anchor ([[address-routing]]'s detailBackHash supplies it) — a REAL <a href> derived
+// from the canonical address, never a history.back button.
+export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, backHref, backLabel, children }) {
   if (failure) {
     return (
       <div className="ds-page ds-missing ds-failed" role="alert">
@@ -427,6 +431,11 @@ export function DetailShell({ title, titleMeta, status, side, composer, missing,
   return (
     <div className="ds-page">
       <header className="ds-head">
+        {backHref && (
+          <a className="ds-back" href={backHref} data-tip={backLabel} aria-label={backLabel}>
+            <Icon name="arrow-left" size={16} />
+          </a>
+        )}
         <h1 className="ds-title">
           {title}
           {titleMeta && <span className="ds-title-meta">{titleMeta}</span>}

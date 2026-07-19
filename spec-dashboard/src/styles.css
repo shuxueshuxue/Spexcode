@@ -872,24 +872,29 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    surface — including the session-board page, which is where the rename gesture now lives; a lower value
    (it began at 30, sized for the .sesswin glance) rendered it behind surfaces it must float over. */
 .sess-menu {
-  position: fixed; z-index: 60; min-width: 116px;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 5px;
-  box-shadow: 0 6px 22px rgba(101,123,131,.22); overflow: hidden; padding: 3px;
+  position: fixed; z-index: 60; min-width: 190px; max-width: min(260px, calc(100vw - 16px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 18%, transparent);
+  overflow: hidden; padding: 4px; color: var(--ink);
 }
+.sess-menu-group { display: grid; gap: 1px; }
 .sess-menu-item {
-  display: block; width: 100%; text-align: left; background: none; border: none;
-  border-radius: 3px; padding: 5px 9px; cursor: pointer;
-  font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
+  display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: center; gap: 7px;
+  width: 100%; min-height: 28px; text-align: left; background: none; border: none;
+  border-radius: 4px; padding: 4px 7px; cursor: pointer;
+  font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-tight); color: var(--ink);
 }
-.sess-menu-item:hover { background: var(--blue); color: var(--paper); }
-/* close is destructive — tinted orange like the header's kill button, inverting on hover. */
-.sess-menu-item.danger { color: var(--orange); }
-.sess-menu-item.danger:hover { background: var(--orange); color: var(--paper); }
+.sess-menu-icon { width: 17px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.sess-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-menu-item:hover, .sess-menu-item:focus { outline: none; background: var(--panel2); color: var(--ink2); }
+.sess-menu-item:hover .sess-menu-icon, .sess-menu-item:focus .sess-menu-icon { color: currentColor; }
+/* close/delete are destructive — orange text + icon, isolated by a separator rather than a loud fill. */
+.sess-menu-item.danger, .sess-menu-item.danger .sess-menu-icon { color: var(--orange); }
+.sess-menu-item.danger:hover, .sess-menu-item.danger:focus { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); color: var(--orange); }
 /* overlay-session items ([[node-menu]]): a thin divider parts them from the verbs, each row a status
    glyph + the session name. The glyph keeps its status colour on hover (inline colour wins). */
-.sess-menu-sep { height: 1px; margin: 3px 4px; background: var(--line); }
-.sess-menu-item.sess-menu-sess { display: flex; align-items: center; gap: 6px; }
-.sess-menu-item.sess-menu-sess .sess-glyph { width: 11px; }
+.sess-menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.sess-menu-item.sess-menu-sess .sess-glyph { width: 11px; line-height: var(--leading-none); }
 /* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
 .sess-rename-modal { width: min(360px, 92vw); }
 .sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }

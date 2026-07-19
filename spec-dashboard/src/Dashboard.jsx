@@ -512,7 +512,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   // spine open). A session with no pending ops still locks — the top banner explains the empty grip;
   // releasing (clicking again) leaves focus where it is.
   // toggle=true (the graph's session rows): a click on the locked session releases it. toggle=false (the
-  // session-board tab's DOUBLE click): always GRIP — switch back to the graph already locked + focused,
+  // session-board row's context-menu action): always GRIP — switch back to the graph already locked + focused,
   // never accidentally release. Either way, locking auto-focuses the session's first changed node.
   const onPickSession = useCallback((s, toggle = true) => {
     const releasing = toggle && highlightId === s.source
@@ -617,7 +617,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
           onSeedConsumed={() => setSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
-          onOpenSession={openSession}
           onOpenSearch={() => setSearch('sessions')}
           reload={reload}
         />

@@ -258,10 +258,11 @@ export default {
   },
 
   sessionWindow: {
-    rowTitle: '单击将图锁定到此会话 · 双击打开它 · 右键重命名或关闭',
+    rowTitle: '单击将图锁定到此会话 · 双击打开它',
     lockedTitle: '图已锁定到此会话——再次单击解除',
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
+    lock: '锁定到图谱',
     rename: '重命名',
     attach: '在终端中打开…',
     select: '多选…',
@@ -416,8 +417,8 @@ export default {
   },
 
   session: {
-    opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
-    lockTitle: '双击标签锁定该会话并返回图谱',
+    opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
+    lockTitle: '右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
     searchTitle: '搜索（⌘+/）',

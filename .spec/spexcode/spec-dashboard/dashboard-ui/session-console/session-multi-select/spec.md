@@ -31,8 +31,8 @@ would remove just it. Entering the mode is the only new job the menu item does; 
 In multi-select mode the list stops being a tab picker and becomes a **checklist**. Every session row shows a
 checkbox and a **click toggles that row's pick** instead of switching the right pane — the terminal you were
 watching stays put, because ticking sessions to remove must never yank you onto a different one. The
-right-click rename/close menu is **suppressed** while selecting (the gesture that opens single-row actions
-would fight the bulk one); double-click-to-lock is likewise inert. Zone grouping and ordering are unchanged —
+right-click session menu is **suppressed** while selecting (the gesture that opens single-row actions
+would fight the bulk one), so its lock-on-graph action is unavailable too. Zone grouping and ordering are unchanged —
 the mode only reinterprets a row's clicks, it does not reshuffle the list.
 
 The list's top button row is **replaced, while selecting, by a select bar**: a live **count of picked

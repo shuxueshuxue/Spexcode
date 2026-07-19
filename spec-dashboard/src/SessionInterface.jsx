@@ -154,11 +154,11 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
-  const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — the RENAME gesture lives here, on the board's session list
+  const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
@@ -710,12 +710,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             const lead = (it.expandable || it.depth)
               ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />
               : null
-            // single click switches tab; double-click locks the session and returns to the graph — no
-            // pending-ops precondition: an ops-less session still locks (the banner explains the empty
-            // grip), the console-side twin of the board window's single-click lock.
+            // A click switches tabs. Locking is an explicit item in the right-click menu below; double-click
+            // deliberately has no extra meaning, so it only leaves the clicked tab selected.
             // The face is the shared SessionRow, avatar-less here.
             // In multi-select mode ([[session-multi-select]]) the row is a checkbox instead: a click toggles
-            // its pick (never switches the pane), and the rename/lock gestures are suppressed.
+            // its pick (never switches the pane), and the row action menu is suppressed.
             const isPicked = selecting && picked.has(s.id)
             return (
               <button
@@ -724,7 +723,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
                 onClick={() => (selecting ? togglePick(s.id) : setSel(s.id))}
-                onDoubleClick={() => { if (!selecting && onPickSession) { onPickSession(s, false); onClose() } }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
               >
@@ -883,7 +881,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </section>
       </div>
     </div>
-    <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} onMultiSelect={enterSelect} />
+    <SessionContextMenu
+      menu={ctxMenu}
+      onClose={() => setCtxMenu(null)}
+      onChanged={reload}
+      onLock={(s) => { onPickSession?.(s, false); onClose() }}
+      onMultiSelect={enterSelect}
+    />
     </>
   )
 }

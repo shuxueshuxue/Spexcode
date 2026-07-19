@@ -1183,60 +1183,56 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.forum:hover { color: var(--blue); }
 .si-pill.forum.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
 
-/* ---- the master-detail shell shared by the Evals page ([[evals-view]]) and the Issues page
-   ([[issues-view]]) — a SLIM left list + a full-height detail pane. Selection IS detail: no in-place
-   expansion inside a scroll box. Rows are title-only, so the list earns no more than ~280px; a fold
-   toggle collapses it to a thin strip so the detail workspace owns the width while an eval is worked.
-   Each page is its OWN top-level route now — no in-page tab switcher. ---- */
-.fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(232px, 280px) 1fr; }
-.fv-master.folded { grid-template-columns: 22px 1fr; }
-/* the left column is ONE box: its own filter bar (the evals chips, or the issues store/New/concluded bar)
-   over a full-height list that scrolls itself. The [[side-nav]] rail names the page — no column title. */
-.fv-list-col { position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
-.fv-list-col > .fv-notice { flex: none; }
-.fv-list-col > .fv-group { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 0; }
-/* a multi-section list (the session Eval tab's per-node groups) scrolls as ONE box under the col. */
-.fv-list-col > .fv-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.fv-list-col > .fv-scroll .fv-group { border-top: 0; }
-/* the session Eval tab's multi-group list has no single head row, so its fold badge still floats on the
-   sticky bar's right edge; the bar reserves room for it. The issues/evals pages anchor theirs instead. */
-.fv-list-col > .fv-scroll .fv-group-head { padding-right: 34px; }
-.fv-fold { position: absolute; top: 8px; right: 6px; z-index: 3; display: grid; place-items: center; padding: 0;
-  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  width: 22px; height: 22px; cursor: pointer; }
-.fv-fold:hover { color: var(--blue); border-color: var(--blue); }
-/* the ANCHORED fold toggle ([[issues-view]]/[[evals-view]] control row): a normal flex member of the
-   bar's first row — same badge look, no absolute positioning over the list's scrollbar. */
-.fv-fold-inline { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0;
-  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  width: 22px; height: 22px; cursor: pointer; }
-.fv-fold-inline:hover { color: var(--blue); border-color: var(--blue); }
-/* folded: the whole strip is the unfold affordance — a full-height slim button; the icon sits at the
-   top, where the fold badge lived, so the toggle never moves under the pointer. */
-.fv-unfold { display: flex; align-items: flex-start; justify-content: center; padding: 9px 0 0;
-  color: var(--muted); background: var(--panel); border: none;
-  border-right: 1px solid var(--line); cursor: pointer; min-height: 0; }
-.fv-unfold:hover { color: var(--blue); background: var(--panel2); }
-/* the ONE sidebar-toggle glyph (FoldToggle.jsx) every fold site renders — sized here, tinted by the
-   button's currentColor. */
-.fold-toggle-icon { width: 15px; height: 15px; display: block; flex: none; }
-.fv-detail { min-height: 0; min-width: 0; overflow-y: auto; background: var(--paper); }
-.fv-group { display: flex; flex-direction: column; }
-.fv-group + .fv-group { border-top: 1px solid var(--line); }
-/* the filter bar reads as ONE two-row cluster on both pages: the CONTROL row (fold / filter dropdown /
-   New) over the small toggle chips ([[issues-view]]). Unhurried padding + a gentle row-gap so the wrap
-   on the slim column looks intentional. */
-.fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 5px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
-.fv-group-title { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
-/* the bar's CONTROL row: full-basis so the chip bar always wraps beneath it. */
-.fv-head-row { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
-/* ONE row grammar for BOTH tabs: a compact SINGLE-LINE button (the title truncates, never wraps, so the
-   two pickers keep an identical, uniform rhythm) with unhurried vertical air and a hairline-soft divider
-   (the old full-strength border on every row read as a dense ledger). `.sel` is the page's one selection. */
-.fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; font: inherit; font-size: var(--type-control); color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 7px 12px; cursor: pointer; }
-.fv-row:hover, .ef-row:hover { background: var(--panel2); }
-.fv-row.sel, .ef-row.sel { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
-.fv-row .fv-concern, .ef-scenario {
+/* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page
+   skeletons both #/evals and #/issues render ([[evals-view]] / [[issues-view]]). One implementation:
+   list rhythm, sticky head, anchor rows, detail grid, and the phone reflow live here once. ---- */
+/* the LIST page: sticky head (control row over chip row) above full-width anchor rows. */
+.lp-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; background: var(--paper); }
+.lp-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 5px; padding: 10px 14px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.lp-controls { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
+.lp-rows { display: flex; flex-direction: column; }
+.lp-empty { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
+/* ONE row grammar for BOTH pages: a real <a> anchor, one compact SINGLE line (the title truncates, never
+   wraps) with unhurried vertical air over a hairline-soft divider. `.cur` is the j/k cursor (a visual
+   cursor, not a selection — Enter opens the row's page); `.inert` rows (blind spots) carry no link. */
+.lp-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; text-align: left; text-decoration: none; font: inherit; font-size: var(--type-control); color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 8px 14px; cursor: pointer; }
+.lp-row:hover { background: var(--panel2); }
+.lp-row.cur { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
+.lp-row.inert { cursor: default; }
+.lp-row.inert:hover { background: none; }
+/* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
+   rail. No fake back button — browser history is the return path. */
+.ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
+.ds-head { max-width: 1180px; }
+.ds-title { margin: 0 0 6px; font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.ds-title-meta { margin-left: 10px; font-size: var(--type-meta); font-weight: var(--weight-regular); color: var(--muted); }
+.ds-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1180px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.ds-status-pill { display: inline-flex; align-items: center; gap: 5px; }
+.ds-cols { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: 22px; max-width: 1180px; align-items: start; }
+.ds-main { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
+/* the composer DOCKS STICKY at the main column's foot — the thread scrolls behind it, so the write
+   affordance is always on screen (the docked-writer geometry every review surface shares). */
+.ds-compose { position: sticky; bottom: 0; z-index: 2; background: var(--paper); padding: 6px 0 12px; border-top: 1px solid var(--line); }
+.ds-compose .fv-compose { margin-top: 0; }
+.ds-side { display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
+.ds-side-sec { display: flex; flex-direction: column; gap: 5px; padding-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.ds-side-label { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); }
+.ds-side-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--type-meta); color: var(--ink2); }
+.ds-side-line { font-size: var(--type-meta); color: var(--ink2); }
+.ds-side-dim { color: var(--muted); }
+/* the honest not-found face — an address naming no object, with the one link back to its list. */
+.ds-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.ds-missing-note { color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }
+.ds-backlink { color: var(--blue); font-size: var(--type-control); text-decoration: none; }
+.ds-backlink:hover { text-decoration: underline; }
+/* the phone reflow (GitHub's measured 390px order): ONE column, side metadata ABOVE the main column —
+   pure CSS over the same markup, never a second component. */
+@media (max-width: 760px) {
+  .ds-cols { display: flex; flex-direction: column; gap: 0; }
+  .ds-side { order: -1; padding: 10px 0 0; }
+  .ds-side-sec { padding-bottom: 8px; }
+}
+.fv-concern, .ef-scenario {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--type-control); font-weight: var(--weight-semibold);
 }
@@ -1260,7 +1256,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   color: var(--muted);
 }
 .fv-store-local { color: color-mix(in srgb, var(--blue) 65%, var(--muted)); }
-.fv-row .fv-store { font-family: inherit; font-size: var(--type-meta); letter-spacing: var(--tracking-normal); text-transform: none; }
+.lp-row .fv-store { font-family: inherit; font-size: var(--type-meta); letter-spacing: var(--tracking-normal); text-transform: none; }
 .fv-concern { color: var(--ink); }
 .fv-status {
   flex: none; font-family: var(--mono); font-size: var(--type-caption); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
@@ -1278,19 +1274,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-originator.openable:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .fv-originator.offline { opacity: .7; }
 .fv-chips { flex: none; display: flex; flex-wrap: wrap; gap: 5px; }
-/* the detail pane's issue face: a full-height column — the thread region scrolls, the composer docks at
-   the foot (see .fvd-compose), so replying never needs a scroll to the bottom of a long thread. */
-.fvd { height: 100%; min-height: 0; display: flex; flex-direction: column; }
-.fvd-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 22px 24px; }
-.fvd-scroll > * { max-width: 860px; }
-/* the docked composer bar — the issues-detail sibling of .an-rail-compose / the console's ❯ bar. The
-   full-width hairline + panel band are the DOCK's chrome; the quiet bordered box inside rides the SAME
-   content column as the prose above (the scroll region's horizontal padding + the same 860px cap), so
-   the writing surface never sits offset from the thread it replies to. */
-.fvd-compose { flex: none; border-top: 1px solid var(--line); padding: 8px 22px 12px; background: var(--panel); }
-.fvd-compose .fv-compose { margin-top: 0; max-width: 860px; }
-.fvd-head { margin-bottom: 4px; }
-.fvd-concern { font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); }
 .fv-close-issue {
   flex: none; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange);
   background: var(--paper); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
@@ -1301,7 +1284,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* promote is a move to the forge; close keeps the default conclusion hue. */
 .fv-close-issue.fv-life-promote { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
 .fv-close-issue.fv-life-promote:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-.fvd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .fvd-body { font-size: var(--type-body); }
 
 /* node chips — the doc-link blue vocabulary, but clickable buttons that focus the node on the board. */
@@ -1872,22 +1854,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-sess-status { font-size: var(--type-control); color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
 
-/* the header's eval entry + the evaluation host ([[session-eval]] on the phone): the SAME SessionEvalPane,
-   restacked for one-axis thumb reading — master list ABOVE the detail; the desktop fold toggle retires here
-   (stacking already gives the detail the full width). */
+/* the header's eval entry ([[session-eval]] on the phone): a DOOR to the session-scoped Evals page. */
 .m-sess-evalbtn {
   flex: none; margin-left: auto; padding: 6px 13px; font-size: var(--type-control); font-family: var(--mono);
   color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: 15px; cursor: pointer;
 }
-.m-sess-evalbtn.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
-.m-eval-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.m-eval-host > .m-empty { padding: 20px 14px; }
-.m-eval-host .fv-master { grid-template-columns: 1fr; grid-template-rows: minmax(110px, 38%) 1fr; }
-.m-eval-host .fv-list-col { border-right: none; border-bottom: 1px solid var(--line); }
-.m-eval-host .fv-fold, .m-eval-host .fv-unfold, .m-eval-host .fv-fold-inline { display: none; }
-/* the phone host retires the remark-rail fold too — with its strip/badge hidden above, the rail must
-   stay open or the review track would be unreachable. */
-.m-eval-host .an-rail.folded { display: flex; }
+/* the routed review pages inside the phone shell ([[mobile-ui]]): the same lp-/ds- chrome, one column. */
+.m-review { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
    below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
@@ -2029,6 +2002,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the scenario is the row's title: it grows and TRUNCATES to one line (full text on hover), so the evals
    picker keeps the same uniform single-line rhythm the issues list has — the two never read as two dialects. */
 .ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; }
+/* the full-width list page has room — the node name breathes there (58px was the slim-column budget). */
+.lp-row .ef-node { max-width: 180px; }
 .ef-kind { flex: none; margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
 .ef-time { flex: none; color: var(--muted); font-size: var(--type-meta); min-width: 26px; text-align: right; }
 /* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
@@ -2036,44 +2011,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
 .ef-okchip { display: inline-flex; align-items: center; gap: 5px; }
 
-/* ---- annotator ([[annotator]]) — the human's measuring hand on an already-captured clip. The pane is a
-   WORKSPACE (the gugu-annotator shape): a slim header band, then MEDIA STAGE | REMARK RAIL side by side,
-   each scrolling itself — circle on the stage, remark in the rail, no vertical ping-pong. ---- */
-.an-detail { height: 100%; min-height: 0; display: flex; flex-direction: column; padding: 0; }
-.an-head { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
-/* the stage | rail split: the media owns the center, the remark track + composer the right rail —
-   BOTH always visible, each its own scroll. */
-.an-work { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
-.an-stage-col { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px 20px; }
-.an-rail { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); }
-/* the rail's default fold ([[event-detail]] / [[fold-toggle]]): the rail collapses to the SAME thin
-   strip the master lists fold to (.fv-unfold reused verbatim) — mirrored to the right edge, count-badged;
-   the rail stays mounted (display:none) so a typed draft survives a fold. */
-.an-work.rail-folded { grid-template-columns: minmax(0, 1fr) 22px; }
-.an-rail.folded { display: none; }
-.an-rail-unfold { flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; border-right: none; border-left: 1px solid var(--line); }
-.an-rail-count { font-size: var(--type-caption); font-family: var(--mono); line-height: var(--leading-none); color: var(--muted); }
-.an-rail-count.open { color: var(--orange); font-weight: var(--weight-bold); }
-.an-rail .an-comments-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid var(--line); }
-.an-rail .an-comments-head .fv-fold-inline { margin-left: auto; }
-.an-rail-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 12px 8px; }
-.an-rail-list .fv-reply { margin-top: 8px; }
-/* the composer is DOCKED at the rail's foot — always on screen, never scrolled to. */
-.an-rail-compose { flex: none; border-top: 1px solid var(--line); padding: 0 12px 10px; background: var(--panel); }
-.an-rail-compose .fv-compose { margin-top: 8px; }
-/* narrow: the workspace stacks — stage over rail — and the pane scrolls as one column again; the composer
-   stays a sticky bar at the column's foot, so the write affordance floats over the scroll. */
-@media (max-width: 900px) {
-  .an-detail { height: auto; }
-  .an-work { display: block; }
-  .an-stage-col { overflow: visible; }
-  .an-rail { border-left: none; border-top: 1px solid var(--line); }
-  .an-rail-list { overflow: visible; }
-  .an-rail-compose { position: sticky; bottom: 0; z-index: 2; }
-  /* stacked mode: the folded rail's strip turns into a slim full-width bar under the stage. */
-  .an-rail-unfold { flex-direction: row; justify-content: center; width: 100%; padding: 8px 0;
-    border-left: none; border-top: 1px solid var(--line); }
-}
+/* ---- the eval detail's evidence workspace ([[event-detail]]) — the human's measuring hand on an
+   already-captured clip, now the MAIN column of the Evals DETAIL page ([[review-chrome]]): the media
+   stage + review-track scrubber, then the remark thread (the page's activity), with the composer docked
+   sticky at the column's foot by the shell. ---- */
+.an-thread { display: flex; flex-direction: column; padding: 4px 0 8px; }
+.an-thread .an-comments-head { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
+.an-thread .fv-reply { margin-top: 10px; }
 .an-meta { font-size: var(--type-meta); color: var(--muted); }
 .an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
 /* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
@@ -2087,12 +2031,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-node { font-size: var(--type-meta); color: var(--muted); }
 .an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
 .an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
-/* the stage's content caps at a review-comfortable width even when the pane is very wide. */
-.an-stage-col > * { max-width: 1100px; }
 /* the still gallery — every image entry stacked on the stage, each click-to-enlarge. */
 .an-gallery { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 0; }
-/* a stage-less an-detail (the session tab's blind-spot face) breathes without the stage column's padding. */
-.an-detail > .an-expected, .an-detail > .an-hint { padding: 8px 16px 0; }
 .an-stage { position: relative; margin: 12px 0 0; cursor: crosshair; }
 .an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
@@ -2165,27 +2105,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-ab-pip.on { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
 .an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; }
 
-/* ---- the session Eval tab ([[session-eval]]'s interactive face) — gates strip + the shared eval
-   master-detail, session-scoped. Rows are tier-1; evidence streams on open. ---- */
-.se-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
-/* the master-detail below the gates is the SHARED shell (.fv-master, [[evals-view]]) — no session-only clone. */
+/* a blind-spot row (declared, never measured — inert, no detail page to open). */
 .se-blind .ef-scenario { color: var(--muted); }
-.se-warn { font-family: var(--mono); font-size: var(--type-caption); color: var(--orange); }
 .ef-insession { color: var(--blue); font-size: var(--type-caption); flex: none; }
-/* the attribution boundary inside a group: ✦ (this session's readings) above, inherited baseline below —
-   a BUTTON: the default-collapsed baseline's toggle, carrying its row count. */
-.se-divider { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px 5px; background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); }
-.se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
-.se-divider:hover { color: var(--ink2); }
-.se-divider:hover::before, .se-divider:hover::after { border-top-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
-.se-divider-arrow { flex: none; font-size: var(--type-caption); }
-.se-divider-n { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; line-height: var(--leading-relaxed); }
 
 /* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
    the evals feed's kind filter; one control, one look. */

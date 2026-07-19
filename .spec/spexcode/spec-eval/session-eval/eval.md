@@ -35,24 +35,20 @@ scenarios:
       inlined evidence, per-file diff drill-down — whole, not garbled.
   - name: session-attribution-legible
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SessionEval.jsx, spec-eval/src/sessioneval.ts]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-eval/src/sessioneval.ts]
     description: >
-      Open the Eval tab of a session that filed a reading WITHOUT committing code (its codeSha is the
-      merge-base) over a node carrying older readings by other sessions plus a retired scenario's residual
-      reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the inherited
-      divider's default state, its count, and whether the retired scenario shows. Then click the divider
-      to expand, click again to collapse, and walk j/k across both states.
+      Open #/evals?session=<id> for a session that filed a reading WITHOUT committing code (its codeSha
+      is the merge-base) over a node carrying older readings by other sessions plus a retired scenario's
+      residual reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the
+      row order, and whether the retired scenario shows.
     expected: >
-      Every measured row carries its ✓/✗ verdict mark (muted when stale). The session's own reading is
-      ✦-marked and leads its group even when the session has no code commits (a reading is the session's
-      own when IT filed it, not only when its codeSha is a branch commit), and the ✦ count chip is present
-      to narrow to those. The inherited baseline (other sessions' latest readings) arrives DEFAULT-COLLAPSED
-      behind its explicit divider — a toggle naming the baseline with the inherited-row count and a visible
-      expand affordance; while collapsed no inherited row renders and the j/k walk never lands on one.
-      Clicking the divider expands the same inherited rows in place below it — selection stays where it was,
-      the ✦ filter still narrows to the session's own (withdrawing the divider with its rows) — and clicking
-      again re-collapses. A retired scenario (declared in no eval.md) contributes NO row — the tab is
-      bounded by declared scenarios, the same latest-per-scenario computation every eval face reads.
+      Every measured row carries its ✓/✗ verdict mark (muted when stale). Blind spots lead as inert
+      unmeasured rows; the session's own readings are ✦-marked and lead the measured rows even when the
+      session has no code commits (a reading is the session's own when IT filed it, not only when its
+      codeSha is a branch commit); the inherited baseline (other sessions' latest readings) follows,
+      legible as NOT the session's own by the absent ✦. A retired scenario (declared in no eval.md)
+      contributes NO row — the list is bounded by declared scenarios, the same latest-per-scenario
+      computation every eval face reads.
   - name: eval-cli-read
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts]
@@ -71,62 +67,42 @@ scenarios:
       signposts `spex session review`, and `spex session review proof` signposts the canonical
       `spex eval ls --session <SEL> --export` — one stderr line, exit non-zero, the old verb never
       executes. Help: the map lists eval as its own noun and an --help probe never fires the verb.
-  - name: eval-tab-shared-shell
+  - name: eval-door-one-chrome
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >
-      Open a session's Eval tab in a real browser and read the master-detail's DOM against the Evals
-      page's: is the shell the SAME component family (`.fv-master` / `.fv-list-col` / `.fv-detail` — no
-      `.se-master`/`.se-list`/`.se-detail` clone)? Click the fold toggle and re-measure the columns;
-      unfold. Press j/k (focus not in an input) and read whether the selection walks the rows and the
-      detail follows, exactly as on #/evals.
+      Open a session's console in a real browser and read the tab bar: what the Eval entry is and what
+      clicking it does (read location.hash + the rendered page); type /eval in the ❯ box and accept it.
+      On the landed page, compare the DOM skeleton (head, rows, anchors) against the un-scoped #/evals
+      list; read the gates strip and the export link's href. Check no eval pane ever mounts inside the
+      console.
     expected: >
-      The Eval tab's master-detail IS the shared shell ([[evals-view]]'s EvalMasterDetail): the same
-      .fv-master grid with the slim .fv-list-col left (gates strip riding above, session-scoped groups
-      inside) and the full-height .fv-detail right, the same fold-to-a-strip toggle (fold collapses the
-      list, the strip unfolds it, selection intact), and the same j/k walk (selection moves through blind
-      + measured rows, the detail pane follows; a key typed into an input or the terminal's textarea is
-      never captured). No session-only shell classes remain. Zero loss = one shell, two homes — the
-      session tab can never drift from the Evals page on geometry, fold, or keys.
-  - name: eval-tab-text-selection
-    tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionEval.jsx]
-    description: >
-      Open a session's Eval tab and the top-level Evals page in a real browser. In each, drag-select
-      visible eval detail text such as the expected paragraph or scenario title, and inspect the
-      mousedown event/default behavior plus `window.getSelection()`.
-    expected: >
-      Text in the session Eval tab selects like text in the top-level Evals page. The session console's
-      focus-retention mousedown handler does not preventDefault inside the Eval workspace, a drag creates
-      a non-empty browser selection, and ordinary Eval-tab buttons/row selection still work. No page
-      errors.
+      The console's Eval entry is a DOOR, not a tab: clicking it (or the typed /eval) NAVIGATES to
+      #/evals?session=<id> — a real page switch, history-walked — and the console itself never mounts an
+      eval pane (the terminal's width never reflows). The landed page is the SAME shared list chrome the
+      un-scoped #/evals renders (one component set — no session-only clone), with the session's gates
+      strip above and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss = one
+      canonical home for a session's evaluation, reached through doors.
   - name: session-eval-deep-link
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/route.js, spec-dashboard/src/SessionEval.jsx]
+    code: [spec-dashboard/src/route.js, spec-dashboard/src/EvalsPage.jsx]
     related:
       - spec-dashboard/src/Dashboard.jsx
-      - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/address.js
     description: >
       In a fresh browser tab (a cold app load — the MR-reviewer path), open
       '#/sessions/<id>/eval/<node>/<scenario>' for a session holding a reading on that scenario, and read
-      the real DOM: which right-pane tab is active, which row is selected, and what the detail shows. Also
-      load the bare '#/sessions/<id>/eval' form, a target whose reading is INHERITED (another session's),
-      and a garbage node/scenario.
+      location.hash after settle + the rendered page. Also load the bare '#/sessions/<id>/eval' form, the
+      canonical '#/evals/<node>/<scenario>?session=<id>' directly, and a garbage node/scenario under the
+      session scope.
     expected: >
-      The console opens with the EVAL tab active (never the terminal) and the named scenario's row selected,
-      its detail (expected, verdict note, media + remark thread + composer) open on the right — one click from
-      an MR note to the live, remarkable, worktree-rooted reading; no clicking through terminal→eval by hand.
-      The bare /eval form lands on THIS session's own reading — a failing one first, then any in-session
-      reading — never the leading blind-spot row, and the URL reflects that resolved default. An inherited
-      target auto-unfolds its baseline divider so the selected row is visible. A name matching nothing degrades
-      to the default selection — never a blank pane or a crash. The address is PERSISTENT, refreshable, AND
-      always consistent with the pane: the '#/sessions/<id>/eval/<node>/<scenario>' sub-route stays in the hash
-      (a browser reload reopens the SAME reading), and because the URL tracks the console's REAL tab/selection —
-      (a) manually clicking into the Eval tab from a plain session makes the URL addressable ('#/…/eval/<node>/<scenario>'),
-      (b) switching to the Terminal tab drops the sub-route back to bare '#/sessions/<id>', and (c) leaving the
-      session and returning to a bare '#/sessions/<id>' shows the Terminal with a bare URL — no stale sub-route
-      resurrects, and the address never shows /eval while the Terminal is up (or vice-versa).
+      The LEGACY address normalizes at the route layer (replace) to the canonical evals family:
+      '#/sessions/<id>/eval/<node>/<scenario>' lands on '#/evals/<node>/<scenario>?session=<id>' — the
+      scenario's worktree-rooted detail page (media + remark thread + composer), one click from an MR
+      note to the live, remarkable reading; the bare '/eval' form lands on '#/evals?session=<id>' (the
+      session-scoped list). The canonical address opens identically when pasted directly. A name matching
+      nothing renders the honest not-found with the link back to the session-scoped list — never a blank
+      page or a crash. The old shape never re-appears in the address bar.
   - name: branch-new-node-visible
     tags: [backend-api]
     code: [spec-eval/src/sessioneval.ts, spec-cli/src/specs.ts]
@@ -139,12 +115,12 @@ scenarios:
       The branch-new node appears in the model like any trunk node — the node SET, like the readings
       and freshness, is rooted at the SESSION's worktree (a worktree's .spec is the branch's pending
       proposal, not invisible): hasEvalFile true, its declared scenarios listed, its filed readings
-      present and inSession-marked when this session filed them — so the Eval tab and the session-eval
+      present and inSession-marked when this session filed them — so the session-scoped Evals page and its
       deep link can land on a reading the session filed on a node it just created, while the branch is
       still un-merged. A session with no worktree keeps reading the trunk tree unchanged.
 ---
 # session-eval loss
 
-YATU through the real console: a session with real changes + readings, the Eval tab read from the live
-DOM (rows, gates, request waterfall — the tier check is a NETWORK assertion), and the export artifact
-opened as a plain document. Never asserted from the engine code.
+YATU through the real dashboard: a session with real changes + readings, the session-scoped Evals pages
+read from the live DOM (rows, gates, request waterfall — the tier check is a NETWORK assertion), and the
+export artifact opened as a plain document. Never asserted from the engine code.

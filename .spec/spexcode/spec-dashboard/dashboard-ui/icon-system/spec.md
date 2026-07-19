@@ -39,8 +39,8 @@ the accessible name impossible to forget.
 - **`<IconButton icon label onClick/>` is the icon-only button.** `label` is required and becomes BOTH
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).
-- **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]), the fold glyph
-  ([[fold-toggle]]'s `panel-left`), the session console's New/search pills and attach/busy glyphs, the
+- **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]),
+  the session console's New/search pills and attach/busy glyphs, the
   lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers ([[event-detail]]), the modal
   close `×`, the issues New `＋`, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues

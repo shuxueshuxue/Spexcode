@@ -39,7 +39,7 @@ Behaviour, the modern contract:
   the *visual* `title=`); while shown, the layer stamps `aria-describedby` on the anchor pointing at the
   `role=tooltip` bubble. Multi-line tips (`\n` joins) render as lines, not one blob.
 
-The migrated surfaces are the interactive chrome: the [[side-nav]] rail, [[fold-toggle]] buttons, the
+The migrated surfaces are the interactive chrome: the [[side-nav]] rail, the
 HUD/help and action buttons, session pills/avatars/status glyphs, chips and badges across the node,
 evals, and issues views. The phone face keeps native `title=` (no hover there, and the layer mounts only
 in the desktop shell).

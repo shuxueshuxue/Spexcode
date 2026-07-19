@@ -1,54 +1,55 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseRoute, routeHash, sessionTabParam } from './route.js'
+import { parseRoute, routeHash, legacyEvalHash, queryString } from './route.js'
 import { addressHash, sessionEvalAddress } from './address.js'
 
-// the session-eval deep link ([[address-routing]] / [[session-eval]]) — the console's in-page eval address.
-test('parseRoute splits a session-eval deep link into id + eval sub-route', () => {
-  assert.deepEqual(parseRoute('#/sessions/abc/eval/shell-layout/ws-sidebar'),
-    { page: 'sessions', param: 'abc/eval/shell-layout/ws-sidebar' })
-  // bare /eval form (no node/scenario) still parses to the sub-route
-  assert.deepEqual(parseRoute('#/sessions/abc/eval'), { page: 'sessions', param: 'abc/eval' })
-  // a plain session tab has no sub-route
-  assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc' })
+// The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state —
+// and the legacy session-eval address normalizes to the evals family at the parse layer.
+
+test('parseRoute splits path and query inside the hash', () => {
+  assert.deepEqual(parseRoute('#/evals'), { page: 'evals', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/evals?kind=all&session=abc'), { page: 'evals', param: null, query: { kind: 'all', session: 'abc' } })
+  assert.deepEqual(parseRoute('#/evals/my-node/my%20scenario?session=abc'),
+    { page: 'evals', param: 'my-node/my scenario', query: { session: 'abc' } })
+  assert.deepEqual(parseRoute('#/issues/th-123?store=github&concluded=1'),
+    { page: 'issues', param: 'th-123', query: { store: 'github', concluded: '1' } })
+  assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc', query: {} })
+  assert.deepEqual(parseRoute('#/nope'), { page: 'graph', param: null, query: {} })
 })
 
-test('a session-eval hash round-trips through routeHash (each segment re-encoded)', () => {
-  const { param } = parseRoute('#/sessions/abc/eval/shell-layout/tab%20switch')
-  assert.equal(param, 'abc/eval/shell-layout/tab switch')     // decoded per segment
-  assert.equal(routeHash('sessions', param), '#/sessions/abc/eval/shell-layout/tab%20switch')  // re-encoded
+test('routeHash round-trips through parseRoute, query in canonical key order', () => {
+  const h = routeHash('evals', 'node-a/scenario b', { session: 's1', kind: 'all' })
+  assert.equal(h, '#/evals/node-a/scenario%20b?kind=all&session=s1')
+  assert.deepEqual(parseRoute(h), { page: 'evals', param: 'node-a/scenario b', query: { kind: 'all', session: 's1' } })
+  // the same state always prints the same address, whatever the object key order
+  assert.equal(queryString({ session: 's1', kind: 'all' }), queryString({ kind: 'all', session: 's1' }))
+  // empty/null values drop out
+  assert.equal(routeHash('issues', null, { store: null, live: '' }), '#/issues')
 })
 
-// sessionTabParam is the tab-echo's target: PURE and driven by the SEED STATE (never by re-reading the
-// mutable hash, which a transient write can clobber). It keeps the eval sub-route addressable (refreshable/
-// shareable) whenever the seed targets the selected tab, else echoes the bare id.
-// sessionTabParam is the tab-echo's target: PURE, driven by the console's REAL view (evalView, reported up),
-// never a persisted seed — so the address always matches what's on screen ([[session-eval]]). A non-null
-// evalView (Eval tab showing) yields the sub-route; null (Terminal / New) yields the bare id.
-test('sessionTabParam writes the eval sub-route when the Eval tab shows a reading', () => {
-  assert.equal(sessionTabParam('abc', { node: 'shell-layout', scenario: 'ws-sidebar' }),
-    'abc/eval/shell-layout/ws-sidebar')
-  // Eval tab open with no specific reading (bare /eval) — a shareable root link
-  assert.equal(sessionTabParam('abc', { node: null, scenario: null }), 'abc/eval')
+test('legacy #/sessions/<id>/eval normalizes to the evals family (replace source, never re-minted)', () => {
+  assert.equal(legacyEvalHash('#/sessions/abc/eval'), '#/evals?session=abc')
+  assert.equal(legacyEvalHash('#/sessions/abc/eval/my-node/my-scenario'),
+    '#/evals/my-node/my-scenario?session=abc')
+  // a scenario name with slashes survives — the detail page splits on the FIRST '/'
+  assert.equal(legacyEvalHash('#/sessions/abc/eval/n/a/b'), '#/evals/n/a/b?session=abc')
+  // non-legacy shapes pass through untouched
+  assert.equal(legacyEvalHash('#/sessions/abc'), null)
+  assert.equal(legacyEvalHash('#/evals/n/s'), null)
+  assert.equal(legacyEvalHash('#/graph'), null)
 })
 
-test('sessionTabParam echoes the bare id when the Eval tab is NOT showing', () => {
-  // null evalView = Terminal / New tab → bare id (a manual switch to Terminal drops the sub-route)
-  assert.equal(sessionTabParam('abc', null), 'abc')
-  assert.equal(sessionTabParam('new', null), 'new')
+test('the normalized legacy detail address re-parses to the same (node, scenario, session)', () => {
+  const canon = legacyEvalHash('#/sessions/s-1/eval/side-nav/rail-order')
+  const r = parseRoute(canon)
+  assert.equal(r.page, 'evals')
+  assert.equal(r.param, 'side-nav/rail-order')
+  assert.equal(r.query.session, 's-1')
 })
 
-// UNIFICATION guarantee ([[address-routing]]): the tab-echo side (sessionTabParam) and the href side
-// (addressHash of a session-eval address) share ONE param encoder, so both produce the IDENTICAL hash for
-// the same target — no second URL grammar for the eval deep link.
-test('the tab echo and addressHash agree byte-for-byte on the session-eval hash', () => {
-  const echoHash = routeHash('sessions', sessionTabParam('abc', { node: 'shell-layout', scenario: 'ws-sidebar' }))
-  const linkHash = addressHash(sessionEvalAddress('abc', 'shell-layout', 'ws-sidebar'))
-  assert.equal(echoHash, linkHash)
-  assert.equal(echoHash, '#/sessions/abc/eval/shell-layout/ws-sidebar')
-  // and the bare /eval form agrees too
-  const echoBare = routeHash('sessions', sessionTabParam('abc', { node: null, scenario: null }))
-  const linkBare = addressHash(sessionEvalAddress('abc', null, null))
-  assert.equal(echoBare, linkBare)
-  assert.equal(echoBare, '#/sessions/abc/eval')
+test('legacy and object session-eval addresses converge on the canonical evals hash', () => {
+  const canonical = '#/evals/shell-layout/tab%20switch?session=abc'
+  assert.equal(legacyEvalHash('#/sessions/abc/eval/shell-layout/tab%20switch'), canonical)
+  assert.equal(addressHash(sessionEvalAddress('abc', 'shell-layout', 'tab switch')), canonical)
+  assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?session=abc')
 })

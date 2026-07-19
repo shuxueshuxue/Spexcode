@@ -2,19 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
+import { PAGES } from './route.js'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
 // always visible, one entry per top-level page (graph · sessions · evals · issues, settings pinned at the
 // bottom). Clicking navigates the URL layer (route.js); the active page wears the accent. Glyphs come from
 // the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria — the rail stays slim.
-// Under the multi-project gateway ([[projects-hub]]) the rail grows two things, both catalog-gated: a
-// PROJECTS entry (the catalog page — only when the catalog probe succeeded, so a direct-project guest
-// never even sees the door) and, on a scoped page, the persistent current-project selector chip pinned at
-// the very top — the project's initial, opening a menu of the catalog for same-tab switching. When the
-// catalog is denied the chip still names the current project but carries no menu: the catalog stays
-// unrevealed, the chip is orientation only.
+// Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
+// selector chip at the top. A successful catalog probe gives it same-tab switching plus the global
+// /projects door; it never adds project management to the scoped rail. When the catalog is denied the
+// chip still names the current project but carries no menu: the catalog stays unrevealed.
 
-const ENTRIES = ['graph', 'sessions', 'evals', 'issues']
+const ENTRIES = PAGES.filter((page) => page !== 'settings')
 
 function RailButton({ page, active, onNav, label }) {
   return (
@@ -92,7 +91,6 @@ export default function SideBar({ page, onNav, project, catalog }) {
       {ENTRIES.map((p) => (
         <RailButton key={p} page={p} active={page === p} onNav={onNav} label={t(`nav.${p}`)} />
       ))}
-      {catalogOk && <RailButton page="projects" active={page === 'projects'} onNav={onNav} label={t('nav.projects')} />}
       <div className="rail-spacer" />
       <RailButton page="settings" active={page === 'settings'} onNav={onNav} label={t('nav.settings')} />
     </nav>

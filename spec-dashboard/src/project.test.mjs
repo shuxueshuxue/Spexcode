@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseProjectPath, scopedApiUrl, projectHref, hubHref } from './project.js'
+import { parseProjectPath, scopedApiUrl, projectHref, hubHref, legacyProjectsRedirect } from './project.js'
 import { PAGES, parseRoute } from './route.js'
 
 // The project-scope seam ([[projects-hub]] / [[dashboard-shell]]): the pathname is the WHOLE scope
@@ -38,14 +38,21 @@ test('scopedApiUrl prefixes exactly the /api lane, idempotently', () => {
   assert.equal(scopedApiUrl(scopedApiUrl('/api/graph', '/p/x'), '/p/x'), '/p/x/api/graph')
 })
 
-test('cross-scope hrefs encode the id and land on a hash route', () => {
+test('cross-scope hrefs land on their canonical project and global surfaces', () => {
   assert.equal(projectHref('abc'), '/p/abc/#/graph')
   assert.equal(projectHref('a b', '#/sessions'), '/p/a%20b/#/sessions')
-  assert.equal(hubHref(), '/#/projects')
+  assert.equal(hubHref(), '/projects')
 })
 
-test('the projects page is a first-class route', () => {
-  assert.ok(PAGES.includes('projects'))
-  assert.deepEqual(parseRoute('#/projects'), { page: 'projects', param: null, query: {} })
+test('project navigation contains only project-owned pages', () => {
+  assert.deepEqual(PAGES, ['graph', 'sessions', 'evals', 'issues', 'settings'])
+  assert.deepEqual(parseRoute('#/projects'), { page: 'graph', param: null, query: {} })
   assert.equal(parseRoute('#/nonsense').page, 'graph') // unknown still lands home
+})
+
+test('the retired scoped projects hash redirects once to the global surface', () => {
+  assert.equal(legacyProjectsRedirect('/p/abc/', '#/projects'), '/projects')
+  assert.equal(legacyProjectsRedirect('/p/a%20b/', '#/projects?from=old'), '/projects')
+  assert.equal(legacyProjectsRedirect('/projects', '#/projects'), null)
+  assert.equal(legacyProjectsRedirect('/p/abc/', '#/graph'), null)
 })

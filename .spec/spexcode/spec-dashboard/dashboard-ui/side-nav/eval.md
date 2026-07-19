@@ -3,15 +3,19 @@ scenarios:
   - name: rail-routes-pages
     tags: [frontend-e2e, desktop]
     description: >
-      Open the dashboard in a real browser at a live backend. The rail shows FIVE entries. Click each in
-      turn (graph → sessions → evals → issues → settings) and read location.hash after each click; then
-      press the browser Back button; then deep-load the app at #/settings directly.
+      Open a scoped dashboard through the real hub gateway with catalog access. The rail shows the
+      current-project chip and FIVE project page entries, with no Projects button. Click each in turn
+      (graph → sessions → evals → issues → settings) and read location.hash after each click; press the
+      browser Back button; deep-load #/settings directly; then navigate to the legacy
+      /p/<id>/#/projects address.
     expected: >
-      The rail carries five entries (graph, sessions, evals, issues, settings — evals above issues). Each
-      click swaps the main area to that page and the hash reads #/graph, #/sessions/…, #/evals, #/issues,
-      #/settings respectively, with the clicked rail entry accented; Back returns to the previous page;
-      a direct load at #/settings opens on the settings page (no flash through the graph). Zero loss =
-      the rail, the URL, and the visible page never disagree.
+      The scoped rail carries the current-project chip plus five page entries (graph, sessions, evals,
+      issues, settings — evals above issues), never a Projects page entry. Each click swaps the main area
+      to that page and the hash reads #/graph, #/sessions/…, #/evals, #/issues, #/settings respectively,
+      with the clicked rail entry accented; Back returns to the previous page; a direct load at #/settings
+      opens on the settings page (no flash through the graph). The legacy scoped projects hash performs
+      one full-page redirect to `/projects`, where the global management page renders. Zero loss = the
+      scoped rail, the URL, and the visible page never disagree while project management has one home.
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js]
   - name: global-alt-vocabulary
     tags: [frontend-e2e, desktop]
@@ -34,4 +38,4 @@ scenarios:
 
 YATU: drive a real headless browser against the running dashboard — click the actual rail buttons and
 read `location.hash` + the rendered page from the DOM, never from reasoning about the router. File with
-`spex yatsu eval side-nav --scenario rail-routes-pages --image <png> --pass|--fail`.
+`spex eval add side-nav --scenario rail-routes-pages --video <webm> --pass|--fail`.

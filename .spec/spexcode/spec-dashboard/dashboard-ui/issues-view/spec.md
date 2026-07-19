@@ -129,7 +129,9 @@ straight to the trunk.
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same
   docked-bar shape as the eval rail's composer and the console's ❯ box, one write-affordance geometry across
-  the review surfaces). The composer is the ONE shared thread-composer shape ([[event-detail]] docks the
+  the review surfaces). The dock's full-width hairline and band are the DOCK's own chrome; the composer box
+  itself rides the SAME content column the title/body/thread establish — one content measure, the box never
+  offset from or wider than the prose it replies to. The composer is the ONE shared thread-composer shape ([[event-detail]] docks the
   SAME component): a **quiet bordered container** holding a **borderless writing surface that is already
   usable at idle** — **floored at two lines, never a one-line sliver you must click to expand**: the box
   you land on is the box you can write in, and focus changes nothing about its height. It still

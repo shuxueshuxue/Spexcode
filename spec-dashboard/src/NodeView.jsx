@@ -7,6 +7,8 @@ import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
+import { addressHash, evalAddress } from './address.js'
+import { Icon } from './icons.jsx'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -177,7 +179,7 @@ export function SpecPane({ node }) {
           <i className="stat-dot" />{t(`status.${node.status}`)}
         </span>
         <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
-        <ScenarioCount scenarios={node.scenarios} evals={node.evals} />
+        <ScenarioCount scenarios={node.scenarios} evals={node.evals} href={addressHash(evalAddress(node.id))} />
         {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
@@ -267,7 +269,7 @@ function DiffEvidence({ diff }) {
   )
 }
 
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing, resetKey }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, renderAction, leading, trailing, resetKey }) {
   const t = useT()
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
@@ -329,6 +331,9 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
             <button className={classes.head} onClick={() => toggle(i)} aria-expanded={isOpen}>
               {renderHeader(it, i, isOpen)}
             </button>
+            {/* a row's outbound affordance (e.g. the eval detail anchor) renders as a SIBLING of the
+                toggle — interactive controls never nest inside one another. */}
+            {renderAction?.(it, i)}
             {isOpen && <figure className={classes.evidence}>{renderEvidence(it, i)}</figure>}
           </div>
         )
@@ -574,6 +579,14 @@ export function EvalPane({ node }) {
       trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
+      // every reading row carries a REAL anchor out to the scenario's canonical full-page detail
+      // (`#/evals/<node>/<scenario>`, a history PUSH) — a sibling of the expand toggle, never nested in it.
+      renderAction={(r) => (
+        <a className="eval-open" href={addressHash(evalAddress(node.id, r.scenario))}
+          data-tip={t('nodeView.eval.openDetail')} aria-label={t('nodeView.eval.openDetail')}>
+          <Icon name="chevron-right" size={14} />
+        </a>
+      )}
       renderHeader={(r, i, open) => (
         <>
           <span className="eval-top">

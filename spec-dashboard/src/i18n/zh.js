@@ -390,6 +390,7 @@ export default {
       miss: '原始文件缺失 —— 证据已从缓存中清除。',
       noImage: '无证据 —— 代理未捕获即作出判定。',
       shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
+      openDetail: '打开该场景的 eval 详情页',
     },
   },
 
@@ -419,6 +420,7 @@ export default {
     count: ({ satisfied, total, outstanding }) =>
       `${total} 个场景中有 ${satisfied} 个已满足（最新且通过）` +
       (outstanding ? ` · ${outstanding} 个待处理 —— 未通过、已过期或未测量` : ''),
+    openList: '打开该节点的 Evals 过滤列表',
   },
 
   // 左侧聚焦面板 —— 把当前聚焦节点的 Issue 与 Scenario（及其满足状态）放在一处，让这两种有状态的工作

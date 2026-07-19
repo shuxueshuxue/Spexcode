@@ -676,6 +676,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .scenario-count.fail { color: var(--red); }
 .scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
 .scenario-count.empty { color: var(--muted); opacity: .7; }
+/* as a REAL anchor (the node-info stat bar → the node-filtered Evals list) the same pill gains link
+   affordance; on the tile it stays a passive span (the tile's click belongs to the board). */
+a.scenario-count { text-decoration: none; cursor: pointer; }
+a.scenario-count:hover { background: var(--panel2); }
 
 /* @@@ focus panel - the RIGHT column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
    stateful kinds of bound work, in ONE place with their satisfaction status — replacing the on-node issue
@@ -1969,9 +1973,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-dangling-tag { font-family: var(--mono); font-size: var(--type-caption); color: var(--orange); margin-left: 8px;
   border: 1px dashed color-mix(in srgb, var(--orange) 45%, var(--line)); border-radius: 3px; padding: 0 5px; }
 .eval-dangling-remarks { padding-left: 23px; margin: 6px 0 0; }
-.eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.eval-row { position: relative; border-bottom: 1px solid var(--line); padding: 10px 0; }
 .eval-row:last-child { border-bottom: 0; }
-.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 0 26px 0 0; text-align: left; background: none; border: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+/* the row's outbound anchor — the eval's canonical routed detail — sits top-right, a SIBLING of the
+   expand toggle (never nested inside it); the head's right padding reserves its lane. */
+.eval-open { position: absolute; top: 10px; right: 2px; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 4px; color: var(--muted); }
+.eval-open:hover { color: var(--ink2); background: var(--panel2); }
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
 .eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); }

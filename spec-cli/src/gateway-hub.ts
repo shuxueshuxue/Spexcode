@@ -257,6 +257,14 @@ export function startHubGateway(opts: HubOpts): http.Server {
         if (sub.startsWith('/api')) return sendJson(res, 401, { error: 'authentication required', login: `${base}/login` })
         return redirect(res, `${base}/login`)
       }
+      // browser navigation into the scoped page (`/p/<id>/`, any non-api sub) is content-negotiated
+      // exactly like GET /projects: with a host fallback mounted, an explicit text/html GET serves the
+      // SPA shell — the scoped address is directly shareable ([[projects-hub]]) and the shell's
+      // root-absolute assets resolve outside /p onto the same fallback. Every api/SSE/health fetch
+      // (json, */*, event-stream) and the WS upgrade keep proxying to the backend untouched.
+      if (req.method === 'GET' && !sub.startsWith('/api') && ext.fallback && (req.headers.accept ?? '').includes('text/html')) {
+        return ext.fallback(req, res, '/')
+      }
       return proxyTo(req, res, up.port, sub + query)
     }
 

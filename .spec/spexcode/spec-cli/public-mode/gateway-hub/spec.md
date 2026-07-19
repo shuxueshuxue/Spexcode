@@ -31,6 +31,9 @@ internal services; the hub owns the outside.
 - `/p/:projectId/*` — the project surface: `login`/`logout` are the hub's own (the designed login page,
   parameterized), everything else is reverse-proxied to that project's backend with the `/p/:projectId`
   prefix stripped, WebSocket upgrades included. Admin or matching-project scope, or open when ungated.
+  Browser navigation is content-negotiated the same way as `GET /projects`: an authorized, explicit
+  text/html GET outside `/api` serves the SPA shell (the scoped address stays directly shareable —
+  [[projects-hub]]); api/SSE/health fetches and the WS upgrade always reach the backend.
 - `/login`, `/logout` — the admin session, same designed page.
 
 **The registry is the endpoint records, not a second config.** A project = a live

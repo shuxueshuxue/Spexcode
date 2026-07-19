@@ -193,12 +193,12 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
 
     const gatewayIcon = await fetch(`${base}/projects/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ icon: 'database', revision: list.body.gateway.revision }),
+      body: JSON.stringify({ icon: 'simple-icons:github', revision: list.body.gateway.revision }),
     })
     assert.equal(gatewayIcon.status, 200)
-    assert.deepEqual((await gatewayIcon.json()).gateway.identity, { title: 'Projects', icon: 'database' })
-    assert.deepEqual(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')), { gateway: { icon: 'database' } })
-    assert.equal((await getJson(`${base}/projects`)).body.gateway.icon, 'database', 'gateway write refreshes the normal catalog projection')
+    assert.deepEqual((await gatewayIcon.json()).gateway.identity, { title: 'Projects', icon: 'simple-icons:github' })
+    assert.deepEqual(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')), { gateway: { icon: 'simple-icons:github' } })
+    assert.equal((await getJson(`${base}/projects`)).body.gateway.icon, 'simple-icons:github', 'gateway write refreshes the normal catalog projection')
     const streamFirst = await new Promise<string>((res, rej) => {
       const req = http.get(`${base}/projects/stream`, (r) => {
         let buf = ''
@@ -275,12 +275,20 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.deepEqual(iconSaved.identity, { title: 'Offline Repo', icon: 'spark' })
     assert.equal(iconSaved.content, readFileSync(join(repo, 'spexcode.json'), 'utf8'), 'response is the canonical source bytes')
     assert.deepEqual(JSON.parse(iconSaved.content), { preset: 'default', dashboard: { title: 'Offline Repo', icon: 'spark' } })
-    const rejectedIcon = await fetch(`${base}/projects/${repoId}/icon`, {
+    const iconifySavedRes = await fetch(`${base}/projects/${repoId}/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ icon: 'lucide:radar', revision: iconSaved.revision }),
     })
-    assert.equal(rejectedIcon.status, 400, 'picker writes accept presets only; direct legacy config remains readable')
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconSaved.content)
+    assert.equal(iconifySavedRes.status, 200, 'structured writes restore the established Iconify namespace')
+    const iconifySaved = await iconifySavedRes.json()
+    assert.deepEqual(iconifySaved.identity, { title: 'Offline Repo', icon: 'lucide:radar' })
+    assert.equal(iconifySaved.content, readFileSync(join(repo, 'spexcode.json'), 'utf8'))
+    const rejectedIcon = await fetch(`${base}/projects/${repoId}/icon`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icon: 'not a catalog choice', revision: iconifySaved.revision }),
+    })
+    assert.equal(rejectedIcon.status, 400, 'structured writes reject values outside presets and Iconify')
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconifySaved.content)
     const staleIcon = await fetch(`${base}/projects/${repoId}/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ icon: 'package', revision: savedConfig.revision }),
@@ -288,10 +296,10 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(staleIcon.status, 409)
     const invalidConfig = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: '[]', revision: iconSaved.revision }),
+      body: JSON.stringify({ content: '[]', revision: iconifySaved.revision }),
     })
     assert.equal(invalidConfig.status, 400)
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconSaved.content)
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconifySaved.content)
     writeFileSync(join(repo, 'spexcode.json'), '{"newer":true}\n')
     const staleConfig = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },

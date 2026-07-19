@@ -9,7 +9,7 @@ import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress } from './address.js'
 import { Icon } from './icons.jsx'
-import { CompactReviewFilter, nextQuery } from './ReviewShell.jsx'
+import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -384,6 +384,7 @@ export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => 
   return (
     <div className="pane-issues">
       {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+        summary={{ shown: model.shown.length, total: issues.length }}
         placeholder={t('nodeView.filterIssues')} searchLabel={t('reviewList.searchIssues')}
         filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
       {!shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
@@ -540,6 +541,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'session'])
   const filterEl = filterItems.length > 4
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+      summary={{ shown: model.shown.length, total: filterItems.length }}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
       filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
     : null
@@ -600,6 +602,16 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
+// one caption state-count chip: the shared [[review-chrome]] ReviewState visual + the tally, one tooltip
+// text on chip and icon alike — the issues and eval captions speak the same primitive.
+function TabCount({ kind, state, cls, n, label }) {
+  return (
+    <span className={`ovc ${cls}`} data-tip={label}>
+      <ReviewState kind={kind} state={state} title={label} size={11} />{n}
+    </span>
+  )
+}
+
 export default function NodeView({ node, pane, setPane, onClose, sessions = [] }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
@@ -610,6 +622,11 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => i.status === 'open').length
   const issueClosed = issuesAll.length - issueOpen
+  // the eval caption's verdict tally rides the SAME scenarioStates join every score surface reads
+  // ([[eval-score-badge]]) — fresh passes and fresh fails, zero values omitted like the issues caption.
+  const evalStates = scenarioStates(node.scenarios, node.evals)
+  const evalPass = evalStates.filter((s) => s.state === 'pass').length
+  const evalFail = evalStates.filter((s) => s.state === 'fail').length
   const editCount = (node.overlays || []).length
   const panes = panesFor(node)
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node
@@ -624,13 +641,19 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
         <div className="ov-head">
           <span className="ov-title">{node.title}</span>
           <div className="ov-tabs">
-            {panes.map((p, i) => (
+            {panes.map((p) => (
               <button key={p.key} className={p.key === active ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
-                <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
+                {t(PANE_LABEL[p.key])}
                 {p.key === 'issues' && (issueOpen > 0 || issueClosed > 0) && (
                   <span className="ov-tab-counts">
-                    {issueOpen > 0 && <span className="ovc st-open" data-tip={t('nodeView.openIssues', { n: issueOpen })}>{issueOpen}</span>}
-                    {issueClosed > 0 && <span className="ovc st-closed" data-tip={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
+                    {issueOpen > 0 && <TabCount kind="issue" state="open" cls="st-open" n={issueOpen} label={t('nodeView.openIssues', { n: issueOpen })} />}
+                    {issueClosed > 0 && <TabCount kind="issue" state="closed" cls="st-closed" n={issueClosed} label={t('nodeView.closedIssues', { n: issueClosed })} />}
+                  </span>
+                )}
+                {p.key === 'eval' && (evalPass > 0 || evalFail > 0) && (
+                  <span className="ov-tab-counts">
+                    {evalPass > 0 && <TabCount kind="eval" state="pass" cls="st-pass" n={evalPass} label={t('nodeView.eval.passCount', { n: evalPass })} />}
+                    {evalFail > 0 && <TabCount kind="eval" state="fail" cls="st-fail" n={evalFail} label={t('nodeView.eval.failCount', { n: evalFail })} />}
                   </span>
                 )}
                 {p.key === 'edit' && editCount > 0 && (

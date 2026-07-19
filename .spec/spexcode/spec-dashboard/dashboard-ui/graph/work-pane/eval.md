@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: caption-counts-and-result-summary
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open a node's Information Board (`i`) in a real browser. The tab captions carry NO visible key-digit
+      markers (digit keys still switch panes); the issues and eval captions tally state through the one
+      shared ReviewState chip — issues open/closed, eval fresh pass/fail from the same scenarioStates join
+      the tiles read — with zero values omitted. On a pane long enough to earn the compact filter, the
+      filter row LEADS with "showing X of Y" from the same filter model that picks the rows, and typing a
+      needle moves X live. At 390px the words condense to a bare X/Y (the sentence stays in the
+      aria-label) with no horizontal overflow. Capture and file with
+      `spex eval add work-pane --scenario caption-counts-and-result-summary --image <png>`.
+    expected: >-
+      Captions are plain labels + ReviewState state-count chips (no kbd digits, zero counts absent, one
+      primitive across issues and eval); the compact filter row's leading summary reads "showing X of Y"
+      off model.shown/total, tracks the live filter, and condenses to X/Y under the phone breakpoint
+      without overflowing; digit-key pane switching still works.
+    code:
+      - spec-dashboard/src/NodeView.jsx
+      - spec-dashboard/src/ReviewShell.jsx
+      - spec-dashboard/src/styles.css
   - name: edit-tab-no-reload-flash
     tags: [frontend-e2e, desktop]
     description: >-

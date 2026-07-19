@@ -47,3 +47,29 @@ test('the anchors keep row/pill chrome (no default link styling bleeding through
   assert.match(css, /\.eval-row \{ position: relative/)
   assert.match(css, /\.eval-open \{ position: absolute/)
 })
+
+test('popup tab captions: no visible key digits; state counts speak the shared ReviewState primitive', () => {
+  // the kbd digit markers are gone from the captions — digit-key pane switching stays (Dashboard.jsx)
+  assert.doesNotMatch(nodeView, /<kbd>\{i \+ 1\}<\/kbd>/)
+  assert.match(nodeView, /\{t\(PANE_LABEL\[p\.key\]\)\}/)
+  // one TabCount chip = ReviewState icon + tally; issues AND eval captions consume it
+  assert.match(nodeView, /function TabCount\(\{ kind, state, cls, n, label \}\)[\s\S]{0,300}<ReviewState kind=\{kind\} state=\{state\}/)
+  assert.match(nodeView, /<TabCount kind="issue" state="open"/)
+  assert.match(nodeView, /<TabCount kind="issue" state="closed"/)
+  assert.match(nodeView, /<TabCount kind="eval" state="pass"/)
+  assert.match(nodeView, /<TabCount kind="eval" state="fail"/)
+  // the tally comes from the ONE scenarioStates join — no second statistics path
+  assert.match(nodeView, /const evalStates = scenarioStates\(node\.scenarios, node\.evals\)/)
+})
+
+test('the compact filter row leads with the one showing-X-of-Y summary from the filter model', () => {
+  const shell = read('ReviewShell.jsx')
+  // the primitive renders full words + a phone-width X/Y condensation, words kept in the aria-label
+  assert.match(shell, /className="rf-summary" aria-label=\{label\}/)
+  assert.match(shell, /rf-summary-full/)
+  assert.match(shell, /rf-summary-compact/)
+  // both popup panes feed it model.shown/total — the SAME filtered result the rows render
+  assert.match(nodeView, /summary=\{\{ shown: model\.shown\.length, total: filterItems\.length \}\}/)
+  assert.match(nodeView, /summary=\{\{ shown: model\.shown\.length, total: issues\.length \}\}/)
+  assert.match(css, /@media \(max-width: 640px\) \{\s*\.rf-summary-full \{ display: none; \}/)
+})

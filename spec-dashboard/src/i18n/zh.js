@@ -142,6 +142,7 @@ export default {
     searchIssues: '搜索 issues',
     searchEvals: '搜索 evals',
     clearSearch: '清除搜索',
+    showing: ({ shown, total }) => `显示 ${shown} / ${total} 条`,
     issuesTitle: 'Issues',
     open: 'Open',
     closed: 'Closed',
@@ -391,6 +392,8 @@ export default {
       noImage: '无证据 —— 代理未捕获即作出判定。',
       shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
       openDetail: '打开该场景的 eval 详情页',
+      passCount: ({ n }) => `${n} 个场景最新且通过`,
+      failCount: ({ n }) => `${n} 个场景最新且未通过`,
     },
   },
 

@@ -65,6 +65,8 @@ filter (default off) picking the root.
 - **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
   the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
   source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
-  unchanged. The session detail's worktree history is referentially stable while that model, node, and
-  scenario are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole, loaded
-  timeline events, or composer draft. A real scope/model/scenario change still re-sources the workspace.
+  unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
+  and viewed reading are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
+  loaded timeline events, ordinary typed prose, or anchored composer draft. A real
+  scope/scenario/A-B-reading change re-sources the workspace and clears that draft before the new reading is
+  reviewable.

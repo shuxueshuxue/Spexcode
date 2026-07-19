@@ -86,7 +86,7 @@ const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.st
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function EventDetail({ entry, history: providedHistory, specs = [], sessions = [], onWrite, onOpenSession, listHref = null }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -124,6 +124,10 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   const [history, setHistory] = useState(null)
   const [histIdx, setHistIdx] = useState(0)
   const viewing = (history && history[histIdx]) || entry
+  // One semantic identity for every kind of composer-local state. A board repaint recreates props but keeps
+  // this value; a real scope/scenario/A-B-reading change moves it and remounts the shared composer.
+  const readingIdentity = `${histIdx}:${viewing.ts || viewing.codeSha || viewing.blob || 'reading'}`
+  const reviewIdentity = `${sourceKey}·${entry.node}·${entry.scenario}·${readingIdentity}`
 
   // the review-track prose presets (`surface: review` plugins, [[review-commands]]) — fetched once; each
   // becomes a `/` command that PREFILLS the composer with its placeholder-filled body.
@@ -515,12 +519,12 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     </>
   )
 
-  // the docked composer ([[issues-view]]'s ONE shared thread composer): keyed by the (node, scenario)
-  // identity, so only a page change resets the working draft — a half-typed or circle-prefilled remark
-  // dies with its page, never surfacing on another eval's thread. `commands` arms the review-track `/`
-  // menu; the composer itself stays home-agnostic.
+  // the docked composer ([[issues-view]]'s ONE shared thread composer): its scope/scenario/reading identity
+  // resets ALL child-local state, including ordinary typed prose the outer anchored-draft state cannot see.
+  // An unrelated board repaint keeps the key byte-identical. `commands` arms the review-track `/` menu;
+  // the composer itself stays home-agnostic.
   const composer = (
-    <ReplyComposer key={`${entry.node}·${entry.scenario}`}
+    <ReplyComposer key={reviewIdentity}
       onSend={(text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha: viewing.codeSha, evidence })}
       specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite}
       anchorNow={hasVideo ? anchorNow : null} draft={draft} commands={composerCommands} />

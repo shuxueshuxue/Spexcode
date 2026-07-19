@@ -59,14 +59,17 @@ scenarios:
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]
     description: >
       Open a session-scoped detail whose scenario has at least two readings and a timeline sidecar. Walk
-      from the latest B pole to the older A pole, wait for the timeline events to render, and type an
-      unsent composer draft. Trigger an app board refresh (the same new specs/sessions props a poll or SSE
-      board message delivers) without changing the session model, node, or scenario; record the whole flow.
+      from the latest B pole to the older A pole, wait for the timeline events to render, type unsent prose,
+      and stamp an anchor while keeping that prose. Trigger an app board refresh (the same new specs/sessions
+      props a poll or SSE board message delivers) without changing the scope, node, scenario, or viewed
+      reading. Then flip to the other A/B reading, type again, and switch between session and merged scope;
+      record the whole flow.
     expected: >
       The board repaint does not change the selected A/B pole or position label, the timeline/step events
-      remain rendered, and the exact unsent draft remains in the composer. No session-model refetch occurs.
-      Changing the addressed scenario still resets those working states. Zero loss = unrelated app
-      freshness cannot erase review work in progress.
+      remain rendered, and the exact ordinary prose + anchored prefill remain in the composer. No
+      session-model refetch occurs. A real A/B-reading, scope, or addressed-scenario change clears both
+      ordinary and anchored drafts before the new evidence is reviewable. Zero loss = unrelated app freshness
+      cannot erase review work, while review text cannot leak across a real evidence identity change.
   - name: session-scope-load-failure
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx]

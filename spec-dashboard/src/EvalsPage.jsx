@@ -123,7 +123,7 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
-      <EventDetail entry={entry} history={history} specs={specs} sessions={sessions}
+      <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} />
     </div>
   )

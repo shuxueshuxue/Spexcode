@@ -125,7 +125,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     [sessions],
   )
 
-  const openSession = useCallback((id) => { setSessionSel(id); setEvalView(null); navigate('sessions', id) }, [])
+  const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
   const onNavigateAddress = useCallback((address) => {
     navigateAddress(address, { onFocusNode: setFocusId, onOpenSession: openSession })

@@ -250,7 +250,10 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 //   fallback     — the dashboard SPA shell + assets for paths the hub doesn't own.
 // /p/:projectId/* routing (HTTP, SSE, WS; prefix strip; cookie strip) belongs entirely to the hub.
 
-export type HostDashboardOpts = { port: number; host?: string; distDir?: string }
+// tls is the HUB's transport option passed through unchanged ([[gateway-hub]] terminates HTTPS itself),
+// so an operator deployment runs the ONE host gateway directly over TLS — no second proxy in front.
+// Absent tls = the default plain-HTTP loopback `spex dashboard` serves.
+export type HostDashboardOpts = { port: number; host?: string; distDir?: string; tls?: { cert: string; key: string } | null }
 export type HostDashboard = { server: http.Server; close: () => Promise<void> }
 
 const json = (res: http.ServerResponse, status: number, body: unknown) => {
@@ -330,7 +333,7 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
     fallback: (req, res, path) => serveStatic(req, res, distDir, path),
   }
 
-  const server = startHubGateway({ port: opts.port, host: opts.host ?? '127.0.0.1', tls: null, extensions })
+  const server = startHubGateway({ port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions })
 
   // continuous reconciliation: the stream stays live without a client-side poll and the list the hub
   // serves stays fresh. Heartbeat comments keep intermediaries from timing the stream out. Both timers

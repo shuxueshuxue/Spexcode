@@ -1,13 +1,16 @@
 // The narrow data client for the multi-project gateway ([[projects-hub]]) — the ONE module that spells
-// the LANDED hub contract ([[gateway-hub]] / [[gateway-auth]]):
-//   GET  /projects                      → { adminGated, projects: [{ id, name, url, port, gated }] }
+// the LANDED hub contract ([[gateway-hub]] / [[gateway-auth]] / [[host-gateway]]):
+//   GET  /projects                      → { adminGated, projects: [{ id, name, root, online, url, gated }] }
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
+//   POST /projects {root}                register an existing repo into the durable catalog
+//   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
+//   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)
 //   POST /login · POST /p/:id/login      the credential posts (JSON {password}; success 302s, wrong 401)
-// The registry is the machine's live backend records (a project appears by RUNNING `spex serve` in it),
-// so there are no add/init/doctor/start verbs here — registration is the backend's own act, not a
-// catalog write. Health is not a registry field either: the client probes each project's own
-// `/p/:id/health` through the authorized proxy lane.
+// The registry is the host's reconciled view: the durable known-project catalog plus the machine's live
+// backend records — a project appears by running `spex serve` in its repo OR by explicit registration
+// here. `online` is the host's instance-validated liveness; the client still probes each ONLINE
+// project's own `/p/:id/health` through the authorized proxy lane for the end-to-end dot.
 //
 // Denial is read from the STATUS, exactly as the hub speaks it: 401 = credentials wanted ('admin-login'
 // on the catalog, 'project-login' on a project api), 403 = the admin surface is locked (no admin
@@ -20,7 +23,9 @@ const jsonOf = async (res) => {
   return res.json().catch(() => null)
 }
 
-// one catalog row, whatever the server sent → the shape the UI renders.
+// one catalog row, whatever the server sent → the shape the UI renders. `online` is tri-state: the
+// host-enriched row says true/false (instance-validated); a hub generation without the host extension
+// says nothing → null, and the UI falls back to probe-only health.
 export function normalizeProject(p) {
   if (!p || typeof p !== 'object') return null
   const id = p.id ?? p.projectId
@@ -28,6 +33,8 @@ export function normalizeProject(p) {
   return {
     id: String(id),
     name: p.name || String(id),
+    root: typeof p.root === 'string' ? p.root : '',
+    online: typeof p.online === 'boolean' ? p.online : null,
     url: p.url || '',
     port: p.port ?? null,
     gated: !!(p.gated ?? p.locked ?? p.hasPassword),
@@ -99,4 +106,59 @@ export async function submitCredential(scope, password) {
   if (res.status === 401) return { ok: false, error: 'wrong-password' }
   if (res.status === 403) return { ok: false, error: 'locked' }
   return res.ok || res.redirected ? { ok: true } : { ok: false, error: `http-${res.status}` }
+}
+
+// register an existing repo by its root path — POST /projects {root}, admin scope. The host normalizes
+// any path inside the repo to its main checkout and requires a git repo (the same precondition `spex
+// init` holds); the 400 it answers for a non-repo carries the human-readable reason, surfaced verbatim.
+export async function addProject(root) {
+  let res
+  try {
+    res = await fetch('/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ root }),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  const project = normalizeProject(data)
+  return project ? { ok: true, project } : { ok: false, error: 'unexpected answer' }
+}
+
+// run a host operation in a registered repo — POST /projects/:id/(init|doctor). These spawn the REAL
+// spex verb with cwd = the project root; the HTTP answer is 200 whether the verb succeeded or not, and
+// truth is the exit code + transcript: { ok, code, output }. init carries the EXPLICIT harness choice
+// (a comma list of ids — the CLI refuses to run without one) and the optional preset tier.
+export async function runProjectOp(id, op, body = {}) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}/${op}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  if (!data || typeof data !== 'object') return { ok: false, error: 'unexpected answer' }
+  return { ok: data.ok === true, code: data.code ?? null, output: String(data.output ?? '') }
+}
+export const initProject = (id, harness, preset) =>
+  runProjectOp(id, 'init', { harness, ...(preset ? { preset } : {}) })
+export const doctorProject = (id) => runProjectOp(id, 'doctor')
+
+// start an OFFLINE project's backend — POST /projects/:id/serve. The host spawns a detached `spex
+// serve` and waits for its instance-validated record to reconcile online, so success means the project
+// IS reachable, not merely spawned. A 409 (already online) is the desired end state, read as success;
+// a 502 carries the reason (and points at the serve log) verbatim.
+export async function startProjectBackend(id) {
+  let res
+  try {
+    res = await fetch(`/projects/${encodeURIComponent(id)}/serve`, {
+      method: 'POST', headers: { Accept: 'application/json' },
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (res.status === 409) return { ok: true, already: true, project: normalizeProject(data?.project) }
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  return { ok: true, project: normalizeProject(data?.project) }
 }

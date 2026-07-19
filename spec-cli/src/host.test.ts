@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
+import https from 'node:https'
 import net from 'node:net'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -196,6 +197,50 @@ test('host dashboard on the hub: admin list + stream, /p proxy via hub, registra
     })
     assert.match(wsBytes, /101 Switching Protocols/)
     assert.equal(upgradePath, '/api/sessions/s1/socket')
+  } finally {
+    await gw.close()
+    backend.server.close()
+  }
+})
+
+test('startHostDashboard passes tls through to the hub: the ONE host gateway serves HTTPS directly', async () => {
+  freshHome('tls')
+  const rootLive = '/proj/tls-live'
+  const backend = await fakeBackend({ instanceId: 'inst-tls', root: rootLive })
+  publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-tls' }))
+  const dist = mkdtempSync(join(tmpdir(), 'spex-host-dist-'))
+  writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
+  const tlsDir = mkdtempSync(join(tmpdir(), 'spex-host-tls-'))
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', join(tlsDir, 'key.pem'), '-out', join(tlsDir, 'cert.pem'),
+    '-days', '2', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' })
+  const tls = { cert: readFileSync(join(tlsDir, 'cert.pem'), 'utf8'), key: readFileSync(join(tlsDir, 'key.pem'), 'utf8') }
+
+  const gwPort = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
+  const gw = startHostDashboard({ port: gwPort, host: '127.0.0.1', distDir: dist, tls })
+  await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  // self-signed → verification off for the probe; what's proven is the transport + the same surfaces
+  const getSecure = (path: string): Promise<{ status: number; body: string }> =>
+    new Promise((res, rej) => {
+      https.get({ host: '127.0.0.1', port: gwPort, path, rejectUnauthorized: false }, (r) => {
+        let buf = ''
+        r.on('data', (d) => { buf += d })
+        r.on('end', () => res({ status: r.statusCode ?? 0, body: buf }))
+      }).on('error', rej)
+    })
+  try {
+    // the hub's admin surface answers over TLS (loopback stays implicit admin — auth is unchanged)
+    const list = await getSecure('/projects')
+    assert.equal(list.status, 200)
+    const parsed = JSON.parse(list.body)
+    assert.equal(parsed.adminGated, false)
+    assert.equal(parsed.projects.find((p: any) => p.projectId === encodeProject(rootLive)).online, true)
+    // /p proxying and the shell fallback ride the same TLS server — no second proxy anywhere
+    const proxied = await getSecure(`/p/${encodeProject(rootLive)}/api/graph?x=1`)
+    assert.equal(JSON.parse(proxied.body).echoedPath, '/api/graph?x=1')
+    assert.match((await getSecure('/somepage')).body, /shell/)
+    // a plaintext client on the TLS port gets a refusal, not a silent HTTP downgrade
+    await assert.rejects(getJson(`http://127.0.0.1:${gwPort}/projects`))
   } finally {
     await gw.close()
     backend.server.close()

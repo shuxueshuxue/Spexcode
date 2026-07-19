@@ -60,5 +60,9 @@ discovery ([[remote-client]]'s ladder) reads the same records straight from the 
 gateway. The gateway obeys the shared port contract (a busy port is a loud non-zero exit via the one bind
 helper) and carries the standard connection reaping — both via the hub. Authentication is deliberately NOT
 this node's mechanism: it is [[gateway-auth]]'s, decided once at the hub — this node adds no second gate,
-no second cookie, no bypass. Loopback by default; `--host` widens the bind, behind whatever gates the
-operator configured.
+no second cookie, no bypass. Transport is likewise the hub's: `startHostDashboard` accepts the hub's `tls`
+option and hands it through unchanged, so an operator deployment runs the ONE host gateway directly over
+HTTPS — every surface (admin list, /p proxying, the shell) on that one TLS port, no second proxy in front,
+and a plaintext client on the TLS port is refused, never silently downgraded. Absent `tls`, `spex
+dashboard` stays plain loopback HTTP; `--host` widens the bind, behind whatever gates the operator
+configured.

@@ -66,3 +66,20 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
   assert.match(blindRows, /cls: 'se-blind'/)
   assert.doesNotMatch(blindRows, /href:/)
 })
+
+test('the A/B strip is bounded: a recent window, the current pip always visible, one overflow menu', () => {
+  // the window constant + the current-outside-window slot rule
+  assert.match(detail, /export const AB_WINDOW = 8/)
+  assert.match(detail, /histIdx < AB_WINDOW\s*\n?\s*\? Array\.from\(\{ length: recent \}/)
+  assert.match(detail, /\[histIdx, \.\.\.Array\.from\(\{ length: AB_WINDOW - 1 \}/)
+  // every non-pip reading reaches the ONE accessible overflow menu (shared popover mechanics)
+  assert.match(detail, /function AbOverflow\(/)
+  assert.match(detail, /role="menuitemradio" aria-checked=\{r\.idx === histIdx\}/)
+  assert.match(detail, /usePopover/)
+  // pips wear the shared ReviewState primitive and mark the viewed one for AT + layout alike
+  assert.match(detail, /aria-current=\{idx === histIdx \? 'true' : undefined\}/)
+  // the strip never wraps — single line at stable height
+  const cssText = readFileSync(join(here, 'styles.css'), 'utf8')
+  assert.match(cssText, /\.an-ab \{ display: flex; align-items: center; flex-wrap: nowrap;/)
+  assert.match(cssText, /\.an-ab-track \{ display: flex; flex-wrap: nowrap;/)
+})

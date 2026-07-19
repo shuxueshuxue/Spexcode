@@ -258,3 +258,34 @@ test('shared list empty state distinguishes a vacant dataset from a filtered zer
     assert.match(messages, /issuesNoMatch:/)
   }
 })
+
+test('the detail shell back affordance is a real derived anchor, never history.back', () => {
+  // DetailShell renders backHref as a REAL <a> with the icon-system arrow + forced tooltip/aria pair
+  assert.match(shell, /backHref && \(\s*<a className="ds-back" href=\{backHref\} data-tip=\{backLabel\} aria-label=\{backLabel\}>/)
+  assert.match(shell, /<Icon name="arrow-left" size=\{16\} \/>/)
+  assert.match(icons, /'arrow-left':/)
+  // no review surface ever navigates by history.back — the href derives from the canonical address
+  for (const src of [shell, page, detail, issues]) assert.doesNotMatch(src, /history\.back\(/)
+  // both pages derive the href through the ONE address helper ([[address-routing]])
+  assert.match(page, /detailBackHash\('evals', query\.q \|\| ''\)/)
+  assert.match(issues, /backHref=\{detailBackHash\('issues'\)\}/)
+  // localized labels exist in both dictionaries
+  for (const dict of [en, zh]) {
+    assert.match(dict, /backToEvals:/)
+    assert.match(dict, /backToIssues:/)
+    assert.match(dict, /backToSession:/)
+  }
+})
+
+test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced width', () => {
+  // the clip + evidence media: intrinsic size capped by the column, never width:100% stretch
+  assert.match(css, /\.an-video \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
+  assert.match(css, /\.an-image \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
+  assert.match(css, /\.eval-video \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
+  // media homes may not stretch their children wide (the flex-column default)
+  assert.match(css, /\.an-gallery \{ display: flex; flex-direction: column; align-items: flex-start;/)
+  assert.match(css, /\.fv-reply-media \{ display: flex; flex-direction: column; align-items: flex-start;/)
+  // the player chrome shrink-wraps the clip it plays
+  assert.match(css, /\.an-player \{ inline-size: fit-content; max-inline-size: 100%; \}/)
+  assert.match(css, /\.an-stage \{ position: relative; inline-size: fit-content; max-inline-size: 100%;/)
+})

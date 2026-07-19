@@ -1212,8 +1212,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
-.ds-head { max-width: 1180px; }
-.ds-title { margin: 0 0 6px; font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.ds-head { max-width: 1180px; display: flex; align-items: flex-start; gap: 10px; }
+/* the compact back anchor ([[review-chrome]] / [[address-routing]]): a REAL <a href> derived from the
+   canonical address — never a history.back button. */
+.ds-back { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 1px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+.ds-back:hover { color: var(--ink); background: var(--panel); }
+.ds-back:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.ds-title { margin: 0 0 6px; font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); overflow-wrap: anywhere; min-width: 0; }
 .ds-title-meta { margin-left: 10px; font-size: var(--type-meta); font-weight: var(--weight-regular); color: var(--muted); }
 .ds-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1180px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .ds-status-pill { display: inline-flex; align-items: center; gap: 5px; }
@@ -1332,7 +1337,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-anchor.static.degraded:hover { color: var(--muted); background: transparent; }
 /* blobs carried inline by a reply — rendered by the ONE shared evidence renderer (Evidence.jsx), sized to
    their home: full-width in the thread body, thumbnail strip in the composer preview. */
-.fv-reply-media { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.fv-reply-media { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
 /* the composer's staged evidence previews (derived from the draft's blob links). */
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .fv-frames .an-image, .fv-frames .eval-video { height: 48px; width: auto; max-width: none; }
@@ -1958,7 +1963,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
 /* the shared renderer's inline video — sized like an evidence image WHEREVER it plays (eval tab, eval
    detail gallery, an issue/eval reply's thread). */
-.eval-video { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+.eval-video { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
 .eval-noimg { font-size: var(--type-meta); color: var(--muted); }
 .eval-expected, .eval-note { font-size: var(--type-control); color: var(--ink2); margin: 0 0 6px; }
 .eval-expected-label { color: var(--muted); font-weight: var(--weight-semibold); }
@@ -1993,7 +1998,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-thread .an-comments-head { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
 .an-thread .fv-reply { margin-top: 10px; }
 .an-meta { font-size: var(--type-meta); color: var(--muted); }
-.an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
+.an-image { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
 /* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
 .lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .82); cursor: zoom-out; }
 .lightbox img { max-width: 96vw; max-height: 96vh; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 48px rgba(0, 0, 0, .6); }
@@ -2005,10 +2010,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-node { font-size: var(--type-meta); color: var(--muted); }
 .an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
 .an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
-/* the still gallery — every image entry stacked on the stage, each click-to-enlarge. */
-.an-gallery { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 0; }
-.an-stage { position: relative; margin: 12px 0 0; cursor: crosshair; }
-.an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
+/* the still gallery — every image entry stacked on the stage, each click-to-enlarge. Media keeps its
+   INTRINSIC geometry ([[event-detail]]): items align start so the flex column never stretches a small
+   image to the column width — shrink-only via each element's own max-inline-size. */
+.an-gallery { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 0; }
+/* the player + stage shrink-wrap the clip they play — the clip renders at its intrinsic size (capped by
+   the column) and the chrome follows it, never the clip stretched to fill the chrome. */
+.an-player { inline-size: fit-content; max-inline-size: 100%; }
+.an-stage { position: relative; inline-size: fit-content; max-inline-size: 100%; margin: 12px 0 0; cursor: crosshair; }
+.an-video { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
 .an-rect.live { border-style: dashed; }
 /* the paused-state play hint over the frame — a cue, never in the way. */
@@ -2064,15 +2074,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-okd { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
 
 /* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
-   oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim
-   header band, right-aligned. ---- */
-.an-ab { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+   oldest→newest left-to-right, with ‹ › to walk it. BOUNDED to one line at a stable height: at most
+   AB_WINDOW recent pips + the ONE overflow menu; nothing here ever wraps. ---- */
+.an-ab { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-left: auto; }
 .an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
 .an-ab-nav:disabled { opacity: .35; cursor: default; }
-.an-ab-track { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.an-ab-track { display: flex; flex-wrap: nowrap; gap: 3px; align-items: center; }
 .an-ab-pip { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
 .an-ab-pip.on { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
-.an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; }
+.an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; white-space: nowrap; }
+/* the strip's overflow door — every reading not holding a pip, one accessible menu (shared popover
+   mechanics + the shared .rl-menu skin). */
+.an-ab-more { position: relative; flex: none; }
+.an-ab-morebtn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.an-ab-morebtn:hover { color: var(--ink); border-color: var(--blue); }
+.an-ab-morebtn:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.an-ab-menu { max-height: min(300px, 60vh); }
+.an-ab-menuitem { grid-template-columns: 16px auto minmax(0, 1fr); }
+.an-ab-menupos { font-variant-numeric: tabular-nums; }
+.an-ab-menudate { color: var(--muted); font-size: var(--type-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }

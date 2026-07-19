@@ -49,7 +49,15 @@ A reading's evidence is a **LIST**, so every entry renders on the ONE stage — 
 detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`** — one kind-dispatch
 (`EvidenceItem`: video → an inline player, image → click-to-enlarge lightbox whose Esc is swallowed,
 transcript → text, a pruned blob → the honest miss sentinel) reused verbatim by the node eval tab's
-gallery and by a reply's inline blob links (kind resolved from the blob route's served Content-Type). The
+gallery and by a reply's inline blob links (kind resolved from the blob route's served Content-Type).
+**Media keeps its INTRINSIC geometry** (GitHub's detail-media behavior): an image or clip renders at its
+native size — `inline-size: auto` capped by `max-inline-size: 100%` with `block-size: auto` — so a piece
+larger than the main column's available width scales down proportionally to fit, and a smaller one keeps
+its native pixels, never stretched or upscaled to fill the column. That law covers every media home alike
+(the clip stage, the still gallery, a reply's inline frames), no home may flex-stretch its children wide,
+and no evidence — however oversized or tall, at any viewport down to phone width — ever widens the page.
+A shrunk clip keeps its full custom review-track controls and timeline; the player chrome shrink-wraps
+the clip it plays rather than stretching the clip to fill the column. The
 ONE deliberate specialization is this workspace's **clip player**: the video plays under a **custom
 review-track scrubber** — native chrome replaced so the timeline can carry the review: anchored remarks
 are **markers** on it, the playhead lights the remark it is inside, and clicking a marker (or an anchored
@@ -63,12 +71,19 @@ With a [[step-timeline]] sidecar, a **step ruler** renders naming each step at i
 live chip names the current step; a non-video reading with a sidecar shows its ruler too. Without a
 sidecar it is a plain evidence view with remarks — degraded gracefully, never blocked.
 
-**The A/B strip — a scenario's fail→pass lifecycle, walkable in place.** A bug fix leaves a pair of
-readings ([[reproduce-before-fix]]): the A (reproduced failure) and the B (verified fix). The status band
-renders the viewed verdict and the scenario's WHOLE history through [[review-chrome]]'s ONE shared
-icon/label/tone mapping (oldest→newest), the viewed one lit, with shared chevron buttons to
+**The A/B strip — a scenario's fail→pass lifecycle, walkable in place, BOUNDED to one line.** A bug fix
+leaves a pair of readings ([[reproduce-before-fix]]): the A (reproduced failure) and the B (verified fix).
+The status band renders the viewed verdict and the scenario's WHOLE history through [[review-chrome]]'s
+ONE shared icon/label/tone mapping (oldest→newest), the viewed one lit, with shared chevron buttons to
 walk — flipping swaps the media, expected, note, and badge in place, so A and B sit one keystroke apart.
-The history is **SCOPE-PROVIDED, sharing the page's root**: the project scope lazily fetches the node's
+The strip is a **single line at a stable height however many readings accrue**: at most EIGHT recent
+readings render as pips, and when the viewed reading falls outside that recent window it **takes one of
+the eight slots** (leftmost — it is the oldest shown), clearly selected, so the current reading is always
+visible. Every reading not holding a pip collapses behind ONE accessible **overflow menu** (the shared
+popover mechanics — menuitemradio rows wearing the same shared verdict visual plus position and filed
+time; picking a row views that reading), so a hundreds-deep history neither wraps the band tall nor loses
+any reading's reach, and no walk or pick ever changes the band's height. The history is
+**SCOPE-PROVIDED, sharing the page's root**: the project scope lazily fetches the node's
 `/api/specs/:id/evals` timeline (the board folds only the latest per scenario, [[graph-lean]]); the
 `?q=scope:<id>` scope supplies the WORKTREE-rooted readings ([[session-eval]]) — the un-merged in-session
 reading lives only in the branch's worktree, and re-fetching the main-checkout timeline would strand the

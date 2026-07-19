@@ -73,7 +73,11 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   alignment patch. Small overview surfaces may add counts beside the primitive, but never mint another
   state mapping.
 - **`DetailShell` follows GitHub's issue grammar:** title/meta HEADER, STATUS band, MAIN content with an
-  optional docked composer, and a metadata SIDE rail. Browser history is the return path. Source failure
+  optional docked composer, and a metadata SIDE rail. The header row leads with a compact **back anchor**
+  when the page supplies one (`backHref`/`backLabel`): a REAL `<a href>` wearing the [[icon-system]]
+  left-arrow glyph with its localized tooltip + accessible name — Enter follows the href natively, and it
+  never calls `history.back` (the page derives the href from the detail's canonical address,
+  [[address-routing]]). Browser history remains the finer return path beside it. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with
   side metadata above main content.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute

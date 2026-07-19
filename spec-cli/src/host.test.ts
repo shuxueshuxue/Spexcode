@@ -170,6 +170,21 @@ test('host dashboard on the hub: admin list + stream, /p proxy via hub, registra
       assert.equal(r.status, 200)
       assert.match(await r.text(), /shell/)
     }
+    // browser navigation to the Projects UI: / redirects to /projects, and the redirected GET — same
+    // explicit text/html Accept a browser sends — serves the SPA shell on the ONE content-negotiated
+    // route, while API fetches of the same path (asserted above with default Accept, and here with an
+    // explicit application/json) keep the catalog envelope.
+    const browserAccept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    const rootNav = await fetch(`${base}/`, { headers: { accept: browserAccept }, redirect: 'manual' })
+    assert.equal(rootNav.status, 302)
+    assert.equal(rootNav.headers.get('location'), '/projects')
+    const nav = await fetch(`${base}/projects`, { headers: { accept: browserAccept } })
+    assert.equal(nav.status, 200)
+    assert.match(nav.headers.get('content-type') ?? '', /text\/html/)
+    assert.match(await nav.text(), /shell/)
+    const asJson = await fetch(`${base}/projects`, { headers: { accept: 'application/json' } })
+    assert.match(asJson.headers.get('content-type') ?? '', /application\/json/)
+    assert.equal((await asJson.json()).adminGated, false)
     const viaBackend = await getJson(`${base}/p/${liveId}/anything`)
     assert.equal(viaBackend.body.echoedPath, '/anything')
 

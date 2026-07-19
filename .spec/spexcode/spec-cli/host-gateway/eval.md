@@ -10,7 +10,9 @@ scenarios:
       answering a DIFFERENT instanceId, a dead url, a record copied into a store slot its root does not
       own, a legacy {url,pid} record, and a catalog-only project; start `spex dashboard`'s gateway
       (startHostDashboard — the hub with the host extensions) on a free port and, as an implicit-loopback
-      admin, GET /projects, the /projects/stream SSE, /p/<projectId>/api/* (live, catalog-offline,
+      admin, GET /projects, the /projects/stream SSE, the browser-navigation loop (GET / with a browser
+      Accept header, then the redirected GET /projects with the same text/html Accept, plus an explicit
+      application/json fetch of the same path), /p/<projectId>/api/* (live, catalog-offline,
       unknown), a non-API /p/ path, a non-hub path (the shell), POST a git repo and a non-repo to
       /projects, POST an op on an unknown project, and open a raw WebSocket upgrade through
       /p/<projectId>/api/…. (3) TLS pass-through: start the same gateway again with the hub's `tls`
@@ -25,7 +27,10 @@ scenarios:
       older's drop). Reconcile lists ONLY the identity-matched backend online; the mismatched and dead
       records read offline, the mis-slotted and legacy records yield nothing, the catalog-only project
       lists offline. Through the hub-mounted gateway: GET /projects (implicit loopback admin) returns the
-      reconciled rows each carrying the hub row key and gating flag; the stream's first event is the
+      reconciled rows each carrying the hub row key and gating flag; browser navigation lands on the
+      Projects UI — GET / 302s to /projects and the redirected text/html GET serves the SPA shell on
+      that one content-negotiated route, while application/json and default-Accept fetches of the same
+      path keep the catalog envelope; the stream's first event is the
       current list; /p/<id>/api/* reaches the right backend with the /p prefix stripped and query intact;
       a project with no live record — unknown or catalog-offline alike — answers 404 before any upstream
       contact; a non-API /p path is proxied to the backend; a non-hub path serves the SPA shell; a git

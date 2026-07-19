@@ -152,7 +152,24 @@ test('menus and section tabs share one keyboard and Escape contract', () => {
   assert.match(popover, /requestAnimationFrame[\s\S]*aria-checked[\s\S]*focusMenuItem/)
   assert.match(popover, /\['ArrowDown', 'ArrowUp', 'Home', 'End'\]/)
   assert.match(shell, /role="menuitemradio"[\s\S]*tabIndex=\{-1\}/)
-  assert.match(shell, /role="tab" aria-selected=\{section\.active\}[\s\S]*tabIndex=\{section\.active \? 0 : -1\}/)
+  assert.match(shell, /role="tab" aria-selected=\{section\.active\}[\s\S]*tabIndex=\{index === activeSectionIndex \? 0 : -1\}/)
+})
+
+test('the tablist always exposes one roving stop and honest tab counts', () => {
+  // no active section (a committed text without its section token) still leaves tab 0 focusable,
+  // and the one results panel stays labelled by that same fallback tab
+  assert.match(shell, /const activeSectionIndex = Math\.max\(0, sections\.findIndex/)
+  assert.match(shell, /tabIndex=\{index === activeSectionIndex \? 0 : -1\}/)
+  // the pages default their leading section active, so aria-selected agrees with the fallback stop
+  assert.match(evals, /active: section !== 'reviewed'/)
+  assert.match(issues, /active: section === '' \|\| section === 'open'/)
+  // Current's COUNT is rest-of-query: blind rows keep counting while Reviewed is displayed…
+  assert.match(evals, /const blindCount = blind\.filter\(\(b\) => blindMatchesTokens\(b, restTokens\)\)\.length/)
+  assert.match(evals, /count: currentCount \+ blindCount/)
+  // …while the RENDERED blind rows still obey the full query, section included
+  assert.match(evals, /const shownBlind = blind\.filter\(\(b\) => blindMatchesTokens\(b, tokens\)\)/)
+  // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text
+  assert.match(page, /const listHref = routeHash\('evals', null, sessionId \? \{ q: scopedEvalQuery\(sessionId\) \} : null\)/)
 })
 
 test('overflow radio sets and section tabs expose complete ARIA ownership', () => {

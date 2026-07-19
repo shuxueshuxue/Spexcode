@@ -135,8 +135,9 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
     $text: (e, w) => [e.scenario, e.node, e.by, e.evaluator].filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(w)),
   }
   // tab counts are computed under the REST of the query — every token but the section's own state:.
+  const restTokens = tokens.filter((tk) => tk.key !== 'state')
   const faceted = useMemo(
-    () => entries.filter(buildMatcher(tokens.filter((tk) => tk.key !== 'state'), fields)),
+    () => entries.filter(buildMatcher(restTokens, fields)),
     [entries, tokens, sessions],
   )
   const currentCount = faceted.filter((e) => !reviewed(e)).length
@@ -144,6 +145,9 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
   const shown = entries.filter(buildMatcher(tokens, fields))
   const section = readToken(text, 'state')
   const shownBlind = blind.filter((b) => blindMatchesTokens(b, tokens))
+  // the Current tab's COUNT is rest-of-query too: a blind row keeps counting toward Current even while
+  // the Reviewed section is displayed — switching tabs must never make the other tab's number jump.
+  const blindCount = blind.filter((b) => blindMatchesTokens(b, restTokens)).length
 
   const rows = [
     ...shownBlind.map((b) => ({
@@ -203,7 +207,9 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
         },
       }}
       sections={[
-        { key: 'current', label: t('reviewList.current'), count: currentCount + shownBlind.length, active: section === 'current', onSelect: () => surgery('state', 'current') },
+        // Current is the DEFAULT section: with no (or an unknown) state: token it stays the active tab,
+        // so the tablist always exposes one roving tab stop and the panel is labelled by a selected tab.
+        { key: 'current', label: t('reviewList.current'), count: currentCount + blindCount, active: section !== 'reviewed', onSelect: () => surgery('state', 'current') },
         { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: section === 'reviewed', onSelect: () => surgery('state', 'reviewed') },
       ]}
       facets={

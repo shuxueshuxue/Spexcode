@@ -131,21 +131,22 @@ scenarios:
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
       On the running issues page (#/issues), read the query + bordered ListView skeleton, row tag/hrefs,
-      Open/Closed section tabs, direct facet buttons, and overflow menu. Select Closed and read the hash;
-      reload at that address. Submit a query, select a facet, and drive Back through each state. Drive
-      j/k and Enter; then type 'j' inside the New-form input. Record history.length across a row click
-      and drive browser Back.
+      Open/Closed section tabs, direct menu buttons, and overflow menu. Select Closed and read the hash
+      and the visible query text; reload at that address. Submit a query text, pick a menu value, and
+      drive Back through each state. Drive j/k and Enter; then type 'j' inside the New-form input. Record
+      history.length across a row click and drive browser Back.
     expected: >-
       The page is a GitHub-style full-width ListView: 32px query, 48px metadata header, ~64px desktop
       structured rows, each a REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
-      sit left, Author/Store remain direct and Spec node/Live use functional overflow; only real values
-      appear. At 390px only Author remains direct and Store joins the same kebab; body/document stay 390px.
-      The list renders instantly from app-resident issues. Query, section (`?state=closed`), and facet picks
-      each PUSH canonical state; reload and Back replay the exact row set. j/k move a visible CURSOR down the
-      rows and Enter opens the cursor row's detail page; a row click pushes (history grows) and browser
-      Back restores the exact filtered list. A key typed into an input/textarea reaches the input and
-      never moves the cursor. An empty store says there are no issues yet; a query/section/facet zero says
-      no issues match this view. No page errors.
+      sit left; Store is the direct menu and source-session presence uses functional overflow; author and
+      spec node are query tokens with no menus; only real values appear. At 390px Store remains direct;
+      body/document stay 390px. The list renders instantly from app-resident issues. A query edit, the
+      Closed section (`?q=is:issue state:closed`), and every menu pick each PUSH the one canonical ?q
+      address with the pick visible in the input text; reload and Back replay the exact row set. j/k move
+      a visible CURSOR down the rows and Enter opens the cursor row's detail page; a row click pushes
+      (history grows) and browser Back restores the exact filtered list. A key typed into an
+      input/textarea reaches the input and never moves the cursor. An empty store says there are no
+      issues yet; a query/section/menu zero says no issues match this view. No page errors.
   - name: node-issue-cards-route-internally
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]
@@ -182,16 +183,19 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
     description: >-
-      With issues spanning stores, originators, nodes, and live/offline sessions, open #/issues at desktop
-      and 390px. Read section/facet/overflow DOM, menu option values, query/hash after picks, and compare
-      primitive classes with #/evals.
+      With issues spanning stores, originators, nodes, and present/missing source sessions, open #/issues
+      at desktop and 390px. Read section/menu/overflow DOM and menu option values; pick Store and Source
+      session values and read the visible query text and hash; type author:/node: prefixes and walk the
+      suggestions; compare primitive classes with #/evals.
     expected: >-
-      Issues and Evals consume the SAME `FacetMenu`/`FacetOverflow`/ListPage classes, never a select. Issues
-      offers only real model dimensions: originator, stores present, spec nodes present, and live-session
-      involvement; no fake labels/projects/assignee buttons. Desktop common facets are invisible label +
-      chevron buttons; 390px leaves Author and moves displaced facets into a usable kebab menu. Every option
-      changes canonical query as a PUSH and Back restores it. New is the page-title action, not a filter.
-      No page errors or horizontal overflow.
+      Issues and Evals consume the SAME `FacetMenu`/`FacetOverflow`/ListPage classes, never a select.
+      Menus exist only for the low-cardinality model dimensions — stores actually present and
+      source-session presence — and every pick is token surgery into the visible query plus one PUSH.
+      Originator and spec node have NO enumerating dropdown: author:/node: are typed or completed from
+      bounded data-derived suggestions, and unknown values submit to the honest zero. No fake
+      labels/projects/assignee buttons. Desktop menus are invisible label + chevron buttons; 390px keeps
+      Store direct and presence in a usable kebab. Back restores every pick. New is the page-title
+      action, not a filter. No page errors or horizontal overflow.
   - name: close-issue-button
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-cli/src/issues.ts]

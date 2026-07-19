@@ -97,6 +97,15 @@ test('legacy structured params replay as the FULL visible token state', () => {
   // the free q survives — quoted as ONE phrase when it held spaces (the old single-substring search)
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { store: 'github', q: 'long title' }),
     'is:issue state:open store:github "long title"')
+  // …and when it holds a colon or quote the tokenizer would misread: q=drift:check stays a substring
+  // search, never an unknown-qualifier zero
+  assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { live: '1', q: 'drift:check' }),
+    'is:issue state:open session:present "drift:check"')
+  assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { state: 'open', q: 'say "hi"' }),
+    'is:issue state:open "say hi"')
+  const colonFields = { $text: (item, w) => item.title.toLocaleLowerCase().includes(w) }
+  assert.equal(buildMatcher(tokenize('"drift:check"'), colonFields)({ title: 'run drift:check now' }), true)
+  assert.equal(buildMatcher(tokenize('"drift:check"'), colonFields)({ title: 'other' }), false)
 })
 
 test('autocomplete is bounded: keys complete in place, values only from supplied candidates', () => {

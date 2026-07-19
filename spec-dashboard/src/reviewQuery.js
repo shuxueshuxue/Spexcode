@@ -120,10 +120,15 @@ const LEGACY_PARAMS = {
 export const hasLegacyParams = (query) =>
   Object.keys(LEGACY_PARAMS).some((k) => query?.[k] != null && query[k] !== '')
 
+// the legacy free q was ONE substring search — it must replay as ONE text token. Quote it whenever the
+// tokenizer would read it as anything else: spaces (several words), a colon (q=drift:check would become
+// an unknown qualifier and match zero), or a stray quote (which would swallow neighbours).
+const freeTextToken = (v) => (/[\s:"]/.test(v) ? `"${v.replace(/"/g, '')}"` : v)
+
 // a legacy LIST address replays as the FULL visible state: the page's default tokens with each legacy
 // param surgically applied (live=1→session:present, session=<id>→scope:<id>, ok=1→state:reviewed,
-// kind→evidence:), the free-text q appended as a bare word — quoted as ONE phrase when it held spaces,
-// preserving the old single-substring search. Returns null when nothing legacy is present.
+// kind→evidence:), the free-text q appended as ONE bare/phrase token preserving the old
+// single-substring search. Returns null when nothing legacy is present.
 export function legacyQueryText(defaultText, query) {
   if (!hasLegacyParams(query)) return null
   let text = defaultText
@@ -134,7 +139,7 @@ export function legacyQueryText(defaultText, query) {
     if (pair) text = setToken(text, pair[0], pair[1])
   }
   const free = String(query.q ?? '').trim()
-  if (free) text = `${text} ${quoteValue(free)}`.trim()
+  if (free) text = `${text} ${freeTextToken(free)}`.trim()
   return text
 }
 

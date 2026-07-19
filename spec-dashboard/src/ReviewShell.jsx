@@ -334,6 +334,8 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   }, [])
   useEffect(() => { document.querySelector('.lp-row.cur')?.scrollIntoView({ block: 'nearest' }) }, [cur])
   const emptyText = listEmptyText(empty)
+  // the tablist ALWAYS exposes one roving tab stop: if a consumer marks no section active (a committed
+  // text with no section token), the FIRST tab keeps tabIndex=0 and labels the one results panel.
   const activeSectionIndex = Math.max(0, sections.findIndex((section) => section.active))
   const panelId = `${tabsId}-panel`
   const tabId = (index) => `${tabsId}-tab-${index}`
@@ -353,7 +355,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
               {sections.map((section, index) => (
                 <button type="button" role="tab" aria-selected={section.active} aria-controls={panelId}
                   id={tabId(index)} key={section.key}
-                  tabIndex={section.active ? 0 : -1} className={`rl-section ${section.active ? 'active' : ''}`}
+                  tabIndex={index === activeSectionIndex ? 0 : -1} className={`rl-section ${section.active ? 'active' : ''}`}
                   onClick={section.onSelect} onKeyDown={(event) => {
                     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
                     const tabs = [...event.currentTarget.closest('[role="tablist"]').querySelectorAll('[role="tab"]')]

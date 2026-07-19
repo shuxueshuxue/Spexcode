@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
-import { EVAL_QUERY_DEFAULT, queryParam, readToken } from './reviewQuery.js'
+import { EVAL_QUERY_DEFAULT, queryParam, readToken, scopedEvalQuery } from './reviewQuery.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
@@ -151,7 +151,9 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   )
   const sessionQ = sessionId ? { q: `scope:${sessionId}` } : null   // a DETAIL address carries only the scope
   const hrefFor = (e) => routeHash('evals', `${e.node}/${e.scenario}`, sessionQ)
-  const listHref = routeHash('evals', null, sessionQ)
+  // the way BACK to the list is a LIST address: the scoped default view, same as every session door —
+  // never a scope-only text (which would show both sections and mark no tab active).
+  const listHref = routeHash('evals', null, sessionId ? { q: scopedEvalQuery(sessionId) } : null)
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
   const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })

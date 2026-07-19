@@ -149,7 +149,9 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
         },
       }}
       sections={[
-        { key: 'open', label: t('reviewList.open'), count: openCount, active: section === 'open', onSelect: () => surgery('state', 'open') },
+        // Open is the DEFAULT section: with no state: token it stays the active tab, so the tablist
+        // always exposes one roving tab stop; every non-open state spelling belongs to Closed.
+        { key: 'open', label: t('reviewList.open'), count: openCount, active: section === '' || section === 'open', onSelect: () => surgery('state', 'open') },
         { key: 'closed', label: t('reviewList.closed'), count: closedCount, active: section !== '' && section !== 'open', onSelect: () => surgery('state', 'closed') },
       ]}
       facets={

@@ -8,7 +8,9 @@ scenarios:
       DOM: the 32px query, ListView container, section/facet/overflow metadata bar, structured row elements
       (tag, classes, state/title/meta/aside, hairline divider), menus, and empty-state
       class. Open direct and overflow menus by mouse and keyboard; read focus transfer, checked item,
-      Arrow/Home/End roving, trigger restoration, outside dismissal, and one-layer Escape. Then open one
+      Arrow/Home/End roving, trigger restoration, outside dismissal, one-layer Escape, and the Chromium
+      accessibility tree's named group/radio ownership. Read tablist/tab/tabpanel names and relations, and
+      press Up/Down on a horizontal tab. Then open one
       eval detail and one issue detail and compare the detail skeletons: header,
       status band and state SVG, main column, side rail, docked composer classes. Resize list and detail to
       390px; read facet visibility, overflow contents, row geometry, body scroll width, and column order.
@@ -27,7 +29,10 @@ scenarios:
       empty primitive distinguishes a vacant dataset from a non-empty dataset whose current view matches zero.
       An active facet whose data option disappeared remains visible with an All off-switch; an inactive facet
       with no real options stays omitted. Menus and section tabs expose one roving tab stop, and Escape peels
-      only the top registered layer before focus returns to its trigger.
+      only the top registered layer before focus returns to its trigger. Each overflow facet is a distinct
+      accessible radio group named by its visible label. The horizontal section tablist is named; every tab
+      controls the one results tabpanel, the panel is labelled by the active tab, and Up/Down neither changes
+      section nor suppresses normal scrolling.
   - name: list-key-routing
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx]

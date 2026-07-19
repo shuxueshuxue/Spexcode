@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
@@ -185,6 +185,7 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
 }
 
 export function FacetOverflow({ label, groups = [], clearLabel }) {
+  const groupId = useId()
   const usable = groups
     .map((group) => ({ ...group, options: facetMenuOptions(group.options, group.value, group.clearLabel === null ? null : (group.clearLabel || clearLabel)) }))
     .filter((group) => group.options.length)
@@ -199,9 +200,10 @@ export function FacetOverflow({ label, groups = [], clearLabel }) {
         onKeyDown={popover.onTriggerKeyDown} />
       {popover.open && (
         <div className="rl-menu rl-overflow-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
-          {usable.map((group) => (
-            <div key={`${group.label}-${group.mobileOnly ? 'mobile' : 'all'}`} className={`rl-menu-group ${group.mobileOnly ? 'mobile-only' : ''}`}>
-              <div className="rl-menu-label">{group.label}</div>
+          {usable.map((group, index) => (
+            <div key={`${group.label}-${group.mobileOnly ? 'mobile' : 'all'}`} role="group"
+              aria-labelledby={`${groupId}-group-${index}`} className={`rl-menu-group ${group.mobileOnly ? 'mobile-only' : ''}`}>
+              <div className="rl-menu-label" id={`${groupId}-group-${index}`}>{group.label}</div>
               {group.options.map((option) => (
                 <button type="button" role="menuitemradio" aria-checked={String(option.value) === String(group.value || '')}
                   tabIndex={-1} key={String(option.value)} className="rl-menu-item" onFocus={popover.onItemFocus}
@@ -247,6 +249,7 @@ function QueryBar({ value = '', onSubmit, placeholder, label }) {
 // a 48px metadata bar, structured anchor rows, and an empty state. Pages supply domain data only.
 export function ListPage({ notice, error, title, action, search, sections = [], facets, overflow, rows, empty, children }) {
   const [cur, setCur] = useState(null)
+  const tabsId = useId()
   const stateRef = useRef({})
   stateRef.current = { rows, cur }
   useEffect(() => {
@@ -269,6 +272,9 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   }, [])
   useEffect(() => { document.querySelector('.lp-row.cur')?.scrollIntoView({ block: 'nearest' }) }, [cur])
   const emptyText = listEmptyText(empty)
+  const activeSectionIndex = Math.max(0, sections.findIndex((section) => section.active))
+  const panelId = `${tabsId}-panel`
+  const tabId = (index) => `${tabsId}-tab-${index}`
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
@@ -281,12 +287,13 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
         {error && <div className="fv-error lp-error" role="alert">{error}</div>}
         <section className="rl-list">
           <header className="lp-head">
-            <div className="rl-sections" role="tablist">
-              {sections.map((section) => (
-                <button type="button" role="tab" aria-selected={section.active} key={section.key}
+            <div className="rl-sections" role="tablist" aria-label={title} aria-orientation="horizontal">
+              {sections.map((section, index) => (
+                <button type="button" role="tab" aria-selected={section.active} aria-controls={panelId}
+                  id={tabId(index)} key={section.key}
                   tabIndex={section.active ? 0 : -1} className={`rl-section ${section.active ? 'active' : ''}`}
                   onClick={section.onSelect} onKeyDown={(event) => {
-                    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
                     const tabs = [...event.currentTarget.closest('[role="tablist"]').querySelectorAll('[role="tab"]')]
                     const next = rovingIndex(tabs.indexOf(event.currentTarget), tabs.length, event.key)
                     event.preventDefault()
@@ -300,7 +307,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
             </div>
             <div className="rl-facets">{facets}{overflow}</div>
           </header>
-          <div className="lp-rows">
+          <div className="lp-rows" role="tabpanel" id={panelId} aria-labelledby={tabId(activeSectionIndex)}>
             {rows.length === 0 && <div className="lp-empty">{emptyText}</div>}
             {rows.map((row) => row.href
               ? <a key={row.key} className={`lp-row ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`} href={row.href}>{row.content}</a>

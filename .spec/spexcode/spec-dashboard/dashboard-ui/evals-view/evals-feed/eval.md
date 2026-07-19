@@ -24,8 +24,10 @@ scenarios:
       Facets map only real reading fields: verdict reads pass/fail/unscored, freshness reads the live fresh
       bit, kind matches the reading's evidence SET (a mixed reading matches each carried kind), and all
       returns non-media readings too. Stale readings are present in the default Current list, never silently
-      hidden. Combined facets are conjunctive and an honest zero-result renders the shared empty state while
-      all chrome remains releasable. No list media request or fake facet appears.
+      hidden. Blind rows match their node/unscored/query facts but disappear under kind, freshness, filer,
+      or Live because they own no reading facts; they remain inert when visible. Combined facets are
+      conjunctive and an honest zero-result says no evals match this view (not that no evals exist) while all
+      chrome remains releasable. No list media request or fake facet appears.
   - name: node-filer-scope-live-overflow
     tags: [frontend-e2e, desktop, mobile]
     description: >

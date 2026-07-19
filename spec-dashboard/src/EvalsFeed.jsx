@@ -86,6 +86,18 @@ const rel = (ts) => {
   return `${Math.floor(s / 86400)}d`
 }
 
+// Blind spots have scenario/node/query identity and the unscored verdict, but no reading facts. Keeping
+// this predicate pure makes that absence explicit and testable instead of letting inert rows bypass facets.
+export const blindMatchesFilters = (blind, { kind, verdict, freshness, node, filer, liveOnly, q }) => (
+  kind === 'all'
+  && (!verdict || verdict === 'unscored')
+  && !freshness
+  && (!node || blind.node === node)
+  && !filer
+  && !liveOnly
+  && (!q || [blind.scenario, blind.node].some((value) => String(value).toLocaleLowerCase().includes(q)))
+)
+
 // `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
 // scope from the board prop, the session scope from the worktree-rooted model). `blind`: the session
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
@@ -124,11 +136,9 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
   const reviewedCount = faceted.filter(reviewed).length
   const shown = faceted.filter((e) => reviewed(e) === reviewedSection)
 
-  const shownBlind = reviewedSection ? [] : blind.filter((b) => (
-    (!node || b.node === node)
-    && (!verdict || verdict === 'unscored')
-    && (!q || [b.scenario, b.node].some((value) => String(value).toLocaleLowerCase().includes(q)))
-  ))
+  const shownBlind = reviewedSection ? [] : blind.filter((b) => blindMatchesFilters(b, {
+    kind, verdict, freshness, node, filer, liveOnly, q,
+  }))
 
   const rows = [
     ...shownBlind.map((b) => ({
@@ -194,7 +204,11 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
         { label: t('reviewList.facetNode'), value: node, options: nodeOptions, onChange: (value) => set({ node: value || null }), mobileOnly: true },
       ]} />}
       rows={rows}
-      empty={empty || t('evalsFeed.empty')}
+      empty={empty || {
+        hasData: entries.length > 0 || blind.length > 0,
+        dataset: t('evalsFeed.datasetEmpty'),
+        filtered: t('evalsFeed.noMatches'),
+      }}
     />
   )
 }

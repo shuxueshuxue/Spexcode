@@ -40,7 +40,9 @@ abstraction layer or page-local near-copy is allowed.
   a visual cursor and row-context `Enter` opens its href. Inputs, textareas, and selects never yield any key
   to the list; buttons yield `j`/`k` but retain native `Enter`/Space activation, so a cursor cannot steal a
   section, facet, overflow, or page-action command. Rows without an href (a blind spot) remain inert; one
-  shared empty state occupies the list container.
+  shared empty state occupies the list container. That primitive distinguishes an actually empty dataset
+  from a non-empty dataset whose current section/query/facets match nothing; pages supply domain nouns but
+  never substitute a "nothing exists yet" claim for an honest filtered zero.
 - **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
   (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
   list leading marks, detail status, and every A/B reading selector consume it; Issues list and detail do

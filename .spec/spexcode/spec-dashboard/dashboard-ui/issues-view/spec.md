@@ -51,7 +51,9 @@ verbs the CLI uses.
   desktop overflow facet; at 390px originator stays directly reachable while store/live join that same
   functional overflow menu. Every pick
   is canonical query state and a PUSH. New remains the page-title action. No assignee/labels/project
-  theatre is invented for a model that has none.
+  theatre is invented for a model that has none. An actually empty issue store says there are no issues
+  yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
+  issues, through [[review-chrome]]'s shared empty-state contract.
 - **The row leads with the issue, never its plumbing.** A structured two-level row: the **status mark** (GitHub
   Primer's 16px `issue-opened` octicon in the semantic open green; every concluded state — local
   `landed`, forge `closed` — the `issue-closed` ring+check in the one closed purple; never a CSS dot),

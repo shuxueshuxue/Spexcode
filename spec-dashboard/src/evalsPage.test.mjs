@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const page = readFileSync(join(here, 'EvalsPage.jsx'), 'utf8')
+const feed = readFileSync(join(here, 'EvalsFeed.jsx'), 'utf8')
 const detail = readFileSync(join(here, 'EventDetail.jsx'), 'utf8')
 const shell = readFileSync(join(here, 'ReviewShell.jsx'), 'utf8')
 const dashboard = readFileSync(join(here, 'Dashboard.jsx'), 'utf8')
@@ -35,4 +36,30 @@ test('opening a filer or originator session uses no retired eval-view state', ()
   assert.match(callback, /setSessionSel\(id\)/)
   assert.match(callback, /navigate\('sessions', id\)/)
   assert.doesNotMatch(callback, /\b(?:setEvalView|evalView)\b/)
+})
+
+test('blind eval rows obey every reading-only facet and remain inert', () => {
+  const source = feed.match(/export const blindMatchesFilters = ([\s\S]*?\n\))\n\n\/\//)?.[1]
+  assert.ok(source, 'blindMatchesFilters stays a directly testable pure predicate')
+  const matches = Function(`return (${source})`)()
+  const blind = { node: 'alpha', scenario: 'never measured' }
+  const base = { kind: 'all', verdict: '', freshness: '', node: '', filer: '', liveOnly: false, q: '' }
+
+  assert.equal(matches(blind, base), true)
+  assert.equal(matches(blind, { ...base, verdict: 'unscored' }), true)
+  assert.equal(matches(blind, { ...base, node: 'alpha' }), true)
+  assert.equal(matches(blind, { ...base, q: 'never' }), true)
+  assert.equal(matches(blind, { ...base, kind: 'video' }), false)
+  assert.equal(matches(blind, { ...base, kind: 'image' }), false)
+  assert.equal(matches(blind, { ...base, freshness: 'fresh' }), false)
+  assert.equal(matches(blind, { ...base, freshness: 'stale' }), false)
+  assert.equal(matches(blind, { ...base, filer: 'session-id' }), false)
+  assert.equal(matches(blind, { ...base, liveOnly: true }), false)
+  assert.equal(matches(blind, { ...base, verdict: 'pass' }), false)
+  assert.equal(matches(blind, { ...base, node: 'beta' }), false)
+  assert.equal(matches(blind, { ...base, q: 'absent' }), false)
+
+  const blindRows = feed.slice(feed.indexOf('...shownBlind.map'), feed.indexOf('...shown.map'))
+  assert.match(blindRows, /cls: 'se-blind'/)
+  assert.doesNotMatch(blindRows, /href:/)
 })

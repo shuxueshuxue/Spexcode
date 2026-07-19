@@ -44,6 +44,12 @@ export function nextQuery(query, patch) {
   return next
 }
 
+export const listEmptyText = (empty) => (
+  empty && typeof empty === 'object'
+    ? (empty.hasData ? empty.filtered : empty.dataset)
+    : empty
+)
+
 function usePopover() {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -173,6 +179,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
   useEffect(() => { document.querySelector('.lp-row.cur')?.scrollIntoView({ block: 'nearest' }) }, [cur])
+  const emptyText = listEmptyText(empty)
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
@@ -196,7 +203,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
             <div className="rl-facets">{facets}{overflow}</div>
           </header>
           <div className="lp-rows">
-            {rows.length === 0 && <div className="lp-empty">{empty}</div>}
+            {rows.length === 0 && <div className="lp-empty">{emptyText}</div>}
             {rows.map((row) => row.href
               ? <a key={row.key} className={`lp-row ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`} href={row.href}>{row.content}</a>
               : <div key={row.key} className={`lp-row inert ${row.cls || ''}`}>{row.content}</div>)}

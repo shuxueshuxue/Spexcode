@@ -58,7 +58,10 @@ state survives tab switches while the node popup remains open, but owns no canon
 reading still follows the Evals route family. Each
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
 beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
-([[eval-score-badge]]), then its codeSha and time.
+([[eval-score-badge]]), then its codeSha and time. Beside every reading row — a SIBLING of the expand
+toggle, never nested inside it — sits a **real anchor** onto the scenario's canonical routed detail
+(`#/evals/<node>/<scenario>`, [[address-routing]]), so the popup timeline links out to the full-page
+review surface; blind-spot and dangling rows, having no reading to open, stay inert.
 Its evidence is the scenario's **expected** over the captured proof — a **gallery** mapping the reading's
 evidence list (N screenshots, a video, a transcript), each entry showing *miss original file* when its blob
 was pruned.

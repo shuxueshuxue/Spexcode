@@ -317,13 +317,31 @@ export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys
 
 // Spec Information's compact projection of the same review filter mechanism: direct typing plus the
 // existing accessible overflow popover. It owns no parser, predicate, or modal-only interaction state.
-export function CompactReviewFilter({ value = '', onChange, placeholder, searchLabel, filterLabel, groups, clearLabel, clearSearchLabel }) {
-  return (
+// `summary` ({shown, total}) leads the row with the ONE result count — "showing X of Y" on desktop,
+// bare X/Y under the phone breakpoint (the aria-label keeps the words) — so the filter row's leading
+// space states what the current view yields without repeating the caption's state tallies.
+export function CompactReviewFilter({ value = '', onChange, placeholder, searchLabel, filterLabel, groups, clearLabel, clearSearchLabel, summary }) {
+  const t = useT()
+  const box = (
     <div className="rf-compact" role="search">
       <span className="rf-search-icon"><Icon name="search" size={13} /></span>
       <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={searchLabel} />
       {value && <IconButton icon="x" size={12} className="rf-clear" label={clearSearchLabel} onClick={() => onChange('')} />}
       <FacetOverflow label={filterLabel} clearLabel={clearLabel} groups={groups} icon="filter" className="rf-overflow" />
+    </div>
+  )
+  if (!summary) return box
+  const label = t('reviewList.showing', { shown: summary.shown, total: summary.total })
+  return (
+    <div className="rf-row">
+      {/* the sentence rides a real (visually hidden) text node — robust where aria-label on a generic
+          span is not — while the visible spans stay presentation-only. */}
+      <span className="rf-summary" data-tip={label}>
+        <span className="sr-only">{label}</span>
+        <span className="rf-summary-full" aria-hidden="true">{label}</span>
+        <span className="rf-summary-compact" aria-hidden="true">{summary.shown}/{summary.total}</span>
+      </span>
+      {box}
     </div>
   )
 }

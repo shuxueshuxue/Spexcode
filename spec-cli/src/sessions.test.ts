@@ -5,10 +5,52 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, fromRaw, launchScript, rawLifecycleStatus, type SessRec } from './sessions.js'
-import { sessionRecordPath, sessionArtifactPath, type RawRecord } from './layout.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
+import { sessionRecordPath, sessionArtifactPath } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+test('command presets compose once at the launch owner while unknown slash text passes through', () => {
+  const presets = [
+    { name: 'tidy', body: 'Tidy these targets:\n\n{{targets}}\n\nSee [[links]] for context.' },
+    { name: 'report', body: 'Report clearly.' },
+  ]
+  const specs = [{ id: 'alpha', path: '.spec/project/alpha/spec.md' }]
+
+  assert.equal(
+    composeCommandPrompt('/tidy [[alpha]] keep the edge cases', presets, specs),
+    'Tidy these targets:\n\n- [[alpha]] — project/alpha\n\nSee [[links]] for context.\n\nkeep the edge cases',
+  )
+  assert.equal(
+    composeCommandPrompt('/report', presets, specs, 'alpha'),
+    'Report clearly.\n\n- [[alpha]] — project/alpha',
+    'an explicit create node supplies targets when the raw invocation has no mention',
+  )
+  assert.match(
+    composeCommandPrompt('/tidy', presets, specs),
+    /No target was mentioned/,
+    'plugin-body links do not become implicit invocation targets',
+  )
+  assert.equal(composeCommandPrompt('/missing [[alpha]]', presets, specs), '/missing [[alpha]]')
+  assert.equal(composeCommandPrompt('plain prompt', presets, specs), 'plain prompt')
+})
+
+test('session-create API rejects stale fields generically and accepts an ordinary launcher create', async () => {
+  let called: [string | null, string, string | null, string | undefined] | null = null
+  const created = { id: 'created-1' } as Session
+  const create = async (node: string | null, prompt: string, parent: string | null, launcher?: string) => {
+    called = [node, prompt, parent, launcher]
+    return created
+  }
+
+  const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' }, create)
+  assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
+  assert.equal(called, null, 'unknown fields are refused before creation')
+
+  const ordinary = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', parent: null, launcher: 'claude' }, create)
+  assert.deepEqual(ordinary, { status: 201, session: created })
+  assert.deepEqual(called, ['launcher-select', 'probe', null, 'claude'])
+})
 
 // @@@ birth registration — EXECUTE a generated launch.sh whose agent command is a stub, and prove the wrapper
 // writes the REAL agent pid to agent.pid before exec (the anchor of the 100ms hot death tier), AND that an
@@ -77,44 +119,6 @@ test('launch retry log names the fast exit without guessing a daemon race', () =
   }
 })
 
-// [[harness-adapter]] headless launch template — the agent is a ONE-SHOT process, so the interactive
-// fast-exit retry is WRONG here (a small task completing in seconds would be re-run, doubling the work): the
-// headless template treats exit 0 as COMPLETION and a non-zero exit as a loud, unretried failure. And no
-// rendezvous env: nothing will ever listen, so the record must not look socket-addressable.
-test('headless launchScript: exit 0 is completion (never a retry), non-zero fails loud, no rendezvous env', () => {
-  const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-headless-tpl-'))
-  process.env.SPEXCODE_HOME = home
-  try {
-    const script = launchScript('headless-tpl-test', `--session-id x 'do the task'`, claudeHarness, '/opt/reclaude --skip -p', 'headless')
-    const body = readFileSync(script, 'utf8')
-    assert.doesNotMatch(body, /CLAUDE_BG_BACKEND|CLAUDE_BG_RENDEZVOUS_SOCK/, 'no rendezvous env for a headless launch')
-    assert.doesNotMatch(body, /__spex_try|retrying/, 'no fast-exit retry loop for a one-shot agent')
-    // the pinned headlessCmd is embedded WHOLE inside the one-shot bootstrap (the caller's tail rides "$@"),
-    // and the undeclared-exit recovery closes the script ([[harness-adapter]] one-shot recovery).
-    assert.match(body, /\/opt\/reclaude --skip -p "\$@"/, 'the pinned headlessCmd is embedded whole')
-    assert.match(body, /spexcode-oneshot --session-id x/, 'the ordinary launch tail rides the script tail')
-    assert.match(body, /exited undeclared/, 'the undeclared-exit recovery rides the launch script')
-    assert.match(body, /agent\.pid/, 'the turn process is still birth-registered')
-
-    // EXECUTE the template: a completing agent (`true`) exits 0 immediately — completion, not a fast-fail.
-    const okScript = launchScript('headless-tpl-ok', '', claudeHarness, 'true', 'headless')
-    const ok = spawnSync('bash', [okScript], { encoding: 'utf8' })
-    assert.equal(ok.status, 0)
-    assert.doesNotMatch(ok.stderr ?? '', /retry|attempt/)
-
-    // a failing agent (`false`) propagates its rc loud, once — no respray of the one-shot prompt.
-    const failScript = launchScript('headless-tpl-fail', '', claudeHarness, 'false', 'headless')
-    const fail = spawnSync('bash', [failScript], { encoding: 'utf8' })
-    assert.equal(fail.status, 1)
-    assert.match(fail.stderr ?? '', /\[spex launch\] headless agent exited rc=1/)
-  } finally {
-    if (prevHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = prevHome
-    rmSync(home, { recursive: true, force: true })
-  }
-})
-
 test('a failed creation-time materialize is reported loud and stamped on the record note', () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-materialize-fail-'))
@@ -127,7 +131,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', mode: 'interactive', launchOwner: null,
+      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
 
@@ -146,22 +150,6 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
   }
 })
 
-// [[launcher-select]] headless — the OLD-RECORD fallback: `mode` follows the same read rule as
-// `harness || 'claude'`. A record written before modes (no field), or carrying junk, reads `interactive`,
-// so every pre-existing session keeps its exact behavior; only an explicit 'headless' reads headless.
-test('old records without a mode field read interactive; only an explicit headless reads headless', () => {
-  const raw = (over: Partial<RawRecord> = {}): RawRecord => ({
-    session_id: 's1', governed: true, worktree_path: '/wt/x', branch: 'node/x-1', node: 'x',
-    title: null, name: null, status: 'active', proposal: null, merges: 0, note: null,
-    sortkey: null, createdAt: 1,
-    ...over,
-  })
-  assert.equal(fromRaw(raw()).mode, 'interactive')                          // pre-mode record → interactive, unchanged paths
-  assert.equal(fromRaw(raw({ mode: '' })).mode, 'interactive')              // empty value → interactive
-  assert.equal(fromRaw(raw({ mode: 'garbage' })).mode, 'interactive')       // junk never becomes a mode
-  assert.equal(fromRaw(raw({ mode: 'headless' })).mode, 'headless')         // the one explicit opt-in
-})
-
 test('owned queues are public-authority leased and raw-state fenced from legacy drainers', () => {
   const publicAuthority = backendLaunchAuthority({
     SPEXCODE_API_URL: 'https://operator:secret@127.0.0.1:8787/api/?token=private#fragment',
@@ -174,7 +162,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
     createdAt: 1, harness: 'codex', harnessSessionId: null, launcher: 'codex', launchCmd: 'codex',
-    mode: 'headless', launchOwner: publicAuthority,
+    launchOwner: publicAuthority,
   }
   assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)
   assert.notEqual(rawLifecycleStatus(base), 'queued', 'a legacy status === queued selector cannot claim it')
@@ -182,11 +170,10 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   const reread = fromRaw({
     session_id: base.session, governed: true, worktree_path: base.worktreePath, branch: base.branch, node: null,
     title: null, name: null, status: OWNED_QUEUE_RAW_STATUS, proposal: null, merges: 0, note: null,
-    sortkey: null, createdAt: 1, harness: 'codex', launcher: 'codex', launch_cmd: 'codex', mode: 'headless',
+    sortkey: null, createdAt: 1, harness: 'codex', launcher: 'codex', launch_cmd: 'codex',
     launch_owner: publicAuthority,
   })
   assert.equal(reread.status, 'queued', 'the current public record still reports queued before launch')
-  assert.equal(reread.mode, 'headless')
   assert.equal(canDrainQueued(reread, publicAuthority), true, 'a replacement child at the same public authority takes over')
   assert.equal(canDrainQueued(reread, 'http://127.0.0.1:8956'), false, 'a different backend authority cannot claim it')
   assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')

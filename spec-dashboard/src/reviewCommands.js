@@ -10,7 +10,7 @@ export const REVIEW_COMMANDS = [
 ]
 
 // bind the static registry to the live per-render runners, keeping only the commands the viewed reading
-// offers. `runners` maps name → the closure that DOES the thing (the same closure the header button calls).
+// offers. `runners` maps each name to the one closure that DOES the thing.
 export function reviewCommandsFor(view, runners) {
   return REVIEW_COMMANDS
     .filter((c) => c.when(view))

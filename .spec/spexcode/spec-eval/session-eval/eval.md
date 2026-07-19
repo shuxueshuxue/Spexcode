@@ -127,6 +127,21 @@ scenarios:
       (b) switching to the Terminal tab drops the sub-route back to bare '#/sessions/<id>', and (c) leaving the
       session and returning to a bare '#/sessions/<id>' shows the Terminal with a bare URL — no stale sub-route
       resurrects, and the address never shows /eval while the Terminal is up (or vice-versa).
+  - name: branch-new-node-visible
+    tags: [backend-api]
+    code: [spec-eval/src/sessioneval.ts, spec-cli/src/specs.ts]
+    description: >
+      Against a live backend, GET /api/sessions/<id>/evals for a session whose branch ADDS a brand-new
+      spec node — spec.md + eval.md + filed readings exist only in the session worktree, not on the
+      trunk. Read the model's nodes list for that new node: presence, hasEvalFile, declared scenarios,
+      readings.
+    expected: >
+      The branch-new node appears in the model like any trunk node — the node SET, like the readings
+      and freshness, is rooted at the SESSION's worktree (a worktree's .spec is the branch's pending
+      proposal, not invisible): hasEvalFile true, its declared scenarios listed, its filed readings
+      present and inSession-marked when this session filed them — so the Eval tab and the session-eval
+      deep link can land on a reading the session filed on a node it just created, while the branch is
+      still un-merged. A session with no worktree keeps reading the trunk tree unchanged.
 ---
 # session-eval loss
 

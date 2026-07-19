@@ -82,8 +82,15 @@ straight to the trunk.
   hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
   hides itself when only one store exists. An issue's ROW is one compact line that leads with the issue
-  itself, never its plumbing: a **status DOT** (the status vocabulary as color — a boxed "open" on every row
-  was noise), then the concern; the trailing edge carries the quiet meta — a compact reply-count pill and a
+  itself, never its plumbing: a **status mark** (the status vocabulary as icon + color — a boxed "open" on every row
+  was noise). The whole lifecycle uses GitHub Primer's original 16px Octicon geometry through the shared
+  icon registry: open work uses `issue-opened` (ring + centre) in the theme's semantic open green; every
+  concluded state (local `landed`, forge `closed`) uses `issue-closed` (ring + check) in the one semantic
+  closed purple. Store vocabulary never changes the mark, and no lifecycle falls back to a CSS dot. Then
+  comes the concern; the row's TYPE SCALE is the SAME as the [[evals-view]] picker, not an Issues-only
+  dialect: concern/scenario titles share the same 12px semibold face, while the trailing quiet metadata
+  uses the eval row's 10.5–11px UI face (no tiny 9px uppercase monospace or added letter-spacing). The
+  trailing edge carries a compact reply-count pill and a
   **store mini-tag** (borderless, muted, and rendered only while stores are actually mixed — a single-store
   list carries no tags, mirroring the filter's own self-hiding). **The store is metadata, never identity: it
   never leads a row and never sits on a title** (the human called the leading boxed chip). The DETAIL opens
@@ -122,7 +129,9 @@ straight to the trunk.
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same
   docked-bar shape as the eval rail's composer and the console's ❯ box, one write-affordance geometry across
-  the review surfaces). The composer is the ONE shared thread-composer shape ([[event-detail]] docks the
+  the review surfaces). The dock's full-width hairline and band are the DOCK's own chrome; the composer box
+  itself rides the SAME content column the title/body/thread establish — one content measure, the box never
+  offset from or wider than the prose it replies to. The composer is the ONE shared thread-composer shape ([[event-detail]] docks the
   SAME component): a **quiet bordered container** holding a **borderless writing surface that is already
   usable at idle** — **floored at two lines, never a one-line sliver you must click to expand**: the box
   you land on is the box you can write in, and focus changes nothing about its height. It still
@@ -161,7 +170,9 @@ straight to the trunk.
   selection event at the same unchanged caret must not reopen what Esc dismissed. **New opens as a
   centered pop-out over the page, not as an inline row in the list column**: the left column stays a slim
   picker, the modal carries the same two text surfaces (concern + optional body), a single compact store
-  picker (local plus the configured forge issue stores such as github/gitlab), its own close affordance, and
+  picker (local plus the configured forge issue stores such as github/gitlab) whose options name each
+  store's canonical display label ONCE (`local`, `github`, `gitlab`) — never redundant invented initials
+  such as `L · local` / `GH · github` — its own close affordance, and
   Esc/backdrop close only that layer. The picker selects where the new issue is opened: local writes the
   git-native local store, while a forge choice creates the real forge issue through the same issue port and
   writes a `Spec:` marker from any `[[node]]` links so the tracer links it back on read. The modal's

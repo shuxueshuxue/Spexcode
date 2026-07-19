@@ -28,7 +28,9 @@ the session's `governed:true` record `session.json` (+ best-effort the `prompt` 
 pristine — `materialize`s the spec-discipline contract into the worktree's own `CLAUDE.md`/`AGENTS.md`
 ([[harness-delivery]]), and **queues the worktree for launch** on a private
 `tmux -L` socket (`spex new "<prompt>" [--node X] [--launcher <name>]`). The selected [[launcher-select]]
-profile derives the [[harness-adapter]] and owns the actual agent command. Claude launches with
+profile derives one of the four interactive [[harness-adapter]] entries and owns the actual agent command.
+There is one launch lifecycle and no execution-mode router: create, drain, reopen, liveness, and delivery all
+call that resolved adapter directly. Claude launches with
 `--session-id <uuid>` — the SAME id the record is keyed by, the tmux window name,
 the rendezvous socket, and the commit attribution, so the conversation `--resume`s after death, the board maps
 it to its worktree, and a spec node links to it. Codex launches a visible TUI attached to the project's shared
@@ -79,6 +81,15 @@ so the launch always runs where the launch env and cap live. The caller can be *
 stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
 rather than the backend's. The CLI falls back to in-process **only when no backend answers** (warning that it then
 carries the caller's env, no cap).
+
+That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
+`/<preset>` names a live `surface: command` plugin: `newSession` expands its body, fills `{{targets}}` from the
+prompt's `[[node]]` mentions (or the explicit create node when the invocation names none), and appends the
+remaining free text. That expansion is only the agent's launch payload: session node/title derivation and the
+stored originating prompt use the raw caller text, so a plugin body's own `[[links]]` cannot silently become
+session scope. The dashboard, phone, CLI, direct API caller, and no-backend in-process fallback all enter this
+same path; clients may list and insert preset names but never expand plugin bodies themselves. A slash name
+that is not a live preset passes through verbatim.
 
 **The launch is project-bound; the route is not — so the launch guards its project.** A launch builds the
 worktree under the backend's OWN `mainRoot`, but the route to a backend is a bare URL (`SPEXCODE_API_URL`,

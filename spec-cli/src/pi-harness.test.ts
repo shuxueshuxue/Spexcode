@@ -66,7 +66,7 @@ test('pi extension: dispatch exit 2 bridges to { block, reason } on tool_call an
   assert.equal(sent[0].text, 'not yet — commit first')
 })
 
-// the one-shot wedge regression (session c20abe54): without the loop-termination bit every settle read as a
+// the settle-loop wedge regression (session c20abe54): without the loop-termination bit every settle read as a
 // FIRST stop, a gate that can never pass (commit gate on a 0-commit worktree) blocked forever, and pi's
 // print-mode disposed the session mid-loop — the next inject threw "extension ctx is stale" into the host
 // and the record wedged `active` (rc=97 after both recovery turns). The bit is what lets the gate's own

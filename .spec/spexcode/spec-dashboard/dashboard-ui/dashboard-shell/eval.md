@@ -25,6 +25,21 @@ scenarios:
       never an eternal spinner; a retry once the backend is reachable lands the board. Zero loss = a
       dead backend is legible at a glance and recoverable without a manual page reload.
     code: [spec-dashboard/src/App.jsx]
+  - name: unified-typography-hierarchy
+    tags: [frontend-e2e, desktop, mobile]
+    description: >
+      Open the live dashboard at normal browser zoom in desktop and phone-sized viewports. On desktop,
+      visit the graph, sessions, evals, issues, and settings pages; on the phone, visit the specs and
+      sessions faces. Capture the settled end state of each representative surface and inspect the
+      rendered text hierarchy, density, wrapping, and control alignment.
+    expected: >
+      The dashboard reads as one product: equivalent titles, controls, body copy, and metadata use a
+      consistent hierarchy across every page; ordinary labels remain comfortably legible; secondary
+      metadata is quieter without collapsing into tiny text; and no label clips, overlaps, or changes a
+      fixed control's geometry. Desktop and phone layouts keep their intended density at normal zoom.
+      Zero loss = every visible surface uses the shell's shared type scale without a page-specific
+      typographic dialect.
+    code: [spec-dashboard/src/styles.css]
   - name: silent-push-death-self-heals
     tags: [frontend-e2e, desktop]
     description: >

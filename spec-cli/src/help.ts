@@ -108,6 +108,28 @@ projects coexist on one host). Loopback-only by default; --host 0.0.0.0 opens it
 still plain HTTP with no gate, so bind wide only on a network you trust.`,
     see: 'GET /health (backend liveness probe)',
   },
+  dashboard: {
+    line: 'dashboard             ONE dashboard for every project you serve — no --api-port pairing  [--port N=5173]',
+    body: `Usage: spex dashboard [--port N=5173] [--host H=127.0.0.1]
+
+The HOST gateway: serves the built dashboard once and routes to EVERY backend the current user runs —
+the multi-project hub engine plus the host registry on top. It continuously reconciles the per-project
+endpoint records each \`spex serve\` publishes (validating each against the live backend's /api/instance
+identity), keeps a durable known-project catalog, and proxies each project's API + SSE + terminal
+socket under /p/<projectId>/* — the project is named in the path, so nothing is "current" and no
+pairing flag exists.
+
+Admin surface (hub-authorized: implicit from loopback until an admin password is set, then cookie
+sessions): GET /projects (the validated list + gating state) · GET /projects/stream (SSE) ·
+POST /projects {root} (register an existing repo) · POST /projects/<id>/init|doctor|serve
+(run the real \`spex init\`/\`spex doctor\`, or start an offline project's backend, detached — a
+backend never depends on this gateway staying up) · PUT|DELETE /projects/admin-password and
+/projects/<id>/password (the gates). A gated project answers /p/<id>/login with the designed page.
+
+Loopback-only by default; --host widens the bind — the admin surface stays locked to loopback until
+an admin password exists, and ungated projects serve open.`,
+    see: 'spex serve (each project\'s backend) · spex serve ui (explicit one-backend pairing)',
+  },
 
   // ── the noun drawers ──────────────────────────────────────────────────────
   spec: {
@@ -372,6 +394,7 @@ Project verbs (implicit object = this project)
   ${ENTRIES.doctor.line}
   ${ENTRIES.uninstall.line}
   ${ENTRIES.serve.line}
+  ${ENTRIES.dashboard.line}
 
 Noun drawers
   ${ENTRIES.spec.line}

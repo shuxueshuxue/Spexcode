@@ -20,8 +20,8 @@ scenarios:
       Drive the shared port-ownership contract through the real CLI. Start `spex serve --port P`,
       wait until P serves, then run a SECOND `spex serve --port P` on the same port; capture its
       exit code, its stderr, and whether the private child it booted before failing is still
-      listening. Repeat with `spex serve ui --port Q` (v0.3.0 removed the `spex dashboard` verb —
-      the dashboard is now `spex serve ui`; two on the same Q). File the transcript with
+      listening. Repeat with `spex serve ui --port Q` (the per-project dashboard verb; two on the
+      same Q). File the transcript with
       `spex eval add spec-cli --scenario port-bind-failure --result <txt> --pass`.
     expected: >-
       The second `serve` exits NON-ZERO (1) printing a single loud line naming the busy port and the

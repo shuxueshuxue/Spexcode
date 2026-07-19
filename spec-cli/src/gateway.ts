@@ -173,6 +173,12 @@ export function startGateway(opts: GatewayOpts): void {
     })
     const bail = () => { socket.destroy(); up.destroy() }
     socket.on('error', bail); up.on('error', bail)
+    // pair the halves fully (the supervisor's rule): an http server's sockets are allowHalfOpen, so a bare
+    // client FIN ('end') would otherwise leave this side open forever — an upgraded stream never
+    // half-closes legitimately, so either half's FIN or close tears down both.
+    socket.on('end', bail); up.on('end', bail)
+    socket.once('close', () => up.destroy())
+    up.once('close', () => socket.destroy())
   })
 
   // `spex serve ui` passes an explicit host (loopback by default, --host to widen); `--public` passes
@@ -192,7 +198,9 @@ export function startGateway(opts: GatewayOpts): void {
   listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, onListen })
 }
 
-function rawHeaders(req: http.IncomingMessage): string {
+// re-serialize an upgrade request's headers for replay against the upstream (exported for the host
+// gateway's per-project WS pipe, which replays the same way).
+export function rawHeaders(req: http.IncomingMessage): string {
   let s = ''
   for (let i = 0; i < req.rawHeaders.length; i += 2) s += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`
   return s + '\r\n'
@@ -219,8 +227,10 @@ const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.head
 
 // reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
-function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number) {
-  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: req.url, method: req.method, headers: req.headers }, (upRes) => {
+// `path` overrides the upstream path (the host gateway strips its /p/:projectId prefix); default = as-is.
+// Exported: the host gateway ([[host-gateway]]) proxies per-project traffic through this same function.
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string) {
+  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers: req.headers }, (upRes) => {
     const type = String(upRes.headers['content-type'] || '')
     const skip = !wantsGzip(req) || upRes.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
     if (skip) { res.writeHead(upRes.statusCode || 502, upRes.headers); upRes.pipe(res); return }
@@ -236,8 +246,9 @@ function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstream
 // serve the built dashboard (vite dist). Unknown non-file paths fall back to index.html (SPA). Path
 // traversal is blocked by normalising and confining to distDir. Compressible files ship gzipped, memoized
 // per (path, mtime) — a dist file is immutable per build, so each is compressed once, not per request.
+// Exported: the host gateway serves the same dist through the same function.
 const gzMemo = new Map<string, { mtime: number; gz: Buffer }>()
-function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDir: string, urlPath: string) {
+export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDir: string, urlPath: string) {
   const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '')
   let file = join(distDir, rel)
   if (!file.startsWith(distDir)) file = join(distDir, 'index.html')

@@ -11,7 +11,7 @@ import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote,
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
-import { resolveLayout, mainBranch } from './layout.js'
+import { resolveLayout, mainBranch, mainCheckout } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
@@ -40,6 +40,14 @@ app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/sp
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
+// @@@ instance identity - who THIS backend is: the serve generation's instanceId (minted by the supervisor,
+// constant across zero-downtime reloads, handed down via env) and the project root it serves. This is the
+// answer the host gateway ([[host-gateway]]) compares an endpoint record against before proxying to it — a
+// recycled port serving another project or a stale record fails the match instead of being routed to. Git-free
+// after the first memoized resolution; a self-run child (no supervisor) answers instanceId:null, which no
+// record claims, so it is simply not hosted.
+const instanceStartedAt = new Date().toISOString()
+app.get('/api/instance', (c) => c.json({ instanceId: process.env.SPEXCODE_INSTANCE_ID ?? null, root: mainCheckout(), pid: process.pid, startedAt: instanceStartedAt }))
 // the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
 // dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request

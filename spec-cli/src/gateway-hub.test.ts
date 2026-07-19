@@ -50,7 +50,9 @@ function fakeBackend(who: string, port: number): http.Server {
 function registerProject(id: string, url: string): void {
   const dir = join(home, 'projects', id)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'backend.json'), JSON.stringify({ url, pid: process.pid }) + '\n')
+  // the canonical instance-shaped record supervise.ts publishes ([[host-gateway]]); the hub honors only
+  // this shape, and only in the slot the record's own root encodes to (here root === id — no [/.] chars).
+  writeFileSync(join(dir, 'backend.json'), JSON.stringify({ url, pid: process.pid, instanceId: `inst-${id}`, root: id, startedAt: 'test' }) + '\n')
 }
 
 const hub = (path: string, init: RequestInit = {}) =>

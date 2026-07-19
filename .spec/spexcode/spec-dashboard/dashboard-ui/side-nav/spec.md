@@ -36,8 +36,9 @@ restores the list.
   unknown hash lands here), `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
   `#/evals/<node>/<scenario>`, the canonical eval DETAIL address — each segment encoded on its own so the
   path shape survives), `#/issues` (+ `#/issues/<id>`), `#/settings`. A LIST page's filter state rides a
-  query string INSIDE the hash (`#/evals?kind=all&session=<id>`), so a filtered list is a copyable,
-  Back-restorable address. Hash, deliberately not the History API: the dashboard ships as a static dist
+  query string INSIDE the hash — for the review lists, ONE `?q=<raw token text>` param ([[review-query]];
+  the default view stays bare) — so a filtered list is a copyable, Back-restorable address. Hash,
+  deliberately not the History API: the dashboard ships as a static dist
   behind plain gateways with no index.html fallback, and a hash route needs nothing from any server.
   `route.js` is the whole route layer (parse — path + query, hash construction, navigate, one hashchange
   hook, legacy normalization); the object-level address vocabulary over it is [[address-routing]].
@@ -49,10 +50,13 @@ restores the list.
   exactly. What REPLACES is automatic state-naming — a normalization or the session board's selected-tab
   echo. There
   is no fake in-app Back button anywhere; the browser's history is the return path.
-- **Legacy session-eval addresses normalize.** `#/sessions/<id>/eval[/<node>/<scenario>]` was the
+- **Legacy review addresses normalize.** `#/sessions/<id>/eval[/<node>/<scenario>]` was the
   un-merged worktree evals' old home; its canonical form is now the [[evals-view]] family
-  (`#/evals?session=<id>` / `#/evals/<node>/<scenario>?session=<id>`). The route layer rewrites the old
-  shape to the new with replace on arrival — old links keep working, the old shape is never re-minted.
+  (`#/evals?q=is:eval state:current scope:<id>` / `#/evals/<node>/<scenario>?q=scope:<id>`). Likewise the
+  review lists' old STRUCTURED filter params (`state/concluded/store/author/node/filer/verdict/
+  freshness/kind/live/ok/session`) replay into the one `?q=` token text ([[review-query]]). The route
+  layer rewrites each old shape with replace on arrival — old links keep working, no old shape is ever
+  re-minted.
   The retired scoped `#/projects` admin route crosses a pathname boundary instead: arrival at
   `/p/<id>/#/projects` performs one full-page redirect to the canonical global `/projects` surface.
 - **Pages are peers, not layers.** Navigation swaps which page fills the main area beside the rail;

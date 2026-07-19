@@ -54,6 +54,28 @@ scenarios:
       row. After a menu closes, j on its focused trigger still advances the cursor. INPUT, TEXTAREA, and
       SELECT targets surrender no list keys. Enter on a focused anchor follows that anchor's native href,
       never the cursor's; only row-context Enter outside a native control opens the cursor row.
+  - name: token-query
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewQuery.js]
+    description: >
+      In a real browser at a live backend, drive both list pages through the visible token query alone:
+      read the default face's input text and URL; click section tabs and low-cardinality menus and read
+      the input text, URL, and history depth after each; hand-type a query with an unknown qualifier and
+      submit; type a bare prefix and a key:prefix and walk the inline suggestions (including scope: on a
+      board with sessions); walk browser Back through every recorded step; open legacy structured-param
+      and #/sessions/<id>/eval addresses; open a scoped list and one of its details; resize to 390px and
+      switch themes.
+    expected: >
+      ONE source of truth throughout: the bare address shows the default tokens in the input; every tab
+      or menu pick rewrites ONLY its token in the visible text and pushes ?q=<raw text> exactly once;
+      recognized qualifiers color in the aria-hidden overlay while an unknown one stays plain, keeps
+      running, and lands on the filtered-zero face with the token intact in input and URL. A key pick
+      completes `key:` in place without executing; a value pick completes the token and executes;
+      `scope:` suggests only sessions on the current board. Back restores URL + input text + result set
+      at every level. Legacy addresses replace-normalize to the token form (live=1→session:present,
+      session=<id>→scope:<id>, ok=1→state:reviewed, kind=all→the bare default); a scoped list shows the
+      gates strip and its rows' details carry ?q=scope:<id> alone. At 390px the input keeps full width
+      and highlight with no horizontal overflow; every theme keeps the overlay colored and aligned.
 ---
 # measuring review-chrome
 

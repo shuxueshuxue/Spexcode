@@ -26,7 +26,7 @@ realised wherever a live terminal sits beside spec navigation.
   pretend it sent. A **set of `/` commands never reaches the agent** — the *board* commands, handled by
   the dashboard itself: `/stop` stops the session but **keeps** its worktree (it goes offline, resumable),
   `/close` removes the worktree (the no-prompt discard), `/merge` merges it, `/type` toggles type mode, `/eval`
-  opens `#/evals?session=<id>`. Each is the **typed twin of its header action or navigation door** — drawn from
+  opens the session-scoped Evals list ([[evals-view]]'s scoped default query). Each is the **typed twin of its header action or navigation door** — drawn from
   **one registry**, so the command and its button are one action, one identity colour, and can never
   drift. Sending these words to a live agent would only drive the agent's own process, not the board.
   Realised in [[session-console]].

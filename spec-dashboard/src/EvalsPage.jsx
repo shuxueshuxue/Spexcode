@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
+import { EVAL_QUERY_DEFAULT, queryParam, readToken, scopedEvalQuery } from './reviewQuery.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
@@ -9,12 +10,13 @@ import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
-// page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, every filter in the URL
-// query; `#/evals/<node>/<scenario>` is the standalone DETAIL page — the [[event-detail]] workspace in the
-// shared DetailShell. A row click is a real-anchor history PUSH; browser Back restores the exact filtered
-// list URL; both pages are directly openable. The `?session=<id>` query scopes EITHER page to one
-// session's WORKTREE-rooted model ([[session-eval]] — un-merged evals live here now; the legacy
-// `#/sessions/<id>/eval` address normalizes to this family at the route layer).
+// page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
+// query in the URL; `#/evals/<node>/<scenario>` is the standalone DETAIL page — the [[event-detail]]
+// workspace in the shared DetailShell. A row click is a real-anchor history PUSH; browser Back restores
+// the exact filtered list URL; both pages are directly openable. The `scope:<id>` token scopes EITHER
+// page to one session's WORKTREE-rooted model ([[session-eval]] — un-merged evals live here now; the
+// detail carries `?q=scope:<id>` alone, and the legacy `#/sessions/<id>/eval` + structured-param
+// addresses normalize to this family at the route layer).
 
 // the session scope's worktree-rooted lean model (`GET /api/sessions/:id/evals`, [[session-eval]]) —
 // null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
@@ -61,11 +63,10 @@ function sessionRows(model) {
 }
 
 // The LIST page (`#/evals[?query]`): the session scope's gates strip + export door above the one
-// [[evals-feed]] list. All filter state is the URL's; the scope picker (default off = the merged trunk)
-// is the easy door into any session's un-merged worktree evals.
-export function EvalsListPage({ scope, sessionId, model, error, sessions, query, hrefFor, notice }) {
+// [[evals-feed]] list. All filter state is the URL's one token text; the scope: token (default absent =
+// the merged trunk) is the door into any session's un-merged worktree evals.
+export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
   const t = useT()
-  const onQuery = (next) => navigate('evals', null, { query: next })
   const empty = sessionId && model === null
     ? t('common.loading')
     : sessionId && error
@@ -88,13 +89,13 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, query,
         </div>
       )}
       <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
-        query={query} onQuery={onQuery} hrefFor={hrefFor} notice={notice}
+        queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice}
         error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
     </>
   )
 }
 
-// The DETAIL page (`#/evals/<node>/<scenario>[?session=<id>]`): the [[event-detail]] workspace for one
+// The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
 export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, onOpenSession, onWrite, notice }) {
@@ -130,7 +131,9 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
 export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession }) {
   const t = useT()
   const { param, query } = useRoute()
-  const sessionId = query.session || null
+  // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
+  // conflated with session:present|missing, the source-session presence facet.
+  const sessionId = readToken(query.q || '', 'scope') || null
   const { model, error, reload: reloadSession } = useSessionEvals(sessionId)
   const [notice, setNotice] = useState('')
 
@@ -146,13 +149,18 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
     () => (sessionId ? (model && model !== false ? sessionRows(model) : { blind: [], entries: [] }) : { blind: [], entries: currentEntries(specs) }),
     [sessionId, model, specs],
   )
-  const sessionQ = sessionId ? { session: sessionId } : null
+  const sessionQ = sessionId ? { q: `scope:${sessionId}` } : null   // a DETAIL address carries only the scope
   const hrefFor = (e) => routeHash('evals', `${e.node}/${e.scenario}`, sessionQ)
-  const listHref = routeHash('evals', null, sessionQ)
+  // the way BACK to the list is a LIST address: the scoped default view, same as every session door —
+  // never a scope-only text (which would show both sections and mark no tab active).
+  const listHref = routeHash('evals', null, sessionId ? { q: scopedEvalQuery(sessionId) } : null)
+  // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
+  // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
+  const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })
 
   return param
     ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
         sessions={sessions} listHref={listHref} onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
     : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
-        query={query} hrefFor={hrefFor} notice={notice} />
+        queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} />
 }

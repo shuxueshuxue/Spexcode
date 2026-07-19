@@ -1,28 +1,35 @@
 ---
 scenarios:
-  - name: live-facet-filters-both-pages
+  - name: presence-facet-filters-both-pages
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/session.js]
     description: >-
-      Run the dashboard with a genuinely live session behind issues and eval readings. Open each ListView's
-      overflow, pick Live, compare rows against board session ids, read hash/history, then clear with All.
-      Repeat at 390px and after combining another facet.
+      Run the dashboard with sessions on the board behind some issues and eval readings. On each
+      ListView open the overflow's Source session group, pick Present and then Missing, compare rows
+      against the board's session ids, and read the visible query text and hash after each pick; clear
+      with All. Repeat at 390px and after combining another token.
     expected: >-
-      Both pages expose the same functional Live facet and write `?live=1` as a PUSH. Issues retain exactly
-      rows whose originator or reply author is live; Evals retain exactly readings whose filer is live —
-      identical to detail liveness dots because all consume `liveSession`. All restores the prior population;
-      Back replays each state. Live remains usable in mobile kebab with no horizontal overflow.
-  - name: live-facet-survives-filer-death
+      Both pages expose the same Source session radio group whose picks are token surgery: Present
+      writes `session:present`, Missing `session:missing`, into the visible text and the ?q address as
+      one PUSH; All removes the token. Issues retain exactly rows whose originator or a reply author
+      still resolves to a board session; Evals retain exactly readings whose filer does — the ONE
+      `sessionPresent` membership join, any zone, no liveness judgment and no live/online/offline
+      wording anywhere on the facet. present|missing partition every entry. Back replays each state;
+      the group stays usable in the mobile kebab with no horizontal overflow.
+  - name: presence-facet-never-strands
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/IssuesPage.jsx]
     description: >-
-      Select Live, then close the only live session so the matching count becomes zero. Reopen overflow and
-      clear the filter; repeat on both pages.
+      With `session:present` active, reduce the matching count to zero (combine tokens or use a board
+      with no present sources). Reopen the overflow and clear the filter; also delete the token from the
+      query text directly. Repeat on both pages.
     expected: >-
-      While `?live=1` is active, Live remains present even at zero results and All can release it. Once off
-      with no live data, the no-data facet may disappear. Neither ListView can strand itself empty.
+      At zero results the list shows the honest filtered-empty face while the Source session group stays
+      mounted with All releasable — and the visible query text itself is always the canonical
+      off-switch, so neither ListView can strand itself behind an invisible filter.
 ---
 # measuring live-session-filter
 
-YATU through the real ListViews and a genuinely live board session: compare visible rows and detail dots to
-the board, drive the real overflow menu and browser history, and repeat after the session leaves the board.
+YATU through the real ListViews against the real board: compare visible rows to /api/sessions membership,
+drive the real overflow menu, the visible query text, and browser history; repeat after data contracts.
+

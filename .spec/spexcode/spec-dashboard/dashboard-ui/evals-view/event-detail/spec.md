@@ -70,7 +70,7 @@ icon/label/tone mapping (oldest→newest), the viewed one lit, with shared chevr
 walk — flipping swaps the media, expected, note, and badge in place, so A and B sit one keystroke apart.
 The history is **SCOPE-PROVIDED, sharing the page's root**: the project scope lazily fetches the node's
 `/api/specs/:id/evals` timeline (the board folds only the latest per scenario, [[graph-lean]]); the
-`?session=<id>` scope supplies the WORKTREE-rooted readings ([[session-eval]]) — the un-merged in-session
+`?q=scope:<id>` scope supplies the WORKTREE-rooted readings ([[session-eval]]) — the un-merged in-session
 reading lives only in the branch's worktree, and re-fetching the main-checkout timeline would strand the
 current video behind an older inherited one. The strip shows only when a scenario has more than one
 reading. New readings arrive only from the eval seam's CLI (`spex eval add`, [[eval-core]]); the pane

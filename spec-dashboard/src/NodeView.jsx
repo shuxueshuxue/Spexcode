@@ -376,7 +376,7 @@ export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => 
   const shown = model.shown
   const open = shown.filter((i) => i.status === 'open')
   const closed = shown.filter((i) => i.status !== 'open')
-  const groups = filterMenuGroups(model, onFilter, ['section', 'author', 'store', 'live'])
+  const groups = filterMenuGroups(model, onFilter, ['section', 'author', 'store', 'session'])
   return (
     <div className="pane-issues">
       {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
@@ -533,7 +533,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   const readings = model.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
   const unmeasured = model.shown.filter((item) => item.filterKind === 'unmeasured').map((item) => item.source)
   const dangling = model.shown.filter((item) => item.filterKind === 'dangling').map((item) => item.source)
-  const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'live'])
+  const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'session'])
   const filterEl = filterItems.length > 4
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}

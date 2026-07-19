@@ -1,7 +1,10 @@
-import { liveSession, sessionHeadline } from './session.js'
+import { sessionHeadline, sessionPresent } from './session.js'
+import { effectiveTokens, tokenize } from './reviewQuery.js'
 
-// [[review-filters]]: one pure filter engine. Domain adapters below provide field values; surfaces provide
-// only the state home (canonical hash query or Spec Information local state) and presentation.
+// [[review-filters]]: one pure filter engine — the single home of Issues/Evals FIELD SEMANTICS. Domain
+// adapters below provide field values; surfaces provide only the state home and presentation: the
+// canonical pages parse their ONE visible token text ([[review-query]]) and bridge it here, the Spec
+// Information panes keep plain local state. Neither duplicates matching.
 
 const text = (value) => String(value ?? '').trim().toLocaleLowerCase()
 const values = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value])
@@ -21,10 +24,13 @@ export const kindsOf = (reading) => {
 const optionLabel = (t, key, fallback) => t ? t(key) : fallback
 const allOption = (t) => ({ value: '', label: optionLabel(t, 'reviewList.all', 'All') })
 const optionsFor = (items, facet, state, context, t) => {
-  const found = facet.fixedValues
-    ? facet.fixedValues.filter((value) => items.some((item) => values(facet.values(item, context)).map(String).includes(String(value))))
-    : unique(items.map((item) => facet.values(item, context)))
   const active = state[facet.key] != null && String(state[facet.key]) !== ''
+  // a fixed-value ENUM facet keeps its ACTIVE value as a real (checked) row even when no data carries
+  // it — an active facet must never hide its own off-switch; data-valued facets stay data-derived.
+  const found = facet.fixedValues
+    ? facet.fixedValues.filter((value) => (active && String(state[facet.key]) === String(value))
+      || items.some((item) => values(facet.values(item, context)).map(String).includes(String(value))))
+    : unique(items.map((item) => facet.values(item, context)))
   const available = facet.available
     ? facet.available(found, items, state, context)
     : found.length >= (facet.minValues ?? 2)
@@ -36,9 +42,11 @@ const optionsFor = (items, facet, state, context, t) => {
 }
 
 export function filterReviewItems(items, state, config, context = {}) {
-  const q = text(state.q)
-  const faceted = items.filter((item) => (
-    (!q || config.search(item, context).some((value) => text(value).includes(q)))
+  // `q` is one substring or an ARRAY of substrings (the token text's bare words/phrases), conjunctive;
+  // an `impossible` state (an unknown qualifier in the canonical text) honestly matches NOTHING.
+  const qs = values(state.q).map(text).filter(Boolean)
+  const faceted = state.impossible ? [] : items.filter((item) => (
+    qs.every((q) => config.search(item, context).some((value) => text(value).includes(q)))
     && config.facets.every((facet) => {
       const selected = state[facet.key]
       return selected == null || selected === ''
@@ -48,11 +56,14 @@ export function filterReviewItems(items, state, config, context = {}) {
     })
   ))
   const sectionValue = config.section && state[config.section.key]
+  const sectionMatch = (item, selected) => (config.section.matches
+    ? config.section.matches(item, selected, context)
+    : String(config.section.value(item, context)) === String(selected))
   const shown = sectionValue == null || sectionValue === ''
     ? faceted
-    : faceted.filter((item) => String(config.section.value(item, context)) === String(sectionValue))
+    : faceted.filter((item) => sectionMatch(item, sectionValue))
   const sections = config.section
-    ? Object.fromEntries(config.section.options.map((option) => [option.value, faceted.filter((item) => String(config.section.value(item, context)) === String(option.value)).length]))
+    ? Object.fromEntries(config.section.options.map((option) => [option.value, faceted.filter((item) => sectionMatch(item, option.value)).length]))
     : {}
   const facets = Object.fromEntries(config.facets.map((facet) => [facet.key, {
     key: facet.key,
@@ -64,17 +75,24 @@ export function filterReviewItems(items, state, config, context = {}) {
 }
 
 export const reviewActorName = (actor) => String(actor || '').length > 22 ? `${String(actor).slice(0, 8)}…` : actor
-const issueIsLive = (issue, sessions) => !!liveSession(sessions, issue.by)
-  || (Array.isArray(issue.replies) && issue.replies.some((reply) => liveSession(sessions, reply.by)))
+// the source-session PRESENCE join ([[live-session-filter]]): originator or any reply author still
+// resolves on the board — membership, never liveness.
+const issuePresent = (issue, sessions) => !!sessionPresent(sessions, issue.by)
+  || (Array.isArray(issue.replies) && issue.replies.some((reply) => sessionPresent(sessions, reply.by)))
+const presenceFacet = (valuesOf) => ({
+  key: 'session', label: 'reviewList.facetSession', fixedValues: ['present', 'missing'],
+  values: valuesOf,
+  labelValue: (value, { t }) => optionLabel(t, value === 'present' ? 'reviewList.sessionPresent' : 'reviewList.sessionMissing', value),
+})
 
 export function issueFilterState(raw = {}, { defaultSection = '' } = {}) {
   const state = raw.state === 'closed' || raw.concluded === '1'
     ? 'closed'
-    : raw.state === 'open' ? 'open' : defaultSection
+    : raw.state || defaultSection
   return {
-    q: raw.q || '', state,
+    q: raw.q || '', state, impossible: raw.impossible === true,
     author: raw.author || '', store: raw.store || '', node: raw.node || '',
-    live: raw.live === '1' ? '1' : '',
+    session: raw.session || '',
   }
 }
 
@@ -83,17 +101,17 @@ const ISSUE_CONFIG = {
   section: {
     key: 'state',
     value: (issue) => issue.status === 'open' ? 'open' : 'closed',
+    // open|closed are the lifecycle halves; a concrete concluded spelling (landed) matches that status
+    // honestly instead of pretending the enum is binary.
+    matches: (issue, selected) => (selected === 'open' ? issue.status === 'open'
+      : selected === 'closed' ? issue.status !== 'open' : issue.status === selected),
     options: [{ value: 'open', label: 'reviewList.open' }, { value: 'closed', label: 'reviewList.closed' }],
   },
   facets: [
     { key: 'author', label: 'reviewList.facetAuthor', values: (issue) => issue.by, labelValue: reviewActorName },
     { key: 'store', label: 'reviewList.facetStore', values: (issue) => issue.store },
     { key: 'node', label: 'reviewList.facetNode', values: (issue) => issue.nodes || [] },
-    {
-      key: 'live', label: 'reviewList.facetLive', values: (issue, { sessions }) => issueIsLive(issue, sessions) ? '1' : [],
-      minValues: 1, available: (_found, items, state, { sessions }) => state.live === '1' || items.some((item) => issueIsLive(item, sessions)),
-      labelValue: (_value, { t }) => optionLabel(t, 'reviewList.live', 'Live session'),
-    },
+    presenceFacet((issue, { sessions }) => issuePresent(issue, sessions) ? 'present' : 'missing'),
   ],
 }
 
@@ -113,7 +131,6 @@ export function issueFilterModel(items, raw = {}, context = {}) {
 }
 
 const evalIsReading = (entry) => entry.reading !== false
-const evalIsLive = (entry, sessions) => evalIsReading(entry) && !!liveSession(sessions, entry.by)
 const verdictOf = (entry) => evalIsReading(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
 const reviewed = (entry) => evalIsReading(entry) && !!(entry.fresh && entry.humanOk)
 const shortSession = (value, sessions) => {
@@ -122,16 +139,11 @@ const shortSession = (value, sessions) => {
   return String(value || '').length > 22 ? `${String(value).slice(0, 8)}…` : value
 }
 
-export const defaultEvalKind = (items) => items.some((entry) => evalIsReading(entry) && kindsOf(entry).includes('video'))
-  ? 'video'
-  : items.some((entry) => evalIsReading(entry) && kindsOf(entry).includes('image')) ? 'image' : 'all'
-
 export function evalFilterState(raw = {}, { defaultKind = 'all', defaultSection = '' } = {}) {
-  const kind = ['video', 'image', 'all'].includes(raw.kind) ? raw.kind : defaultKind
   return {
-    q: raw.q || '', kind,
+    q: raw.q || '', kind: raw.kind || defaultKind, impossible: raw.impossible === true,
     verdict: raw.verdict || '', freshness: raw.freshness || '', node: raw.node || '', filer: raw.filer || '',
-    live: raw.live === '1' ? '1' : '', ok: raw.ok === '1' ? '1' : raw.ok === 'current' ? 'current' : defaultSection,
+    session: raw.session || '', ok: raw.ok || defaultSection,
   }
 }
 
@@ -160,11 +172,9 @@ const EVAL_CONFIG = {
       key: 'filer', label: 'reviewList.facetFiler', values: (entry) => evalIsReading(entry) ? entry.by : [],
       labelValue: (value, { sessions = [] }) => shortSession(value, sessions),
     },
-    {
-      key: 'live', label: 'reviewList.facetLive', values: (entry, { sessions }) => evalIsLive(entry, sessions) ? '1' : [],
-      minValues: 1, available: (_found, items, state, { sessions }) => state.live === '1' || items.some((item) => evalIsLive(item, sessions)),
-      labelValue: (_value, { t }) => optionLabel(t, 'reviewList.live', 'Live session'),
-    },
+    presenceFacet((entry, { sessions }) => (evalIsReading(entry)
+      ? (sessionPresent(sessions, entry.by) ? 'present' : 'missing')
+      : [])),
   ],
 }
 
@@ -207,4 +217,44 @@ export function filterMenuGroups(model, onChange, keys) {
     clearLabel: facet.value === 'all' ? null : undefined,
     onChange: (value) => onChange({ [facet.key]: value || null }),
   }))
+}
+
+// the CANONICAL pages' bridge ([[review-query]] → this engine): parse the ONE visible token text into
+// engine state. Bare words/phrases become conjunctive q substrings; duplicate qualifiers are last-wins;
+// a qualifier outside the page's map (or a wrong is: identity) marks the state IMPOSSIBLE — the token
+// stays verbatim in the text and the list honestly shows nothing. `scope:` maps to no filter: it picks
+// the DATA SOURCE upstream ([[evals-view]]), never a per-row predicate.
+const TOKEN_MAPS = {
+  issue: {
+    is: (v) => (v === 'issue' ? {} : null),
+    state: (v) => ({ state: v }),
+    store: (v) => ({ store: v }),
+    author: (v) => ({ author: v }),
+    node: (v) => ({ node: v }),
+    session: (v) => ({ session: v }),
+  },
+  eval: {
+    is: (v) => (v === 'eval' ? {} : null),
+    state: (v) => ({ ok: v === 'reviewed' ? '1' : v }),
+    verdict: (v) => ({ verdict: v }),
+    freshness: (v) => ({ freshness: v }),
+    evidence: (v) => ({ kind: v }),
+    node: (v) => ({ node: v }),
+    filer: (v) => ({ filer: v }),
+    session: (v) => ({ session: v }),
+    scope: () => ({}),
+  },
+}
+
+export function tokenFilterState(text, domain) {
+  const map = TOKEN_MAPS[domain]
+  const state = { q: [] }
+  for (const token of effectiveTokens(tokenize(text))) {
+    if (token.key == null) { state.q.push(token.value); continue }
+    const toState = map[token.key]
+    const mapped = toState ? toState(token.value) : null
+    if (mapped == null) return { impossible: true, q: [] }
+    Object.assign(state, mapped)
+  }
+  return state
 }

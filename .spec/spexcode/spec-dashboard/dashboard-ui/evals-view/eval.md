@@ -6,23 +6,26 @@ scenarios:
     description: >
       Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
-      elements' tag/href and structured content, 32px query, Current/Reviewed sections, direct facets,
-      and overflow facets. Change query, verdict/kind, and scope; read the hash, reload, and Back through
-      the prior states.
+      elements' tag/href and structured content, 32px query with its visible token text, Current/Reviewed
+      sections, direct menus, and overflow. Edit the query, pick verdict/evidence values, and add a
+      scope: token; read the hash, reload, and Back through the prior states.
     expected: >
-      The hash reads #/evals and the Evals rail entry is accented. The page is a GitHub-style full-width
+      The hash reads #/evals, the Evals rail entry is accented, and the input shows the default
+      `is:eval state:current`. The page is a GitHub-style full-width
       ListView — one structured row per (node, scenario), each row a REAL <a> anchor whose href is that eval's canonical
       detail address (#/evals/<node>/<scenario>), copyable/middle-clickable; NO master-detail split pane
-      and NO in-page detail. Current/Reviewed + counts sit left; the shared real-data facets cover verdict,
-      freshness, kind, node, filer/live, and session scope. A query, section, or facet pick writes canonical
-      query (e.g. #/evals?verdict=fail&kind=all) as a history push, and reload/Back re-derive the exact state.
+      and NO in-page detail. Current/Reviewed + counts sit left; verdict/freshness/evidence keep
+      low-cardinality menus while node/filer/scope are query tokens only. A query, section, or menu pick
+      writes the ONE canonical address (e.g. #/evals?q=is:eval state:current verdict:fail) as a history
+      push with the pick visible in the input text, and reload/Back re-derive the exact state.
       The list/detail/A-B verdict icon, label, and tone come from ONE `.review-state` mapping. Zero loss = one
       page whose whole state lives in its URL and whose rows are links.
   - name: list-detail-push-back
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/EventDetail.jsx]
     description: >
-      In a real browser on #/evals with a non-default filter applied (e.g. ?kind=all): record
+      In a real browser on #/evals with a non-default filter applied (e.g. ?q=is:eval state:current
+      verdict:fail): record
       history.length, click a row's anchor, and read the new hash + history.length + the rendered page.
       Then drive the browser's real Back and read the hash + the restored list DOM. Also reload the
       browser directly at the detail address and read what renders.
@@ -41,19 +44,23 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]
     description: >
-      With a live session that has worktree-rooted readings: on #/evals open the overflow's Scope facet and
-      pick that session; read the hash, the gates strip, and the rows. Then open the legacy address
+      With a live session that has worktree-rooted readings: on #/evals scope to that session through the
+      query — type scope: and pick it from the bounded suggestions (board sessions only) — and read the
+      hash, the gates strip, and the rows. Then open the legacy address
       #/sessions/<id>/eval directly and read the hash after settle. Open the session console and click
       the Eval entry; read where it lands. Finally check a session-scoped row's href carries the scope.
     expected: >
-      Picking a session rewrites the address to #/evals?session=<id> and the list becomes that session's
+      Scoping rewrites the address to the scoped LIST query (#/evals?q=is:eval state:current scope:<id> —
+      the same text every session door mints) and the list becomes that session's
       WORKTREE-rooted model: the gates strip (the review numbers + the HTML export door) above, blind
       spots leading as inert unmeasured rows, the session's own readings ✦-marked, then the inherited
-      baseline. Row hrefs carry ?session=<id> so the detail's A/B history walks the worktree readings.
-      The legacy #/sessions/<id>/eval address NORMALIZES (replace) to #/evals?session=<id> — old links
-      keep working, the old shape never shows in the bar. The console's Eval entry is a DOOR that
+      baseline. Row hrefs carry ?q=scope:<id> ALONE — a detail address never drags list filters — so the
+      detail's A/B history walks the worktree readings, and the detail's way back to the list is the
+      scoped default query again. The legacy #/sessions/<id>/eval address NORMALIZES (replace) to the
+      scoped default list — old links keep working, the old shape never shows in the bar. The console's
+      Eval entry is a DOOR that
       navigates to the same session-scoped list (no in-console eval pane exists). Zero loss = un-merged
-      worktree evals live in the ONE #/evals route family behind a default-off session filter.
+      worktree evals live in the ONE #/evals route family behind the scope: token.
   - name: session-detail-refresh-stability
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]

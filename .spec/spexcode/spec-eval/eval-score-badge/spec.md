@@ -6,6 +6,7 @@ desc: The at-a-glance scenario vocabulary on score.jsx — a per-scenario COUNT 
 code:
   - spec-dashboard/src/score.jsx
 related:
+  - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/SpecNode.jsx
 ---
 # eval-score-badge
@@ -34,7 +35,9 @@ count reuses that same colour vocabulary, so tile and tab still speak ONE langua
 circle state; `scenarioStates` joins the node's DECLARED scenarios (the folded `node.scenarios`) to their
 latest reading so a **never-measured** scenario is still seen — a unit of loss, not an absence; `aggregateState`
 folds those per-scenario states to one worst-first colour; `ScenarioCount`
-renders the tile/stat-bar count; `ScoreBadge` draws the per-reading ring. The node tile ([[node-graph]]) and
+renders the tile/stat-bar count; `ScoreBadge` delegates the per-reading `icon + label + tone` to
+[[review-chrome]]'s ONE `ReviewState` mapping, so graph/eval-tab glances and the routed Evals list/detail/A-B
+cannot disagree or fall back to Unicode. The node tile ([[node-graph]]) and
 the node-info stat bar render `ScenarioCount`; the [[focus-panel]] renders the same per-scenario states as a
 list; the eval tab ([[eval-tab]]) renders the per-reading circle.
 

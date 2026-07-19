@@ -6,13 +6,13 @@ scenarios:
     description: >
       Serve the dashboard over the REAL hub gateway (startHubGateway) fronting at least two real `spex
       serve` backends whose supervisors registered themselves (backend.json records), one of them gated.
-      Open the ROOT address in a real browser from loopback with no admin password configured, then:
+      Open `/projects` in a real browser from loopback with no admin password configured, then:
       read the catalog and its bootstrap hint; SET the admin password through the header control and
       confirm the page stays signed in; set and clear a project password from its row drawer; watch a
       backend registered/killed OUTSIDE the page appear/flip health without a reload; follow a row's
       Open link.
     expected: >
-      The root address renders the Projects hub: one row per KNOWN project with an honest liveness dot
+      `/projects` renders the Projects hub: one row per KNOWN project with an honest liveness dot
       (running=green via the probed /p/:id/health; a host-validated dead/stopped backend reads a calm
       grey 'stopped' with Start as the row's primary action; red is reserved for an online-claimed
       backend the probe cannot reach), the gated rows wearing the lock. With no admin password the
@@ -20,10 +20,10 @@ scenarios:
       answers (the hub rotated the setter's cookie — no logout). Project password set/clear round-trips
       (PUT/DELETE) and the row's lock badge follows. A registry change made outside the page lands via
       the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic dashboard renders
-      that project's board through the scoped /p/<id>/api lane, with the rail carrying the
-      current-project chip and the Projects entry. Zero loss = the whole admin loop (see fleet, gate
-      it, enter a project, come back) works in one tab through shareable pathname URLs, against the
-      real gateway code.
+      that project's board through the scoped /p/<id>/api lane. Its rail carries the current-project
+      chip and only the five project-owned page buttons; the chip's "All projects" action returns to
+      `/projects`. Zero loss = the whole admin loop (see fleet, gate it, enter a project, come back)
+      works in one tab through shareable pathname URLs, against the real gateway code.
   - name: project-scope-unlock
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/CredentialGate.jsx, spec-dashboard/src/projects.js]

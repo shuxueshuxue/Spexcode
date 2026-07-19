@@ -32,7 +32,6 @@ const SessionInterface = lazy(() => import('./SessionInterface.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
-const ProjectsPage = lazy(() => import('./ProjectsPage.jsx'))
 
 const nodeTypes = { spec: SpecNode }
 // node box (used only to frame the camera on a node). NW/NH must track the .spec-node size in
@@ -643,13 +642,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
       {page === 'settings' && (
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
           <Settings />
-        </Suspense>
-      )}
-      {/* the projects catalog ([[projects-hub]]) as a routed page inside a scoped dashboard — the same
-          component the hub face mounts standalone; it fetches and gates itself. */}
-      {page === 'projects' && (
-        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-          <ProjectsPage />
         </Suspense>
       )}
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a

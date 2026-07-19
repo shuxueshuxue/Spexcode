@@ -53,17 +53,20 @@ restores the list.
   un-merged worktree evals' old home; its canonical form is now the [[evals-view]] family
   (`#/evals?session=<id>` / `#/evals/<node>/<scenario>?session=<id>`). The route layer rewrites the old
   shape to the new with replace on arrival — old links keep working, the old shape is never re-minted.
+  The retired scoped `#/projects` admin route crosses a pathname boundary instead: arrival at
+  `/p/<id>/#/projects` performs one full-page redirect to the canonical global `/projects` surface.
 - **Pages are peers, not layers.** Navigation swaps which page fills the main area beside the rail;
   nothing dims or floats. Surfaces that must stay warm across switches (the graph's camera, the session
   board's live terminals) stay mounted and display-toggled — a route change may never cost a terminal
   its socket. True transient overlays (help, search, the node popup) remain modals *within* a page and
   close when the page changes.
-- **Catalog-gated multi-project chrome.** Under the multi-project gateway ([[projects-hub]]) the rail
-  carries two more pieces, both rendered only from a SUCCESSFUL catalog probe: a `#/projects` entry for
-  the catalog page, and — on a `/p/<id>/` scoped page — the persistent current-project chip pinned above
-  the page entries, whose menu lists the catalog for same-tab switching plus an "All projects" door to
-  the hub. When the catalog is denied the chip still names the current project but carries no menu, so a
-  direct-project guest never sees the fleet: the gate is absence of data, not a hidden element.
+- **Catalog-gated project switching, never project management.** Under the multi-project gateway
+  ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
+  project-owned page entries. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
+  switching plus an "All projects" door to the global `/projects` hub; it never adds a Projects rail page
+  or mounts project management inside the scoped shell. When the catalog is denied the chip still names
+  the current project but carries no menu, so a direct-project guest never sees the fleet or any global
+  admin affordance: the gate is absence of data, not a hidden element.
 - **One global ⌥ vocabulary; Esc never switches pages.** Page switching is the **⌥ command family**,
   window-global on every page: `⌥1..⌥5` jump straight to a page in rail order (graph · sessions · evals ·
   issues · settings — the rail tooltips carry the hints), `⌥N` to the New Session composer, `⌥F` to the

@@ -27,8 +27,11 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   low-frequency/width-displaced facets in overflow. No real options means no fake control, but an ACTIVE
   value whose option vanished keeps an All off-switch, including dead session scope after failed reload.
   Menu open focuses the checked/first radio; Arrow/Home/End rove, selection/Escape restore the trigger,
-  and outside click keeps clicked focus. Menus use the ONE LIFO Escape stack, while section tabs expose one
-  roving tab stop. Every query, section, or facet action PUSHES canonical hash state; Back replays it.
+  and outside click keeps clicked focus. Each overflow facet is its own named radio group inside the menu,
+  never one mixed set with several checked items. Menus use the ONE LIFO Escape stack. The named horizontal
+  tablist exposes one roving tab stop; tabs control one labelled results panel and only Left/Right/Home/End
+  switch it, leaving Up/Down to normal page scrolling. Every query, section, or facet action PUSHES canonical
+  hash state; Back replays it.
 - **Rows use ONE two-level information grammar.** Rows arrive as data and remain REAL `<a>` anchors, but
   their content is structured through the shared row primitive: leading state visual, a wrapping title,
   secondary identity/author/time metadata, then real right-side facts such as comments, store, evidence

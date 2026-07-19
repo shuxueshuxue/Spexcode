@@ -52,10 +52,14 @@ edits the project's ONE portable settings source directly: it loads the raw root
 (`{}` when absent) into a monospace text editor and saves only a valid top-level JSON object through
 `GET|PUT /projects/:id/config`. Saving is atomic and revision-guarded, so a concurrent disk edit is a
 visible conflict instead of silent loss; `spexcode.local.json` is deliberately outside this browser
-surface because it holds host-specific paths and may hold secrets. Beside that general editor, visual
-preset pickers issue admin-only structured writes: a project pick changes only its existing
+surface because it holds host-specific paths and may hold secrets. The raw JSON editor is the drawer's
+work area: about half the viewport tall on desktop, with sensible bounds, and a large viewport-constrained
+mobile height that leaves its controls reachable without overlap. Inside that same project details drawer,
+identity editing is a quiet secondary disclosure: its compact current mark and edit button reveal the shared
+searchable, source-filtered icon browser only on request. The global gateway equivalent sits in the page's low-priority
+settings/details area, never as a prominent picker block. A project pick changes only its existing
 `dashboard.icon`, while the global pick changes only the one host `gateway.icon`; both use the shared
-[[icon-presets]] registry and surface revision conflicts. The separate setup action runs the
+[[icon-presets]] resolver and Iconify catalog, re-collapse after a successful choice, and surface revision conflicts. The separate setup action runs the
 real repo verbs (`POST /projects/:id/init|doctor`): init demands the EXPLICIT harness choice
 (nothing picked, nothing run), while preset policy comes from the edited `spexcode.json` rather than a
 second one-off input; every run renders its exit code and full transcript in place, a failure stays on

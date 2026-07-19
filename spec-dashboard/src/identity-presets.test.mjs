@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   identityFaviconHref,
   identityPreset,
-  requireIdentityPreset,
+  isIconifyIcon,
+  requireIdentityChoice,
   resolvedIdentityIcon,
 } from '../../spec-cli/src/identity-presets.js'
 
@@ -18,8 +19,11 @@ test('preset favicons are local SVG data while legacy icon forms remain valid', 
   assert.equal(resolvedIdentityIcon('lucide:radar'), 'lucide:radar')
 })
 
-test('picker validation accepts only registry presets and keeps the existing rocket id canonical', () => {
+test('structured choices accept presets and the established Iconify namespace', () => {
   assert.equal(identityPreset('mdi:rocket-launch').label, 'Rocket')
-  assert.equal(requireIdentityPreset('rocket'), 'mdi:rocket-launch')
-  assert.throws(() => requireIdentityPreset('lucide:radar'), /unknown identity icon/)
+  assert.equal(requireIdentityChoice('rocket'), 'mdi:rocket-launch')
+  assert.equal(requireIdentityChoice('lucide/radar'), 'lucide:radar')
+  assert.equal(isIconifyIcon('simple-icons:github'), true)
+  assert.throws(() => requireIdentityChoice('not a catalog choice'), /unknown identity icon/)
+  assert.throws(() => requireIdentityChoice('https://example.test/new.svg'), /unknown identity icon/)
 })

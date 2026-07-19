@@ -6,11 +6,13 @@ scenarios:
       path: spec-dashboard/src/identity-presets.test.mjs
       name: preset and legacy href cases
     description: >-
-      Exercise registry ids, aliases, validation, SVG/favicon serialization, and legacy URL/Iconify/emoji
-      values; then inspect the real browser favicon and picker in the complete identity-chain run.
+      Exercise featured registry ids, aliases, structured-choice validation, SVG/favicon serialization,
+      broad Iconify names, and legacy URL/Iconify/emoji values; then inspect the real browser favicon and
+      compact searchable chooser in the complete identity-chain run.
     expected: >-
-      Every preset has one labeled data row and local SVG href; validation accepts only picker presets;
-      existing URL/Iconify/emoji values retain their old output; browser swatches and favicons match.
+      Every featured preset has one labeled data row and local SVG href; validation accepts featured ids and
+      well-formed Iconify names while rejecting other new arbitrary values; existing URL/Iconify/emoji values
+      retain their old output. Browser results, visible marks, and favicons resolve from the same saved value.
 ---
 
 Unit output proves exact serialization; the browser eval proves the renderer consumes it.

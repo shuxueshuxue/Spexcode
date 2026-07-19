@@ -23,5 +23,7 @@ that actual root, so merely claiming another checkout cannot pass validation.
 
 The host exposes narrow, admin-authorized structured icon writes. A project write revision-checks and
 updates only `dashboard.icon` in that project's portable JSON, including while its backend is offline; a
-gateway write revision-checks and updates only the host config. Both accept only registry presets and are
-atomic. Raw project-config editing remains the general settings surface, not a second identity store.
+gateway write revision-checks and updates only the host config. Both accept the shared resolver's registry
+ids and well-formed Iconify names and are atomic. Raw project-config editing remains the general settings
+surface, not a second identity store; arbitrary legacy emoji/URL values remain readable without becoming
+new structured-write choices.

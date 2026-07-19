@@ -199,18 +199,18 @@ test('structured icon writes use canonical responses and encode project ids', as
   const impl = async (url, init) => {
     calls.push({ url, body: JSON.parse(init.body) })
     return url === '/projects/icon'
-      ? jsonRes(200, { ok: true, gateway: { identity: { title: 'Projects', icon: 'compass' }, revision: 'g2' } })
-      : jsonRes(200, { ok: true, identity: { title: 'Repo', icon: 'spark' }, content: '{"dashboard":{"icon":"spark"}}\n', revision: 'p2' })
+      ? jsonRes(200, { ok: true, gateway: { identity: { title: 'Projects', icon: 'simple-icons:github' }, revision: 'g2' } })
+      : jsonRes(200, { ok: true, identity: { title: 'Repo', icon: 'lucide:radar' }, content: '{"dashboard":{"icon":"lucide:radar"}}\n', revision: 'p2' })
   }
-  const gateway = await withFetch(impl, () => saveGatewayIcon('compass', 'g1'))
-  const project = await withFetch(impl, () => saveProjectIcon('a b', 'spark', 'p1'))
+  const gateway = await withFetch(impl, () => saveGatewayIcon('simple-icons:github', 'g1'))
+  const project = await withFetch(impl, () => saveProjectIcon('a b', 'lucide:radar', 'p1'))
   assert.deepEqual(calls, [
-    { url: '/projects/icon', body: { icon: 'compass', revision: 'g1' } },
-    { url: '/projects/a%20b/icon', body: { icon: 'spark', revision: 'p1' } },
+    { url: '/projects/icon', body: { icon: 'simple-icons:github', revision: 'g1' } },
+    { url: '/projects/a%20b/icon', body: { icon: 'lucide:radar', revision: 'p1' } },
   ])
-  assert.equal(gateway.gateway.identity.icon, 'compass')
-  assert.equal(project.identity.icon, 'spark')
-  assert.match(project.content, /"spark"/)
+  assert.equal(gateway.gateway.identity.icon, 'simple-icons:github')
+  assert.equal(project.identity.icon, 'lucide:radar')
+  assert.match(project.content, /"lucide:radar"/)
 })
 
 test('initProject carries only the EXPLICIT harness choice in the body; preset lives in spexcode.json', async () => {

@@ -4,7 +4,8 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
-import { DetailShell, SideSection } from './ReviewShell.jsx'
+import { DetailShell, ReviewState, SideSection } from './ReviewShell.jsx'
+import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { apiUrl } from './project.js'
@@ -75,11 +76,6 @@ function StepRail({ events, axis, extent, activeStepIdx, onSeek }) {
     </div>
   )
 }
-
-// verdict pip for the A/B history strip: ✓ pass (a B pole) / ✗ fail (an A pole) / · a pre-verdict legacy
-// reading. The verdict is an object `{status, note}` (never a bare string), so read `.status`.
-const verdictMark = (r) => (r.verdict?.status === 'pass' ? '✓' : r.verdict?.status === 'fail' ? '✗' : '·')
-const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.status === 'fail' ? 'fail' : 'legacy')
 
 // the deterministic concern key binding an eval's remark thread to its (node, scenario) — the thread IS a
 // local Issue, keyed by this exact concern text (ids de-collide, concerns don't). Kept only for display /
@@ -452,14 +448,14 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   // the STATUS band — verdict + sign-off + the A/B strip, GitHub's status row under the title.
   const status = (
     <>
-      <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
+      <ReviewState kind="eval" state={readingScore(viewing)} showLabel className="an-verdict-badge" size={16} />
       {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark. The band carries NO
           write button — the ONE dashboard door to the ok is the composer's typed /ok
           ([[review-commands]]), gated exactly as the CLI. */}
       {viewing.humanOk &&
-        <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>}
-      {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
-          repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one
+        <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}><Icon name="circle-check" size={14} /> {t('annotator.okd')}</span>}
+      {/* the A/B history strip — the scenario's fail→pass lifecycle: the ONE shared verdict visual on
+          every reading, the viewed one lit, shared chevrons to walk it. Shown only when there's more than one
           reading to flip between; a fresh scenario is just its single reading. */}
       {history && history.length > 1 && (
         <div className="an-ab">
@@ -468,12 +464,13 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
           <div className="an-ab-track">
             {history.slice().reverse().map((r, p) => {
               const idx = history.length - 1 - p
+              const state = readingScore(r)
               return (
                 <button type="button" key={`${r.ts}-${idx}`}
-                  className={`an-ab-pip ${verdictCls(r)} ${idx === histIdx ? 'on' : ''}`}
+                  className={`an-ab-pip ${idx === histIdx ? 'on' : ''}`}
                   onClick={() => setHistIdx(idx)}
-                  data-tip={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
-                  {verdictMark(r)}
+                  aria-label={`${t(`score.${state}`)} · ${new Date(r.ts).toLocaleString()}`}>
+                  <ReviewState kind="eval" state={state} size={13} />
                 </button>
               )
             })}

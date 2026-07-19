@@ -15,7 +15,7 @@ export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'projects', 'setti
 
 // canonical query serialization: fixed key order, so the same state always prints the same address
 // (hash comparisons in navigate() and tests stay byte-stable).
-const QUERY_KEYS = ['kind', 'live', 'ok', 'store', 'concluded', 'session']
+const QUERY_KEYS = ['q', 'state', 'verdict', 'freshness', 'kind', 'author', 'store', 'node', 'filer', 'live', 'ok', 'concluded', 'session']
 export function queryString(query) {
   if (!query) return ''
   const sp = new URLSearchParams()

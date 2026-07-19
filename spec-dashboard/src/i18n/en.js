@@ -111,7 +111,7 @@ export default {
   },
 
   evalsFeed: {
-    title: 'evals',
+    title: 'Evals',
     kind: { video: 'video', image: 'image', all: 'all' },
     summary: ({ n }) => `${n} current`,
     empty: 'no current evals match — measure a scenario or switch the filter.',
@@ -120,6 +120,41 @@ export default {
     okdTip: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     okChip: ({ n }) => `${n} ok’d`,
     okChipTitle: 'show the fresh, human-ok’d scenarios the feed default-hides',
+    filedBy: ({ by }) => `filed by ${by}`,
+    filedAt: ({ at }) => `filed ${at} ago`,
+    sessionTag: 'session',
+  },
+
+  reviewState: {
+    issueOpen: 'Open',
+    issueClosed: 'Closed',
+  },
+
+  reviewList: {
+    all: 'All',
+    search: 'Search',
+    searchIssues: 'Search issues',
+    searchEvals: 'Search evals',
+    issuesTitle: 'Issues',
+    open: 'Open',
+    closed: 'Closed',
+    current: 'Current',
+    reviewed: 'Reviewed',
+    live: 'Live session',
+    moreFilters: 'More filters',
+    facetAuthor: 'Author',
+    facetStore: 'Store',
+    facetNode: 'Spec node',
+    facetLive: 'Live',
+    facetVerdict: 'Verdict',
+    facetFreshness: 'Freshness',
+    facetKind: 'Evidence',
+    facetFiler: 'Filer',
+    facetScope: 'Scope',
+    openedBy: ({ by }) => `opened by ${by}`,
+    openedAt: ({ at }) => `opened ${at} ago`,
+    verdict: { pass: 'Pass', fail: 'Fail', unscored: 'Unscored' },
+    freshness: { fresh: 'Fresh', stale: 'Stale' },
   },
 
   evals: {

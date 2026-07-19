@@ -2,7 +2,7 @@
 title: evals-view
 status: active
 hue: 200
-desc: The dashboard's Evals surface as GitHub-style TWO pages — a full-width LIST page (#/evals, [[side-nav]]) whose one-line rows are real anchors, and a standalone DETAIL page (#/evals/<node>/<scenario>) reached by a history PUSH so browser Back restores the exact filtered list. Un-merged worktree/session evals live in the SAME route family behind a default-off session filter (?session=<id>); the old #/sessions/…/eval address normalizes here. Both pages wear the shared [[review-chrome]].
+desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Current/Reviewed sections + real eval facets over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
 code:
   - spec-dashboard/src/EvalsPage.jsx#EvalsPage
   - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
@@ -29,13 +29,14 @@ filter (default off) picking the root.
   page — each bookmarkable, reloadable, directly openable (hash routing needs no server). The [[side-nav]]
   rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. There is no pagination — the list is
   bounded by declared scenarios and the API has no page semantics, so none is invented.
-- **The list's state is its URL.** Filters ride the hash's query string — `#/evals?kind=all&session=<id>`
-  plus the live/ok chips — so a filtered list is copyable and Back-restorable: on every hashchange the
+- **The list's state is its URL.** Query and facets ride the hash's query string — kind, verdict,
+  freshness, node, filer/live, and session scope, plus the Current/Reviewed section — so a filtered list
+  is copyable and Back-restorable: on every hashchange the
   list re-derives its WHOLE state from the URL, so Back replays exactly what was on screen. A human's
   filter change PUSHES (GitHub's semantics — Back walks filter history); only an AUTOMATIC rewrite (the
   legacy-address normalization) replaces. Rows are the
-  [[evals-feed]] grammar: one
-  line each, latest reading per scenario, and each row is a REAL `<a href>` to its detail address — the
+  [[evals-feed]] grammar: a shared structured row for each latest reading per scenario, and each row is a
+  REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
 - **List → detail is a history PUSH; Back restores the list exactly.** Clicking a row (or Enter on the
   j/k cursor) navigates to the detail page as a normal hash push — measured on GitHub: history grows by
@@ -44,7 +45,8 @@ filter (default off) picking the root.
   browser's history is the return path. An address naming no real eval renders an honest not-found with a
   link to the list, never a silent rewrite to some other eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
-  header naming the scenario (title) and node, a status band (verdict badge + the A/B strip), then a MAIN
+  header naming the scenario (title) and node, a status band (the ONE shared verdict visual + an A/B strip
+  whose reading buttons consume that same visual mapping), then a MAIN
   column beside a metadata SIDE rail. The main column is the [[event-detail]] evidence WORKSPACE — media
   stage under the review-track scrubber, step rail, gallery/transcripts — followed by the (node, scenario)
   remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).

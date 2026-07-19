@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
-import FilterSelect from './FilterSelect.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
-import { sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
@@ -65,7 +63,7 @@ function sessionRows(model) {
 // The LIST page (`#/evals[?query]`): the session scope's gates strip + export door above the one
 // [[evals-feed]] list. All filter state is the URL's; the scope picker (default off = the merged trunk)
 // is the easy door into any session's un-merged worktree evals.
-export function EvalsListPage({ scope, sessionId, model, error, sessions, query, hrefFor, scopePick, notice }) {
+export function EvalsListPage({ scope, sessionId, model, error, sessions, query, hrefFor, notice }) {
   const t = useT()
   const onQuery = (next) => navigate('evals', null, { query: next })
   const empty = sessionId && model === null
@@ -82,7 +80,7 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, query,
       {sessionId && model && (
         <div className="se-gates">
           {model.gates.map((g) => (
-            <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}>{g.ok ? '✓' : '✗'} {g.label}</span>
+            <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}><Icon name={g.ok ? 'check' : 'x'} size={11} /> {g.label}</span>
           ))}
           <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
             <Icon name="download" size={13} />
@@ -90,7 +88,7 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, query,
         </div>
       )}
       <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
-        query={query} onQuery={onQuery} hrefFor={hrefFor} lead={scopePick} notice={notice}
+        query={query} onQuery={onQuery} hrefFor={hrefFor} notice={notice}
         error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
     </>
   )
@@ -152,18 +150,9 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const hrefFor = (e) => routeHash('evals', `${e.node}/${e.scenario}`, sessionQ)
   const listHref = routeHash('evals', null, sessionQ)
 
-  // the session-scope picker — DEFAULT OFF (the merged trunk), the easy door into any session's un-merged
-  // worktree evals ([[session-eval]]). Changing scope drops the kind/live/ok state with it (a new scope is
-  // a new list, and its default filters are the honest start).
-  const scopePick = (
-    <FilterSelect value={sessionId || ''} onChange={(v) => navigate('evals', null, { query: v ? { session: v } : {} })}
-      options={[{ value: '', label: t('evals.scopeMerged') },
-        ...sessions.map((s) => ({ value: s.id, label: sessionHeadline(s) }))]} />
-  )
-
   return param
     ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
         sessions={sessions} listHref={listHref} onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
     : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
-        query={query} hrefFor={hrefFor} scopePick={scopePick} notice={notice} />
+        query={query} hrefFor={hrefFor} notice={notice} />
 }

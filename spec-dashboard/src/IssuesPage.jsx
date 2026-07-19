@@ -6,26 +6,40 @@ import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { liveSession } from './session.js'
-import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
-import { ListPage, DetailShell, SideSection } from './ReviewShell.jsx'
+import { DetailShell, FacetMenu, FacetOverflow, ListPage, nextQuery, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
 import { navigate, routeHash, useRoute } from './route.js'
-import { Icon, IconButton } from './icons.jsx'
+import { Icon } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
 // The Issues surface ([[issues-view]]): GitHub-style TWO pages over one route family, both wearing the
 // shared [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
-// order, no re-sort), one-line rows that are REAL anchors, filters in the URL query; `#/issues/<id>` is
+// order, no re-sort), structured rows that are REAL anchors, query/sections/facets in the URL; `#/issues/<id>` is
 // the standalone DETAIL page — the markdown body + reply thread as the main column with the composer
 // docked at its foot, the status/store/originator/node metadata in the side rail. A row click PUSHES;
 // browser Back restores the exact filtered list; both pages are directly openable. Writes post as
 // 'human' and route by store ([[issues]]).
 
-const statusIconOf = (status) => (status === 'open' ? 'issue-opened' : 'issue-closed')
 const concluded = (i) => i.status !== 'open'
 
+const age = (ts) => {
+  const seconds = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000)
+  if (!Number.isFinite(seconds)) return ''
+  if (seconds < 3600) return `${Math.max(1, Math.floor(seconds / 60))}m`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  return `${Math.floor(seconds / 86400)}d`
+}
+
+const issueNumber = (id) => {
+  const parts = String(id || '').split('#')
+  const value = parts.length > 1 ? parts.at(-1) : parts[0]
+  return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
+}
+
+const actorName = (actor) => String(actor || '').length > 22 ? `${String(actor).slice(0, 8)}…` : actor
+
 // The LIST page (`#/issues[?query]`): RESIDENT data — the page renders instantly from app-held state
-// ([[issues-view]]); filters (store / concluded reveal / live chip) are URL-query state, re-derived on
+// ([[issues-view]]); query, Open/Closed section, and real model facets are URL-query state, re-derived on
 // every hashchange so Back replays them exactly.
 export function IssuesListPage({ data, reloadIssues, specs, sessions, query, notice, flash }) {
   const t = useT()
@@ -35,25 +49,33 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
   const all = Array.isArray(data.issues) ? data.issues : []
-  const storeFilter = query.store || 'all'
-  const showConcluded = query.concluded === '1'
+  const storeFilter = query.store || ''
+  const closedSection = query.state === 'closed' || query.concluded === '1'
   const liveOnly = query.live === '1'
+  const author = query.author || ''
+  const node = query.node || ''
+  const q = (query.q || '').trim().toLocaleLowerCase()
   // a human's filter pick PUSHES the new list address (GitHub's semantics — Back walks filter history).
-  const set = (patch) => navigate('issues', null, { query: { ...query, ...patch } })
+  const set = (patch) => navigate('issues', null, { query: nextQuery(query, patch) })
 
-  // the store filter's options come from the DATA, not a hardcoded list — a new store (gitlab) appears
-  // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
+  // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
   const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
   // [[live-session-filter]]: an issue is LIVE while a session behind it is still alive — its originator
   // (i.by) or any reply author; the join is session.js's liveSession, the same judgment the originator
   // chip's dot renders, so the chip-filtered list and the dots can never disagree.
   const isLive = (i) => !!liveSession(sessions, i.by) || (Array.isArray(i.replies) && i.replies.some((r) => liveSession(sessions, r.by)))
-  const shown = showConcluded ? stored : stored.filter((i) => !concluded(i))
-  const issues = liveOnly ? shown.filter(isLive) : shown
-  const liveCount = shown.filter(isLive).length
-  const concludedCount = stored.filter(concluded).length
+  const faceted = all.filter((issue) => (
+    (!storeFilter || issue.store === storeFilter)
+    && (!author || issue.by === author)
+    && (!node || issue.nodes?.includes(node))
+    && (!liveOnly || isLive(issue))
+    && (!q || [issue.id, issue.concern, issue.by, ...(issue.nodes || [])].filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(q)))
+  ))
+  const openCount = faceted.filter((issue) => !concluded(issue)).length
+  const closedCount = faceted.filter(concluded).length
+  const issues = faceted.filter((issue) => concluded(issue) === closedSection)
 
   // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
   // the store mini-tag renders only while stores are actually mixed ([[issues-view]]).
@@ -64,49 +86,59 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
       href: routeHash('issues', th.id),
       content: (
         <>
-          <span className={`fv-status-mark ${status === 'open' ? 'open' : 'concluded'}`} data-tip={status}>
-            <Icon name={statusIconOf(status)} size={16} />
-          </span>
-          <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
-          {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
-          {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
+          <ReviewListRow
+            state={<ReviewState kind="issue" state={status} />}
+            title={th.concern}
+            meta={(
+              <>
+                <span data-tip={th.id}>{issueNumber(th.id)}</span>
+                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: actorName(th.by) })}</span>}
+                {th.created && <span>{t('reviewList.openedAt', { at: age(th.created) })}</span>}
+              </>
+            )}
+            aside={(
+              <>
+                {(th.replies?.length ?? 0) > 0 && <span className="rl-comments" data-tip={t('session.issuesReplies', { n: th.replies.length })}><Icon name="message-square" size={14} />{th.replies.length}</span>}
+                {stores.length > 1 && <span className={`rl-tag fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
+                {th.nodes?.[0] && <span className="rl-tag node">{th.nodes[0]}</span>}
+              </>
+            )}
+          />
         </>
       ),
     }
   })
 
-  const chips = (liveOnly || liveCount > 0 || concludedCount > 0) ? (
-    <>
-      {/* [[live-session-filter]]: the live chip self-hides at N=0 ONLY while the filter is OFF; once on it
-          stays mounted as liveCount → 0 (the originating sessions close), so the filter is always
-          releasable and the list never dead-ends empty. */}
-      {(liveOnly || liveCount > 0) && (
-        <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => set({ live: liveOnly ? null : '1' })}
-          data-tip={t('masterList.liveChipTitle')}>
-          {t('masterList.liveChip', { n: liveCount })}
-        </button>
-      )}
-      {concludedCount > 0 && (
-        <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => set({ concluded: showConcluded ? null : '1' })}>
-          {t('nodeView.closedIssues', { n: concludedCount })}
-        </button>
-      )}
-    </>
-  ) : null
+  const allOption = { value: '', label: t('reviewList.all') }
+  const authorValues = [...new Set(all.map((issue) => issue.by).filter(Boolean))]
+  const authorOptions = authorValues.length ? [allOption, ...authorValues.map((value) => ({ value, label: actorName(value) }))] : []
+  const storeOptions = stores.length > 1 ? [allOption, ...stores.map((value) => ({ value, label: value }))] : []
+  const nodeValues = [...new Set(all.flatMap((issue) => issue.nodes || []).filter(Boolean))]
+  const nodeOptions = nodeValues.length > 1 ? [allOption, ...nodeValues.map((value) => ({ value, label: value }))] : []
+  const liveCount = all.filter(isLive).length
+  const liveOptions = (liveOnly || liveCount > 0) ? [allOption, { value: '1', label: t('reviewList.live') }] : []
 
   return (
     <ListPage
       notice={notice}
-      controls={
+      title={t('reviewList.issuesTitle')}
+      action={<button type="button" className="rl-new" onClick={() => setComposing(true)}><Icon name="plus" size={14} />{t('session.issuesNew')}</button>}
+      search={{ value: query.q || '', onSubmit: (value) => set({ q: value || null }), placeholder: t('reviewList.searchIssues'), label: t('reviewList.search') }}
+      sections={[
+        { key: 'open', label: t('reviewList.open'), count: openCount, active: !closedSection, onSelect: () => set({ state: null, concluded: null }) },
+        { key: 'closed', label: t('reviewList.closed'), count: closedCount, active: closedSection, onSelect: () => set({ state: 'closed', concluded: null }) },
+      ]}
+      facets={
         <>
-          {stores.length > 1 && (
-            <FilterSelect value={storeFilter} onChange={(v) => set({ store: v === 'all' ? null : v })}
-              options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
-          )}
-          <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
+          <FacetMenu label={t('reviewList.facetAuthor')} value={author} options={authorOptions} onChange={(value) => set({ author: value || null })} mobile />
+          <FacetMenu label={t('reviewList.facetStore')} value={storeFilter} options={storeOptions} onChange={(value) => set({ store: value || null })} />
         </>
       }
-      chips={chips}
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} groups={[
+        { label: t('reviewList.facetNode'), value: node, options: nodeOptions, onChange: (value) => set({ node: value || null }) },
+        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', options: liveOptions, onChange: (value) => set({ live: value || null }) },
+        { label: t('reviewList.facetStore'), value: storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
+      ]} />}
       rows={rows}
       empty={t('session.issuesEmpty')}
     >
@@ -155,9 +187,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
     <DetailShell
       title={th.concern}
       status={
-        <span className={`fv-status fv-st-${status} ds-status-pill`}>
-          <Icon name={statusIconOf(status)} size={14} /> {status}
-        </span>
+        <ReviewState kind="issue" state={status} showLabel className="ds-status-pill" size={16} />
       }
       side={
         <>

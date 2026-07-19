@@ -5,18 +5,23 @@ scenarios:
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >
       In a real browser at a live backend, open #/evals and #/issues and compare the two list pages'
-      DOM: the head container class, the row elements (tag, classes, hairline divider), the empty-state
+      DOM: the 32px query, ListView container, section/facet/overflow metadata bar, structured row elements
+      (tag, classes, state/title/meta/aside, hairline divider), menus, and empty-state
       class. Then open one eval detail and one issue detail and compare the detail skeletons: header,
-      status band, main column, side rail, docked composer classes. Resize to 390px on a detail page and
-      read the column order.
+      status band and state SVG, main column, side rail, docked composer classes. Resize list and detail to
+      390px; read facet visibility, overflow contents, row geometry, body scroll width, and column order.
     expected: >
-      Both list pages render the SAME ListPage chrome — one `.lp-head` (control row over chip row), rows
-      as `.lp-row` REAL anchors in one uniform single-line rhythm, one `.lp-empty` — and both detail
+      Both list pages render the SAME ListPage chrome — a `.rl-query`, one bordered `.rl-list`, one
+      `.lp-head` with counted section tabs left and real invisible facet buttons + functional overflow
+      right, `.lp-row` REAL anchors whose shared `.rl-row-grid` holds state/title/meta/aside, and one
+      `.lp-empty` — and both detail
       pages the SAME DetailShell skeleton (`.ds-head` title, `.ds-status`, `.ds-main` beside `.ds-side`,
       the composer in `.ds-compose` docked sticky at the main column's foot). No page-local fork of
-      either skeleton exists in the DOM. At phone width the SAME markup reflows to one column with the
-      side rail FIRST. Zero loss = the two review surfaces are literally one chrome, so they cannot
-      drift into two dialects.
+      either skeleton exists. Desktop query/header/row measure approximately 32/48/64px. At 390px query
+      width is viewport minus 32px, metadata is ~49px, only the primary facet remains beside tabs and all
+      displaced real facets are usable in kebab; a long title wraps to at most three lines with no body or
+      document horizontal overflow. The SAME detail markup reflows to one column with side rail FIRST.
+      Eval list/detail/A-B and Issue list/detail states use the same `.review-state` SVG mapping.
 ---
 # measuring review-chrome
 

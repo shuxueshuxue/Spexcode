@@ -65,7 +65,8 @@ sidecar it is a plain evidence view with remarks — degraded gracefully, never 
 
 **The A/B strip — a scenario's fail→pass lifecycle, walkable in place.** A bug fix leaves a pair of
 readings ([[reproduce-before-fix]]): the A (reproduced failure) and the B (verified fix). The status band
-renders the scenario's WHOLE history as verdict pips (oldest→newest, ✗/✓/·), the viewed one lit, ‹ › to
+renders the viewed verdict and the scenario's WHOLE history through [[review-chrome]]'s ONE shared
+icon/label/tone mapping (oldest→newest), the viewed one lit, with shared chevron buttons to
 walk — flipping swaps the media, expected, note, and badge in place, so A and B sit one keystroke apart.
 The history is **SCOPE-PROVIDED, sharing the page's root**: the project scope lazily fetches the node's
 `/api/specs/:id/evals` timeline (the board folds only the latest per scenario, [[graph-lean]]); the

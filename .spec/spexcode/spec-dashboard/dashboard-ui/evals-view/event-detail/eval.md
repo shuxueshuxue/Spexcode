@@ -36,7 +36,7 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       Open the detail page of a reading whose node's governed code changed after it was taken (a
-      code-stale reading — the muted ✓/✗ in the list). Read the side rail: is there a stale readout
+      code-stale reading — the muted shared verdict icon in the list). Read the side rail: is there a stale readout
       naming the moved axes, and for the code axis the drifted file(s) + how many commits behind? Then
       confirm the remark composer works on it exactly as on a fresh reading (type + send a remark).
     expected: |
@@ -172,11 +172,12 @@ scenarios:
       which evidence blob the media points at; then click the newest (pass) pip and read them again. Read
       the remark thread before and after the flips.
     expected: |
-      The A/B strip rides the slim header band (right-aligned), one verdict pip per reading,
-      oldest→newest, ✗ for a fail (an A pole) and ✓ for a pass (a B pole), the viewed pip outlined.
-      Flipping to the older reading lights its ✗ pip, sets the
-      header badge to ✗, and swaps the media/expected/note IN PLACE to that reading's (a different blob hash
-      than the latest); flipping back to the newest lights the ✓ pip, badge ✓, media back to the latest,
+      The A/B strip rides the slim header band (right-aligned), one shared verdict-state SVG per reading,
+      oldest→newest, fail for an A pole and pass for a B pole, the viewed button outlined. The icon, accessible
+      label, and tone are the SAME mapping consumed by the Evals list and detail status. Flipping to the older
+      reading lights its fail state, updates the header to the same fail visual, and swaps the media/expected/
+      note IN PLACE to that reading's (a different blob hash than the latest); flipping back to the newest
+      lights pass in both selector and header, restores the latest media,
       and the position label reads 'latest'. The strip is absent for a single-reading scenario. The eval's
       remark thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
       per-scenario, not per-reading, so the annotation track spans the whole A/B.
@@ -274,7 +275,7 @@ scenarios:
       line ('@session to summon · [[node]] to link' is gone) — while the `@`/`[[` autocomplete and the
       `/` command menu still open, as overlays ABOVE the composer container, never inside or under it.
       The eval status band carries NO standalone human-ok button — the typed /ok is the only dashboard
-      door, and an ok'd reading shows only the settled ☑ mark. At the narrow width both composers keep
+      door, and an ok'd reading shows only the settled shared circle-check SVG mark. At the narrow width both composers keep
       the same shape with no overlapping controls and no clipped text. No page errors.
 ---
 # event-detail loss

@@ -2,7 +2,7 @@
 title: live-session-filter
 status: active
 hue: 200
-desc: One "N live" toggle chip on the review pickers' chip row — the issues list and the evals feed each narrow to the entries a LIVE session is behind (issue originator/reply authors; a reading's filer), reusing the originator chip's one liveness join (session.js liveSession), never a second aliveness judgment.
+desc: One real Live facet in both review ListViews — Issues and Evals narrow to entries a live session is behind, reusing session.js liveSession and staying releasable even when the selected result falls to zero.
 code:
   - spec-dashboard/src/session.js#liveSession
 related:
@@ -22,21 +22,15 @@ the evals feed — to exactly those entries, using the aliveness the originator 
 
 ## expanded spec
 
-- **One chip, two surfaces, one judgment.** Both the [[issues-view]] list and the [[evals-feed]] carry an
-  **"N live"** toggle chip on their head's CHIP row (second row — the control row is for filters/New).
-  Same `ef-chip` grammar and toggle interaction as the concluded-count chip: click narrows, click again
-  releases; the chip hides itself when nothing is live (N = 0), like every self-hiding filter control on
-  these bars — **but self-hiding is gated on the filter being OFF**. A live filter drives its own liveness
-  count toward zero (the very sessions it keeps close normally right after their merge), so a chip that
-  vanished at N = 0 *while the filter was on* would strand the surface empty with no way to release it —
-  the one control that clears the filter is the chip itself. So while the filter is on the chip stays
-  mounted even at N = 0 (it may read "0 live"), always releasable; it only disappears once the filter is
-  off. A filter must never be able to hide its own off-switch.
+- **One facet, two surfaces, one judgment.** Both [[issues-view]] and [[evals-feed]] expose Live through
+  [[review-chrome]]'s shared real-data facet/overflow mechanism. Picking Live writes `?live=1` as a history
+  PUSH; All clears it. The facet is omitted while nothing is live and it is off, but remains mounted and
+  releasable when an active filter's result later falls to zero. A filter must never hide its own off-switch.
 - **Live means: a session behind the entry is still alive.** For an issue, that is its originator
   (`issue.by`) or any reply author; for a reading, its filer (`by`). Aliveness is the ONE join the
   originator chip already renders — `session.js`'s `liveSession` (listed on the board and not offline,
   [[state]]'s zones) — so the chip-filtered list and the detail's liveness dots can never disagree; this
   node owns that shared helper, and no surface grows a second aliveness judgment. A non-session author
   ('human', a github login) is honestly not live.
-- **N counts what the chip would keep** among the rows the other filters already show, so the label reads
-  as "this many of these are live", not a global stat.
+- **Composition is honest.** Live combines with query, section, and other facets over the same row model;
+  it is not a global stat or a second list. At 390px it remains available through the functional kebab.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from './reviewQuery.js'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/sessions,
@@ -13,14 +14,17 @@ import { useEffect, useState } from 'react'
 
 export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
-// canonical query serialization: fixed key order, so the same state always prints the same address
-// (hash comparisons in navigate() and tests stay byte-stable).
-const QUERY_KEYS = ['q', 'state', 'verdict', 'freshness', 'kind', 'author', 'store', 'node', 'filer', 'live', 'ok', 'concluded', 'session']
+// canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
+// any remaining keys in sorted order — the same state always prints the same address (hash comparisons
+// in navigate() and tests stay byte-stable).
+const QUERY_KEYS = ['q']
 export function queryString(query) {
   if (!query) return ''
   const sp = new URLSearchParams()
   for (const k of QUERY_KEYS) if (query[k] != null && query[k] !== '') sp.set(k, query[k])
-  for (const k of Object.keys(query)) if (!QUERY_KEYS.includes(k) && query[k] != null && query[k] !== '') sp.set(k, query[k])
+  for (const k of Object.keys(query).filter((key) => !QUERY_KEYS.includes(key)).sort()) {
+    if (query[k] != null && query[k] !== '') sp.set(k, query[k])
+  }
   const s = sp.toString()
   return s ? `?${s}` : ''
 }
@@ -43,7 +47,8 @@ export function parseRoute(hash) {
 }
 
 // the LEGACY session-eval address ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]' → its
-// canonical [[evals-view]] form — '#/evals?session=<id>' / '#/evals/<node>/<scenario>?session=<id>'.
+// canonical [[evals-view]] form — the scoped default list ('#/evals?q=is:eval state:current scope:<id>')
+// or the scope-only detail ('#/evals/<node>/<scenario>?q=scope:<id>').
 // Pure: returns the canonical hash, or null when the hash isn't the legacy shape. The rewrite happens at
 // the parse layer (useRoute, with replace) so old links keep working and no page-level effect races it.
 export function legacyEvalHash(hash) {
@@ -56,7 +61,24 @@ export function legacyEvalHash(hash) {
   const node = parts[3] ? decodeURIComponent(parts[3]) : null
   const scenario = parts.length > 4 ? parts.slice(4).map(decodeURIComponent).join('/') : null
   const param = node && scenario ? `${node}/${scenario}` : null
-  return routeHash('evals', param, { session: id })
+  return routeHash('evals', param, { q: param ? `scope:${id}` : scopedEvalQuery(id) })
+}
+
+// the LEGACY structured review params ([[review-query]]): an old '#/evals|#/issues' address carrying
+// state/concluded/store/author/node/filer/verdict/freshness/kind/live/ok/session params replays as the
+// FULL visible token text (the page default with each param surgically applied) — a DETAIL address keeps
+// only its worktree scope, never list filters. Returns the canonical hash, or null when the address is
+// already canonical (bare, or ?q= only).
+export function legacyReviewHash(hash) {
+  const { page, param, query } = parseRoute(hash)
+  if (page !== 'evals' && page !== 'issues') return null
+  if (!hasLegacyParams(query)) return null
+  if (param != null) {
+    return routeHash(page, param, query.session ? { q: `scope:${query.session}` } : null)
+  }
+  const defaultText = page === 'issues' ? ISSUE_QUERY_DEFAULT : EVAL_QUERY_DEFAULT
+  const text = legacyQueryText(defaultText, query)
+  return routeHash(page, null, sameQuery(text, defaultText) ? null : { q: text })
 }
 
 // a param's '/'-separated segments are encoded one by one so a multi-segment param (evals' node/scenario)
@@ -77,10 +99,11 @@ export function navigate(page, param = null, { replace = false, query = null } =
   } else window.location.hash = h
 }
 
-// the live route — one hashchange subscription, parsed; the legacy session-eval shape normalizes here
-// (replace — idempotent across multiple mounted subscribers) before any page sees it.
+// the live route — one hashchange subscription, parsed; the legacy shapes (session-eval path, structured
+// review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
+// page sees them.
 const currentRoute = () => {
-  const legacy = legacyEvalHash(window.location.hash)
+  const legacy = legacyEvalHash(window.location.hash) || legacyReviewHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)

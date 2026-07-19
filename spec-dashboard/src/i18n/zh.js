@@ -147,32 +147,23 @@ export default {
     closed: 'Closed',
     current: '当前',
     reviewed: '已评审',
-    live: '活跃会话',
     moreFilters: '更多筛选',
-    facetAuthor: '发起者',
     facetStore: '存储',
-    facetNode: '规格节点',
-    facetLive: '活跃',
     facetVerdict: '判定',
     facetFreshness: '新鲜度',
     facetKind: '证据',
+    facetAuthor: '发起者',
+    facetNode: '规格节点',
     facetFiler: '提交者',
-    facetScope: '范围',
     facetState: '状态',
     facetReview: '评审',
+    facetSession: '来源会话',
+    sessionPresent: '仍在',
+    sessionMissing: '已不在',
     openedBy: ({ by }) => `由 ${by} 发起`,
     openedAt: ({ at }) => `${at}前发起`,
     verdict: { pass: '通过', fail: '未通过', unscored: '未评分' },
     freshness: { fresh: '最新', stale: '过期' },
-  },
-
-  masterList: {
-    liveChip: ({ n }) => `${n} 活跃`,
-    liveChipTitle: '只看背后 session 还活着的条目',
-  },
-
-  evals: {
-    scopeMerged: '已合并',
   },
 
   reviewShell: {

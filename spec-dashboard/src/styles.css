@@ -1136,11 +1136,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .rl-titlebar h1 { min-width: 0; margin: 0; color: var(--ink); font-size: var(--type-title); font-weight: var(--weight-bold); line-height: var(--leading-ui); }
 .rl-new { margin-left: auto; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--paper); background: var(--green); border: 1px solid color-mix(in srgb, var(--green) 75%, var(--line)); border-radius: 6px; font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); cursor: pointer; }
 .rl-new:hover { background: color-mix(in srgb, var(--green) 82%, var(--ink)); }
-.rl-query { height: 32px; display: flex; align-items: stretch; margin-bottom: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.rl-query { height: 32px; position: relative; display: flex; align-items: stretch; margin-bottom: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
 .rl-query:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 15%, transparent); }
-.rl-query input { flex: 1; min-width: 0; padding: 0 12px; color: var(--ink); background: transparent; border: 0; outline: 0; font-family: var(--mono); font-size: var(--type-control); }
+/* the token query's overlay pair ([[review-query]]): the NATIVE input keeps caret/selection but paints
+   its glyphs transparent; the aria-hidden .rq-hl underneath carries the visible (highlighted) glyphs —
+   identical font, padding, and line metrics, scrollLeft synced, so they align glyph-for-glyph. */
+.rq-wrap { position: relative; flex: 1; min-width: 0; }
+.rl-query input { width: 100%; height: 100%; position: relative; padding: 0 12px; color: transparent; caret-color: var(--ink); background: transparent; border: 0; outline: 0; font-family: var(--mono); font-size: var(--type-control); }
 .rl-query input::placeholder { color: var(--muted); }
-.rl-query-submit { width: 36px; flex: none; display: grid; place-items: center; color: var(--muted); background: var(--panel2); border: 0; border-left: 1px solid var(--line); cursor: pointer; }
+.rl-query input::selection { color: transparent; background: color-mix(in srgb, var(--blue) 28%, transparent); }
+.rq-hl { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 12px; overflow: hidden; color: var(--ink); font-family: var(--mono); font-size: var(--type-control); white-space: pre; pointer-events: none; }
+.rq-hl > span { flex: none; white-space: pre; }
+.rq-tok-key { color: var(--muted); }
+.rq-tok-val { color: var(--blue); }
+.rl-menu.rq-list { left: 0; right: 36px; width: auto; }
+.rq-opt { min-height: 32px; display: flex; align-items: center; gap: 8px; padding: 5px 9px; border-radius: 4px; color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
+.rq-opt.active, .rq-opt:hover { color: var(--ink); background: var(--panel2); }
+.rq-opt-token { color: var(--blue); }
+.rq-opt-label { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.rl-query-submit { width: 36px; flex: none; display: grid; place-items: center; color: var(--muted); background: var(--panel2); border: 0; border-left: 1px solid var(--line); border-radius: 0 5px 5px 0; cursor: pointer; }
 .rl-query-submit:hover { color: var(--ink); }
 .rl-list { position: relative; min-width: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
 .lp-head { position: sticky; top: 0; z-index: 5; height: 48px; box-sizing: border-box; display: flex; align-items: center; padding: 0 8px; background: var(--panel2); border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; }

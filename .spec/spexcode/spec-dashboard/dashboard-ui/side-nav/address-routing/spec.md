@@ -22,8 +22,8 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 
 - `graph-node` focuses a node on `#/graph`; the focused id is shell view state, not a hash segment.
 - `session` opens `#/sessions/<id>`.
-- `session-eval` opens `#/evals?session=<id>` — or, with a node + scenario,
-  `#/evals/<node>/<scenario>?session=<id>` — the session-SCOPED Evals pages ([[session-eval]] /
+- `session-eval` opens the scoped default list `#/evals?q=is:eval state:current scope:<id>` — or, with
+  a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
   [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
   remarkable, worktree-rooted reading of an un-merged branch. The old
   `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form

@@ -34,27 +34,36 @@ verbs the CLI uses.
 - **Two pages, one route family — the shared [[review-chrome]].** `#/issues` is the list page (the
   [[side-nav]] rail entry and ⌥4 land here); `#/issues/<id>` is the detail page. Both are bookmarkable,
   reloadable, directly openable. Rows are REAL anchors to their detail address; clicking one is a normal
-  hash PUSH, and Back returns to the list URL with its query intact. Filter state — the store pick, the
-  concluded reveal, the [[live-session-filter]] chip — rides the hash's query string; a human's filter
-  change PUSHES (GitHub's semantics), and the list re-derives its whole state from the URL on every
-  hashchange, so Back replays it exactly. No pagination exists — `/api/issues` has no
-  page semantics and the open list is small; none is invented. A detail address naming no issue renders
-  the shell's honest not-found with a link to the list. Esc routes nothing ([[side-nav]]).
+  hash PUSH, and Back returns to the list URL with its query intact. All list state is [[review-chrome]]'s
+  ONE token query (`is:issue state:open` by default; the [[review-query]] engine): a human's edit, tab,
+  or menu pick PUSHES the canonical address — bare `#/issues` for the default view, exactly
+  `?q=<raw text>` otherwise — and the list re-derives its whole state from the URL on every hashchange,
+  so Back replays text and results exactly. Legacy structured params
+  (`state/concluded/store/author/node/live/q`) replay at the route layer as a REPLACE into that token
+  text; old deep links keep working and the old shape is never re-minted. No pagination exists —
+  `/api/issues` has no page semantics and the open list is small; none is invented. A detail address
+  naming no issue renders the shell's honest not-found with a link to the list. Esc routes nothing
+  ([[side-nav]]).
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is [[issues]]'s
   `mergedIssues` — which excludes eval-remark threads ([[eval-issue-split]]: a scenario-scoped concern is
   a remark and lives on the Evals pages). It is app-held state beside the board: the page renders
   instantly from it; freshness inherits the board's pattern (push-signal throttled refetch that DEFERS,
   never drops; the 15s cold lane; ETag 304s), and a write forces the refetch. Rows render **in API
-  order** — stores interleaved newest first, no salience ranking. The [[review-filters]] Issue adapter
-  supplies the shared ListView query over concern/id/originator/node facts and every real facet; page code
-  only maps its canonical hash query to that engine. The metadata header's **Open / Closed sections + counts** are the
-  lifecycle switch (default Open; every non-open state belongs to Closed). Real facets cover only data the
-  issue model actually has: originator, store, spec node, and live-session involvement. Spec node is the
-  desktop overflow facet; at 390px originator stays directly reachable while store/live join that same
-  functional overflow menu. Every pick is canonical query state and a PUSH. If resident data changes
-  while a store/originator/node/live value is active, its shared facet remains reachable with an All
-  off-switch until that query is cleared; data disappearance cannot trap the list behind an invisible
-  filter. New remains the page-title action. No assignee/labels/project
+  order** — stores interleaved newest first, no salience ranking. Bare query words search the
+  concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
+  lifecycle switch — token surgery on `state:` only, every other token preserved, counts computed under
+  the rest of the query (default Open; every non-open state belongs to Closed, and a concrete concluded
+  spelling like `state:landed` matches that status honestly). Matching and options come from the
+  [[review-filters]] Issue adapter — page code only bridges the parsed token text into that engine.
+  Menus exist only for the low-cardinality
+  data the model actually has: the store pick and the source-session presence facet
+  (`session:present|missing` — [[live-session-filter]]); store stays directly reachable at 390px while
+  presence lives in the functional overflow. Originator and spec node are HIGH-cardinality: `author:` /
+  `node:` tokens, hand-typed or completed from the input's bounded inline autocomplete — no enumerating
+  dropdown; an unknown or historical value still submits and yields the honest filtered zero. An ACTIVE
+  menu value whose data option disappeared keeps its cheap All off-switch — and the visible text is
+  always the canonical release — so data disappearance cannot trap the list behind an invisible filter.
+  New remains the page-title action. No assignee/labels/project
   theatre is invented for a model that has none. An actually empty issue store says there are no issues
   yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
   issues, through [[review-chrome]]'s shared empty-state contract.

@@ -36,13 +36,18 @@ the accessible name impossible to forget.
   sourced from AionUi's multi-CLI icon set and monochrome-adapted: hardcoded brand fills stripped so
   the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
   tone as an opacity step.
+- **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping composes this
+  registry's Primer issue pair with Lucide circle-check/circle-x/circle-minus/circle-dashed verdict marks.
+  The same mapping feeds eval list, detail status, and every A/B selector, plus issue list/detail. ListView
+  query/facet chrome also takes search, chevron-down, ellipsis, comments, and check marks from here; no
+  Unicode check/cross or component-local triangle appears.
 - **`<IconButton icon label onClick/>` is the icon-only button.** `label` is required and becomes BOTH
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).
 - **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]),
   the session console's New/search pills and attach/busy glyphs, the
   lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers ([[event-detail]]), the modal
-  close `×`, the issues New `＋`, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
+  close `×`, the issues New plus, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
   drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`
   pair rather than mixing one Octicon with CSS-made dots.

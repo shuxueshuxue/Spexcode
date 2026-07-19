@@ -23,6 +23,10 @@ test('routeHash round-trips through parseRoute, query in canonical key order', (
   assert.deepEqual(parseRoute(h), { page: 'evals', param: 'node-a/scenario b', query: { kind: 'all', session: 's1' } })
   // the same state always prints the same address, whatever the object key order
   assert.equal(queryString({ session: 's1', kind: 'all' }), queryString({ kind: 'all', session: 's1' }))
+  assert.equal(
+    queryString({ session: 's1', filer: 'worker', q: 'long title', freshness: 'stale', verdict: 'fail' }),
+    '?q=long+title&verdict=fail&freshness=stale&filer=worker&session=s1',
+  )
   // empty/null values drop out
   assert.equal(routeHash('issues', null, { store: null, live: '' }), '#/issues')
 })

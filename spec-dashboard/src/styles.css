@@ -656,14 +656,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    Just the glance — the detail card (.issue-popover) is now anchored to the WHOLE node, not this marker. */
 .issue-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: var(--leading-ui); cursor: default; }
 
-/* @@@ score badge - the eval SCORE at a glance (score.jsx). A RINGED circle with a centred ✓/✗ glyph, made
-   round-and-outlined on purpose so it never reads as the filled square status dot. Colour carries freshness
-   (green/red = fresh, grey = stale), the glyph carries the verdict, an empty ring = no current score. Shared
-   by the node tile here and the eval-tab rows (one vocabulary). Drawn, not unicode-"circled", to stay crisp. */
+/* @@@ score badge - the eval SCORE at a glance consumes review-chrome's ONE icon/label/tone mapping. */
 .score-badge {
   flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
-  font-size: var(--type-caption); font-weight: var(--weight-black); line-height: var(--leading-none); cursor: default;
+  width: 14px; height: 14px; line-height: var(--leading-none); cursor: default;
 }
 .score-badge.pass      { color: var(--green); }
 .score-badge.fail      { color: var(--red); }
@@ -674,7 +670,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* @@@ scenario count - the per-scenario tally on a node tile (score.jsx ScenarioCount): ✓ satisfied/total,
    replacing the single fuzzy score circle. A tiny outlined pill in the worst-first colour (green all-pass,
    red any fresh fail, grey stale/blind-spot), so a board sweep reads HOW MANY scenarios a node satisfies. */
-.scenario-count { flex: none; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-ui);
+.scenario-count { flex: none; display: inline-flex; align-items: center; gap: 2px; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-ui);
   border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; cursor: default; }
 .scenario-count.pass { color: var(--green); }
 .scenario-count.fail { color: var(--red); }
@@ -1177,21 +1173,72 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page
    skeletons both #/evals and #/issues render ([[evals-view]] / [[issues-view]]). One implementation:
    list rhythm, sticky head, anchor rows, detail grid, and the phone reflow live here once. ---- */
-/* the LIST page: sticky head (control row over chip row) above full-width anchor rows. */
+/* The LIST page copies GitHub's measured ListView grammar: title/action, a 32px query, then one bordered
+   container whose 48px metadata bar owns section tabs at left and invisible facets at right. */
 .lp-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; background: var(--paper); }
-.lp-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 5px; padding: 10px 14px; background: var(--panel2); border-bottom: 1px solid var(--line); }
-.lp-controls { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
+.rl-content { width: min(1136px, calc(100% - 32px)); min-width: 0; margin: 0 auto; padding: 16px 0 24px; }
+.rl-titlebar { height: 32px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.rl-titlebar h1 { min-width: 0; margin: 0; color: var(--ink); font-size: var(--type-title); font-weight: var(--weight-bold); line-height: var(--leading-ui); }
+.rl-new { margin-left: auto; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--paper); background: var(--green); border: 1px solid color-mix(in srgb, var(--green) 75%, var(--line)); border-radius: 6px; font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); cursor: pointer; }
+.rl-new:hover { background: color-mix(in srgb, var(--green) 82%, var(--ink)); }
+.rl-query { height: 32px; display: flex; align-items: stretch; margin-bottom: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.rl-query:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 15%, transparent); }
+.rl-query input { flex: 1; min-width: 0; padding: 0 12px; color: var(--ink); background: transparent; border: 0; outline: 0; font-family: var(--mono); font-size: var(--type-control); }
+.rl-query input::placeholder { color: var(--muted); }
+.rl-query-submit { width: 36px; flex: none; display: grid; place-items: center; color: var(--muted); background: var(--panel2); border: 0; border-left: 1px solid var(--line); cursor: pointer; }
+.rl-query-submit:hover { color: var(--ink); }
+.rl-list { position: relative; min-width: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+.lp-head { position: sticky; top: 0; z-index: 5; height: 48px; box-sizing: border-box; display: flex; align-items: center; padding: 0 8px; background: var(--panel2); border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; }
+.rl-sections, .rl-facets { display: flex; align-items: center; min-width: 0; }
+.rl-sections { align-self: stretch; flex: none; }
+.rl-section { align-self: stretch; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--ink2); background: transparent; border: 0; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
+.rl-section.active { color: var(--ink); font-weight: var(--weight-bold); }
+.rl-section:hover { color: var(--ink); }
+.rl-section-count, .rl-menu-count { display: inline-flex; min-width: 18px; height: 18px; box-sizing: border-box; align-items: center; justify-content: center; padding: 0 5px; color: var(--ink2); background: color-mix(in srgb, var(--line) 65%, transparent); border-radius: 9px; font-size: var(--type-caption); }
+.rl-facets { margin-left: auto; justify-content: flex-end; }
+.rl-facet-wrap, .rl-overflow { position: relative; flex: none; }
+.rl-facet { max-width: 190px; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--muted); background: transparent; border: 0; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
+.rl-facet span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-facet:hover, .rl-facet.active { color: var(--ink); }
+.rl-overflow-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
+.rl-overflow-btn:hover, .rl-overflow.active .rl-overflow-btn { color: var(--ink); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.rl-section:focus-visible, .rl-facet:focus-visible, .rl-overflow-btn:focus-visible, .rl-menu-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.rl-overflow.mobile-only, .rl-menu-group.mobile-only { display: none; }
+.rl-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; width: 230px; max-height: min(420px, 70vh); overflow-y: auto; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 20%, transparent); }
+.rl-menu-item { width: 100%; min-width: 0; min-height: 32px; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 5px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: 4px; text-align: left; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
+.rl-menu-item:hover { color: var(--ink); background: var(--panel2); }
+.rl-menu-item > span:nth-child(2) { overflow-wrap: anywhere; }
+.rl-menu-item[aria-checked='true'] { color: var(--ink); font-weight: var(--weight-semibold); }
+.rl-menu-label { padding: 5px 7px 3px; color: var(--muted); font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; }
+.rl-menu-group + .rl-menu-group { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); }
 .lp-rows { display: flex; flex-direction: column; }
-.lp-empty { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
-.lp-error { margin: 10px 14px 0; }
-/* ONE row grammar for BOTH pages: a real <a> anchor, one compact SINGLE line (the title truncates, never
-   wraps) with unhurried vertical air over a hairline-soft divider. `.cur` is the j/k cursor (a visual
-   cursor, not a selection — Enter opens the row's page); `.inert` rows (blind spots) carry no link. */
-.lp-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; text-align: left; text-decoration: none; font: inherit; font-size: var(--type-control); color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); padding: 8px 14px; cursor: pointer; }
+.lp-empty { min-height: 170px; display: grid; place-items: center; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
+.lp-error { margin: 0 0 10px; }
+/* ONE row grammar for BOTH pages: desktop ~64px; the same markup grows and restacks on a phone. */
+.lp-row { display: block; width: 100%; min-width: 0; min-height: 64px; box-sizing: border-box; text-align: left; text-decoration: none; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer; }
+.lp-row:last-child { border-bottom: 0; border-radius: 0 0 6px 6px; }
 .lp-row:hover { background: var(--panel2); }
 .lp-row.cur { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
 .lp-row.inert { cursor: default; }
 .lp-row.inert:hover { background: none; }
+.rl-row-grid { min-height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 10px 16px; }
+.rl-row-state { padding-top: 2px; }
+.rl-row-body { min-width: 0; }
+.rl-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
+.rl-row-meta { min-width: 0; display: flex; align-items: center; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); }
+.rl-row-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-row-aside { align-self: center; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding-left: 12px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
+.rl-tag { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; }
+.rl-tag.in-session { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+.rl-tag.node { color: var(--ink2); }
+.rl-comments { display: inline-flex; align-items: center; gap: 4px; }
+.review-state { flex: none; display: inline-flex; align-items: center; gap: 5px; line-height: var(--leading-none); }
+.review-state svg { display: block; }
+.review-state.open, .review-state.pass { color: var(--green); }
+.review-state.closed { color: var(--magenta); }
+.review-state.fail { color: var(--red); }
+.review-state.stale, .review-state.empty { color: var(--muted); }
+.review-state-label { font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
@@ -1221,27 +1268,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the phone reflow (GitHub's measured 390px order): ONE column, side metadata ABOVE the main column —
    pure CSS over the same markup, never a second component. */
 @media (max-width: 760px) {
+  .rl-content { width: calc(100% - 32px); padding-top: 16px; }
+  .rl-titlebar { margin-bottom: 8px; }
+  .rl-query { margin-bottom: 16px; }
+  .lp-head { height: 49px; padding: 0 7px; }
+  .rl-section { padding: 0 8px; }
+  .rl-facet-wrap:not(.mobile-stay) { display: none; }
+  .rl-facet { max-width: 112px; padding: 0 7px; }
+  .rl-overflow.mobile-only, .rl-menu-group.mobile-only { display: block; }
+  .rl-row-grid { min-height: 112px; grid-template-columns: 16px minmax(0, 1fr); padding: 14px 16px; }
+  .rl-row-title { display: -webkit-box; overflow: hidden; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .rl-row-meta { flex-wrap: nowrap; margin-top: 5px; }
+  .rl-row-meta > span { max-width: 100%; }
+  .rl-row-aside { grid-column: 2; align-self: start; justify-content: flex-start; flex-wrap: wrap; gap: 5px; margin-top: 6px; padding-left: 0; }
+  .rl-menu { max-width: calc(100vw - 34px); }
   .ds-cols { display: flex; flex-direction: column; gap: 0; }
   .ds-side { order: -1; padding: 10px 0 0; }
   .ds-side-sec { padding-bottom: 8px; }
 }
-.fv-concern, .ef-scenario {
-  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--type-control); font-weight: var(--weight-semibold);
-}
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
-/* a row leads with the ISSUE, not its plumbing ([[issues-view]]): the status mark carries the status
-   vocabulary as icon + color (a boxed word on every row was noise). The full lifecycle copies Primer's
-   original 16px Octicon pair through the shared registry: issue-opened for open, issue-closed for every
-   concluded state (local landed / forge closed). */
-.fv-status-mark { flex: none; display: grid; place-items: center; width: 16px; height: 16px; }
-.fv-status-mark svg { display: block; }
-.fv-status-mark.open { color: var(--green); }
-.fv-status-mark.concluded { color: var(--magenta); }
-/* …and the reply count is a compact trailing pill, not a phrase. */
-/* the reply-count pill must not out-tower the row's text line (else pill-bearing rows read taller and the
-   uniform rhythm breaks) — a tight line-height keeps every row on the same 1-line height. */
-.fv-replies { flex: none; font: inherit; font-size: var(--type-meta); color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; line-height: var(--leading-ui); }
 /* the store is metadata, never identity — a borderless muted mini-tag at a row's trailing edge (only
    while stores are mixed) and in the detail's meta strip; never a leading boxed chip, never on a title. */
 .fv-store {
@@ -1249,13 +1294,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   color: var(--muted);
 }
 .fv-store-local { color: color-mix(in srgb, var(--blue) 65%, var(--muted)); }
-.lp-row .fv-store { font-family: inherit; font-size: var(--type-meta); letter-spacing: var(--tracking-normal); text-transform: none; }
-.fv-concern { color: var(--ink); }
-.fv-status {
-  flex: none; font-family: var(--mono); font-size: var(--type-caption); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
-}
-.fv-st-open     { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
-.fv-st-landed   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .fv-by { flex: none; color: var(--muted); font-size: var(--type-meta); }
 /* the originator liveness chip ([[mentions]] loop-in): who filed + whether their session is alive. The dot
    takes the board's live STATUS_COLOR (inline style); live chips are buttons into that session's tab. */
@@ -1334,15 +1372,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
 
 /* the human write path ([[issues-view]]): New opens a centered pop-out; replies compose in the detail. */
-/* New shares the chip HEIGHT + radius so the filter row is one even control cluster, but wears a faint accent
-   fill so it reads as the row's primary action rather than another toggle. */
-.fv-new-btn {
-  display: inline-flex; align-items: center; justify-content: center; color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 10%, var(--panel2));
-  border: 1px solid color-mix(in srgb, var(--blue) 32%, var(--line)); padding: 3px 12px; border-radius: 6px; cursor: pointer;
-  transition: color .12s, background .12s, border-color .12s;
-}
-.fv-new-btn:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fv-new-modal { width: min(520px, 92vw); overflow: visible; }
 .fv-new-modal .legend-body { padding: 0; }
 /* a brief @-dispatch summary echoed after a write. */
@@ -1978,28 +2007,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-datafold[open] > summary.eval-datahead::before { content: '▾ '; }
 .eval-datafold:not([open]) > summary.eval-datahead { border-bottom: none; }
 
-/* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
-/* the filter chips are ONE control language across both tabs ([[evals-view]] / [[issues-view]]): a segmented
-   pill set, left-clustered with the other header controls (the count-meta is the only thing pushed right).
-   A chip fills with the accent when active, so the picked filter reads at a glance — the same segmented feel
-   the New button and store select now share. */
-.ef-chipbar { display: flex; gap: 6px; flex-wrap: wrap; }
-.ef-chip { font: inherit; font-size: var(--type-meta); color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; line-height: var(--leading-ui); transition: color .12s, border-color .12s, background .12s; }
-.ef-chip:hover { color: var(--ink2); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
-.ef-chip.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
-.ef-close { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 6px; }
-.ef-empty, .ef-miss { color: var(--muted); font-size: var(--type-control); padding: 18px 8px; }
-/* the scenario is the row's title: it grows and TRUNCATES to one line (full text on hover), so the evals
-   picker keeps the same uniform single-line rhythm the issues list has — the two never read as two dialects. */
+/* ---- evals feed ([[evals-feed]]) — structured ListView rows, media strictly lazy. ---- */
 .ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; }
 /* the full-width list page has room — the node name breathes there (58px was the slim-column budget). */
 .lp-row .ef-node { max-width: 180px; }
-.ef-kind { flex: none; margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
-.ef-time { flex: none; color: var(--muted); font-size: var(--type-meta); min-width: 26px; text-align: right; }
 /* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
    hover-revealed ok affordance on an un-ok'd one (a span, not a nested button — the row IS a button). */
 .ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
-.ef-okchip { display: inline-flex; align-items: center; gap: 5px; }
 
 /* ---- the eval detail's evidence workspace ([[event-detail]]) — the human's measuring hand on an
    already-captured clip, now the MAIN column of the Evals DETAIL page ([[review-chrome]]): the media
@@ -2073,14 +2087,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-flash { font-size: var(--type-control); color: var(--green); padding: 4px 0 0; }
 
 /* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
-.an-verdict-badge { font-size: var(--type-control); font-weight: var(--weight-bold); line-height: var(--leading-none); }
-.an-verdict-badge.pass { color: var(--green); }
-.an-verdict-badge.fail { color: var(--orange); }
-.an-verdict-badge.legacy { color: var(--muted); }
+.an-verdict-badge { font-weight: var(--weight-bold); }
 
 /* the human sign-off in the header band ([[human-ok]]): settled mark / the deliberate ok button —
    offered only while the viewed reading IS the scenario's latest. */
-.an-okd { font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
+.an-okd { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
 
 /* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
    oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim
@@ -2089,9 +2100,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
 .an-ab-nav:disabled { opacity: .35; cursor: default; }
 .an-ab-track { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
-.an-ab-pip { font: inherit; font-size: var(--type-meta); font-weight: var(--weight-bold); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
-.an-ab-pip.pass { color: var(--green); }
-.an-ab-pip.fail { color: var(--orange); }
+.an-ab-pip { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
 .an-ab-pip.on { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
 .an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; }
 
@@ -2102,15 +2111,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
-/* a blind-spot row (declared, never measured — inert, no detail page to open). */
-.se-blind .ef-scenario { color: var(--muted); }
-.ef-insession { color: var(--blue); font-size: var(--type-caption); flex: none; }
-
-/* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
-   the evals feed's kind filter; one control, one look. */
-.fv-filter { font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
-.fv-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
-
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }

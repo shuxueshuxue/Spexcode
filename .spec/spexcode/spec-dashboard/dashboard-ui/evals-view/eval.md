@@ -6,17 +6,17 @@ scenarios:
     description: >
       Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
-      elements' tag name and href attributes, the sticky head's controls (kind dropdown, session scope
-      picker), and the chip row. Change the kind filter and read the hash; reload the browser at that
-      filtered address and read the active filter back from the DOM.
+      elements' tag/href and structured content, 32px query, Current/Reviewed sections, direct facets,
+      and overflow facets. Change query, verdict/kind, and scope; read the hash, reload, and Back through
+      the prior states.
     expected: >
       The hash reads #/evals and the Evals rail entry is accented. The page is a GitHub-style full-width
-      LIST — one row per (node, scenario), each row a REAL <a> anchor whose href is that eval's canonical
+      ListView — one structured row per (node, scenario), each row a REAL <a> anchor whose href is that eval's canonical
       detail address (#/evals/<node>/<scenario>), copyable/middle-clickable; NO master-detail split pane
-      and NO in-page detail. The head carries the shared kind dropdown (video | image | all) and the
-      session scope picker (default off = merged). A filter pick REWRITES the address (e.g.
-      #/evals?kind=all) as a history push, and a fresh reload at that filtered address re-derives the
-      exact same filter state from the URL — the address IS the list state. Zero loss = the list is one
+      and NO in-page detail. Current/Reviewed + counts sit left; the shared real-data facets cover verdict,
+      freshness, kind, node, filer/live, and session scope. A query, section, or facet pick writes canonical
+      query (e.g. #/evals?verdict=fail&kind=all) as a history push, and reload/Back re-derive the exact state.
+      The list/detail/A-B verdict icon, label, and tone come from ONE `.review-state` mapping. Zero loss = one
       page whose whole state lives in its URL and whose rows are links.
   - name: list-detail-push-back
     tags: [frontend-e2e, desktop]
@@ -41,7 +41,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]
     description: >
-      With a live session that has worktree-rooted readings: on #/evals open the session scope picker and
+      With a live session that has worktree-rooted readings: on #/evals open the overflow's Scope facet and
       pick that session; read the hash, the gates strip, and the rows. Then open the legacy address
       #/sessions/<id>/eval directly and read the hash after settle. Open the session console and click
       the Eval entry; read where it lands. Finally check a session-scoped row's href carries the scope.
@@ -79,22 +79,24 @@ scenarios:
     description: >
       Open a session-scoped Evals list and detail while forcing its `/api/sessions/:id/evals` request to
       return 503, then repeat with a real 404/missing target. Read the visible controls, alert/not-found
-      faces, and retry by changing the scope picker.
+      faces, and retry by changing the Scope facet.
     expected: >
-      A transport/5xx failure is explicit: the list retains the session scope and kind controls and shows
+      A transport/5xx failure is explicit: the list retains the ListView query/facet chrome and shows
       a load-failed alert, while the detail shows the distinct load-failed face. It never says the session
       has no evals and never renders the addressed eval as not-found. A genuine missing session/reading uses
-      the normal empty/not-found copy instead, and the list's scope picker remains usable in every state.
+      the normal empty/not-found copy instead, and the list's Scope facet remains usable in every state.
   - name: mobile-evals-pages
     tags: [frontend-e2e, mobile]
     code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >
       In a real browser at a 390px viewport: open #/evals (via the tab bar's Evals entry or directly),
-      read the list; open a row's detail and read the column order of the rendered page (side metadata
-      vs the evidence workspace); drive browser Back. Compare the DOM classes against the desktop pages.
+      read query/header/row sizes, visible facets and the opened kebab, body/document scroll width; open a
+      long row's detail and read the column order (side metadata vs workspace); drive browser Back.
     expected: >
       The phone renders the SAME routed pages (the lp-/ds- chrome, not a mobile clone) inside the phone
-      shell, with an Evals entry on the tab bar. The detail reflows to ONE column with the side metadata
+      shell, with an Evals entry on the tab bar. Query is viewport minus 32px, metadata ~49px; only Verdict
+      remains direct and all displaced real facets are functional in kebab. Long titles and metadata wrap
+      inside the row and body/document equal 390px. The detail reflows to ONE column with side metadata
       ABOVE the evidence workspace (GitHub's 390px order), never a shrunken two-column; the composer
       stays reachable at the column's foot. Back returns to the list with its state. Zero loss = one
       component set, two viewports, same URLs.

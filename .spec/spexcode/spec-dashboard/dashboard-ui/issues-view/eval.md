@@ -8,17 +8,17 @@ scenarios:
       forge issues). Open #/issues and read the rendered DOM: the list rows (tag + href), then open
       the local thread's detail page and read it; check for raw markdown syntax in the detail.
     expected: >-
-      The list renders the non-concluded rows in the API's order (no re-sort/rank): one compact
-      line each — a REAL <a> anchor to #/issues/<id> — LEADING with the issue itself: open rows use the
+      The list renders open rows in the API's order (no re-sort/rank) as REAL <a> anchors to
+      #/issues/<id>. Every shared structured row leads with the issue state: open rows use the
       original 16px GitHub Primer
       `issue-opened` Octicon geometry (ring + centre) in the theme's semantic open green, never the old
-      8px solid dot; after the concluded chip reveals the archive, both local `landed` and forge `closed`
+      8px solid dot; after the Closed section is selected, both local `landed` and forge `closed`
       rows use Primer's matching 16px `issue-closed` geometry (ring + check) in the one semantic closed
-      purple, never compact CSS dots. Then comes the concern; its computed font size/weight match an
-      Evals scenario title (12px/600), while the reply-count pill and borderless store mini-tag use the
-      Evals row's quiet 10.5–11px UI font family with zero added letter-spacing — never the old tiny
-      uppercase monospace dialect. NO boxed store chip leads any row. Concluded issues (any non-open
-      issue: local landed or forge closed) are hidden behind a count chip that reveals them. Opening the
+      purple, never compact CSS dots. Then comes the wrapping concern; identity, originator, and opened time
+      occupy the secondary line, while real comments/store/node facts sit at the right. At 390px the same
+      markup wraps the title and moves trailing facts beneath it without horizontal overflow. The issue
+      title face matches the Evals scenario title; NO boxed store chip leads a row. Open/Closed tabs carry
+      their true counts and every non-open issue belongs to Closed. Opening the
       local thread lands on its own DETAIL PAGE (#/issues/<id>, a history push): the title is the concern
       ALONE (no store chip on the title); the status band under it carries the status; the SIDE rail
       carries the store tag, author, clickable node chips; the body and replies MARKDOWN-RENDERED in the
@@ -130,20 +130,22 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      On the running issues page (#/issues), read the list page's skeleton: the rows' element tag and
-      hrefs, which container scrolls, the sticky filter head (NO tab switcher — the Issues page is its
-      own top-level route). Apply the concluded chip and read the hash; reload at that address. Drive
+      On the running issues page (#/issues), read the query + bordered ListView skeleton, row tag/hrefs,
+      Open/Closed section tabs, direct facet buttons, and overflow menu. Select Closed and read the hash;
+      reload at that address. Submit a query, select a facet, and drive Back through each state. Drive
       j/k and Enter; then type 'j' inside the New-form input. Record history.length across a row click
       and drive browser Back.
     expected: >-
-      The page is a GitHub-style full-width LIST: one-line rows, each a REAL <a> anchor to
-      #/issues/<id>; NO master-detail split, NO Evals|Threads switcher. The head is sticky (the CONTROL
-      row: store filter + New; the small toggle chips on the CHIP row; NO open/total count meta). The
-      list renders INSTANTLY from app-resident issues (no per-mount fetch). A chip pick rewrites the
-      address (?concluded=1) and a reload there re-derives the state. j/k move a visible CURSOR down the
+      The page is a GitHub-style full-width ListView: 32px query, 48px metadata header, ~64px desktop
+      structured rows, each a REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
+      sit left, Author/Store remain direct and Spec node/Live use functional overflow; only real values
+      appear. At 390px only Author remains direct and Store joins the same kebab; body/document stay 390px.
+      The list renders instantly from app-resident issues. Query, section (`?state=closed`), and facet picks
+      each PUSH canonical state; reload and Back replay the exact row set. j/k move a visible CURSOR down the
       rows and Enter opens the cursor row's detail page; a row click pushes (history grows) and browser
       Back restores the exact filtered list. A key typed into an input/textarea reaches the input and
-      never moves the cursor. No page errors.
+      never moves the cursor. An empty store says there are no issues yet; a query/section/facet zero says
+      no issues match this view. No page errors.
   - name: node-issue-cards-route-internally
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]
@@ -176,22 +178,20 @@ scenarios:
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.
-  - name: filter-bar-shared-dropdown
+  - name: shared-listview-facets
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/FilterSelect.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
     description: >-
-      With issues spanning both stores on the running dashboard, open #/issues and read the filter head's
-      real DOM: the store dropdown's options and their labels, the head's row structure (which row the
-      dropdown, New, and the chips sit on), and the
-      dropdown's element/class compared with the evals list's kind dropdown on #/evals.
+      With issues spanning stores, originators, nodes, and live/offline sessions, open #/issues at desktop
+      and 390px. Read section/facet/overflow DOM, menu option values, query/hash after picks, and compare
+      primitive classes with #/evals.
     expected: >-
-      The store dropdown is the SAME shared control as the evals list's kind filter — one component, the
-      same select element and `fv-filter` class on both pages. Its options are the stores present plus a
-      first option labelled exactly "all" (the bare word — never "all stores"). The head's FIRST row is the
-      CONTROL row — the store dropdown and New together; the small toggle chips (concluded count) sit on the
-      SECOND row. No open/total count meta exists anywhere in the head. The evals list's head wears the
-      same control-row grammar.
-      No page errors.
+      Issues and Evals consume the SAME `FacetMenu`/`FacetOverflow`/ListPage classes, never a select. Issues
+      offers only real model dimensions: originator, stores present, spec nodes present, and live-session
+      involvement; no fake labels/projects/assignee buttons. Desktop common facets are invisible label +
+      chevron buttons; 390px leaves Author and moves displaced facets into a usable kebab menu. Every option
+      changes canonical query as a PUSH and Back restores it. New is the page-title action, not a filter.
+      No page errors or horizontal overflow.
   - name: close-issue-button
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-cli/src/issues.ts]

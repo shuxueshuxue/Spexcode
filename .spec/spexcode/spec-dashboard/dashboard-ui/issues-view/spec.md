@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's Issues surface as GitHub-style TWO pages sharing the [[review-chrome]] — a full-width LIST page (#/issues, filters in the URL query, one-line anchor rows, merged local+forge in API order) and a standalone DETAIL page (#/issues/<id>) reached by history PUSH, whose main column is the markdown body + reply thread with the docked composer and whose side rail is the status/store/originator/node metadata; writes route by store (local commit or real forge comment).
+desc: The dashboard's Issues surface as GitHub-style TWO pages sharing [[review-chrome]] — a ListView query + Open/Closed sections + real issue facets over structured anchor rows, and a standalone detail page whose thread writes route to the issue's own store.
 code:
   - spec-dashboard/src/IssuesPage.jsx#IssuesPage
   - spec-dashboard/src/IssuesPage.jsx#IssuesListPage
@@ -12,7 +12,6 @@ related:
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/Thread.jsx
-  - spec-dashboard/src/FilterSelect.jsx
   - spec-dashboard/src/textarea.js
 ---
 
@@ -45,19 +44,28 @@ verbs the CLI uses.
   a remark and lives on the Evals pages). It is app-held state beside the board: the page renders
   instantly from it; freshness inherits the board's pattern (push-signal throttled refetch that DEFERS,
   never drops; the 15s cold lane; ETag 304s), and a write forces the refetch. Rows render **in API
-  order** — stores interleaved newest first, no re-sort, no salience ranking. **Concluded issues hide by
-  default** behind a count chip (any non-open issue is archive, not open work). The head's control row
-  carries the **store filter** — the ONE shared `FilterSelect`, options DERIVED from the stores present
-  plus bare "all", self-hiding when only one store exists — and the **New** button; the chip row carries
-  the concluded count and "N live" chips. No open/total count meta — the list is the count.
-- **The row leads with the issue, never its plumbing.** One compact line: the **status mark** (GitHub
+  order** — stores interleaved newest first, no salience ranking. The shared ListView query searches the
+  concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
+  lifecycle switch (default Open; every non-open state belongs to Closed). Real facets cover only data the
+  issue model actually has: originator, store, spec node, and live-session involvement. Spec node is the
+  desktop overflow facet; at 390px originator stays directly reachable while store/live join that same
+  functional overflow menu. Every pick is canonical query state and a PUSH. If resident data changes
+  while a store/originator/node/live value is active, its shared facet remains reachable with an All
+  off-switch until that query is cleared; data disappearance cannot trap the list behind an invisible
+  filter. New remains the page-title action. No assignee/labels/project
+  theatre is invented for a model that has none. An actually empty issue store says there are no issues
+  yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
+  issues, through [[review-chrome]]'s shared empty-state contract.
+- **The row leads with the issue, never its plumbing.** A structured two-level row: the **status mark** (GitHub
   Primer's 16px `issue-opened` octicon in the semantic open green; every concluded state — local
   `landed`, forge `closed` — the `issue-closed` ring+check in the one closed purple; never a CSS dot),
-  then the concern (the same 12px/600 title face the eval rows wear), then trailing quiet meta — a
-  reply-count pill and a borderless store mini-tag shown only while stores are mixed. **The store is
-  metadata, never identity**: it never leads a row and never sits on a title.
+  then the wrapping concern; under it the real issue identity, originator, and opened time; at the right
+  the comment count and store/node facts that exist. At 390px those facts join the secondary line and the
+  title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
+  row and never sits on a title.
 - **The detail page is [[review-chrome]]'s GitHub-grammar skeleton.** Header: the concern ALONE as the
-  title. Status band: the status mark + word. MAIN column: the **markdown-rendered body** (SpecBody — the
+  title. Status band: the same shared issue-state primitive as the list mark, now with its label. MAIN
+  column: the **markdown-rendered body** (SpecBody — the
   one spec dialect, no raw `##`/pipes) then the reply thread, with the **composer docked at the column's
   foot**. SIDE rail: the store tag, the ORIGINATOR + liveness (a local thread's `by` is a session id — a
   live one is a click-through chip to `#/sessions/<id>`, painted by the board's STATUS_COLOR join; a

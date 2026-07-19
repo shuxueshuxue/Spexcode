@@ -1,65 +1,54 @@
 ---
 scenarios:
-  - name: feed-current-loss-video-first-title-only
+  - name: feed-current-loss-listview
     tags: [frontend-e2e]
     description: >
-      With at least one fresh video reading filed (spex eval add --video … --timeline …), open #/evals
-      in a real browser (board `f` or the URL). Read the real DOM: the rows' element tag + hrefs, the
-      kind dropdown's default value, the rows' media-element count and any row-level human-ok action;
-      count /api/graph requests fired by opening the page; open a video row and read where its media
-      renders.
+      With fresh video/image readings, stale readings, and at least one human-ok'd reading, open #/evals
+      in a real browser. Read the query/header/rows, current and reviewed counts, media element count,
+      row hrefs, state SVGs, and /api/graph requests; open a video row.
     expected: |
-      The list is the page itself — the kind dropdown in a sticky head; the dropdown's
-      default value is `video` (falling back to `image` when no video reading exists). Rows are the LATEST
-      reading per (node, scenario), newest first — title-only ALWAYS: zero <video>/<img>
-      elements in the list — and each row is a REAL <a> anchor to its detail address. Opening the page
-      fires ZERO extra /api/graph fetches (the group rides the app's one poll via props). Opening a video
-      row lands on its detail page — the only place its <video> exists and the only visible human-ok
-      write door. Rows carry settled human-ok status only; an un-ok'd row exposes no ok action.
-  - name: stale-not-hidden-mixed-by-time
+      The list is one GitHub-style ListView over latest-per-scenario rows: 32px query, Current/Reviewed
+      counted sections, real facets, ~64px desktop structured anchors. Each `.rl-row-grid` leads with the
+      shared verdict icon, then scenario title, node/filer/time metadata, and kind/scope facts. Fresh
+      human-ok'd readings alone belong to Reviewed; everything else remains Current, newest-first. The
+      list mounts zero video/image elements and fires zero extra /api/graph reads; media exists only after
+      the real anchor opens the standalone detail page. The list state icon matches that detail's icon for
+      the same verdict.
+  - name: verdict-freshness-kind-facets-are-honest
     tags: [frontend-e2e]
     description: >
-      With BOTH fresh and stale readings on the board (a node whose governed code changed after some of
-      its readings), open #/evals?kind=all in a real browser. Read the real DOM:
-      are stale rows (the muted ✓/✗) present in the list, is the order purely by time (a stale reading
-      newer than a fresh one sits ABOVE it), and does the sticky head carry ANY control besides the
-      dropdowns?
+      Open #/evals against mixed pass/fail, fresh/stale, video/image/mixed/note readings. Open Verdict,
+      Freshness, and Evidence facets and compare each option/result against /api/graph. Combine facets,
+      inspect empty state, then clear them.
     expected: |
-      The list shows fresh AND stale readings together, ALWAYS — a stale row is never hidden, and there is
-      NO stale toggle: the head's controls are the kind dropdown and the session scope picker (no `N
-      stale` chip exists anywhere on the page). The order is strictly newest-first regardless of
-      freshness (a newer stale reading appears above an older fresh one); a stale row's only stale signal
-      is its muted ✓/✗ mark. No reading ever silently disappears behind the default view.
-  - name: kind-dropdown-video-image-all-only
-    tags: [frontend-e2e]
+      Facets map only real reading fields: verdict reads pass/fail/unscored, freshness reads the live fresh
+      bit, kind matches the reading's evidence SET (a mixed reading matches each carried kind), and all
+      returns non-media readings too. Stale readings are present in the default Current list, never silently
+      hidden. Blind rows match their node/unscored/query facts but disappear under kind, freshness, filer,
+      or Live because they own no reading facts; they remain inert when visible. Combined facets are
+      conjunctive and an honest zero-result says no evals match this view (not that no evals exist) while all
+      chrome remains releasable. No list media request or fake facet appears.
+  - name: node-filer-scope-live-overflow
+    tags: [frontend-e2e, desktop, mobile]
     description: >
-      Open #/evals in a real browser against a board that also holds non-media readings (blob-less
-      note-only verdicts and/or transcript-only readings). Read the kind dropdown's options from the real
-      DOM and compare its element/class with the Issues page's store filter. Pick `image`, recount rows
-      against /api/graph; pick `all` and recount; read a blob-less row's kind tag.
+      With readings across nodes/filers and live sessions, inspect desktop direct facets and overflow, then
+      repeat at 390px. Pick node, filer, merged/session scope, and live values; compare row sets and hashes.
     expected: |
-      The dropdown offers EXACTLY three options — video · image · all — never note, never transcript; and
-      it is the SAME shared control as the issues store filter (one component, same select element and
-      `fv-filter` class). `image` claims ONLY rows whose reading holds a real image blob (blob-less count
-      under it: zero); blob-less and transcript-only readings surface under `all` alone. A blob-less row
-      carries no media tag (never `img`/`vid`), and its detail page renders its verdict note as TEXT —
-      no <video>/<img> element and no empty media box.
+      Node, filer, live-session join, and session scope filter their real fields. Desktop keeps common facets
+      direct and low-frequency filer/scope/live in functional overflow. At 390px only Verdict remains direct;
+      freshness/kind/node plus filer/scope/live are usable in kebab. Long UUID values are compact display
+      labels but write the full id into canonical query. No menu or row widens body/document past 390px.
   - name: filters-live-in-the-url
     tags: [frontend-e2e, desktop]
     description: >
-      Open #/evals and record history.length. Pick a non-default kind and read location.hash +
-      history.length; toggle the ok chip and re-read; reload the browser at the resulting address and
-      read the dropdown/chip state from the DOM; drive browser Back twice and read the state after each
-      step.
+      Open #/evals and record history.length. Submit a query, pick verdict/freshness/kind, select Reviewed,
+      and choose a session scope; read hash/history after each. Reload, then drive Back one state at a time.
     expected: >
-      Every filter pick REWRITES the address (?kind=…, ok=1, live=1) as a history PUSH — Back walks the
-      filter history, GitHub's semantics — and the list re-derives its WHOLE state from the URL on every
-      hashchange: a reload at a filtered address renders exactly that state, and each Back step restores
-      the previous filter state exactly. No component-local filter state survives that the address
-      doesn't name.
+      Every human query, section, and facet change writes canonical hash query as a history PUSH. Reload
+      replays the exact query text, selected section/facets, counts, and row set; each browser Back restores
+      the previous state exactly. No component-local filter state survives outside the address.
 ---
 # evals-feed loss
 
-YATU through the real browser: drive the actual list page over a real backend with a real video
-reading and read the DOM the user sees — the dropdown state, the row set, the anchor hrefs, the
-media-element count, the request count — never the flatten helper in isolation.
+YATU through the real browser over a live backend: drive the actual query, sections, facet menus, overflow,
+row anchors, and Back history; inspect DOM geometry, media requests, and screenshots. Helpers are auxiliary.

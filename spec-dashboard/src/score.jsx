@@ -1,4 +1,6 @@
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
+import { ReviewState } from './ReviewShell.jsx'
 
 // the pass/fail MARK a reading scores, or null when there is no pass/fail to show — a legacy pre-verdict
 // reading, or a legacy note-only one (status:'note', before `note` became an annotation on pass/fail). Those
@@ -6,8 +8,6 @@ import { useT } from './i18n/index.jsx'
 function mark(r) {
   return r?.verdict?.status === 'pass' ? 'check' : r?.verdict?.status === 'fail' ? 'cross' : null
 }
-
-const GLYPH = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', empty: '' }
 
 export function readingScore(r) {
   const m = mark(r)
@@ -43,7 +43,7 @@ export function ScenarioCount({ scenarios, evals }) {
   const satisfied = states.filter((s) => s.state === 'pass').length
   const total = states.length
   const label = t('score.count', { satisfied, total, outstanding: total - satisfied })
-  return <span className={`scenario-count ${state}`} data-tip={label} aria-label={label}>✓{satisfied}/{total}</span>
+  return <span className={`scenario-count ${state}`} data-tip={label} aria-label={label}><Icon name="check" size={11} />{satisfied}/{total}</span>
 }
 
 // the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
@@ -60,8 +60,6 @@ export function TagChips({ tags }) {
 
 // `title` overrides the default hover copy (the eval tab passes the moved-axis detail for a stale reading).
 export function ScoreBadge({ state, title }) {
-  const t = useT()
   if (!state) return null
-  const label = title ?? t(`score.${state}`)
-  return <span className={`score-badge ${state}`} data-tip={label} aria-label={label}>{GLYPH[state]}</span>
+  return <ReviewState kind="eval" state={state} title={title} className={`score-badge ${state}`} size={14} />
 }

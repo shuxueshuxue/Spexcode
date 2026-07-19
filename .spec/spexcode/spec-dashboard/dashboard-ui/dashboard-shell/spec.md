@@ -80,6 +80,18 @@ script in `<head>` that applies the same choice (same fallback to Minimal) to `<
 before first paint — its inline code list mirrors THEMES and must move with it. The [[settings]]
 page carries the live picker; preset labels are proper nouns and deliberately untranslated.
 
+**One type system.** Dashboard chrome reads font size, line height, weight, and letter spacing from one
+small semantic scale in `styles.css`: caption/meta, control, body, subtitle, title, heading, and display
+roles, plus shared leading and weight roles. A component chooses the role its text performs; it never
+invents a nearby pixel value to make one label fit. The scale keeps ordinary UI text readable, reserves
+the smallest role for genuinely secondary metadata, and gives the graph, sessions, evals, issues,
+settings, overlays, and phone face the same hierarchy. Compactness comes from layout and spacing rather
+than shrinking copy below the scale. Responsive display copy may own a fluid scale token, but the formula
+still lives with the shared tokens rather than at its callsite. Letter spacing is neutral across the app;
+hierarchy comes from size, weight, colour, and case, not scattered tracking values. The embedded terminal
+uses the same family and a shared terminal-size token at its xterm adapter boundary, so its numeric API
+does not become a second typography source.
+
 **Fail-loud boot.** A board that never arrives (backend down, proxy dead) shows an **error + retry panel**,
 never an eternal spinner — the pre-first-board window is the only reader; once a board has landed, a failed
 refetch keeps the last good board and the stream/poll below keep retrying on their own.

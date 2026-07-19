@@ -214,6 +214,33 @@ try {
   await waitFor(async () => (await page.title()) === 'Atlas Lab · SpexCode', 'atlas title after rocket')
   assert.equal(await favicon(page), atlasHref, 'last visited project never leaks into atlas')
 
+  step('side nav route contract')
+  assert.equal(await page.locator('.side-rail .rail-btn:not(.proj-chip)').count(), 5)
+  assert.equal(await page.getByRole('button', { name: 'Projects', exact: true }).count(), 0)
+  const routes = [
+    { name: /^Sessions/, hash: '#/sessions' },
+    { name: /^Evals/, hash: '#/evals' },
+    { name: /^Issues/, hash: '#/issues' },
+    { name: /^Settings/, hash: '#/settings' },
+    { name: /^Spec Node Graph/, hash: '#/graph' },
+  ]
+  for (const route of routes) {
+    await page.getByRole('button', { name: route.name }).click()
+    await waitFor(() => Promise.resolve(page.url().includes(route.hash)), `rail route ${route.hash}`)
+  }
+  await page.goBack({ waitUntil: 'domcontentloaded' })
+  await waitFor(() => Promise.resolve(page.url().includes('#/settings')), 'browser back to settings')
+  await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/settings`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.side-rail').waitFor()
+  assert.equal(await page.getByRole('button', { name: /^Settings/ }).getAttribute('aria-current'), 'page')
+  await page.goto('about:blank')
+  await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/projects`, { waitUntil: 'domcontentloaded' })
+  await page.waitForURL((url) => url.pathname === '/projects')
+  await page.getByRole('heading', { name: 'Projects' }).waitFor()
+  assert.equal(new URL(page.url()).pathname, '/projects')
+  await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.side-rail').waitFor()
+
   step('live catalog update')
   const changed = await page.evaluate(async ({ id }) => {
     const catalog = await fetch('/projects', { headers: { Accept: 'application/json' } }).then((response) => response.json())

@@ -293,9 +293,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const evalOn = rightTab === 'eval' && active !== 'new'
   const viewNode = evalOn ? (evalSel?.node ?? null) : null
   const viewScenario = evalOn ? (evalSel?.scenario ?? null) : null
+  // While a routeNav still PENDS for the active session (mount commit: rightTab is still the initial
+  // 'terminal' until the apply effect lands one commit later), this render's view is transitional — reporting
+  // it would clobber the shell's optimistic deep target with null for one commit, and a refresh inside that
+  // window loses the exact reading. Hold the report until the directive is consumed; a stale directive for
+  // ANOTHER session doesn't gate (it can never apply here).
+  const navPending = !!(routeNav && routeNav.session === active)
   useEffect(() => {
+    if (navPending || active === 'new') return
     onEvalViewChange?.(evalOn ? { node: viewNode, scenario: viewScenario } : null)
-  }, [evalOn, viewNode, viewScenario]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [evalOn, viewNode, viewScenario, navPending, active]) // eslint-disable-line react-hooks/exhaustive-deps
   // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
   // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
   useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])

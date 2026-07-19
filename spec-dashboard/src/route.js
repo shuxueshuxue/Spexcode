@@ -51,9 +51,11 @@ export const sessionEvalParam = (sessionId, nodeId, scenario) =>
 // sub-route when the console's Eval tab is showing ([[session-eval]]). Driven by `evalView` — the console's
 // REAL selection ({node,scenario}|null), reported up — so the address always matches what's on screen: a
 // non-null evalView (Eval tab) yields '<id>/eval[/<node>/<scenario>]' via the shared sessionEvalParam encoder;
-// null (Terminal / New) yields the bare id. Pure; the shell writes the result with replace.
+// null (Terminal / New) yields the bare id. The 'new' placeholder is ALWAYS bare — it has no eval surface, so
+// a stale view can never ride it. Pure; the shell writes the result with replace.
 export function sessionTabParam(sessionSel, evalView) {
-  return evalView ? sessionEvalParam(sessionSel, evalView.node, evalView.scenario) : sessionSel
+  if (sessionSel === 'new' || !evalView) return sessionSel
+  return sessionEvalParam(sessionSel, evalView.node, evalView.scenario)
 }
 
 // the live route — one hashchange subscription, parsed. replaceState doesn't fire hashchange, which is

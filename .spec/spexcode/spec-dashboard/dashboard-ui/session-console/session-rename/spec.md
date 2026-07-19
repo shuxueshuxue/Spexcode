@@ -83,6 +83,9 @@ existing lock action and routes to `#/graph`; [[session-console]] owns that lock
 The same menu also hosts [[session-multi-select]]'s select item and [[attach-menu]]'s live-only attach item,
 so these verbs extend one menu instead of creating parallel gestures or pop-overs.
 
-This node's slices of the shared files are the context-menu/rename-modal styling in `styles.css` and the
+Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
+separate destructive close row. This node supplies the session actions; it never forks the menu chrome.
+
+This node's slices of the shared files are the rename/confirm-modal styling in `styles.css` and the
 rename route in `index.ts`; the eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
 the measure-and-score reframe, are [[spec-eval]]'s churn, not session-rename's drift.

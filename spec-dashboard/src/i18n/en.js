@@ -259,6 +259,7 @@ export default {
   },
 
   sessionWindow: {
+    menuLabel: 'session actions',
     rowTitle: 'click to lock the graph onto this session · double-click to open it',
     lockedTitle: 'graph locked to this session — click again to release',
     emptyBefore: 'no live worktrees — press ',
@@ -418,6 +419,7 @@ export default {
 
   // the node right-click menu ([[node-menu]]) — labels for the board's node verbs, mouse-side.
   nodeMenu: {
+    menuLabel: 'node actions',
     info: 'node info',
     newSession: 'new session',
     newChild: 'new child node…',

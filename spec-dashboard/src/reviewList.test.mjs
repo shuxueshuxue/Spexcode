@@ -86,6 +86,18 @@ test('menus and section tabs share one keyboard and Escape contract', () => {
   assert.match(shell, /role="tab" aria-selected=\{section\.active\}[\s\S]*tabIndex=\{section\.active \? 0 : -1\}/)
 })
 
+test('overflow radio sets and section tabs expose complete ARIA ownership', () => {
+  assert.match(shell, /role="group"[\s\S]*aria-labelledby=\{`\$\{groupId\}-group-\$\{index\}`\}/)
+  assert.match(shell, /className="rl-menu-label" id=\{`\$\{groupId\}-group-\$\{index\}`\}/)
+  assert.match(shell, /role="tablist" aria-label=\{title\} aria-orientation="horizontal"/)
+  assert.match(shell, /role="tab" aria-selected=\{section\.active\} aria-controls=\{panelId\}/)
+  assert.match(shell, /role="tabpanel" id=\{panelId\} aria-labelledby=\{tabId\(activeSectionIndex\)\}/)
+
+  const tabHandler = shell.slice(shell.indexOf("if (!['ArrowLeft', 'ArrowRight'"), shell.indexOf('tabs[next]?.click()'))
+  assert.match(tabHandler, /'ArrowLeft', 'ArrowRight', 'Home', 'End'/)
+  assert.doesNotMatch(tabHandler, /ArrowUp|ArrowDown/)
+})
+
 test('one icon-label-tone mapping drives every review state home', () => {
   assert.match(shell, /export const REVIEW_STATE_VISUALS = \{[\s\S]*issue:[\s\S]*eval:/)
   assert.match(shell, /open: \{ icon: 'issue-opened', tone: 'open'/)

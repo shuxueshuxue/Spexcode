@@ -1,4 +1,4 @@
-import { navigate, parseRoute, routeHash } from './route.js'
+import { navigate, parseRoute, routeHash, sessionEvalParam } from './route.js'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
@@ -13,8 +13,9 @@ export function addressHash(address) {
   if (address.kind === 'graph-node') return routeHash('graph')
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
-    const segs = [address.sessionId, 'eval', ...(address.nodeId && address.scenario ? [address.nodeId, address.scenario] : [])]
-    return routeHash('sessions', segs.join('/'))
+    // the ONE session-eval param encoder (route.sessionEvalParam) — same shape the tab echo writes, so the
+    // href side and the echo side share one URL grammar ([[address-routing]]).
+    return routeHash('sessions', sessionEvalParam(address.sessionId, address.nodeId, address.scenario))
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
   if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)

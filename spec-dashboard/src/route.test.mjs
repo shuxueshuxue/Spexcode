@@ -1,0 +1,54 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { parseRoute, routeHash, sessionTabParam } from './route.js'
+import { addressHash, sessionEvalAddress } from './address.js'
+
+// the session-eval deep link ([[address-routing]] / [[session-eval]]) — the console's in-page eval address.
+test('parseRoute splits a session-eval deep link into id + eval sub-route', () => {
+  assert.deepEqual(parseRoute('#/sessions/abc/eval/shell-layout/ws-sidebar'),
+    { page: 'sessions', param: 'abc/eval/shell-layout/ws-sidebar' })
+  // bare /eval form (no node/scenario) still parses to the sub-route
+  assert.deepEqual(parseRoute('#/sessions/abc/eval'), { page: 'sessions', param: 'abc/eval' })
+  // a plain session tab has no sub-route
+  assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc' })
+})
+
+test('a session-eval hash round-trips through routeHash (each segment re-encoded)', () => {
+  const { param } = parseRoute('#/sessions/abc/eval/shell-layout/tab%20switch')
+  assert.equal(param, 'abc/eval/shell-layout/tab switch')     // decoded per segment
+  assert.equal(routeHash('sessions', param), '#/sessions/abc/eval/shell-layout/tab%20switch')  // re-encoded
+})
+
+// sessionTabParam is the tab-echo's target: PURE and driven by the SEED STATE (never by re-reading the
+// mutable hash, which a transient write can clobber). It keeps the eval sub-route addressable (refreshable/
+// shareable) whenever the seed targets the selected tab, else echoes the bare id.
+// sessionTabParam is the tab-echo's target: PURE, driven by the console's REAL view (evalView, reported up),
+// never a persisted seed — so the address always matches what's on screen ([[session-eval]]). A non-null
+// evalView (Eval tab showing) yields the sub-route; null (Terminal / New) yields the bare id.
+test('sessionTabParam writes the eval sub-route when the Eval tab shows a reading', () => {
+  assert.equal(sessionTabParam('abc', { node: 'shell-layout', scenario: 'ws-sidebar' }),
+    'abc/eval/shell-layout/ws-sidebar')
+  // Eval tab open with no specific reading (bare /eval) — a shareable root link
+  assert.equal(sessionTabParam('abc', { node: null, scenario: null }), 'abc/eval')
+})
+
+test('sessionTabParam echoes the bare id when the Eval tab is NOT showing', () => {
+  // null evalView = Terminal / New tab → bare id (a manual switch to Terminal drops the sub-route)
+  assert.equal(sessionTabParam('abc', null), 'abc')
+  assert.equal(sessionTabParam('new', null), 'new')
+})
+
+// UNIFICATION guarantee ([[address-routing]]): the tab-echo side (sessionTabParam) and the href side
+// (addressHash of a session-eval address) share ONE param encoder, so both produce the IDENTICAL hash for
+// the same target — no second URL grammar for the eval deep link.
+test('the tab echo and addressHash agree byte-for-byte on the session-eval hash', () => {
+  const echoHash = routeHash('sessions', sessionTabParam('abc', { node: 'shell-layout', scenario: 'ws-sidebar' }))
+  const linkHash = addressHash(sessionEvalAddress('abc', 'shell-layout', 'ws-sidebar'))
+  assert.equal(echoHash, linkHash)
+  assert.equal(echoHash, '#/sessions/abc/eval/shell-layout/ws-sidebar')
+  // and the bare /eval form agrees too
+  const echoBare = routeHash('sessions', sessionTabParam('abc', { node: null, scenario: null }))
+  const linkBare = addressHash(sessionEvalAddress('abc', null, null))
+  assert.equal(echoBare, linkBare)
+  assert.equal(echoBare, '#/sessions/abc/eval')
+})

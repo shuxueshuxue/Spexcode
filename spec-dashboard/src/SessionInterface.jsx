@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest } from './session.js'
+import { sessionAncestorIds, sessionForest, applyRouteNav } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
@@ -155,7 +155,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, evalSeed, onEvalSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, routeNav, onRouteNavConsumed, onEvalViewChange, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -178,6 +178,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // the Eval tab's deep-link target ({node,scenario}|null) — set by the one-shot evalSeed below, handed to
   // the pane as its initial selection; cleared on tab switch so a later manual visit opens fresh.
   const [evalJump, setEvalJump] = useState(null)
+  // the Eval pane's CURRENT selection ({node,scenario}|null), reported back up from SessionEval — the console
+  // folds it into the evalView it reports to the shell (the URL's real source, [[session-eval]]).
+  const [evalSel, setEvalSel] = useState(null)
   // the Eval tab auto-collapses the session list to a thin strip ([[session-console]] / [[evals-view]]'s
   // fold-to-strip): the eval tab is itself a master-detail whose scenario list needs the width, so the
   // console's session list folds out of the way while it's shown and unfolds on the way back to Terminal.
@@ -219,8 +222,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (open && active !== 'new') expandFolds(sessionAncestorIds(sessions, active))
   }, [open, active, expandFolds]) // eslint-disable-line react-hooks/exhaustive-deps
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
-  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
-  // is showing — a background board refresh must not clobber the remembered tab (or the URL echo) mid-boot.
+  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
+  // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep
+  // link, or a loaded-empty project), not still loading; resetting it to New is correct, and Dashboard drops
+  // the matching dead seed so nothing waits forever.
   useEffect(() => {
     if (open && !validIds.has(sel)) setSel('new')
   }, [open, validIds, sel, setSel])
@@ -248,18 +253,47 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // into the launch prompt (see submit); listing is display-only, like the slash menu. Shared fetch (./launch.js).
   const commandPresets = useCommandPresets()
 
-  // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
-  // keystrokes can never leak into the wrong pane.
+  // per-tab reset: switching the active session tab clears the per-tab input state and drops the right pane
+  // back to the Terminal ([[session-console]]). Keyed on `active` only, declared BEFORE the routeNav apply below
+  // so a navigation's directive applies its tab ON TOP of this reset within the same commit (the board is loaded
+  // when the console mounts — App gates Dashboard on a non-null board — so `active` resolves in the mount commit).
   useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal'); setEvalJump(null) }, [active])
-  // the eval deep link ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]' seeds this one-shot —
-  // flip the right pane to the Eval tab and hand the pane its target reading. Declared AFTER the [active]
-  // reset above so a deep load applies on top of it (effects run in declaration order within a commit).
+  // apply the per-navigation route directive ([[session-eval]] / [[address-routing]]): the URL entrance sets the
+  // right pane on EVERY real navigation — '/eval' opens the Eval tab (+ jumps to the reading), a bare tab URL
+  // shows the Terminal — applied ONCE per navigation (the ref). Between navigations the console's own manual tab
+  // clicks drive the URL instead (evalView, reported below); a bare return therefore resets a warm Eval tab to
+  // the Terminal, so the address never diverges from the pane. A directive for another session is a no-op here.
+  const appliedNavRef = useRef(null)
   useEffect(() => {
-    if (evalSeed == null) return
-    setRightTab('eval')
-    setEvalJump(evalSeed.node && evalSeed.scenario ? { node: evalSeed.node, scenario: evalSeed.scenario } : null)
-    onEvalSeedConsumed?.()
-  }, [evalSeed]) // eslint-disable-line react-hooks/exhaustive-deps
+    const r = applyRouteNav(routeNav, active)
+    if (!r || appliedNavRef.current === routeNav) return
+    appliedNavRef.current = routeNav
+    setRightTab(r.tab)
+    setEvalJump(r.tab === 'eval' ? r.jump : null)
+    // The route target is also the optimistic outbound view while SessionEval loads. Without this, the
+    // newly-mounted pane reports its initial "selection unknown" as null and the shell briefly rewrites an
+    // exact deep link to bare /eval; refreshing in that window permanently loses the requested reading.
+    setEvalSel(r.tab === 'eval' ? r.jump : null)
+    onRouteNavConsumed?.()
+  }, [active, routeNav])
+  // report the console's REAL eval view UP ([[session-eval]] / [[address-routing]]): the Eval tab's selected
+  // {node,scenario} while it is showing, else null (Terminal / New). This — not a persisted seed — is what the
+  // shell echoes into the hash, so a manual Eval entry becomes addressable, a switch to Terminal drops the
+  // sub-route, and leaving+returning can't resurrect an old one. `evalSel` is fed by SessionEval below; before
+  // it reports, an open Eval tab still yields {null,null} → the bare `/eval` form.
+  const evalOn = rightTab === 'eval' && active !== 'new'
+  const viewNode = evalOn ? (evalSel?.node ?? null) : null
+  const viewScenario = evalOn ? (evalSel?.scenario ?? null) : null
+  // While a routeNav still PENDS for the active session (mount commit: rightTab is still the initial
+  // 'terminal' until the apply effect lands one commit later), this render's view is transitional — reporting
+  // it would clobber the shell's optimistic deep target with null for one commit, and a refresh inside that
+  // window loses the exact reading. Hold the report until the directive is consumed; a stale directive for
+  // ANOTHER session doesn't gate (it can never apply here).
+  const navPending = !!(routeNav && routeNav.session === active)
+  useEffect(() => {
+    if (navPending || active === 'new') return
+    onEvalViewChange?.(evalOn ? { node: viewNode, scenario: viewScenario } : null)
+  }, [evalOn, viewNode, viewScenario, navPending, active]) // eslint-disable-line react-hooks/exhaustive-deps
   // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
   // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
   useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])
@@ -930,7 +964,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   routinely names the session already being viewed (its own filed readings), where the plain
                   openSession would no-op (selection unchanged, hash identical) and leave a dead button —
                   so flip the right pane to the terminal, and only navigate when the filer is another session. */}
-              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} initialSel={evalJump}
+              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} initialSel={evalJump} onSelChange={setEvalSel}
                 onOpenSession={(id) => { setRightTab('terminal'); if (id !== active) onOpenSession?.(id) }} />}
           </div>
         </section>

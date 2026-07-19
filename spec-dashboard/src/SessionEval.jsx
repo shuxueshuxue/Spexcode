@@ -3,6 +3,7 @@ import { EvalRow, entryKey } from './EvalsFeed.jsx'
 import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
+import { defaultEvalKey, evalSelectionReport } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
@@ -19,7 +20,7 @@ import { apiUrl } from './project.js'
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
 // inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
-export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession, initialSel = null }) {
+export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession, onSelChange, initialSel = null }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
@@ -89,8 +90,28 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
     ...g.rows.filter((r) => r.inSession || (!onlySession && openInherited.has(g.node.id)))
       .map((r) => ({ kind: 'eval', key: entryKey(r), item: r })),
   ]), [groups, onlySession, openInherited])
-  const effSel = sel && visible.some((v) => v.key === sel) ? sel : visible[0]?.key ?? null
+  // effSel resolves the selection: an explicit `sel` (a click or a deep-link jump) if it's still visible,
+  // else the DEFAULT — this session's own reading, failing first ([[session-eval]]'s defaultEvalKey), NOT the
+  // blind-spot row that merely leads the visual order. So a bare '#/sessions/<id>/eval' lands on the measured
+  // loss a reviewer wants, and a scenario deep link (which sets `sel` via the jump effect) still wins.
+  const effSel = sel && visible.some((v) => v.key === sel) ? sel : defaultEvalKey(visible)
   const selEntry = visible.find((v) => v.key === effSel)
+  // report the current selection's {node,scenario} UP ([[session-eval]] / [[address-routing]]): the console
+  // folds it into the evalView it echoes to the URL, so the address tracks the shown reading (including the
+  // default a bare /eval resolves to). null when nothing is selected (empty pane).
+  const selNode = selEntry?.item?.node ?? null
+  const selScenario = selEntry?.item?.scenario ?? null
+  const initialTargetExists = Boolean(initialSel && groups.some((g) =>
+    g.rows.some((r) => r.scenario === initialSel.scenario && g.node.id === initialSel.node)
+    || g.blind.some((b) => b.scenario === initialSel.scenario && g.node.id === initialSel.node)))
+  // On the first loaded render, effSel still falls back to the default until the jump effect above applies.
+  // Suppress that one stale render when the requested target exists; otherwise it would briefly replace the
+  // exact hash with the default row. Unknown targets deliberately report the default immediately.
+  const initialTargetPending = Boolean(initialSel && jumpedRef.current !== initialSel && initialTargetExists)
+  useEffect(() => {
+    const report = evalSelectionReport(model, selNode, selScenario, initialTargetPending)
+    if (report !== undefined) onSelChange?.(report)
+  }, [model, selNode, selScenario, initialTargetPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // the selected reading's WORKTREE-rooted A/B history (newest-first): the session model already carries EVERY
   // reading per node ([[session-eval]] — rooted at this branch's worktree), so hand the detail this scenario's

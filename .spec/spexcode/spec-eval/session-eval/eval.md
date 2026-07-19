@@ -115,12 +115,18 @@ scenarios:
       and a garbage node/scenario.
     expected: >
       The console opens with the EVAL tab active (never the terminal) and the named scenario's row selected,
-      its detail (media + remark thread + composer) open on the right — one click from an MR note to the
-      live, remarkable, worktree-rooted reading; no clicking through terminal→eval by hand. The bare /eval
-      form lands on the tab with its default first row. An inherited target auto-unfolds its baseline
-      divider so the selected row is visible. A name matching nothing degrades to the tab's default
-      selection — never a blank pane or a crash. After landing, the address bar normalizes to
-      '#/sessions/<id>' (the sub-route is an entrance, not synced view state).
+      its detail (expected, verdict note, media + remark thread + composer) open on the right — one click from
+      an MR note to the live, remarkable, worktree-rooted reading; no clicking through terminal→eval by hand.
+      The bare /eval form lands on THIS session's own reading — a failing one first, then any in-session
+      reading — never the leading blind-spot row, and the URL reflects that resolved default. An inherited
+      target auto-unfolds its baseline divider so the selected row is visible. A name matching nothing degrades
+      to the default selection — never a blank pane or a crash. The address is PERSISTENT, refreshable, AND
+      always consistent with the pane: the '#/sessions/<id>/eval/<node>/<scenario>' sub-route stays in the hash
+      (a browser reload reopens the SAME reading), and because the URL tracks the console's REAL tab/selection —
+      (a) manually clicking into the Eval tab from a plain session makes the URL addressable ('#/…/eval/<node>/<scenario>'),
+      (b) switching to the Terminal tab drops the sub-route back to bare '#/sessions/<id>', and (c) leaving the
+      session and returning to a bare '#/sessions/<id>' shows the Terminal with a bare URL — no stale sub-route
+      resurrects, and the address never shows /eval while the Terminal is up (or vice-versa).
   - name: branch-new-node-visible
     tags: [backend-api]
     code: [spec-eval/src/sessioneval.ts, spec-cli/src/specs.ts]

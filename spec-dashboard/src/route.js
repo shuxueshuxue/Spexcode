@@ -40,6 +40,24 @@ export function navigate(page, param = null, { replace = false } = {}) {
   else window.location.hash = h
 }
 
+// The ONE encoder for the sessions-page param of a session-eval address: '<id>/eval[/<node>/<scenario>]'
+// ([[address-routing]] / [[session-eval]]). The single source of that sub-route's URL shape — the href side
+// (address.js addressHash) and the tab-echo side (sessionTabParam below) both go through here, so the two
+// can't drift. Lives in route.js (the lower layer) so address.js can import it without a cycle.
+export const sessionEvalParam = (sessionId, nodeId, scenario) =>
+  [sessionId, 'eval', ...(nodeId && scenario ? [nodeId, scenario] : [])].join('/')
+
+// The session-tab hash param ([[address-routing]]): the bare session id, OR the PERSISTENT, refreshable eval
+// sub-route when the console's Eval tab is showing ([[session-eval]]). Driven by `evalView` — the console's
+// REAL selection ({node,scenario}|null), reported up — so the address always matches what's on screen: a
+// non-null evalView (Eval tab) yields '<id>/eval[/<node>/<scenario>]' via the shared sessionEvalParam encoder;
+// null (Terminal / New) yields the bare id. The 'new' placeholder is ALWAYS bare — it has no eval surface, so
+// a stale view can never ride it. Pure; the shell writes the result with replace.
+export function sessionTabParam(sessionSel, evalView) {
+  if (sessionSel === 'new' || !evalView) return sessionSel
+  return sessionEvalParam(sessionSel, evalView.node, evalView.scenario)
+}
+
 // the live route — one hashchange subscription, parsed. replaceState doesn't fire hashchange, which is
 // fine: replace() is only used to echo state the app already holds.
 export function useRoute() {

@@ -68,6 +68,8 @@ export default {
     configReload: '重新加载',
     configSaved: '已保存',
     configInvalid: '顶层内容必须是有效的 JSON 对象',
+    gatewayIcon: 'gateway 图标',
+    projectIcon: '项目图标',
     setupTitle: '项目操作 — init / doctor',
     harnessLabel: 'harness：',
     harnessRequired: '至少选择一个 harness 目标 — init 不会替你猜',

@@ -11,8 +11,9 @@ import { installProcessGuards } from './resilience.js'
 import { listenOrExit } from './listen.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 import { tsxBin } from './tsx-bin.js'
-import { mainCheckout } from './layout.js'
 import { publishEndpoint, dropOwnEndpoint } from './host.js'
+import { repoRoot as servedRepoRoot } from './git.js'
+import { resolveProjectIdentity } from './project-identity.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -48,7 +49,7 @@ const watchRoots = [
 // served root) against the live /api/instance answer — a recycled port serving a DIFFERENT project or a
 // different serve generation fails the match and is treated as offline, never proxied to.
 const instanceId = randomUUID()
-const projectRoot = mainCheckout()   // the served project's main checkout — the identity the record claims
+const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
 
 type Backend = { port: number; child: ChildProcess }
 let current: Backend | null = null   // which internal port new proxy connections forward to
@@ -148,14 +149,23 @@ const proxy = net.createServer((client) => {
 // (~/.spexcode/projects/<enc>/backend.json) only AFTER the public bind succeeds. It's what lets a bare
 // `spex` run from this project's tree find ITS OWN backend instead of an env URL inherited from another
 // project's ([[remote-client]]'s resolution ladder), and what the host gateway ([[host-gateway]]) reconciles
-// its project list from. The write is ATOMIC (tmp + rename) and carries the serve's identity —
-// {url, pid, instanceId, root} — so a reader can VALIDATE the record against the live /api/instance answer,
+// its project list from. The write is ATOMIC (tmp + rename) and carries the serve's actual git toplevel +
+// resolved identity — so a reader can VALIDATE the record against the live /api/instance answer,
 // never just trust a URL. Readers health-probe before trusting, so a crashed serve leaves at worst a dead
 // record that is ignored — never followed. The recorded URL is the LOOPBACK face local agents reach (equals
-// the public port when public mode is off), never the password-gated gateway.
+// the public port when public mode is off), never the password-gated gateway. A linked worktree therefore
+// gets its own encoded slot and can never overwrite the main checkout's endpoint.
 function recordEndpoint(url: string): void {
   try {
-    publishEndpoint({ url, pid: process.pid, instanceId, root: projectRoot, startedAt: new Date().toISOString() })
+    publishEndpoint({
+      version: 2,
+      url,
+      pid: process.pid,
+      instanceId,
+      root: projectRoot,
+      identity: resolveProjectIdentity(projectRoot, projectRoot),
+      startedAt: new Date().toISOString(),
+    })
   } catch (e) {
     console.error(`[supervisor] could not record the backend endpoint (${(e as Error).message}) — cwd-based \`spex\` discovery won't find this backend`)
   }

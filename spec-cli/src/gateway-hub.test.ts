@@ -52,7 +52,10 @@ function registerProject(id: string, url: string): void {
   mkdirSync(dir, { recursive: true })
   // the canonical instance-shaped record supervise.ts publishes ([[host-gateway]]); the hub honors only
   // this shape, and only in the slot the record's own root encodes to (here root === id — no [/.] chars).
-  writeFileSync(join(dir, 'backend.json'), JSON.stringify({ url, pid: process.pid, instanceId: `inst-${id}`, root: id, startedAt: 'test' }) + '\n')
+  writeFileSync(join(dir, 'backend.json'), JSON.stringify({
+    version: 2, url, pid: process.pid, instanceId: `inst-${id}`, root: id,
+    identity: { title: id, icon: id === 'projA' ? 'compass' : 'spark' }, startedAt: 'test',
+  }) + '\n')
 }
 
 const hub = (path: string, init: RequestInit = {}) =>
@@ -105,6 +108,9 @@ test('no admin password: /projects is implicit from loopback, LOCKED from non-lo
   const body = await res.json() as any
   assert.equal(body.adminGated, false)
   assert.deepEqual(body.projects.map((p: any) => p.id), ['projA', 'projB'], 'the non-loopback upstream record is not listed')
+  assert.deepEqual(Object.fromEntries(body.projects.map((p: any) => [p.id, p.identity.icon])),
+    { projA: 'compass', projB: 'spark' }, 'each catalog id keeps its own record projection')
+  assert.equal(body.gateway.icon, 'gateway')
 
   // the bare hub has no shell to negotiate toward: a text/html GET still answers the catalog JSON
   // (the content-negotiated shell branch exists only when a host fallback is mounted — host.test.ts)

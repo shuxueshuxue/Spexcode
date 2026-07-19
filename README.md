@@ -209,10 +209,12 @@ plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors;
 
 ## Configuration
 
-`spexcode.json` (committed, portable: layout, lint budgets, dashboard identity, launcher names) and
+`spexcode.json` (committed, portable: layout, lint budgets, project dashboard identity, launcher names) and
 `spexcode.local.json` (gitignored, host-specific: absolute launcher paths, cert paths) cover every
 setting. There is no imperative settings verb: you edit the two files by hand (or ask your agent
-to), and `spex guide settings` documents every field. The other
+to), and `spex guide settings` documents every field. The Projects admin UI writes a project's icon back
+to that same `dashboard.icon` field; the global gateway icon is the one separate host fact at
+`$SPEXCODE_HOME/config.json` `gateway.icon`, never copied into a repo. The other
 manuals are `spex guide` (the workflow), `spex guide spec`, `spex guide eval`, and
 `spex guide footprint`; `spex help` maps the commands.
 

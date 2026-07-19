@@ -334,7 +334,10 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
   const label = t('reviewList.showing', { shown: summary.shown, total: summary.total })
   return (
     <div className="rf-row">
-      <span className="rf-summary" aria-label={label} data-tip={label}>
+      {/* the sentence rides a real (visually hidden) text node — robust where aria-label on a generic
+          span is not — while the visible spans stay presentation-only. */}
+      <span className="rf-summary" data-tip={label}>
+        <span className="sr-only">{label}</span>
         <span className="rf-summary-full" aria-hidden="true">{label}</span>
         <span className="rf-summary-compact" aria-hidden="true">{summary.shown}/{summary.total}</span>
       </span>

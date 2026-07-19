@@ -270,7 +270,8 @@ function DiffEvidence({ diff }) {
   )
 }
 
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, renderAction, leading, trailing, resetKey }) {  const scRef = useRef(null)
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, renderAction, leading, trailing, resetKey }) {
+  const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   // a caller filtering its items passes the filter as resetKey: the open set is INDEX-keyed, so surviving
   // rows shift under a stale set — re-anchoring on the latest keeps the open state meaningful.

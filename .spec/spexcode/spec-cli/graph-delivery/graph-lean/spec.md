@@ -59,10 +59,8 @@ dogfood graph halved again (~576KB → ~270KB).
 (`{path}` or `{path, name}`) a measuring hand follows. The opaque case name is metadata only — the graph
 does not parse a test framework or execute anything. Scenario prose (`description` / `expected`) and
 per-scenario `code` join the **lite corpus**: a measurable node's `/api/specs/lite` row carries its scenarios
-whole, so the one corpus fetch ranks scenario prose as it ranks node bodies. The shared fetch (`corpus.js`) revalidates at most once per mount, when prose is first needed — the
-palette per open, the always-mounted [[focus-panel]] on its first scenario-bearing focus, whose clamped
-`expected` preview and tracked-files line join from it (rows render name/state/tags instantly;
-prose fills in). The eval tab's blind-spot
+whole, so the one corpus fetch ranks scenario prose as it ranks node bodies. The shared fetch (`corpus.js`)
+revalidates once per search-palette mount, when prose is first needed. The eval tab's blind-spot
 rows take `expected`+`code` from the `/evals` fetch it already makes, falling back to the slim graph set — shallow, never wrong. Measured: the fold 73KB → 9KB, the dogfood frame ~304KB → ~240KB (~-21%).
 
 This node holds the lean-payload contract those cuts extend, beside the freshness-side [[graph-stream]],

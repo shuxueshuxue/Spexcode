@@ -14,8 +14,8 @@ scenarios:
     expected: >-
       The eval tab surfaces the WHOLE declared set, not only the readings: a scenario with no reading
       shows its name + expected (+ tracked files) under a blind-spot ring, so a node's measurable intent
-      is legible inside the popup even before any reading lands — the only place it shows once the popup
-      covers the focus panel. No reading at all → the declared list under a hint; some measured, some not
+      is legible inside the popup even before any reading lands. No reading at all → the declared list
+      under a hint; some measured, some not
       → those same rows lead the one timeline (the empty ring is the only distinction, not a separate band).
     code:
       - spec-dashboard/src/NodeView.jsx

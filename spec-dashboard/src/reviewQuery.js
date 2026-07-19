@@ -7,6 +7,8 @@ export const ISSUE_QUERY_DEFAULT = 'is:issue state:open'
 export const EVAL_QUERY_DEFAULT = 'is:eval state:current'
 // the session doors' scoped-list address: the default view, scoped — the text shows exactly that.
 export const scopedEvalQuery = (sessionId) => setToken(EVAL_QUERY_DEFAULT, 'scope', sessionId)
+// the aggregate score/count doors' address ([[eval-score-badge]]): the default view, node-filtered.
+export const nodeEvalQuery = (nodeId) => setToken(EVAL_QUERY_DEFAULT, 'node', nodeId)
 
 const KEY_RE = /^([A-Za-z][A-Za-z0-9-]*):(.*)$/s
 const unquote = (v) => (v.length >= 2 && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v)

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString } from './route.js'
-import { addressHash, sessionEvalAddress } from './address.js'
+import { addressHash, evalAddress, sessionEvalAddress } from './address.js'
 
 // The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state — one
 // ?q=<raw token text> for the review lists ([[review-query]]) — and every legacy shape (session-eval
@@ -81,4 +81,18 @@ test('legacy and object session-eval addresses converge on the canonical evals h
   assert.equal(legacyEvalHash('#/sessions/abc/eval/shell-layout/tab%20switch'), canonical)
   assert.equal(addressHash(sessionEvalAddress('abc', 'shell-layout', 'tab switch')), canonical)
   assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
+})
+
+test('eval addresses: concrete → the canonical detail, scenario-less → the node-filtered list', () => {
+  // the DETAIL address carries no list filters — path only.
+  assert.equal(addressHash(evalAddress('eval-score-badge', 'count-renders')), '#/evals/eval-score-badge/count-renders')
+  assert.equal(addressHash(evalAddress('n', 'a b')), '#/evals/n/a%20b')
+  // the AGGREGATE entry (no scenario) is the Evals LIST filtered to the node — the ONE canonical
+  // token text (default view + node qualifier), minted only through evalAddress/nodeEvalQuery.
+  assert.equal(addressHash(evalAddress('eval-score-badge')),
+    '#/evals?q=is%3Aeval+state%3Acurrent+node%3Aeval-score-badge')
+  const r = parseRoute(addressHash(evalAddress('side-nav')))
+  assert.equal(r.page, 'evals')
+  assert.equal(r.param, null)
+  assert.equal(r.query.q, 'is:eval state:current node:side-nav')
 })

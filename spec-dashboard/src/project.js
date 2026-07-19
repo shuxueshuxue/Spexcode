@@ -31,7 +31,16 @@ export const PROJECT_BASE = scope.base
 export const scopedApiUrl = (path, base) => (path.startsWith('/api') ? base + path : path)
 export const apiUrl = (path) => scopedApiUrl(path, PROJECT_BASE)
 
-// hash-preserving addresses for cross-scope navigation (the selector, the hub's Open action). The id is
-// encoded per-segment so a path-derived id with awkward chars survives the address bar.
+// Hash-preserving project addresses for cross-scope navigation (the selector, the hub's Open action).
+// The id is encoded per-segment so a path-derived id with awkward chars survives the address bar. The
+// hub itself is one global pathname, never an in-shell hash route.
 export const projectHref = (id, hash = '#/graph') => `/p/${encodeURIComponent(id)}/${hash}`
-export const hubHref = (hash = '#/projects') => `/${hash}`
+export const hubHref = () => '/projects'
+
+// The retired scoped admin route crosses from a project pathname into the global hub. Resolve it before
+// React mounts so arrival performs one full-page navigation and can never paint a duplicate admin page.
+export function legacyProjectsRedirect(pathname, hash) {
+  if (!parseProjectPath(pathname).id) return null
+  const path = (hash || '').replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '')
+  return path === 'projects' ? hubHref() : null
+}

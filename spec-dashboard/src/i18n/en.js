@@ -46,7 +46,6 @@ export default {
     evals: 'Evals (⌥3 / ⌥F)',
     issues: 'Issues (⌥4)',
     settings: 'Settings (⌥5)',
-    projects: 'Projects',
     projectChip: 'project: {name} — switch project',
     allProjects: 'All projects',
   },

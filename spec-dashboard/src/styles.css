@@ -2155,8 +2155,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
 
 /* ================================================================================================
-   projects hub ([[projects-hub]]) — the multi-project catalog page (hub face at `/` AND the routed
-   #/projects page), the unified credential card, and the rail's current-project selector. Everything
+   projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,
+   and the scoped rail's current-project selector. Everything
    reads through the shared palette vars, so all themes skin these surfaces with no extra rules. */
 
 /* --- the credential card: ONE visual language for admin sign-in and per-project unlock --- */
@@ -2187,8 +2187,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .cred-submit:disabled { opacity: 0.5; cursor: default; }
 
 /* --- the catalog page --- */
-.page-projects { overflow-y: auto; }
-.page-projects.standalone { min-height: 100vh; box-sizing: border-box; }
+.page-projects { min-height: 100vh; box-sizing: border-box; overflow-y: auto; }
 .proj-body { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; box-sizing: border-box; font-family: var(--mono); }
 .proj-brand { margin-bottom: 14px; }
 .proj-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

@@ -8,6 +8,7 @@ import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
+import { nextQuery } from './ReviewShell.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
 // reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
@@ -58,7 +59,12 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
     ...base.map((p) => ({ key: p.key, label: t(PANE_T[p.key]) })),
   ]
   const [pane, setPane] = useState(null)
-  useEffect(() => { setPane(null) }, [node.id])   // a fresh screen always opens on its first tab
+  const [filters, setFilters] = useState({ issues: {}, eval: {} })
+  useEffect(() => { setPane(null); setFilters({ issues: {}, eval: {} }) }, [node.id])   // a fresh screen always opens on its first tab
+  const updateFilter = (kind, patch) => setFilters((current) => ({
+    ...current,
+    [kind]: nextQuery(current[kind], patch),
+  }))
   const active = pane && tabs.some((p) => p.key === pane) ? pane : tabs[0].key
   // fetch the version log only when the history tab is actually up (same gate as the desktop popup)
   const rows = useHistory(node.id, active === 'history')
@@ -94,8 +100,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
         )}
         {active === 'spec' && <SpecPane node={node} />}
         {active === 'history' && <HistoryPane node={node} rows={rows} />}
-        {active === 'issues' && <IssuesPane node={node} />}
-        {active === 'eval' && <EvalPane node={node} />}
+        {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
+        {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}
         {active === 'edit' && <EditPane node={node} />}
       </div>
     </div>

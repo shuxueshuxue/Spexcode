@@ -5,9 +5,9 @@ import { useLaunchers } from './launch.js'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { liveSession } from './session.js'
 import Modal from './Modal.jsx'
 import { DetailShell, FacetMenu, FacetOverflow, ListPage, nextQuery, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
+import { filterMenuGroups, issueFilterModel, reviewActorName } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { Icon } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
@@ -36,8 +36,6 @@ const issueNumber = (id) => {
   return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
 }
 
-const actorName = (actor) => String(actor || '').length > 22 ? `${String(actor).slice(0, 8)}…` : actor
-
 // The LIST page (`#/issues[?query]`): RESIDENT data — the page renders instantly from app-held state
 // ([[issues-view]]); query, Open/Closed section, and real model facets are URL-query state, re-derived on
 // every hashchange so Back replays them exactly.
@@ -49,33 +47,17 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
   const all = Array.isArray(data.issues) ? data.issues : []
-  const storeFilter = query.store || ''
-  const closedSection = query.state === 'closed' || query.concluded === '1'
-  const liveOnly = query.live === '1'
-  const author = query.author || ''
-  const node = query.node || ''
-  const q = (query.q || '').trim().toLocaleLowerCase()
   // a human's filter pick PUSHES the new list address (GitHub's semantics — Back walks filter history).
   const set = (patch) => navigate('issues', null, { query: nextQuery(query, patch) })
 
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
   const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  // [[live-session-filter]]: an issue is LIVE while a session behind it is still alive — its originator
-  // (i.by) or any reply author; the join is session.js's liveSession, the same judgment the originator
-  // chip's dot renders, so the chip-filtered list and the dots can never disagree.
-  const isLive = (i) => !!liveSession(sessions, i.by) || (Array.isArray(i.replies) && i.replies.some((r) => liveSession(sessions, r.by)))
-  const faceted = all.filter((issue) => (
-    (!storeFilter || issue.store === storeFilter)
-    && (!author || issue.by === author)
-    && (!node || issue.nodes?.includes(node))
-    && (!liveOnly || isLive(issue))
-    && (!q || [issue.id, issue.concern, issue.by, ...(issue.nodes || [])].filter(Boolean)
-      .some((value) => String(value).toLocaleLowerCase().includes(q)))
-  ))
-  const openCount = faceted.filter((issue) => !concluded(issue)).length
-  const closedCount = faceted.filter(concluded).length
-  const issues = faceted.filter((issue) => concluded(issue) === closedSection)
+  const filters = issueFilterModel(all, query, { sessions, t, defaultSection: 'open' })
+  const closedSection = filters.state.state === 'closed'
+  const issues = filters.shown
+  const openCount = filters.sections.open || 0
+  const closedCount = filters.sections.closed || 0
 
   // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
   // the store mini-tag renders only while stores are actually mixed ([[issues-view]]).
@@ -92,7 +74,7 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
             meta={(
               <>
                 <span data-tip={th.id}>{issueNumber(th.id)}</span>
-                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: actorName(th.by) })}</span>}
+                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: reviewActorName(th.by) })}</span>}
                 {th.created && <span>{t('reviewList.openedAt', { at: age(th.created) })}</span>}
               </>
             )}
@@ -109,14 +91,12 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
     }
   })
 
-  const allOption = { value: '', label: t('reviewList.all') }
-  const authorValues = [...new Set(all.map((issue) => issue.by).filter(Boolean))]
-  const authorOptions = authorValues.length ? [allOption, ...authorValues.map((value) => ({ value, label: actorName(value) }))] : []
-  const storeOptions = stores.length > 1 ? [allOption, ...stores.map((value) => ({ value, label: value }))] : []
-  const nodeValues = [...new Set(all.flatMap((issue) => issue.nodes || []).filter(Boolean))]
-  const nodeOptions = nodeValues.length > 1 ? [allOption, ...nodeValues.map((value) => ({ value, label: value }))] : []
-  const liveCount = all.filter(isLive).length
-  const liveOptions = (liveOnly || liveCount > 0) ? [allOption, { value: '1', label: t('reviewList.live') }] : []
+  const authorFacet = filters.facets.author
+  const storeFacet = filters.facets.store
+  const overflowGroups = [
+    ...filterMenuGroups(filters, set, ['node', 'live']),
+    ...filterMenuGroups(filters, set, ['store']).map((group) => ({ ...group, mobileOnly: true })),
+  ]
 
   return (
     <ListPage
@@ -130,15 +110,11 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
       ]}
       facets={
         <>
-          <FacetMenu label={t('reviewList.facetAuthor')} value={author} options={authorOptions} clearLabel={allOption.label} onChange={(value) => set({ author: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetStore')} value={storeFilter} options={storeOptions} clearLabel={allOption.label} onChange={(value) => set({ store: value || null })} />
+          <FacetMenu label={authorFacet.label} value={authorFacet.value} options={authorFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => set({ author: value || null })} mobile />
+          <FacetMenu label={storeFacet.label} value={storeFacet.value} options={storeFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => set({ store: value || null })} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
-        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetStore'), value: storeFilter, active: !!storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
-      ]} />}
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={overflowGroups} />}
       rows={rows}
       empty={{
         hasData: all.length > 0,

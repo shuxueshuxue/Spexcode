@@ -49,8 +49,13 @@ same `panesFor` registry. It fetches its timeline (readings + declared detail) p
 by the summary's newest reading so a fresh filing refetches; a failed fetch degrades to the board's
 summary. It is a **thin consumer of the chronological-timeline
 scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture, an
-expand-all door for find-in-page, and — on a long timeline — the shared sticky **scenario-name filter**
-(blind-spot rows and dangling tracks filter with the readings, so a filtered view stays one coherent set). Each
+individual row-header toggle, no bulk-expand control, and — on a long timeline — an extremely compact
+embedded face of the canonical Evals filter. The popup and list page share one query parser, conjunctive
+filter engine, and field semantics through domain configuration/data adapters; the popup does not grow a
+modal-only state machine or a second eval query dialect ([[review-filters]]). Blind-spot rows and dangling tracks participate in
+the same honest field rules as the canonical list, so a filtered view stays one coherent set. Popup filter
+state survives tab switches while the node popup remains open, but owns no canonical address; opening a
+reading still follows the Evals route family. Each
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
 beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
 ([[eval-score-badge]]), then its codeSha and time.

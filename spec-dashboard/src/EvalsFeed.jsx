@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
 import { scenarioStates } from './score.jsx'
-import { liveSession, sessionHeadline } from './session.js'
 import { FacetMenu, FacetOverflow, ListPage, nextQuery, ReviewListRow, ReviewState } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+import { sessionHeadline } from './session.js'
+import { defaultEvalKind, evalFilterModel, filterMenuGroups, kindsOf } from './reviewFilters.js'
 
 // The evals list ([[evals-feed]]): the rows + filters of the Evals LIST page ([[evals-view]]), rendered
 // through the shared [[review-chrome]] ListPage. The unit is the SCENARIO, never the reading — latest
@@ -13,26 +13,6 @@ import { Icon } from './icons.jsx'
 // and every real data facet are URL state written as a history PUSH, so Back replays the whole face.
 
 const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
-const shortId = (value) => String(value || '').length > 22 ? `${String(value).slice(0, 8)}…` : value
-
-// normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
-// present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
-// the same scalar→list bridge the eval sidecar's evidenceOf does, so a legacy reading still renders.
-export const evidenceList = (r) =>
-  r.evidence?.length ? r.evidence
-  : r.blob != null ? [{ hash: r.blob, kind: r.blobKind || 'image', state: r.blobState || 'present' }]
-  : []
-
-// a reading's evidence kinds as a SET (video-first), or ['note'] when it carries no blob at all. Kinds stay
-// HONEST: a MIXED reading (images + a video) belongs to EVERY kind it contains — it advertises all its media
-// and none it lacks; a blob-less verdict is a 'note', never a media kind. 'note' is a data-level kind only —
-// it is not a filter option and carries no row tag; such readings surface under the 'all' filter.
-export const kindsOf = (r) => {
-  const ev = evidenceList(r)
-  if (!ev.length) return ['note']
-  return ['video', 'image', 'transcript', 'data'].filter((k) => ev.some((e) => e.kind === k))
-}
-
 // flatten board nodes → list entries via the ONE latest-per-scenario computation (scenarioStates).
 export function currentEntries(nodes) {
   const out = []
@@ -86,18 +66,6 @@ const rel = (ts) => {
   return `${Math.floor(s / 86400)}d`
 }
 
-// Blind spots have scenario/node/query identity and the unscored verdict, but no reading facts. Keeping
-// this predicate pure makes that absence explicit and testable instead of letting inert rows bypass facets.
-export const blindMatchesFilters = (blind, { kind, verdict, freshness, node, filer, liveOnly, q }) => (
-  kind === 'all'
-  && (!verdict || verdict === 'unscored')
-  && !freshness
-  && (!node || blind.node === node)
-  && !filer
-  && !liveOnly
-  && (!q || [blind.scenario, blind.node].some((value) => String(value).toLocaleLowerCase().includes(q)))
-)
-
 // `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
 // scope from the board prop, the session scope from the worktree-rooted model). `blind`: the session
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
@@ -105,40 +73,17 @@ export const blindMatchesFilters = (blind, { kind, verdict, freshness, node, fil
 // `hrefFor`: an entry's detail address. Session scope is another real overflow facet over this same model.
 export default function EvalsGroup({ entries = [], blind = [], sessions = [], query = {}, onQuery, hrefFor, notice = null, error = null, empty = null }) {
   const t = useT()
-  const hasVideo = entries.some((e) => kindsOf(e).includes('video'))
-  const hasImage = entries.some((e) => kindsOf(e).includes('image'))
-  const kind = ['video', 'image', 'all'].includes(query.kind) ? query.kind : (hasVideo ? 'video' : hasImage ? 'image' : 'all')
-  const liveOnly = query.live === '1'
-  const reviewedSection = query.ok === '1'
-  const q = (query.q || '').trim().toLocaleLowerCase()
-  const verdict = query.verdict || ''
-  const freshness = query.freshness || ''
-  const node = query.node || ''
-  const filer = query.filer || ''
   const set = (patch) => onQuery(nextQuery(query, patch))
-
-  // [[live-session-filter]]: a reading is LIVE while its filer session (e.by) is still alive — the same
-  // liveSession join the filer chip renders, so the facet and the dots can never disagree.
-  const isLive = (e) => !!liveSession(sessions, e.by)
-  const verdictOf = (e) => e.verdict?.status || 'unscored'
-  const reviewed = (e) => !!(e.fresh && e.humanOk)
-  const matches = (e) => (
-    (kind === 'all' || kindsOf(e).includes(kind))
-    && (!verdict || verdictOf(e) === verdict)
-    && (!freshness || (freshness === 'fresh' ? e.fresh === true : e.fresh !== true))
-    && (!node || e.node === node)
-    && (!filer || e.by === filer)
-    && (!liveOnly || isLive(e))
-    && (!q || [e.scenario, e.node, e.by, e.evaluator].filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(q)))
-  )
-  const faceted = useMemo(() => entries.filter(matches), [entries, kind, verdict, freshness, node, filer, liveOnly, q, sessions])
-  const currentCount = faceted.filter((e) => !reviewed(e)).length
-  const reviewedCount = faceted.filter(reviewed).length
-  const shown = faceted.filter((e) => reviewed(e) === reviewedSection)
-
-  const shownBlind = reviewedSection ? [] : blind.filter((b) => blindMatchesFilters(b, {
-    kind, verdict, freshness, node, filer, liveOnly, q,
-  }))
+  const defaultKind = defaultEvalKind(entries)
+  const filterItems = [
+    ...entries.map((entry, index) => ({ ...entry, reading: true, filterKind: 'reading', filterKey: `reading:${index}`, source: entry })),
+    ...blind.map((entry, index) => ({ ...entry, reading: false, filterKind: 'blind', filterKey: `blind:${index}`, source: entry })),
+  ]
+  const filters = evalFilterModel(filterItems, query, { sessions, t, defaultKind, defaultSection: 'current' })
+  const shown = filters.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
+  const shownBlind = filters.shown.filter((item) => item.filterKind === 'blind').map((item) => item.source)
+  const currentCount = filters.sections.current || 0
+  const reviewedCount = filters.sections['1'] || 0
 
   const rows = [
     ...shownBlind.map((b) => ({
@@ -152,30 +97,22 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
     ...shown.map((e) => ({ key: entryKey(e), href: hrefFor(e), content: <EvalRow e={e} /> })),
   ]
 
-  const allOption = { value: '', label: t('reviewList.all') }
-  const verdictValues = [...new Set(entries.map(verdictOf))]
-  const verdictOptions = [allOption, ...verdictValues.map((value) => ({ value, label: t(`reviewList.verdict.${value}`) }))]
-  const freshnessValues = [...new Set(entries.map((e) => (e.fresh === true ? 'fresh' : 'stale')))]
-  const freshnessOptions = freshnessValues.length > 1
-    ? [allOption, ...freshnessValues.map((value) => ({ value, label: t(`reviewList.freshness.${value}`) }))]
-    : []
-  const nodeValues = [...new Set(entries.map((e) => e.node).filter(Boolean))]
-  const nodeOptions = nodeValues.length > 1 ? [allOption, ...nodeValues.map((value) => ({ value, label: value }))] : []
-  const filerValues = [...new Set(entries.map((e) => e.by).filter(Boolean))]
-  const filerOptions = filerValues.length ? [allOption, ...filerValues.map((value) => ({
-    value,
-    label: sessions.find((session) => session.id === value) ? sessionHeadline(sessions.find((session) => session.id === value)) : shortId(value),
-  }))] : []
   const scopeOptions = sessions.length
     ? [{ value: '', label: t('evals.scopeMerged') }, ...sessions.map((session) => ({ value: session.id, label: sessionHeadline(session) }))]
     : []
-  const liveCount = entries.filter(isLive).length
-  const liveOptions = (liveOnly || liveCount > 0) ? [allOption, { value: '1', label: t('reviewList.live') }] : []
-  const kindOptions = [
-    { value: 'all', label: t('evalsFeed.kind.all') },
-    { value: 'video', label: t('evalsFeed.kind.video') },
-    { value: 'image', label: t('evalsFeed.kind.image') },
+  const overflowGroups = [
+    ...filterMenuGroups(filters, set, ['filer', 'live']),
+    { label: t('reviewList.facetScope'), value: query.session || '', active: !!query.session, options: scopeOptions, onChange: (value) => set({ session: value || null }) },
+    ...filterMenuGroups(filters, set, ['freshness', 'kind', 'node']).map((group) => ({
+      ...group,
+      mobileOnly: true,
+      onChange: group.key === 'kind' ? (value) => set({ kind: value === defaultKind ? null : value }) : group.onChange,
+    })),
   ]
+  const verdictFacet = filters.facets.verdict
+  const freshnessFacet = filters.facets.freshness
+  const kindFacet = filters.facets.kind
+  const nodeFacet = filters.facets.node
 
   return (
     <ListPage
@@ -184,25 +121,18 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
       title={t('evalsFeed.title')}
       search={{ value: query.q || '', onSubmit: (value) => set({ q: value || null }), placeholder: t('reviewList.searchEvals'), label: t('reviewList.search') }}
       sections={[
-        { key: 'current', label: t('reviewList.current'), count: currentCount + shownBlind.length, active: !reviewedSection, onSelect: () => set({ ok: null }) },
-        { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: reviewedSection, onSelect: () => set({ ok: '1' }) },
+        { key: 'current', label: t('reviewList.current'), count: currentCount, active: filters.state.ok !== '1', onSelect: () => set({ ok: null }) },
+        { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: filters.state.ok === '1', onSelect: () => set({ ok: '1' }) },
       ]}
       facets={
         <>
-          <FacetMenu label={t('reviewList.facetVerdict')} value={verdict} options={verdictOptions} clearLabel={allOption.label} onChange={(value) => set({ verdict: value || null })} mobile />
-          <FacetMenu label={t('reviewList.facetFreshness')} value={freshness} options={freshnessOptions} clearLabel={allOption.label} onChange={(value) => set({ freshness: value || null })} />
-          <FacetMenu label={t('reviewList.facetKind')} value={kind} options={kindOptions} onChange={(value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value })} />
-          <FacetMenu label={t('reviewList.facetNode')} value={node} options={nodeOptions} clearLabel={allOption.label} onChange={(value) => set({ node: value || null })} />
+          <FacetMenu label={verdictFacet.label} value={verdictFacet.value} options={verdictFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => set({ verdict: value || null })} mobile />
+          <FacetMenu label={freshnessFacet.label} value={freshnessFacet.value} options={freshnessFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => set({ freshness: value || null })} />
+          <FacetMenu label={kindFacet.label} value={kindFacet.value} options={kindFacet.options} onChange={(value) => set({ kind: value === defaultKind ? null : value })} />
+          <FacetMenu label={nodeFacet.label} value={nodeFacet.value} options={nodeFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => set({ node: value || null })} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
-        { label: t('reviewList.facetFiler'), value: filer, active: !!filer, options: filerOptions, onChange: (value) => set({ filer: value || null }) },
-        { label: t('reviewList.facetScope'), value: query.session || '', active: !!query.session, options: scopeOptions, onChange: (value) => set({ session: value || null }) },
-        { label: t('reviewList.facetLive'), value: liveOnly ? '1' : '', active: liveOnly, options: liveOptions, onChange: (value) => set({ live: value || null }) },
-        { label: t('reviewList.facetFreshness'), value: freshness, active: !!freshness, options: freshnessOptions, onChange: (value) => set({ freshness: value || null }), mobileOnly: true },
-        { label: t('reviewList.facetKind'), value: kind, active: !!query.kind, options: kindOptions, clearLabel: null, onChange: (value) => set({ kind: value === (hasVideo ? 'video' : hasImage ? 'image' : 'all') ? null : value }), mobileOnly: true },
-        { label: t('reviewList.facetNode'), value: node, active: !!node, options: nodeOptions, onChange: (value) => set({ node: value || null }), mobileOnly: true },
-      ]} />}
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={overflowGroups} />}
       rows={rows}
       empty={empty || {
         hasData: entries.length > 0 || blind.length > 0,

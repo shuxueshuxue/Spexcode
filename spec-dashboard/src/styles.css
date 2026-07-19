@@ -1177,7 +1177,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .lp-row.inert { cursor: default; }
 .lp-row.inert:hover { background: none; }
 .rl-row-grid { min-height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 10px 16px; }
-.rl-row-state { padding-top: 2px; }
+.rl-row-state { width: 16px; height: 16px; margin-top: 2px; display: grid; place-items: center; }
 .rl-row-body { min-width: 0; }
 .rl-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 .rl-row-meta { min-width: 0; display: flex; align-items: center; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); }
@@ -1188,6 +1188,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .rl-tag.node { color: var(--ink2); }
 .rl-comments { display: inline-flex; align-items: center; gap: 4px; }
 .review-state { flex: none; display: inline-flex; align-items: center; gap: 5px; line-height: var(--leading-none); }
+.review-state-icon { flex: none; display: grid; place-items: center; line-height: var(--leading-none); }
 .review-state svg { display: block; }
 .review-state.open, .review-state.pass { color: var(--green); }
 .review-state.closed { color: var(--magenta); }
@@ -2073,17 +2074,19 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .load-retry { font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .load-retry:hover { border-color: var(--muted); }
 
-/* chrono timeline tools ([[work-pane]]): expand-all complements the down-gesture reveal — collapsed rows
-   aren't mounted, so find-in-page / jump-to-an-old-version needs this door. */
-.chrono-tools { display: flex; justify-content: flex-end; margin: 0 0 6px; }
-.chrono-all { font-family: var(--mono); font-size: var(--type-caption); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
-.chrono-all:hover { color: var(--ink2); border-color: var(--muted); }
-
-/* the long-pane text filter ([[work-pane]]): sticky at the scroller's top, palette-toned like the search bar. */
-.pane-filter { position: sticky; top: -16px; z-index: 2; margin: -8px 0 8px; padding: 6px 0; background: var(--panel); }
-.pane-filter-input { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; outline: none; color: var(--ink2); font-family: var(--mono); font-size: var(--type-meta); padding: 4px 8px; }
-.pane-filter-input:focus { border-color: var(--muted); }
-.pane-filter-input::placeholder { color: var(--muted); }
+/* [[review-filters]]: the embedded projection stays one shallow row at the scroller's right edge. It
+   reuses FacetOverflow's menu/keyboard/Escape behavior instead of growing a popup-only state machine. */
+.rf-compact { position: sticky; top: -16px; z-index: 6; width: min(260px, 100%); height: 28px; box-sizing: border-box; margin: -8px 0 8px auto; display: flex; align-items: center; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; }
+.rf-compact:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 13%, transparent); }
+.rf-search-icon { width: 27px; flex: none; display: grid; place-items: center; }
+.rf-compact input { min-width: 0; flex: 1; height: 26px; padding: 0; color: var(--ink2); background: transparent; border: 0; outline: 0; font-family: var(--mono); font-size: var(--type-meta); }
+.rf-compact input::placeholder { color: var(--muted); }
+.rf-clear, .rf-compact .rl-overflow-btn { width: 27px; height: 26px; flex: none; display: grid; place-items: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.rf-clear:hover, .rf-compact .rl-overflow-btn:hover, .rf-compact .rl-overflow.active .rl-overflow-btn { color: var(--ink); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.rf-clear:focus-visible, .rf-compact .rl-overflow-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+@media (max-width: 760px) {
+  .rf-compact .rl-menu { max-height: min(270px, 32vh); }
+}
 .pane-filter-none { color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); padding: 6px 2px; }
 
 /* ---- shared tooltip ([[tooltip]]): the ONE hover/focus bubble every `data-tip` renders through.

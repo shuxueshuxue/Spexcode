@@ -593,7 +593,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
-      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
+      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} onClose={() => setOverlay(false)} />}
       {/* the console mounts immediately (warm terminals) — its chunk just arrives a beat after the shell;
           nothing renders in its place while it loads (it's hidden unless routed to anyway). */}
       <Suspense fallback={null}>

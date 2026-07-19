@@ -39,8 +39,10 @@ the accessible name impossible to forget.
 - **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping composes this
   registry's Primer issue pair with Lucide circle-check/circle-x/circle-minus/circle-dashed verdict marks.
   The same mapping feeds eval list, detail status, and every A/B selector, plus issue list/detail. ListView
-  query/facet chrome also takes search, chevron-down, ellipsis, comments, and check marks from here; no
-  Unicode check/cross or component-local triangle appears.
+  state marks share a normalized 16-grid outer ring and optical stroke with the Primer pair, then
+  [[review-chrome]] places them in one fixed box — domain/state changes never shift a row. ListView
+  query/facet chrome also takes search, chevron-down, filter, ellipsis, comments, and check marks from here;
+  no Unicode check/cross or component-local triangle appears.
 - **`<IconButton icon label onClick/>` is the icon-only button.** `label` is required and becomes BOTH
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).

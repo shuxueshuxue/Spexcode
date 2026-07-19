@@ -42,9 +42,13 @@ An **issues** tab lists the unified issue work bound to this node — local and 
 with both counts on the tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]);
 the data already rides the board fold (`node.issues`), so the tab is a no-fetch group, silent when empty.
 Each entry is the shared compact `IssueCard`, clamped inside the popup and routed to the internal Issues
-page selection (`#/issues/<issue-id>`), not directly to the forge. A **long pane earns a
-small sticky text filter** (substring, over id + concern) — short lists skip it, the affordance would be
-chrome; the eval timeline mounts the same control ([[eval-tab]]). An **edit** tab makes a
+page selection (`#/issues/<issue-id>`), not directly to the forge. A long pane earns an **extremely compact
+embedded face of the canonical Issues filter**: the same query parsing, conjunctive facet semantics, and
+real issue fields as [[issues-view]], projected through shared configuration/data adapters rather than a
+popup-only filter implementation ([[review-filters]]). Short lists skip the affordance entirely. Its state belongs to the pane,
+survives tab switches while the popup stays open, and never mints a competing page address; following a
+result still lands on the canonical Issues detail route. The eval timeline mounts the corresponding
+domain configuration through that same mechanism ([[eval-tab]]). An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
@@ -62,9 +66,9 @@ the one merged version log: the latest version sits expanded with its proof, old
 reveal one at a time on the **down gesture** once you've finished the open one — scrolling past its end, *or*
 a `j`/`↓` keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of
 a long one). Tying reveal to the gesture, not to scroll movement alone, is what keeps a sub-page history from
-dead-ending with older versions forever hidden (a header click also toggles by hand). An **expand-all**
-control complements that reveal, never replaces it: collapsed rows aren't mounted, so find-in-page and
-jump-to-an-old-version can't reach them without the one door that opens everything. The version log itself
+dead-ending with older versions forever hidden (a header click also toggles by hand). Disclosure stays
+strictly per-entry: there is no expand-all control or bulk-expand replacement, so the down gesture and
+row-header toggle remain the complete interaction. The version log itself
 fetches **when the history tab first shows** (lazy, like eval/edit — most popup opens never visit it) and
 persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the

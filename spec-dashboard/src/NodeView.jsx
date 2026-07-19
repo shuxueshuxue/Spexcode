@@ -7,7 +7,9 @@ import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
-import { CompactReviewFilter, nextQuery } from './ReviewShell.jsx'
+import { addressHash, evalAddress } from './address.js'
+import { Icon } from './icons.jsx'
+import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -178,7 +180,7 @@ export function SpecPane({ node }) {
           <i className="stat-dot" />{t(`status.${node.status}`)}
         </span>
         <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
-        <ScenarioCount scenarios={node.scenarios} evals={node.evals} />
+        <ScenarioCount scenarios={node.scenarios} evals={node.evals} href={addressHash(evalAddress(node.id))} />
         {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
@@ -268,7 +270,7 @@ function DiffEvidence({ diff }) {
   )
 }
 
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing, resetKey }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, renderAction, leading, trailing, resetKey }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   // a caller filtering its items passes the filter as resetKey: the open set is INDEX-keyed, so surviving
@@ -322,6 +324,9 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
             <button className={classes.head} onClick={() => toggle(i)} aria-expanded={isOpen}>
               {renderHeader(it, i, isOpen)}
             </button>
+            {/* a row's outbound affordance (e.g. the eval detail anchor) renders as a SIBLING of the
+                toggle — interactive controls never nest inside one another. */}
+            {renderAction?.(it, i)}
             {isOpen && <figure className={classes.evidence}>{renderEvidence(it, i)}</figure>}
           </div>
         )
@@ -380,6 +385,7 @@ export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => 
   return (
     <div className="pane-issues">
       {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+        summary={{ shown: model.shown.length, total: issues.length }}
         placeholder={t('nodeView.filterIssues')} searchLabel={t('reviewList.searchIssues')}
         filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
       {!shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
@@ -536,6 +542,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'session'])
   const filterEl = filterItems.length > 4
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+      summary={{ shown: model.shown.length, total: filterItems.length }}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
       filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
     : null
@@ -565,6 +572,14 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
       trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
+      // every reading row carries a REAL anchor out to the scenario's canonical full-page detail
+      // (`#/evals/<node>/<scenario>`, a history PUSH) — a sibling of the expand toggle, never nested in it.
+      renderAction={(r) => (
+        <a className="eval-open" href={addressHash(evalAddress(node.id, r.scenario))}
+          data-tip={t('nodeView.eval.openDetail')} aria-label={t('nodeView.eval.openDetail')}>
+          <Icon name="chevron-right" size={14} />
+        </a>
+      )}
       renderHeader={(r, i, open) => (
         <>
           <span className="eval-top">
@@ -588,6 +603,16 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
+// one caption state-count chip: the shared [[review-chrome]] ReviewState visual + the tally, one tooltip
+// text on chip and icon alike — the issues and eval captions speak the same primitive.
+function TabCount({ kind, state, cls, n, label }) {
+  return (
+    <span className={`ovc ${cls}`} data-tip={label}>
+      <ReviewState kind={kind} state={state} title={label} size={11} />{n}
+    </span>
+  )
+}
+
 export default function NodeView({ node, pane, setPane, onClose, sessions = [] }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
@@ -598,6 +623,11 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => i.status === 'open').length
   const issueClosed = issuesAll.length - issueOpen
+  // the eval caption's verdict tally rides the SAME scenarioStates join every score surface reads
+  // ([[eval-score-badge]]) — fresh passes and fresh fails, zero values omitted like the issues caption.
+  const evalStates = scenarioStates(node.scenarios, node.evals)
+  const evalPass = evalStates.filter((s) => s.state === 'pass').length
+  const evalFail = evalStates.filter((s) => s.state === 'fail').length
   const editCount = (node.overlays || []).length
   const panes = panesFor(node)
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node
@@ -612,13 +642,19 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
         <div className="ov-head">
           <span className="ov-title">{node.title}</span>
           <div className="ov-tabs">
-            {panes.map((p, i) => (
+            {panes.map((p) => (
               <button key={p.key} className={p.key === active ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
-                <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
+                {t(PANE_LABEL[p.key])}
                 {p.key === 'issues' && (issueOpen > 0 || issueClosed > 0) && (
                   <span className="ov-tab-counts">
-                    {issueOpen > 0 && <span className="ovc st-open" data-tip={t('nodeView.openIssues', { n: issueOpen })}>{issueOpen}</span>}
-                    {issueClosed > 0 && <span className="ovc st-closed" data-tip={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
+                    {issueOpen > 0 && <TabCount kind="issue" state="open" cls="st-open" n={issueOpen} label={t('nodeView.openIssues', { n: issueOpen })} />}
+                    {issueClosed > 0 && <TabCount kind="issue" state="closed" cls="st-closed" n={issueClosed} label={t('nodeView.closedIssues', { n: issueClosed })} />}
+                  </span>
+                )}
+                {p.key === 'eval' && (evalPass > 0 || evalFail > 0) && (
+                  <span className="ov-tab-counts">
+                    {evalPass > 0 && <TabCount kind="eval" state="pass" cls="st-pass" n={evalPass} label={t('nodeView.eval.passCount', { n: evalPass })} />}
+                    {evalFail > 0 && <TabCount kind="eval" state="fail" cls="st-fail" n={evalFail} label={t('nodeView.eval.failCount', { n: evalFail })} />}
                   </span>
                 )}
                 {p.key === 'edit' && editCount > 0 && (

@@ -11,7 +11,7 @@ import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote,
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
-import { resolveLayout, mainBranch, mainCheckout } from './layout.js'
+import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
@@ -27,6 +27,7 @@ import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spe
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
+import { resolveProjectIdentity } from './project-identity.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -47,7 +48,16 @@ app.get('/health', (c) => c.text('ok'))
 // after the first memoized resolution; a self-run child (no supervisor) answers instanceId:null, which no
 // record claims, so it is simply not hosted.
 const instanceStartedAt = new Date().toISOString()
-app.get('/api/instance', (c) => c.json({ instanceId: process.env.SPEXCODE_INSTANCE_ID ?? null, root: mainCheckout(), pid: process.pid, startedAt: instanceStartedAt }))
+app.get('/api/instance', (c) => {
+  const root = repoRoot()
+  return c.json({
+    instanceId: process.env.SPEXCODE_INSTANCE_ID ?? null,
+    root,
+    identity: resolveProjectIdentity(root, root),
+    pid: process.pid,
+    startedAt: instanceStartedAt,
+  })
+})
 // the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
 // dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request

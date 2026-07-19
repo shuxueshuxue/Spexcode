@@ -8,6 +8,8 @@ code:
 related:
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/SpecNode.jsx
+  - spec-dashboard/src/address.js
+  - spec-dashboard/src/evalNav.test.mjs
 ---
 # eval-score-badge
 
@@ -49,6 +51,18 @@ so a tag looks identical everywhere and reads off the same `.tag-chip` vocabular
 need no extra wiring. This node owns `TagChips` + its `.tag-chip` style slice; it does NOT own the tag
 *vocabulary* or its validation — that is [[eval-core]]'s schema. Count says *how satisfied*, tags say *what
 kind* — two orthogonal glances on one scenario.
+
+**The glance is an entry point — a real anchor, never a dead pill.** Wherever the score vocabulary surfaces
+as an *affordance*, it is a REAL `<a href>` into the routed Evals pages ([[evals-view]]), so middle-click,
+copy-link, and keyboard Enter come free and browser history — never an in-page fake Back — is the return
+path. A **concrete** reading (an eval-tab reading row) links to the canonical full-page detail
+`#/evals/<node>/<scenario>` (path only — the detail hash carries no list filters). An **aggregate** count
+with no single scenario behind it — the node-info stat bar's `ScenarioCount` — links to the Evals LIST
+filtered to the node, and every such href is minted by [[address-routing]]'s ONE scenario-less
+`evalAddress(nodeId)` form, so the list-filter grammar has exactly one swap point when it evolves. The graph
+TILE's count is the one deliberate exception: it stays a passive glyph, because a tile's click belongs to
+the board ([[node-graph]]) — `ScenarioCount` renders the anchor only when handed an `href`.
+`evalNav.test.mjs` pins this contract at the source level.
 
 **The aggregate is a worst-first fold** over the per-scenario states: any **fresh fail** makes it red ✗ (the
 loudest current signal); else any **stale** scenario makes it grey (fail-flavoured if any stale scenario

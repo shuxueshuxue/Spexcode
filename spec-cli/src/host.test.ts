@@ -17,6 +17,7 @@ import {
 } from './host.js'
 import { encodeProject } from './layout.js'
 import { tsxBin } from './tsx-bin.js'
+import { setAdminPassword } from './gateway-auth.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -26,7 +27,7 @@ const freshHome = (tag: string): string => {
   return home
 }
 const rec = (over: Partial<EndpointRecord> & { root: string; url: string }): EndpointRecord =>
-  ({ pid: 12345, instanceId: 'inst-x', startedAt: new Date().toISOString(), ...over })
+  ({ version: 2, pid: 12345, instanceId: 'inst-x', identity: { title: over.root.split('/').pop() || over.root, icon: 'spexcode' }, startedAt: new Date().toISOString(), ...over })
 
 function listen(handler: http.RequestListener): Promise<{ server: http.Server; port: number; url: string }> {
   return new Promise((res) => {
@@ -38,11 +39,15 @@ function listen(handler: http.RequestListener): Promise<{ server: http.Server; p
   })
 }
 // a fake project backend: answers /api/instance with the given identity and echoes any other /api path.
-function fakeBackend(identity: { instanceId: string; root: string }) {
+function fakeBackend(identity: { instanceId: string; root: string; identity?: { title: string; icon: string } }) {
   const seen: string[] = []
   const made = listen((req, res) => {
     seen.push(req.url || '')
-    if (req.url === '/api/instance') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(identity)); return }
+    if (req.url === '/api/instance') {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ ...identity, identity: identity.identity ?? { title: identity.root.split('/').pop(), icon: 'spexcode' } }))
+      return
+    }
     res.setHeader('content-type', 'application/json')
     res.end(JSON.stringify({ echoedPath: req.url }))
   })
@@ -69,10 +74,12 @@ test('publishEndpoint writes atomically; dropOwnEndpoint removes only its own re
 test('reconcile validates instance identity and unions with the durable catalog', async () => {
   const home = freshHome('reconcile')
   const rootOk = '/proj/ok', rootBad = '/proj/bad', rootDead = '/proj/dead', rootCatalog = '/proj/catalog-only'
-  const ok = await fakeBackend({ instanceId: 'inst-ok', root: rootOk })
+  const okIdentity = { instanceId: 'inst-ok', root: rootOk, identity: { title: 'Alpha', icon: 'compass' } }
+  const ok = await fakeBackend(okIdentity)
   const bad = await fakeBackend({ instanceId: 'DIFFERENT', root: rootBad })   // identity mismatch
+  let restarted: Awaited<ReturnType<typeof fakeBackend>> | null = null
   try {
-    publishEndpoint(rec({ root: rootOk, url: ok.url, instanceId: 'inst-ok' }))
+    publishEndpoint(rec({ root: rootOk, url: ok.url, instanceId: 'inst-ok', identity: okIdentity.identity }))
     publishEndpoint(rec({ root: rootBad, url: bad.url, instanceId: 'inst-bad' }))
     publishEndpoint(rec({ root: rootDead, url: 'http://127.0.0.1:1', instanceId: 'inst-dead' }))   // nothing listening
     // a record copied into a slot its root does not own is not trusted (no entry may come from it)
@@ -90,6 +97,7 @@ test('reconcile validates instance identity and unions with the durable catalog'
     assert.equal(by[rootOk].online, true)
     assert.equal(by[rootOk].url, ok.url)
     assert.equal(by[rootOk].projectId, encodeProject(rootOk))
+    assert.deepEqual(by[rootOk].identity, { title: 'Alpha', icon: 'compass' })
     assert.equal(by[rootBad].online, false, 'identity mismatch must read offline')
     assert.equal(by[rootBad].url, null)
     assert.equal(by[rootDead].online, false, 'dead url must read offline')
@@ -98,7 +106,17 @@ test('reconcile validates instance identity and unions with the durable catalog'
     assert.equal(by['/proj/legacy'], undefined, 'a legacy record must yield nothing')
     // auto-adoption: the validated live root became durable catalog knowledge
     assert.ok(readCatalog().some((e) => e.root === rootOk))
-  } finally { ok.server.close(); bad.server.close() }
+
+    okIdentity.identity = { title: 'Alpha live', icon: 'spark' }
+    assert.deepEqual((await reconcileProjects()).find((p) => p.root === rootOk)?.identity,
+      { title: 'Alpha live', icon: 'spark' }, 'live /api/instance projection updates without a restart')
+
+    restarted = await fakeBackend({ instanceId: 'inst-ok-2', root: rootOk, identity: { title: 'Alpha restarted', icon: 'package' } })
+    publishEndpoint(rec({ root: rootOk, url: restarted.url, instanceId: 'inst-ok-2', identity: { title: 'Alpha restarted', icon: 'package' } }))
+    const afterRestart = (await reconcileProjects()).find((p) => p.root === rootOk)
+    assert.equal(afterRestart?.online, true)
+    assert.deepEqual(afterRestart?.identity, { title: 'Alpha restarted', icon: 'package' })
+  } finally { ok.server.close(); bad.server.close(); restarted?.server.close() }
 })
 
 test('addKnownProject normalizes to the main checkout and requires a git repo', () => {
@@ -115,17 +133,40 @@ test('addKnownProject normalizes to the main checkout and requires a git repo', 
   assert.throws(() => addKnownProject(notRepo), /not a git repository/)
 })
 
+test('structured gateway and offline-project icon writes are admin-only', async () => {
+  const home = freshHome('identity-auth')
+  const repo = mkdtempSync(join(tmpdir(), 'spex-host-auth-repo-'))
+  writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [{ root: repo, addedAt: 'x' }] }))
+  setAdminPassword('secret')
+  const dist = mkdtempSync(join(tmpdir(), 'spex-host-auth-dist-'))
+  writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
+  const port = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
+  const gw = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
+  await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  try {
+    for (const path of ['/projects/icon', `/projects/${encodeProject(repo)}/icon`]) {
+      const denied = await fetch(`http://127.0.0.1:${port}${path}`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ icon: 'spark', revision: 'forged' }),
+      })
+      assert.equal(denied.status, 401)
+    }
+    assert.equal(existsSync(join(home, 'config.json')), false)
+    assert.equal(existsSync(join(repo, 'spexcode.json')), false)
+  } finally { await gw.close() }
+})
+
 test('host dashboard on the hub: admin list + stream, /p proxy, registration, config, ops, shell, WS pipe', async () => {
   const home = freshHome('gateway')
   const rootLive = '/proj/live-one'
-  const backend = await fakeBackend({ instanceId: 'inst-live', root: rootLive })
+  const backend = await fakeBackend({ instanceId: 'inst-live', root: rootLive, identity: { title: 'Live One', icon: 'compass' } })
   // the fake backend also answers a WS upgrade so the raw pipe can be proven end to end
   let upgradePath = ''
   backend.server.on('upgrade', (req, socket) => {
     upgradePath = req.url || ''
     socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\nhello-from-backend')
   })
-  publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-live' }))
+  publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-live', identity: { title: 'Live One', icon: 'compass' } }))
   writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [{ root: '/proj/asleep', addedAt: 'x' }] }))
   const dist = mkdtempSync(join(tmpdir(), 'spex-host-dist-'))
   writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
@@ -145,7 +186,19 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(live.online, true)
     assert.equal(live.id, liveId, 'rows carry the hub row key too')
     assert.equal(live.gated, false)
+    assert.deepEqual(live.identity, { title: 'Live One', icon: 'compass' })
+    assert.equal(list.body.gateway.icon, 'gateway')
+    assert.equal(typeof list.body.gateway.revision, 'string')
     assert.equal(list.body.projects.find((p: any) => p.root === '/proj/asleep').online, false)
+
+    const gatewayIcon = await fetch(`${base}/projects/icon`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icon: 'database', revision: list.body.gateway.revision }),
+    })
+    assert.equal(gatewayIcon.status, 200)
+    assert.deepEqual((await gatewayIcon.json()).gateway.identity, { title: 'Projects', icon: 'database' })
+    assert.deepEqual(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')), { gateway: { icon: 'database' } })
+    assert.equal((await getJson(`${base}/projects`)).body.gateway.icon, 'database', 'gateway write refreshes the normal catalog projection')
     const streamFirst = await new Promise<string>((res, rej) => {
       const req = http.get(`${base}/projects/stream`, (r) => {
         let buf = ''
@@ -202,7 +255,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     const initialConfig = await getJson(`${base}/projects/${repoId}/config`)
     assert.equal(initialConfig.status, 200)
     assert.equal(initialConfig.body.content, '{}\n')
-    const configText = '{\n  "preset": "default"\n}'
+    const configText = '{\n  "preset": "default",\n  "dashboard": { "title": "Offline Repo", "icon": "lucide:radar" }\n}'
     const savedConfigRes = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ content: configText, revision: initialConfig.body.revision }),
@@ -210,12 +263,35 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(savedConfigRes.status, 200)
     const savedConfig = await savedConfigRes.json()
     assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), `${configText}\n`)
+    const legacyRow = (await getJson(`${base}/projects`)).body.projects.find((p: any) => p.projectId === repoId)
+    assert.deepEqual(legacyRow.identity, { title: 'Offline Repo', icon: 'lucide:radar' }, 'existing Iconify values remain canonical while offline')
+
+    const iconSavedRes = await fetch(`${base}/projects/${repoId}/icon`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icon: 'spark', revision: savedConfig.revision }),
+    })
+    assert.equal(iconSavedRes.status, 200)
+    const iconSaved = await iconSavedRes.json()
+    assert.deepEqual(iconSaved.identity, { title: 'Offline Repo', icon: 'spark' })
+    assert.equal(iconSaved.content, readFileSync(join(repo, 'spexcode.json'), 'utf8'), 'response is the canonical source bytes')
+    assert.deepEqual(JSON.parse(iconSaved.content), { preset: 'default', dashboard: { title: 'Offline Repo', icon: 'spark' } })
+    const rejectedIcon = await fetch(`${base}/projects/${repoId}/icon`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icon: 'lucide:radar', revision: iconSaved.revision }),
+    })
+    assert.equal(rejectedIcon.status, 400, 'picker writes accept presets only; direct legacy config remains readable')
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconSaved.content)
+    const staleIcon = await fetch(`${base}/projects/${repoId}/icon`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icon: 'package', revision: savedConfig.revision }),
+    })
+    assert.equal(staleIcon.status, 409)
     const invalidConfig = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: '[]', revision: savedConfig.revision }),
+      body: JSON.stringify({ content: '[]', revision: iconSaved.revision }),
     })
     assert.equal(invalidConfig.status, 400)
-    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), `${configText}\n`)
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), iconSaved.content)
     writeFileSync(join(repo, 'spexcode.json'), '{"newer":true}\n')
     const staleConfig = await fetch(`${base}/projects/${repoId}/config`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
@@ -292,20 +368,28 @@ test('startHostDashboard passes tls through to the hub: the ONE host gateway ser
   }
 })
 
-test('a real `spex serve` publishes a validated record and removes it on clean stop', async () => {
+test('a linked-worktree `spex serve` registers its actual served root without replacing main', async () => {
   const home = freshHome('serve-e2e')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-serve-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
+  execFileSync('git', ['config', 'user.email', 't@t.co'], { cwd: repo })
+  execFileSync('git', ['config', 'user.name', 't'], { cwd: repo })
+  writeFileSync(join(repo, 'README.md'), 'main\n')
+  execFileSync('git', ['add', 'README.md'], { cwd: repo })
+  execFileSync('git', ['commit', '-qm', 'seed'], { cwd: repo })
+  const linked = join(mkdtempSync(join(tmpdir(), 'spex-host-linked-parent-')), 'feature-tree')
+  execFileSync('git', ['worktree', 'add', '-q', '-b', 'node/feature', linked], { cwd: repo })
+  publishEndpoint(rec({ root: repo, url: 'http://127.0.0.1:1', instanceId: 'main-generation', identity: { title: 'Main', icon: 'compass' } }))
   const port = await new Promise<number>((res) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => res(p)) }) })
   const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home }
   delete env.PORT; delete env.SPEXCODE_API_URL; delete env.SPEXCODE_SESSION_ID; delete env.SPEXCODE_INSTANCE_ID
-  const child = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, 'cli.ts'), 'serve', '--port', String(port)], { cwd: repo, env })
+  const child = spawn(process.execPath, [tsxBin(join(here, '..')), join(here, 'cli.ts'), 'serve', '--port', String(port)], { cwd: linked, env })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   child.stderr.on('data', (d) => { out += d })
   try {
     // wait for the record — published only AFTER the public bind succeeds
-    const file = endpointRecordPath(repo)
+    const file = endpointRecordPath(linked)
     const deadline = Date.now() + 90_000
     while (!existsSync(file)) {
       assert.ok(Date.now() < deadline, `no endpoint record within 90s; serve output:\n${out}`)
@@ -313,13 +397,15 @@ test('a real `spex serve` publishes a validated record and removes it on clean s
     }
     const record = JSON.parse(readFileSync(file, 'utf8'))
     assert.equal(record.url, `http://127.0.0.1:${port}`)
-    assert.equal(record.root, repo)
+    assert.equal(record.version, 2)
+    assert.equal(record.root, linked)
+    assert.equal(JSON.parse(readFileSync(endpointRecordPath(repo), 'utf8')).instanceId, 'main-generation', 'main slot was never touched')
     assert.equal(typeof record.instanceId, 'string')
     // the live backend answers the SAME identity the record claims → the reconciler lists it online
     const inst = await fetch(`${record.url}/api/instance`).then((r) => r.json()) as any
     assert.equal(inst.instanceId, record.instanceId)
-    assert.equal(inst.root, repo)
-    const entry = (await reconcileNow()).find((p) => p.root === repo)
+    assert.equal(inst.root, linked)
+    const entry = (await reconcileNow()).find((p) => p.root === linked)
     assert.equal(entry?.online, true)
     // clean stop removes ONLY its own record
     child.kill('SIGTERM')
@@ -330,5 +416,6 @@ test('a real `spex serve` publishes a validated record and removes it on clean s
     }
   } finally {
     try { child.kill('SIGKILL') } catch { /* already gone */ }
+    dropOwnEndpoint('main-generation', repo)
   }
 })

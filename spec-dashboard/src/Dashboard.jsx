@@ -35,6 +35,84 @@ const nodeTypes = { spec: SpecNode }
 // Layout coordinates name the node centre, so camera framing never needs to duplicate the rendered tile size.
 const NODE_ORIGIN = [0.5, 0.5]
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
+const STRUCTURE_MOTION_MS = 220
+
+const samePosition = (a, b) => a?.x === b?.x && a?.y === b?.y
+
+// React Flow must own the moving geometry: when node positions change here, its SVG edges recompute from
+// those same positions on every frame. A CSS transform transition moves only the tile pixels and leaves the
+// already-replotted edges behind. New children start just beyond their parent's outgoing side, then unfold.
+function useConnectedNodes(targetNodes) {
+  const [renderedNodes, setRenderedNodes] = useState(targetNodes)
+  const renderedRef = useRef(targetNodes)
+  const frameRef = useRef(0)
+
+  useLayoutEffect(() => {
+    cancelAnimationFrame(frameRef.current)
+    const current = renderedRef.current
+    const currentById = new Map(current.map((node) => [node.id, node]))
+    const geometryChanged = current.length !== targetNodes.length || targetNodes.some((node) => {
+      const before = currentById.get(node.id)
+      return !before || !samePosition(before.position, node.position)
+    })
+
+    if (!geometryChanged || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      renderedRef.current = targetNodes
+      setRenderedNodes(targetNodes)
+      return undefined
+    }
+
+    const targetById = new Map(targetNodes.map((node) => [node.id, node]))
+    const starts = targetNodes.map((node) => {
+      const before = currentById.get(node.id)
+      if (before) return { ...node, position: before.position }
+
+      const parentTarget = targetById.get(node.data.parent)
+      if (!parentTarget) return node
+      const parentStart = currentById.get(parentTarget.id)?.position || parentTarget.position
+      return {
+        ...node,
+        position: {
+          x: parentStart.x + (node.position.x - parentTarget.position.x) * 0.7,
+          y: parentStart.y,
+        },
+      }
+    })
+
+    // A branch closing can change membership without moving any survivor. Remove it and its edges in one
+    // render instead of running an animation whose every frame has identical geometry.
+    if (starts.every((node, index) => samePosition(node.position, targetNodes[index].position))) {
+      renderedRef.current = targetNodes
+      setRenderedNodes(targetNodes)
+      return undefined
+    }
+
+    renderedRef.current = starts
+    setRenderedNodes(starts)
+    const startedAt = performance.now()
+    const step = (now) => {
+      const progress = Math.min(1, (now - startedAt) / STRUCTURE_MOTION_MS)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const next = targetNodes.map((node, index) => {
+        const from = starts[index].position
+        return {
+          ...node,
+          position: {
+            x: from.x + (node.position.x - from.x) * eased,
+            y: from.y + (node.position.y - from.y) * eased,
+          },
+        }
+      })
+      renderedRef.current = next
+      setRenderedNodes(next)
+      if (progress < 1) frameRef.current = requestAnimationFrame(step)
+    }
+    frameRef.current = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frameRef.current)
+  }, [targetNodes])
+
+  return renderedNodes
+}
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
@@ -46,7 +124,8 @@ const CHORDS = {
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues, catalog }) {
+function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues, catalog }) {
+  const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
@@ -198,7 +277,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   const upTarget    = useMemo(() => nearestY('up'), [nearestY])
 
   // per-node className: focus-kin dimming, or overlay spotlight when a session is locked; recomputed each poll
-  const nodes = useMemo(() => {
+  const targetNodes = useMemo(() => {
     return specs2.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     let className
@@ -225,8 +304,9 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     }
     })
   }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  const nodes = useConnectedNodes(targetNodes)
 
-  const edges = useMemo(() => {
+  const targetEdges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
       const hot = s.id === focusId || s.parent === focusId
       return {
@@ -248,6 +328,13 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
     }
     return [...tree, ...moves]
   }, [focusId, specs2, byId])
+  // On the first layout pass for a newly-visible child, omit its edge until the controlled node has joined
+  // the rendered set. The next synchronous layout pass mounts both at the child's connected start point.
+  const renderedIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes])
+  const edges = useMemo(
+    () => targetEdges.filter((edge) => renderedIds.has(edge.source) && renderedIds.has(edge.target)),
+    [targetEdges, renderedIds],
+  )
 
   // flat-pan the viewport to centre a target node.
   const animateView = useCallback((target, dur) => {
@@ -529,7 +616,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues,
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
-      <SideBar page={page} onNav={navigate} project={project} catalog={catalog} />
+      <SideBar page={page} onNav={navigate} identity={identity} catalog={catalog} />
       <div className="app-main">
       <div className="page-graph" style={{ display: page === 'graph' ? undefined : 'none' }}>
       <div className="graph" ref={graphRef}>

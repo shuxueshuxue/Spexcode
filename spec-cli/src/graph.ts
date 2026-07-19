@@ -1,6 +1,5 @@
-import { basename } from 'path'
 import { loadSpecs, deriveStatus } from './specs.js'
-import { resolveLayout, readConfig } from './layout.js'
+import { resolveLayout } from './layout.js'
 import { listSessions } from './sessions.js'
 import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
@@ -8,6 +7,7 @@ import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { evalNodesAsync, type ScenarioTestReference } from '../../spec-eval/src/scenarios.js'
+import { resolveProjectIdentity } from './project-identity.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -161,10 +161,11 @@ export async function buildBoard() {
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
   const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
 
-  const dash = readConfig(root).dashboard
-  // project names the tab ([[tab-title]]); projectIcon is the tab favicon ([[tab-icon]]) — both ride the
-  // /api/graph poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
-  return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '', issuesStamp }
+  // One resolved identity projection feeds title, favicon, rail, and catalog compatibility. A worktree
+  // backend reads the actual served tree's branch config and identity; endpoint registration uses the
+  // same git toplevel, so a linked worktree occupies its own host slot instead of replacing main.
+  const identity = resolveProjectIdentity(root, root)
+  return { nodes, sessions: sess, identity, issuesStamp }
 }
 
 // @@@ spliceSessions — the SESSIONS-ONLY producer ([[graph-cache]]). A session-scoped change (a lifecycle

@@ -19,6 +19,10 @@ import { git } from './git.js'
 import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { tsxBin } from './tsx-bin.js'
+import { DEFAULT_PROJECT_ICON, requireIdentityPreset } from './identity-presets.js'
+import {
+  resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
+} from './project-identity.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -27,7 +31,10 @@ const here = dirname(fileURLToPath(import.meta.url))
 // removed (only by its own writer) on a clean stop. The shape carries the serve's IDENTITY — url, pid,
 // instanceId, root — so a reader can validate "the backend at this url is the serve that wrote this
 // record, serving this root" instead of trusting a URL that a recycled port may have re-occupied.
-export type EndpointRecord = { url: string; pid: number; instanceId: string; root: string; startedAt: string }
+export type EndpointRecord = {
+  version: 2; url: string; pid: number; instanceId: string; root: string
+  identity: ResolvedIdentity; startedAt: string
+}
 
 export const endpointRecordPath = (root: string): string =>
   join(spexcodeHome(), 'projects', encodeProject(root), 'backend.json')
@@ -55,7 +62,8 @@ export function dropOwnEndpoint(instanceId: string, root: string): void {
 export function readEndpointRecord(file: string): EndpointRecord | null {
   try {
     const r = JSON.parse(readFileSync(file, 'utf8'))
-    if (r && typeof r.url === 'string' && typeof r.instanceId === 'string' && typeof r.root === 'string') return r as EndpointRecord
+    if (r?.version === 2 && typeof r.url === 'string' && typeof r.instanceId === 'string' && typeof r.root === 'string' &&
+      typeof r.identity?.title === 'string' && typeof r.identity?.icon === 'string') return r as EndpointRecord
     return null
   } catch { return null }
 }
@@ -117,17 +125,18 @@ function catalogAdd(root: string): void {
 // its url answers /api/instance with the SAME instanceId and root — anything else (dead process, recycled
 // port, copied record, another project's serve) is just an offline project, never a proxy target.
 export type ProjectEntry = {
-  projectId: string; root: string; name: string
+  projectId: string; root: string; identity: ResolvedIdentity; configRevision: string
   online: boolean; url: string | null; pid?: number; startedAt?: string
 }
 
-async function fetchInstance(url: string): Promise<{ instanceId?: string; root?: string } | null> {
+type LiveInstance = { instanceId?: string; root?: string; identity?: ResolvedIdentity }
+async function fetchInstance(url: string): Promise<LiveInstance | null> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 900)
   try {
     const r = await fetch(`${url}/api/instance`, { signal: ctrl.signal })
     if (!r.ok) return null
-    return await r.json() as { instanceId?: string; root?: string }
+    return await r.json() as LiveInstance
   } catch { return null }
   finally { clearTimeout(t) }
 }
@@ -138,15 +147,18 @@ export async function reconcileProjects(): Promise<ProjectEntry[]> {
   try { dirs = readdirSync(projectsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
 
-  const live = new Map<string, EndpointRecord>()     // root → validated record (proxyable)
+  const live = new Map<string, { rec: EndpointRecord; identity: ResolvedIdentity }>()
   const claimed = new Set<string>()                  // roots with a slot-matched record, validated or not
   await Promise.all(dirs.map(async (d) => {
     const rec = readEndpointRecord(join(projectsDir, d, 'backend.json'))
     if (!rec) return
-    if (encodeProject(rec.root) !== d) return   // a record in a slot its root doesn't own is not trusted
+    if (encodeProject(rec.root) !== d) return
     claimed.add(rec.root)                       // a dead/mismatched record still NAMES a project — listed offline
     const inst = await fetchInstance(rec.url)
-    if (inst && inst.instanceId === rec.instanceId && inst.root === rec.root) live.set(rec.root, rec)
+    if (inst && inst.instanceId === rec.instanceId && inst.root === rec.root &&
+      typeof inst.identity?.title === 'string' && typeof inst.identity?.icon === 'string') {
+      live.set(rec.root, { rec, identity: inst.identity })
+    }
   }))
 
   // auto-adopt: a VALIDATED live root becomes durable catalog knowledge, so it stays listed after its
@@ -161,16 +173,23 @@ export async function reconcileProjects(): Promise<ProjectEntry[]> {
   const push = (root: string) => {
     const projectId = encodeProject(root)
     if (byId.has(projectId)) return   // encodeProject is lossy; first root wins a (pathological) collision
-    const rec = live.get(root) ?? null
+    const active = live.get(root) ?? null
+    const source = readProjectConfig(root)
+    let identity: ResolvedIdentity
+    try { identity = active?.identity ?? resolveProjectIdentity(root, root) }
+    catch (e) {
+      console.error(`[host] cannot resolve identity for ${root}: ${(e as Error).message}`)
+      identity = { title: basename(root), icon: DEFAULT_PROJECT_ICON }
+    }
     byId.set(projectId, {
-      projectId, root, name: basename(root),
-      online: !!rec, url: rec?.url ?? null,
-      ...(rec ? { pid: rec.pid, startedAt: rec.startedAt } : {}),
+      projectId, root, identity, configRevision: source.revision,
+      online: !!active, url: active?.rec.url ?? null,
+      ...(active ? { pid: active.rec.pid, startedAt: active.rec.startedAt } : {}),
     })
   }
   for (const e of readCatalog()) push(e.root)
   for (const root of claimed) push(root)
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name) || a.root.localeCompare(b.root))
+  return [...byId.values()].sort((a, b) => a.identity.title.localeCompare(b.identity.title) || a.root.localeCompare(b.root))
 }
 
 // single-flight + last-snapshot: every reader (GET, the stream loop, the per-request proxy resolution)
@@ -256,6 +275,30 @@ function writeProjectConfig(root: string, content: string, revision: string): Pr
     try { rmSync(tmp) } catch { /* rename consumed it / write never created it */ }
   }
   return { content: normalized, revision: configRevision(normalized) }
+}
+
+function writeProjectIcon(root: string, icon: unknown, revision: string): ProjectConfigSource & { identity: ResolvedIdentity } {
+  const canonical = requireIdentityPreset(icon)
+  const current = readProjectConfig(root)
+  let config: Record<string, any>
+  try { config = JSON.parse(current.content) }
+  catch (e) {
+    const error = new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
+    error.status = 400
+    throw error
+  }
+  const dashboard = config.dashboard === undefined
+    ? {}
+    : config.dashboard && typeof config.dashboard === 'object' && !Array.isArray(config.dashboard)
+      ? config.dashboard
+      : null
+  if (!dashboard) {
+    const error = new Error('spexcode.json dashboard must be an object before its icon can be changed') as Error & { status?: number }
+    error.status = 400
+    throw error
+  }
+  const saved = writeProjectConfig(root, `${JSON.stringify({ ...config, dashboard: { ...dashboard, icon: canonical } }, null, 2)}\n`, revision)
+  return { ...saved, identity: resolveProjectIdentity(root, root) }
 }
 
 function freeTcpPort(): Promise<number> {
@@ -354,8 +397,40 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         try {
           const normalized = addKnownProject(root)
           const entry = (await tick()).find((p) => p.root === normalized)
-          json(res, 200, entry ?? { projectId: encodeProject(normalized), root: normalized, name: basename(normalized), online: false, url: null })
+          json(res, 200, entry ?? {
+            projectId: encodeProject(normalized), root: normalized,
+            identity: resolveProjectIdentity(normalized, normalized), configRevision: readProjectConfig(normalized).revision,
+            online: false, url: null,
+          })
         } catch (e) { json(res, 400, { error: (e as Error).message }) }
+        return true
+      }
+      if (path === '/projects/icon' && req.method === 'PUT') {
+        let body: any
+        try { body = JSON.parse(await readBody(req) || '{}') }
+        catch { json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' }); return true }
+        if (typeof body?.icon !== 'string' || typeof body?.revision !== 'string') {
+          json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' })
+          return true
+        }
+        try { json(res, 200, { ok: true, gateway: writeGatewayIcon(body.icon, body.revision) }) }
+        catch (e) { json(res, (e as any).status ?? 400, { error: (e as Error).message }) }
+        return true
+      }
+      const icon = path.match(/^\/projects\/([^/]+)\/icon$/)
+      if (icon && req.method === 'PUT') {
+        const projectId = decodeURIComponent(icon[1])
+        const entry = (await reconcileNow()).find((p) => p.projectId === projectId)
+        if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
+        let body: any
+        try { body = JSON.parse(await readBody(req) || '{}') }
+        catch { json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' }); return true }
+        if (typeof body?.icon !== 'string' || typeof body?.revision !== 'string') {
+          json(res, 400, { error: 'body must be {"icon":"<preset>","revision":"..."}' })
+          return true
+        }
+        try { json(res, 200, { ok: true, ...writeProjectIcon(entry.root, body.icon, body.revision) }) }
+        catch (e) { json(res, (e as any).status ?? 400, { error: (e as Error).message }) }
         return true
       }
       const config = path.match(/^\/projects\/([^/]+)\/config$/)

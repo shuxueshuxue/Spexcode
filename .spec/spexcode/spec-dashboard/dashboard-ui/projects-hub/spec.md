@@ -14,6 +14,7 @@ related:
   - spec-dashboard/src/project.js
   - spec-dashboard/src/projects.js
   - spec-dashboard/src/CredentialGate.jsx
+  - spec-dashboard/src/IdentityIcon.jsx
   - spec-dashboard/src/project.test.mjs
   - spec-dashboard/src/projects.test.mjs
   - spec-dashboard/vite.config.js
@@ -40,7 +41,8 @@ backend so scoped pages are drivable without a hub.
 **One global admin page over the landed contract.** `ProjectsPage` renders the host's reconciled
 KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex serve` in it, or through
 the page's add drawer (`POST /projects` with the repo root; a non-repo's refusal is shown verbatim).
-Each row shows liveness — the host's instance-validated `online` refined by a probed `/p/:id/health` dot
+Each row shows its [[project-identity]] icon/title and liveness — the host's instance-validated `online`
+refined by a probed `/p/:id/health` dot
 when online, while an offline row calmly reads *stopped*, never probed into a false red — the gating
 state, a password set/clear drawer (`PUT`/`DELETE /projects/:id/password`), and one primary action per
 state: Open when online (a plain link to `/p/<id>/#/graph` — switching projects is ordinary same-tab
@@ -50,7 +52,10 @@ edits the project's ONE portable settings source directly: it loads the raw root
 (`{}` when absent) into a monospace text editor and saves only a valid top-level JSON object through
 `GET|PUT /projects/:id/config`. Saving is atomic and revision-guarded, so a concurrent disk edit is a
 visible conflict instead of silent loss; `spexcode.local.json` is deliberately outside this browser
-surface because it holds host-specific paths and may hold secrets. The separate setup action runs the
+surface because it holds host-specific paths and may hold secrets. Beside that general editor, visual
+preset pickers issue admin-only structured writes: a project pick changes only its existing
+`dashboard.icon`, while the global pick changes only the one host `gateway.icon`; both use the shared
+[[icon-presets]] registry and surface revision conflicts. The separate setup action runs the
 real repo verbs (`POST /projects/:id/init|doctor`): init demands the EXPLICIT harness choice
 (nothing picked, nothing run), while preset policy comes from the edited `spexcode.json` rather than a
 second one-off input; every run renders its exit code and full transcript in place, a failure stays on

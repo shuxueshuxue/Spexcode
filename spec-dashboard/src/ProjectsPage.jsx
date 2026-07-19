@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import {
-  loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
+  CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
   setAdminPassword, clearAdminPassword, addProject, loadProjectConfig, saveProjectConfig,
-  initProject, doctorProject, startProjectBackend,
+  initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
+import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
@@ -30,7 +31,6 @@ import CredentialGate from './CredentialGate.jsx'
 // visitor never reaches this page at all (the scoped shell never mounts it), so neither the
 // catalog nor any management control is ever revealed to a direct-project guest.
 
-const POLL_MS = 5000
 // the CLI's native harness vocabulary, mirrored for the choice chips; the server validates the real
 // legality (an unknown id fails loudly in the returned transcript), so this list is presentation only.
 const HARNESS_IDS = ['claude', 'codex', 'opencode', 'pi']
@@ -92,13 +92,16 @@ function AddProjectForm({ onAdded, t }) {
 
 // The settings gear means settings: edit the ONE portable source file verbatim. Missing files arrive as
 // `{}`; the revision returned by the host makes a concurrent disk edit a visible conflict on save.
-function ConfigDrawer({ p, t }) {
+function ConfigDrawer({ p, onRefresh, t }) {
   const [loaded, setLoaded] = useState(null) // { content, revision } | null
   const [content, setContent] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
   const [reload, setReload] = useState(0)
+  const [pickedIcon, setPickedIcon] = useState(p.identity.icon)
+  const [iconBusy, setIconBusy] = useState(false)
+  const [iconError, setIconError] = useState(null)
 
   useEffect(() => {
     let live = true
@@ -106,10 +109,10 @@ function ConfigDrawer({ p, t }) {
     loadProjectConfig(p.id).then((r) => {
       if (!live) return
       if (!r.ok) { setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
-      setLoaded({ content: r.content, revision: r.revision }); setContent(r.content)
+      setLoaded({ content: r.content, revision: r.revision }); setContent(r.content); setPickedIcon(p.identity.icon)
     })
     return () => { live = false }
-  }, [p.id, reload, t])
+  }, [p.id, p.identity.icon, reload, t])
 
   let invalid = false
   try {
@@ -125,6 +128,19 @@ function ConfigDrawer({ p, t }) {
     setBusy(false)
     if (!r.ok) { setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
     setLoaded({ content: r.content, revision: r.revision }); setContent(r.content); setSaved(true)
+    try { setPickedIcon(JSON.parse(r.content)?.dashboard?.icon || p.identity.icon) } catch { /* already validated */ }
+    onRefresh()
+  }
+
+  const pickIcon = async (icon) => {
+    if (!loaded || iconBusy) return
+    const before = pickedIcon
+    setPickedIcon(icon); setIconBusy(true); setIconError(null); setSaved(false)
+    const r = await saveProjectIcon(p.id, icon, loaded.revision)
+    setIconBusy(false)
+    if (!r.ok) { setPickedIcon(before); setIconError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    setLoaded({ content: r.content, revision: r.revision }); setContent(r.content); setPickedIcon(r.identity.icon); setSaved(true)
+    onRefresh()
   }
 
   return (
@@ -142,6 +158,14 @@ function ConfigDrawer({ p, t }) {
           </>}
         </div>
       ) : <>
+        <IdentityPicker
+          value={pickedIcon}
+          onChange={pickIcon}
+          label={t('projects.projectIcon')}
+          name={`project-icon-${p.id}`}
+          disabled={busy || iconBusy}
+        />
+        {iconError && <span className="proj-err">{iconError}</span>}
         <textarea
           className={invalid ? 'proj-config-editor invalid' : 'proj-config-editor'}
           value={content}
@@ -248,7 +272,8 @@ function ProjectRow({ p, health, onRefresh, t }) {
     <li className={current ? 'proj-row current' : 'proj-row'}>
       <div className="proj-row-main">
         <span className={`proj-health h-${dot}`} data-tip={t(`projects.health.${dot}`)} />
-        <span className="proj-name">{p.name}</span>
+        <IdentityIcon icon={p.identity.icon} size={26} />
+        <span className="proj-name">{p.identity.title}</span>
         {p.gated && <Icon name="lock" size={12} className="proj-locked" />}
         {current && <span className="proj-tag">{t('projects.current')}</span>}
         <span className="proj-path" title={p.id}>{p.root || p.id}</span>
@@ -296,9 +321,32 @@ function ProjectRow({ p, health, onRefresh, t }) {
           onClear={() => run(() => clearProjectPassword(p.id))}
         />
       )}
-      {panel === 'config' && <ConfigDrawer p={p} t={t} />}
+      {panel === 'config' && <ConfigDrawer p={p} onRefresh={onRefresh} t={t} />}
       {panel === 'setup' && <SetupDrawer p={p} busyOp={busyOp} run={runOp} result={result} t={t} />}
     </li>
+  )
+}
+
+function GatewayIdentityEditor({ gateway, onRefresh, t }) {
+  const [icon, setIcon] = useState(gateway.identity.icon)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  useEffect(() => { setIcon(gateway.identity.icon) }, [gateway.identity.icon])
+  const pick = async (next) => {
+    if (busy || !gateway.revision) return
+    const before = icon
+    setIcon(next); setBusy(true); setError(null)
+    const r = await saveGatewayIcon(next, gateway.revision)
+    setBusy(false)
+    if (!r.ok) { setIcon(before); setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    setIcon(r.gateway.identity.icon)
+    onRefresh()
+  }
+  return (
+    <div className="proj-gateway-identity">
+      <IdentityPicker value={icon} onChange={pick} label={t('projects.gatewayIcon')} name="gateway-icon" disabled={busy || !gateway.revision} />
+      {error && <span className="proj-err">{error}</span>}
+    </div>
   )
 }
 
@@ -316,7 +364,7 @@ export default function ProjectsPage() {
     const r = await loadProjects()
     if (mine !== seq.current) return // freshest-issued wins, same guard as the board
     if (r.state === 'ok') {
-      setState({ kind: 'ok', adminGated: r.adminGated, projects: r.projects })
+      setState({ kind: 'ok', adminGated: r.adminGated, gateway: r.gateway, projects: r.projects })
       // health rides its own probes through the authorized /p/:id lane — concurrent, freshest wins per
       // id; a host-validated offline row skips the probe (its dot is 'stopped', not a failed ping).
       r.projects.filter((p) => p.online !== false).forEach((p) => {
@@ -330,7 +378,7 @@ export default function ProjectsPage() {
   // becomes visible again (the poll would catch it anyway; this trims the staleness a wake resumes with).
   useEffect(() => {
     refresh()
-    const id = setInterval(refresh, POLL_MS)
+    const id = setInterval(refresh, CATALOG_POLL_MS)
     const onVis = () => { if (!document.hidden) refresh() }
     document.addEventListener('visibilitychange', onVis)
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
@@ -369,6 +417,7 @@ export default function ProjectsPage() {
         {!state.adminGated && (
           <div className="proj-hint">{t('projects.adminUngated')}</div>
         )}
+        <GatewayIdentityEditor gateway={state.gateway} onRefresh={refresh} t={t} />
         {drawer === 'add' && (
           <div className="proj-admin-pw">
             <AddProjectForm t={t} onAdded={() => { setDrawer(null); refresh() }} />
@@ -397,10 +446,15 @@ export default function ProjectsPage() {
     )
   })()
 
+  const gatewayIdentity = state.kind === 'ok' ? state.gateway.identity : { title: 'Projects', icon: 'gateway' }
+
   return (
     <div className="page-pane page-projects">
       <div className="proj-body">
-        <div className="cred-brand proj-brand">$ spexcode</div>
+        <div className="cred-brand proj-brand">
+          <IdentityIcon icon={gatewayIdentity.icon} fallback="gateway" size={30} />
+          <span>$ spexcode</span>
+        </div>
         <h1 className="page-title">{t('projects.title')}</h1>
         {body}
       </div>

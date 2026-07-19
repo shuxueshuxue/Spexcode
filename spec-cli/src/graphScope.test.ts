@@ -123,8 +123,7 @@ test('spliceSessions is byte-identical to a fresh buildBoard when only session s
 
   // node/meta units are UNTOUCHED by the splice — the SAME objects as the previous board (splice is {...prev}).
   assert.equal(Bsplice.nodes, A.nodes, 'nodes: identical object reference (reused, not rebuilt)')
-  assert.equal(Bsplice.project, A.project)
-  assert.equal(Bsplice.projectIcon, A.projectIcon)
+  assert.equal(Bsplice.identity, A.identity)
   // and nodes are session-independent: a fresh full build serializes its nodes identically to A's.
   assert.equal(JSON.stringify(Bfull.nodes), JSON.stringify(A.nodes), 'a session-only change leaves nodes byte-identical')
 })

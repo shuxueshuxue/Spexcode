@@ -15,9 +15,9 @@ scenarios:
       records never proxy. Live identity changes and restarted generations refresh the catalog. Two project
       projections plus the gateway projection remain distinct. Gateway icon writes are admin-only and touch
       only `SPEXCODE_HOME/config.json`; project writes are admin-only, revision-checked, atomic, preserve
-      other JSON fields, work offline, and return canonical bytes/projection. Existing emoji/Iconify config
-      remains resolved. `/projects`, stream, scoped HTTP/WS, TLS, registration, raw config, and shell routing
-      retain their auth and transport contracts.
+      other JSON fields, work offline, accept featured ids and well-formed Iconify names, and return canonical
+      bytes/projection. Existing emoji/Iconify config remains resolved. `/projects`, stream, scoped HTTP/WS,
+      TLS, registration, raw config, and shell routing retain their auth and transport contracts.
     related: [spec-cli/src/supervise.ts, spec-cli/src/gateway-hub.ts, spec-cli/src/host.test.ts]
 ---
 # measuring host-gateway

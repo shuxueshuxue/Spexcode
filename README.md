@@ -82,15 +82,27 @@ Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 ```sh
 npm i -g spexcode        # installs the `spex` command
 cd your-repo
-spex init                # seeds .spec/, installs git hooks, materializes the agent contract
-spex serve               # API backend on :8787
-spex serve ui            # dashboard on :5173, proxying to the backend
+spex init --harness claude  # seeds .spec/, installs hooks, materializes the agent contract
+spex serve               # this project's backend; registers itself for the current user
+# In another shell, once per user:
+spex dashboard           # shared host gateway + UI on :5173
 ```
 
+Run `spex serve` from every project you want online; use a free backend port such as
+`spex serve --port 8788` for an additional project. Each backend self-registers in the current
+user's host registry. The single `spex dashboard` discovers backends that are already running and
+ones started later, exposes `/projects` for project switching and management, and serves each
+project dashboard under `/p/:id/`. There is no per-project dashboard process or API/UI port pairing.
+
+`--harness` selects the agent integration to materialize (`codex` is another built-in choice).
 `spex init` is additive. It works on any existing git repo and never overwrites your files: it
 creates a root `.spec/project/spec.md` and a starter `spexcode.json`, installs the git hooks, and
-writes a managed block into `CLAUDE.md`/`AGENTS.md` so any agent working in the repo
-discovers the workflow on its own.
+writes the selected harness's managed contract so agents working in the repo discover the workflow
+on their own.
+
+Those are installed-user commands. Contributors working from this source checkout use `npm run api`
+for the reloadable backend and `npm run web` for the Vite/HMR frontend; see
+[Contributing](#contributing).
 
 Then grow the tree:
 

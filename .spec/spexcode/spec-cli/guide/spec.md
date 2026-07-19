@@ -15,15 +15,16 @@ related:
 the agent from one verb, picked by an optional topic:
 
 - **no topic → the human SETUP workflow.** The model it teaches is **install once, then let an agent
-  drive** — one global install (`npm i -g spexcode`, the [[packaging]] contract) serves *every* project
-  (the `spex` CLI acts on whatever repo is cwd, `spex serve ui` is a viewer pointed per project), so the
-  human's only manual steps are the global install and pointing at a backend; authoring spec nodes and the
-  dogfood ritual are an agent's job. Each step names the real seam, not internals: **cwd** is the "which
-  repo" knob, **`--api-port`** is the dashboard's endpoint seam, **`spexcode.json`** governs lint's layout.
-  The source-checkout path (repo-root `npm link`, the dashboard dev server) stays a *dogfood footnote* with
-  its real footguns (shared `spex` bin — uninstall before switching; no prebuilt dist under a source link),
-  never the headline: teaching the maintainer's path as the install was exactly the drift the packaging
-  node's arrival made stale.
+  drive** — one global install (`npm i -g spexcode`, the [[packaging]] contract) serves *every* project.
+  Each adopted repo runs its own `spex serve` from that repo's cwd and publishes its endpoint into the
+  current user's host registry; one host-level `spex dashboard` serves the shared gateway/UI, continuously
+  discovers backends that are already running or start later, exposes `/projects` for global switching and
+  management, and scopes each project's dashboard under `/p/:id/`. There is no per-project UI process or
+  API/UI port pairing. Each step names the real seam, not internals: **cwd** picks the repo a backend serves,
+  backend **`--port`** avoids listen collisions, and **`spexcode.json`** governs lint's layout. The
+  source-checkout path (repo-root `npm link`, `npm run api`, and the Vite/HMR `npm run web`) stays a
+  *contributor footnote*, never the installed-user headline: teaching the maintainer's path as the install
+  was exactly the drift the packaging node's arrival made stale.
 - **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
   artifacts — spec.md (frontmatter, body, the rules lint enforces) and eval.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
@@ -68,7 +69,7 @@ guide answers "how do I work".** Command usage — the map (`spex help`) and eac
 layers and the help layers name the guide's topics, so neither surface dead-ends. The `--help`
 interception's safety contract is unchanged: it prints and EXITS **before** the verb runs — the flag
 used to be an ignored no-op that fell through to the verb's side effect, so probing a STREAMING verb
-(`spex watch --help` started a watch that never exits) or a MUTATING one (`spex session new --help`
+(`spex session watch --help` started a watch that never exits) or a MUTATING one (`spex session new --help`
 created a stray session) detonated the very command the user was only asking about. A help probe must
 never fire a side effect, and the help it prints must read its own caveats honestly: a verb that blocks
 forever (`watch`) says so and points at the one-shot alternative.

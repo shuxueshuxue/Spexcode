@@ -5,13 +5,13 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
 1. Install the CLI (one-time, global — ONE install serves every project)
      npm i -g spexcode                           # ONE command lands on PATH: \`spex\` (Node ≥ 22)
-   It always operates on the repo of your current directory — that cwd is the only "which repo" knob.
+   Project-scoped commands operate on the repo of your current directory; the dashboard is host-scoped.
    (Dogfooding an unpublished HEAD from a source checkout? \`npm link\` at the repo ROOT — that links
    the \`spexcode\` package itself, never the internal @spexcode/spec-cli. Both paths own the same
    \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`; a legacy link of the
-   inner package uninstalls as \`@spexcode/spec-cli\`). A source link ships no
-   prebuilt dashboard dist — \`spex serve ui\` builds it once on first run (needs spec-dashboard's
-   npm deps installed), or use the dev server.)
+   inner package uninstalls as \`@spexcode/spec-cli\`). Contributors run \`npm run api\` and
+   \`npm run web\` from the source root for backend reloads and Vite/HMR; those are not installed-user
+   startup commands.)
 
 2. Adopt a repo
      cd <your-repo> && spex init --harness claude   # seeds .spec/ + git hooks (additive, never overwrites)
@@ -19,19 +19,16 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    Works on any git repo. Edit .spec/project/spec.md to describe it, then grow child nodes
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 
-3. Run the backend — it reads .spec + git from the cwd repo
+3. Run this repo's backend — it reads .spec + git from cwd and registers in this user's host registry
      spex serve                                  # http://localhost:8787  (--port <n> for another endpoint)
-   Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two ports.
+   Run one \`spex serve\` from every project you want online. Give each additional backend a free
+   --port; the port only binds that backend and is never paired with a dashboard process.
 
-4. Open the dashboard — the SAME dashboard for every project, pointed per project
-     spex serve ui                              # serves the bundled dashboard on :5173, proxying /api
-   Point it at another backend with --api-port (pairs with \`spex serve --port\`); one dashboard per
-   project. The dashboard is a viewer — which backend it proxies is the only "which project" knob.
-   Loopback-only by default: viewing from another machine needs \`--host 0.0.0.0\` (or a specific
-   interface) — still plain HTTP with no gate, so bind wide only on a LAN/tailnet you trust (for
-   the internet, use \`spex serve --public\` instead).
-   (Dogfood/source alternative: API_URL=http://localhost:<port> npm run dev in spec-dashboard —
-   the dev server; "dashboard": { "apiUrl": "..." } in spexcode.json applies only to that layout.)
+4. Open the shared host dashboard — run this ONCE for the current user, from any directory
+     spex dashboard                             # host gateway + UI on http://localhost:5173
+   It discovers backends already running and any that start later. \`/projects\` is the global project
+   switcher and management surface; each project's dashboard lives under \`/p/:id/\`. The gateway is
+   loopback-only by default; \`--host\` widens its bind as described by \`spex dashboard --help\`.
 
 5. Govern your layout (optional)
      spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.

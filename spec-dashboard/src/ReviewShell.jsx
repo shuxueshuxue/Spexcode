@@ -153,7 +153,9 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   useEffect(() => {
     const onKey = (event) => {
       const tag = event.target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.metaKey || event.ctrlKey || event.altKey) return
+      const typingControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+      const nativeButtonKey = tag === 'BUTTON' && (event.key === 'Enter' || event.key === ' ')
+      if (typingControl || nativeButtonKey || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key !== 'j' && event.key !== 'k' && event.key !== 'Enter') return
       const nav = stateRef.current.rows.filter((row) => row.href)
       if (!nav.length) return

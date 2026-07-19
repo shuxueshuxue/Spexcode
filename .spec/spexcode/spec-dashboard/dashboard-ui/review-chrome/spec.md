@@ -37,8 +37,10 @@ abstraction layer or page-local near-copy is allowed.
   secondary identity/author/time metadata, then real right-side facts such as comments, store, evidence
   kind, or scope. Desktop rows have GitHub's ~64px rhythm; at 390px the same markup grows vertically, moves
   trailing facts under the title, allows long titles to wrap, and never widens the page. `j`/`k` still move
-  a visual cursor and `Enter` opens its href; keys typed into form controls are never captured. Rows without
-  an href (a blind spot) remain inert; one shared empty state occupies the list container.
+  a visual cursor and row-context `Enter` opens its href. Inputs, textareas, and selects never yield any key
+  to the list; buttons yield `j`/`k` but retain native `Enter`/Space activation, so a cursor cannot steal a
+  section, facet, overflow, or page-action command. Rows without an href (a blind spot) remain inert; one
+  shared empty state occupies the list container.
 - **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
   (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
   list leading marks, detail status, and every A/B reading selector consume it; Issues list and detail do

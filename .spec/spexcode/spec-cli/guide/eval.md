@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: setup-topic-teaches-host-dashboard
+    description: >
+      Run the real CLI verb `spex guide` and read its stdout. The installed-user workflow must explain
+      the host-level multi-project architecture and keep source-contributor hot-reload commands separate.
+    expected: >
+      Output teaches one `spex serve` per project, registration in the current user's host registry, and
+      one `spex dashboard` that discovers already-running and later-started backends. It names `/projects`
+      as the global switcher/management surface and `/p/:id/` as each project dashboard's scope, identifies
+      `npm run api` / `npm run web` as contributor commands, and does not teach `spex serve ui`,
+      `--api-port`, or per-project UI/API port pairing.
+    tags: cli
+    code: spec-cli/src/guide.ts
   - name: config-topic-prints-settings-manual
     description: >
       Run the real CLI verb `spex guide settings` and read its stdout. It must print the runtime-settings

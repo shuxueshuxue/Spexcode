@@ -403,24 +403,25 @@ scenarios:
       vendor glyphs the old icon-only harness radios used). The pop still opens and operates on click
       (the launcher-picker-opens-on-click contract is unaffected).
     related: spec-dashboard/src/SessionInterface.jsx
-  - name: tab-dblclick-locks-graph
+  - name: tab-context-menu-locks-graph
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (#/sessions) with at
       least two sessions available: one WITH pending ops (its tab carries the ops tooltip / op tally) and
       one WITHOUT any pending ops (a freshly dispatched worker, or one whose spec edits are already
-      committed — the common resting state). Double-click each tab in turn (expanding any nesting fold
-      first so the tab is visible). After each double-click, read `location.hash`, whether the graph page
-      is the visible page, and whether the session-lock banner (`.lock-hint`) is up. Record the whole
-      interaction as a video.
+      committed — the common resting state). Right-click each tab in turn (expanding any nesting fold first
+      so the tab is visible), choose **lock on graph**, and read `location.hash`, whether the graph page is
+      visible, and whether the session-lock banner (`.lock-hint`) is up. Return to the sessions page and
+      double-click a tab once to prove the removed gesture has no hidden effect. Record the whole interaction
+      as a video.
     expected: |
-      BOTH double-clicks leave the console and land on the graph page (`#/graph`) with the board LOCKED
-      onto that session (the lock banner is up; rest of the board greys where overlays exist). The
+      BOTH context-menu actions leave the console and land on the graph page (`#/graph`) with the board
+      LOCKED onto that session (the lock banner is up; rest of the board greys where overlays exist). The
       with-ops session additionally auto-focuses its first changed node. The ops-less session still
       locks — the banner explains the empty grip ([[keyboard-nav]]'s lock contract: "a no-overlay session
-      still locks") — it is NEVER a silent no-op that leaves you sitting on the sessions page. Single
-      click still only switches tabs; the double-click gesture is the console-side twin of the board
-      window's single-click lock, with no pending-ops precondition.
+      still locks") — it is NEVER a silent no-op that leaves you sitting on the sessions page. Single click
+      still only switches tabs, and double-click has no extra meaning: it stays on `#/sessions/<sel>` with
+      that tab selected and does not lock or navigate.
     related: spec-dashboard/src/SessionInterface.jsx
   - name: ime-enter-composes-not-sends
     tags: [frontend-e2e, desktop]

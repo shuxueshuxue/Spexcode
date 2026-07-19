@@ -19,9 +19,10 @@ related:
 Sessions are labelled automatically — by the spec node they touch, or a few words of their launch
 prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
 node read alike, and a node-agnostic session wears an awkward prompt fragment forever. Right-clicking a
-session row should open a small menu: **rename** lets a human give that session a name that sticks, and
-**close** offers the worktree removal one right-click away — the destructive twin of the typed `/close`
-command ([[session-console]]), distinct from `/exit`, which only stops the agent and keeps the worktree.
+session row should open the session's small action menu: **lock on graph** makes the board follow it,
+**rename** gives it a human name that sticks, and **close** offers worktree removal one right-click away —
+the destructive twin of the typed `/close` command ([[session-console]]), distinct from `/stop`, which only
+stops the agent and keeps the worktree.
 
 ## expanded spec
 
@@ -76,6 +77,11 @@ right-click that kills the browser's menu on a row ALSO opens the rename pop-ove
 still fires), so blocking the OS menu never costs the human theirs. Right-clicking the
 list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
 and the docked input keeps focus, never a stolen-focus gap.
+
+The pop-over is the one home for row-level session actions. Its **lock on graph** item invokes the console's
+existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.
+The same menu also hosts [[session-multi-select]]'s select item and [[attach-menu]]'s live-only attach item,
+so these verbs extend one menu instead of creating parallel gestures or pop-overs.
 
 This node's slices of the shared files are the context-menu/rename-modal styling in `styles.css` and the
 rename route in `index.ts`; the eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in

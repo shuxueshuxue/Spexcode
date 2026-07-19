@@ -177,10 +177,12 @@ type-mode toggle. A best-effort pane sniff — a
 select-caret line beside an `Esc`/Enter hint line — only ever **suggests** type mode by pulsing the type
 button, a non-authoritative nudge that never seizes keys.
 
-A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]), select for
-bulk close ([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
-`spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
-suppression; the shared `sessionName` puts that rename first in the label precedence.
+A **right-click on a session row** opens its context menu — **lock on graph**, rename or close
+([[session-rename]]), select for bulk close ([[session-multi-select]]), and **attach** for a live row
+([[attach-menu]], which hands over the `spex session attach <id>` command to join the session's real tmux) —
+coexisting with the context-menu suppression. Lock on graph locks the board to that session and navigates to
+`#/graph`; it has no pending-ops precondition, so an ops-less session still lands on the graph with the lock
+banner explaining the empty grip. The shared `sessionName` puts a rename first in the label precedence.
 The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
 drag-to-reorder gesture. Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
@@ -231,11 +233,10 @@ row is locked. It stays a
 always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
 than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
-no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks **and returns to the graph** (the console is a routed page,
-so the lock is only visible back on the board) — with **no pending-ops precondition**: an ops-less session
-still locks, the banner explaining the empty grip, exactly like the window's single-click; a silent no-op
-here is the bug, not the contract — but in its **compact, avatar-less** variant
+no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with different gestures:
+single click switches tab, while double-click has no separate meaning and therefore only leaves that tab
+selected. Locking from the console is the row's explicit **right-click → lock on graph** action above, not a
+hidden double-click gesture. The console renders the row in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list, the status a
 single colour glyph not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
 session to the avatars on the nodes it edits) belongs to the map-side SessionWindow, which keeps it. The

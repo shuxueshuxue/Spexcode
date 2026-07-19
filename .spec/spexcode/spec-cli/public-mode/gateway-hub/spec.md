@@ -22,7 +22,12 @@ internal services; the hub owns the outside.
 
 - `/projects` — the admin surface: list the registry (`GET`, with gating state), and set/clear passwords
   (`PUT`/`DELETE /projects/admin-password`, `PUT`/`DELETE /projects/:id/password`) — the APIs the future
-  admin UI drives. Admin scope required; with no admin password, loopback only.
+  admin UI drives. Admin scope required; with no admin password, loopback only. `GET /projects` is
+  content-negotiated: when a host `fallback` is mounted and the request explicitly accepts `text/html`
+  (browser navigation — the `/` redirect lands here), it serves the SPA shell instead of the catalog —
+  the shell is code, not data (the fallback's own posture), and every data call it makes re-enters the
+  gated JSON route. All API fetches (`application/json`, `*/*`) keep the catalog envelope and its auth
+  semantics, as does the bare hub with no fallback.
 - `/p/:projectId/*` — the project surface: `login`/`logout` are the hub's own (the designed login page,
   parameterized), everything else is reverse-proxied to that project's backend with the `/p/:projectId`
   prefix stripped, WebSocket upgrades included. Admin or matching-project scope, or open when ungated.

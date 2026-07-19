@@ -7,7 +7,8 @@
 //
 // The route contract:
 //   /login /logout                      admin session (the designed login page)
-//   GET /projects                       admin: list the registry (+ gating state)
+//   GET /projects                       admin: list the registry (+ gating state); with a host shell
+//                                       mounted, an explicit text/html GET gets the Projects UI instead
 //   PUT|DELETE /projects/admin-password admin: set/clear the admin password
 //   PUT|DELETE /projects/:id/password   admin: set/clear one project's password
 //   /p/:projectId/login|logout          project session for that project
@@ -172,6 +173,14 @@ export function startHubGateway(opts: HubOpts): http.Server {
     if (path === '/logout') return redirect(res, '/login', clearCookie(adminCookieName(port)))
 
     if (path === '/projects' || path.startsWith('/projects/')) {
+      // browser navigation (the `/` redirect lands here with Accept: text/html) wants the Projects UI,
+      // not the catalog envelope. With a host shell mounted, an explicit text/html GET is served the SPA
+      // shell — code, not data, same unauthorized-by-design posture as the fallback seam: every data call
+      // the shell makes re-enters the JSON route below with its auth gate intact. API fetches
+      // (application/json, */*, no Accept) keep the JSON catalog unchanged, as does the bare hub.
+      if (path === '/projects' && req.method === 'GET' && ext.fallback && (req.headers.accept ?? '').includes('text/html')) {
+        return ext.fallback(req, res, path)
+      }
       const d = adminz()
       if (!d.ok) {
         return d.reason === 'locked'

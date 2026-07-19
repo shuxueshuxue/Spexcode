@@ -106,6 +106,12 @@ test('no admin password: /projects is implicit from loopback, LOCKED from non-lo
   assert.equal(body.adminGated, false)
   assert.deepEqual(body.projects.map((p: any) => p.id), ['projA', 'projB'], 'the non-loopback upstream record is not listed')
 
+  // the bare hub has no shell to negotiate toward: a text/html GET still answers the catalog JSON
+  // (the content-negotiated shell branch exists only when a host fallback is mounted — host.test.ts)
+  const htmlNav = await hub('/projects', { headers: { accept: 'text/html,*/*;q=0.8' } })
+  assert.equal(htmlNav.status, 200)
+  assert.match(htmlNav.headers.get('content-type') ?? '', /application\/json/)
+
   const ext = externalIPv4()
   if (!ext) return t.skip('no non-loopback IPv4 on this machine')
   const remote = await fetch(`http://${ext}:${hubWidePort}/projects`, { redirect: 'manual' })

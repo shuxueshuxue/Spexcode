@@ -2325,6 +2325,24 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 
+/* the register drawer and the per-row setup drawer ([[projects-hub]]) — same drawer bones, palette
+   tokens only, so every theme preset skins them for free. The transcript block is the spawned spex
+   verb's honest output: monospace, scrollable, never truncated by the UI. */
+.proj-add .proj-add-path { flex: 1 1 220px; }
+.proj-full { flex-basis: 100%; }
+.proj-setup { flex-direction: column; align-items: stretch; gap: 6px; }
+.proj-setup-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.proj-preset { flex: 1 1 140px; }
+.proj-op-status { font-size: var(--type-meta); }
+.proj-op-status.ok { color: var(--green); }
+.proj-op-status.fail { color: var(--red); }
+.proj-log {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel2);
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-caption);
+  line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
 /* --- the rail's current-project selector chip + switcher menu --- */
 .proj-chip-wrap { position: relative; }
 .rail-btn.proj-chip {

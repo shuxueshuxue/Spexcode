@@ -32,8 +32,12 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   tablist exposes one roving tab stop; tabs control one labelled results panel and only Left/Right/Home/End
   switch it, leaving Up/Down to normal page scrolling. Every query, section, or facet action PUSHES canonical
   hash state; Back replays it.
+- **Filtering is [[review-filters]], not page code.** The canonical ListViews project its shared Issue/Eval
+  adapters into URL-owned query/facet chrome; [[work-pane]] and [[eval-tab]] project the same mechanism into
+  one extremely compact embedded control with popup-local state. This node owns the two presentations and
+  canonical address behavior, never a second parser or predicate.
 - **Rows use ONE two-level information grammar.** Rows arrive as data and remain REAL `<a>` anchors, but
-  their content is structured through the shared row primitive: leading state visual, a wrapping title,
+  their content is structured through the shared row primitive: a fixed state-icon box, a wrapping title,
   secondary identity/author/time metadata, then real right-side facts such as comments, store, evidence
   kind, or scope. Desktop rows have GitHub's ~64px rhythm; at 390px the same markup grows vertically, moves
   trailing facts under the title, allows long titles to wrap, and never widens the page. `j`/`k` still move
@@ -44,9 +48,12 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
 - **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
   (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
   list leading marks, detail status, and every A/B reading selector consume it; Issues list/detail and the
-  compact `IssueCard` entries consume the same issue half. Glyphs come only
-  from [[icon-system]] — no page-local SVG, CSS dot, raw status pill, or Unicode check/cross. Small overview
-  surfaces may add counts beside the primitive, but never mint another state mapping.
+  compact `IssueCard` entries consume the same issue half. In list rows the shared primitive fixes one
+  optical box, rendered size, stroke weight, and alignment for every issue/eval state, so switching domain
+  or state never shifts the row; detail contexts may still request their own explicit size. Glyphs come only
+  from [[icon-system]] — no page-local SVG, CSS dot, raw status pill, Unicode check/cross, or Eval-only
+  alignment patch. Small overview surfaces may add counts beside the primitive, but never mint another
+  state mapping.
 - **`DetailShell` follows GitHub's issue grammar:** title/meta HEADER, STATUS band, MAIN content with an
   optional docked composer, and a metadata SIDE rail. Browser history is the return path. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with

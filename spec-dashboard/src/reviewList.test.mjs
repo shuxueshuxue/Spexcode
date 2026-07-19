@@ -13,6 +13,8 @@ const issues = read('IssuesPage.jsx')
 const issueCard = read('IssueCard.jsx')
 const dashboard = read('Dashboard.jsx')
 const css = read('styles.css')
+const filters = read('reviewFilters.js')
+const icons = read('icons.jsx')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
 
@@ -32,6 +34,9 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
+  assert.match(evals, /evalFilterModel\(filterItems, query/)
+  assert.match(issues, /issueFilterModel\(all, query/)
+  assert.match(filters, /export function filterReviewItems/)
 })
 
 test('shared list key ownership preserves native controls and focused anchors', () => {
@@ -64,9 +69,9 @@ test('facet primitives keep an active missing value clearable', () => {
   assert.deepEqual(options([], 'dead-session', 'All'), [all])
   assert.deepEqual(options([{ value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.deepEqual(options([all, { value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
-  assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
+  assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
   assert.match(evals, /label: t\('reviewList\.facetScope'\), value: query\.session \|\| ''/)
-  assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
+  assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
 })
 
 test('menus and section tabs share one keyboard and Escape contract', () => {
@@ -116,6 +121,12 @@ test('one icon-label-tone mapping drives every review state home', () => {
   assert.doesNotMatch(`${evals}\n${detail}`, />\s*[✓✗☑]\s*</)
   assert.doesNotMatch(issueCard, /issue-state|[✓✗○]/)
   assert.doesNotMatch(css, /\.issue-state/)
+  assert.match(shell, /className="review-state-icon" style=\{\{ width: size, height: size \}\}/)
+  assert.match(css, /\.rl-row-state\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*place-items:\s*center;/s)
+  for (const name of ['circle-check', 'circle-x', 'circle-minus', 'circle-dashed']) {
+    assert.match(icons, new RegExp(`'${name}': \\{ vb: 16, sw: 1\\.5`))
+  }
+  assert.doesNotMatch(css, /\.review-state\.eval|\.rl-row-state[^}]*\.eval/)
 })
 
 test('graph keeps the full canvas and mounts no persistent focus sidebar', () => {

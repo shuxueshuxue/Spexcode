@@ -9,6 +9,7 @@ related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/graph.ts
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/reviewFilters.js
 ---
 # evals-feed
 
@@ -29,7 +30,9 @@ real measured loss and remains in the default Current section; freshness is now 
 default hide. A fresh human-ok'd reading belongs to the Reviewed section while everything else belongs to
 Current, preserving the existing default attention boundary as GitHub-style mutually exclusive tabs with
 counts. The query field and verdict, freshness, evidence-kind, node, filer/live, and session-scope facets
-all filter real entry fields; the kind values remain exactly video | image | all and keep the existing
+all travel through [[review-filters]]'s Eval adapter; page code only maps canonical hash query state to the
+shared engine, so the embedded node list cannot acquire different parsing or matching semantics. The kind
+values remain exactly video | image | all and keep the existing
 video→image→all default. Common facets stay visible on desktop, low-frequency/width-displaced facets move
 to the functional overflow, and only the primary facet survives beside the tabs at 390px. **Every pick is
 URL-query state**: a human's action pushes, reload/Back fully replay, and no local filter state survives.

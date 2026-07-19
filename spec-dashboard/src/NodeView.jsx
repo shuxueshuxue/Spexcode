@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
-import { evidenceList } from './EvalsFeed.jsx'
+import { evidenceList, evalFilterModel, filterMenuGroups, issueFilterModel } from './reviewFilters.js'
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
+import { CompactReviewFilter, nextQuery } from './ReviewShell.jsx'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -268,7 +269,6 @@ function DiffEvidence({ diff }) {
 }
 
 function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing, resetKey }) {
-  const t = useT()
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   // a caller filtering its items passes the filter as resetKey: the open set is INDEX-keyed, so surviving
@@ -313,13 +313,6 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   }, [revealNext])
   return (
     <div className={classes.pane} ref={scRef}>
-      {/* expand-all COMPLEMENTS the one-at-a-time down-gesture reveal, never replaces it: collapsed rows
-          aren't mounted, so find-in-page / jump-to-an-old-version can't reach them without this door. */}
-      {items.length > 1 && open.size < items.length && (
-        <div className="chrono-tools">
-          <button className="chrono-all" onClick={() => setOpen(new Set(items.keys()))}>{t('nodeView.expandAll', { n: items.length })}</button>
-        </div>
-      )}
       {leading}
       {items.map((it, i) => {
         const isOpen = open.has(i)
@@ -375,29 +368,21 @@ export function HistoryPane({ node, rows }) {
   )
 }
 
-// a long pane earns a text filter ([[work-pane]]): substring over concern+id, sticky at the pane top.
-// Short lists (≤5 rows) skip it — the affordance would be chrome, not help.
-function PaneFilter({ q, setQ, placeholder }) {
-  return (
-    <div className="pane-filter">
-      <input className="pane-filter-input" value={q} placeholder={placeholder} onChange={(e) => setQ(e.target.value)} />
-    </div>
-  )
-}
-
-export function IssuesPane({ node }) {
+export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
   const t = useT()
-  const [q, setQ] = useState('')
   const issues = node.issues || []
   if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
-  const needle = q.trim().toLowerCase()
-  const shown = needle ? issues.filter((i) => `${i.id} ${i.concern || ''}`.toLowerCase().includes(needle)) : issues
+  const model = issueFilterModel(issues, filter, { sessions, t, defaultSection: '' })
+  const shown = model.shown
   const open = shown.filter((i) => i.status === 'open')
   const closed = shown.filter((i) => i.status !== 'open')
+  const groups = filterMenuGroups(model, onFilter, ['section', 'author', 'store', 'live'])
   return (
     <div className="pane-issues">
-      {issues.length > 5 && <PaneFilter q={q} setQ={setQ} placeholder={t('nodeView.filterIssues')} />}
-      {needle && !shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
+      {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+        placeholder={t('nodeView.filterIssues')} searchLabel={t('reviewList.searchIssues')}
+        filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
+      {!shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
       {open.length > 0 && (
         <>
           <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
@@ -522,9 +507,8 @@ function DanglingTrack({ track }) {
 // falls back to the board's summary readings + slim scenarios — truthful, just shallow — never a spinner
 // that never stops.
 const evalCache = new Map()
-export function EvalPane({ node }) {
+export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
   const t = useT()
-  const [q, setQ] = useState('')
   const key = `${node.id}@${node.evals?.[0]?.ts || ''}:${node.evals?.length || 0}`
   const [timeline, setTimeline] = useState(() => evalCache.get(key) ?? null)
   useEffect(() => {
@@ -539,21 +523,28 @@ export function EvalPane({ node }) {
   if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
   if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
   const all = timeline.readings
-  const needle = q.trim().toLowerCase()
-  const byScenario = (name) => !needle || (name || '').toLowerCase().includes(needle)
-  const readings = needle ? all.filter((r) => byScenario(r.scenario)) : all
-  const dangling = (timeline.dangling || []).filter((tr) => byScenario(tr.scenario))
-  const unmeasured = scenarioStates(timeline.scenarios, all).filter((s) => !s.reading && byScenario(s.name))
-  // the filter rides the timeline's own scroller as its sticky first row (the pane root IS the scroll box)
-  const filterEl = (timeline.readings.length + timeline.scenarios.length) > 5
-    ? <PaneFilter key="filter" q={q} setQ={setQ} placeholder={t('nodeView.filterScenarios')} />
+  const filterItems = [
+    ...all.map((reading, index) => ({ ...reading, node: node.id, reading: true, filterKind: 'reading', filterKey: `reading:${index}`, source: reading })),
+    ...scenarioStates(timeline.scenarios, all).filter((scenario) => !scenario.reading)
+      .map((scenario) => ({ ...scenario, scenario: scenario.name, node: node.id, reading: false, filterKind: 'unmeasured', filterKey: `unmeasured:${scenario.name}`, source: scenario })),
+    ...(timeline.dangling || []).map((track) => ({ ...track, node: node.id, reading: false, filterKind: 'dangling', filterKey: `dangling:${track.threadId}`, source: track })),
+  ]
+  const model = evalFilterModel(filterItems, filter, { sessions, t, defaultKind: 'all', defaultSection: '' })
+  const readings = model.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
+  const unmeasured = model.shown.filter((item) => item.filterKind === 'unmeasured').map((item) => item.source)
+  const dangling = model.shown.filter((item) => item.filterKind === 'dangling').map((item) => item.source)
+  const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'live'])
+  const filterEl = filterItems.length > 4
+    ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
+      placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
+      filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
     : null
-  // branch on the UNFILTERED list so typing a no-match needle never flips the tree (a flip would remount
-  // the filter input and drop its focus mid-word) — a filtered-to-empty timeline stays a ChronoPane.
+  // Branch on the unfiltered list so a no-match state never flips the tree and remounts the compact search
+  // mid-word — a filtered-to-empty timeline stays a ChronoPane with its controls intact.
   if (!all.length) return (
     <div className="pane-eval pane-eval-declared">
       {filterEl}
-      <div className="eval-todo-note">{needle && !unmeasured.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
+      <div className="eval-todo-note">{!model.shown.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       {dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
     </div>
@@ -563,10 +554,10 @@ export function EvalPane({ node }) {
   return (
     <ChronoPane
       items={readings}
-      resetKey={needle}
+      resetKey={JSON.stringify(model.state)}
       leading={[
         filterEl,
-        needle && !readings.length && !unmeasured.length && !dangling.length
+        !model.shown.length
           ? <div key="none" className="pane-filter-none">{t('nodeView.filterNone')}</div>
           : null,
         ...unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />),
@@ -597,8 +588,13 @@ export function EvalPane({ node }) {
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [] }) {
   const t = useT()
+  const [filters, setFilters] = useState({ issues: {}, eval: {} })
+  const updateFilter = (kind, patch) => setFilters((current) => ({
+    ...current,
+    [kind]: nextQuery(current[kind], patch),
+  }))
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => i.status === 'open').length
   const issueClosed = issuesAll.length - issueOpen
@@ -636,8 +632,8 @@ export default function NodeView({ node, pane, setPane, onClose }) {
         <div className="ov-body">
           {active === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
-          {active === 'issues' && <IssuesPane node={node} />}
-          {active === 'eval' && <EvalPane node={node} />}
+          {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
+          {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}
           {active === 'edit' && <EditPane node={node} />}
         </div>
       </div>

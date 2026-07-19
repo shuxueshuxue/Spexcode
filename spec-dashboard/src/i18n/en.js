@@ -170,11 +170,6 @@ export default {
     sideNodes: 'spec nodes',
   },
 
-  masterList: {
-    liveChip: ({ n }) => `${n} live`,
-    liveChipTitle: 'only issues/evals a LIVE session is behind',
-  },
-
   annotator: {
     title: 'annotator',
     hint: 'click the frame to play/pause · drag to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',

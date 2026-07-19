@@ -5,10 +5,10 @@ import { useLaunchers } from './launch.js'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { sessionPresent } from './session.js'
 import Modal from './Modal.jsx'
 import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
-import { ISSUE_QUERY_DEFAULT, buildMatcher, queryParam, readToken, setToken, tokenize } from './reviewQuery.js'
+import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
+import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { Icon } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
@@ -37,17 +37,15 @@ const issueNumber = (id) => {
   return `#${value.length > 16 ? `${value.slice(0, 13)}…` : value}`
 }
 
-const actorName = (actor) => String(actor || '').length > 22 ? `${String(actor).slice(0, 8)}…` : actor
-
 // the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
 // autocomplete offers; anything else stays plain and matches nothing.
 export const ISSUE_QUERY_KEYS = ['is', 'state', 'store', 'author', 'node', 'session']
 
 // The LIST page (`#/issues[?q=<raw tokens>]`): RESIDENT data — the page renders instantly from app-held
-// state ([[issues-view]]); the WHOLE face is ONE visible token query ([[review-query]]): sections and
-// low-cardinality menus are pure builders doing token surgery + PUSH over the COMMITTED text,
-// author/node are token-only, and the list re-derives everything from the URL on every hashchange so
-// Back replays it exactly.
+// state ([[issues-view]]); the WHOLE face is ONE visible token query ([[review-query]]) bridged into the
+// ONE field-semantics engine ([[review-filters]]): sections and low-cardinality menus are pure builders
+// doing token surgery + PUSH over the COMMITTED text, author/node are token-only, and the list
+// re-derives everything from the URL on every hashchange so Back replays it exactly.
 export function IssuesListPage({ data, reloadIssues, specs, sessions, query, notice, flash }) {
   const t = useT()
   const [composing, setComposing] = useState(false)
@@ -57,7 +55,6 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
 
   const all = Array.isArray(data.issues) ? data.issues : []
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
-  const tokens = tokenize(text)
   // a human's edit/tab/menu action PUSHES the canonical address — bare for the default view, exactly
   // ?q=<raw text> otherwise (GitHub's semantics — Back walks filter history).
   const push = (nextText) => navigate('issues', null, { query: queryParam(nextText, ISSUE_QUERY_DEFAULT) })
@@ -66,26 +63,13 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
   const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  // [[live-session-filter]]: source-session PRESENCE — the originator (i.by) or any reply author still
-  // resolves to a session on the current board; the session:present|missing token classifies by it.
-  const isPresent = (i) => !!sessionPresent(sessions, i.by) || (Array.isArray(i.replies) && i.replies.some((r) => sessionPresent(sessions, r.by)))
-  const fields = {
-    is: (i, v) => v === 'issue',
-    // open | closed are the lifecycle halves; a concrete concluded spelling (state:landed) matches that
-    // status honestly instead of pretending the enum is binary.
-    state: (i, v) => (v === 'open' ? !concluded(i) : v === 'closed' ? concluded(i) : i.status === v),
-    store: (i, v) => i.store === v,
-    author: (i, v) => i.by === v,
-    node: (i, v) => (i.nodes || []).includes(v),
-    session: (i, v) => (v === 'present' ? isPresent(i) : v === 'missing' ? !isPresent(i) : false),
-    $text: (i, w) => [i.id, i.concern, i.by, ...(i.nodes || [])].filter(Boolean)
-      .some((value) => String(value).toLocaleLowerCase().includes(w)),
-  }
-  // tab counts are computed under the REST of the query — every token but the section's own state:.
-  const faceted = all.filter(buildMatcher(tokens.filter((tk) => tk.key !== 'state'), fields))
-  const openCount = faceted.filter((issue) => !concluded(issue)).length
-  const closedCount = faceted.filter(concluded).length
-  const issues = all.filter(buildMatcher(tokens, fields))
+  // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
+  // engine state; tab counts come out computed under the REST of the query (the section never sees its
+  // own token), and the presence facet is the adapter's session:present|missing.
+  const filters = issueFilterModel(all, tokenFilterState(text, 'issue'), { sessions, t, defaultSection: '' })
+  const issues = filters.shown
+  const openCount = filters.sections.open || 0
+  const closedCount = filters.sections.closed || 0
   const section = readToken(text, 'state')
 
   // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
@@ -103,7 +87,7 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
             meta={(
               <>
                 <span data-tip={th.id}>{issueNumber(th.id)}</span>
-                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: actorName(th.by) })}</span>}
+                {th.by && <span data-tip={th.by}>{t('reviewList.openedBy', { by: reviewActorName(th.by) })}</span>}
                 {th.created && <span>{t('reviewList.openedAt', { at: age(th.created) })}</span>}
               </>
             )}
@@ -120,15 +104,9 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
     }
   })
 
-  const allOption = { value: '', label: t('reviewList.all') }
-  const storeValue = readToken(text, 'store')
-  const storeOptions = stores.length > 1 ? [allOption, ...stores.map((value) => ({ value, label: value }))] : []
-  const sessionValue = readToken(text, 'session')
-  const sessionOptions = [
-    allOption,
-    { value: 'present', label: t('reviewList.sessionPresent') },
-    { value: 'missing', label: t('reviewList.sessionMissing') },
-  ]
+  // menus are pure query builders over the ADAPTER's data-derived options — zero private state.
+  const storeFacet = filters.facets.store
+  const sessionFacet = filters.facets.session
 
   return (
     <ListPage
@@ -155,10 +133,10 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
         { key: 'closed', label: t('reviewList.closed'), count: closedCount, active: section !== '' && section !== 'open', onSelect: () => surgery('state', 'closed') },
       ]}
       facets={
-        <FacetMenu label={t('reviewList.facetStore')} value={storeValue} options={storeOptions} clearLabel={allOption.label} onChange={(value) => surgery('store', value)} mobile />
+        <FacetMenu label={storeFacet.label} value={storeFacet.value} options={storeFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('store', value)} mobile />
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={allOption.label} groups={[
-        { label: t('reviewList.facetSession'), value: sessionValue, active: !!sessionValue, options: sessionOptions, onChange: (value) => surgery('session', value) },
+      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+        { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
       ]} />}
       rows={rows}
       empty={{

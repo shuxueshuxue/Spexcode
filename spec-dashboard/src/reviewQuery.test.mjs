@@ -80,7 +80,11 @@ test('default equivalence: bare address for the default view, ?q verbatim otherw
 
 test('legacy structured params replay as the FULL visible token state', () => {
   assert.equal(hasLegacyParams({ q: 'plain' }), false)
+  // the UNDECIDABLE boundary, decided by fiat ([[review-query]]): a bare ?q= with no structured param
+  // is byte-identical in both grammars and ALWAYS reads as the new token grammar — an old bare
+  // ?q=drift:check becomes an unknown-qualifier honest zero. No heuristic, no stored state.
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { q: 'plain' }), null)
+  assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { q: 'drift:check' }), null)
   assert.equal(
     legacyQueryText(ISSUE_QUERY_DEFAULT, { state: 'closed', author: 'w-1' }),
     'is:issue state:closed author:w-1',

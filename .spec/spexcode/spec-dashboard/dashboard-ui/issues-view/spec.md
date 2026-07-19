@@ -11,6 +11,7 @@ code:
 related:
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/textarea.js
 ---
@@ -52,7 +53,9 @@ verbs the CLI uses.
   concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
   lifecycle switch — token surgery on `state:` only, every other token preserved, counts computed under
   the rest of the query (default Open; every non-open state belongs to Closed, and a concrete concluded
-  spelling like `state:landed` matches that status honestly). Menus exist only for the low-cardinality
+  spelling like `state:landed` matches that status honestly). Matching and options come from the
+  [[review-filters]] Issue adapter — page code only bridges the parsed token text into that engine.
+  Menus exist only for the low-cardinality
   data the model actually has: the store pick and the source-session presence facet
   (`session:present|missing` — [[live-session-filter]]); store stays directly reachable at 390px while
   presence lives in the functional overflow. Originator and spec node are HIGH-cardinality: `author:` /

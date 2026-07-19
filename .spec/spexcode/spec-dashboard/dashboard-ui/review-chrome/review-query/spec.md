@@ -45,7 +45,10 @@ consumer that needs canonical review addresses (e.g. eval anchors on other board
   live=1→session:present, session=&lt;id&gt;→scope:&lt;id&gt; — and the free q appended as ONE text token,
   quoted whenever the tokenizer would misread it (spaces, a colon like q=drift:check, a stray quote) so
   the old single-substring search survives verbatim. The route layer applies this as a REPLACE; the old
-  shape is never re-minted.
+  shape is never re-minted. One boundary is UNDECIDABLE and decided by fiat: a bare `?q=` with no
+  structured param sits byte-identical in both grammars, so it always reads as the NEW token grammar —
+  an old bare `?q=drift:check` deep link becomes an unknown-qualifier honest zero. No heuristic and no
+  stored state may reintroduce the distinction.
 - **Autocomplete is bounded.** A bare prefix completes qualifier keys (insert `key:`, keep typing); a
   `key:prefix` completes values from the page-supplied candidates only — data-derived sets, and for
   `scope:` only sessions on the current board — capped at 8. Unknown or historical values remain

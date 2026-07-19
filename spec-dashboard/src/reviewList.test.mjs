@@ -14,6 +14,8 @@ const issues = read('IssuesPage.jsx')
 const issueCard = read('IssueCard.jsx')
 const dashboard = read('Dashboard.jsx')
 const css = read('styles.css')
+const filters = read('reviewFilters.js')
+const icons = read('icons.jsx')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
 
@@ -33,6 +35,9 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
+  assert.match(evals, /evalFilterModel\(filterItems, tokenFilterState\(text, 'eval'\)/)
+  assert.match(issues, /issueFilterModel\(all, tokenFilterState\(text, 'issue'\)/)
+  assert.match(filters, /export function filterReviewItems/)
 })
 
 test('one visible token query is the whole list state — combobox, overlay, bounded listbox', () => {
@@ -57,9 +62,13 @@ test('every control is a token BUILDER over the committed text — no private fi
   for (const source of [evals, issues]) {
     assert.match(source, /const surgery = \(key, value\) => /)
     assert.match(source, /setToken\(text, key, value\)/)
-    // tab counts under the REST of the query: every token but the section's own state:
-    assert.match(source, /tokens\.filter\(\(tk\) => tk\.key !== 'state'\)/)
   }
+  // ONE parse → ONE matcher: both pages bridge the token text into the shared engine, whose section
+  // counts are computed under the REST of the query (the section never sees its own token)
+  assert.match(evals, /tokenFilterState\(text, 'eval'\)/)
+  assert.match(issues, /tokenFilterState\(text, 'issue'\)/)
+  assert.match(evals, /const currentCount = filters\.sections\.current \|\| 0/)
+  assert.match(issues, /const openCount = filters\.sections\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
   assert.match(evals, /surgery\('state', 'current'\)/)
@@ -83,10 +92,14 @@ test('high-cardinality dimensions are token-only: no enumerating dropdowns, boun
 })
 
 test('the source-session facet speaks presence, never liveness', () => {
+  // the ONE membership join lives in the engine's presence facet — pages only render its options
+  assert.match(filters, /sessionPresent/)
+  assert.match(filters, /fixedValues: \['present', 'missing'\]/)
+  assert.match(filters, /reviewList\.facetSession/)
+  assert.doesNotMatch(filters, /liveSession|facetLive|'live'/)
   for (const source of [evals, issues]) {
-    assert.match(source, /reviewList\.facetSession/)
-    assert.match(source, /sessionPresent/)
-    assert.doesNotMatch(source, /liveSession|liveOnly|'live'/)
+    assert.match(source, /sessionFacet/)
+    assert.doesNotMatch(source, /liveSession|liveOnly|facetLive/)
   }
   const enBlock = en.slice(en.indexOf('reviewList: {'), en.indexOf('reviewShell: {'))
   const zhBlock = zh.slice(zh.indexOf('reviewList: {'), zh.indexOf('reviewShell: {'))
@@ -131,9 +144,9 @@ test('facet primitives keep an active missing value clearable', () => {
   assert.deepEqual(options([], 'dead-session', 'All'), [all])
   assert.deepEqual(options([{ value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.deepEqual(options([all, { value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
-  assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
-  assert.match(evals, /label: t\('reviewList\.facetSession'\), value: sessionValue/)
-  assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{allOption\.label\}/)
+  assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
+  assert.match(evals, /label: sessionFacet\.label, value: sessionFacet\.value/)
+  assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
 })
 
 test('menus and section tabs share one keyboard and Escape contract', () => {
@@ -163,11 +176,12 @@ test('the tablist always exposes one roving stop and honest tab counts', () => {
   // the pages default their leading section active, so aria-selected agrees with the fallback stop
   assert.match(evals, /active: section !== 'reviewed'/)
   assert.match(issues, /active: section === '' \|\| section === 'open'/)
-  // Current's COUNT is rest-of-query: blind rows keep counting while Reviewed is displayed…
-  assert.match(evals, /const blindCount = blind\.filter\(\(b\) => blindMatchesTokens\(b, restTokens\)\)\.length/)
-  assert.match(evals, /count: currentCount \+ blindCount/)
-  // …while the RENDERED blind rows still obey the full query, section included
-  assert.match(evals, /const shownBlind = blind\.filter\(\(b\) => blindMatchesTokens\(b, tokens\)\)/)
+  // blind rows travel through the SAME engine as reading:false items: the Current COUNT comes out
+  // rest-of-query (a blind row keeps counting while Reviewed is displayed) while the RENDERED blind
+  // rows still obey the full query, section included
+  assert.match(evals, /reading: false, filterKind: 'blind'/)
+  assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === 'blind'\)/)
+  assert.match(evals, /count: currentCount/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text
   assert.match(page, /const listHref = routeHash\('evals', null, sessionId \? \{ q: scopedEvalQuery\(sessionId\) \} : null\)/)
 })
@@ -200,6 +214,12 @@ test('one icon-label-tone mapping drives every review state home', () => {
   assert.doesNotMatch(`${evals}\n${detail}`, />\s*[✓✗☑]\s*</)
   assert.doesNotMatch(issueCard, /issue-state|[✓✗○]/)
   assert.doesNotMatch(css, /\.issue-state/)
+  assert.match(shell, /className="review-state-icon" style=\{\{ width: size, height: size \}\}/)
+  assert.match(css, /\.rl-row-state\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*place-items:\s*center;/s)
+  for (const name of ['circle-check', 'circle-x', 'circle-minus', 'circle-dashed']) {
+    assert.match(icons, new RegExp(`'${name}': \\{ vb: 16, sw: 1\\.5`))
+  }
+  assert.doesNotMatch(css, /\.review-state\.eval|\.rl-row-state[^}]*\.eval/)
 })
 
 test('graph keeps the full canvas and mounts no persistent focus sidebar', () => {

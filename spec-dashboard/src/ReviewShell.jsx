@@ -34,10 +34,18 @@ export function ReviewState({ kind, state, showLabel = false, size = 16, classNa
   const label = title || t(visual.label)
   return (
     <span className={`review-state ${kind} ${visual.tone} ${className}`} data-tip={label} aria-label={label}>
-      <Icon name={visual.icon} size={size} />
+      <span className="review-state-icon" style={{ width: size, height: size }}><Icon name={visual.icon} size={size} /></span>
       {showLabel && <span className="review-state-label">{label}</span>}
     </span>
   )
+}
+
+// the embedded surfaces' local-state reducer ([[review-filters]]): merge a patch, dropping emptied keys.
+// The CANONICAL pages never use this — their one state is the visible token text ([[review-query]]).
+export function nextQuery(query, patch) {
+  const next = { ...query, ...patch }
+  for (const [key, value] of Object.entries(next)) if (value == null || value === '') delete next[key]
+  return next
 }
 
 export const listEmptyText = (empty) => (
@@ -179,7 +187,7 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
   )
 }
 
-export function FacetOverflow({ label, groups = [], clearLabel }) {
+export function FacetOverflow({ label, groups = [], clearLabel, icon = 'ellipsis', className = '' }) {
   const groupId = useId()
   const usable = groups
     .map((group) => ({ ...group, options: facetMenuOptions(group.options, group.value, group.clearLabel === null ? null : (group.clearLabel || clearLabel)) }))
@@ -189,8 +197,8 @@ export function FacetOverflow({ label, groups = [], clearLabel }) {
   const popover = usePopover()
   if (!usable.length) return null
   return (
-    <div className={`rl-overflow ${hasDesktop ? '' : 'mobile-only'} ${hasActive ? 'active' : ''}`} ref={popover.ref}>
-      <IconButton icon="ellipsis" size={16} className="rl-overflow-btn" label={label}
+    <div className={`rl-overflow ${hasDesktop ? '' : 'mobile-only'} ${hasActive ? 'active' : ''} ${className}`} ref={popover.ref}>
+      <IconButton icon={icon} size={16} className="rl-overflow-btn" label={label}
         aria-haspopup="menu" aria-expanded={popover.open} onClick={(event) => popover.toggle(event.currentTarget)}
         onKeyDown={popover.onTriggerKeyDown} />
       {popover.open && (
@@ -304,6 +312,19 @@ export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys
       )}
       <button type="submit" className="rl-query-submit" data-tip={label} aria-label={label}><Icon name="search" size={16} /></button>
     </form>
+  )
+}
+
+// Spec Information's compact projection of the same review filter mechanism: direct typing plus the
+// existing accessible overflow popover. It owns no parser, predicate, or modal-only interaction state.
+export function CompactReviewFilter({ value = '', onChange, placeholder, searchLabel, filterLabel, groups, clearLabel, clearSearchLabel }) {
+  return (
+    <div className="rf-compact" role="search">
+      <span className="rf-search-icon"><Icon name="search" size={13} /></span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={searchLabel} />
+      {value && <IconButton icon="x" size={12} className="rf-clear" label={clearSearchLabel} onClick={() => onChange('')} />}
+      <FacetOverflow label={filterLabel} clearLabel={clearLabel} groups={groups} icon="filter" className="rf-overflow" />
+    </div>
   )
 }
 

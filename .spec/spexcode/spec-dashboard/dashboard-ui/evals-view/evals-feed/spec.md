@@ -9,6 +9,7 @@ related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/graph.ts
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/reviewFilters.js
 ---
 # evals-feed
 
@@ -29,7 +30,9 @@ real measured loss and remains in the default Current section; freshness is now 
 default hide. A fresh human-ok'd reading belongs to the Reviewed section while everything else belongs to
 Current, preserving the existing default attention boundary as GitHub-style mutually exclusive tabs with
 counts — `state:current` / `state:reviewed` tokens the tabs rewrite by surgery, counts computed under the
-rest of the query. Every filter is a token in [[review-chrome]]'s ONE visible query ([[review-query]]):
+rest of the query. Every filter is a token in [[review-chrome]]'s ONE visible query ([[review-query]]),
+and matching travels through [[review-filters]]'s Eval adapter — page code only bridges the parsed text
+into the shared engine, so the embedded node list cannot acquire different parsing or matching semantics:
 `verdict:`, `freshness:`, and `evidence:` (values exactly video | image | all; the default is `all`,
 with NO data-dependent fallback) keep low-cardinality menus that are pure query builders; the
 source-session presence facet is `session:present|missing` ([[live-session-filter]]); `node:` and

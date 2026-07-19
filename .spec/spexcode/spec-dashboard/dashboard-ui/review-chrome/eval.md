@@ -14,6 +14,9 @@ scenarios:
       eval detail and one issue detail and compare the detail skeletons: header,
       status band and state SVG, main column, side rail, docked composer classes. Resize list and detail to
       390px; read facet visibility, overflow contents, row geometry, body scroll width, and column order.
+      Across both sizes and at least two dashboard themes, place open/closed Issue rows beside
+      pass/fail/stale/missing Eval rows and measure each leading state box, SVG bounds, stroke, and baseline.
+      Record the menu, viewport, and theme interactions as video evidence.
     expected: >
       Both list pages render the SAME ListPage chrome — a `.rl-query`, one bordered `.rl-list`, one
       `.lp-head` with counted section tabs left and real invisible facet buttons + functional overflow
@@ -26,6 +29,9 @@ scenarios:
       displaced real facets are usable in kebab; a long title wraps to at most three lines with no body or
       document horizontal overflow. The SAME detail markup reflows to one column with side rail FIRST.
       Eval list/detail/A-B and Issue list/detail states use the same `.review-state` SVG mapping. The shared
+      list primitive gives every Issue/Eval leading state one stable icon box, rendered size, optical stroke,
+      and alignment: changing domain, verdict, lifecycle, viewport, or theme never shifts the title column
+      or row baseline, and no Eval-only CSS patch exists. The shared
       empty primitive distinguishes a vacant dataset from a non-empty dataset whose current view matches zero.
       An active facet whose data option disappeared remains visible with an All off-switch; an inactive facet
       with no real options stays omitted. Menus and section tabs expose one roving tab stop, and Escape peels

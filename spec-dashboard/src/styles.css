@@ -1086,15 +1086,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   flex: 0 0 240px; border-right: 1px solid var(--line); background: var(--panel);
   display: flex; flex-direction: column; overflow-y: auto;
 }
-/* folded session list (Eval tab) — a thin full-height strip that is itself the unfold affordance, mirroring
-   the Evals page's master-list fold (.fv-unfold): 22px wide (the .fv-master.folded column width), muted at
-   rest, inking blue on hover. */
-.si-list-unfold {
-  flex: 0 0 22px; display: flex; align-items: flex-start; justify-content: center; padding: 9px 0 0;
-  color: var(--muted); background: var(--panel); border: none; border-right: 1px solid var(--line);
-  cursor: pointer; min-height: 0;
-}
-.si-list-unfold:hover { color: var(--blue); background: var(--panel2); }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);
@@ -1192,6 +1183,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .lp-controls { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
 .lp-rows { display: flex; flex-direction: column; }
 .lp-empty { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
+.lp-error { margin: 10px 14px 0; }
 /* ONE row grammar for BOTH pages: a real <a> anchor, one compact SINGLE line (the title truncates, never
    wraps) with unhurried vertical air over a hairline-soft divider. `.cur` is the j/k cursor (a visual
    cursor, not a selection — Enter opens the row's page); `.inert` rows (blind spots) carry no link. */
@@ -1223,6 +1215,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the honest not-found face — an address naming no object, with the one link back to its list. */
 .ds-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .ds-missing-note { color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }
+.ds-failed .ds-missing-note { color: var(--red); }
 .ds-backlink { color: var(--blue); font-size: var(--type-control); text-decoration: none; }
 .ds-backlink:hover { text-decoration: underline; }
 /* the phone reflow (GitHub's measured 390px order): ONE column, side metadata ABOVE the main column —
@@ -1273,7 +1266,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-originator.openable:hover { background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fv-originator.openable:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .fv-originator.offline { opacity: .7; }
-.fv-chips { flex: none; display: flex; flex-wrap: wrap; gap: 5px; }
 .fv-close-issue {
   flex: none; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange);
   background: var(--paper); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
@@ -1293,11 +1285,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: var(--leading-relaxed);
 }
 .fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-.fv-count { color: var(--muted); font-size: var(--type-meta); }
 /* a forge issue's permalink — read here, discussed there. */
 .fv-link { color: var(--blue); font-size: var(--type-meta); text-decoration: none; }
 .fv-link:hover { text-decoration: underline; }
-.fv-text { font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; }
 .fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 4px 4px 0; transition: background .15s, border-color .15s; }
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 // a click is a normal hash PUSH); a row without one (a blind spot) is inert. j/k move a visual CURSOR
 // (no detail pane exists to drive — Enter opens the cursor row's page); keys typed into inputs are never
 // captured.
-export function ListPage({ notice, controls, chips, rows, empty, children }) {
+export function ListPage({ notice, error, controls, chips, rows, empty, children }) {
   const [cur, setCur] = useState(null)
   const stateRef = useRef({})
   stateRef.current = { rows, cur }
@@ -39,6 +39,7 @@ export function ListPage({ notice, controls, chips, rows, empty, children }) {
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
+      {error && <div className="fv-error lp-error" role="alert">{error}</div>}
       <header className="lp-head">
         <span className="lp-controls">{controls}</span>
         {chips && <span className="ef-chipbar">{chips}</span>}
@@ -60,7 +61,15 @@ export function ListPage({ notice, controls, chips, rows, empty, children }) {
 // history is the return path. At phone width the same markup reflows to ONE column, side metadata FIRST
 // (the 390px GitHub order) — pure CSS, never a second component. `missing` renders the honest not-found
 // face with a link back to the list.
-export function DetailShell({ title, titleMeta, status, side, composer, missing, listHref, listLabel, children }) {
+export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, children }) {
+  if (failure) {
+    return (
+      <div className="ds-page ds-missing ds-failed" role="alert">
+        <div className="ds-missing-note">{failure}</div>
+        {listHref && <a className="ds-backlink" href={listHref}>{listLabel}</a>}
+      </div>
+    )
+  }
   if (missing) {
     return (
       <div className="ds-page ds-missing">

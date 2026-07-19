@@ -192,6 +192,8 @@ export default {
     btn: 'eval',
     btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
     none: 'no evaluation for this session yet',
+    unavailable: 'evaluation unavailable until the session model loads successfully.',
+    loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,
     export: 'export',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
@@ -489,7 +491,7 @@ export default {
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
       typeDesc: "type mode — type raw keystrokes straight into the agent's terminal",
-      evalDesc: "switch to this session's eval tab — eval evidence, diff, merge gates",
+      evalDesc: "open this session's Evals page — eval evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',

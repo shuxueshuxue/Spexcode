@@ -19,21 +19,28 @@ import { apiUrl } from './project.js'
 // `#/sessions/<id>/eval` address normalizes to this family at the route layer).
 
 // the session scope's worktree-rooted lean model (`GET /api/sessions/:id/evals`, [[session-eval]]) —
-// null loading · false failed/none · else the model. A seq guard drops a stale response; `reload` is the
-// write path's refresh (a remark/ok lands in the worktree store, which fires no board SSE).
+// null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
+// A seq guard drops a stale response; `reload` is the write path's refresh (a remark/ok lands in the
+// worktree store, which fires no board SSE).
 function useSessionEvals(sessionId) {
   const [model, setModel] = useState(null)
+  const [error, setError] = useState(null)
   const seq = useRef(0)
   const load = useCallback(() => {
     if (!sessionId) return Promise.resolve()
     const mine = ++seq.current
+    setError(null)
     return fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((m) => { if (mine === seq.current) setModel(m) })
-      .catch(() => { if (mine === seq.current) setModel(false) })
+      .catch((err) => {
+        if (mine !== seq.current) return
+        setModel(false)
+        setError(err instanceof Error ? err.message : String(err))
+      })
   }, [sessionId])
-  useEffect(() => { setModel(null); if (sessionId) load() }, [sessionId, load])
-  return { model, reload: load }
+  useEffect(() => { setModel(null); setError(null); if (sessionId) load() }, [sessionId, load])
+  return { model, error, reload: load }
 }
 
 // flatten the session model → the list's rows, the session-eval attention order: blind spots lead
@@ -58,11 +65,16 @@ function sessionRows(model) {
 // The LIST page (`#/evals[?query]`): the session scope's gates strip + export door above the one
 // [[evals-feed]] list. All filter state is the URL's; the scope picker (default off = the merged trunk)
 // is the easy door into any session's un-merged worktree evals.
-export function EvalsListPage({ scope, sessionId, model, sessions, query, hrefFor, scopePick, notice }) {
+export function EvalsListPage({ scope, sessionId, model, error, sessions, query, hrefFor, scopePick, notice }) {
   const t = useT()
-  if (sessionId && model === null) return <div className="fv-note">{t('common.loading')}</div>
-  if (sessionId && model === false) return <div className="fv-note">{t('sessionEval.none')}</div>
   const onQuery = (next) => navigate('evals', null, { query: next })
+  const empty = sessionId && model === null
+    ? t('common.loading')
+    : sessionId && error
+      ? t('sessionEval.unavailable')
+      : sessionId && model === false
+        ? t('sessionEval.none')
+        : null
   return (
     <>
       {/* the session scope's gates strip — the same reviewPayload numbers `spex session review` prints
@@ -78,7 +90,8 @@ export function EvalsListPage({ scope, sessionId, model, sessions, query, hrefFo
         </div>
       )}
       <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
-        query={query} onQuery={onQuery} hrefFor={hrefFor} lead={scopePick} notice={notice} />
+        query={query} onQuery={onQuery} hrefFor={hrefFor} lead={scopePick} notice={notice}
+        error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
     </>
   )
 }
@@ -86,21 +99,27 @@ export function EvalsListPage({ scope, sessionId, model, sessions, query, hrefFo
 // The DETAIL page (`#/evals/<node>/<scenario>[?session=<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, scope, sessionId, model, specs, sessions, listHref, onOpenSession, onWrite, notice }) {
+export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, onOpenSession, onWrite, notice }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
   const scenario = i > 0 ? param.slice(i + 1) : null
+  // The session scope's A/B history is WORKTREE-rooted. Memoizing the slice makes its identity stable
+  // across unrelated board poll/SSE repaints, so EventDetail keeps the A/B cursor, timeline, and draft.
+  const history = useMemo(
+    () => (sessionId && model && model !== false
+      ? (model.nodes.find((n) => n.id === node)?.evals || []).filter((e) => e.scenario === scenario)
+      : undefined),
+    [sessionId, model, node, scenario],
+  )
+  if (sessionId && error) {
+    return <DetailShell failure={t('sessionEval.loadFailed', { reason: error })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
+  }
   if (sessionId && model === null) return <div className="fv-note">{t('common.loading')}</div>
   const entry = scope.entries.find((e) => entryKey(e) === `eval:${node}·${scenario}`) || null
   if (!entry) {
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
-  // the session scope's A/B history is the WORKTREE-rooted slice ([[session-eval]] / [[event-detail]]);
-  // the project scope passes none and the detail fetches the trunk timeline itself.
-  const history = sessionId && model && model !== false
-    ? (model.nodes.find((n) => n.id === node)?.evals || []).filter((e) => e.scenario === scenario)
-    : undefined
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
@@ -114,7 +133,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const t = useT()
   const { param, query } = useRoute()
   const sessionId = query.session || null
-  const { model, reload: reloadSession } = useSessionEvals(sessionId)
+  const { model, error, reload: reloadSession } = useSessionEvals(sessionId)
   const [notice, setNotice] = useState('')
 
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
@@ -143,8 +162,8 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   )
 
   return param
-    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} specs={specs}
+    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
         sessions={sessions} listHref={listHref} onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
-    : <EvalsListPage scope={scope} sessionId={sessionId} model={model} sessions={sessions}
+    : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
         query={query} hrefFor={hrefFor} scopePick={scopePick} notice={notice} />
 }

@@ -32,8 +32,8 @@ filter (default off) picking the root.
 - **The list's state is its URL.** Filters ride the hash's query string — `#/evals?kind=all&session=<id>`
   plus the live/ok chips — so a filtered list is copyable and Back-restorable: on every hashchange the
   list re-derives its WHOLE state from the URL, so Back replays exactly what was on screen. A human's
-  filter change PUSHES (GitHub's semantics — Back walks filter history); only an AUTOMATIC rewrite (a
-  deep link widening a filter to reveal its target, a normalization) replaces. Rows are the
+  filter change PUSHES (GitHub's semantics — Back walks filter history); only an AUTOMATIC rewrite (the
+  legacy-address normalization) replaces. Rows are the
   [[evals-feed]] grammar: one
   line each, latest reading per scenario, and each row is a REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
@@ -57,8 +57,14 @@ filter (default off) picking the root.
   rows, in-session rows ✦-marked); the detail carries the same `?session=<id>` so its A/B history walks
   the worktree-rooted readings. `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route
   layer normalizes it (replace) to the `#/evals` form — old links keep working, the old shape is never
-  re-minted, and the console's Eval tab is now a door that navigates here.
+  re-minted, and the console exposes only a door that navigates here. The session model has three honest
+  read states: loading, loaded/not-found, and failed. A failed fetch is never rendered as an empty session
+  or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
+  detail gets a distinct load-failed face; only a successfully loaded model without the addressed reading
+  gets the not-found face.
 - **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
   the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
   source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
-  unchanged.
+  unchanged. The session detail's worktree history is referentially stable while that model, node, and
+  scenario are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole, loaded
+  timeline events, or composer draft. A real scope/model/scenario change still re-sources the workspace.

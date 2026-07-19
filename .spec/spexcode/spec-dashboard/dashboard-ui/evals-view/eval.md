@@ -54,6 +54,31 @@ scenarios:
       keep working, the old shape never shows in the bar. The console's Eval entry is a DOOR that
       navigates to the same session-scoped list (no in-console eval pane exists). Zero loss = un-merged
       worktree evals live in the ONE #/evals route family behind a default-off session filter.
+  - name: session-detail-refresh-stability
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]
+    description: >
+      Open a session-scoped detail whose scenario has at least two readings and a timeline sidecar. Walk
+      from the latest B pole to the older A pole, wait for the timeline events to render, and type an
+      unsent composer draft. Trigger an app board refresh (the same new specs/sessions props a poll or SSE
+      board message delivers) without changing the session model, node, or scenario; record the whole flow.
+    expected: >
+      The board repaint does not change the selected A/B pole or position label, the timeline/step events
+      remain rendered, and the exact unsent draft remains in the composer. No session-model refetch occurs.
+      Changing the addressed scenario still resets those working states. Zero loss = unrelated app
+      freshness cannot erase review work in progress.
+  - name: session-scope-load-failure
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    description: >
+      Open a session-scoped Evals list and detail while forcing its `/api/sessions/:id/evals` request to
+      return 503, then repeat with a real 404/missing target. Read the visible controls, alert/not-found
+      faces, and retry by changing the scope picker.
+    expected: >
+      A transport/5xx failure is explicit: the list retains the session scope and kind controls and shows
+      a load-failed alert, while the detail shows the distinct load-failed face. It never says the session
+      has no evals and never renders the addressed eval as not-found. A genuine missing session/reading uses
+      the normal empty/not-found copy instead, and the list's scope picker remains usable in every state.
   - name: mobile-evals-pages
     tags: [frontend-e2e, mobile]
     code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]

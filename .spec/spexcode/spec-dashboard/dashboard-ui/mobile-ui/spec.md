@@ -34,6 +34,13 @@ of the phone surface, never a session type selected at launch. The chat body liv
 `replyVia:"note"` fixed); this node's `MobileSessionDetail` is the thin phone wrapper around it
 (identity card, back control, eval entry).
 
+**The review pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
+[[side-nav]] route family: a `#/evals`/`#/issues` address (list or detail) opened at phone width renders
+the SAME [[evals-view]]/[[issues-view]] components inside the phone shell, restacked by [[review-chrome]]'s
+one-column reflow (side metadata above the main column — GitHub's own 390px order); the tab bar grows an
+Evals and an Issues entry (tapping navigates the route, the active page lights its tab), and Back is the
+browser's history exactly as on desktop. Specs/Sessions stay the phone-local planes below.
+
 **One API, never its own.** Every read/write the phone makes is a route the desktop already
 uses, through the shared `data.js` helpers: the pushed/polled board for both planes, the
 `/api/specs/:id/*` panes (content/history/issues/evals — the SAME React pane components, no second
@@ -61,12 +68,10 @@ The two planes, made native to touch:
   timeline's pending state reads the GENERIC loading word — never another surface's loading phrase
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
-  a list a phone reader never used — but the header carries ONE compact **eval** entry that flips
-  the detail to the session's evaluation: the SAME SessionEvalPane the desktop console's Eval tab
-  mounts ([[session-eval]] — gates strip, blind spots, ✦-marked own readings, inherited baseline),
-  loaded lazily (a phone that never opens it never downloads the eval family) and restacked by CSS
-  to one column at thumb width — master list above, detail below, the desktop fold toggle hidden
-  (stacking already gives the detail the full width). Reading the measured loss is exactly what a
+  a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that
+  navigates to the session-scoped Evals list (`#/evals?session=<id>`, [[session-eval]] — gates strip,
+  blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,
+  lazily loaded and reflowed to one column. Reading the measured loss is exactly what a
   phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the

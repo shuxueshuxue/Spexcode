@@ -1,7 +1,7 @@
 ---
 title: session-eval
 hue: 150
-desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) and its CLI twin `spex eval ls --session <SEL>`, over the same worktree-rooted engine that renders the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
+desc: A session's fully-derived evaluation — the worktree-rooted engine (sessioneval.ts) whose interactive face is now the Evals route family scoped by ?session=<id> ([[evals-view]] — the console and phone expose navigation doors, never a local Eval tab), its CLI twin `spex eval ls --session <SEL>`, and the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
 code:
   - spec-eval/src/sessioneval.ts
 related:
@@ -10,9 +10,7 @@ related:
   - spec-cli/src/client.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
-  - spec-dashboard/src/SessionEval.jsx
-  - spec-dashboard/src/session.js
-  - spec-dashboard/src/session.test.mjs
+  - spec-dashboard/src/EvalsPage.jsx
 ---
 # session-eval
 
@@ -24,6 +22,8 @@ evidence, its diff, and the merge gates, in a single beautiful page, available f
 into its own at review, but the human can open it any time). It is **fully DERIVED**: it costs the agent nothing
 and can never go stale, because it is built from what the system already knows and **generated on the fly
 each time it is opened**. This is the optimizer's measured loss, marshaled at the moment a human decides.
+And it is not a separate world: the human's directive re-homed un-merged worktree evals into the ONE Evals
+route family — a session's evaluation is the same pages as the project's, scoped.
 
 ## expanded spec
 
@@ -47,66 +47,38 @@ Every changed file — `spec.md` included — is a **drill-down**: its row expan
 behind native toggles (capped so a huge changeset can't bloat the page). Nothing is hidden — the whole
 diff and both file versions are there to jump into, no extra fetch.
 
-**The faces split by purpose — the interactive face is the eval component family, the artifact is the
-export.** The dashboard's face is the console right pane's **Eval tab** (Terminal / Eval; the typed
-`/eval` board command switches to it): the THIRD scope of the ONE eval component family — the node
-popup reads one node, the Evals page reads the project, this tab reads *this session* — the same rows, the
-same [[event-detail]] detail, inside the SAME master-detail shell the Evals page renders ([[evals-view]]'s
-shared `EvalMasterDetail`: the split, the fold-to-a-strip, the j/k walk — no session-only clone of the
-geometry or the keys). It fetches the LEAN model (`GET
-/api/sessions/:id/evals` — rows only, worktree-rooted, no diff enrichment, no inlined bytes) and rides the
-tiered loading every eval face shares: collapsed scenario rows first, evidence streamed from
-`/api/evidence` only when a row opens. It also keeps the same native reading affordances as the top-level
-Evals page: browser text selection inside the eval workspace is allowed, and the session console's
-input-focus retention must never cancel the Eval tab's mousedown defaults. Rows order by attention — and every row must be legible as WHAT
-it is, because a reviewer misreading the inherited baseline as the session's own output is this face's one
-fatal failure: **blind spots lead** (declared, never measured — the outstanding loss), then the session's
-own measurements ✦-marked (a reading is the session's own iff THIS session filed it or its `codeSha` is
-one of the branch's commits — derived from the reading, never hand-tagged; filing alone counts, else a
-session that measured without committing code reads as if it did nothing), then the **inherited
-baseline** — other sessions' latest readings — **default-collapsed** behind an explicit divider naming it:
-the divider is the group's toggle, carrying its inherited-row count so the folded baseline stays legible
-and an obvious expand/collapse affordance; expanding reveals the same rows in place. The fold changes
-only visibility, never semantics — a collapsed row leaves the selection walk exactly as a filtered row
-does, and a count chip still narrows the list to the session's own alone (while it narrows, the inherited
-divider withdraws with its rows). The rows are the DECLARED scenarios' current score, the same
-latest-per-scenario computation every eval face reads (each row carrying its ✓/✗, muted when stale) — a
-retired scenario's residual reading contributes no row. The tab is **addressable**
-(`#/sessions/<id>/eval[/<node>/<scenario>]`, [[address-routing]]'s `session-eval` address): a **persistent,
-refreshable** sub-route — not a one-shot entrance — that flips the console to this tab and, given a node +
-scenario, selects that reading's row and opens its detail, unfolding the inherited baseline when the target
-lives there and degrading to the default selection when the name matches nothing. The **bare `/eval` form**
-(no node/scenario) defaults to THIS session's own reading — a failing one first (the loss a reviewer most
-needs to see), then any in-session reading — never the blind-spot row that merely LEADS the visual order;
-only a session with no reading of its own falls back to the first visible row. The address is **two-way and
-always consistent with the pane**: on every real navigation the URL entrance drives the right pane (a `/eval`
-entrance opens this tab and jumps to the reading, a bare tab URL shows the Terminal), and BETWEEN navigations
-the console reports its live tab + selection back, so a manual switch INTO this tab makes the URL addressable,
-a switch to the Terminal — or a bare return to the session — drops the sub-route, and no stale entrance can
-resurrect an old reading. The sub-route survives a reload, so a CI/MR note lands a reviewer on the live,
-remarkable, worktree-rooted reading of a still-open branch and a refresh reopens the same one — merging
-first is not required, and the inert `?format=html` export is not the link (it can't be commented on). A gates strip (the same
-`reviewPayload` numbers `spex session review` prints — lint memoized on the checkout fingerprint,
-[[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
-measuring the real product, not by a language-specific checker. When the session has no worktree/diff the
-tab shows a clean empty placeholder. The pane has a second interactive home: the phone's session detail
-([[mobile-ui]]) flips to the SAME component behind its header eval entry — lazily loaded, restacked to one
-column by the phone's CSS; no mobile clone of the rows, the order, or the detail.
+**The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
+address of a session's evaluation is `#/evals?session=<id>` (the list — the same [[evals-feed]] row
+grammar with the session's gates strip above, blind spots leading as inert unmeasured rows, then the
+session's own measurements ✦-marked, then the inherited baseline — other sessions' latest readings; a
+reading is the session's own iff THIS session filed it or its `codeSha` is one of the branch's commits,
+derived, never hand-tagged) and `#/evals/<node>/<scenario>?session=<id>` (the [[event-detail]] page whose
+A/B history walks the WORKTREE-rooted readings — the live, remarkable reading of a still-open branch,
+what a CI/MR note links; merging first is not required, and the inert `?format=html` export is not the
+link). The face fetches the LEAN model (`GET /api/sessions/:id/evals` — rows only, worktree-rooted, no
+diff enrichment, no inlined bytes) and rides the tiered loading every eval face shares: rows first,
+evidence streamed from `/api/evidence` only on the detail page. The console and phone session surfaces expose
+**DOORS** that navigate to the session-scoped Evals list
+(a real page switch, history-walked) instead of mounting a console-local eval pane; the typed `/eval`
+board command opens the same door. The LEGACY address `#/sessions/<id>/eval[/<node>/<scenario>]`
+normalizes to the canonical form at the route layer ([[side-nav]] — replace, old links keep working).
+There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the
+real product, not by a language-specific checker; a session with no worktree/diff shows a clean empty
+state.
 
 The **self-contained HTML** (`renderExportHtml`: evidence inlined as data-URIs, every changed file's
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
-browser — behind the tab's `export ↗` link (labelled as the export it is, tooltip naming the self-contained
-HTML report — the same `GET /api/sessions/:id/evals` route with `?format=html`; bare, it serves the lean
-JSON model), and
+browser — behind the session-scoped list's `export ↗` link (labelled as the export it is — the same
+`GET /api/sessions/:id/evals` route with `?format=html`; bare, it serves the lean JSON model), and
 `spex eval ls --session <SEL> --export` (`--out`/`--open`, a backend client that works against a remote backend
 unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
-for an interactive tab — that is the whole split.
+for an interactive page — that is the whole split.
 
-**The CLI mirrors the vocabulary, not just the artifact.** `spex eval ls --session <SEL>` is the Eval tab's CLI twin:
-it reads the same lean `/evals` model and renders the same attention order as text — blind spots lead,
-the session's own readings ✦-marked, the inherited baseline under its named divider, an uncovered
-frontend node flagged — so a terminal-bound manager reads the measured loss without the dashboard.
-`proof` is no longer a user-facing word at all: the export rides the eval read as its `--export`
-flag (named for what the artifact IS — an export — not for the legacy noun), and the old
-`spex review proof` spelling is gone — a signpost names the canonical form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval ls --session` READS a session's evaluation;
-filing a reading remains `spex eval add`.
+**The CLI mirrors the vocabulary, not just the artifact.** `spex eval ls --session <SEL>` is the
+session-scoped list's CLI twin: it reads the same lean `/evals` model and renders the same attention
+order as text — blind spots lead, the session's own readings ✦-marked, the inherited baseline under its
+named divider, an uncovered frontend node flagged — so a terminal-bound manager reads the measured loss
+without the dashboard. `proof` is no longer a user-facing word at all: the export rides the eval read as
+its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
+form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval
+ls --session` READS a session's evaluation; filing a reading remains `spex eval add`.

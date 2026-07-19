@@ -115,16 +115,35 @@ export default {
     summary: ({ n }) => `${n} 条当前`,
     empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
     annotate: '打开并标注',
+    inSession: '由本会话测得',
     okdTip: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
     okChip: ({ n }) => `${n} 已签核`,
     okChipTitle: '显示被默认隐藏的已签核场景',
   },
 
   masterList: {
-    fold: '折叠列表 — 让详情占满宽度',
-    unfold: '展开列表',
     liveChip: ({ n }) => `${n} 活跃`,
     liveChipTitle: '只看背后 session 还活着的条目',
+  },
+
+  evals: {
+    scopeMerged: '已合并',
+  },
+
+  reviewShell: {
+    evalNotFound: ({ node, scenario }) => `找不到 ${node} · ${scenario} 的评测`,
+    issueNotFound: ({ id }) => `找不到 issue ${id}`,
+    backToEvals: '← 全部评测',
+    backToIssues: '← 全部 issues',
+  },
+
+  detail: {
+    sideReading: '读数',
+    sideFiler: '提交者',
+    sideOk: '人工签核',
+    sideStore: '存储',
+    sideOriginator: '发起者',
+    sideNodes: '规格节点',
   },
 
   annotator: {
@@ -138,8 +157,6 @@ export default {
     capturing: '正在截取画面…',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
-    railFold: '折叠评审轨道 — 让画面占满宽度',
-    railUnfold: '展开评审轨道',
     abOlder: '更早的 eval（‹ 靠近 A / 复现出的 bug）',
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
@@ -172,16 +189,12 @@ export default {
 
   sessionEval: {
     btn: '评测',
-    btnTitle: '切换到此会话的评测页 —— 测得的评测证据、改动与合并门禁',
+    btnTitle: '打开此会话的评测页 —— 测得的评测证据与合并门禁（Evals 页会话视角）',
     none: '此会话暂无评测',
-    sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
-    inherited: '继承基线 · 其他会话的最新读数',
     export: '导出',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',
-    blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex eval add 测一次。',
     unmeasured: '未测量',
-    noEvalFile: 'UI 代码 · 无 eval.md',
   },
 
   time: {
@@ -445,6 +458,7 @@ export default {
     launcherTip: '修改 spexcode.json / spexcode.local.json 来配置启动器',
     tabTerminal: '终端',
     tabEval: '评测',
+    tabEvalTitle: '打开此会话在 Evals 页的评测（?session 视角）',
     typeBtn: '终端交互',
     typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
@@ -500,6 +514,8 @@ export default {
   mobile: {
     specsTab: '规格',
     sessionsTab: '会话',
+    evalsTab: '评测',
+    issuesTab: 'issues',
     childrenTab: ({ n }) => `子节点 ${n}`,
     liveEditors: ({ n }) => `${n} 个在线编辑者`,
     noSessions: '没有运行中的会话 —— 点上方 ＋ 新建',

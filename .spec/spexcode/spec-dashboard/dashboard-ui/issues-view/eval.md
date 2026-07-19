@@ -5,11 +5,12 @@ scenarios:
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
       Run the dashboard against a backend whose issues span both stores (a local thread with a reply,
-      forge issues). Open #/issues and read the rendered DOM: the issue group's rows, then select
-      the local thread and read the detail pane; check for raw markdown syntax in the detail.
+      forge issues). Open #/issues and read the rendered DOM: the list rows (tag + href), then open
+      the local thread's detail page and read it; check for raw markdown syntax in the detail.
     expected: >-
-      The issue group renders the non-concluded rows in the API's order (no re-sort/rank): one compact
-      line each, LEADING with the issue itself — open rows use the original 16px GitHub Primer
+      The list renders the non-concluded rows in the API's order (no re-sort/rank): one compact
+      line each — a REAL <a> anchor to #/issues/<id> — LEADING with the issue itself: open rows use the
+      original 16px GitHub Primer
       `issue-opened` Octicon geometry (ring + centre) in the theme's semantic open green, never the old
       8px solid dot; after the concluded chip reveals the archive, both local `landed` and forge `closed`
       rows use Primer's matching 16px `issue-closed` geometry (ring + check) in the one semantic closed
@@ -17,12 +18,13 @@ scenarios:
       Evals scenario title (12px/600), while the reply-count pill and borderless store mini-tag use the
       Evals row's quiet 10.5–11px UI font family with zero added letter-spacing — never the old tiny
       uppercase monospace dialect. NO boxed store chip leads any row. Concluded issues (any non-open
-      issue: local landed or forge closed) are hidden behind a count chip that reveals them. Selecting the local
-      thread opens it in the RIGHT detail pane: the title is the concern ALONE (no store chip on the
-      title); the meta strip under it carries status, the store tag, author, clickable node
-      chips; the body and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes
-      visible), and a reply composer. A forge selection renders the SAME way — its GitHub comments as
-      the reply thread, its permalink in the meta strip labeled with the store's concrete display name
+      issue: local landed or forge closed) are hidden behind a count chip that reveals them. Opening the
+      local thread lands on its own DETAIL PAGE (#/issues/<id>, a history push): the title is the concern
+      ALONE (no store chip on the title); the status band under it carries the status; the SIDE rail
+      carries the store tag, author, clickable node chips; the body and replies MARKDOWN-RENDERED in the
+      main column (headings/tables/lists — no raw `##` or `|` pipes
+      visible), and a reply composer. A forge detail renders the SAME way — its GitHub comments as
+      the reply thread, its permalink in the side rail labeled with the store's concrete display name
       ("Open on GitHub" for a github issue, "Open on GitLab" for a gitlab issue — derived from the
       issue's `store` identity, never the internal word "forge"), and the SAME composer (no read-only
       note exists) — store never changes the thread's shape. A local issue shows no permalink. No page
@@ -85,18 +87,18 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-dashboard/src/textarea.js]
     description: >-
-      On the running issues page, select an issue whose thread is LONG (body + replies overflow the
-      detail pane). WITHOUT scrolling, read the reply composer's geometry (getBoundingClientRect on
-      `.fvd-compose` and its textarea) against the viewport; read the composer container's computed
+      On the running issues page, open the detail page of an issue whose thread is LONG (body + replies
+      overflow the viewport). WITHOUT scrolling, read the reply composer's geometry (getBoundingClientRect
+      on `.ds-compose` and its textarea) against the viewport; read the composer container's computed
       border/radius and the textarea's computed border-style; read the IDLE textarea's height (before any
       click/focus) and whether the actions row (`.fv-actions`) is present, what it contains, and whether
       any always-visible hint text renders. Focus the textarea and re-read; type several lines and read
-      the height after each; clear and blur and re-read. Then scroll the thread region and read whether
-      the composer moved. Repeat the idle/engaged reading on an eval detail's rail composer (#/evals).
+      the height after each; clear and blur and re-read. Then scroll the thread and read whether
+      the composer stays on screen. Repeat the idle/engaged reading on an eval detail's composer (#/evals).
     expected: >-
-      The composer is DOCKED at the detail pane's foot — visible in the viewport immediately on
-      selection, no scrolling needed even on a long thread; the thread scrolls in its own region
-      (`.fvd-scroll`) behind it and the composer never moves. The composer is ONE quiet bordered rounded
+      The composer is DOCKED STICKY at the main column's foot — visible in the viewport immediately on
+      page open, no scrolling needed even on a long thread; the thread scrolls behind it and the composer
+      stays on screen. The composer is ONE quiet bordered rounded
       container; the textarea inside it is BORDERLESS (computed border-style none) and IDLE it is
       ALREADY USABLE — a two-line floor (~40px, never a one-line ~26px sliver), needing NO click/focus to
       reach that height: the box you land on is the box you can write in. Focus does not change the
@@ -107,48 +109,41 @@ scenarios:
       the pane; an emptied, blurred composer settles back to the same usable idle floor, never collapsing
       to a hairline line, and the action row stays visible throughout; for a non-concluded issue it shows
       Promote/Close issue beside the disabled Send, and for a home with no lifecycle action, such as the
-      eval rail composer, idle still shows the disabled Send (plus ⏱ over a clip). Switching to another
-      issue clears the draft (keyed to the selection). One shared composer, every home. No page errors.
+      eval detail's composer, idle still shows the disabled Send (plus ⏱ over a clip). Another issue's
+      page starts with a fresh draft (keyed to the issue). One shared composer, every home. No page errors.
   - name: detail-composer-column-alignment
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]
     description: >-
-      On the running issues page at a wide desktop viewport (~1600px), select an issue with a body and
-      replies. Measure bounding rects of the detail's title (.fvd-head), meta strip, body, a reply, and
-      the docked composer's quiet bordered box (.fvd-compose .fv-compose): left edges and right edges.
-      Read the dock strip's (.fvd-compose) and the box's computed border/background. Re-measure at a
-      ~780px window; check document/body horizontal overflow at both widths.
+      On the running issues page at a wide desktop viewport (~1600px), open the detail page of an issue
+      with a body and replies. Measure bounding rects of the detail's title (.ds-title), body, a reply,
+      and the docked composer's quiet bordered box (.ds-compose .fv-compose): left edges and right edges.
+      Re-measure at a ~780px window; check document/body horizontal overflow at both widths.
     expected: >-
-      The title, meta, body, replies, and the docked composer's quiet bordered box share ONE content
-      column — the same left edge and the same capped width (identical right edges) at every viewport,
+      The title, body, replies, and the docked composer's quiet bordered box share ONE main column — the
+      same left edge and the same capped width at every viewport,
       wide or narrow: the writing box sits ON the column the prose above establishes, never offset a
-      few px left/right of it and never stretched to the pane edge while the content is capped. The
-      dock strip's full-width hairline top border and panel band are the dock's own chrome (the same
-      docked-bar geometry as the eval rail's composer); the quiet 1px rounded border belongs to the
-      composer box alone. No horizontal overflow at either width. No page errors.
-  - name: panel-skeleton
+      few px left/right of it and never stretched past the column while the content is capped. The quiet
+      1px rounded border belongs to the composer box alone. No horizontal overflow at either width. No
+      page errors.
+  - name: list-page-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      On the running issues page (#/issues), read the master-detail shell: the grid split and the LIST
-      COLUMN'S MEASURED WIDTH, the left box (NO tab switcher — the Issues page is its own top-level route
-      now), which container scrolls, the sticky filter bar. Click the fold toggle and re-measure the
-      columns; unfold. Drive j/k in the issue list; select a row and read the detail pane; finally type
-      'j' inside the New-form input.
+      On the running issues page (#/issues), read the list page's skeleton: the rows' element tag and
+      hrefs, which container scrolls, the sticky filter head (NO tab switcher — the Issues page is its
+      own top-level route). Apply the concluded chip and read the hash; reload at that address. Drive
+      j/k and Enter; then type 'j' inside the New-form input. Record history.length across a row click
+      and drive browser Back.
     expected: >-
-      The page is a two-column grid whose LEFT column is SLIM (compact one-line rows, at most ~280px —
-      the detail is the protagonist): ONE box — the merged issue list under its own
-      sticky filter bar (the CONTROL row: the fold toggle + the store filter + New, the fold toggle a
-      normal in-row member — NOT absolutely positioned over the scrollbar; the small toggle chips on a
-      second CHIP row; NO open/total count meta anywhere), NO Evals|Threads tab switcher present; its list gets
-      the full column height, scrolling
-      itself; the RIGHT detail pane scrolls independently, the page itself never scrolls. The fold
-      toggle collapses the list to a thin strip (the detail takes essentially the full width) and the
-      strip unfolds it with filters and selection intact. The list
-      renders INSTANTLY from app-resident issues (no per-mount fetch). j/k move ONE visible selection in
-      the issue list and the detail pane follows immediately — selection IS detail, nothing expands
-      inside the list. Deep j keeps the selected row inside the left column's viewport. A key typed into
-      an input/textarea reaches the input and never moves the selection. No page errors.
+      The page is a GitHub-style full-width LIST: one-line rows, each a REAL <a> anchor to
+      #/issues/<id>; NO master-detail split, NO Evals|Threads switcher. The head is sticky (the CONTROL
+      row: store filter + New; the small toggle chips on the CHIP row; NO open/total count meta). The
+      list renders INSTANTLY from app-resident issues (no per-mount fetch). A chip pick rewrites the
+      address (?concluded=1) and a reload there re-derives the state. j/k move a visible CURSOR down the
+      rows and Enter opens the cursor row's detail page; a row click pushes (history grows) and browser
+      Back restores the exact filtered list. A key typed into an input/textarea reaches the input and
+      never moves the cursor. No page errors.
   - name: node-issue-cards-route-internally
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]
@@ -170,14 +165,14 @@ scenarios:
       On the running issues page, open the New form and count its text surfaces and read every store
       picker's option text; then post an issue whose
       concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
-      select the new thread and read its detail meta strip (`.fvd-meta`).
+      open the new thread's detail page and read its side rail.
     expected: >-
       The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
       The form carries exactly TWO text surfaces — the concern input and the body textarea — plus one compact
       store picker for local/configured forge stores. Each option names its canonical store label exactly
       once (`local`, `github`, `gitlab` as configured), with no redundant initial/prefix such as `L · local`
       or `GH · github`; NO node-ids field exists (nothing placeholder-labelled
-      "node ids"). Posted local threads show the linked node as a clickable chip — the store inferred
+      "node ids"). Posted local threads show the linked node as a clickable chip in the detail's side rail — the store inferred
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.
@@ -185,18 +180,17 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/FilterSelect.jsx]
     description: >-
-      With issues spanning both stores on the running dashboard, open #/issues and read the filter bar's
-      real DOM: the store dropdown's options and their labels, the bar's row structure (which row the fold
-      toggle, the dropdown, New, and the chips sit on; the fold toggle's computed position), and the
-      dropdown's element/class compared with the evals feed's kind dropdown on #/evals.
+      With issues spanning both stores on the running dashboard, open #/issues and read the filter head's
+      real DOM: the store dropdown's options and their labels, the head's row structure (which row the
+      dropdown, New, and the chips sit on), and the
+      dropdown's element/class compared with the evals list's kind dropdown on #/evals.
     expected: >-
-      The store dropdown is the SAME shared control as the evals feed's kind filter — one component, the
+      The store dropdown is the SAME shared control as the evals list's kind filter — one component, the
       same select element and `fv-filter` class on both pages. Its options are the stores present plus a
-      first option labelled exactly "all" (the bare word — never "all stores"). The bar's FIRST row is the
-      CONTROL row — the fold toggle (a normal static flex member, never position:absolute over the
-      scrollbar), the store dropdown, and New together; the small toggle chips (concluded count) sit on the
-      SECOND row. No open/total count meta exists anywhere in the bar. The evals feed's head wears the
-      same control-row grammar (its fold toggle anchored beside the kind dropdown).
+      first option labelled exactly "all" (the bare word — never "all stores"). The head's FIRST row is the
+      CONTROL row — the store dropdown and New together; the small toggle chips (concluded count) sit on the
+      SECOND row. No open/total count meta exists anywhere in the head. The evals list's head wears the
+      same control-row grammar.
       No page errors.
   - name: close-issue-button
     tags: [frontend-e2e]
@@ -220,12 +214,13 @@ scenarios:
     code: spec-dashboard/src/Thread.jsx
     description: >-
       Run the dashboard against a backend whose board lists live sessions. Seed one LOCAL issue whose `by`
-      is an ONLINE session id and one whose `by` is an id absent from the board. Open #/issues, select
-      each, and read the detail header's originator chip (`.fv-originator`): its alive/offline class, the
+      is an ONLINE session id and one whose `by` is an id absent from the board. Open #/issues, open
+      each detail page, and read the side rail's originator chip (`.fv-originator`): its alive/offline
+      class, the
       dot's computed background colour, whether the ONLINE originator is a click target, and whether the
       old reach phrase is absent.
     expected: >-
-      Each local issue's header shows the originator id with a liveness dot and no visible reach phrase. The
+      Each local issue's side rail shows the originator id with a liveness dot and no visible reach phrase. The
       ONLINE originator reads `alive`, uses a status-hued dot from the board's `STATUS_COLOR`, renders as a
       clickable chip, and clicking it opens `#/sessions/<id>` with that session selected. The absent
       originator reads `offline`, uses the muted dot, and is not clickable. A forge issue's github-login
@@ -251,9 +246,9 @@ scenarios:
 # measuring issues-view
 
 YATU through the REAL running dashboard, never the code: a backend seeded with local + forge issues, the
-worktree dashboard pointed at it, and a headless Chromium that opens #/issues and reads the live DOM
-(`.fv-master`, `.fv-row`, `.fv-store`, `.fvd`, `.doc-body`) + screenshots it. The loss is the gap between
-that reading and the spec: a master-detail Issues page (its own top-level route, no in-page switcher),
-one merged store-tagged list in API order, markdown-rendered detail, one thread surface and one composer
-over both stores. (This reading style is
+worktree dashboard pointed at it, and a headless Chromium that opens the #/issues pages and reads the live
+DOM (`.lp-page`, `.lp-row` anchors, `.ds-page`, `.ds-side`, `.doc-body`) + screenshots them. The loss is
+the gap between that reading and the spec: a GitHub-style list page + detail page pair (its own top-level
+route family, state in the URL, push/Back navigation), one merged store-tagged list in API order,
+markdown-rendered detail, one thread surface and one composer over both stores. (This reading style is
 what caught the `t(...)` i18n call-convention crash a build could not.)

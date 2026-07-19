@@ -103,22 +103,12 @@ does it **overlay** the terminal, expanding
 reserves space — growth overlays), and growth is **content-driven**: only real draft content grows the box —
 an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
 strip taller than the space the terminal reserved. Above the pane a **horizontal tab bar** replaces the old title/action
-strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
-pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
-view — the shared eval components, session-scoped; below and [[session-eval]]). Inside the Eval tab,
-"open a session" (the eval detail's filer chip, [[event-detail]]) means SHOW ITS CONSOLE: the chip routinely
-names the session already being viewed, where a plain navigate would no-op (selection unchanged, identical
-hash — a dead button), so the host flips the right pane back to Terminal and navigates only when the filer
-is a different session. **Opening the Eval tab
-auto-collapses the left session list to a thin strip** — the same fold-to-strip geometry the Evals page's
-master list uses ([[evals-view]]), and for the same reason: the Eval tab is itself a master-detail whose own
-scenario list ([[session-eval]]) needs room, so leaving the console's full-width session list beside it would
-crowd two lists into the width one deserves. The collapse is **automatic on entering the tab and reverts on
-returning to Terminal**; the strip is the unfold affordance (click to bring the list back, which then stays
-until you leave the tab), and the list stays **mounted** behind it — the fold is pure geometry, so its zone
-grouping, nesting-fold, and selection survive untouched. The fold shows **only while Eval is the tab**, so the
-terminal's width is **stable across a Terminal↔Eval round-trip** — the warm pane is never reflowed on the way
-back (a reflow would scroll a normal-screen codex pane back through its history; see [[live-view]]). The bar wears the app-chrome background with a bottom separator, so it reads
+strip, carrying the **Terminal** tab on the left plus an **Eval door**: Terminal shows the live
+pane with the docked `❯` input; the Eval entry is a **DOOR, not a tab** — clicking it (or the typed
+`/eval`) NAVIGATES to the session-scoped Evals list (`#/evals?session=<id>`, [[session-eval]] /
+[[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
+eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
+see [[live-view]]). The bar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Between the tabs and the actions it still carries the
 **shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session
@@ -150,8 +140,8 @@ session (`act('stop')`, **muted grey** — v0.3.0 respelled it off the old `/exi
 Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux but **keeps the worktree**, so
 the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
 **`/close`** removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's
-right-click Close's twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` jumps to the
-**Eval tab** (cyan). In the inbox `/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's
+right-click Close's twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` opens the
+**session-scoped Evals page** (cyan — the same door as the bar's Eval entry). In the inbox `/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's
 blue command rows; accepting one **runs** it (the one row that acts, not inserts — see [[term-input]]). A
 board command still **overrides** a same-named CC command so a name shows **once** — though after the
 `/exit`→`/stop` respelling no board name currently twins a CC one: one command, one identity. Row
@@ -215,9 +205,9 @@ reaches the page to be cancelled — ⌥ is the modifier the app can actually ow
 right side** holds the same board-command registry as action buttons, narrowed to the current state:
 **type** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
-**agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is a
-permanent **Eval tab**, always available for any selected session (see [[session-eval]]), reached by
-clicking the tab or the typed `/eval`. There is
+**agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
+permanent **Eval door**, always available for any selected session (see [[session-eval]]): the bar entry
+or the typed `/eval`, each navigating to the session-scoped Evals page. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed

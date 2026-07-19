@@ -71,6 +71,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
   const [routeNav, setRouteNav] = useState(null)  // per-navigation route directive ({session,tab,node,scenario}) driving the console's right pane
   const [evalView, setEvalView] = useState(null)  // the console's REAL eval-tab selection ({node,scenario}|null), reported up — the URL's source
+  const firstEchoRef = useRef(true)               // the echo effect's mount run predates the URL parse — skipped (see below)
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
@@ -167,13 +168,22 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // `sessions` is real (a stale link or a genuinely empty project), not loading: drop the directive and its
   // optimistic view so nothing waits on a tab that never appears.
   useEffect(() => {
-    if (routeNav && !sessions.some((s) => s.id === routeNav.session)) { setRouteNav(null); setEvalView(null) }
   }, [routeNav, sessions])
+  // a directive not yet applied is dropped once the selection has manually moved to a DIFFERENT session —
+  // otherwise it would sit dormant and apply a stale entrance if the user later returns to that tab. (The
+  // 'new' placeholder mid-parse is not a switch.)
+  useEffect(() => {
+    if (routeNav && sessionSel !== 'new' && sessionSel !== routeNav.session) setRouteNav(null)
+  }, [routeNav, sessionSel])
   useEffect(() => {
     // echo the console's REAL view (evalView, reported up by SessionInterface) into the hash with replace: the
     // address matches the shown tab/selection ([[session-eval]]) — eval → '<id>/eval[/<node>/<scenario>]',
     // terminal/new → bare '<id>'. Driven by the console's live view, not the inbound directive, so no stale
     // sub-route survives a tab switch or a bare return, and a manual Eval-tab entry is addressable.
+    // Skipped on its very FIRST run (mount): that run's closure predates the parse above (an effect of the
+    // pre-parse render), so at mount it can only no-op or clobber the entrance the user typed — echoing is
+    // only meaningful for state changes AFTER the app has adopted its initial URL.
+    if (firstEchoRef.current) { firstEchoRef.current = false; return }
     if (page !== 'sessions') return
     navigate('sessions', sessionTabParam(sessionSel, evalView), { replace: true })
   }, [page, sessionSel, evalView])

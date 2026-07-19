@@ -29,8 +29,13 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
   on arrival ([[side-nav]]) and nothing mints it anymore.
 - `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
-- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted ([[evals-view]]); a
-  not-yet-merged session reading's address is `session-eval`, not this.
+- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted ([[evals-view]]), path
+  only (the detail hash carries no list filters); a not-yet-merged session reading's address is
+  `session-eval`, not this. **Scenario-less**, `eval(nodeId)` is the node's AGGREGATE entry: the Evals LIST
+  filtered to that node — `#/evals?q=is:eval state:current node:<id>`, [[review-query]]'s canonical token
+  text (the default view + the `node` qualifier, minted via `nodeEvalQuery`) — the address every aggregate
+  score/count affordance ([[eval-score-badge]]) mints. The list-filter grammar lives in this one projection
+  and nowhere else.
 
 `addressHash(address)` is the href side: real anchors and copyable links get the canonical hash without
 hand-rolled string assembly in components. `navigateAddress(address, callbacks)` is the SPA side: it follows

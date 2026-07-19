@@ -145,6 +145,7 @@ export default {
     searchIssues: 'Search issues',
     searchEvals: 'Search evals',
     clearSearch: 'Clear search',
+    showing: ({ shown, total }) => `showing ${shown} of ${total}`,
     issuesTitle: 'Issues',
     open: 'Open',
     closed: 'Closed',
@@ -398,6 +399,9 @@ export default {
       miss: 'miss original file — the evidence was pruned from the cache.',
       noImage: 'no evidence — the agent attested without a capture.',
       shotAlt: ({ scenario }) => `captured evidence for ${scenario}`,
+      openDetail: "open this scenario's eval detail page",
+      passCount: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh & passing`,
+      failCount: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh & failing`,
     },
   },
 
@@ -429,6 +433,7 @@ export default {
     count: ({ satisfied, total, outstanding }) =>
       `${satisfied} of ${total} scenario${total === 1 ? '' : 's'} satisfied (fresh & passing)` +
       (outstanding ? ` · ${outstanding} outstanding — failing, stale, or unmeasured` : ''),
+    openList: 'open the Evals list filtered to this node',
   },
 
   specNode: {

@@ -2,7 +2,7 @@
 // Each `spex serve` stays scoped to ONE repo, loopback-only and auth-unaware; what it contributes to the
 // host is a single instance-validated endpoint record in the per-user global store. THIS module is the
 // other half: the durable known-project catalog, the reconciler that turns records into a validated live
-// project list, and the host operations (register/init/doctor/start) — mounted as [[gateway-hub]]'s
+// project list, portable-config editor, and host operations (register/init/doctor/start) — mounted as [[gateway-hub]]'s
 // extension by `spex dashboard` (startHostDashboard below), so routing, /p/:projectId proxying, and
 // authorization ([[gateway-auth]]) stay the hub's single seam and are never duplicated here. Backends
 // never depend on the gateway: they publish records and serve loopback whether or not a gateway is
@@ -10,6 +10,7 @@
 import http from 'node:http'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync, renameSync, rmSync, readdirSync, openSync, closeSync, existsSync } from 'node:fs'
 import { dirname, join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -208,6 +209,55 @@ export function runSpex(root: string, args: string[], timeoutMs = 120_000): Prom
   })
 }
 
+// The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there
+// is no browser-supplied path), works for offline projects, and uses a content revision so a save cannot
+// clobber a concurrent agent/user edit. spexcode.local.json stays outside this surface by contract.
+type ProjectConfigSource = { content: string; revision: string }
+let configWriteSeq = 0
+const configRevision = (raw: string | null): string => createHash('sha256').update(raw === null ? 'missing' : `present\0${raw}`).digest('hex')
+
+function readProjectConfig(root: string): ProjectConfigSource {
+  try {
+    const content = readFileSync(join(root, 'spexcode.json'), 'utf8')
+    return { content, revision: configRevision(content) }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }
+    throw e
+  }
+}
+
+function writeProjectConfig(root: string, content: string, revision: string): ProjectConfigSource {
+  const current = readProjectConfig(root)
+  if (revision !== current.revision) {
+    const e = new Error('spexcode.json changed on disk — reload before saving') as Error & { status?: number }
+    e.status = 409
+    throw e
+  }
+  let parsed: unknown
+  try { parsed = JSON.parse(content) }
+  catch (e) {
+    const err = new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
+    err.status = 400
+    throw err
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const e = new Error('spexcode.json must contain one top-level JSON object') as Error & { status?: number }
+    e.status = 400
+    throw e
+  }
+
+  const normalized = content.endsWith('\n') ? content : `${content}\n`
+  const file = join(root, 'spexcode.json')
+  const tmp = join(root, `.spexcode.json.${process.pid}.${++configWriteSeq}.tmp`)
+  try {
+    writeFileSync(tmp, normalized)
+    renameSync(tmp, file)
+  } finally {
+    try { rmSync(tmp) } catch { /* rename consumed it / write never created it */ }
+  }
+  return { content: normalized, revision: configRevision(normalized) }
+}
+
 function freeTcpPort(): Promise<number> {
   return new Promise((res, rej) => {
     const s = net.createServer()
@@ -244,8 +294,9 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 // gateway or a second auth check beside it. What the host adds rides the hub's extension seam:
 //   listProjects — GET /projects rows come from the instance-validated reconciler + the durable catalog
 //                  (online/offline/root), each carrying the hub's gating state.
-//   adminRoute   — /projects/stream (SSE), POST /projects (register a repo), and
-//                  POST /projects/:id/(init|doctor|serve) — all behind the hub's admin scope
+//   adminRoute   — /projects/stream (SSE), POST /projects (register a repo), raw spexcode.json
+//                  GET|PUT /projects/:id/config, and POST /projects/:id/(init|doctor|serve) — all
+//                  behind the hub's admin scope
 //                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
 //   fallback     — the dashboard SPA shell + assets for paths the hub doesn't own.
 // /p/:projectId/* routing (HTTP, SSE, WS; prefix strip; cookie strip) belongs entirely to the hub.
@@ -305,6 +356,27 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
           const entry = (await tick()).find((p) => p.root === normalized)
           json(res, 200, entry ?? { projectId: encodeProject(normalized), root: normalized, name: basename(normalized), online: false, url: null })
         } catch (e) { json(res, 400, { error: (e as Error).message }) }
+        return true
+      }
+      const config = path.match(/^\/projects\/([^/]+)\/config$/)
+      if (config && (req.method === 'GET' || req.method === 'PUT')) {
+        const projectId = decodeURIComponent(config[1])
+        const entry = (await reconcileNow()).find((p) => p.projectId === projectId)
+        if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
+        if (req.method === 'GET') {
+          try { json(res, 200, readProjectConfig(entry.root)) }
+          catch (e) { json(res, 500, { error: `cannot read spexcode.json: ${(e as Error).message}` }) }
+          return true
+        }
+        let body: any
+        try { body = JSON.parse(await readBody(req) || '{}') }
+        catch { json(res, 400, { error: 'body must be {"content":"...","revision":"..."}' }); return true }
+        if (typeof body?.content !== 'string' || typeof body?.revision !== 'string') {
+          json(res, 400, { error: 'body must be {"content":"...","revision":"..."}' })
+          return true
+        }
+        try { json(res, 200, { ok: true, ...writeProjectConfig(entry.root, body.content, body.revision) }) }
+        catch (e) { json(res, (e as any).status ?? 500, { error: (e as Error).message }) }
         return true
       }
       const op = path.match(/^\/projects\/([^/]+)\/(init|doctor|serve)$/)

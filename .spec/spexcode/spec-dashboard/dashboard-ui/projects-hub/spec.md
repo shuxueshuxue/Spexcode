@@ -45,10 +45,16 @@ when online, while an offline row calmly reads *stopped*, never probed into a fa
 state, a password set/clear drawer (`PUT`/`DELETE /projects/:id/password`), and one primary action per
 state: Open when online (a plain link to `/p/<id>/#/graph` — switching projects is ordinary same-tab
 navigation, extra tabs always optional) or Start when offline (`POST /projects/:id/serve` answers only
-when the booted backend's record reconciles online, so success means reachable). The setup drawer runs
-the real repo verbs (`POST /projects/:id/init|doctor`): init demands the EXPLICIT harness choice
-(nothing picked, nothing run) with the optional preset alongside; every run renders its exit code and
-full transcript in place, a failure stays on screen, and the same button is the retry. The header owns
+when the booted backend's record reconciles online, so success means reachable). A row's settings gear
+edits the project's ONE portable settings source directly: it loads the raw root `spexcode.json`
+(`{}` when absent) into a monospace text editor and saves only a valid top-level JSON object through
+`GET|PUT /projects/:id/config`. Saving is atomic and revision-guarded, so a concurrent disk edit is a
+visible conflict instead of silent loss; `spexcode.local.json` is deliberately outside this browser
+surface because it holds host-specific paths and may hold secrets. The separate setup action runs the
+real repo verbs (`POST /projects/:id/init|doctor`): init demands the EXPLICIT harness choice
+(nothing picked, nothing run), while preset policy comes from the edited `spexcode.json` rather than a
+second one-off input; every run renders its exit code and full transcript in place, a failure stays on
+screen, and the same button is the retry. The header owns
 the ADMIN password (`PUT`/`DELETE /projects/admin-password`): `adminGated:false` renders the bootstrap
 hint — management is implicit-loopback-only until a password exists, and the set response rotates the
 setter's cookie so they stay signed in. Freshness is a plain poll — registration, a just-started
@@ -73,9 +79,9 @@ the probe is denied, so the switcher menu is absent and the project shell expose
 identity and project-owned pages — absence of data, not a hidden element.
 
 **The contract lives in one module.** `projects.js` is the only place the hub routes are spelled — the
-catalog read, the password writes, the credential posts, and the management verbs (add / init / doctor /
-serve); every reader is tolerant (a pre-hub server's SPA-fallback HTML reads as "absent", a hub without
+catalog read, the password writes, the raw portable-config read/write, the credential posts, and the
+management verbs (add / init / doctor / serve); every reader is tolerant (a pre-hub server's SPA-fallback HTML reads as "absent", a hub without
 the host extension leaves `online` unknown and the UI falls back to probe-only health, unknown fields
 default) so the same frontend runs against every deployment generation. All hub/credential/selector
 styling reads the shared palette AND typography tokens only — every theme preset skins these surfaces,
-the setup drawer, and the transcript block with no extra rules.
+the config/setup drawers, and the transcript block with no extra rules.

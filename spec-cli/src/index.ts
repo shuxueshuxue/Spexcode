@@ -15,9 +15,9 @@ import { resolveLayout, mainBranch, mainCheckout } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
-import { defaultHarness, defaultSessionMode, HARNESSES, launcherList, launcherDefault } from './harness.js'
+import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { evalNodes } from '../../spec-eval/src/scenarios.js'
@@ -174,23 +174,19 @@ app.post('/api/evidence', async (c) => {
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
 // `.layout.main`) and the named launcher profiles ([[launcher-select]]) the New-Session picker
-// offers — `{ name, harness, cmd, headlessCmd, modes }`: the cmd/headlessCmd read-only display data for the
-// picker's expandable per-launcher detail (the dashboard sits behind the gateway auth; the browser can read
-// but never edit config), and `modes` the BACKEND-computed availability list ('interactive' always;
-// 'headless' when the harness's capability + config allow it) so the frontend consumes availability instead
-// of re-deriving adapter knowledge — plus the configured `default` NAME so the picker pre-selects the SAME
+// offers — `{ name, harness, cmd }`: the cmd is read-only display data for the picker (the dashboard sits
+// behind the gateway auth; the browser can read but never edit config) — plus the configured `default` NAME
+// so the picker pre-selects the SAME
 // launcher a bare `spex session new` uses (the CLI/config default), instead of the alphabetically-first one,
-// and `defaultMode` (sessions.defaultMode, 'interactive' unless configured). Missing
-// defaultLauncher is returned as an actionable config error, not hidden by falling through to the
+// Missing defaultLauncher is returned as an actionable config error, not hidden by falling through to the
 // built-in `claude` launcher.
 // `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
 // so the row's attach modal ([[attach-menu]]) can offer the RAW `tmux -L <socket> attach -t <id>` fallback
 // beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
-  launchers: launcherList().map(({ name, harness, cmd, headlessCmd, modes }) => ({ name, harness, cmd, headlessCmd, modes })),
+  launchers: launcherList(),
   tmuxSocket: TMUX_SOCK,
-  defaultMode: defaultSessionMode(),
   ...launcherDefault(),
 }))
 // the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with
@@ -390,21 +386,9 @@ app.post('/api/sessions/edges/unwatch', async (c) => {
   return c.json({ ok }, ok ? 200 : 404)
 })
 app.post('/api/sessions', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
-  if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
-  if (typeof body?.harness === 'string') return c.json({ error: 'harness is not a create-session input; use launcher' }, 400)
-  // the named launcher ([[launcher-select]]) — fixes the session's harness AND its persisted launch command.
-  const launcher = typeof body?.launcher === 'string' && body.launcher.trim() ? body.launcher.trim() : undefined
-  // the session mode ('interactive' | 'headless') — optional; newSession validates it fail-loud (an unknown
-  // value, or headless on a harness with no headless capability, rejects here as a 400 with the reason).
-  const mode = typeof body?.mode === 'string' && body.mode.trim() ? body.mode.trim() : undefined
-  // parent = the spawning session's id, resolved by the CALLER (createSession) in its own process and passed
-  // through here ([[session-nesting]]); the browser's New Session omits it → a top-level session.
-  const parent = typeof body?.parent === 'string' && body.parent.trim() ? body.parent.trim() : null
-  try {
-    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, parent, launcher, mode), 201)
-  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown launcher/mode/capability → 400, not a 500
+  const body = await c.req.json().catch(() => null)
+  const result = await sessionCreateRequest(body)
+  return result.status === 201 ? c.json(result.session, 201) : c.json({ error: result.error }, 400)
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

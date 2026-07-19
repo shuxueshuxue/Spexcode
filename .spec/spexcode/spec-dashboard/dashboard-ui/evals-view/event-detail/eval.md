@@ -158,17 +158,19 @@ scenarios:
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
       On #/evals, select a reading and unfold the remark rail. In the rail composer's action row read the
-      `@` and `[[` symbol buttons (aria-labels/tooltips). Seed a draft, place the caret mid-draft, click
-      `@` and read the textarea's value/focus/selectionStart and any open menu; Esc, select a span, click
-      `[[` and re-read. Confirm no remark was posted, then re-read the row's child geometry at desktop and
-      at a ~780px window.
+      `@`, `[[`, and `/` symbol buttons (aria-labels/tooltips). Seed a draft, place the caret mid-draft,
+      click `@` and read the textarea's value/focus/selectionStart and any open menu; Esc, select a span,
+      click `[[` and re-read; Esc, put the caret at a line start, click `/`, and read the review menu.
+      Confirm no remark was posted, then re-read the row's child geometry at desktop and at a ~780px
+      window. Open an issue reply composer and confirm its action row still has only the reference buttons.
     expected: >-
-      The eval rail composer carries the SAME two discoverability buttons the issues composer does (one
-      shared Thread composer): each inserts its EXACT trigger at the caret/selection, preserves the rest of
-      the draft, refocuses with the caret right after the trigger, and the ONE shared autocomplete opens
-      upward over the rail (sessions + `@new` for `@`, spec nodes — the eval's node leading — for `[[`);
-      no second menu, no dispatch, no post. Localized aria-label + shared `data-tip` on both. At desktop
-      and ~780px the row (triggers, ⏱ where a clip supplies one, Send) fits without overlap. No page errors.
+      The shared Thread composer carries `@` and `[[` discoverability buttons on every home; the eval rail,
+      which supplies review commands, adds the compact `/` button while an issue composer does not. Each
+      inserts its EXACT trigger at the caret/selection, preserves the rest of the draft, and refocuses with
+      the caret right after the trigger. The ONE shared autocomplete opens upward for `@`/`[[`; from a
+      command-eligible line start `/` opens the ONE shared review menu. No second menu, dispatch, or post.
+      Localized aria-label + shared `data-tip` on all applicable buttons. At desktop and ~780px the row
+      (triggers, ⏱ where a clip supplies one, Send) fits without overlap. No page errors.
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >
@@ -270,9 +272,10 @@ scenarios:
     expected: >-
       ONE shared composer shape on both homes: a quiet bordered rounded container holding a BORDERLESS
       writing surface (computed border-style none) floored at TWO lines idle (~40px, never a one-line
-      sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — the two
-      `@`/`[[` trigger-insert buttons ([[mentions]] discoverability, on every home), ⏱ anchor
-      on the eval rail's clip composer, Promote/Close issue on an open issue — and an ICON-ONLY Send
+      sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — the
+      `@`/`[[` trigger-insert buttons ([[mentions]] discoverability, on every home), the `/` trigger on
+      the eval rail where review commands are armed, ⏱ anchor on that clip composer, Promote/Close issue
+      on an open issue — and an ICON-ONLY Send
       (an SVG glyph with an aria-label/tooltip, no bare unlabeled icon) pinned at the row's right edge;
       none of the reference app's tools (attach, web, model pickers …) appear. NO always-visible hint
       line ('@session to summon · [[node]] to link' is gone) — while the `@`/`[[` autocomplete and the

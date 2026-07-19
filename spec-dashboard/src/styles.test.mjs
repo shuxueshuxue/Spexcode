@@ -6,7 +6,30 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
-const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
+const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
+
+test('dashboard typography declarations use the shared scale', () => {
+  const contracts = {
+    'font-size': /^var\(--type-/,
+    'font-weight': /^var\(--weight-/,
+    'line-height': /^var\(--(?:leading|line)-/,
+    'letter-spacing': /^var\(--tracking-/,
+  }
+
+  for (const [property, token] of Object.entries(contracts)) {
+    const values = [...css.matchAll(new RegExp(`${property}\\s*:\\s*([^;}]+)`, 'g'))]
+      .map((match) => match[1].trim())
+    assert.ok(values.length > 0, `${property} declarations should exist`)
+    assert.deepEqual(
+      values.filter((value) => !token.test(value)),
+      [],
+      `${property} must use its shared typography token`,
+    )
+  }
+
+  assert.match(terminal, /getPropertyValue\('--type-terminal'\)/)
+  assert.doesNotMatch(terminal, /fontSize:\s*\d/)
+})
 
 test('evals and issues pages sit flush against the side rail and top edge', () => {
   assert.match(
@@ -28,23 +51,12 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
   )
   assert.match(
     css,
-    /\.si-bottom\s+\.si-input\s*\{[^}]*min-height:\s*20px;[^}]*line-height:\s*20px;/s,
+    /\.si-bottom\s+\.si-input\s*\{[^}]*min-height:\s*20px;[^}]*line-height:\s*var\(--line-input\);/s,
   )
   // the paperclip carries NO align-self override, so it inherits the base .si-attach flex-end and tracks
   // the same bottom line as ❯ (the align-items:center override that stranded it mid-box is gone).
   assert.doesNotMatch(
     css,
     /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:/s,
-  )
-})
-
-test('headless chat removes the terminal-only dock reserve', () => {
-  assert.match(
-    sessionInterface,
-    /`si-content is-session\$\{isHeadless \? ' is-headless' : ''\}`/,
-  )
-  assert.match(
-    css,
-    /\.si-content\.is-session\.is-headless\s*\{[^}]*--si-dock-h:\s*0px;/s,
   )
 })

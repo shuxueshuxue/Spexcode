@@ -113,7 +113,8 @@ export default {
     title: '评测',
     kind: { video: '视频', image: '图片', all: '全部' },
     summary: ({ n }) => `${n} 条当前`,
-    empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
+    datasetEmpty: '暂无评测。',
+    noMatches: '当前视图没有匹配的评测。',
     annotate: '打开并标注',
     inSession: '由本会话测得',
     okdTip: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
@@ -460,6 +461,7 @@ export default {
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: 'issues 工作流已关闭。',
     issuesEmpty: '暂无 issue。',
+    issuesNoMatch: '当前视图没有匹配的 issue。',
     issuesLoading: '正在加载 issues……',
     issuesFocusNode: '在看板上聚焦此节点',
     issuesReplies: ({ n }) => `${n} 条回复`,

@@ -140,7 +140,11 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
         { label: t('reviewList.facetStore'), value: storeFilter, options: storeOptions, onChange: (value) => set({ store: value || null }), mobileOnly: true },
       ]} />}
       rows={rows}
-      empty={t('session.issuesEmpty')}
+      empty={{
+        hasData: all.length > 0,
+        dataset: t('session.issuesEmpty'),
+        filtered: t('session.issuesNoMatch'),
+      }}
     >
       {composing && (
         <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">

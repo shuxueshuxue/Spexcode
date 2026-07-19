@@ -114,7 +114,8 @@ export default {
     title: 'Evals',
     kind: { video: 'video', image: 'image', all: 'all' },
     summary: ({ n }) => `${n} current`,
-    empty: 'no current evals match — measure a scenario or switch the filter.',
+    datasetEmpty: 'No evals yet.',
+    noMatches: 'No evals match this view.',
     annotate: 'open & annotate',
     inSession: 'measured by this session',
     okdTip: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
@@ -468,6 +469,7 @@ export default {
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',
+    issuesNoMatch: 'No issues match this view.',
     issuesLoading: 'loading issues…',
     issuesFocusNode: 'focus this node on the graph',
     issuesReplies: ({ n }) => `${n} ${n === 1 ? 'reply' : 'replies'}`,

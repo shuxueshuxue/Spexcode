@@ -144,7 +144,8 @@ scenarios:
       each PUSH canonical state; reload and Back replay the exact row set. j/k move a visible CURSOR down the
       rows and Enter opens the cursor row's detail page; a row click pushes (history grows) and browser
       Back restores the exact filtered list. A key typed into an input/textarea reaches the input and
-      never moves the cursor. No page errors.
+      never moves the cursor. An empty store says there are no issues yet; a query/section/facet zero says
+      no issues match this view. No page errors.
   - name: node-issue-cards-route-internally
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/styles.css]

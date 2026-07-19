@@ -21,7 +21,8 @@ scenarios:
       width is viewport minus 32px, metadata is ~49px, only the primary facet remains beside tabs and all
       displaced real facets are usable in kebab; a long title wraps to at most three lines with no body or
       document horizontal overflow. The SAME detail markup reflows to one column with side rail FIRST.
-      Eval list/detail/A-B and Issue list/detail states use the same `.review-state` SVG mapping.
+      Eval list/detail/A-B and Issue list/detail states use the same `.review-state` SVG mapping. The shared
+      empty primitive distinguishes a vacant dataset from a non-empty dataset whose current view matches zero.
   - name: list-key-routing
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx]

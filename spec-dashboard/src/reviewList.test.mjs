@@ -11,6 +11,8 @@ const evals = read('EvalsFeed.jsx')
 const detail = read('EventDetail.jsx')
 const issues = read('IssuesPage.jsx')
 const css = read('styles.css')
+const en = read('i18n/en.js')
+const zh = read('i18n/zh.js')
 
 test('issues and evals consume one GitHub ListView primitive set', () => {
   for (const source of [evals, issues]) {
@@ -55,4 +57,21 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*height:\s*49px;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
   assert.match(css, /\.rl-row-title\s*\{[^}]*-webkit-line-clamp:\s*3;/s)
+})
+
+test('shared list empty state distinguishes a vacant dataset from a filtered zero', () => {
+  const source = shell.match(/export const listEmptyText = ([\s\S]*?\n\))\n\nfunction usePopover/)?.[1]
+  assert.ok(source, 'listEmptyText stays a directly testable shared primitive')
+  const message = Function(`return (${source})`)()
+  assert.equal(message({ hasData: false, dataset: 'none yet', filtered: 'no match' }), 'none yet')
+  assert.equal(message({ hasData: true, dataset: 'none yet', filtered: 'no match' }), 'no match')
+  assert.equal(message('loading'), 'loading')
+
+  assert.match(issues, /hasData: all\.length > 0,[\s\S]*dataset: t\('session\.issuesEmpty'\),[\s\S]*filtered: t\('session\.issuesNoMatch'\)/)
+  assert.match(evals, /hasData: entries\.length > 0 \|\| blind\.length > 0,[\s\S]*dataset: t\('evalsFeed\.datasetEmpty'\),[\s\S]*filtered: t\('evalsFeed\.noMatches'\)/)
+  for (const messages of [en, zh]) {
+    assert.match(messages, /datasetEmpty:/)
+    assert.match(messages, /noMatches:/)
+    assert.match(messages, /issuesNoMatch:/)
+  }
 })

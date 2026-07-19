@@ -33,6 +33,10 @@ all filter real entry fields; the kind values remain exactly video | image | all
 video→image→all default. Common facets stay visible on desktop, low-frequency/width-displaced facets move
 to the functional overflow, and only the primary facet survives beside the tabs at 390px. **Every pick is
 URL-query state**: a human's action pushes, reload/Back fully replay, and no local filter state survives.
+An inert blind-spot row participates in that SAME conjunctive contract: it can match its real node,
+unscored verdict, and query text, but a selected evidence kind, freshness, filer, or Live facet excludes it
+because an unmeasured scenario owns none of those reading facts. Blind rows never leak into a filtered
+reading population and never gain an href just to satisfy list structure.
 
 **Kinds are honest — and a reading carries a SET of them.** Evidence is a LIST: a reading's kinds are
 every entry it holds (`video`/`image`/`transcript`; a legacy scalar blob with no kind is an image), plus

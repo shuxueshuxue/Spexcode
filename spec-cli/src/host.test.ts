@@ -115,7 +115,7 @@ test('addKnownProject normalizes to the main checkout and requires a git repo', 
   assert.throws(() => addKnownProject(notRepo), /not a git repository/)
 })
 
-test('host dashboard on the hub: admin list + stream, /p proxy via hub, registration, ops 404, shell fallback, WS pipe', async () => {
+test('host dashboard on the hub: admin list + stream, /p proxy, registration, config, ops, shell, WS pipe', async () => {
   const home = freshHome('gateway')
   const rootLive = '/proj/live-one'
   const backend = await fakeBackend({ instanceId: 'inst-live', root: rootLive })
@@ -195,10 +195,40 @@ test('host dashboard on the hub: admin list + stream, /p proxy via hub, registra
     const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
     assert.equal(added.status, 200)
     assert.equal((await added.json()).online, false)
+    const repoId = encodeProject(repo)
+
+    // Raw portable config rides the same admin surface and works while the repo is offline. Missing is
+    // an editable {}, saves are atomic + normalized, malformed content and a stale revision lose nothing.
+    const initialConfig = await getJson(`${base}/projects/${repoId}/config`)
+    assert.equal(initialConfig.status, 200)
+    assert.equal(initialConfig.body.content, '{}\n')
+    const configText = '{\n  "preset": "default"\n}'
+    const savedConfigRes = await fetch(`${base}/projects/${repoId}/config`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: configText, revision: initialConfig.body.revision }),
+    })
+    assert.equal(savedConfigRes.status, 200)
+    const savedConfig = await savedConfigRes.json()
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), `${configText}\n`)
+    const invalidConfig = await fetch(`${base}/projects/${repoId}/config`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: '[]', revision: savedConfig.revision }),
+    })
+    assert.equal(invalidConfig.status, 400)
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), `${configText}\n`)
+    writeFileSync(join(repo, 'spexcode.json'), '{"newer":true}\n')
+    const staleConfig = await fetch(`${base}/projects/${repoId}/config`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: '{"stale":true}', revision: savedConfig.revision }),
+    })
+    assert.equal(staleConfig.status, 409)
+    assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), '{"newer":true}\n')
+
     const refused = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: join(repo, 'nope') }) })
     assert.equal(refused.status, 400)
     const noSuch = await fetch(`${base}/projects/no-such/init`, { method: 'POST', body: '{}' })
     assert.equal(noSuch.status, 404)
+    assert.equal((await getJson(`${base}/projects/no-such/config`)).status, 404)
 
     // the WS upgrade raw-pipes to the project's backend with the same prefix strip (hub-authorized: open)
     const wsBytes = await new Promise<string>((res, rej) => {

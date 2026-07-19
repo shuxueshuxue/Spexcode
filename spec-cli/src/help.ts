@@ -121,7 +121,8 @@ pairing flag exists.
 
 Admin surface (hub-authorized: implicit from loopback until an admin password is set, then cookie
 sessions): GET /projects (the validated list + gating state) · GET /projects/stream (SSE) ·
-POST /projects {root} (register an existing repo) · POST /projects/<id>/init|doctor|serve
+POST /projects {root} (register an existing repo) · GET|PUT /projects/<id>/config (raw portable
+spexcode.json, revision-guarded) · POST /projects/<id>/init|doctor|serve
 (run the real \`spex init\`/\`spex doctor\`, or start an offline project's backend, detached — a
 backend never depends on this gateway staying up) · PUT|DELETE /projects/admin-password and
 /projects/<id>/password (the gates). A gated project answers /p/<id>/login with the designed page.

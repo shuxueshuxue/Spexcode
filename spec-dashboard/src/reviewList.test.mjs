@@ -120,7 +120,10 @@ test('one icon-label-tone mapping drives every review state home', () => {
 
 test('graph keeps the full canvas and mounts no persistent focus sidebar', () => {
   assert.equal(existsSync(join(here, 'FocusPanel.jsx')), false)
-  assert.doesNotMatch(dashboard, /FocusPanel|spex\.fpWidth|--fp-w/)
+  assert.doesNotMatch(dashboard, /FocusPanel|spex\.fpWidth|--fp-w|FOCUS_X_BIAS/)
+  assert.match(dashboard, /nodeOrigin=\{NODE_ORIGIN\}/)
+  assert.match(dashboard, /x:\s*el\.clientWidth \/ 2 - node\.x \* z/)
+  assert.match(dashboard, /requestAnimationFrame\(\(\) => \{\s*framedRef\.current = true\s*centerOn\(focus, undefined, 0\)/)
   assert.doesNotMatch(css, /\.focus-panel|\.fp-sc-|--fp-w/)
   assert.match(css, /\.page-graph\s*\{[^}]*flex:\s*1;[^}]*position:\s*relative;/s)
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)

@@ -6,11 +6,14 @@ import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
+import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 
-// the session's evaluation ([[session-eval]]) — the SAME pane the desktop console's Eval tab mounts,
-// lazy so a phone that never opens it never downloads the eval component family.
-const SessionEvalPane = lazy(() => import('./SessionEval.jsx'))
+// the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
+// reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
+// downloads the eval/annotator family.
+const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
+const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
@@ -101,14 +104,11 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
 
 // @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail, now a THIN
 // wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
-// is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the header's one
-// extra control that flips the detail to the session's evaluation ([[session-eval]] — the shared
-// SessionEvalPane, restacked by CSS).
-function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
+// is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the
+// header's one extra control — the eval DOOR that navigates to the session-scoped Evals list
+// ([[session-eval]]: `#/evals?session=<id>`, the same canonical pages the desktop uses).
+function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
-  const [showEval, setShowEval] = useState(false)   // header eval entry: conversation ⇄ the session's evaluation
-  useEffect(() => { setShowEval(false) }, [s.id])   // a fresh session always opens on its conversation
-
   return (
     <div className="m-sessdetail chat">
       <div className="m-sess-card">
@@ -119,19 +119,11 @@ function MobileSessionDetail({ s, sessions, specs, onOpenSession, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
-        <button className={showEval ? 'm-sess-evalbtn on' : 'm-sess-evalbtn'} onClick={() => setShowEval((v) => !v)} title={t('sessionEval.btnTitle')}>
+        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { session: s.id } })} title={t('sessionEval.btnTitle')}>
           {t('sessionEval.btn')}
         </button>
       </div>
-      {showEval ? (
-        <div className="m-eval-host">
-          <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
-            <SessionEvalPane sessionId={s.id} specs={specs} sessions={sessions} onOpenSession={onOpenSession} />
-          </Suspense>
-        </div>
-      ) : (
-        <TimelineChat s={s} sessions={sessions} />
-      )}
+      <TimelineChat s={s} sessions={sessions} />
     </div>
   )
 }
@@ -200,7 +192,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   const { expanded, toggle } = useFold()
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   if (creating) return <MobileNewSession draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
-  if (open) return <MobileSessionDetail s={open} sessions={sessions} specs={specs} onOpenSession={setOpenId} onBack={() => setOpenId(null)} />
+  if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
   return (
     <div className="m-sesslist">
       <button className="m-new-btn" onClick={() => setCreating(true)}>
@@ -223,7 +215,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   )
 }
 
-export default function MobileApp({ specs, sessions }) {
+export default function MobileApp({ specs, sessions, issuesData = null, reloadIssues, reloadBoard }) {
   const t = useT()
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   const root = useMemo(() => specs.find((s) => !s.parent) || specs[0], [specs])
@@ -241,6 +233,19 @@ export default function MobileApp({ specs, sessions }) {
   // the desktop's per-tab draft cache).
   const [creating, setCreating] = useState(false)
   const [newDraft, setNewDraft] = useState('')
+  // the phone honors the [[side-nav]] route family for the review pages ([[mobile-ui]]): a #/evals or
+  // #/issues address (list or detail, shared link or tab tap) renders the SAME routed pages the desktop
+  // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
+  // stay the phone-local planes.
+  const { page } = useRoute()
+  const plane = page === 'evals' || page === 'issues' ? page : tab
+  const pickPlane = (p) => {
+    if (p === 'evals' || p === 'issues') { navigate(p); return }
+    setTab(p)
+    if (page === 'evals' || page === 'issues') navigate(p === 'specs' ? 'graph' : 'sessions')
+  }
+  // a filer/originator chip click on a review page opens that session's conversation here.
+  const openSession = (id) => { setTab('sessions'); setOpenSessionId(id); navigate('sessions', id) }
 
   // the 4s board poll can retire a node out from under us (merged/deleted); drop any breadcrumb id the
   // latest tree no longer has, and fall back to root, so a stale focus never blanks the screen.
@@ -255,7 +260,15 @@ export default function MobileApp({ specs, sessions }) {
   return (
     <div className="m-app">
       <main className="m-main">
-        {tab === 'specs' ? (
+        {plane === 'evals' || plane === 'issues' ? (
+          <div className="m-review">
+            <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
+              {plane === 'evals'
+                ? <EvalsPage specs={specs} sessions={sessions} reloadBoard={reloadBoard} onOpenSession={openSession} />
+                : <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
+            </Suspense>
+          </div>
+        ) : plane === 'specs' ? (
           <div className="m-specs">
             <nav className="m-crumbs">
               {validPath.map((id, i) => (
@@ -279,12 +292,18 @@ export default function MobileApp({ specs, sessions }) {
       </main>
 
       <nav className="m-tabbar">
-        <button className={tab === 'specs' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => setTab('specs')}>
+        <button className={plane === 'specs' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('specs')}>
           <span className="m-tabbar-ico">❯_</span>{t('mobile.specsTab')}
         </button>
-        <button className={tab === 'sessions' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => setTab('sessions')}>
+        <button className={plane === 'sessions' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('sessions')}>
           <span className="m-tabbar-ico">◐</span>{t('mobile.sessionsTab')}
           {sessions.length > 0 && <span className="m-tabbar-badge">{sessions.length}</span>}
+        </button>
+        <button className={plane === 'evals' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('evals')}>
+          <span className="m-tabbar-ico">✓</span>{t('mobile.evalsTab')}
+        </button>
+        <button className={plane === 'issues' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('issues')}>
+          <span className="m-tabbar-ico">◎</span>{t('mobile.issuesTab')}
         </button>
       </nav>
     </div>

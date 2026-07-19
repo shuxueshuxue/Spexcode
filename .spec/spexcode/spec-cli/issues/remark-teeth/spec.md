@@ -12,7 +12,7 @@ related:
   - spec-eval/src/cli.ts
   - spec-cli/src/graph.ts
   - spec-dashboard/src/EventDetail.jsx
-  - spec-dashboard/src/SessionEval.jsx
+  - spec-dashboard/src/EvalsPage.jsx
   - spec-eval/src/freshness.test.ts
 ---
 # remark-teeth

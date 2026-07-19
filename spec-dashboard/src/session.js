@@ -158,38 +158,3 @@ export function sessionForest(sessions, isExpanded) {
   }
   return items
 }
-
-// @@@ per-navigation route directive ([[session-eval]] / [[address-routing]]) — the URL entrance drives the
-// console's right pane on EVERY real navigation (deep link, history, an openSession): '#/sessions/<id>/eval
-// [/<node>/<scenario>]' → the Eval tab (+ a jump to that reading), a bare '#/sessions/<id>' → the Terminal.
-// Between navigations the console's own manual tab clicks drive the URL instead (the echo), so this is applied
-// ONCE per navigation. Apply it only when its session is the active tab; a directive for another session
-// returns null (leave this tab alone). The board is already loaded when the console mounts (App gates Dashboard
-// on a non-null board), so `active` resolves in the mount commit — no async settle to guard against. Pure; the
-// effect that runs it lives in the console.
-export function applyRouteNav(nav, active) {
-  if (!nav || nav.session !== active) return null
-  return nav.tab === 'eval'
-    ? { tab: 'eval', jump: nav.node && nav.scenario ? { node: nav.node, scenario: nav.scenario } : null }
-    : { tab: 'terminal', jump: null }
-}
-
-// A session-eval model that is still loading has no selection answer yet. `undefined` tells the parent to
-// preserve the route's optimistic deep target; only a loaded model may report a resolved selection or an
-// honest null for an empty pane. This keeps an exact deep-link stable across the loading window.
-export function evalSelectionReport(model, node, scenario, routeTargetPending = false) {
-  if (model === null || routeTargetPending) return undefined
-  return node && scenario ? { node, scenario } : null
-}
-
-// @@@ the default eval-tab selection ([[session-eval]]) for a BARE /eval landing (no scenario named). The
-// visual order LEADS with blind spots (declared-but-unmeasured — outstanding loss), so the first visible row
-// is the wrong default: a reviewer opening a session's eval wants what THIS session MEASURED. Prefer an
-// in-session FAILING reading first (the loss most worth seeing), then any in-session reading; only a session
-// with no reading of its own falls back to the first visible row. `visible` is the flat row list the pane
-// walks — each {kind:'blind'|'eval', key, item}; an eval item carries `inSession` and `state`.
-export function defaultEvalKey(visible) {
-  const mine = (visible || []).filter((v) => v.kind === 'eval' && v.item?.inSession)
-  const fail = mine.find((v) => v.item.state === 'fail' || v.item.state === 'staleFail')
-  return (fail || mine[0])?.key ?? (visible || [])[0]?.key ?? null
-}

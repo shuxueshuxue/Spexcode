@@ -57,20 +57,18 @@ scenarios:
     tags: [frontend-e2e, mobile]
     description: >
       On a PHONE viewport (≤ 640px), open a session detail. The header card carries a compact eval
-      entry. Tap it: the detail flips from the conversation to the session's evaluation — the SAME
-      SessionEvalPane the desktop console's Eval tab mounts ([[session-eval]]). Read the DOM: the
-      gates strip, the grouped scenario rows, the master/detail geometry (.fv-master), and whether
-      anything scrolls horizontally. Tap a row and read the detail. Tap the entry again: the
-      conversation returns. Record the whole interaction as a video.
+      entry. Tap it and read location.hash + the rendered page: the tab bar's active entry, the gates
+      strip, the row shapes, and whether anything scrolls horizontally. Open a row's detail page and
+      read the column order; drive browser Back twice. Record the whole interaction as a video.
     expected: |
-      The eval entry opens the session's evaluation in place: the gates strip renders, the rows are
-      the shared eval family's (blind spots lead, ✦-marked own readings, inherited under its divider)
-      grouped by changed node, and the shell is the SAME .fv-master — restacked by CSS to ONE COLUMN
-      at thumb width (master list above, detail below; the desktop fold toggle hidden — stacking
-      already gives the detail full width), with no horizontal scrolling. Selecting a row shows the
-      shared detail below. The eval chunk loads lazily (only on first entry), and toggling back
-      returns the untouched conversation. A session with no worktree/diff shows the clean
-      no-evaluation placeholder, never a blank host.
+      The eval entry is a DOOR: it navigates to #/evals?session=<id> — the SAME session-scoped Evals
+      list the desktop uses ([[session-eval]]), rendered by the shared routed pages inside the phone
+      shell (the Evals tab lights): the gates strip renders, blind spots lead, ✦-marked own readings
+      then the inherited baseline, one column, no horizontal scrolling. Opening a row lands on the
+      worktree-rooted detail page reflowed to one column (side metadata first). Back returns to the
+      scoped list, and Back again to the session conversation. The eval chunk loads lazily (only on
+      first entry). A session with no worktree/diff shows the clean no-evaluation placeholder, never a
+      blank page.
   - name: timeline-scroll-pinning
     tags: [frontend-e2e, mobile]
     description: >

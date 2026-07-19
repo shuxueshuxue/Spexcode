@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a filter — no stale control exists); one kind dropdown (video | image | all) as the only filter, the shared control the issues drain wears; title-only rows, media strictly lazy.
+desc: The Evals LIST page's rows and filters ([[evals-view]], rendered through [[review-chrome]]'s ListPage) — the project's current measured loss: latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a filter); each row ONE line and a REAL anchor to its detail address; the kind dropdown (video | image | all) and the live/ok chips as URL-query state, the shared control grammar the issues list wears; media strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
@@ -14,62 +14,46 @@ related:
 
 ## raw source
 
-The Evals page ([[evals-view]]) is where a human reads the project's current measured loss — the leading
-review surface, a top-level page of its own (evals outrank issues, so they get the leading page and the
-`f` / ⌥F doors). This feed is its left list, and its outer container never scrolls — the list scrolls
-internally. A feed of every reading ever filed grows without bound; a feed of the project's *current* loss
-does not. The unit of this feed is the **scenario, not the reading**: the eval engine already defines the latest
-reading per scenario as the current score, so the feed is bounded by declared scenarios (structural,
-slow-growing), never by measurement count. Review attends to what still counts.
+The Evals list page ([[evals-view]]) is where a human reads the project's current measured loss — the
+leading review surface. A feed of every reading ever filed grows without bound; a feed of the project's
+*current* loss does not. The unit is the **scenario, not the reading**: the eval engine already defines
+the latest reading per scenario as the current score, so the list is bounded by declared scenarios
+(structural, slow-growing), never by measurement count — which is also why it needs no pagination. Review
+attends to what still counts; and in the GitHub navigation model each row is a LINK to the eval's own
+page, not a selection in a pane.
 
 ## expanded spec
 
 Default view: **latest reading per scenario, newest first — fresh and stale MIXED, always**. Freshness is
-**never a filter**: a stale reading is real measured loss and stays in the time-ordered feed, its row carrying
-the muted ✓/✗ that marks it stale (so it reads *as* stale without being removed) — hiding it was the bug that
-let a just-filed screenshot vanish while newer work looked absent, and the stale-only toggle once offered on
-top of the always-mixed default proved redundant, so the head carries **no stale control at all**. The ONE
-filter control is the **evidence-kind dropdown** — exactly three options, **video | image | all** — rendered
-by the SAME shared `FilterSelect` control the [[issues-view]] drain's store filter uses (one implementation,
-one look, never two page-local forks). It defaults to `video`, falling back to `image` when no reading
-*contains* a video and to `all` when neither media kind is present. The dropdown lives in this group's sticky
-head, on its **control row** beside the shell's fold toggle — [[evals-view]] owns the fold *state* but hands
-the anchored button in as `lead`, so the head wears the same control-row grammar as the issues drain and
-nothing floats over the list — and the filter is this group's own state — [[evals-view]] owns the page shell
-(split, selection, j/k), never this
-group's filter. The head's chip row carries the [[live-session-filter]] "N live" toggle (this feed is that
-feature's second surface: it narrows to readings whose filer session is alive, the same one-judgment join the
-originator chip renders). One deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the
-current filter would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down
-as a `mustShow` key, and the group widens **its own** dropdown to `all` so the address always renders its
-eval — the page never reaches into the group's filter state, and an address naming no real eval changes
-nothing. The widen is **one-shot per arrival**: once the target is visible the key clears, so a dropdown pick
-that hides the *current selection* is the human's filter decision and always wins — the selection falls to
-the first visible row instead of the filter snapping back.
+**never a filter**: a stale reading is real measured loss and stays in the time-ordered list, its muted
+✓/✗ the only stale signal — hiding it was the bug that let a just-filed screenshot vanish, and the head
+carries **no stale control at all**. The ONE dropdown filter is the **evidence-kind pick** — exactly
+video | image | all, the SAME shared `FilterSelect` the [[issues-view]] store filter uses — defaulting to
+`video`, falling back to `image` then `all` when the data lacks the richer kind. The chip row carries the
+[[live-session-filter]] "N live" toggle (readings whose filer session is alive — the same one-judgment
+join the filer chip renders) and the [[human-ok]] reveal chip (a fresh, ok'd scenario is reviewed loss —
+the ONE default hide — released by the chip; both chips self-hide at N=0 only while OFF, so a filter is
+always releasable and the list never dead-ends). **Every filter is URL-query state** ([[evals-view]]):
+a human's pick pushes a new list address, and the list re-derives all of it from the URL on each
+hashchange — no component-local filter state survives that the address doesn't name.
 
-**Kinds are honest — and a reading carries a SET of them.** Evidence is a LIST, so a reading's kinds are
-every entry it holds: `video`/`image`/`transcript` (a legacy scalar blob with no recorded kind is an image —
-every legacy capture was one), and **`note`** when it holds no blob at all (a verdict filed with prose only). A
-**MIXED** reading (images + a video) belongs to **EVERY** media filter it contains — it shows under both the
-`video` and `image` picks — and its row tag lists its media kinds, video-first (e.g. `vid·img`). A reading
-never advertises media it lacks. But `note` and `transcript` are **data-level kinds only, never filter
-options**: the dropdown stays video | image | all, so a transcript-only or blob-less reading surfaces under
-`all` alone, and a blob-less row simply carries no media tag.
+**Kinds are honest — and a reading carries a SET of them.** Evidence is a LIST: a reading's kinds are
+every entry it holds (`video`/`image`/`transcript`; a legacy scalar blob with no kind is an image), plus
+**`note`** when it holds no blob. A MIXED reading belongs to EVERY media filter it contains and its tag
+lists its kinds video-first (`vid·img`); it never advertises media it lacks. `note` and `transcript` are
+data-level kinds only, never filter options — they surface under `all`.
 
-**Rows are title-only, always** — verdict mark · scenario · node · evidence-kind tag · relative time —
-no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
-[[event-detail]] — media loads there, a `<video>` element exists only there. The group reports its visible
-rows upward so the page's j/k walk the feed; history drills down per scenario
-(the node's [[eval-tab]] scaffold), not in the list. A human-ok'd row adds one settled certification
-mark: the shared stroke check inside a quiet green ring, with the signer/time as its accessible name;
-the show-all chip uses the same SVG. Before sign-off the row adds NO ok action — the list is a picker and
-status surface, while reviewing + signing belongs to the selected [[event-detail]]. No platform-dependent
-checkbox character enters the row grammar.
+**Rows are one line, and each row is a REAL `<a>`** to `#/evals/<node>/<scenario>` (the session scope's
+rows carry the `?session=<id>` query) — verdict mark · scenario · node · kind tag · relative time, the
+[[review-chrome]] row rhythm; no media request of any kind in the list, no per-row write affordance
+(reviewing + signing lives on the detail page). A human-ok'd row adds the one settled certification mark
+(the shared stroke check in a quiet green ring, signer/time as its accessible name). Clicking a row is a
+history PUSH onto the detail page; `j`/`k` move the cursor and Enter opens it ([[review-chrome]]).
 
-**One data path, one computation.** The board nodes arrive as a prop from the app's single board
-poll + SSE subscription — the section fetches nothing of its own — and latest-per-scenario is
-`scenarioStates`, the same computation behind the node badge, the focus panel, and the eval tab; the feed
-never re-derives the current score its own way. At scale the board fold itself converges to the same
-semantics — latest reading per scenario plus a history count, the full timeline served per node on
-demand — one convergence shared by this feed, the node eval tab, and [[graph-lean]];
-`clean --keep-latest` already aligns the evidence bytes with it.
+**One data path, one computation.** The project scope's nodes arrive as a prop from the app's single
+board poll + SSE — the list fetches nothing of its own — and latest-per-scenario is `scenarioStates`, the
+same computation behind the node badge, the focus panel, and the node eval tab; the feed never re-derives
+the current score its own way. The `?session=<id>` scope rides the one session model the page fetches
+([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
+spots as inert unmeasured lines. Loading, empty, and failed models do not replace the list shell: the scope
+and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

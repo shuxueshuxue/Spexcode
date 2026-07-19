@@ -101,10 +101,10 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
-      REVIEW state (so type + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
-      Eval; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO leading glyph/emoji
-      (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
-      action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
+      REVIEW state (so type + merge apply). (1) Read the bar: on the LEFT the Terminal tab and the Eval
+      navigation door; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO
+      leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each in a distinct colour — and the word "proof"
+      appears nowhere in the UI. (2) In the Terminal `❯` inbox type
       `/` and read the completion menu: the board's own
       commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
       painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
@@ -112,27 +112,25 @@ scenarios:
       `/stop` exactly ONCE (the board's coloured row). Then type `/exit`, a name Claude Code ships that the board
       no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
       sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
-      (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
-      to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
-      view. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
+      (3) Type `/eval` and Enter: the dashboard navigates to `#/evals?session=<id>` — the same address the
+      bar's Eval door opens — and no inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
       button shows its active `.on` state); click the type button to toggle it back off. Screenshot the tab bar
       and the `/` menu.
     expected: |
       The action-row buttons are text-only (no glyphs/emoji) and colour-coded — type yellow (var --yellow =
-      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
-      permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
-      surface says "proof" (the tab, the command, and its menu description all say eval).
+      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); Eval is an always-available navigation
+      door, not a console-local tab or review-gated action, and no UI surface says "proof".
       In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
-      rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
+      rgb(42,161,152)) for the navigation door; the two button-less terminal verbs split
       by destructiveness — stop muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
       blue (rgb(38,139,210)); one element, one colour in both places. The board's `/stop` appears exactly ONCE as
       its coloured row; `/exit` — the pre-v0.3.0 spelling the board no longer owns after the `/exit`→`/stop`
       respelling — now shows only as CC's own blue built-in row (the override still filters a same-named CC twin,
       but no board command currently collides with a CC name) —
-      and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
-      shows the same inline view the tab click does (one shared tab-state); typing `/type` toggles type mode
+      and every row's description reads as a capitalised sentence. Typing `/eval` navigates to the same
+      session-scoped Evals list the bar's door opens; typing `/type` toggles type mode
       exactly as the type button does, and the button reflects that same state. A board command is never
       dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/type` text reaches the pane.
   - name: status-word-colour
@@ -344,77 +342,25 @@ scenarios:
   - name: terminal-proof-tabs
     tags: [frontend-e2e, desktop]
     description: >
-      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session.
-      The right pane is a two-tab view: a horizontal tab bar (Terminal | Eval — the former Proof tab, which
-      [[session-eval]] folded into the session Eval; the proof HTML lives on as that tab's export ↗ link)
-      above the pane content. Confirm the DEFAULT tab is Terminal — the live terminal shows and the docked `❯`
-      input is present below it. Read the tab bar's computed background against the terminal's (`.si-tabbar`
-      vs `.si-term-body`) to confirm they differ (a distinct panel + a bottom separator), and repeat in BOTH
-      light and dark themes. Then click the Eval tab: confirm the terminal is hidden (display:none) but NOT
-      unmounted (the `.si-term-body` node stays in the DOM so its socket/scroll survive), the `❯` input dock
-      is gone (input belongs to Terminal only), and the session's eval view renders INLINE — never a floating
-      overlay. Switch back to Terminal and confirm the live pane is intact. Then the grown-input round-trip:
-      on Terminal, grow the `❯` box multi-line (a several-line draft, unsent), read its rendered height,
-      switch to the other tab and back, and re-read the box's height and draft. Screenshot the tab bar + pane
-      on each tab, plus the grown box before and after the round-trip.
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
+      session. The right pane's tab bar carries the Terminal tab and the Eval DOOR. Confirm the default
+      view is the live terminal with the docked `❯` input below it. Read the tab bar's computed
+      background against the terminal's (`.si-tabbar` vs `.si-term-body`) to confirm they differ (a
+      distinct panel + a bottom separator), and repeat in BOTH light and dark themes. Click the Eval
+      entry and read location.hash + whether the console's terminal stayed mounted behind the page
+      switch (return via the browser Back and confirm the pane is intact). Then the grown-input
+      round-trip: grow the `❯` box multi-line (a several-line draft, unsent), toggle type mode on and
+      off, and re-read the box's height and draft.
     expected: |
-      The right pane opens on the Terminal tab by default: the live terminal is visible with the docked `❯`
-      input below it. The tab bar is a clear horizontal row set VISIBLY APART from the dark terminal — a lighter
-      app-chrome panel (var --panel) with a bottom separator (var --line), distinct from the terminal's var
-      --term-bg in BOTH light (#f4eeda vs #0d1117) and dark (#161b22 vs #0d1117) themes. Clicking Eval hides the
-      terminal (display:none) without unmounting it — `.si-term-body` and its terminal layers stay in the DOM so
-      the socket and scrollback survive a round-trip — drops the `❯` input dock, and renders the session eval
-      INLINE in the pane (the eval feed of the session's work, carrying the proof export ↗ link), not a modal
-      overlay. Returning to Terminal restores the live pane unchanged. The Eval tab is always available for any
-      selected session, not only one in review. The grown `❯` box survives the round-trip: its multi-line draft
-      is still there AND its rendered height matches the pre-switch height (re-fit to the persisted draft on
-      remount) — it is never collapsed back to a single row.
-    related: spec-dashboard/src/SessionEval.jsx
-  - name: eval-tab-folds-session-list
-    tags: [frontend-e2e, desktop]
-    description: >
-      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session so
-      the right pane shows the Terminal|Eval tab bar and the left session list (`.si-list`) is at its full
-      width. Read the left column geometry on the Terminal tab: `.si-list` is present with its top button row +
-      session rows, and the drag divider (`.si-resizer`) sits on its border. Now click the Eval tab and re-read
-      the left column: measure `.si-list`'s rendered width/visibility and whether a thin unfold strip
-      (`.si-list-unfold`, ~22px, the Evals page's `.fv-unfold` twin) has taken its place, with the resizer gone.
-      Click that strip and confirm the full list returns while STILL on the Eval tab (a manual unfold sticks).
-      Then, from the folded state again (re-enter Eval), switch back to the Terminal tab and confirm the full
-      list is restored automatically. Screenshot the left column on the Terminal tab, on the Eval tab (folded),
-      and after the manual unfold.
-    expected: |
-      Opening the Eval tab auto-collapses the session list to a thin strip: `.si-list` is no longer taking its
-      full ~240px width (it is display:none, still in the DOM so its zone/nesting/selection state survives), and
-      in its place sits the slim `.si-list-unfold` strip (~22px, the same fold-to-strip geometry the Evals page's
-      master list uses) with the `.si-resizer` drag divider removed — the eval master-detail owns the width.
-      Clicking the strip brings the full session list back while the Eval tab is still shown, and it stays
-      unfolded (the manual unfold sticks; it only re-folds on a fresh entry to the tab). Switching back to the
-      Terminal tab restores the full session list automatically. On the MAIN baseline the session list keeps its
-      full width on the Eval tab — there is no fold.
-    related: spec-dashboard/src/SessionInterface.jsx
-  - name: eval-return-no-terminal-reflow
-    tags: [frontend-e2e, desktop]
-    description: >
-      Through the running dashboard in a real browser, open the session interface on a LIVE session whose pane
-      is a NORMAL-screen program — a shell or a codex-style inline TUI on the main screen (NOT an
-      alternate-screen full-screen TUI like Claude Code) — with real scrollback below the fold. Instrument the
-      terminal WebSocket to log every OUTGOING `{t:'resize'}` frame. On the Terminal tab, let the pane settle
-      and note its visible bottom content. Now do the round-trip the list-fold makes lossy: click Eval (which
-      folds the session list to a strip, [[eval-tab-folds-session-list]]) and then click straight back to
-      Terminal. Collect the resize frames emitted DURING that round-trip and the pane's visible content right
-      after returning and once settled. Screenshot the pane on the Terminal tab BEFORE the round-trip and just
-      after returning.
-    expected: |
-      A Terminal→Eval→Terminal round-trip sends ZERO resize frames to the pane — the terminal's column count is
-      identical before and after — so tmux never reflows the pane and a normal-screen (codex) program receives
-      no SIGWINCH. The pane comes back showing exactly its prior bottom content, in place, with no re-render: it
-      does NOT re-seed from high in its scrollback and animate downward to the live bottom. The bug path — the
-      list unfold restoring on a LAGGING effect one frame after the tab flips, so the pane paints one frame at
-      the wide (list-folded) width and then snaps to the narrow (list-shown) width, firing two resizes (wide
-      then narrow) that reflow a normal-screen pane into a scroll-through-history redraw (an alternate-screen
-      pane redraws in place and hides it) — must be absent: the list is never folded while the Terminal tab
-      shows, so the terminal width is stable across the round-trip and no resize is emitted.
+      The right pane shows the live terminal with the docked `❯` input; the tab bar is a clear
+      horizontal row set VISIBLY APART from the dark terminal — a lighter app-chrome panel (var
+      --panel) with a bottom separator (var --line), distinct from the terminal's var --term-bg in
+      BOTH themes. The Eval entry is a DOOR: clicking it navigates to #/evals?session=<id> (the
+      session's evaluation on the Evals page, carrying the export ↗ link) — no in-console eval pane
+      mounts, and the session pages stay warm across the page switch, so Back returns to the console
+      with the live pane intact (the socket and scrollback survive). The grown `❯` box survives a type
+      mode round-trip: its multi-line draft is still there AND its rendered height matches the
+      pre-switch height — never collapsed back to a single row.
     related: spec-dashboard/src/SessionInterface.jsx
   - name: launcher-picker-opens-on-click
     tags: [frontend-e2e, desktop]
@@ -497,17 +443,15 @@ scenarios:
   - name: filer-chip-opens-console
     tags: [frontend-e2e]
     code: spec-dashboard/src/SessionInterface.jsx
-    related: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EventDetail.jsx]
+    related: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]
     description: >-
-      On a session's Eval tab, select a reading THAT SESSION filed (the header's filer chip names the
-      session you are already viewing) and click the live filer chip. Read the right pane's tab state and
-      the hash before and after. Then, on an eval whose filer is a DIFFERENT live session, click its chip.
+      On a session-scoped eval detail page (#/evals/<node>/<scenario>?session=<id>) whose viewed reading
+      was filed by a LIVE session, click the side rail's filer chip. Read the hash and the rendered page
+      after the click.
     expected: >-
-      The chip is never a dead button. Clicking the filer chip of the session you are already viewing flips
-      the right pane to the TERMINAL tab (the console — "open this session" made real; the hash may stay
-      put since the session is already selected). Clicking a different live session's chip navigates to
-      #/sessions/<id> and lands on that session's console. Baseline bug: same-session clicks did nothing —
-      setSessionSel was already set and navigate() saw an identical hash, so the openable chip was a no-op.
+      The chip is never a dead button: clicking a live filer chip navigates to #/sessions/<id> and lands
+      on that session's console with its terminal showing — the direct door from a reading back to the
+      session that measured it. An offline filer stays a static chip.
   - name: external-open-reveals-nested-session
     tags: [frontend-e2e, desktop]
     code: spec-dashboard/src/SessionInterface.jsx

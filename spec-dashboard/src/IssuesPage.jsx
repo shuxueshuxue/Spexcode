@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
@@ -6,54 +6,45 @@ import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { liveSession } from './session.js'
-import FoldToggle from './FoldToggle.jsx'
 import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
+import { ListPage, DetailShell, SideSection } from './ReviewShell.jsx'
+import { navigate, routeHash, useRoute } from './route.js'
 import { Icon, IconButton } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
-// The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
-// session board, and the Evals page. MASTER-DETAIL over one full routed page — the LEFT column is the
-// SLIM merged ISSUE list (local + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
-// issues hidden behind a count chip) under its own filter bar, foldable to a thin strip so the detail
-// owns the width; the RIGHT pane is the full-height DETAIL of the selection — selection IS the detail,
-// no in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
-// its replies, and the reply composer — BOTH stores ([[issues]]: the reply/close verbs route by store). j/k
-// walk the issue list even while folded, the detail follows; writes post as 'human'. The evals are their
-// OWN top-level page now ([[evals-view]]) — no in-page switcher here.
-export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues, issueId = null }) {
+// The Issues surface ([[issues-view]]): GitHub-style TWO pages over one route family, both wearing the
+// shared [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
+// order, no re-sort), one-line rows that are REAL anchors, filters in the URL query; `#/issues/<id>` is
+// the standalone DETAIL page — the markdown body + reply thread as the main column with the composer
+// docked at its foot, the status/store/originator/node metadata in the side rail. A row click PUSHES;
+// browser Back restores the exact filtered list; both pages are directly openable. Writes post as
+// 'human' and route by store ([[issues]]).
+
+const statusIconOf = (status) => (status === 'open' ? 'issue-opened' : 'issue-closed')
+const concluded = (i) => i.status !== 'open'
+
+// The LIST page (`#/issues[?query]`): RESIDENT data — the page renders instantly from app-held state
+// ([[issues-view]]); filters (store / concluded reveal / live chip) are URL-query state, re-derived on
+// every hashchange so Back replays them exactly.
+export function IssuesListPage({ data, reloadIssues, specs, sessions, query, notice, flash }) {
   const t = useT()
-  const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
-  const [folded, setFolded] = useState(false)      // the master list folded to a strip — the detail owns the width
-  const [showConcluded, setShowConcluded] = useState(false)
-  const [liveOnly, setLiveOnly] = useState(false)  // [[live-session-filter]]: only issues a live session is behind
-  const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
-  const [notice, setNotice] = useState('')
-  const [sel, setSel] = useState(null)            // the ONE selection: 'issue:<id>'
-  const rowsRef = useRef([])                      // the issue key list, for j/k
+  useEscLayer(composing, () => setComposing(false))
+  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
+  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
-  // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
-  const load = useCallback(() => reloadIssues?.(true), [reloadIssues])
+  const all = Array.isArray(data.issues) ? data.issues : []
+  const storeFilter = query.store || 'all'
+  const showConcluded = query.concluded === '1'
+  const liveOnly = query.live === '1'
+  // a human's filter pick PUSHES the new list address (GitHub's semantics — Back walks filter history).
+  const set = (patch) => navigate('issues', null, { query: { ...query, ...patch } })
 
-  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
-
-  const all = Array.isArray(data?.issues) ? data.issues : []
-  // a non-open issue is archive by default — the list is the open work, not lifecycle history.
-  const concluded = (i) => i.status !== 'open'
   // the store filter's options come from the DATA, not a hardcoded list — a new store (gitlab) appears
   // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
-  const writeStores = Array.isArray(data?.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  useEffect(() => {
-    if (!issueId || !all.length) return
-    const hit = all.find((i) => i.id === issueId)
-    if (!hit) return
-    if (storeFilter !== 'all' && hit.store !== storeFilter) setStoreFilter('all')
-    if (concluded(hit)) setShowConcluded(true)
-    if (!isLive(hit)) setLiveOnly(false)   // a deep link must render: widen past the live chip too
-    setSel(`issue:${hit.id}`)
-  }, [issueId, all, storeFilter])
+  const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
   const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
   // [[live-session-filter]]: an issue is LIVE while a session behind it is still alive — its originator
   // (i.by) or any reply author; the join is session.js's liveSession, the same judgment the originator
@@ -64,127 +55,85 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   const liveCount = shown.filter(isLive).length
   const concludedCount = stored.filter(concluded).length
 
-  const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
-  rowsRef.current = issues.map((i) => `issue:${i.id}`)
-  // default selection: the list's first row — the detail pane is never idle by default.
-  const effSel = sel && issueByKey.has(sel) ? sel : rowsRef.current[0] ?? null
-
-  // page keys ([[issues-view]]): j/k walk the issue list; the detail follows the selection (no Enter —
-  // selection IS detail). Capture phase; a key typed into an input/textarea or carrying a modifier is
-  // never ours.
-  const stateRef = useRef({})
-  stateRef.current = { effSel }
-  useEscLayer(composing, () => setComposing(false))
-  useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key !== 'j' && e.key !== 'k') return
-      e.preventDefault(); e.stopPropagation()
-      const rows = rowsRef.current
-      if (!rows.length) return
-      const cur = rows.indexOf(stateRef.current.effSel)
-      const next = cur < 0 ? (e.key === 'j' ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, cur + (e.key === 'j' ? 1 : -1)))
-      setSel(rows[next])
+  // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
+  // the store mini-tag renders only while stores are actually mixed ([[issues-view]]).
+  const rows = issues.map((th) => {
+    const status = th.status || 'open'
+    return {
+      key: th.id,
+      href: routeHash('issues', th.id),
+      content: (
+        <>
+          <span className={`fv-status-mark ${status === 'open' ? 'open' : 'concluded'}`} data-tip={status}>
+            <Icon name={statusIconOf(status)} size={16} />
+          </span>
+          <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
+          {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
+          {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
+        </>
+      ),
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
-  useEffect(() => {
-    document.querySelector('.fv-list-col .sel')?.scrollIntoView({ block: 'nearest' })
-  }, [effSel])
+  })
 
-  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
-  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
-
-  const selIssue = effSel ? issueByKey.get(effSel) : null
+  const chips = (liveOnly || liveCount > 0 || concludedCount > 0) ? (
+    <>
+      {/* [[live-session-filter]]: the live chip self-hides at N=0 ONLY while the filter is OFF; once on it
+          stays mounted as liveCount → 0 (the originating sessions close), so the filter is always
+          releasable and the list never dead-ends empty. */}
+      {(liveOnly || liveCount > 0) && (
+        <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => set({ live: liveOnly ? null : '1' })}
+          data-tip={t('masterList.liveChipTitle')}>
+          {t('masterList.liveChip', { n: liveCount })}
+        </button>
+      )}
+      {concludedCount > 0 && (
+        <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => set({ concluded: showConcluded ? null : '1' })}>
+          {t('nodeView.closedIssues', { n: concludedCount })}
+        </button>
+      )}
+    </>
+  ) : null
 
   return (
-    <div className={`fv-master ${folded ? 'folded' : ''}`}>
-      {/* the list column stays MOUNTED while folded (filter state + j/k live in it) — the fold is pure
-          CSS; the thin strip is the unfold affordance. */}
-      {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
-      <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        {notice && <div className="fv-notice">{notice}</div>}
-        <section className="fv-group">
-          <header className="fv-group-head">
-            {/* the bar is a two-row cluster: the CONTROL row (fold / store filter / New — anchored flex
-                members, nothing floats over the list or its scrollbar) over the CHIP row (the small
-                count/toggle chips). No open/total count meta — the list itself is the count. */}
-            <span className="fv-head-row">
-              <FoldToggle className="fv-fold-inline" onToggle={() => setFolded(true)} />
-              {stores.length > 1 && (
-                <FilterSelect value={storeFilter} onChange={setStoreFilter}
-                  options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
-              )}
-              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
-            </span>
-            {(liveOnly || liveCount > 0 || concludedCount > 0) && (
-              <span className="ef-chipbar">
-                {/* [[live-session-filter]]: the live chip self-hides at N=0 ONLY while the filter is OFF; once
-                    liveOnly is on it stays mounted as liveCount → 0 (the originating sessions close), so the
-                    filter is always releasable and the issues list never dead-ends empty. */}
-                {(liveOnly || liveCount > 0) && (
-                  <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
-                    data-tip={t('masterList.liveChipTitle')}>
-                    {t('masterList.liveChip', { n: liveCount })}
-                  </button>
-                )}
-                {concludedCount > 0 && (
-                  <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
-                    {t('nodeView.closedIssues', { n: concludedCount })}
-                  </button>
-                )}
-              </span>
-            )}
-          </header>
-          {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
-          {/* a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
-              the store mini-tag renders only while stores are actually mixed ([[issues-view]]). */}
-          {issues.map((th) => {
-            const k = `issue:${th.id}`
-            const status = th.status || 'open'
-            const statusIcon = status === 'open' ? 'issue-opened' : 'issue-closed'
-            return (
-              <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-status-mark ${status === 'open' ? 'open' : 'concluded'}`} data-tip={status}>
-                  <Icon name={statusIcon} size={16} />
-                </span>
-                <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
-                {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
-                {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
-              </button>
-            )
-          })}
-        </section>
-      </div>
-      <div className="fv-detail">
-        {selIssue
-          ? <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onOpenSession={onOpenSession} onWrite={async (outcomes) => { flash(outcomes); await load() }} />
-          : <div className="fv-note">{t('session.issuesEmpty')}</div>}
-      </div>
+    <ListPage
+      notice={notice}
+      controls={
+        <>
+          {stores.length > 1 && (
+            <FilterSelect value={storeFilter} onChange={(v) => set({ store: v === 'all' ? null : v })}
+              options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
+          )}
+          <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
+        </>
+      }
+      chips={chips}
+      rows={rows}
+      empty={t('session.issuesEmpty')}
+    >
       {composing && (
         <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">
-          <NewThreadForm specs={specs} sessions={sessions} stores={writeStores} onCancel={() => setComposing(false)} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />
+          <NewThreadForm specs={specs} sessions={sessions} stores={writeStores} onCancel={() => setComposing(false)}
+            onDone={async (outcomes) => { setComposing(false); flash(outcomes); await reloadIssues?.(true) }} />
         </Modal>
       )}
-    </div>
+    </ListPage>
   )
 }
 
-// the issue detail — full-height, split like the eval rail: a scrolling thread region (header
-// (store/status/author/node chips/permalink), the markdown-RENDERED body, the replies) over the composer
-// DOCKED at the pane's foot — one thread surface for both stores, the write affordance always on screen.
-// The composer's action row stays narrow: reply is the main path, close is the lifecycle path, and an open
-// local thread can be promoted when it needs forge visibility. Sign/accept/reject are not product verbs.
-function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite }) {
+// The DETAIL page (`#/issues/<id>`) — [[review-chrome]]'s GitHub-grammar skeleton: the concern ALONE as
+// the title, the status band under it, the markdown body + reply thread as the MAIN column with the
+// composer docked at its foot, and the store/originator/node/permalink metadata in the SIDE rail (reflowed
+// above the body at phone width). One thread surface for both stores; the only store-specific affordances
+// are metadata. Sign/accept/reject are not product verbs.
+export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite, notice }) {
   const t = useT()
   const local = th.store === 'local'
-  const concluded = th.status !== 'open'
+  const isConcluded = concluded(th)
   const [acting, setActing] = useState('')   // the lifecycle action in flight — one at a time
   const [actErr, setActErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
   const replies = Array.isArray(th.replies) ? th.replies : []
+  const status = th.status || 'open'
   const run = (name, fn) => async () => {
     if (acting) return
     setActing(name)
@@ -203,36 +152,42 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
     </button>
   )
   return (
-    <div className="fvd">
-      <div className="fvd-scroll">
-        {/* the title is the concern ALONE — the store is metadata, never identity: it lives in the meta
-            strip below, never on the title ([[issues-view]]). */}
-        <header className="fvd-head">
-          <span className="fvd-concern">{th.concern}</span>
-        </header>
-        <div className="fvd-meta">
-          {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-          <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
+    <DetailShell
+      title={th.concern}
+      status={
+        <span className={`fv-status fv-st-${status} ds-status-pill`}>
+          <Icon name={statusIconOf(status)} size={14} /> {status}
+        </span>
+      }
+      side={
+        <>
+          <SideSection label={t('detail.sideStore')}>
+            <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
+            {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })}</a>}
+          </SideSection>
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
               session id (join it against the board for liveness, click through when live); a forge issue's
               `by` is a github login that resolves to no session, so it stays a plain label. */}
-          {local
-            ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
-            : (th.by && <span className="fv-by">{th.by}</span>)}
-          {nodes.map((id) => (
-            <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} data-tip={t('session.issuesFocusNode')}>{id}</button>
-          ))}
-          {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })}</a>}
-        </div>
-        {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
-        {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
-            can host on an issue, not only a scenario); the shared Thread UI enforces nothing itself. */}
-        <Replies replies={replies} threadId={local ? th.id : null} onRemarkChange={() => onWrite?.('')} />
-      </div>
-      {/* the composer is DOCKED at the detail's foot ([[issues-view]]) — always on screen, the thread
-          scrolls behind it (no scroll-to-the-bottom to reply); keyed to the issue so a half-typed draft
-          dies with its selection instead of leaking onto another issue's thread. */}
-      <div className="fvd-compose">
+          {th.by && (
+            <SideSection label={t('detail.sideOriginator')}>
+              {local
+                ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
+                : <span className="fv-by">{th.by}</span>}
+            </SideSection>
+          )}
+          {nodes.length > 0 && (
+            <SideSection label={t('detail.sideNodes')}>
+              {nodes.map((id) => (
+                <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} data-tip={t('session.issuesFocusNode')}>{id}</button>
+              ))}
+            </SideSection>
+          )}
+        </>
+      }
+      composer={
+        // the composer is DOCKED at the main column's foot ([[issues-view]]) — always on screen, the
+        // thread scrolls behind it; keyed to the issue so a half-typed draft dies with its page instead of
+        // leaking onto another issue's thread.
         <ReplyComposer
           key={th.id}
           onSend={(text, evidence) => postIssueReply(th.id, text, evidence)}
@@ -240,7 +195,7 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
           sessions={sessions}
           focusId={nodes[0] || null}
           onDone={onWrite}
-          actionsEnd={!concluded && (
+          actionsEnd={!isConcluded && (
             <>
               {actErr && <span className="fv-error">{actErr}</span>}
               {local && lifecycleBtn('promote', t('session.issuesPromote'), () => postIssuePromote(th.id), t('session.issuesPromoteTitle'))}
@@ -248,9 +203,38 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
             </>
           )}
         />
-      </div>
-    </div>
+      }
+    >
+      {notice && <div className="fv-notice">{notice}</div>}
+      {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
+      {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
+          can host on an issue, not only a scenario); the shared Thread UI enforces nothing itself. */}
+      <Replies replies={replies} threadId={local ? th.id : null} onRemarkChange={() => onWrite?.('')} />
+    </DetailShell>
   )
+}
+
+export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues }) {
+  const t = useT()
+  const { param, query } = useRoute()
+  const [notice, setNotice] = useState('')
+  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
+  // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
+  const onWrite = async (outcomes) => { flash(outcomes); await reloadIssues?.(true) }
+
+  if (param) {
+    if (issuesData == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
+    if (!issuesData.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
+    const th = (issuesData.issues || []).find((i) => i.id === param)
+    if (!th) {
+      // an address naming no issue renders the honest not-found with the list link ([[review-chrome]]).
+      return <DetailShell missing={t('reviewShell.issueNotFound', { id: param })} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
+    }
+    return <IssueDetailPage issue={th} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
+      onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
+  }
+  return <IssuesListPage data={issuesData} reloadIssues={reloadIssues} specs={specs} sessions={sessions}
+    query={query} notice={notice} flash={flash} />
 }
 
 // canonical store display names — the permalink label derives from the issue's OWN `store` identity

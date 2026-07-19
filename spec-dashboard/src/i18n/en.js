@@ -116,14 +116,33 @@ export default {
     summary: ({ n }) => `${n} current`,
     empty: 'no current evals match — measure a scenario or switch the filter.',
     annotate: 'open & annotate',
+    inSession: 'measured by this session',
     okdTip: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     okChip: ({ n }) => `${n} ok’d`,
     okChipTitle: 'show the fresh, human-ok’d scenarios the feed default-hides',
   },
 
+  evals: {
+    scopeMerged: 'merged',
+  },
+
+  reviewShell: {
+    evalNotFound: ({ node, scenario }) => `no eval found for ${node} · ${scenario}`,
+    issueNotFound: ({ id }) => `no issue found for ${id}`,
+    backToEvals: '← all evals',
+    backToIssues: '← all issues',
+  },
+
+  detail: {
+    sideReading: 'reading',
+    sideFiler: 'filed by',
+    sideOk: 'human-ok',
+    sideStore: 'store',
+    sideOriginator: 'opened by',
+    sideNodes: 'spec nodes',
+  },
+
   masterList: {
-    fold: 'fold the list — the detail owns the width',
-    unfold: 'unfold the list',
     liveChip: ({ n }) => `${n} live`,
     liveChipTitle: 'only issues/evals a LIVE session is behind',
   },
@@ -139,8 +158,6 @@ export default {
     capturing: 'capturing frame…',
     failed: 'failed — is the backend up?',
     comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
-    railFold: 'fold the review track — the stage owns the width',
-    railUnfold: 'unfold the review track',
     abOlder: 'older eval (‹ toward the A / reproduced bug)',
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
@@ -173,16 +190,14 @@ export default {
 
   sessionEval: {
     btn: 'eval',
-    btnTitle: "switch to this session's eval tab — the measured eval evidence, the diff, and the merge gates",
+    btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
     none: 'no evaluation for this session yet',
-    sessionN: ({ n }) => `✦ this session: ${n}`,
-    inherited: 'inherited · latest evals by other sessions',
+    unavailable: 'evaluation unavailable until the session model loads successfully.',
+    loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,
     export: 'export',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
-    blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex eval add.',
     unmeasured: 'unmeasured',
-    noEvalFile: 'UI code · no eval.md',
   },
 
   time: {
@@ -453,6 +468,7 @@ export default {
     launcherTip: 'edit spexcode.json / spexcode.local.json to change launchers',
     tabTerminal: 'terminal',
     tabEval: 'eval',
+    tabEvalTitle: "open this session's evaluation on the Evals page (?session scope)",
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
@@ -475,7 +491,7 @@ export default {
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
       typeDesc: "type mode — type raw keystrokes straight into the agent's terminal",
-      evalDesc: "switch to this session's eval tab — eval evidence, diff, merge gates",
+      evalDesc: "open this session's Evals page — eval evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',
@@ -509,6 +525,8 @@ export default {
   mobile: {
     specsTab: 'specs',
     sessionsTab: 'sessions',
+    evalsTab: 'evals',
+    issuesTab: 'issues',
     childrenTab: ({ n }) => `children ${n}`,
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     noSessions: 'no live sessions — tap ＋ above to start one',

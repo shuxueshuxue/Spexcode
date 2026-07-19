@@ -2,70 +2,71 @@
 title: evals-view
 status: active
 hue: 200
-desc: The dashboard's Evals page — a top-level route (#/evals, [[side-nav]]) peer to the graph, the session board, and the Issues page, showing the project's current measured loss as a MASTER-DETAIL: the [[evals-feed]] list in a SLIM, foldable left column, the [[event-detail]] workspace of the selection full-height on the right. Evals lead — the board's `f` and ⌥F land here.
+desc: The dashboard's Evals surface as GitHub-style TWO pages — a full-width LIST page (#/evals, [[side-nav]]) whose one-line rows are real anchors, and a standalone DETAIL page (#/evals/<node>/<scenario>) reached by a history PUSH so browser Back restores the exact filtered list. Un-merged worktree/session evals live in the SAME route family behind a default-off session filter (?session=<id>); the old #/sessions/…/eval address normalizes here. Both pages wear the shared [[review-chrome]].
 code:
   - spec-dashboard/src/EvalsPage.jsx#EvalsPage
-  - spec-dashboard/src/EvalsPage.jsx#EvalMasterDetail
+  - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
+  - spec-dashboard/src/EvalsPage.jsx#EvalDetailPage
 ---
 
 # evals-view
 
 ## raw source
 
-The project's measured loss is what the optimizer reads, so a human reviewing the project wants it on a
-surface of its own — not buried as a tab inside another page. Evals and issues were once one `#/issues`
-page with an in-page `Evals | Threads` switcher; the human's directive collapsed the indirection: make
-them **two top-level pages**, peers of the graph and the session board. So the evals get their OWN page,
-`#/evals`, a real [[side-nav]] rail entry and route — and because the current loss is what review attends
-to first, **evals lead**: they sit above issues in the rail, and the board's shortcuts to the review
-surfaces (`f`, ⌥F) land here.
+The project's measured loss deserves a surface of its own, and the human's directive names the navigation
+model to copy: **GitHub's issues**, verified against the live product — the list is one page whose whole
+state (filters, query) lives in the URL, each row is a plain copyable link, clicking a row PUSHES a history
+entry onto a standalone full-page detail, and browser Back restores the exact filtered list URL (GitHub's
+own docs promise the URL↔view equivalence). No master-detail split pane, no in-page selection echo: **list
+page and detail page are two different addresses.** GitLab's default side-panel mode was explicitly NOT
+chosen — this is the full-page mode. And the second directive: un-merged worktree evals stop living under
+`#/sessions/<id>/eval` — one route family, `#/evals`, carries merged and un-merged loss alike, a session
+filter (default off) picking the root.
 
 ## expanded spec
 
-- **A top-level page, not a tab.** `#/evals` is a peer route with its own [[side-nav]] rail entry —
-  bookmarkable, reloadable, history-walked. The keyboard doors are [[side-nav]]'s global ⌥ vocabulary
-  (**⌥3** in rail order, plus **⌥F** — evals are the leading loss surface) reachable from any page, and the
-  board's bare **`f`** ([[side-nav]] / the keymap) as the direct jump from the graph. There is no in-page
-  switcher: the page IS the evals, the [[issues-view]] page IS the issues, and the rail is how you cross
-  between them.
-- **The selection has an ADDRESS — `#/evals/<node>/<scenario>` is the canonical eval URL.** An eval a
-  human wants another human (or a dispatched agent) to look at must be pointable-at: the deep link selects
-  exactly that (node, scenario) in the detail pane — widening the feed's default kind filter when it would
-  hide the target ([[evals-feed]]'s `mustShow`, the feed widening its own state) — and every selection made
-  in the page (a row click, a j/k hop) is ECHOED back into the hash with replace ([[side-nav]]'s
-  pages-push/details-replace discipline), so the address bar always names the eval on screen and copy-URL
-  is the share affordance, no button needed. An address naming no real eval falls back to the feed's first
-  row and canonicalizes; a deep link to an eval that exists is never silently rewritten before the feed has
-  shown it.
-- **A MASTER-DETAIL — a full page deserves a full-height detail, and the DETAIL is the protagonist.** The
-  **left column** is the [[evals-feed]] list — the latest reading per (node, scenario), fresh leading, video
-  first — under its own kind dropdown (that filter is the feed's own state; this node owns the page shell,
-  never the filters). Its rows are title-only, so the column stays **SLIM** — it never crowds the detail
-  (the human called the wide sidebar: the list is a picker, not a reading surface) — and a **fold toggle**
-  (the shared [[fold-toggle]] icon button) collapses it to a thin strip, giving the whole width to the
-  detail workspace once a human is working one
-  eval; the strip itself is the unfold affordance, and the folded list keeps its state (filters, selection,
-  j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the column carries no title of
-  its own. The **right pane** is the full-height [[event-detail]] of the one selection — **selection IS
-  detail** (no Enter, no in-place expansion): picking an eval row renders it as the event detail — the media
-  stage under the review-track scrubber, the A/B strip in the header, and the (node, scenario) remark rail +
-  docked composer. The list stays a picker + status surface: a write acting on the selected reading (notably
-  [[human-ok]]) lives in the detail and is never duplicated on its feed row. **j/k walk the feed** (folded or
-  not) and the detail follows; a key typed into an input is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
-  owns the page shell: the split, the fold, the selection, and the j/k routing. That shell is ONE exported
-  component (`EvalMasterDetail`), and it is deliberately SHARED: the session console's Eval tab
-  ([[session-eval]]) renders the same shell around its own worktree-rooted list, so the two eval
-  master-detail homes cannot drift apart on geometry, fold, or keys. The list CHROME is one grammar too:
-  the feed and the [[issues-view]] drain wear the SAME filter-control language (ONE shared dropdown filter
-  component — the feed's kind filter and the drain's store filter are literally one control; chips and any
-  New/action button sharing that height and radius; the count-meta pushed to its row's end), the SAME uniform single-line rows (the title truncates,
-  it never wraps — both pickers keep one even rhythm), and the SAME unhurried spacing over a hairline-soft
-  row divider — so the two top-level pages read as ONE surface, never two dialects of a picker.
-- **One data path — the feed rides the app's one board poll.** The list fetches nothing of its own: the
-  board nodes arrive as a prop from the app's single board poll + SSE ([[evals-feed]]). A remark authored in
-  the [[event-detail]] composer writes through the CLI-parity `/api/remarks` and then refreshes the
-  BOARD — the eval's remark thread is the server overlay folded in through the board ([[event-detail]] /
-  [[eval-issue-split]]), so it needs no issues-list reload; the Issues page's list stays a separate data
-  path. A `@session`/`@new` in that composer **dispatches** ([[mentions]]), and the returned one-line
-  dispatch summary (`@ new→<session>`) is **echoed briefly** as a page notice — the same flash the
-  [[issues-view]] page gives its composers; a summons is never silent.
+- **Two pages, one route family.** `#/evals` is the LIST page; `#/evals/<node>/<scenario>` is the DETAIL
+  page — each bookmarkable, reloadable, directly openable (hash routing needs no server). The [[side-nav]]
+  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. There is no pagination — the list is
+  bounded by declared scenarios and the API has no page semantics, so none is invented.
+- **The list's state is its URL.** Filters ride the hash's query string — `#/evals?kind=all&session=<id>`
+  plus the live/ok chips — so a filtered list is copyable and Back-restorable: on every hashchange the
+  list re-derives its WHOLE state from the URL, so Back replays exactly what was on screen. A human's
+  filter change PUSHES (GitHub's semantics — Back walks filter history); only an AUTOMATIC rewrite (the
+  legacy-address normalization) replaces. Rows are the
+  [[evals-feed]] grammar: one
+  line each, latest reading per scenario, and each row is a REAL `<a href>` to its detail address — the
+  row's context menu, middle-click, and copy-link all work for free.
+- **List → detail is a history PUSH; Back restores the list exactly.** Clicking a row (or Enter on the
+  j/k cursor) navigates to the detail page as a normal hash push — measured on GitHub: history grows by
+  one, and Back returns to the previous list URL with its query intact. The detail page renders standalone:
+  a direct open or reload works with no list mounted, and there is NO fake in-app Back button — the
+  browser's history is the return path. An address naming no real eval renders an honest not-found with a
+  link to the list, never a silent rewrite to some other eval.
+- **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
+  header naming the scenario (title) and node, a status band (verdict badge + the A/B strip), then a MAIN
+  column beside a metadata SIDE rail. The main column is the [[event-detail]] evidence WORKSPACE — media
+  stage under the review-track scrubber, step rail, gallery/transcripts — followed by the (node, scenario)
+  remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).
+  The side rail is the reading/session metadata: evaluator, filed time, originator liveness, human-ok,
+  staleness readout. On a phone-width viewport the SAME page reflows to one column with the side metadata
+  ABOVE the workspace (GitHub's 390px order), never a shrunken two-column.
+- **Un-merged session/worktree evals are the SAME pages behind a session filter.** A default-off session
+  picker (the shared filter control) scopes the list to one session's WORKTREE-rooted model
+  ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
+  rows, in-session rows ✦-marked); the detail carries the same `?session=<id>` so its A/B history walks
+  the worktree-rooted readings. `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route
+  layer normalizes it (replace) to the `#/evals` form — old links keep working, the old shape is never
+  re-minted, and the console exposes only a door that navigates here. The session model has three honest
+  read states: loading, loaded/not-found, and failed. A failed fetch is never rendered as an empty session
+  or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
+  detail gets a distinct load-failed face; only a successfully loaded model without the addressed reading
+  gets the not-found face.
+- **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
+  the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
+  source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
+  unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
+  and viewed reading are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
+  loaded timeline events, ordinary typed prose, or anchored composer draft. A real
+  scope/scenario/A-B-reading change re-sources the workspace and clears that draft before the new reading is
+  reviewable.

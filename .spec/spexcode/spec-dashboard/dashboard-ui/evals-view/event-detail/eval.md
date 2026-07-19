@@ -1,67 +1,59 @@
 ---
 scenarios:
-  - name: workspace-no-pingpong
+  - name: detail-page-grammar
     tags: [frontend-e2e, desktop]
     description: >
-      On #/evals, select a video reading whose thread holds several anchored remarks. Unfold the remark
-      rail (click its folded strip), then measure the detail pane's geometry: the header band's height
-      and contents; whether the media stage AND the remark rail's composer are BOTH within the viewport
-      at once (getBoundingClientRect on the video and on the composer textarea); scroll the rail's remark
-      list and read whether the video moved; type into the composer and read whether the stage scrolled.
-      Then narrow the window under the breakpoint and re-read the layout.
+      Open a video reading's detail page (#/evals/<node>/<scenario>) whose thread holds several anchored
+      remarks. Read the page's skeleton: the header (scenario title + node), the status band (verdict
+      badge + A/B strip), the main column's order (evidence workspace, then the remark thread), the side
+      rail's metadata sections, and the composer's geometry (getBoundingClientRect on `.ds-compose` and
+      its textarea) WITHOUT scrolling. Scroll the thread and re-read whether the composer stayed on
+      screen; type into it and read whether the page scrolled. Then narrow the window under the phone
+      breakpoint and read the column order.
     expected: |
-      The detail is a WORKSPACE, not a scroll stack: a slim header (scenario · node · verdict badge ·
-      A/B strip), then the media stage and the remark rail SIDE BY SIDE once the rail is unfolded — the
-      video and the composer are simultaneously visible with NO scrolling (the composer is docked at the
-      rail's foot, never below the media/gallery/thread stack). Scrolling the rail's remark list never
-      moves the stage; the stage scrolls itself when its gallery overflows. Circle→remark→circle needs
-      zero vertical travel — the old top-bottom ping-pong is gone. Under the narrow breakpoint the
-      workspace degrades to one stacked column (stage over rail) instead of clipping.
-  - name: rail-default-folded
+      The detail wears GitHub's issue-page grammar through the shared DetailShell: header → status band →
+      MAIN column (the evidence workspace, then the remark thread as the page's activity) beside the
+      metadata SIDE rail. The composer is DOCKED STICKY at the main column's foot — on screen immediately
+      and staying on screen while the thread scrolls behind it, so circle→remark→circle never buries the
+      writer. NO fold strip and NO in-page back button exist. Under the phone breakpoint the SAME markup
+      reflows to one column with the side metadata FIRST, the composer still reachable at the foot.
+  - name: mark-lands-in-docked-composer
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/FoldToggle.jsx]
+    code: [spec-dashboard/src/EventDetail.jsx]
     description: >
-      On #/evals, select a video reading whose thread holds remarks (at least one unresolved). Read the
-      workspace's initial state: is the remark rail hidden behind a thin right-edge strip (the shared
-      fold-strip affordance, `.an-rail-unfold`), and does the strip carry the remark count? Click the
-      strip and read the rail (list + composer + a fold badge in its head). Click the head's fold badge
-      and re-read. Unfold again is NOT clicked — instead drag-circle a region on the paused frame and
-      read whether the rail opened on its own with the prefilled composer focused. Then click a scrubber
-      comment marker while the rail is folded and read the rail. Switch selection to another row and
-      read whether the fold state persisted.
+      On a video reading's detail page: drag-circle a region on the paused frame and read the docked
+      composer (prefill + focus). Then click a scrubber comment marker and read which thread remark
+      selected/highlighted. Press ↑/↓ and read the selection walk. Navigate to another eval's page and
+      read the composer's draft.
     expected: |
-      The remark rail is FOLDED BY DEFAULT on both eval homes: the workspace opens as stage + a thin
-      right strip — the SAME shared FoldToggle strip the master lists fold to (one component, one glyph),
-      wearing the remark count (accented while any remark is unresolved), so the outstanding loss stays
-      glanceable through the fold. Clicking the strip unfolds the full rail — remark list, docked
-      composer, and the shared inline fold badge in the rail head, which folds it back to the strip. The
-      review act unfolds it WITHOUT the strip: a drag-circle (or `a`) opens the rail with the anchored
-      draft prefilled and the composer focused; clicking a scrubber marker (or ↑/↓ jump) opens it with
-      that remark selected. The fold state persists across selection switches — a new selection neither
-      re-folds an opened rail nor re-opens a folded one. On the phone eval host the fold retires and the
-      rail stays open.
+      A drag-circle (or `a`) pauses the clip, captures the frame, and PREFILLS the docked composer with
+      the anchored draft (`▶m:ss · step` + the frame link), focusing it — no unfold step exists, the
+      composer is already on screen. Clicking a scrubber marker selects+seeks its remark and the thread
+      row highlights in sync; ↑/↓ walk the anchored remarks. A different eval's page starts with a FRESH
+      composer — a half-typed or prefilled draft dies with its page, never leaking onto another
+      scenario's thread.
   - name: stale-reading-readout
     tags: [frontend-e2e]
     description: >
-      On #/evals, select a reading whose node's governed code changed after it was taken (a code-stale
-      reading — the muted ✓/✗ in the list). Read the detail's stage: is there a stale readout naming the
-      moved axes, and for the code axis the drifted file(s) + how many commits behind? Then confirm the
-      remark composer works on it exactly as on a fresh reading (type + send a remark).
+      Open the detail page of a reading whose node's governed code changed after it was taken (a
+      code-stale reading — the muted ✓/✗ in the list). Read the side rail: is there a stale readout
+      naming the moved axes, and for the code axis the drifted file(s) + how many commits behind? Then
+      confirm the remark composer works on it exactly as on a fresh reading (type + send a remark).
     expected: |
-      A non-fresh viewed reading shows a stale readout on the stage: the freshness axes that moved
+      A non-fresh viewed reading shows a stale readout in the side rail: the freshness axes that moved
       (e.g. `code · scenario`), and for the code axis the drifted governed file(s) with a commits-behind
       count (e.g. `EvalsFeed.jsx +3`). A fresh reading shows NO readout. The readout is reporting only —
-      selecting/flipping A/B re-renders it for the viewed reading. The remark composer is unaffected by
+      flipping A/B re-renders it for the viewed reading. The remark composer is unaffected by
       freshness: a remark is authored and sent on a stale reading identically to a fresh one.
   - name: annotate-seek-circle-file
     tags: [frontend-e2e]
     description: >
-      On #/evals, select a video reading (carrying a step-timeline sidecar, its thread holding anchored
-      comments) in the left list. On the detail workspace's MEDIA STAGE, over the CUSTOM review-track
+      Open the detail page of a video reading (carrying a step-timeline sidecar, its thread holding
+      anchored comments). On the MEDIA STAGE, over the CUSTOM review-track
       player: read the scrubber's comment markers + step bands + duration; click a comment marker and read
       video.currentTime + which comment/marker highlights (the comment lives in the RIGHT RAIL);
-      play/pause and read the playhead-active rail comment as it advances; frame-step with '.' and jump
-      comments with ↑/↓ and read video.currentTime; press 'a' and read the rail composer's stamped anchor;
+      play/pause and read the playhead-active thread comment as it advances; frame-step with '.' and jump
+      comments with ↑/↓ and read video.currentTime; press 'a' and read the docked composer's stamped anchor;
       click a step on the ruler; drag on the paused frame to circle a region, read the prefilled composer
       and send it; click the sent comment's anchor chip; read the pane's DOM for any verdict-filing
       controls (pass/fail buttons, a note input, a file-reading action); switch selection to another row
@@ -71,11 +63,11 @@ scenarios:
       (native chrome replaced) on the stage: a scrubber carrying the play-fill + knob, one MARKER per
       anchored comment at its moment, and step BANDS from the timeline; a live time readout + a chip
       naming the step the playhead is in. Clicking a marker SEEKS to that comment (the blob route answers
-      byte ranges — without them the browser clamps to 0) AND selects it: the marker and the rail comment
+      byte ranges — without them the browser clamps to 0) AND selects it: the marker and the thread comment
       both highlight, in sync. As the clip plays the playhead-ACTIVE comment lights and the step chip
       flips at each boundary. The keyboard drives it — space play/pause, ←→ ±5s (⇧ 1s), , . frame-fine,
       ↑↓ jump to the prev/next comment (seek + select), 'a' stamps a `▶m:ss · <step>` anchor into the
-      rail's docked composer (+ a `[[node]]` line when the step routes elsewhere) and focuses it. The
+      docked composer (+ a `[[node]]` line when the step routes elsewhere) and focuses it. The
       named-step ruler still click-seeks. A drag circles a region: the paused frame (rect burned in) is
       POSTed to /api/evidence and the composer is prefilled with an anchored comment — the anchor line,
       a `![frame](/api/evidence/<hash>)` link, and the routing line — with the stage still on screen.
@@ -92,7 +84,7 @@ scenarios:
       On a video reading's detail workspace, make one mark per gesture: drag-circle a region on the paused
       frame, stamp an anchor with the composer's ⏱ button (type a note, send), and press 'a'. Read each
       prefilled/stamped composer draft and, after sending, read the review track's rows (anchor chip,
-      prose, media count) and screenshot the rail.
+      prose, media count) and screenshot the thread.
     expected: |
       Every anchored mark carries the FRAME of its moment, whichever gesture made it: the circle burns its
       rect into the captured frame; ⏱ and 'a' capture the clean current frame — all three stamp
@@ -106,7 +98,7 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/Evidence.jsx]
     description: >
-      On #/evals, select a VIDEO reading. On the detail workspace's MEDIA STAGE, read the custom player's
+      Open a VIDEO reading's detail page. On the MEDIA STAGE, read the custom player's
       control bar (`.an-bar`): does it carry a fullscreen control (`.an-fs`) alongside play/pause · scrubber
       · time? Read the button's glyph (must NOT be an emoji — an inline SVG icon) and its title/aria-label.
       Click it and read `document.fullscreenElement` — is it the player wrapper (`.an-player`, so the custom
@@ -127,7 +119,7 @@ scenarios:
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
-      On #/evals select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
+      Open an IMAGE reading's detail page: read the image's cursor style, click it,
       measure the overlay image's rendered size against the viewport, press Esc and read the page hash;
       reopen, click the backdrop.
     expected: |
@@ -138,14 +130,14 @@ scenarios:
   - name: eval-comments
     tags: [frontend-e2e]
     description: >
-      On #/evals select an eval with no existing remark thread. In the detail workspace's remark rail:
+      Open the detail page of an eval with no existing remark thread:
       send a first comment; send a second; confirm the trunk store holds exactly ONE local issue for that
       concern — read it from the board overlay's `entry.thread` (or the store's git log), since
       /api/issues excludes eval concerns by construction — and that no row for it renders on #/issues;
       send a third containing '@new'. Read the overlay between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
-      (nodes:[node], the comment its first reply) and it renders in place in the rail's remark list. The
+      (nodes:[node], the comment its first reply) and it renders in place in the thread. The
       second comment APPENDS to that same thread — the store holds exactly ONE local issue with that
       concern (no duplicate thread), now with two replies, both carried by the board overlay's
       `entry.thread`. The thread IS a real local issue (store local, concern-keyed) but — after the
@@ -157,14 +149,14 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
-      On #/evals, select a reading and unfold the remark rail. In the rail composer's action row read the
+      Open a reading's detail page. In the docked composer's action row read the
       `@`, `[[`, and `/` symbol buttons (aria-labels/tooltips). Seed a draft, place the caret mid-draft,
       click `@` and read the textarea's value/focus/selectionStart and any open menu; Esc, select a span,
       click `[[` and re-read; Esc, put the caret at a line start, click `/`, and read the review menu.
       Confirm no remark was posted, then re-read the row's child geometry at desktop and at a ~780px
       window. Open an issue reply composer and confirm its action row still has only the reference buttons.
     expected: >-
-      The shared Thread composer carries `@` and `[[` discoverability buttons on every home; the eval rail,
+      The shared Thread composer carries `@` and `[[` discoverability buttons on every home; the eval composer,
       which supplies review commands, adds the compact `/` button while an issue composer does not. Each
       inserts its EXACT trigger at the caret/selection, preserves the rest of the draft, and refocuses with
       the caret right after the trigger. The ONE shared autocomplete opens upward for `@`/`[[`; from a
@@ -174,11 +166,11 @@ scenarios:
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >
-      On #/evals, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
+      Open the detail page of a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
       the detail workspace's HEADER band, read the A/B strip's verdict pips and the position label; click
       the older (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and
       which evidence blob the media points at; then click the newest (pass) pip and read them again. Read
-      the rail's remark thread before and after the flips.
+      the remark thread before and after the flips.
     expected: |
       The A/B strip rides the slim header band (right-aligned), one verdict pip per reading,
       oldest→newest, ✗ for a fail (an A pole) and ✓ for a pass (a B pole), the viewed pip outlined.
@@ -192,27 +184,27 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/EventDetail.jsx
     description: >
-      On #/evals, select a video reading whose LATEST reading carries a `by` (the session that filed it)
-      that is an ONLINE board session. In the detail workspace's HEADER band, read the filer pill
+      On the detail page of a video reading whose LATEST reading carries a `by` (the session that filed
+      it) that is an ONLINE board session, read the SIDE rail's filer pill
       (`.fv-originator`): the originator id, its alive/offline class, the dot's computed colour, and the
       title (which must read as an EVAL, not an issue), whether the ONLINE filer is a click target, and
       whether the old reach phrase is absent. Confirm a reading with no `by` (a legacy reading) shows no
       filer chip.
     expected: |
-      The header surfaces the FILER — the session that filed the viewed scenario's latest reading (from
+      The side rail surfaces the FILER — the session that filed the viewed scenario's latest reading (from
       `evalTimeline`'s per-reading `by`) — with a liveness dot and no visible reach phrase: an ONLINE filer
       reads `alive`, uses a status-hued dot from the board's `STATUS_COLOR`, renders as a clickable chip,
       and clicking it opens `#/sessions/<id>` with that session selected. An absent/offline filer reads
       `offline`, uses the muted dot, and is not clickable. The title names it an EVAL, the same shared
-      `OriginatorLiveness` the issues header uses, distinct only in wording. A legacy reading with no `by`
-      resolves to nobody and the header simply shows no filer chip. No second palette, no page errors.
+      `OriginatorLiveness` the issues detail uses, distinct only in wording. A legacy reading with no `by`
+      resolves to nobody and the rail simply shows no filer chip. No second palette, no page errors.
   - name: remark-resolve-retract
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/EventDetail.jsx]
     description: >-
       Against a backend on a disposable store, seed one AGENT-authored remark (CLI `spex remark`, a real
       session id) and one HUMAN-authored remark (POST /api/remarks) on the SAME (node, scenario). Open
-      #/evals, select that scenario's reading, and read the rail's remark rows: which verb button each
+      that scenario's detail page, and read the thread's remark rows: which verb button each
       carries. Click resolve on the agent's remark and re-read its row; click retract on the human's own
       and re-read the thread.
     expected: >-
@@ -225,23 +217,25 @@ scenarios:
       surfaces its server message on the row, never swallowed. No page errors.
   - name: session-home-history-rooted
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/SessionEval.jsx]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >-
-      In a real browser open a SESSION's console Eval tab (not #/evals) for a session whose worktree has
+      In a real browser open the SESSION-scoped detail page (#/evals/<node>/<scenario>?session=<id>) for
+      a session whose worktree has
       filed an in-session VIDEO reading on a scenario the MAIN checkout still scores with an OLDER,
-      different reading (e.g. an image). The row shows the in-session reading (vid·…). Select it and read
-      the detail: how many <video> elements mount (`.an-video`); whether the media shown is the in-session
+      different reading (e.g. an image). Read
+      the page: how many <video> elements mount (`.an-video`); whether the media shown is the in-session
       video or the older main-checkout still; whether the A/B strip's newer (›) control can reach the
-      current reading. Contrast with the same row on the #/evals page (main-rooted).
+      current reading. Contrast with the same scenario's UN-scoped page (main-rooted).
     expected: |-
-      The session Eval tab is WORKTREE-rooted end to end: selecting an in-session video row opens THAT
+      The session scope is WORKTREE-rooted end to end: the in-session video reading's page opens THAT
       reading — its <video> mounts on the stage (`.an-video` present, video count ≥ 1) and the A/B strip
       shows the in-session reading as the latest (the › newer control disabled AT it, not short of it).
       The detail is NEVER the older main-checkout reading: the pane must not re-fetch the main
       `/api/specs/:id/evals` timeline (which lacks the un-merged in-session reading) and strand the
       current video behind an inherited still with the newer-nav disabled. The A/B history is
-      home-provided — the session tab hands EventDetail its already-computed worktree readings, so the
-      walk reflects the session's branch; the #/evals page (main-rooted) still fetches its own timeline.
+      scope-provided — the session-scoped page hands EventDetail its already-computed worktree readings,
+      so the walk reflects the session's branch; the un-scoped page (main-rooted) still fetches its own
+      timeline.
   - name: data-folds-under-media
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/Evidence.jsx, spec-dashboard/src/EventDetail.jsx]
@@ -260,34 +254,34 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/EventDetail.jsx]
     description: >-
-      In a real browser, open #/evals, select a video reading and unfold the remark rail; then open
-      #/issues and select an open local issue. On BOTH composers read the rendered DOM and computed
+      In a real browser, open a video reading's eval detail page; then an open local issue's detail page.
+      On BOTH composers read the rendered DOM and computed
       styles: the `.fv-compose` container's border/radius, the textarea's computed border-style and idle
       height, the action row's idle presence and contents (every control's accessible name), whether any
-      always-visible hint text renders, and — on the eval detail — whether the header band carries any
+      always-visible hint text renders, and — on the eval detail — whether the status band carries any
       human-ok WRITE button. Type `@` and `/` and read where the menus open relative to the composer.
-      Repeat both pages at a NARROW desktop width (~780px — under the 900px stacked-workspace
-      breakpoint, above the phone app's 640px takeover) and check for overlap or clipped text around
-      the composer.
+      Repeat both pages at a NARROW desktop width (~780px — under the shell's one-column reflow) and
+      check for overlap or clipped text around the composer.
     expected: >-
-      ONE shared composer shape on both homes: a quiet bordered rounded container holding a BORDERLESS
+      ONE shared composer shape on both pages: a quiet bordered rounded container holding a BORDERLESS
       writing surface (computed border-style none) floored at TWO lines idle (~40px, never a one-line
       sliver), over a PERSISTENT compact action row. The row carries only real SpexCode acts — the
       `@`/`[[` trigger-insert buttons ([[mentions]] discoverability, on every home), the `/` trigger on
-      the eval rail where review commands are armed, ⏱ anchor on that clip composer, Promote/Close issue
-      on an open issue — and an ICON-ONLY Send
+      the eval composer where review commands are armed, ⏱ anchor on that clip composer, Promote/Close
+      issue on an open issue — and an ICON-ONLY Send
       (an SVG glyph with an aria-label/tooltip, no bare unlabeled icon) pinned at the row's right edge;
       none of the reference app's tools (attach, web, model pickers …) appear. NO always-visible hint
       line ('@session to summon · [[node]] to link' is gone) — while the `@`/`[[` autocomplete and the
       `/` command menu still open, as overlays ABOVE the composer container, never inside or under it.
-      The eval header carries NO standalone human-ok button — the typed /ok is the only dashboard door,
-      and an ok'd reading shows only the settled ☑ mark. At the narrow width both composers keep the
-      same shape with no overlapping controls and no clipped text. No page errors.
+      The eval status band carries NO standalone human-ok button — the typed /ok is the only dashboard
+      door, and an ok'd reading shows only the settled ☑ mark. At the narrow width both composers keep
+      the same shape with no overlapping controls and no clipped text. No page errors.
 ---
 # event-detail loss
 
-YATU through the real browser over a real backend: the workspace geometry (stage + rail both on screen,
-no ping-pong), the seek, the ⏱ anchor, the circled-frame comment (its frame on /api/evidence and the
-thread's evidence[]), the anchor-chip seek, the @new dispatch, and the absence of verdict-filing controls
-are all read from live surfaces (DOM, /api/issues) — never asserted from the component code. There is ONE
-annotation primitive (an anchored comment on the eval's thread); the pane reads readings, it files none.
+YATU through the real browser over a real backend: the detail page's GitHub grammar (main column + side
+rail, sticky docked composer), the seek, the ⏱ anchor, the circled-frame comment (its frame on
+/api/evidence and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the absence of
+verdict-filing controls are all read from live surfaces (DOM, /api/issues) — never asserted from the
+component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the pane
+reads readings, it files none.

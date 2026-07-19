@@ -4,23 +4,21 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
-import FoldToggle from './FoldToggle.jsx'
+import { DetailShell, SideSection } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { apiUrl } from './project.js'
 
-// EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
-// home — the Evals page AND the session eval tab. It renders a selected READING (an "event") as a
-// WORKSPACE, not a scroll stack: a slim HEADER (title · node · verdict badge · the A/B strip), then a
-// center MEDIA STAGE beside an always-visible RIGHT RAIL. The stage: a reading's evidence is a LIST — the
-// video plays under a CUSTOM review-track scrubber (native chrome replaced so the timeline can carry the
-// review) — anchored remarks render as MARKERS on the scrubber, the playhead lights the remark it is
-// inside, clicking a marker/remark seeks; a step-timeline sidecar bands the step boundaries + names the
-// live step, and the named-step ruler under it click-seeks. The whole surface is keyboard-driven (space,
-// arrows, ,/. frame-fine, ↑/↓ jump remarks, a = annotate the current frame). An image gallery renders on
-// the SAME stage (each still click-to-enlarge); a transcript renders as text. The RAIL carries the remark
-// track (the anchored list, click-to-seek) over a composer DOCKED at its foot — circle on the stage,
-// remark in the rail, media never scrolling out of view (the gugu-annotator shape; no vertical ping-pong).
+// EventDetail ([[event-detail]], U1): the ONE evidence+reply detail, store-agnostic — the content of the
+// Evals DETAIL page ([[evals-view]]), filling the shared [[review-chrome]] DetailShell with GitHub's
+// issue-page grammar: the HEADER names the scenario + node, the STATUS band wears the verdict badge and
+// the A/B strip, the MAIN column is the evidence WORKSPACE — the video under a CUSTOM review-track
+// scrubber (anchored remarks as MARKERS, the playhead lighting the remark it is inside, click = seek; a
+// step-timeline sidecar bands boundaries and names the live step), the image gallery, transcripts/data
+// through the one shared EvidenceItem — followed by the (node, scenario) remark THREAD with its composer
+// DOCKED STICKY at the column's foot; the SIDE rail is the reading/session metadata (evaluator, filed
+// time, the filer's liveness, human-ok, staleness readout). The whole surface stays keyboard-driven
+// (space, arrows, ,/. frame-fine, ↑/↓ jump remarks, a = annotate the current frame).
 //
 // There is ONE reply primitive: a REMARK on the eval's own (node, scenario) thread ([[remark-substrate]]) —
 // a scenario-scoped concern is a remark, never an issue (I1). It is time-anchored by the `▶m:ss · step`
@@ -30,7 +28,7 @@ import { apiUrl } from './project.js'
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
 // /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
 // hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex eval add`,
-// [[eval-core]]) with evidence, and render here as the header badge + A/B pips.
+// [[eval-core]]) with evidence, and render here as the status badge + A/B pips.
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -88,7 +86,7 @@ const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.st
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function EventDetail({ entry, history: providedHistory, specs = [], sessions = [], onWrite, onOpenSession }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -116,19 +114,20 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   const [seeking, setSeeking] = useState(false)  // dragging the scrubber
   const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
   const [selIdx, setSelIdx] = useState(null)     // index (into comments) of the explicitly-selected comment
-  // the remark rail is default-FOLDED to the shared fold strip ([[fold-toggle]]); a mark gesture (circle /
-  // `a` / selecting a remark) unfolds it, and the state persists across selection switches (no per-entry reset).
-  const [railFolded, setRailFolded] = useState(true)
 
-  // A/B history: this scenario's WHOLE reading history (newest-first). The SOURCE is HOME-provided so it shares
-  // each home's ROOT ([[event-detail]]): the session eval tab hands down its WORKTREE-rooted readings
-  // (`providedHistory`) — which always contain the un-merged in-session `entry` — while the Evals page passes
-  // none and we lazily fetch the node's /api/specs/:id/evals timeline (the board only folds the LATEST reading
-  // per scenario, [[graph-lean]]). `histIdx` indexes that list (0 = the latest, i.e. the `entry` the feed
-  // selected); `viewing` is the reading actually shown — the entry until history lands, then the picked reading.
+  // A/B history: this scenario's WHOLE reading history (newest-first). The SOURCE is SCOPE-PROVIDED so it
+  // shares the page's ROOT ([[event-detail]]): the ?session=<id> scope hands down its WORKTREE-rooted
+  // readings (`providedHistory`) — which always contain the un-merged in-session `entry` — while the
+  // project scope passes none and we lazily fetch the node's /api/specs/:id/evals timeline (the board only
+  // folds the LATEST reading per scenario, [[graph-lean]]). `histIdx` indexes that list (0 = the latest,
+  // i.e. the `entry` the list linked); `viewing` is the reading actually shown.
   const [history, setHistory] = useState(null)
   const [histIdx, setHistIdx] = useState(0)
   const viewing = (history && history[histIdx]) || entry
+  // One semantic identity for every kind of composer-local state. A board repaint recreates props but keeps
+  // this value; a real scope/scenario/A-B-reading change moves it and remounts the shared composer.
+  const readingIdentity = `${histIdx}:${viewing.ts || viewing.codeSha || viewing.blob || 'reading'}`
+  const reviewIdentity = `${sourceKey}·${entry.node}·${entry.scenario}·${readingIdentity}`
 
   // the review-track prose presets (`surface: review` plugins, [[review-commands]]) — fetched once; each
   // becomes a `/` command that PREFILLS the composer with its placeholder-filled body.
@@ -139,11 +138,10 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     return () => { on = false }
   }, [])
 
-  // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
-  // then (re)source this scenario's history. When the home supplies it (the session tab's WORKTREE-rooted
+  // a page/scope change is a new SCENARIO under annotation — reset the working state AND the history cursor,
+  // then (re)source this scenario's history. When the scope supplies it (the session scope's WORKTREE-rooted
   // readings), use that directly — re-fetching the main-checkout /api/specs timeline there would MISS the
-  // un-merged in-session reading and strand the current video behind an older inherited one. The Evals page
-  // supplies none, so fetch this scenario's slice of the node's timeline as before.
+  // un-merged in-session reading and strand the current video behind an older inherited one.
   useEffect(() => {
     setDrag(null); setFlash(''); setEvents([]); setDraft(null)
     setHistIdx(0); setHistory(null)
@@ -155,9 +153,9 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
       .catch(() => {})
     return () => { on = false }
     // entry.humanOk?.ts rides the deps so a just-landed sign-off ([[human-ok]]) refetches the history —
-    // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok. On the
-    // session home the same refresh rides `providedHistory`: the host's onWrite reloads the model, handing down
-    // a fresh array, so an ok/remark still re-sources the walk.
+    // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok. On
+    // the session scope the same refresh rides `providedHistory`: the host's onWrite reloads the model,
+    // handing down a fresh array, so an ok/remark still re-sources the walk.
   }, [entry.node, entry.scenario, entry.ts, entry.blob, entry.humanOk?.ts, providedHistory])
 
   // flipping A/B changes the clip/stills under the pen — drop any in-progress mark or draft.
@@ -175,21 +173,19 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   const hasVideo = !!videoEntry
 
   // the eval's remark track rides the reading as `entry.thread` — the ONE server-side (node,scenario)↔thread
-  // overlay ([[remark-teeth]] / [[eval-issue-split]]), the SAME on BOTH homes (the issues-page feed folds it
-  // in through the board; the session tab through the proof model), so this pane no longer re-matches a
-  // concern against a resident issues list. Computed here (not just in the comments section) so the scrubber
+  // overlay ([[remark-teeth]] / [[eval-issue-split]]), the SAME on every scope (the project list folds it
+  // in through the board; the session scope through the proof model), so this pane never re-matches a
+  // concern against a resident issues list. Computed here (not just in the thread section) so the scrubber
   // can render each anchored remark as a marker and the keyboard can jump between them.
   const thread = entry.thread ?? null
   // the review track is the thread's REMARKS — the replies carrying a `rid` ([[remark-substrate]]: "every
-  // remark is a reply, NEVER the thread body"). The thread's ROOT body is a system-minted container stub
-  // ("Remarks on the `<scenario>` eval of [[node]]", authored under find-or-create to close the race
-  // window), not a human remark — rendering it as a comment doubled every track (a phantom row above the
-  // real remark, and an inflated "review track (N)" count). Mirror the backend's own `replies.filter(isRemark)`.
+  // remark is a reply, NEVER the thread body"). The thread's ROOT body is a system-minted container stub,
+  // not a human remark — mirror the backend's own `replies.filter(isRemark)`.
   const comments = useMemo(() => (thread?.replies ?? []).filter((r) => r.rid !== undefined), [thread])
   // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading. The
   // chain's first link is the LATEST reading's filer, so read it from the newest history row (history is
   // newest-first), falling back to the viewed reading; a legacy reading without `by` yields nothing and the
-  // header simply shows no originator.
+  // side rail simply shows no filer.
   const filer = (history && history[0]?.by) || entry.by || null
   // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
   // E2: the moment is resolved by STEP-NAME against THIS reading's timeline (resolveAnchor), so a marker sits
@@ -218,7 +214,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   }, [])
   useEffect(() => { deriveActive() }, [anchored, events, deriveActive])
 
-  // a selection change is a new reading — reset the player-specific state (the shared working state + the
+  // a page change is a new reading — reset the player-specific state (the shared working state + the
   // A/B history cursor are reset by the history effect above). The DOM-painted playhead zeroes by hand.
   useEffect(() => {
     curMsRef.current = 0
@@ -279,7 +275,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
       v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause)
     }
     // keyed on the VIEWED READING, not just the clip hash: readings routinely share one video blob, so a
-    // same-hash selection switch (or A/B flip) must still re-run this — the reset effect above just
+    // same-hash page switch (or A/B flip) must still re-run this — the reset effect above just
     // blanked the bar, and only this paint rewrites it (declaration order makes it the last writer).
   }, [videoEntry?.hash, entry.node, entry.scenario, histIdx, deriveActive])
 
@@ -292,8 +288,8 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
 
   const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
   const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
-  // selecting a remark is a review act on the rail — it unfolds a folded rail so the selection is visible.
-  const selectComment = (i, tMs) => { setRailFolded(false); setSelIdx(i); if (tMs != null) seekMs(tMs) }
+  // selecting a remark is a review act — select + seek; the thread row scrolls into view via the selection.
+  const selectComment = (i, tMs) => { setSelIdx(i); if (tMs != null) seekMs(tMs) }
   // the ONE frame grab all three mark gestures share (circle / ⏱ / `a`): capture the current frame at
   // natural resolution (a circle burns its rect in), stash it in the blob store, return the hash — null
   // when there is no decodable frame or the store refuses, so callers degrade to a text-only anchor
@@ -339,13 +335,11 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
   // mark the current moment (`a` = the clean frame, a drag = the circled rect): pause, capture, and
   // prefill the review-track composer with an anchored comment carrying the frame — the mark becomes a
   // reply. A step whose owning node differs routes the finding there (a `[[node]]` line the reviewer
-  // sees); a failed capture degrades to the text-only anchor, never a blocked mark.
+  // sees); a failed capture degrades to the text-only anchor, never a blocked mark. The composer is
+  // docked sticky at the column's foot, so the mark lands in a writer already on screen.
   const annotate = useCallback(async (rect) => {
     const v = vid.current
     if (!v) return
-    // the mark lands in the rail's composer — unfold NOW (same commit as the draft), so the composer is
-    // visible when the draft's focus effect runs, never focused while display:none.
-    setRailFolded(false)
     v.pause()
     const tMs = Math.round((v.currentTime || 0) * 1000)
     const st = stepAt(events, tMs)
@@ -368,7 +362,7 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     }
     pos = Math.min(anchored.length - 1, Math.max(0, pos + dir))
     const a = anchored[pos]
-    setRailFolded(false); setSelIdx(a.i); seekMs(a.tMs)
+    setSelIdx(a.i); seekMs(a.tMs)
   }, [anchored, selIdx, seekMs])
 
   // the whole player is keyboard-driven; typing in a field (the composer) is never hijacked.
@@ -455,198 +449,195 @@ export default function EventDetail({ entry, history: providedHistory, specs = [
     })),
   ]
 
-  return (
-    <div className="an-detail">
-      {/* the slim header — identity + verdict + the A/B strip, one row band over the workspace */}
-      <header className="an-head">
-        <span className="an-title">{entry.scenario}</span>
-        <span className="an-node">{entry.node}</span>
-        <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
-        {viewing.evaluator && <span className="an-meta">{viewing.evaluator}</span>}
-        <span className="an-meta">{new Date(viewing.ts).toLocaleString()}</span>
-        {/* the filer's liveness — whether the session that filed this eval is still alive; live filers click
-            through to their session-board tab. */}
-        <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" onOpenSession={onOpenSession} />
-
-        {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark. The header carries
-            NO write button — the ONE dashboard door to the ok is the composer's typed /ok
-            ([[review-commands]]), gated exactly as the CLI: offered only while the viewed reading IS the
-            scenario's latest and not yet ok'd. Same server write as `spex eval ok`. */}
-        {viewing.humanOk &&
-          <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>}
-
-        {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
-            repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one
-            reading to flip between; a fresh scenario is just its single reading. */}
-        {history && history.length > 1 && (
-          <div className="an-ab">
-            <IconButton icon="chevron-left" size={13} className="an-ab-nav" disabled={histIdx >= history.length - 1}
-              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} label={t('annotator.abOlder')} />
-            <div className="an-ab-track">
-              {history.slice().reverse().map((r, p) => {
-                const idx = history.length - 1 - p
-                return (
-                  <button type="button" key={`${r.ts}-${idx}`}
-                    className={`an-ab-pip ${verdictCls(r)} ${idx === histIdx ? 'on' : ''}`}
-                    onClick={() => setHistIdx(idx)}
-                    data-tip={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
-                    {verdictMark(r)}
-                  </button>
-                )
-              })}
-            </div>
-            <IconButton icon="chevron-right" size={13} className="an-ab-nav" disabled={histIdx <= 0}
-              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} label={t('annotator.abNewer')} />
-            <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
+  // the STATUS band — verdict + sign-off + the A/B strip, GitHub's status row under the title.
+  const status = (
+    <>
+      <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
+      {/* the human sign-off ([[human-ok]]): an ok'd reading wears its settled mark. The band carries NO
+          write button — the ONE dashboard door to the ok is the composer's typed /ok
+          ([[review-commands]]), gated exactly as the CLI. */}
+      {viewing.humanOk &&
+        <span className="an-okd" data-tip={t('annotator.okBy', { by: viewing.humanOk.by, at: new Date(viewing.humanOk.ts).toLocaleString() })}>☑ {t('annotator.okd')}</span>}
+      {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
+          repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one
+          reading to flip between; a fresh scenario is just its single reading. */}
+      {history && history.length > 1 && (
+        <div className="an-ab">
+          <IconButton icon="chevron-left" size={13} className="an-ab-nav" disabled={histIdx >= history.length - 1}
+            onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} label={t('annotator.abOlder')} />
+          <div className="an-ab-track">
+            {history.slice().reverse().map((r, p) => {
+              const idx = history.length - 1 - p
+              return (
+                <button type="button" key={`${r.ts}-${idx}`}
+                  className={`an-ab-pip ${verdictCls(r)} ${idx === histIdx ? 'on' : ''}`}
+                  onClick={() => setHistIdx(idx)}
+                  data-tip={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
+                  {verdictMark(r)}
+                </button>
+              )
+            })}
           </div>
-        )}
-      </header>
+          <IconButton icon="chevron-right" size={13} className="an-ab-nav" disabled={histIdx <= 0}
+            onClick={() => setHistIdx((i) => Math.max(0, i - 1))} label={t('annotator.abNewer')} />
+          <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
+        </div>
+      )}
+    </>
+  )
 
-      {/* the workspace — media STAGE center, remark RAIL right, both full-height; each scrolls itself, so
-          circling on the stage and remarking in the rail never scroll each other out of view. The rail is
-          default-folded to the shared strip; the rail itself stays MOUNTED (display:none) so a typed
-          draft survives a fold, mirroring the master-list fold. */}
-      <div className={`an-work ${railFolded ? 'rail-folded' : ''}`}>
-        <div className="an-stage-col">
-          {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
-          {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
+  // the SIDE rail — reading/session metadata, GitHub's sidebar sections ([[review-chrome]]; reflows above
+  // the workspace at phone width).
+  const side = (
+    <>
+      <SideSection label={t('detail.sideReading')}>
+        {viewing.evaluator && <span className="ds-side-line">{viewing.evaluator}</span>}
+        <span className="ds-side-line">{new Date(viewing.ts).toLocaleString()}</span>
+      </SideSection>
+      {filer && (
+        <SideSection label={t('detail.sideFiler')}>
+          {/* the filer's liveness — whether the session that filed this eval is still alive; live filers
+              click through to their session console. */}
+          <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" onOpenSession={onOpenSession} />
+        </SideSection>
+      )}
+      {viewing.humanOk && (
+        <SideSection label={t('detail.sideOk')}>
+          <span className="ds-side-line">☑ {viewing.humanOk.by}</span>
+          <span className="ds-side-line ds-side-dim">{new Date(viewing.humanOk.ts).toLocaleString()}</span>
+        </SideSection>
+      )}
+      {/* a stale reading is shown, not hidden — the side rail EXPLAINS how far it's fallen behind: which
+          axes moved, and (for the code axis) which governed files drifted + by how many commits. */}
+      {!viewing.fresh && (viewing.staleAxes?.length ?? 0) > 0 && (
+        <SideSection label={t('nodeView.eval.staleLabel')}>
+          <span className="ds-side-line" data-tip={t('nodeView.eval.staleReadoutTitle')}>{viewing.staleAxes.join(' · ')}</span>
+          {(viewing.codeDrift?.length ?? 0) > 0 &&
+            <span className="ds-side-line ds-side-dim">{viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
+        </SideSection>
+      )}
+    </>
+  )
 
-          {/* a stale reading is shown, not hidden — so the detail EXPLAINS how far it's fallen behind: which
-              axes moved, and (for the code axis) which governed files drifted + by how many commits. */}
-          {!viewing.fresh && (viewing.staleAxes?.length ?? 0) > 0 && (
-            <div className="an-expected an-stale" data-tip={t('nodeView.eval.staleReadoutTitle')}>
-              <b>{t('nodeView.eval.staleLabel')}</b> {viewing.staleAxes.join(' · ')}
-              {(viewing.codeDrift?.length ?? 0) > 0 &&
-                <span className="an-stale-files"> — {viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
+  // the docked composer ([[issues-view]]'s ONE shared thread composer): its scope/scenario/reading identity
+  // resets ALL child-local state, including ordinary typed prose the outer anchored-draft state cannot see.
+  // An unrelated board repaint keeps the key byte-identical. `commands` arms the review-track `/` menu;
+  // the composer itself stays home-agnostic.
+  const composer = (
+    <ReplyComposer key={reviewIdentity}
+      onSend={(text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha: viewing.codeSha, evidence })}
+      specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite}
+      anchorNow={hasVideo ? anchorNow : null} draft={draft} commands={composerCommands} />
+  )
+
+  return (
+    <DetailShell
+      title={entry.scenario}
+      titleMeta={<span className="an-node">{entry.node}</span>}
+      status={status}
+      side={side}
+      composer={composer}
+      listHref={listHref}
+    >
+      {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
+      {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
+
+      {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler.
+          stage + control bar are ONE `an-player` wrapper so fullscreen carries the custom controls too
+          (native chrome is suppressed here, so the bar's fullscreen button is the only door to it). */}
+      {videoEntry && (
+        <>
+          <div className="an-player" ref={playerRef}>
+          <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
+            <video className="an-video" ref={vid} src={apiUrl(`/api/evidence/${videoEntry.hash}`)} preload="metadata" playsInline />
+            {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
+            {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
+          </div>
+
+          {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step · fullscreen */}
+          <div className="an-bar">
+            <IconButton icon={playing ? 'pause' : 'play'} size={14} className="an-play" label={playing ? t('annotator.pause') : t('annotator.play')} onClick={togglePlay} />
+            <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
+              <div className="an-seek-trk" />
+              {durMs > 0 && axis === 'time' && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.at / durMs) * 100}%` }} data-tip={e.step} />)}
+              {/* fill/knob carry NO React-managed position style — the media paint owns them via refs */}
+              <div className="an-seek-play" ref={fillRef} />
+              {durMs > 0 && anchored.map((a) => (
+                <button key={`mk-${a.i}`} type="button"
+                  className={`an-mk ${selIdx === a.i ? 'on' : ''} ${activeIdx === a.i ? 'active' : ''}`}
+                  style={{ left: `${(a.tMs / durMs) * 100}%` }} data-tip={a.label}
+                  onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); selectComment(a.i, a.tMs) }} />
+              ))}
+              <div className="an-knob" ref={knobRef} />
+              {hoverPct != null && durMs > 0 && <div className="an-seek-hov" style={{ left: `${hoverPct}%` }}>{mmss((hoverPct / 100) * durMs)}</div>}
             </div>
-          )}
+            {/* text owned by the media paint (ref) — constant-empty children so React never overwrites it */}
+            <span className="an-time" ref={timeRef} />
+            {activeStep && <span className="an-curstep" data-tip={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
+            <FullscreenButton target={playerRef} />
+          </div>
+          </div>
 
-          {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler.
-              stage + control bar are ONE `an-player` wrapper so fullscreen carries the custom controls too
-              (native chrome is suppressed here, so the bar's fullscreen button is the only door to it). */}
-          {videoEntry && (
-            <>
-              <div className="an-player" ref={playerRef}>
-              <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-                <video className="an-video" ref={vid} src={apiUrl(`/api/evidence/${videoEntry.hash}`)} preload="metadata" playsInline />
-                {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
-                {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
-              </div>
-
-              {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step · fullscreen */}
-              <div className="an-bar">
-                <IconButton icon={playing ? 'pause' : 'play'} size={14} className="an-play" label={playing ? t('annotator.pause') : t('annotator.play')} onClick={togglePlay} />
-                <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
-                  <div className="an-seek-trk" />
-                  {durMs > 0 && axis === 'time' && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.at / durMs) * 100}%` }} data-tip={e.step} />)}
-                  {/* fill/knob carry NO React-managed position style — the media paint owns them via refs */}
-                  <div className="an-seek-play" ref={fillRef} />
-                  {durMs > 0 && anchored.map((a) => (
-                    <button key={`mk-${a.i}`} type="button"
-                      className={`an-mk ${selIdx === a.i ? 'on' : ''} ${activeIdx === a.i ? 'active' : ''}`}
-                      style={{ left: `${(a.tMs / durMs) * 100}%` }} data-tip={a.label}
-                      onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); selectComment(a.i, a.tMs) }} />
-                  ))}
-                  <div className="an-knob" ref={knobRef} />
-                  {hoverPct != null && durMs > 0 && <div className="an-seek-hov" style={{ left: `${hoverPct}%` }}>{mmss((hoverPct / 100) * durMs)}</div>}
-                </div>
-                {/* text owned by the media paint (ref) — constant-empty children so React never overwrites it */}
-                <span className="an-time" ref={timeRef} />
-                {activeStep && <span className="an-curstep" data-tip={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
-                <FullscreenButton target={playerRef} />
-              </div>
-              </div>
-
-              {events.length > 0 && (
-                <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
-              )}
-              <div className="an-hint">{t('annotator.hint')}</div>
-              <div className="an-keys">{t('annotator.keys')}</div>
-              {flash && <div className="an-flash">{flash}</div>}
-            </>
-          )}
-
-          {/* a NON-video reading with a step-map (a transcript's line steps, a still sequence's frames) still
-              gets its named-step rail — the axis-general capability, no longer welded to the clip. The video
-              case renders its own rail inside the player above; this is only for evidence with no clip. */}
-          {!videoEntry && events.length > 0 && (
+          {events.length > 0 && (
             <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
           )}
+          <div className="an-hint">{t('annotator.hint')}</div>
+          <div className="an-keys">{t('annotator.keys')}</div>
+          {flash && <div className="an-flash">{flash}</div>}
+        </>
+      )}
 
-          {/* the still gallery + transcripts — every non-clip entry renders through the ONE shared
-              evidence renderer (Evidence.jsx, U1): images click-to-enlarge, a pruned blob is the honest
-              sentinel. Only the clip above is this pane's own — the annotate-a-loop specialization. */}
-          {images.length > 0 && (
-            <div className="an-gallery">
-              {images.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
-            </div>
-          )}
+      {/* a NON-video reading with a step-map (a transcript's line steps, a still sequence's frames) still
+          gets its named-step rail — the axis-general capability, no longer welded to the clip. The video
+          case renders its own rail inside the player above; this is only for evidence with no clip. */}
+      {!videoEntry && events.length > 0 && (
+        <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
+      )}
 
-          {/* structured `data` folds behind its header when the reading ALSO has a clip/still ([[event-detail]] /
-              [[evidence-kind-taxonomy]]) — the media is the protagonist, the data a secondary drill-down; a
-              data-only reading stays open (only DataBlock reads `collapsed`, so a transcript is unaffected). */}
-          {docs.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} collapsed={hasVideo || images.length > 0} key={`${e.hash}-${i}`} />)}
-
-          {ev.length === 0 && (viewing.verdict?.note
-            ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
-            : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
+      {/* the still gallery + transcripts — every non-clip entry renders through the ONE shared
+          evidence renderer (Evidence.jsx, U1): images click-to-enlarge, a pruned blob is the honest
+          sentinel. Only the clip above is this pane's own — the annotate-a-loop specialization. */}
+      {images.length > 0 && (
+        <div className="an-gallery">
+          {images.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
         </div>
+      )}
 
-        {/* the folded rail's whole strip is the unfold affordance — the SAME shared strip every master
-            list folds to, wearing the remark count (accented while any remark is still open). */}
-        {railFolded && (
-          <FoldToggle className="fv-unfold an-rail-unfold" folded label={t('annotator.railUnfold')}
-            onToggle={() => setRailFolded(false)}>
-            {comments.length > 0 && (
-              <span className={`an-rail-count ${comments.some((c) => !c.resolved) ? 'open' : ''}`}>{comments.length}</span>
-            )}
-          </FoldToggle>
-        )}
-        <EvalRemarks entry={entry} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
-          codeSha={viewing.codeSha} seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
-          selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null}
-          commands={composerCommands} folded={railFolded} onFold={() => setRailFolded(true)} />
-      </div>
-    </div>
+      {/* structured `data` folds behind its header when the reading ALSO has a clip/still ([[event-detail]] /
+          [[evidence-kind-taxonomy]]) — the media is the protagonist, the data a secondary drill-down; a
+          data-only reading stays open (only DataBlock reads `collapsed`, so a transcript is unaffected). */}
+      {docs.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} collapsed={hasVideo || images.length > 0} key={`${e.hash}-${i}`} />)}
+
+      {ev.length === 0 && (viewing.verdict?.note
+        ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
+        : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
+
+      <EvalRemarks entry={entry} comments={comments} seekMs={hasVideo ? seekMs : null}
+        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null}
+        onWrite={onWrite} />
+    </DetailShell>
   )
 }
 
-// the eval's REMARK track ([[remark-substrate]] / [[event-detail]]) — the workspace's always-visible RIGHT
-// RAIL: the anchored remark list scrolls in the middle, the composer stays DOCKED at the rail's foot, so a
-// circle on the stage lands in a composer that is already on screen (no scroll to the bottom of a stack).
-// No new store: the thread is the ONE local Issue bound to this (node, scenario) by its concern key, folded
-// in as `entry.thread` on BOTH homes. The composer authors a REMARK through the CLI-parity /api/remarks
-// (find-or-create by (node, scenario) — no thread id or concern needed on the write side, L): the first
-// remark mints the thread, every later one appends. A remark records the VIEWED reading's codeSha (R2).
-// Anchored remarks (`▶m:ss · step`) linkify to their video moment (click = seek + select) and carry their
-// circled frame; the selected and playhead-active remarks highlight in sync with the scrubber's markers; a
-// resolved remark renders settled ([[remark-teeth]]). Rendered on EVERY eval home — a fresh scenario shows
-// an empty track with a live composer.
-function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events, commands = null, folded = false, onFold = null }) {
+// the eval's REMARK track ([[remark-substrate]] / [[event-detail]]) — the page's ACTIVITY: the anchored
+// remark thread under the evidence workspace (GitHub's description→activity order), the composer living
+// separately as the shell's docked-sticky foot. No new store: the thread is the ONE local Issue bound to
+// this (node, scenario), folded in as `entry.thread`. Anchored remarks (`▶m:ss · step`) linkify to their
+// video moment (click = seek + select) and carry their circled frame; the selected and playhead-active
+// remarks highlight in sync with the scrubber's markers; a resolved remark renders settled
+// ([[remark-teeth]]). A fresh scenario shows an empty track with the live composer below.
+function EvalRemarks({ entry, comments, seekMs, selIdx, activeIdx, onSelect, events, onWrite }) {
   const t = useT()
-  const send = (text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha, evidence })
   return (
-    <aside className={`an-rail ${folded ? 'folded' : ''}`}>
+    <section className="an-thread">
       <div className="an-comments-head">
         <span>{t('annotator.comments', { n: comments.length })}</span>
-        {/* the same shared inline fold badge the master lists wear — folds the rail back to the strip. */}
-        {onFold && <FoldToggle className="fv-fold-inline" label={t('annotator.railFold')} onToggle={onFold} />}
       </div>
-      <div className="an-rail-list">
-        {/* threadId + onRemarkChange arm the rows' resolve/retract verbs (CLI-parity, [[remark-substrate]]):
-            the human resolves an agent's unresolved remark (second-party judgment) or retracts their own —
-            same endpoints `spex resolve`/`spex retract` parallel, reload through the host's onWrite. */}
-        <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events}
-          threadId={entry.thread?.id ?? null} onRemarkChange={() => onWrite?.('')} />
-      </div>
-      <div className="an-rail-compose">
-        {/* keyed by the (node, scenario) identity: the composer owns its body state, so only a remount
-            resets the working draft on selection change — a half-typed or circle-prefilled remark must
-            die with its selection, never surface on another eval's thread (it would post there). */}
-        {/* `commands` arms the composer's review-track `/` menu ([[review-commands]]) — the built-in verbs
-            + the `surface: review` presets the host gathered; the composer itself stays home-agnostic. */}
-        <ReplyComposer key={`${entry.node}·${entry.scenario}`} onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} commands={commands} />
-      </div>
-    </aside>
+      {/* threadId + onRemarkChange arm the rows' resolve/retract verbs (CLI-parity, [[remark-substrate]]):
+          the human resolves an agent's unresolved remark (second-party judgment) or retracts their own —
+          same endpoints `spex resolve`/`spex retract` parallel, reload through the host's onWrite. */}
+      <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events}
+        threadId={entry.thread?.id ?? null} onRemarkChange={() => onWrite?.('')} />
+    </section>
   )
 }

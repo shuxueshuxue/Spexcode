@@ -23,19 +23,15 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 
 - `graph-node` focuses a node on `#/graph`; the focused id is shell view state, not a hash segment.
 - `session` opens `#/sessions/<id>`.
-- `session-eval` opens `#/sessions/<id>/eval[/<node>/<scenario>]` — the console with the **Eval tab**
-  active, optionally landed on one scenario's in-session reading ([[session-eval]]). This is the address an
-  MR/CI note pastes so a reviewer one-clicks into the live, remarkable reading of an un-merged branch — and
-  it is a **persistent, refreshable** sub-route, NOT a one-shot entrance normalized away: the Eval tab and
-  the deep-linked reading stay in the hash while that session's tab is the one showing, so a reload reopens
-  the same reading and the pasted link stays shareable. Switching to another session tab drops the sub-route
-  back to the bare `#/sessions/<id>`; the deep link is preserved only for its own session's tab. The
-  sub-route's URL shape has ONE encoder (`route.sessionEvalParam`): the href side (`addressHash`) and the
-  console's tab-echo both go through it, so the link a reviewer copies and the hash a reload restores are the
-  same string — there is no second, bespoke session-eval route grammar.
-- `issue` opens `#/issues/<issue-id>` and lets [[issues-view]] select the detail.
-- `eval` opens `#/evals/<node>/<scenario>` and lets [[evals-view]] select the detail — the TRUNK-rooted
-  timeline; a not-yet-merged session reading's address is `session-eval`, not this.
+- `session-eval` opens `#/evals?session=<id>` — or, with a node + scenario,
+  `#/evals/<node>/<scenario>?session=<id>` — the session-SCOPED Evals pages ([[session-eval]] /
+  [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
+  remarkable, worktree-rooted reading of an un-merged branch. The old
+  `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
+  on arrival ([[side-nav]]) and nothing mints it anymore.
+- `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
+- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted ([[evals-view]]); a
+  not-yet-merged session reading's address is `session-eval`, not this.
 
 `addressHash(address)` is the href side: real anchors and copyable links get the canonical hash without
 hand-rolled string assembly in components. `navigateAddress(address, callbacks)` is the SPA side: it follows

@@ -57,7 +57,16 @@ centre. It lazily fetches the unified diff of the node's spec.md in the editing 
 last diff at once, not a reload — but **revalidated** each open, since a pending change is live.
 
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
-keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. `panesFor` also
+keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. The tab CAPTIONS are
+plain labels — no visible key-digit markers (the digit keys still switch panes; that vocabulary belongs to
+[[keyboard-nav]] and the help legend, not stamped on every caption) — and the two review tabs tally their
+state through ONE chip primitive: the shared [[review-chrome]] `ReviewState` icon + count, issues as
+open/closed, eval as fresh pass/fail read from the same `scenarioStates` join every score surface uses
+([[eval-score-badge]]); a zero count simply doesn't render, on either tab. The compact filter row those
+panes share leads with the ONE result summary — *showing X of Y* from the same filter model that picks the
+rows (`model.shown` over the pane's item total, [[review-filters]]) — full words on desktop, a bare X/Y
+under the phone breakpoint with the sentence kept in the aria-label; no second control, no facet echo, no
+repeat of what the caption already tallies. `panesFor` also
 registers an **eval** pane (a fourth reference face), but that pane's component and data contract — it
 rides `node.evals`, the board fold — belong to [[eval-tab]], just as the issues tab's content is
 [[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's

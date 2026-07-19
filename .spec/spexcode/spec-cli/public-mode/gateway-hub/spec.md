@@ -20,7 +20,8 @@ internal services; the hub owns the outside.
 
 **The route contract** — two surfaces, one authorization mechanism ([[gateway-auth]]):
 
-- `/projects` — the admin surface: list the registry (`GET`, with gating state), and set/clear passwords
+- `/projects` — the admin surface: list the registry (`GET`, with gating state and the resolved gateway
+  [[identity-config]] projection), and set/clear passwords
   (`PUT`/`DELETE /projects/admin-password`, `PUT`/`DELETE /projects/:id/password`) — the APIs the future
   admin UI drives. Admin scope required; with no admin password, loopback only. `GET /projects` is
   content-negotiated: when a host `fallback` is mounted and the request explicitly accepts `text/html`
@@ -41,7 +42,8 @@ internal services; the hub owns the outside.
 `~/.spexcode/projects/<enc>/backend.json` written by that project's supervisor at bind time; the `<enc>`
 dir name is the projectId. The hub reads records through the ONE record seam ([[host-gateway]]'s
 identity-carrying shape): a legacy or torn record is not routable, and a record sitting in a slot its own
-root does not encode to is not trusted. Only loopback `http` upstreams are honored — a record naming any
+root does not encode to is not trusted. Records carry the backend-resolved project identity and actual
+served tree; linked-worktree records cannot impersonate the canonical slot. Only loopback `http` upstreams are honored — a record naming any
 other host is ignored loudly and never proxied, so a crafted record cannot turn the hub into an open
 proxy. A projectId arrives as one URL path segment and is validated explicitly (shape + registry
 membership) before any lookup; unknown or hostile ids answer 404 before any upstream contact.

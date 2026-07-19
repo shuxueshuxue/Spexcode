@@ -1,9 +1,11 @@
 // The narrow data client for the multi-project gateway ([[projects-hub]]) — the ONE module that spells
 // the LANDED hub contract ([[gateway-hub]] / [[gateway-auth]] / [[host-gateway]]):
-//   GET  /projects                      → { adminGated, projects: [{ id, name, root, online, url, gated }] }
+//   GET  /projects                      → { adminGated, gateway, projects: [{ id, identity, root, online, url, gated }] }
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
 //   POST /projects {root}                register an existing repo into the durable catalog
+//   PUT  /projects/icon                   write the host gateway icon preset
+//   PUT  /projects/:id/icon               write one project's dashboard.icon preset
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
 //   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)
@@ -24,6 +26,13 @@ const jsonOf = async (res) => {
   return res.json().catch(() => null)
 }
 
+export const CATALOG_POLL_MS = 5000
+
+const normalizeIdentity = (identity, fallbackTitle, fallbackIcon) => ({
+  title: typeof identity?.title === 'string' && identity.title ? identity.title : fallbackTitle,
+  icon: typeof identity?.icon === 'string' && identity.icon ? identity.icon : fallbackIcon,
+})
+
 // one catalog row, whatever the server sent → the shape the UI renders. `online` is tri-state: the
 // host-enriched row says true/false (instance-validated); a hub generation without the host extension
 // says nothing → null, and the UI falls back to probe-only health.
@@ -33,18 +42,37 @@ export function normalizeProject(p) {
   if (!id) return null
   return {
     id: String(id),
-    name: p.name || String(id),
+    identity: normalizeIdentity(p.identity || { title: p.name, icon: p.icon }, p.name || String(id), 'spexcode'),
     root: typeof p.root === 'string' ? p.root : '',
     online: typeof p.online === 'boolean' ? p.online : null,
     url: p.url || '',
     port: p.port ?? null,
     gated: !!(p.gated ?? p.locked ?? p.hasPassword),
+    configRevision: typeof p.configRevision === 'string' ? p.configRevision : '',
   }
 }
 export const normalizeProjects = (body) => {
   const list = Array.isArray(body) ? body : Array.isArray(body?.projects) ? body.projects : null
   return list ? list.map(normalizeProject).filter(Boolean) : null
 }
+
+// Path scope wins before any board can paint. While the catalog probe is pending (or an authorized
+// catalog lacks the requested id), use the URL id + default mark rather than a possibly misrouted board.
+// A denied/absent catalog is the direct-project compatibility case: its authorized board may identify it.
+export function selectProjectIdentity(projectId, catalog, boardIdentity) {
+  if (!projectId) return boardIdentity
+  if (!catalog || catalog.state === 'ok') {
+    const match = catalog?.projects?.find((project) => project.id === projectId)
+    return match?.identity || { title: projectId, icon: 'spexcode' }
+  }
+  return {
+    title: boardIdentity?.title || projectId,
+    icon: boardIdentity?.icon || 'spexcode',
+  }
+}
+
+export const selectGatewayIdentity = (catalog) =>
+  catalog?.state === 'ok' ? catalog.gateway.identity : { title: 'Projects', icon: 'gateway' }
 
 // GET /projects → { state: 'ok', adminGated, projects } | { state: 'denied', reason } | { state: 'absent' }.
 export async function loadProjects() {
@@ -56,7 +84,11 @@ export async function loadProjects() {
   if (!res.ok) return { state: 'absent' }
   const body = await jsonOf(res)
   const projects = normalizeProjects(body)
-  return projects ? { state: 'ok', adminGated: !!body?.adminGated, projects } : { state: 'absent' }
+  if (!projects) return { state: 'absent' }
+  const gateway = body?.gateway && typeof body.gateway === 'object'
+    ? { identity: normalizeIdentity(body.gateway, 'Projects', 'gateway'), revision: typeof body.gateway.revision === 'string' ? body.gateway.revision : '' }
+    : { identity: { title: 'Projects', icon: 'gateway' }, revision: '' }
+  return { state: 'ok', adminGated: !!body?.adminGated, gateway, projects }
 }
 
 // liveness of one project's backend, probed through the authorized /p/:id lane (the hub proxies /health
@@ -155,6 +187,23 @@ export async function saveProjectConfig(id, content, revision) {
   if (typeof data?.content !== 'string' || typeof data?.revision !== 'string') return { ok: false, error: 'unexpected answer' }
   return { ok: true, content: data.content, revision: data.revision }
 }
+
+async function saveIcon(url, icon, revision) {
+  let res
+  try {
+    res = await fetch(url, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ icon, revision }),
+    })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  return { ok: true, ...data }
+}
+
+export const saveGatewayIcon = (icon, revision) => saveIcon('/projects/icon', icon, revision)
+export const saveProjectIcon = (id, icon, revision) =>
+  saveIcon(`/projects/${encodeURIComponent(id)}/icon`, icon, revision)
 
 // run a host operation in a registered repo — POST /projects/:id/(init|doctor). These spawn the REAL
 // spex verb with cwd = the project root; the HTTP answer is 200 whether the verb succeeded or not, and

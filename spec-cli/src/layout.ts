@@ -26,7 +26,7 @@ type Config = {
   dashboard?: {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
-    icon?: string                  // the browser-tab favicon: an emoji ("🔭") or an Iconify name ("mdi:rocket-launch"); see tab-icon
+    icon?: string                  // project identity icon: a picker preset id; existing emoji/Iconify/URL values remain supported ([[identity-config]])
   }
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 8; see sessions.ts maxActive)

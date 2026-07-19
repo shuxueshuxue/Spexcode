@@ -362,11 +362,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
 .graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
-/* gentle focus grouping — only opacity changes, positions never move */
-/* opacity for focus-kin dimming; transform so a node GLIDES to its new slot when the tree re-plots on
-   focus change (expand-on-focus) instead of teleporting. Nodes that mount/unmount (a subtree opening or
-   collapsing) just appear/vanish — only nodes that persist across the re-plot animate. */
-.react-flow__node { transition: opacity .18s ease, transform .2s ease; }
+/* gentle focus grouping. Structural movement lives in React Flow's controlled node positions so its
+   edges share the same geometry on every frame; a CSS transform transition would detach the two. */
+.react-flow__node { transition: opacity .18s ease; }
 .react-flow__node.is-far { opacity: .35; }
 
 /* react-flow zoom controls, themed through the palette vars */
@@ -509,16 +507,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .ov-tab:hover { color: var(--ink2); }
 .ov-tab.on { color: var(--ink2); border-color: var(--blue); background: var(--paper); }
-.ov-tab kbd {
-  font-family: var(--mono); font-size: var(--type-caption); color: var(--blue);
-  border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 3px; background: var(--paper);
-}
 /* @@@ tab counts - open/closed issue tallies shown on the issues tab face. Compact mono numbers in the
    card vocabulary (green open · magenta closed) so the count reads without opening the tab. */
 .ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
-.ovc { font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-relaxed); padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); }
+/* a caption state-count chip: the shared review-state icon + tally in one tone (issues open/closed,
+   eval fresh pass/fail — zero values simply don't render). */
+.ovc { display: inline-flex; align-items: center; gap: 2px; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-relaxed); padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); }
+.ovc .review-state svg { width: 11px; height: 11px; }
 .ovc.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .ovc.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
+.ovc.st-pass { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.ovc.st-fail { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
 .ovc.st-edit { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, transparent); }
 .ov-hint { margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
 /* the panel is a fixed-size pop-out; each pane scrolls its OWN content (doc/hist below).
@@ -673,6 +672,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .scenario-count.fail { color: var(--red); }
 .scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
 .scenario-count.empty { color: var(--muted); opacity: .7; }
+/* as a REAL anchor (the node-info stat bar → the node-filtered Evals list) the same pill gains link
+   affordance; on the tile it stays a passive span (the tile's click belongs to the board). */
+a.scenario-count { text-decoration: none; cursor: pointer; }
+a.scenario-count:hover { background: var(--panel2); }
 
 /* @@@ tag chips — the ONE element (score.jsx TagChips) for a scenario's classification tags, used wherever a
    scenario surfaces (search palette and eval tab). Paper chip + mono, the SAME minimal vocabulary as
@@ -1939,9 +1942,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-dangling-tag { font-family: var(--mono); font-size: var(--type-caption); color: var(--orange); margin-left: 8px;
   border: 1px dashed color-mix(in srgb, var(--orange) 45%, var(--line)); border-radius: 3px; padding: 0 5px; }
 .eval-dangling-remarks { padding-left: 23px; margin: 6px 0 0; }
-.eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.eval-row { position: relative; border-bottom: 1px solid var(--line); padding: 10px 0; }
 .eval-row:last-child { border-bottom: 0; }
-.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 0 26px 0 0; text-align: left; background: none; border: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+/* the row's outbound anchor — the eval's canonical routed detail — sits top-right, a SIBLING of the
+   expand toggle (never nested inside it); the head's right padding reserves its lane. */
+.eval-open { position: absolute; top: 10px; right: 2px; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 4px; color: var(--muted); }
+.eval-open:hover { color: var(--ink2); background: var(--panel2); }
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
 .eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); }
@@ -2111,6 +2119,19 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* [[review-filters]]: the embedded projection stays one shallow row at the scroller's right edge. It
    reuses FacetOverflow's menu/keyboard/Escape behavior instead of growing a popup-only state machine. */
 .rf-compact { position: sticky; top: -16px; z-index: 6; width: min(260px, 100%); height: 28px; box-sizing: border-box; margin: -8px 0 8px auto; display: flex; align-items: center; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; }
+/* the filter ROW: a leading "showing X of Y" result count beside the right-hung filter box, one sticky
+   lane on the pane's paper. Under the phone breakpoint the words condense to a bare X/Y (aria keeps
+   the sentence). The row carries the sticky (a child can't stick inside a one-line parent). */
+.rf-row { position: sticky; top: -16px; z-index: 6; display: flex; align-items: center; gap: 10px; margin: -8px 0 8px; background: var(--paper); }
+.rf-row .rf-compact { position: static; margin: 0 0 0 auto; }
+.rf-summary { flex: none; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); }
+/* screen-reader-only text: rendered for AT, invisible on screen (the one visually-hidden utility). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.rf-summary-compact { display: none; }
+@media (max-width: 640px) {
+  .rf-summary-full { display: none; }
+  .rf-summary-compact { display: inline; }
+}
 .rf-compact:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 13%, transparent); }
 .rf-search-icon { width: 27px; flex: none; display: grid; place-items: center; }
 .rf-compact input { min-width: 0; flex: 1; height: 26px; padding: 0; color: var(--ink2); background: transparent; border: 0; outline: 0; font-family: var(--mono); font-size: var(--type-meta); }
@@ -2181,7 +2202,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* --- the catalog page --- */
 .page-projects { min-height: 100vh; box-sizing: border-box; overflow-y: auto; }
 .proj-body { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; box-sizing: border-box; font-family: var(--mono); }
-.proj-brand { margin-bottom: 14px; }
+.proj-brand { margin-bottom: 14px; display: flex; align-items: center; gap: 9px; }
 .proj-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .proj-count { color: var(--muted); font-size: var(--type-meta); flex: 1; }
 .proj-empty { color: var(--muted); font-size: var(--type-body); line-height: var(--leading-body); border: 1px dashed var(--line); border-radius: 6px; padding: 14px 16px; }
@@ -2214,11 +2235,30 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-admin-pw { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 4px 12px 10px; margin-bottom: 12px; }
 .proj-admin-pw .proj-drawer { border-top: none; margin-top: 0; padding-top: 6px; }
 
+/* One preset control renders gateway and project identity. Native radios retain arrow-key movement;
+   :has only supplies the visible focus/checked projection. */
+.identity-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.identity-picker legend { margin: 0 0 6px; color: var(--muted); font-size: var(--type-meta); }
+.identity-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); gap: 6px; }
+.identity-choice {
+  position: relative; min-width: 0; min-height: 58px; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: var(--type-caption); overflow-wrap: anywhere; text-align: center;
+}
+.identity-choice:hover { border-color: var(--blue); color: var(--ink2); }
+.identity-choice:has(input:checked) { border-color: var(--blue); background: var(--panel2); color: var(--blue); font-weight: var(--weight-semibold); }
+.identity-choice:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.identity-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.identity-picker:disabled .identity-choice { opacity: .55; cursor: default; }
+.proj-gateway-identity { margin: 2px 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+
 /* catalog rows */
 .proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .proj-row { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 7px 10px; }
 .proj-row.current { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .proj-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.proj-row-main > svg { flex: none; }
 .proj-health { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .proj-health.h-probing { background: var(--muted); opacity: 0.45; }
 .proj-health.h-running { background: var(--green); }
@@ -2263,7 +2303,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* --- the rail's current-project selector chip + switcher menu --- */
 .proj-chip-wrap { position: relative; }
 .rail-btn.proj-chip {
-  font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold); color: var(--ink2);
+  padding: 4px; color: var(--ink2); overflow: hidden;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
 }
 .rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { border-color: var(--blue); color: var(--blue); }
@@ -2281,11 +2321,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .proj-menu-item.current { color: var(--blue); }
 .proj-menu-item.all { border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; padding-top: 7px; color: var(--muted); }
 .proj-menu-item.all:hover { color: var(--ink2); }
+.proj-menu-mark { display: block; flex: 0 0 16px; width: 16px; height: 16px; }
 .proj-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* narrow viewports: the catalog stays one column; row actions wrap under the name/path line */
 @media (max-width: 640px) {
   .proj-body { padding: 14px 12px 32px; }
+  .identity-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .identity-choice { min-height: 54px; font-size: var(--type-caption); }
   .proj-row-main { row-gap: 6px; }
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }

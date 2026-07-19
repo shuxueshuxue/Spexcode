@@ -21,18 +21,17 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      Open a session's Eval tab in the console (the right pane's Terminal/Eval pair) in a real browser and
-      read the DOM: the gates strip, the row list (blind spots vs measured, in-session vs earlier), where
-      evidence bytes load, and the export link. Then follow the `export ↗` link and check the self-contained
-      HTML still renders whole (masthead, gates, evidence inlined, diff drill-down).
+      Open `#/evals?session=<id>` for a real session and read the DOM: the gates strip, the row list
+      (blind spots vs measured, in-session vs earlier), where evidence bytes load, and the export link.
+      Open one row's standalone detail, then follow the export link and check the self-contained HTML still
+      renders whole (masthead, gates, evidence inlined, diff drill-down).
     expected: |
-      The Eval tab shows the gates strip (lint · merge · ahead · committed, the spex-review numbers) and
-      COLLAPSED scenario rows grouped by changed node — blind spots lead with the empty ring, then this
-      session's own readings ✦-marked and newest-first, then the inherited baseline under its divider;
-      the ✦ count chip narrows to the session's own. NO evidence bytes load with the list (rows are
-      tier-1 JSON; the blob request happens only when a row is selected and the shared annotator detail
-      opens). The `export ↗` link serves the self-contained export HTML: derived masthead, gate row,
-      inlined evidence, per-file diff drill-down — whole, not garbled.
+      The session-scoped list shows the gates strip (lint · merge · ahead · committed, the spex-review
+      numbers), then blind spots with the empty ring, this session's own readings ✦-marked and newest-first,
+      and the inherited baseline. NO evidence bytes load with the list (rows are tier-1 JSON); blob requests
+      begin only after a real row anchor opens its standalone detail. The `export ↗` link serves the
+      self-contained export HTML: derived masthead, gate row, inlined evidence, per-file diff drill-down —
+      whole, not garbled.
   - name: session-attribution-legible
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-eval/src/sessioneval.ts]

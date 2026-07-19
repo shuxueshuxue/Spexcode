@@ -85,7 +85,7 @@ const rel = (ts) => {
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
 // reading to open). `query`/`onQuery`: the URL-held filter state and its push writer ([[evals-view]]).
 // `hrefFor`: an entry's detail address. `lead`: extra controls the page owns (the session scope picker).
-export default function EvalsGroup({ entries = [], blind = [], sessions = [], query = {}, onQuery, hrefFor, lead = null, notice = null }) {
+export default function EvalsGroup({ entries = [], blind = [], sessions = [], query = {}, onQuery, hrefFor, lead = null, notice = null, error = null, empty = null }) {
   const t = useT()
   const hasVideo = entries.some((e) => kindsOf(e).includes('video'))
   const hasImage = entries.some((e) => kindsOf(e).includes('image'))
@@ -149,6 +149,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
   return (
     <ListPage
       notice={notice}
+      error={error}
       controls={
         <>
           {lead}
@@ -158,7 +159,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
       }
       chips={chips}
       rows={rows}
-      empty={t('evalsFeed.empty')}
+      empty={empty || t('evalsFeed.empty')}
     />
   )
 }

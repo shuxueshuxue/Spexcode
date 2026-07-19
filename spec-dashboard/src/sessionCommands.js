@@ -3,8 +3,8 @@
 export const UI_COMMANDS = [
   { name: 'type',  color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
     labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
-  // eval's surface is the console's always-on Eval TAB, not a header button — the typed `/eval` just jumps
-  // to that tab (`button: false`, available for any live session, not only review).
+  // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed
+  // `/eval` navigates through the same door rendered in the bar (`button: false`, available whenever live).
   { name: 'eval', color: 'cyan',   button: false, when: (st) => !!st && st !== 'offline',
     labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
   { name: 'merge', color: 'green',  button: true,  when: (st) => st === 'review' || st === 'done',

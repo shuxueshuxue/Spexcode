@@ -101,10 +101,10 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
-      REVIEW state (so type + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
-      Eval; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO leading glyph/emoji
-      (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
-      action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
+      REVIEW state (so type + merge apply). (1) Read the bar: on the LEFT the Terminal tab and the Eval
+      navigation door; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO
+      leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each in a distinct colour — and the word "proof"
+      appears nowhere in the UI. (2) In the Terminal `❯` inbox type
       `/` and read the completion menu: the board's own
       commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
       painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
@@ -112,27 +112,25 @@ scenarios:
       `/stop` exactly ONCE (the board's coloured row). Then type `/exit`, a name Claude Code ships that the board
       no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
       sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
-      (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
-      to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
-      view. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
+      (3) Type `/eval` and Enter: the dashboard navigates to `#/evals?session=<id>` — the same address the
+      bar's Eval door opens — and no inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
       button shows its active `.on` state); click the type button to toggle it back off. Screenshot the tab bar
       and the `/` menu.
     expected: |
       The action-row buttons are text-only (no glyphs/emoji) and colour-coded — type yellow (var --yellow =
-      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
-      permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
-      surface says "proof" (the tab, the command, and its menu description all say eval).
+      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); Eval is an always-available navigation
+      door, not a console-local tab or review-gated action, and no UI surface says "proof".
       In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
-      rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
+      rgb(42,161,152)) for the navigation door; the two button-less terminal verbs split
       by destructiveness — stop muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
       blue (rgb(38,139,210)); one element, one colour in both places. The board's `/stop` appears exactly ONCE as
       its coloured row; `/exit` — the pre-v0.3.0 spelling the board no longer owns after the `/exit`→`/stop`
       respelling — now shows only as CC's own blue built-in row (the override still filters a same-named CC twin,
       but no board command currently collides with a CC name) —
-      and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
-      shows the same inline view the tab click does (one shared tab-state); typing `/type` toggles type mode
+      and every row's description reads as a capitalised sentence. Typing `/eval` navigates to the same
+      session-scoped Evals list the bar's door opens; typing `/type` toggles type mode
       exactly as the type button does, and the button reflects that same state. A board command is never
       dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/type` text reaches the pane.
   - name: status-word-colour

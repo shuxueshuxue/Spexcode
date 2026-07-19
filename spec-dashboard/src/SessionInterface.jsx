@@ -816,8 +816,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       })}
                 </div>
               </div>
-              {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
-                  Eval tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
+              {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
+                  contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div className="si-term-body" ref={termRef} style={{ position: 'relative' }}>
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
                 {[...opened].map((id) => (

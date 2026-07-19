@@ -191,6 +191,8 @@ export default {
     btn: '评测',
     btnTitle: '打开此会话的评测页 —— 测得的评测证据与合并门禁（Evals 页会话视角）',
     none: '此会话暂无评测',
+    unavailable: '会话模型成功加载前无法显示评测。',
+    loadFailed: ({ reason }) => `会话评测加载失败 — ${reason}`,
     export: '导出',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',

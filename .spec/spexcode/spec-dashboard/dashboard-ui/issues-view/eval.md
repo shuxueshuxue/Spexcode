@@ -186,17 +186,19 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
     description: >-
       With issues spanning stores, originators, nodes, and present/missing source sessions, open #/issues
-      at desktop and 390px. Read section/menu/overflow DOM and menu option values; pick Store and Source
+      at desktop and 390px. Read section/menu/secondary-filter DOM and menu option values; pick Store and Source
       session values and read the visible query text and hash; type author:/node: prefixes and walk the
       suggestions; compare primitive classes with #/evals.
     expected: >-
-      Issues and Evals consume the SAME `FacetMenu`/`FacetOverflow`/ListPage classes, never a select.
+      Issues and Evals consume the SAME `FacetMenu`/`SecondaryFilters`/ListPage classes, never a select.
       Menus exist only for the low-cardinality model dimensions — stores actually present and
       source-session presence — and every pick is token surgery into the visible query plus one PUSH.
       Originator and spec node have NO enumerating dropdown: author:/node: are typed or completed from
       bounded data-derived suggestions, and unknown values submit to the honest zero. No fake
       labels/projects/assignee buttons. Desktop menus are invisible label + chevron buttons; 390px keeps
-      Store direct and presence in a usable kebab. Back restores every pick. New is the page-title
+      Store direct (its compact active face shows the selected store while the accessible name remains
+      fully qualified) and presence in the semantic secondary Filters menu. Even with both active, the
+      sections, Store, and Filters trigger do not overlap. Back restores every pick. New is the page-title
       action, not a filter. No page errors or horizontal overflow.
   - name: close-issue-button
     tags: [frontend-e2e]

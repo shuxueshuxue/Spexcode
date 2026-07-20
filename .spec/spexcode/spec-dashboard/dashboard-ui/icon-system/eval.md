@@ -5,7 +5,8 @@ scenarios:
       Open the running dashboard in a real browser. The converted icon buttons must render real stroke
       SVGs from the shared icons.jsx vocabulary, each keeping its tooltip/accessible name: the Issues
       page title action (.rl-new) carries the plus icon beside New; its ListView search, facet chevrons,
-      kebab and comment counts carry search/chevron-down/ellipsis/message-square; the session console's
+      semantic secondary Filters trigger and comment counts carry search/chevron-down/filter/message-square;
+      the session console's
       New pill (.si-pill.new) and search pill draw the plus/magnifier from the same set; a modal's close
       control (.legend-close) is an × icon with the close label; the annotator's A/B walkers (.an-ab-nav)
       are chevron icons and its play control (.an-play) a play/pause icon; the side rail still shows its

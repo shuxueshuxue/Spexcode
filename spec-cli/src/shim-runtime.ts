@@ -31,7 +31,7 @@ const spexShimRuntime = (cfg) => {
 
   // feed ONE claude-shaped payload ({ session_id, cwd, hook_event_name, ...extra }) to dispatch.sh, the
   // harness id baked as argv[1]. Payload key order matters for tool events: a host must put agent_id (when
-  // present) BEFORE tool_input so harness.sh's hp_is_subagent prefix scan can see it. Resolves with the exit
+  // present) BEFORE tool_input because harness.sh's hp_is_subagent checks keys only before tool_input. Resolves with the exit
   // code + both streams for the verdict helpers below; never rejects.
   const dispatchEvent = (event, extra) => new Promise((resolve) => {
     let out = "", err = ""
@@ -47,7 +47,7 @@ const spexShimRuntime = (cfg) => {
     child.on("close", (code) => resolve({ code: code == null ? 1 : code, out, err }))
     // a handler may exit without draining stdin (fast-fail scripts, a missing dispatch file) — the write then
     // EPIPEs; that must never throw into the host's event handler, the child's exit code still answers.
-    child.stdin.on("error", () => { /* child exited before reading — fine */ })
+    child.stdin.on("error", () => { /* child exited before consuming stdin — fine */ })
     try { child.stdin.end(JSON.stringify({ session_id: cfg.sessionId(), cwd: cwd(), hook_event_name: event, ...(extra || {}) })) } catch { /* same */ }
   })
 
@@ -57,7 +57,7 @@ const spexShimRuntime = (cfg) => {
   // protocol and lives in dispatch.sh — not here.
   const blocked = (r) => r.code === 2
 
-  // the human-readable rejection, extracted in contract order — never the raw wire JSON (an escaped-\\n blob
+  // the human-readable rejection, extracted in contract order — never the raw wire JSON (an escaped-\\n payload
   // turned the stop-gate's teaching menu into one unreadable line on one harness before this was shared):
   //   1. a decision:block JSON line on stdout, strictly parsed (the designed channel);
   //   2. several handlers' stdout objects can arrive GLUED without separators — regex the reason string out
@@ -119,7 +119,7 @@ const spexShimRuntime = (cfg) => {
   // the per-session rendezvous control socket: bind a line-JSON server on CLAUDE_BG_RENDEZVOUS_SOCK (handed
   // by every ownsRendezvous launch; a self-launched bare harness has no env → no server) speaking the
   // reclaude mini-protocol, so claude's deliverViaRendezvous and socket-listener liveness work UNCHANGED.
-  // MULTI-connection (unlike reclaude's daemon): a board liveness probe connect can never kick a concurrent
+  // MULTI-connection (unlike reclaude's daemon): a session-liveness probe connect can never kick a concurrent
   // delivery, so the sender's atomic reply+repaint chunk always resolves on its own connection. The data
   // handler is deliberately SYNCHRONOUS — a chunk's lines parse in one pass and repaint-done (the in-order
   // parse barrier) flushes before any other event can run: confirmation means PARSED, not processed; the

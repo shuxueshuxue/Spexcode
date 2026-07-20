@@ -424,7 +424,7 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
-export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
+export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot()): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -1040,13 +1040,14 @@ const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToo
 const PI_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by
-// launchCmd and baseCmd so the two never diverge: the launcher's pinned `cmd` wins. The bare default is only
-// the fallback for a truly-old record with NO pinned cmd and NO launcher name — there is no env/config-field
-// resolution, because claude/codex are ordinary named launchers now ([[launcher-select]]), resolved by name.
-const claudeBaseCmd = (cmd?: string) => cmd || 'claude --dangerously-skip-permissions'
-const codexBaseCmd = (cmd?: string) => cmd || 'codex --yolo'
+// launchCmd and baseCmd so the two never diverge: the launcher's pinned `cmd` wins. The plain command is only
+// the fallback for a truly-old record with NO pinned cmd and NO launcher name — compatibility must preserve
+// the harness's normal permission model, never silently introduce an automatic-permission flag. There is no
+// env/config-field resolution because launchers are ordinary named config entries ([[launcher-select]]).
+const claudeBaseCmd = (cmd?: string) => cmd || 'claude'
+const codexBaseCmd = (cmd?: string) => cmd || 'codex'
 const piBaseCmd = (cmd?: string) => cmd || 'pi'   // pi runs tools without permission prompts — no yolo flag exists or is needed
-const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode --auto'   // --auto = zero-prompt permissions (opencode's trust mechanism — writeTrust is a no-op)
+const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode'
 
 // @@@ opencodeLaunchCommand - the tail-branching launch script (the codex marker pattern, minus any server:
 // opencode is a per-session process like claude). The caller-appended tail ("$@") is EITHER one single-quoted
@@ -1054,7 +1055,7 @@ const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode --auto'   // --auto =
 // re-attaches the owned opencode session (`--session <id>`, the SAME conversation), `--continue` re-attaches
 // the worktree's last session when no id was ever captured (the plugin failed before its first event). A new
 // launch's tail can never BE a literal marker (it's one quoted prompt), so the branch is unambiguous.
-export function opencodeLaunchCommand(opencodeCmd = 'opencode --auto'): string {
+export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
   const script = [
     `if [ "\${1:-}" = "--resume" ]; then`,
     // the marker carries the owned session id — export it so the plugin can seed rootSession at load: a
@@ -1250,7 +1251,7 @@ export const opencodeHarness: Harness = {
   // content = the plugin source; cmd = the SAME per-event command the plugin bakes into dispatch calls, so
   // any consumer that hashes/inspects commands sees one truth (trust is a no-op here regardless).
   shim: (dispatch, spex) => ({ content: opencodePluginSource(dispatch, spex), cmd: (e) => `SPEX='${spex}' bash ${dispatch} opencode ${e}` }),
-  writeTrust: () => [],                            // zero-prompt is the launcher's `--auto` flag — no artifact to report
+  writeTrust: () => [],                            // permission policy stays with the launcher command; no trust artifact to report
   removeTrust: () => { /* nothing was written */ },
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: opencodeSlashCommands,

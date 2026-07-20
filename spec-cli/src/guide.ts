@@ -326,20 +326,22 @@ A named launcher profile fixes BOTH a session's harness AND its exact launch com
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
 reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS an ordinary named launcher for each
 harness the adopter SELECTED (--harness), from the template pool
-  "claude"   → { "harness": "claude",   "cmd": "claude --dangerously-skip-permissions" }
-  "codex"    → { "harness": "codex",    "cmd": "codex --yolo" }
-  "opencode" → { "harness": "opencode", "cmd": "opencode --auto" }
+  "claude"   → { "harness": "claude",   "cmd": "claude" }
+  "codex"    → { "harness": "codex",    "cmd": "codex" }
+  "opencode" → { "harness": "opencode", "cmd": "opencode" }
   "pi"       → { "harness": "pi",       "cmd": "pi" }
-after which they are edited (or removed) exactly like any launcher you add. To run workers under an auth
+These plain commands preserve each harness's normal permission model. Automatic-permission commands such as
+\`claude --dangerously-skip-permissions\`, \`codex --yolo\`, or \`opencode --auto\` are NEVER clean-init
+defaults: define and select one explicitly only when that access is intended. To run workers under an auth
 wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
-override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir
-variants. Shape:
+override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir or
+permission variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi",
                              "cmd": "<launch command>" } }
-\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. Because a \`cmd\` is a machine
-fact (an absolute wrapper path), the DEFINITION lives in the gitignored
-spexcode.local.json, while the portable defaultLauncher NAME sits in the committed spexcode.json — the
-merge keeps both:
+\`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. A portable plain command may live
+in committed spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
+credential route, or personal permission choice — belongs in gitignored spexcode.local.json, while its
+portable defaultLauncher NAME may stay in committed spexcode.json; the merge keeps both:
 
   spexcode.json  (committed — the portable name reference)
   { "sessions": { "defaultLauncher": "gpt5" } }

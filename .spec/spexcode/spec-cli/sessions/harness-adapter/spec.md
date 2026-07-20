@@ -147,7 +147,7 @@ surface:
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex
   `apply_patch` command — Codex has NO `file_path`), and notification type, from a hook's stdin.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
-  (caller chooses the id); Codex `codex` with `--yolo`/approval+sandbox (id is codex-assigned — the backend
+  (caller chooses the id); Codex `codex` under the launcher's configured approval/sandbox policy (id is codex-assigned — the backend
   owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the
   harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
   worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient

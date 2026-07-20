@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: clean-init-launchers-preserve-permissions
+    tags: [cli, backend-api]
+    description: >-
+      In fresh git repositories, run the real `spex init --harness <selection>` surface for each native
+      harness and for a multi-harness selection. Read each planted `spexcode.json`, then create a queued
+      session without an explicit launcher so creation resolves the planted `sessions.defaultLauncher` and
+      pins its command without needing the harness binary to run.
+    expected: >-
+      Init plants exactly one ordinary named launcher per selected harness: `claude`, `codex`, `opencode`,
+      and `pi` each use their plain command, and `sessions.defaultLauncher` names a real planted entry. No
+      clean config contains `--dangerously-skip-permissions`, `--yolo`, or `--auto`. A no-choice session
+      create succeeds through the same named-launcher mechanism and stores that entry's harness, launcher
+      name, and exact plain command in its record; no environment-specific branch or implicit bypass rewrites
+      it. A bypass command works only when the user explicitly defines and selects that launcher.
+    code: spec-cli/templates/spexcode.json
+    related: spec-cli/src/init.ts, spec-cli/src/sessions.ts, spec-cli/src/harness.ts
   - name: launcher-dropdown-replaces-harness-picker
     tags: [frontend-e2e]
     description: >-

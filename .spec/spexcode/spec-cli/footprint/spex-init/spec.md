@@ -41,9 +41,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
   fresh repo just works and a mature one can still curate explicit roots. The planted file also carries the
   CHOSEN `harnesses` set (next paragraph) and seeds an ordinary [[launcher-select]] launcher for each
-  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first) — so
-  session-create works out of the box without seeding launchers for tools the adopter never picked; a host
-  that needs an auth-wrapper command edits that launcher's `cmd` in `spexcode.local.json`.
+  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). Every
+  seeded `cmd` is the harness's plain command, preserving its normal permission model; auth wrappers and
+  automatic-permission flags are explicit user or host-local launcher definitions, never init defaults. Thus
+  session-create works out of the box without seeding launchers for tools the adopter never picked.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string

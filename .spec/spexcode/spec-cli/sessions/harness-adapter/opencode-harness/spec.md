@@ -58,8 +58,9 @@ branches seed the plugin instead — `--resume` exports the owned id for rootSes
 exports a marker that unlocks a bounded SDK session.list fallback (newest root session; gated on the
 marker so a fresh launch can never adopt a stale conversation) — keeping a resumed worker steerable
 with zero manual pokes. Contract file is `AGENTS.md` (native); skills and
-agents materialize under `.opencode/`; trust is a no-op (`--auto` in the default launcher command is
-the zero-prompt mechanism). Liveness prefers the socket listener and falls back to the launch-registered
+agents materialize under `.opencode/`; trust is a no-op and the launcher command owns the permission policy.
+Clean init seeds plain `opencode`; `--auto` is available only through an explicitly authored launcher profile,
+never an adapter or init default. Liveness prefers the socket listener and falls back to the launch-registered
 agent pid, so a plugin that failed to load still reads honestly from the process signal.
 
 Verification status: the mechanical layer (materialize artifacts, shim → dispatch.sh event flow, launch

@@ -17,6 +17,9 @@ type Bridge = {
   // mode is a line protocol, so a terminal buys nothing and costs the fd-inheritance wedge (see ensureBridge).
   id: string; proc: ChildProcess; cols: number; rows: number; prewarmed: boolean
   repaintToken: number
+  // Repaint is the viewer's sole writer until its reconstructed frame lands. `%output` produced by the
+  // pane's SIGWINCH redraw before that boundary is already represented by the capture and stays hidden.
+  paintedToken: number
   // the size VOTE: whether this client currently asserts window size. Only a bridge some viewer has SIZED
   // (visible connect / resize — never a hidden board-load connect) votes; all others carry tmux's
   // ignore-size client flag and are size-NEUTRAL, so a foreign backend instance sharing the socket can
@@ -194,7 +197,7 @@ function onLine(b: Bridge, line: Buffer): void {
   // in `head` is the same byte index in `line`; the DATA is taken from the raw Buffer, never from `head`.
   const head = line.toString('latin1')
   if (head.startsWith('%output ')) {
-    if (b.paneInMode) return
+    if (b.paneInMode || b.paintedToken !== b.repaintToken) return
     const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
     if (sp > 0) broadcast(b.id, unescapeOutput(line.subarray(sp + 1)))
     return
@@ -273,7 +276,7 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
       env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
     })
   } catch { return null }
-  b = { id, proc: p, cols, rows, prewarmed: prewarm, repaintToken: 0, voting: false, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
+  b = { id, proc: p, cols, rows, prewarmed: prewarm, repaintToken: 0, paintedToken: 0, voting: false, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
   bridges.set(id, b)
   const bx = b
   p.stdout?.on('data', (d: Buffer) => feed(bx, d))
@@ -474,9 +477,13 @@ async function repaint(b: Bridge): Promise<void> {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
     broadcast(b.id, reconstructFrame(mode, lines, full))
+    b.paintedToken = token          // the coherent frame landed; ordinary live output owns the tail again
   })
   const cap = capturePaneCommand(b, mode)
-  try { b.proc.stdin?.write(cap + '\n') } catch { b.cmdQ.pop() }
+  try { b.proc.stdin?.write(cap + '\n') } catch {
+    b.cmdQ.pop()
+    if (token === b.repaintToken) b.paintedToken = token // failed capture must not mute a still-live bridge forever
+  }
 }
 
 export function detachViewer(id: string, v: Viewer): void {

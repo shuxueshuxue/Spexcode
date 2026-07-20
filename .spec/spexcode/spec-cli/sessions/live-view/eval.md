@@ -1,5 +1,23 @@
 ---
 scenarios:
+  - name: resize-repaint-is-one-frame
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Through the running dashboard in a real browser, connect one viewer to a scratch tmux pane whose
+      program handles SIGWINCH by clearing and rewriting a terminal-sized grid in one large output burst
+      (large enough for tmux control mode to split it into several `%output` events). Record the whole run
+      as video and capture the viewer's raw WebSocket payload order. Open the session terminal, let its first
+      frame settle, then resize the browser so SessionTerm sends a real `{t:'resize'}` through the socket.
+      Classify a reconstructed frame by its pen-reset + home/viewport-clear header and keep recording until
+      a later ordinary live-tail marker arrives. File with `spex eval add live-view --scenario
+      resize-repaint-is-one-frame --pass --video <webm> --timeline <json>`.
+    expected: >-
+      After each resize request, the FIRST pane payload visible to the browser is ONE reconstructed frame at
+      the converged size; ZERO raw SIGWINCH redraw chunks precede it. The recording therefore shows the new
+      terminal grid appear coherently, never a top-to-bottom terminal-wide scroll followed by a corrective
+      repaint. A later ordinary live-tail marker still arrives after the frame, proving repaint ownership is
+      bounded rather than muting the pane. The browser viewport itself stays at scrollTop=0 with no scroll
+      event: this is atomic terminal repaint, not a hidden browser-scroll workaround.
   - name: unwatched-warm-bridge-stays-silent
     tags: [backend-api]
     description: >-

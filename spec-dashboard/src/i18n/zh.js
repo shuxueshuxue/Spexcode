@@ -272,6 +272,7 @@ export default {
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',
     unmeasured: '未测量',
+    unknownCoverage: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
   },
 
   time: {
@@ -538,8 +539,9 @@ export default {
     evalPass: ({ n }) => `${n} 个场景为新鲜通过`,
     evalFail: ({ n }) => `${n} 个场景为新鲜失败`,
     evalBlind: ({ n }) => `${n} 个已声明场景尚未评测`,
-    evalDoorSummary: ({ measured, total, pass, fail, blind }) =>
-      `打开此会话的 Evals 页 — 已评测 ${measured}/${total}，新鲜通过 ${pass}，新鲜失败 ${fail}，未评测 ${blind}`,
+    evalUnknown: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
+    evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>
+      `打开此会话的 Evals 页 — 已评测 ${measured}/${total}，新鲜通过 ${pass}，新鲜失败 ${fail}，未评测 ${blind}，覆盖未知 ${unknown}`,
     typeBtn: '终端交互',
     typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',

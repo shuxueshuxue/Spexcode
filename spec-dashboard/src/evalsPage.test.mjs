@@ -73,6 +73,15 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
   assert.doesNotMatch(blindRows, /href:/)
 })
 
+test('session unknown coverage stays outside scenario rows and filter counts', () => {
+  const scopedRows = page.match(/function sessionRows\(model\)[\s\S]*?\n\}/)?.[0] || ''
+  assert.doesNotMatch(scopedRows, /unknownCoverage/)
+  assert.match(page, /sessionEvalSummary\(model\.nodes\)\.unknown/)
+  assert.match(page, /className="se-gate bad"[\s\S]*sessionEval\.unknownCoverage/)
+  const filterSurface = feed.slice(feed.indexOf('export default function EvalsGroup'))
+  assert.doesNotMatch(filterSurface, /unknownCoverage/)
+})
+
 test('queueNeighbors splits balanced positional groups with boundary refill', () => {
   // the pure split, evaluated from the page source (behavioral, not a shape regex): strictly
   // positional over the entries' stable order, nearest-to-current first in each group, ~5 total

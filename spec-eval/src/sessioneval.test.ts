@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { declaredLatest, nodeScore } from './sessioneval.js'
+import { declaredLatest, nodeScore, selectImpactedScenarios, unknownCoveragePaths } from './sessioneval.js'
 import type { EvalTimeline, EvalEntry } from './evaltab.js'
+import type { Scenario } from './scenarios.js'
 
 // a reading with sensible defaults; override per case (mirrors show.test.ts).
 function reading(over: Partial<EvalEntry>): EvalEntry {
@@ -73,4 +74,77 @@ test('declaredLatest: a node with no declared scenarios scores nothing, even wit
     { scenarios: [] },
   )
   assert.deepEqual(declaredLatest(tl), [])
+})
+
+const scenario = (name: string, over: Partial<Scenario> = {}): Scenario => ({
+  name,
+  description: `${name} description`,
+  expected: `${name} expected`,
+  tags: ['backend-api'],
+  ...over,
+})
+
+test('session scope selects each scenario by its own code axis, not by shared eval.md membership', () => {
+  const current = [
+    scenario('changed', { code: ['src/changed.ts'] }),
+    scenario('untouched-sibling', { code: ['src/other.ts'] }),
+    scenario('inherits-node-code'),
+  ]
+  const selected = selectImpactedScenarios(
+    current,
+    current,
+    ['src/node.ts'],
+    new Set(['src/changed.ts', 'src/node.ts']),
+    false,
+    new Set(),
+  )
+
+  assert.deepEqual(selected.map(({ scenario: item, impact }) => [item.name, impact]), [
+    ['changed', ['code']],
+    ['inherits-node-code', ['code']],
+  ])
+})
+
+test('session scope compares only the changed scenario semantic contract', () => {
+  const base = [
+    scenario('semantic-change'),
+    scenario('metadata-only', { tags: ['desktop'], code: ['src/old.ts'] }),
+    scenario('untouched-sibling'),
+  ]
+  const current = [
+    scenario('semantic-change', { expected: 'new expected behavior' }),
+    scenario('metadata-only', { tags: ['mobile'], code: ['src/new.ts'] }),
+    scenario('untouched-sibling'),
+    scenario('new-contract'),
+  ]
+  const selected = selectImpactedScenarios(current, base, [], new Set(['node/eval.md']), true, new Set())
+
+  assert.deepEqual(selected.map(({ scenario: item, impact }) => [item.name, impact]), [
+    ['semantic-change', ['contract']],
+    ['new-contract', ['contract']],
+  ])
+})
+
+test('session measurement keeps an otherwise untouched scenario without consulting freshness', () => {
+  const current = [scenario('measured'), scenario('unmeasured')]
+  const selected = selectImpactedScenarios(current, current, [], new Set(), false, new Set(['measured']))
+
+  assert.deepEqual(selected.map(({ scenario: item, impact }) => [item.name, impact]), [
+    ['measured', ['measurement']],
+  ])
+})
+
+test('unknown coverage is changed frontend code with no declared scenario axis', () => {
+  const changed = new Set(['src/View.jsx', 'src/covered.jsx', 'src/server.ts', 'README.md'])
+  assert.deepEqual(unknownCoveragePaths([], ['src/View.jsx'], changed), ['src/View.jsx'])
+  assert.deepEqual(unknownCoveragePaths(
+    [scenario('explicit', { code: ['src/covered.jsx'] })],
+    ['src/View.jsx', 'src/covered.jsx'],
+    changed,
+  ), ['src/View.jsx'])
+  assert.deepEqual(unknownCoveragePaths(
+    [scenario('inherits')],
+    ['src/View.jsx', 'src/covered.jsx'],
+    changed,
+  ), [])
 })

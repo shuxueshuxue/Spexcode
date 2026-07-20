@@ -36,6 +36,22 @@ export function currentEntries(nodes) {
   return out
 }
 
+// The session toolbar and scoped-list leading strip summarize the SAME already-scoped backend model.
+// Scenario impact is deliberately absent here: sessioneval.ts has selected the rows before this point.
+export function sessionEvalSummary(nodes = []) {
+  const entries = currentEntries(nodes)
+  const total = nodes.reduce((count, node) => count + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
+  const unknown = nodes.reduce((count, node) => count + (Array.isArray(node.unknownCoverage) ? node.unknownCoverage.length : 0), 0)
+  return {
+    measured: entries.length,
+    total,
+    pass: entries.filter((entry) => entry.state === 'pass').length,
+    fail: entries.filter((entry) => entry.state === 'fail').length,
+    blind: Math.max(0, total - entries.length),
+    unknown,
+  }
+}
+
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
 // one eval row's CONTENT — the shared row grammar ([[review-chrome]] wraps it in the real anchor).

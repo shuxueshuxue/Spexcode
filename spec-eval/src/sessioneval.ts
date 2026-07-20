@@ -1,14 +1,53 @@
-import { dirname } from 'node:path'
+import { dirname, relative } from 'node:path'
 import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
-import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline } from './evaltab.js'
+import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
+import { parseScenarios, scenarioHash, type Scenario } from './scenarios.js'
 
 // ---- the model ----
 
 type ScoreState = 'pass' | 'fail' | 'stalePass' | 'staleFail' | 'empty' | null
+
+export type ScenarioImpactReason = 'code' | 'contract' | 'measurement'
+export type SessionScenarioInfo = ScenarioInfo & { impact: ScenarioImpactReason[] }
+
+// The ONE session-scope predicate. Declared scenarios come from the current worktree; impact is orthogonal
+// to freshness and is derived only from the scenario's own code axis, its semantic contract at merge-base,
+// or a reading this session owns. Consumers receive the selected set and never repeat these tests.
+export function selectImpactedScenarios(
+  current: Scenario[],
+  base: Scenario[],
+  nodeCode: string[],
+  changedPaths: ReadonlySet<string>,
+  evalFileChanged: boolean,
+  measuredBySession: ReadonlySet<string>,
+): { scenario: Scenario; impact: ScenarioImpactReason[] }[] {
+  const baseByName = new Map(base.map((scenario) => [scenario.name, scenario]))
+  return current.flatMap((scenario) => {
+    const impact: ScenarioImpactReason[] = []
+    const codeAxis = scenario.code?.length ? scenario.code : nodeCode
+    if ([...changedPaths].some((path) => codeClaims(codeAxis, path))) impact.push('code')
+    const prior = baseByName.get(scenario.name)
+    if (evalFileChanged && (!prior || scenarioHash(prior) !== scenarioHash(scenario))) impact.push('contract')
+    if (measuredBySession.has(scenario.name)) impact.push('measurement')
+    return impact.length ? [{ scenario, impact }] : []
+  })
+}
+
+export function unknownCoveragePaths(
+  current: Scenario[],
+  nodeCode: string[],
+  changedPaths: ReadonlySet<string>,
+): string[] {
+  return [...changedPaths].filter((path) => (
+    isUiPath(path)
+    && codeClaims(nodeCode, path)
+    && !current.some((scenario) => codeClaims(scenario.code?.length ? scenario.code : nodeCode, path))
+  ))
+}
 
 // one eval reading rendered for the export: the latest measurement of one scenario, with its evidence
 // resolved to inline bytes (an image data-URI, or transcript text) so the document is self-contained.
@@ -87,11 +126,15 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
 
+  const changedPaths = new Set(payload.diff.map((file) => file.path))
+
   // enrich each changed file with its unified diff + full before/after content (derived from the session
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
   // extra fetch. Capped at MAX_ENRICHED_FILES so a huge changeset can't bloat the page; the rest keep their
   // row but say so (omitted), never silently blank.
   const base = wtPath ? (await gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD'])).trim() : ''
+  const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
+  const scopedNodes = await sessionScopeNodes(id, ctx, changedPaths, base, shas)
   const enriched = new Map<string, ExportFile>()
   let budget = MAX_ENRICHED_FILES
   for (const f of payload.diff) {
@@ -108,15 +151,11 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
     if (nid) { const arr = byNode.get(nid) ?? []; arr.push(pf); byNode.set(nid, arr) }
     else otherFiles.push(pf)
   }
-  // the session's primary node always appears, even if it has no file in the diff yet.
-  if (payload.node && specById.has(payload.node) && !byNode.has(payload.node)) byNode.set(payload.node, [])
-
   const nodes: ExportNode[] = []
   let passed = 0, total = 0, fresh = 0
-  for (const [nid, files] of byNode) {
-    const spec = specById.get(nid)
-    const tl = await evalTimeline(nid, ctx)
-    const latest = declaredLatest(tl)
+  for (const scoped of scopedNodes) {
+    const files = byNode.get(scoped.id) ?? []
+    const latest = latestPerScenario(scoped.evals)
     const readings = await Promise.all(latest.map(toExportReading))
     for (const r of latest) {
       total++
@@ -124,16 +163,16 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
       if (r.fresh && r.verdict?.status === 'pass') passed++
     }
     nodes.push({
-      id: nid,
-      title: spec?.title ?? nid,
-      hue: spec?.hue ?? 210,
-      desc: spec?.desc ?? '',
+      id: scoped.id,
+      title: scoped.title,
+      hue: scoped.hue,
+      desc: scoped.desc,
       files,
       additions: files.reduce((a, f) => a + f.additions, 0),
       deletions: files.reduce((a, f) => a + f.deletions, 0),
-      hasEvalFile: tl.hasEvalFile,
-      uncoveredFrontend: !tl.hasEvalFile && (spec?.code ?? []).some(isUiPath),
-      score: nodeScore(tl.hasEvalFile, latest),
+      hasEvalFile: scoped.hasEvalFile,
+      uncoveredFrontend: scoped.uncoveredFrontend,
+      score: nodeScore(scoped.hasEvalFile, latest),
       readings,
     })
   }
@@ -532,7 +571,12 @@ export type SessionEvalNode = {
   desc: string
   hasEvalFile: boolean
   uncoveredFrontend: boolean
-  scenarios: { name: string; expected: string; tags?: string[] }[]
+  // Changed frontend code that no declared scenario covers. This is node-level UNKNOWN coverage, never a
+  // synthetic scenario: it stays outside scenario totals and filters while remaining visible to consumers.
+  unknownCoverage: string[]
+  // Already scoped by selectImpactedScenarios. Consumers must not infer impact from node membership,
+  // freshness, or the full eval.md again.
+  scenarios: SessionScenarioInfo[]
   // each reading carries the trunk eval-concern thread for its (node, scenario) ([[remark-teeth]] / directive
   // 3): the server-side join (attached by evalTimeline as `EvalEntry.thread`), so the session tab's event
   // detail reads the comment/remark track directly instead of re-matching a concern key client-side. Absent
@@ -550,6 +594,85 @@ export type SessionEvals = {
   nodes: SessionEvalNode[]
 }
 
+async function sessionScopeNodes(
+  id: string,
+  ctx: Awaited<ReturnType<typeof evalContext>>,
+  changedPaths: ReadonlySet<string>,
+  base: string,
+  shas: ReadonlySet<string>,
+): Promise<SessionEvalNode[]> {
+  const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
+  const nodes: SessionEvalNode[] = []
+
+  for (const spec of ctx.specs) {
+    const evalNode = evalById.get(spec.id)
+    const current = evalNode?.scenarios ?? []
+    const unknownCoverage = unknownCoveragePaths(current, spec.code, changedPaths)
+
+    if (!evalNode) {
+      if (unknownCoverage.length) {
+        nodes.push({
+          id: spec.id, title: spec.title, hue: spec.hue, desc: spec.desc,
+          hasEvalFile: false, uncoveredFrontend: true, unknownCoverage,
+          scenarios: [], evals: [],
+        })
+      }
+      continue
+    }
+
+    const evalFileChanged = changedPaths.has(evalNode.evalPath)
+    const sidecarPath = relative(ctx.root, evalNode.sidecarPath)
+    const sidecarChanged = changedPaths.has(sidecarPath)
+    const codeChanged = current.some((scenario) => {
+      const codeAxis = scenario.code?.length ? scenario.code : spec.code
+      return [...changedPaths].some((path) => codeClaims(codeAxis, path))
+    })
+    if (!evalFileChanged && !sidecarChanged && !codeChanged && !unknownCoverage.length) continue
+
+    const timeline = await evalTimeline(spec.id, ctx)
+    // A reading is this session's own when the session filed it OR its anchor is a branch commit. This is
+    // the same marker the UI and CLI render; measurement impact consumes that marker instead of inventing
+    // another attribution rule.
+    const evals = timeline.readings.map((reading) => ({
+      ...reading,
+      inSession: reading.by === id || shas.has(reading.codeSha),
+    }))
+    const measured = new Set(evals.filter((reading) => reading.inSession).map((reading) => reading.scenario))
+    const baseHasEval = evalFileChanged && base
+      ? (await gitA(['-C', ctx.root, 'ls-tree', '--name-only', base, '--', evalNode.evalPath])).trim() !== ''
+      : false
+    const baseScenarios = baseHasEval
+      ? parseScenarios(await gitA(['-C', ctx.root, 'show', `${base}:${evalNode.evalPath}`]))
+      : []
+    const selected = selectImpactedScenarios(current, baseScenarios, spec.code, changedPaths, evalFileChanged, measured)
+    if (!selected.length && !unknownCoverage.length) continue
+
+    const infoByName = new Map(timeline.scenarios.map((scenario) => [scenario.name, scenario]))
+    const scenarios: SessionScenarioInfo[] = selected.map(({ scenario, impact }) => ({
+      ...(infoByName.get(scenario.name) ?? {
+        name: scenario.name, expected: scenario.expected,
+        ...(scenario.tags?.length ? { tags: scenario.tags } : {}),
+        ...(scenario.test ? { test: scenario.test } : {}),
+        ...(scenario.code?.length ? { code: scenario.code } : {}),
+      }),
+      impact,
+    }))
+    const names = new Set(scenarios.map((scenario) => scenario.name))
+    nodes.push({
+      id: spec.id, title: spec.title, hue: spec.hue, desc: spec.desc,
+      hasEvalFile: timeline.hasEvalFile,
+      uncoveredFrontend: !timeline.hasEvalFile && unknownCoverage.length > 0,
+      unknownCoverage,
+      scenarios,
+      // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
+      // honest downstream states; impact selection never removes a row because its reading is stale.
+      evals: evals.filter((reading) => names.has(reading.scenario)),
+    })
+  }
+
+  return nodes
+}
+
 export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
   const payload = await reviewPayload(id)
   if (!payload) return null
@@ -561,34 +684,14 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
-  // this session's own commits — the membership test behind `inSession`
+  const changedPaths = new Set(payload.diff.map((file) => file.path))
+  const base = wtPath ? (await gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD'])).trim() : ''
+  // this session's own commits — the membership test behind `inSession` and measurement impact
   const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
-
-  const ids = new Set<string>()
-  for (const f of payload.diff) { const nid = nodeForFile(f.path, specs, payload.node); if (nid) ids.add(nid) }
-  if (payload.node && specById.has(payload.node)) ids.add(payload.node)
-
-  const nodes: SessionEvalNode[] = []
-  for (const nid of ids) {
-    const spec = specById.get(nid)
-    const tl = await evalTimeline(nid, ctx)
-    nodes.push({
-      id: nid,
-      title: spec?.title ?? nid,
-      hue: spec?.hue ?? 210,
-      desc: spec?.desc ?? '',
-      hasEvalFile: tl.hasEvalFile,
-      uncoveredFrontend: !tl.hasEvalFile && (spec?.code ?? []).some(isUiPath),
-      scenarios: tl.scenarios,
-      // the per-scenario trunk thread rides each reading as `EvalEntry.thread` (evalTimeline's overlay), so
-      // the event detail has the comment/remark track inline — no extra join here. A reading is the
-      // session's own when it filed it (`by`) OR when its codeSha is a branch commit — filing alone counts,
-      // else a session that measured without committing code reads as if it did nothing.
-      evals: tl.readings.map((r) => ({ ...r, inSession: r.by === id || shas.has(r.codeSha) })),
-    })
-  }
+  const nodes = await sessionScopeNodes(id, ctx, changedPaths, base, shas)
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
-  nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length) || (b.evals.length - a.evals.length))
+  nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
+    || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
 
   const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
   return {

@@ -78,5 +78,8 @@ board poll + SSE — the list fetches nothing of its own — and latest-per-scen
 same computation behind the node badge, graph stats, search, and the node eval tab; the feed never re-derives
 the current score its own way. The `scope:<id>` token rides the one session model the page fetches
 ([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
-spots as inert unmeasured lines. Loading, empty, and failed models do not replace the list shell: the scope
+spots as inert unmeasured lines. The session model arrives already scenario-scoped by its backend impact
+engine, so list rows and every filter count naturally range over only the worktree's affected/measured
+scenarios; unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
+empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

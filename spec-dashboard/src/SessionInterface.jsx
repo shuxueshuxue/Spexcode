@@ -8,7 +8,7 @@ import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
-import { currentEntries } from './EvalsFeed.jsx'
+import { sessionEvalSummary } from './EvalsFeed.jsx'
 import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
@@ -45,13 +45,13 @@ export function LaunchHero() {
 // the page or crossing a lifecycle/liveness edge refreshes immediately; a bounded cadence covers readings filed
 // during one long working state, and a stale response is aborted on tab change.
 function useSessionEvalSummary(sessionId, refreshKey) {
-  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 })
+  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 })
   useEffect(() => {
-    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 }); return }
+    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 }); return }
     let stopped = false
     let timer = null
     let abort = null
-    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 })
+    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 })
     const load = () => {
       abort = new AbortController()
       fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`), { signal: abort.signal })
@@ -59,18 +59,9 @@ function useSessionEvalSummary(sessionId, refreshKey) {
         .then((model) => {
           if (stopped) return
           const nodes = Array.isArray(model?.nodes) ? model.nodes : []
-          const entries = currentEntries(nodes)
-          const total = nodes.reduce((n, node) => n + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
-          setSummary({
-            phase: 'ready',
-            measured: entries.length,
-            total,
-            pass: entries.filter((entry) => entry.state === 'pass').length,
-            fail: entries.filter((entry) => entry.state === 'fail').length,
-            blind: Math.max(0, total - entries.length),
-          })
+          setSummary({ phase: 'ready', ...sessionEvalSummary(nodes) })
         })
-        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 }) })
+        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 }) })
         .finally(() => { if (!stopped) timer = setTimeout(load, 15_000) })
     }
     load()
@@ -100,6 +91,9 @@ function SessionEvalStats({ summary }) {
       )}
       {summary.blind > 0 && (
         <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.blind} label={t('session.evalBlind', { n: summary.blind })} />
+      )}
+      {summary.unknown > 0 && (
+        <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.unknown} label={t('session.evalUnknown', { n: summary.unknown })} />
       )}
     </span>
   )

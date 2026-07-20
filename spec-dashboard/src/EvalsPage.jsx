@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
+import EvalsGroup, { currentEntries, entryKey, sessionEvalSummary } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken } from './reviewQuery.js'
@@ -81,6 +81,7 @@ export function EvalScopeDoor({ sessionId }) {
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
   const t = useT()
+  const unknown = model && model !== false ? sessionEvalSummary(model.nodes).unknown : 0
   const empty = sessionId && model === null
     ? t('common.loading')
     : sessionId && error
@@ -95,6 +96,11 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
           {model && model.gates.map((g) => (
             <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}><Icon name={g.ok ? 'check' : 'x'} size={11} /> {g.label}</span>
           ))}
+          {unknown > 0 && (
+            <span className="se-gate bad" data-tip={t('sessionEval.unknownCoverage', { n: unknown })}>
+              <Icon name="info" size={11} /> {unknown}
+            </span>
+          )}
           {model && (
             <span className="se-acts">
               <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>

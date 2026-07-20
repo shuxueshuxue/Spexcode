@@ -18,6 +18,22 @@ scenarios:
       nor the cards. The proof and the dashboard read one declared-bounded latest-per-scenario, so a merge
       reviewer can never see the proof claim a deleted scenario as outstanding loss the board has already
       dropped.
+  - name: session-scope-bounds-impact
+    tags: [backend-api]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts]
+    description: >
+      Build a session model over a worktree where one source file and one scenario's semantic contract
+      changed, another scenario in that same eval.md did not, a third affected scenario has no reading,
+      a fourth affected scenario has only a stale reading, and the session filed a reading for a scenario
+      whose code did not move. Include a changed frontend node with no eval.md. Read the model's scenario
+      membership, impact reasons, latest reading states, and unknown coverage separately from the UI.
+    expected: >
+      The model contains exactly the scenarios whose own code axis intersects the diff, whose own
+      description/expected hash changed, or which this session measured. The untouched sibling is absent.
+      The stale reading and the declared-but-unmeasured scenario remain in scope; the latter is the precise
+      blind/unmeasured case. The no-eval frontend node is unknown coverage, not a synthetic scenario and not
+      part of measured/declared or filter counts. Toolbar, scoped list, detail reachability, CLI, and export
+      consume this one scoped model without a second impact predicate.
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >

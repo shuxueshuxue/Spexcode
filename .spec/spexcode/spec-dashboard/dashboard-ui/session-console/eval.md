@@ -252,19 +252,21 @@ scenarios:
       whose tmux pane paints a bottom status line (a running agent's own status bar, or a full-screen TUI
       like `htop`/`vim` whose last row is a status line). At the RESTING single-line `❯` box, read the
       geometry: the bounding rects of the terminal region (`.si-term-body`) and the docked input
-      (`.si-bottom`), and check whether the terminal's bottom edge sits AT OR ABOVE the input's top edge
-      (no overlap). Screenshot to confirm the pane's bottom status line is fully visible, not covered by the
-      input. Then grow the box multi-line (paste several newlines, staying below the half-terminal cap) and
-      RE-READ `.si-term-body`'s bounding rect + screenshot. Compare against the pre-change MAIN baseline where
-      the input floats over the terminal's bottom.
+      (`.si-bottom`), check whether the terminal's bottom edge sits AT OR ABOVE the input's top edge
+      (no overlap), and read the input's computed `background-clip`. Screenshot the top separator closely
+      enough to confirm the panel fill stops inside it rather than painting through the boundary. Then grow
+      the box multi-line (paste several newlines, staying below the half-terminal cap), RE-READ
+      `.si-term-body`'s bounding rect and `background-clip`, and screenshot again. Compare against the
+      pre-change MAIN baseline where the input floats over the terminal's bottom.
     expected: |
       At rest the terminal ENDS ABOVE the input: `.si-term-body`'s bottom edge is at or above `.si-bottom`'s
       top edge (they abut, never overlap), so the pane's own bottom status line stays fully visible — the
-      resting input never covers it. Growing the box multi-line does NOT move the terminal: `.si-term-body`'s
-      bounding rect is unchanged between the resting and grown states (terminal content is not pushed up); the
-      taller input instead OVERLAYS the terminal's lower edge, its opaque panel occluding those lines while
-      they scroll behind it. On the MAIN baseline the resting input floats over the terminal and hides its
-      bottom status line.
+      resting input never covers it. The panel uses `background-clip: padding-box` at both heights, so its fill
+      begins inside the 1px top separator and no panel colour leaks through or past that visible boundary.
+      Growing the box multi-line does NOT move the terminal: `.si-term-body`'s bounding rect is unchanged
+      between the resting and grown states (terminal content is not pushed up); the taller input instead
+      OVERLAYS the terminal's lower edge, its opaque panel occluding those lines while they scroll behind it.
+      On the MAIN baseline the resting input floats over the terminal and hides its bottom status line.
     related: spec-dashboard/src/styles.css
   - name: dock-prompt-stays-on-active-line
     tags: [frontend-e2e, desktop]

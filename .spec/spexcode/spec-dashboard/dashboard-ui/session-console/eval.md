@@ -102,8 +102,10 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
       REVIEW state (so type + merge apply). (1) Read the bar: on the LEFT the Terminal tab and the Eval
-      navigation door; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO
-      leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each in a distinct colour — and the word "proof"
+      navigation door; on the RIGHT the action row shows two uniform compact ICON toolbuttons — type and merge —
+      using the shared icon system's familiar keyboard and git-merge marks, with no visible text, emoji, or
+      component-local SVG/mapping. Read each localized tooltip and aria-label, and confirm each keeps its registry
+      identity colour. The word "proof"
       appears nowhere in the UI. (2) In the Terminal `❯` inbox type
       `/` and read the completion menu: the board's own
       commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
@@ -115,12 +117,16 @@ scenarios:
       (3) Type `/eval` and Enter: the dashboard navigates to the canonical scoped list
       `#/evals?q=is:eval state:current scope:<id>` — the same address the toolbar's Eval door opens — and no
       inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
-      button shows its active `.on` state); click the type button to toggle it back off. Screenshot the tab bar
+      tool exposes `aria-pressed=true` and its stable selected state); click the type tool to toggle it back off.
+      Screenshot the toolbar
       and the `/` menu.
     expected: |
-      The action-row buttons are text-only (no glyphs/emoji) and colour-coded — type yellow (var --yellow =
-      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); Eval is an always-available navigation
-      door, not a console-local tab or review-gated action, and no UI surface says "proof".
+      The action row is one icon-toolbutton primitive fed by the session command registry: type is the familiar
+      keyboard mark in yellow (var --yellow = rgb(181,137,0)), merge the git-merge mark in green (var --green =
+      rgb(133,153,0)), and an offline session uses the same primitive with a familiar relaunch mark. There is
+      no visible action text, emoji, parallel action/icon map, or prompt/headline text in any tooltip/aria-label.
+      Eval is an always-available navigation door, not a console-local tab or review-gated action, and no UI
+      surface says "proof".
       In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) for the navigation door; the two button-less terminal verbs split
@@ -132,7 +138,7 @@ scenarios:
       but no board command currently collides with a CC name) —
       and every row's description reads as a capitalised sentence. Typing `/eval` navigates to the same
       session-scoped Evals list the bar's door opens; typing `/type` toggles type mode
-      exactly as the type button does, and the button reflects that same state. A board command is never
+      exactly as the type tool does, and the tool reflects that same state through `aria-pressed`. A board command is never
       dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/type` text reaches the pane.
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
@@ -351,30 +357,32 @@ scenarios:
       capture with the implemented B toolbar. At 1440px, an exact 390px terminal pane, and the narrowest
       reachable desktop viewport (641px with a persisted 480px list), inspect geometry, overflow, computed
       theme colours, accessible roles/names, focus order, and keyboard activation; exercise the last case in
-      review/done so both command buttons are present.
+      review/done so all command tools are present. Measure A's height and crowding before changing the source.
       Repeat B in en/zh, all eight themes, and representative online/offline/review/done/queued fixtures;
-      use a deliberately long shared session headline and enter/leave type mode. Read the Eval door's
+      use a deliberately long or HTML-bearing prompt/headline and enter/leave type mode. Read the Eval door's
       literal href and network-backed symbolic counts, then activate it by pointer and keyboard. Confirm
       Terminal's mount and the docked input survive browser Back.
     expected: |
-      One compact toolbar uses the width instead of leaving an empty gulf: Terminal is the sole
-      role=tab inside the sole tablist and remains the current surface; the shared session headline and
-      lifecycle/liveness state form a distinct identity region; Eval is outside the tablist as a real
-      anchor; only state-valid registry commands render at the right. The long headline ellipses and no
-      toolbar descendant crosses its bounds at 1440px, 390px, or the desktop/mobile boundary (the list yields
-      enough width for the pane instead of clipping controls). Theme tokens keep the
-      toolbar distinct from the dark terminal in all eight themes, with stable geometry in en/zh and
-      across status/type-mode fixtures.
+      The B toolbar is a true single compact row around 32px — materially lower than A's ~40px — with real
+      text, icons, and focus rings fully contained rather than clipped. Terminal is the sole `role=tab` inside
+      the sole tablist and remains current; Eval is outside the tablist as a real anchor; only state-valid
+      registry tools render at the right. `.si-identity`, its headline, and lifecycle/liveness text are absent:
+      the selected sidebar row already owns identity/state, and no long prompt or HTML-derived headline enters
+      toolbar text, `data-tip`, or `aria-label`. No descendant crosses the bar at 1440px, 641px, or a 390px
+      terminal pane, and the bar never jumps height as commands, state, locale, or type mode change. Theme tokens
+      keep it distinct from the dark terminal in all eight themes.
 
       The Eval anchor's href is exactly the canonical scoped query minted by addressHash(sessionEvalAddress(id)).
       Its compact symbols report measured/declared scenarios (including honest 0/0 or 0/N), current pass/fail
       only through ReviewState, and a visible blind-spot count when declared scenarios have no reading;
       loading/failure never masquerades as zero. Pointer, Enter, and copy-link semantics are native. The
       terminal stays mounted behind the route and Back returns with its socket, scroll, draft, and geometry
-      intact. Type/merge remain registry-backed typed/click twins, relaunch replaces them only for offline
+      intact. Type/merge remain registry-backed typed/click twins rendered through one localized icon-toolbutton
+      primitive, relaunch replaces them only for offline
       liveness, and queued shows neither an invalid command nor relaunch; the reserved type-mode chord cannot
-      bypass that gate while offline or queued. A summary filed during a stable working lifecycle appears on
-      the toolbar's bounded refresh without requiring navigation.
+      bypass that gate while offline or queued. Type exposes `aria-pressed` and a stable selected treatment.
+      A summary filed during a stable working lifecycle appears in the Eval glance on the toolbar's bounded
+      refresh without requiring navigation.
     related:
       - spec-dashboard/src/styles.css
       - spec-dashboard/src/address.js

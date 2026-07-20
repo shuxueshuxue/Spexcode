@@ -50,13 +50,15 @@ the accessible name impossible to forget.
   the tooltip — `data-tip`, the app's singleton tooltip layer ([[tooltip]]) — and the `aria-label`
   (the accessible-name gap the audit found — e.g. the issues New button had neither).
 - **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]),
-  the session console's New/search pills and attach/busy glyphs, the
+  the session console's New/search pills, attach/busy glyphs, and compact type/merge/relaunch toolbar tools, the
   lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers ([[event-detail]]), the modal
   close `×`, the issues New plus, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
   drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`
   pair rather than mixing one Octicon with CSS-made dots.
-- **Text stays text where text won.** Verb actions with room to breathe (merge/promote/close/resolve/
+- **Text stays text where text won.** Verb actions with room to breathe (promote/close/resolve/
   retract/send/cancel/save, tab labels, context-menu rows, settings) keep their words — the icon system
   does not replace prose with mystery glyphs. Context-menu rows pair those labels with a small leading
   icon from this registry, the Obsidian/Lucide grammar that makes a scan faster without hiding the command.
+  The desktop terminal toolbar is the deliberate compact exception: familiar icon-only command tools preserve
+  their localized prose in tooltip/`aria-label`, while the ONE session-command registry supplies their meaning.

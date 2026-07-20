@@ -1586,13 +1586,13 @@ a.scenario-count:hover { background: var(--panel2); }
 /* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
 .si-content.is-session { --si-dock-h: 44px; }
-/* @@@ session toolbar — one row, four semantic regions: current surface | identity/state | Eval door |
-   available commands. The session wrapper is the responsive boundary because the list is draggable: viewport
-   media queries cannot know how narrow the terminal pane actually is. */
+/* @@@ session toolbar — one compact row: current surface | Eval door | registry command tools. Identity/state
+   already belongs to the selected sidebar row. The session wrapper is the responsive boundary because the
+   list is draggable: viewport media queries cannot know how narrow the terminal pane actually is. */
 .si-session-wrap { container-type: inline-size; }
 .si-tabbar {
-  flex: none; min-width: 0; min-height: 40px; box-sizing: border-box;
-  display: grid; grid-template-columns: auto minmax(36px, 1fr) auto auto; align-items: stretch;
+  flex: none; min-width: 0; height: 32px; box-sizing: border-box;
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: stretch;
   overflow: hidden; background: color-mix(in srgb, var(--panel) 94%, var(--ink) 6%); border-bottom: 1px solid var(--line);
 }
 .si-surface { display: flex; align-items: stretch; min-width: 0; border-right: 1px solid var(--line); }
@@ -1600,35 +1600,18 @@ a.scenario-count:hover { background: var(--panel2); }
 /* Terminal is the sole tab. Its icon+word surface grammar is intentionally unlike the bordered Eval door and
    command buttons; the blue underline visually attaches the selected surface to the pane below. */
 .si-tab {
-  appearance: none; min-width: 0; height: 40px; display: inline-flex; align-items: center; gap: 7px;
+  appearance: none; min-width: 0; height: 32px; display: inline-flex; align-items: center; gap: 6px;
   background: transparent; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
-  padding: 0 11px; cursor: default; color: var(--muted); font-family: var(--mono);
+  padding: 0 9px; cursor: default; color: var(--muted); font-family: var(--mono);
   font-size: var(--type-control); text-decoration: none; white-space: nowrap;
 }
 .si-tab.on { color: var(--ink); border-bottom-color: var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .si-tab svg { flex: none; }
 
-/* Identity spends the formerly empty middle. The headline is the ONE flexible item; state/liveness never
-   steal its min-content width, so an arbitrarily long CJK/Latin headline ellipses before any control overflows. */
-.si-identity {
-  min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px;
-  border-right: 1px solid var(--line); color: var(--ink2);
-}
-.si-th-name {
-  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink);
-}
-.si-session-status, .si-session-live {
-  flex: none; min-width: 0; display: inline-flex; align-items: center; gap: 4px;
-  color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); white-space: nowrap;
-}
-.si-status-glyph { width: 11px; text-align: center; font-size: var(--type-control); line-height: var(--leading-none); }
-.si-live-dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 15%, transparent); }
-
 /* Eval is navigation, never a tab: one real anchor carrying the canonical scoped href and a compact glance
    over the session's lean eval model. ReviewState supplies every pass/fail/blind symbol and tone. */
 .si-eval-door {
-  min-width: 0; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px;
+  min-width: 0; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px;
   border-right: 1px solid var(--line); color: var(--ink2); text-decoration: none; white-space: nowrap;
   font-family: var(--mono); font-size: var(--type-meta);
 }
@@ -1647,30 +1630,20 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-eval-stats .ovc.st-empty { color: var(--muted); }
 .si-eval-spinner { animation: si-attach-spin .8s linear infinite; }
 
-.si-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 8px; }
-.si-actions:empty { display: none; }
+.si-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 
 @container (max-width: 720px) {
-  .si-live-word { display: none; }
-  .si-identity { gap: 6px; padding-inline: 8px; }
-  .si-eval-door { padding-inline: 8px; }
+  .si-eval-door { padding-inline: 6px; }
 }
 @container (max-width: 540px) {
-  .si-tabbar { grid-template-columns: auto minmax(20px, 1fr) auto auto; }
-  .si-status-word, .si-eval-label, .si-eval-stats .secondary { display: none; }
-  .si-identity { gap: 4px; padding-inline: 6px; }
+  .si-eval-label, .si-eval-stats .secondary { display: none; }
   .si-eval-door { gap: 4px; padding-inline: 6px; }
-  .si-actions { gap: 3px; padding-inline: 5px; }
-  .si-actions .si-act { padding-inline: 6px; }
+  .si-actions { gap: 2px; padding-inline: 4px; }
 }
 @container (max-width: 390px) {
   .si-tab-label, .si-eval-arrow { display: none; }
   .si-tab { width: 34px; padding-inline: 10px; }
-  .si-identity { padding-inline: 4px; }
-  .si-session-live { display: none; }
   .si-eval-door { padding-inline: 5px; }
-  .si-actions { padding-inline: 4px; }
-  .si-actions .si-act { padding-inline: 4px; }
 }
 /* the terminal body fills the rest of the pane, edge-to-edge, but ENDS ABOVE the docked ❯ box: its
    margin-bottom reserves the resting input strip (--si-dock-h) as REAL layout height, so the terminal —
@@ -1762,8 +1735,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: var(--line-input); padding: 0; }
 .si-bottom .si-attach { height: 20px; line-height: var(--line-input); }
 
-/* command buttons stay text verbs from the one board-command registry; the toolbar grid above owns their
-   placement, while each verb's identity colour remains the same as its typed twin. */
+/* Text command buttons remain for roomy pane actions such as the offline relaunch panel. */
 .si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: var(--type-meta); }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
 .si-act.go { border-color: var(--blue); color: var(--blue); }
@@ -1771,22 +1743,29 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-act.big { padding: 8px 18px; font-size: var(--type-body); margin-top: 8px; }
 
 /* @@@ board commands - the `/` commands the inbox runs ITSELF (close / merge / type / eval) each own ONE
-   identity hue, carried in `--sc`. That same `--sc` paints BOTH places the command appears — this header
-   button AND its `/` menu row — so the typed command and the clicked button read as one thing in one colour.
+   identity hue, carried in `--sc`. That same `--sc` paints BOTH places the command appears — its toolbar
+   tool and `/` menu row — so the typed command and clicked tool read as one thing in one colour.
    The `sc-<color>` token is the single definition of each hue; everything downstream reads `var(--sc)`. */
 .sc-red    { --sc: var(--red); }
+.sc-blue   { --sc: var(--blue); }
 .sc-green  { --sc: var(--green); }
 .sc-yellow { --sc: var(--yellow); }
 .sc-cyan   { --sc: var(--cyan); }
 .sc-muted  { --sc: var(--muted); }   /* the soft-stop `exit` hue — dormant grey, matching the offline state it sends the session to */
-/* coloured header button: a resting tint in the identity hue, filled on hover (the proof button's old look,
-   now shared by every board button so type/eval/merge read alike). */
-.si-act.ui { border-color: var(--sc); color: var(--sc); }
-.si-act.ui:hover { background: var(--sc); color: var(--paper); border-color: var(--sc); }
+/* One fixed icon-toolbutton primitive for every registry toolbar action. Its 24px box leaves room for a
+   contained 2px focus ring inside the 32px bar, so state/icon changes never resize the row. */
+.si-tool {
+  appearance: none; width: 24px; height: 24px; flex: 0 0 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--sc) 72%, var(--line)); border-radius: 4px;
+  background: color-mix(in srgb, var(--sc) 8%, transparent); color: var(--sc); cursor: pointer;
+}
+.si-tool:hover { background: color-mix(in srgb, var(--sc) 16%, transparent); border-color: var(--sc); }
+.si-tool:focus-visible { outline: 2px solid var(--sc); outline-offset: 1px; }
 /* type-mode toggle alone carries two extra states: `.on` = active (filled, like the keyboard cursor);
    `.suggest` = the best-effort menu sniff thinks a select menu is up, so it pulses to invite type mode. */
-.si-act.ui.type.on { background: var(--sc); color: var(--paper); }
-.si-act.ui.type.suggest { animation: si-type-pulse 1.1s ease-in-out infinite; }
+.si-tool.type.on { background: var(--sc); color: var(--paper); border-color: var(--sc); }
+.si-tool.type.suggest { animation: si-type-pulse 1.1s ease-in-out infinite; }
 @keyframes si-type-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(181, 137, 0, .5); } 50% { box-shadow: 0 0 0 3px rgba(181, 137, 0, 0); } }
 /* type-mode indicator replacing the ❯ box: keys go to the pane, not this box. */
 .si-bottom.type { border-color: var(--yellow); background: var(--panel2); cursor: pointer; gap: 10px; }

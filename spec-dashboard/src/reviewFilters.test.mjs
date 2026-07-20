@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { evalFilterModel, filterMenuGroups, issueFilterModel, tokenFilterState } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, evalFilterModel, filterMenuGroups, issueFilterModel, tokenFilterState } from './reviewFilters.js'
 
 const t = (key) => key
 // presence is board MEMBERSHIP, any zone: an offline-but-listed session is still PRESENT.
@@ -33,9 +33,9 @@ test('issue adapter composes query, section, facets, and the one presence join',
 
 test('eval adapter gives blind rows only the fields they honestly own', () => {
   const rows = [
-    { scenario: 'video pass', node: 'alpha', reading: true, by: 'on-board', fresh: true, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
-    { scenario: 'image fail', node: 'beta', reading: true, by: 'vanished', fresh: false, verdict: { status: 'fail' }, evidence: [{ kind: 'image', hash: 'i' }] },
-    { scenario: 'never measured', node: 'alpha', reading: false },
+    { scenario: 'video pass', node: 'alpha', filterKind: EVAL_FILTER_KIND.RESULT, by: 'on-board', fresh: true, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
+    { scenario: 'image fail', node: 'beta', filterKind: EVAL_FILTER_KIND.RESULT, by: 'vanished', fresh: false, verdict: { status: 'fail' }, evidence: [{ kind: 'image', hash: 'i' }] },
+    { scenario: 'never measured', node: 'alpha', filterKind: EVAL_FILTER_KIND.BLIND },
   ]
   const shown = (state) => evalFilterModel(rows, state, { sessions, t, defaultKind: 'all' }).shown.map((item) => item.scenario)
 
@@ -51,6 +51,10 @@ test('eval adapter gives blind rows only the fields they honestly own', () => {
   const model = evalFilterModel(rows, { ok: '1' }, { sessions, t, defaultKind: 'all' })
   assert.equal(model.sections.current, 3)
   assert.deepEqual(model.shown, [])
+
+  const untagged = { ...rows[0] }
+  delete untagged.filterKind
+  assert.deepEqual(evalFilterModel([untagged], { kind: 'video' }, { sessions, t, defaultKind: 'all' }).shown, [])
 })
 
 test('compact groups omit fake one-value facets and retain active off-switches', () => {

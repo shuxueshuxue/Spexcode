@@ -203,7 +203,7 @@ export default {
   },
 
   detail: {
-    sideReading: '读数',
+    sideReading: '结果',
     sideFiler: '提交者',
     sideOk: '人工签核',
     sideStore: '存储',
@@ -233,12 +233,12 @@ export default {
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `更早的读数（${n}）`,
+    abMore: ({ n }) => `更早的结果（${n}）`,
     okd: '已签核',
     okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
     menuReview: '评审命令',
     cmd: {
-      okDesc: '签核这条读数 — 你已复核并认可其判定；只绑定当前最新读数，单调（无撤销）',
+      okDesc: '签核这条结果 — 你已复核并认可其判定；只绑定当前最新结果，单调（无撤销）',
     },
   },
   thread: {

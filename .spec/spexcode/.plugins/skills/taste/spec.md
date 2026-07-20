@@ -1,6 +1,7 @@
 ---
 title: taste
 status: active
+seed: false
 surface: skill
 hue: 50
 desc: SpexCode's engineering taste — load when making a design/architecture decision, weighing whether a change is worth its complexity, or sanity-checking work against the project's principles (harness-agnostic zero-friction adoption, spend-complexity-only-to-buy-it-back, one unified mechanism over special-cases, self-launch-is-the-main-body).

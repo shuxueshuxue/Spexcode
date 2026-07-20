@@ -15,7 +15,6 @@ scenarios:
       that never saw the full text — a compacted context — can rebuild every choice's condition. The full
       text never repeats within a session.
     code: .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
-    related: spec-cli/templates/spec/project/.plugins/core/stop-gate/stop-gate.sh
 ---
 Measured YATU on the hook surface itself: invoke stop-gate.sh the way dispatch.sh invokes it — the
 Stop payload on stdin, SPEXCODE_HARNESS_LIB sourced, the session resolved through hp_store_dir into

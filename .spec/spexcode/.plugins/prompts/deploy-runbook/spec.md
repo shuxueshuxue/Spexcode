@@ -1,6 +1,7 @@
 ---
 title: Fleet deployment runbook
 status: active
+seed: false
 desc: The complete operator runbook for deploying SpexCode to its four dogfood targets — two supply chains, iron ordering, verification loop.
 surface: system
 ---

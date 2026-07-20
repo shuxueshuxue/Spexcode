@@ -18,6 +18,6 @@ remark presets under [[review]], while [[core]] — the dev-flow contract subsys
 intent, not yet an active plugin, so it renders on the board but is neither offered as a command preset nor
 materialized into the agent's contract.
 
-Which of these plugins `spex init` ships to an adopter vs. keeps **spexcode-only** is the [[init-preset]]
-rule. Only one is spexcode-only here — `taste` (this repo's *own* engineering principles)
-(needs this repo's local voice MCP); every other active plugin ships.
+Which plugins `spex init` ships is the [[init-preset]] rule. `seed: false` excludes a plugin subtree; shared
+plugins have one body and one helper set — there is no separately authored adopter variant. Dogfood eval
+scenarios/readings remain with the implementation and git history they measure.

@@ -26,9 +26,11 @@
   "scripts": {
     "api": "cd spec-cli && npm run serve",
     "web": "cd spec-dashboard && npm run dev",
-    "lint": "cd spec-cli && npm run -s lint",
+    "lint": "node scripts/sync-init-plugins.mjs --check && cd spec-cli && npm run -s lint",
+    "sync:init-plugins": "node scripts/sync-init-plugins.mjs --write",
+    "test:init-plugins": "node --test scripts/sync-init-plugins.test.mjs",
     "hooks": "bash scripts/install-hooks.sh",
-    "prepack": "node scripts/prepack.mjs"
+    "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

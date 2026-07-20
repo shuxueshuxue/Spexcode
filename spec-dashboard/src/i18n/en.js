@@ -200,7 +200,9 @@ export default {
     sideNodes: 'spec nodes',
     backToEvals: 'back to evals',
     backToIssues: 'back to issues',
-    backToSession: 'back to the session console',
+    scopedSource: "this reading comes from session {id}'s worktree",
+    scopedSourceOpen: 'open the session terminal',
+    sideQueue: 'continue reviewing',
   },
 
   annotator: {

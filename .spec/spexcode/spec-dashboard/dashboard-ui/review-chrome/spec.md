@@ -82,7 +82,10 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   vertical offset from that same first-line box, so the anchor's center coincides with the title FIRST
   line's visual center — at every width and language, and a wrapping title keeps the anchor tied to line
   one, never re-centered against the whole block. No page or breakpoint may add its own pixel offset, and
-  the anchor keeps its ≥24px hit target and focus ring. Source failure
+  the anchor keeps its ≥24px hit target and focus ring. Above the header the shell offers an optional
+  page-supplied **banner** slot (one restrained source-notice line — the scoped eval detail's
+  worktree-source banner rides it, [[evals-view]]): the shell owns its geometry, the page only its
+  content, and a page that supplies none renders no banner box. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with
   side metadata above main content.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute

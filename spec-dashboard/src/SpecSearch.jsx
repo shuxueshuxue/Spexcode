@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './specMeta.js'
-import { scenarioStates, TagChips } from './score.jsx'
+import { TagChips } from './score.jsx'
 import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
-import { evalAddress, graphNodeAddress, issueAddress, sessionAddress } from './address.js'
+import { evalAddress, graphNodeAddress, issueAddress, reviewListAddress, sessionAddress } from './address.js'
+import { EVAL_FILTER_KIND } from './reviewFilters.js'
+import { useReviewPage } from './reviewPage.js'
 
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
 // fresh fail · grey stale / never-measured.
@@ -24,9 +26,10 @@ const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !=
 
 // fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
 // `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
-function buildEntries(specs, sessions, corpus) {
+export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
   const bodies = corpus?.bodies
   const entries = []
+  const specsById = Object.fromEntries(specs.map((spec) => [spec.id, spec]))
   for (const s of specs) {
     const path = specPath(s.path)
     entries.push({
@@ -42,28 +45,28 @@ function buildEntries(specs, sessions, corpus) {
       // falling back to any body still on the node (a fixture, or before the corpus lands).
       name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: bodies?.[s.id] ?? s.body ?? '',
     })
-    for (const i of s.issues || []) {
-      const open = i.status === 'open'
-      entries.push({
-        kind: 'issue', key: `issue:${s.id}:${i.id}`, target: i.id, nodeId: s.id,
-        address: issueAddress(i.id),
-        color: open ? 'var(--green)' : 'var(--muted)',
-        title: i.concern, sub: `${i.id} · ${path}`,
-        name: i.concern || '', desc: i.id, body: '',
-      })
-    }
-    for (const sc of scenarioStates(s.scenarios, s.evals)) {
-      // scenario prose is off the board too ([[graph-lean]]) — the ranked body joins the scenario's
-      // description+expected from the same corpus fetch, falling back to any prose still on the node.
-      const prose = corpus?.scenarios?.[s.id]?.[sc.name]
-      entries.push({
-        kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: sc.name, nodeId: s.id,
-        address: evalAddress(s.id, sc.name),
-        color: SCEN_COLOR[sc.state] || 'var(--cyan)',
-        title: sc.name, sub: path, tags: sc.tags,
-        name: sc.name || '', desc: '', body: prose ? `${prose.description || ''} ${prose.expected || ''}`.trim() : sc.expected || '',
-      })
-    }
+  }
+  for (const issue of issues) {
+    const nodeId = issue.nodes?.[0] || null
+    const path = specPath(specsById[nodeId]?.path)
+    entries.push({
+      kind: 'issue', key: `issue:${issue.id}`, target: issue.id, nodeId,
+      address: issueAddress(issue.id),
+      color: issue.status === 'open' ? 'var(--green)' : 'var(--muted)',
+      title: issue.concern, sub: [issue.id, path].filter(Boolean).join(' · '),
+      name: issue.concern || '', desc: issue.id, body: '',
+    })
+  }
+  for (const entry of evals) {
+    const node = specsById[entry.node]
+    const detail = entry.filterKind === EVAL_FILTER_KIND.RESULT
+    entries.push({
+      kind: 'scenario', key: `scenario:${entry.node}:${entry.scenario}`, target: entry.scenario, nodeId: entry.node,
+      address: detail ? evalAddress(entry.node, entry.scenario) : evalAddress(entry.node),
+      color: SCEN_COLOR[entry.state || 'missing'] || 'var(--cyan)',
+      title: entry.scenario, sub: specPath(node?.path), tags: entry.tags,
+      name: entry.scenario || '', desc: '', body: entry.expected || '',
+    })
   }
   for (const s of sessions) {
     // a session reads as ONE name everywhere: the shared sessionHeadline ([[session-activity]]) the board rows,
@@ -115,8 +118,7 @@ function rank(entries, query, planes) {
 
 export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
-  // the prose corpus ([[graph-lean]], corpus.js): node bodies + scenario description/expected, fetched when
-  // the palette opens (a fresh mount revalidates), seeded instantly from the shared module cache.
+  // Node prose stays in the lite corpus; review planes are bounded page-1 requests, never graph rows.
   const corpus = useSpecCorpus()
   const [q, setQ] = useState('')
   // the RANKED query trails the typed one by a short debounce: rank() runs BM25 once per plane, so ranking
@@ -132,8 +134,29 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const planes = useMemo(() => planeOrder(boost), [boost])
-  const entries = useMemo(() => buildEntries(specs, sessions, corpus), [specs, sessions, corpus])
-  const results = useMemo(() => rank(entries, dq, planes), [entries, dq, planes])
+  const issueQuery = `is:issue${dq.trim() ? ` ${dq.trim()}` : ''}`
+  const evalQuery = `is:eval${dq.trim() ? ` ${dq.trim()}` : ''}`
+  const issuePage = useReviewPage('issues', issueQuery, 1, { pollMs: 0 })
+  const evalPage = useReviewPage('evals', evalQuery, 1, { pollMs: 0 })
+  const issueItems = issuePage.data?.items || []
+  const evalItems = evalPage.data?.items || []
+  const entries = useMemo(() => buildEntries(specs, sessions, corpus, issueItems, evalItems),
+    [specs, sessions, corpus, issuePage.data, evalPage.data])
+  const results = useMemo(() => {
+    const ranked = rank(entries, dq, planes)
+    const more = []
+    if (issuePage.data && issuePage.data.total > issueItems.length) more.push({
+      kind: 'issue', key: 'issue:see-all', address: reviewListAddress('issues', issueQuery),
+      title: t('reviewList.showing', { shown: issueItems.length, total: issuePage.data.total }),
+      sub: t('reviewList.issuesTitle'), name: '', desc: '', body: '', color: 'var(--green)',
+    })
+    if (evalPage.data && evalPage.data.total > evalItems.length) more.push({
+      kind: 'scenario', key: 'scenario:see-all', address: reviewListAddress('evals', evalQuery),
+      title: t('reviewList.showing', { shown: evalItems.length, total: evalPage.data.total }),
+      sub: t('evalsFeed.title'), name: '', desc: '', body: '', color: 'var(--muted)',
+    })
+    return [...ranked, ...more]
+  }, [entries, dq, planes, issuePage.data, evalPage.data, issueItems, evalItems, issueQuery, evalQuery, t])
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => { setSel(0) }, [q])  // a fresh query always re-aims the highlight at the top result

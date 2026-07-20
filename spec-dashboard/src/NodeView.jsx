@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TabCount, TagChips } from './score.jsx'
-import { EVAL_FILTER_KIND, evidenceList, evalFilterModel, filterMenuGroups, issueFilterModel } from './reviewFilters.js'
+import { ScoreBadge, readingScore, ScenarioCount, TabCount, TagChips } from './score.jsx'
+import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from './reviewFilters.js'
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
-import { addressHash, evalAddress } from './address.js'
+import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
+import { EVAL_QUERY_DEFAULT, setToken } from './reviewQuery.js'
+import { useReviewPage } from './reviewPage.js'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -20,6 +22,29 @@ export const PANES = [
 
 export function panesFor(node) {
   return node?.overlays?.length ? [{ key: 'edit', label: 'edit' }, ...PANES] : PANES
+}
+
+const paneReviewQuery = (kind, nodeId, filter = {}) => {
+  let text = `${kind === 'issue' ? 'is:issue' : EVAL_QUERY_DEFAULT}${filter.q ? ` ${String(filter.q).trim()}` : ''}`.trim()
+  const tokenKeys = kind === 'issue'
+    ? { state: 'state', author: 'author', store: 'store', session: 'session' }
+    : { verdict: 'verdict', review: 'state', freshness: 'freshness', kind: 'evidence', filer: 'filer', session: 'session' }
+  for (const [key, token] of Object.entries(tokenKeys)) if (filter[key]) text = setToken(text, token, filter[key])
+  return setToken(text, 'node', nodeId)
+}
+
+const FILTER_LABELS = {
+  state: 'reviewList.facetState', verdict: 'reviewList.facetVerdict', author: 'reviewList.facetAuthor',
+  store: 'reviewList.facetStore', review: 'reviewList.facetReview', freshness: 'reviewList.facetFreshness',
+  kind: 'reviewList.facetKind', filer: 'reviewList.facetFiler', session: 'reviewList.facetSession',
+}
+
+const pageFilterModel = (data, t) => {
+  const localize = (facet) => facet && ({ ...facet, label: t(FILTER_LABELS[facet.key] || facet.label || facet.key) })
+  return {
+    section: localize(data?.section),
+    facets: Object.fromEntries(Object.entries(data?.facets || {}).map(([key, facet]) => [key, localize(facet)])),
+  }
 }
 
 // op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
@@ -180,7 +205,7 @@ export function SpecPane({ node }) {
           <i className="stat-dot" />{t(`status.${node.status}`)}
         </span>
         <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
-        <ScenarioCount scenarios={node.scenarios} evals={node.evals} href={addressHash(evalAddress(node.id))} />
+        <ScenarioCount summary={node.reviewSummary?.evals} href={addressHash(evalAddress(node.id))} />
         {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
@@ -375,20 +400,24 @@ export function HistoryPane({ node, rows }) {
 
 export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
   const t = useT()
-  const issues = node.issues || []
-  if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
-  const model = issueFilterModel(issues, filter, { sessions, t, defaultSection: '' })
-  const shown = model.shown
-  const open = shown.filter((i) => i.status === 'open')
-  const closed = shown.filter((i) => i.status !== 'open')
+  const query = paneReviewQuery('issue', node.id, filter)
+  const page = useReviewPage('issues', query, 1, { pollMs: 0 })
+  if (page.loading) return <div className="pane-issues pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
+  if (page.error) return <div className="pane-issues empty">{page.error}</div>
+  const issues = page.data?.items || []
+  const nodeTotal = (node.reviewSummary?.issues?.open || 0) + (node.reviewSummary?.issues?.closed || 0)
+  if (!nodeTotal) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
+  const model = pageFilterModel(page.data, t)
+  const open = issues.filter((i) => i.status === 'open')
+  const closed = issues.filter((i) => i.status !== 'open')
   const groups = filterMenuGroups(model, onFilter, ['section', 'author', 'store', 'session'])
   return (
     <div className="pane-issues">
-      {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
-        summary={{ shown: model.shown.length, total: issues.length }}
+      {nodeTotal > 4 && <CompactReviewFilter value={filter.q || ''} onChange={(q) => onFilter({ q: q || null })}
+        summary={{ shown: issues.length, total: page.data.total }}
         placeholder={t('nodeView.filterIssues')} searchLabel={t('reviewList.searchIssues')}
         filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
-      {!shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
+      {!issues.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
       {open.length > 0 && (
         <>
           <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
@@ -400,6 +429,11 @@ export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => 
           <div className="issue-group-head closed">{t('nodeView.closedIssues', { n: closed.length })}</div>
           {closed.map((i) => <IssueCard key={i.id} issue={i} />)}
         </>
+      )}
+      {page.data.total > issues.length && (
+        <a className="pane-view-all" href={addressHash(reviewListAddress('issues', query))}>
+          {t('reviewList.showing', { shown: issues.length, total: page.data.total })} <Icon name="chevron-right" size={13} />
+        </a>
       )}
     </div>
   )
@@ -505,98 +539,85 @@ function DanglingTrack({ track }) {
   )
 }
 
-// the full reading history is NOT on the board ([[graph-lean]]): the board's `evals` is only the latest
-// reading per scenario, so this tab lazy-loads the whole timeline from `/api/specs/:id/evals` when opened.
-// The board's `scenarios` fold is slim too ({name, tags}), so the declared set — with each scenario's
-// expected and tracked files for the blind-spot rows — comes from the SAME fetch, which carries it whole.
-// Cache keyed by the summary's newest ts + count, so a fresh filing misses and refetches; a FAILED fetch
-// falls back to the board's summary readings + slim scenarios — truthful, just shallow — never a spinner
-// that never stops.
-const evalCache = new Map()
 export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {} }) {
   const t = useT()
-  const key = `${node.id}@${node.evals?.[0]?.ts || ''}:${node.evals?.length || 0}`
-  const [timeline, setTimeline] = useState(() => evalCache.get(key) ?? null)
-  useEffect(() => {
-    if (evalCache.has(key)) { setTimeline(evalCache.get(key)); return }
-    let on = true
-    setTimeline(null)
-    fetch(specUrl(node.id, 'evals')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((tl) => { const v = { scenarios: tl.scenarios || node.scenarios || [], readings: tl.readings || [], dangling: tl.dangling || [] }; evalCache.set(key, v); if (on) setTimeline(v) })
-      .catch(() => { if (on) setTimeline({ scenarios: node.scenarios || [], readings: node.evals || [], dangling: [] }) })
-    return () => { on = false }
-  }, [key, node.id])
-  if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
-  if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
-  const all = timeline.readings
-  const filterItems = [
-    ...all.map((reading, index) => ({ ...reading, node: node.id, filterKind: EVAL_FILTER_KIND.RESULT, filterKey: `${EVAL_FILTER_KIND.RESULT}:${index}`, source: reading })),
-    ...scenarioStates(timeline.scenarios, all).filter((scenario) => !scenario.reading)
-      .map((scenario) => ({ ...scenario, scenario: scenario.name, node: node.id, filterKind: EVAL_FILTER_KIND.UNMEASURED, filterKey: `${EVAL_FILTER_KIND.UNMEASURED}:${scenario.name}`, source: scenario })),
-    ...(timeline.dangling || []).map((track) => ({ ...track, node: node.id, filterKind: EVAL_FILTER_KIND.DANGLING, filterKey: `${EVAL_FILTER_KIND.DANGLING}:${track.threadId}`, source: track })),
-  ]
-  const model = evalFilterModel(filterItems, filter, { sessions, t, defaultKind: 'all', defaultSection: '' })
-  const readings = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
-  const unmeasured = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.UNMEASURED).map((item) => item.source)
-  const dangling = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.DANGLING).map((item) => item.source)
+  const query = paneReviewQuery('eval', node.id, filter)
+  const page = useReviewPage('evals', query, 1, { pollMs: 0, view: 'timeline' })
+  if (page.loading) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
+  if (page.error) return <div className="pane-eval empty">{page.error}</div>
+  if (!page.data?.hasEvalFile) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
+  const filterItems = page.data.items || []
+  const readings = filterItems.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT)
+  const unmeasured = filterItems.filter((item) => item.filterKind === EVAL_FILTER_KIND.UNMEASURED)
+  const dangling = filterItems.filter((item) => item.filterKind === EVAL_FILTER_KIND.DANGLING)
+  const model = pageFilterModel(page.data, t)
   const groups = filterMenuGroups(model, onFilter, ['section', 'review', 'freshness', 'kind', 'filer', 'session'])
-  const filterEl = filterItems.length > 4
-    ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
-      summary={{ shown: model.shown.length, total: filterItems.length }}
+  const filterEl = page.data.sourceTotal > 4
+    ? <CompactReviewFilter key="filter" value={filter.q || ''} onChange={(q) => onFilter({ q: q || null })}
+      summary={{ shown: filterItems.length, total: page.data.total }}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
       filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
     : null
+  const viewAll = page.data.total > filterItems.length
+    ? (
+        <a className="pane-view-all" href={addressHash(reviewListAddress('evals', query))}>
+          {t('reviewList.showing', { shown: filterItems.length, total: page.data.total })} <Icon name="chevron-right" size={13} />
+        </a>
+      )
+    : null
   // Branch on the unfiltered list so a no-match state never flips the tree and remounts the compact search
   // mid-word — a filtered-to-empty timeline stays a ChronoPane with its controls intact.
-  if (!all.length) return (
+  if (!readings.length) return (
     <div className="pane-eval pane-eval-declared">
       {filterEl}
-      <div className="eval-todo-note">{!model.shown.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
+      <div className="eval-todo-note">{!filterItems.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       {dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
+      {viewAll}
     </div>
   )
   // unmeasured scenarios lead the one timeline as blind-spot rows; orphaned tracks trail it — both the same
   // row frame, an empty ring / a struck-through gone-scenario respectively.
   return (
-    <ChronoPane
-      items={readings}
-      resetKey={JSON.stringify(model.state)}
-      leading={[
-        filterEl,
-        !model.shown.length
-          ? <div key="none" className="pane-filter-none">{t('nodeView.filterNone')}</div>
-          : null,
-        ...unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />),
-      ]}
-      trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
-      itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
-      classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
-      // every reading row carries a REAL anchor out to the scenario's canonical full-page detail
-      // (`#/evals/<node>/<scenario>`, a history PUSH) — a sibling of the expand toggle, never nested in it.
-      renderAction={(r) => (
-        <a className="eval-open" href={addressHash(evalAddress(node.id, r.scenario))}
-          data-tip={t('nodeView.eval.openDetail')} aria-label={t('nodeView.eval.openDetail')}>
-          <Icon name="chevron-right" size={14} />
-        </a>
-      )}
-      renderHeader={(r, i, open) => (
-        <>
-          <span className="eval-top">
-            <span className="eval-caret">{open ? '▾' : '▸'}</span>
-            <span className="eval-scenario">{r.scenario}</span>
-            <VerdictBadge verdict={r.verdict} />
-            <ScoreBadge state={readingScore(r)} title={r.fresh ? undefined : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })} />
-          </span>
-          <span className="eval-meta">
-            {r.evaluator && <span className="eval-evaluator">{r.evaluator}</span>}
-            <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
-            <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
-          </span>
-        </>
-      )}
-      renderEvidence={(r) => <EvalEvidence r={r} />}
-    />
+    <>
+      <ChronoPane
+        items={readings}
+        resetKey={`${page.data.revision}:${JSON.stringify(filter)}`}
+        leading={[
+          filterEl,
+          !filterItems.length
+            ? <div key="none" className="pane-filter-none">{t('nodeView.filterNone')}</div>
+            : null,
+          ...unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />),
+        ]}
+        trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
+        itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
+        classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
+        renderAction={(r) => (
+          <a className="eval-open" href={addressHash(evalAddress(node.id, r.scenario))}
+            data-tip={t('nodeView.eval.openDetail')} aria-label={t('nodeView.eval.openDetail')}>
+            <Icon name="chevron-right" size={14} />
+          </a>
+        )}
+        renderHeader={(r, i, open) => (
+          <>
+            <span className="eval-top">
+              <span className="eval-caret">{open ? '▾' : '▸'}</span>
+              <span className="eval-scenario">{r.scenario}</span>
+              <VerdictBadge verdict={r.verdict} />
+              <ScoreBadge state={readingScore(r)} title={r.fresh ? undefined : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })} />
+            </span>
+            <span className="eval-meta">
+              {r.evaluator && <span className="eval-evaluator">{r.evaluator}</span>}
+              <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
+              <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
+            </span>
+          </>
+        )}
+        renderEvidence={(r) => <EvalEvidence r={r} />}
+      />
+      {viewAll}
+    </>
   )
 }
 
@@ -610,14 +631,10 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
     ...current,
     [kind]: nextQuery(current[kind], patch),
   }))
-  const issuesAll = node.issues || []
-  const issueOpen = issuesAll.filter((i) => i.status === 'open').length
-  const issueClosed = issuesAll.length - issueOpen
-  // the eval caption's verdict tally rides the SAME scenarioStates join every score surface reads
-  // ([[eval-score-badge]]) — fresh passes and fresh fails, zero values omitted like the issues caption.
-  const evalStates = scenarioStates(node.scenarios, node.evals)
-  const evalPass = evalStates.filter((s) => s.state === 'pass').length
-  const evalFail = evalStates.filter((s) => s.state === 'fail').length
+  const issueOpen = node.reviewSummary?.issues?.open || 0
+  const issueClosed = node.reviewSummary?.issues?.closed || 0
+  const evalPass = node.reviewSummary?.evals?.pass || 0
+  const evalFail = node.reviewSummary?.evals?.fail || 0
   const editCount = (node.overlays || []).length
   const panes = panesFor(node)
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node

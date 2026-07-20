@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { loadReviewPlugins, postEvalOk, postRemark, putFrameBlob, specUrl } from './data.js'
+import { loadReviewPlugins, postEvalOk, postRemark, putFrameBlob } from './data.js'
 import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './reviewFilters.js'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
@@ -147,12 +147,8 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
   const [selIdx, setSelIdx] = useState(null)     // index (into comments) of the explicitly-selected comment
 
-  // A/B history: this scenario's WHOLE reading history (newest-first). The SOURCE is SCOPE-PROVIDED so it
-  // shares the page's ROOT ([[event-detail]]): the ?session=<id> scope hands down its WORKTREE-rooted
-  // readings (`providedHistory`) — which always contain the un-merged in-session `entry` — while the
-  // project scope passes none and we lazily fetch the node's /api/specs/:id/evals timeline (the board only
-  // folds the LATEST reading per scenario, [[graph-lean]]). `histIdx` indexes that list (0 = the latest,
-  // i.e. the `entry` the list linked); `viewing` is the reading actually shown.
+  // A/B history is already bounded by scenario at the page's ONE detail endpoint. EventDetail never opens
+  // a node or session-wide model itself. `histIdx` indexes that newest-first list (0 = latest).
   const [history, setHistory] = useState(null)
   const [histIdx, setHistIdx] = useState(0)
   const viewing = (history && history[histIdx]) || entry
@@ -171,23 +167,14 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   }, [])
 
   // a page/scope change is a new SCENARIO under annotation — reset the working state AND the history cursor,
-  // then (re)source this scenario's history. When the scope supplies it (the session scope's WORKTREE-rooted
-  // readings), use that directly — re-fetching the main-checkout /api/specs timeline there would MISS the
-  // un-merged in-session reading and strand the current video behind an older inherited one.
+  // then (re)source this scenario's server-projected history.
   useEffect(() => {
     setDrag(null); setFlash(''); setEvents([]); setDraft(null)
     setHistIdx(0); setHistory(null)
-    if (providedHistory) { setHistory(providedHistory); return }
-    let on = true
-    fetch(specUrl(entry.node, 'evals'))
-      .then((r) => (r.ok ? r.json() : null))
-      .then((tl) => { if (on && Array.isArray(tl?.readings)) setHistory(tl.readings.filter((r) => r.scenario === entry.scenario)) })
-      .catch(() => {})
-    return () => { on = false }
+    setHistory(Array.isArray(providedHistory) ? providedHistory : [entry])
     // entry.humanOk?.ts rides the deps so a just-landed sign-off ([[human-ok]]) refetches the history —
     // `viewing` reads the fetched rows once they land, and without the refetch it would miss the new ok. On
-    // the session scope the same refresh rides `providedHistory`: the host's onWrite reloads the model,
-    // handing down a fresh array, so an ok/remark still re-sources the walk.
+    // the host's onWrite reloads the bounded detail, so an ok/remark still re-sources the walk.
   }, [entry.node, entry.scenario, entry.ts, entry.blob, entry.humanOk?.ts, providedHistory])
 
   // flipping A/B changes the clip/stills under the pen — drop any in-progress mark or draft.

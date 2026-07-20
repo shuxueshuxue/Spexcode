@@ -85,9 +85,10 @@ filter (default off) picking the root.
   time — each ordered nearest-to-current outward. The default total is ~5, split balanced with the
   forward group taking the odd slot; at either boundary the short side's unused budget refills from the
   other side so the total holds while the dataset allows; the current result is excluded. A group with
-  no entries renders no heading. This page computes the queue from the ONE
-  source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
-  state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
+  no entries renders no heading. The ONE bounded detail response projects this queue from the source's
+  stable default order as at most five lightweight neighbors plus total/index/order; the browser receives no
+  other scenario rows or histories, owns no ListPage/filter fork, and holds no private selection state.
+  Each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
   node ([[event-detail]] renders the rows): a trunk neighbor's href is the pure detail path, a scoped
   neighbor's keeps the same one `scope:` token. No neighbors → the section does not render at all. Issues
   details carry no queue. On a phone-width viewport the SAME page reflows to one column with the side
@@ -135,7 +136,7 @@ filter (default off) picking the root.
   the off-switch.
   `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route
   layer normalizes it (replace) to the `#/evals` form — old links keep working, the old shape is never
-  re-minted, and the console exposes only a door that navigates here. The session model has three honest
+  re-minted, and the console exposes only a door that navigates here. The scoped source has three honest
   read states: loading, loaded/not-found, and failed. A failed fetch is never rendered as an empty session
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
@@ -144,9 +145,9 @@ filter (default off) picking the root.
   paged-review endpoint/shape; the backend projects the current graph/eval aggregate for trunk and the
   worktree-rooted session-eval model for `scope:` before filtering/count/slice. The browser never receives
   the graph's full eval board or a full scoped model merely to hide all but one page. Detail may fetch the
-  one addressed reading plus its bounded neighbor queue; it does not reconstruct the full list. Only a
-  scoped detail opens the full demand model; the scoped list and terminal toolbar never prime it. That
-  detail response carries [[session-eval]]'s summary generation and content revision: a response older
+  one addressed current row, that scenario's complete A/B history, and its at-most-five lightweight neighbor
+  queue; it does not reconstruct the full list or serialize another scenario's history. Trunk and scoped detail
+  use that same response shape. The scoped response carries [[session-eval]]'s summary generation and content revision: a response older
   than the graph session row already seen is discarded and reloaded, while an equal generation must match
   its content revision. A remark or /ok written from the detail refreshes its source revision — writes,
   dispatch echo ([[mentions]]), and evidence behavior are
@@ -154,4 +155,5 @@ filter (default off) picking the root.
   and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
   loaded timeline events, ordinary typed prose, or anchored composer draft. A real
   scope/scenario/A-B-result change re-sources the workspace and clears that draft before the new result is
-  reviewable.
+  reviewable. Interactive browser and CLI rows always travel through paged or bounded review responses;
+  the self-contained scoped HTML export is the only full-model transport exception.

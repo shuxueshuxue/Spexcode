@@ -9,7 +9,8 @@ scenarios:
       middle, last, and overflow page-window projections.
     expected: >
       Every test passes. Positive page 1 and very large requested pages survive; invalid/non-positive input
-      repairs to 1; page windows reproduce the one GitHub-shaped number/ellipsis sequence.
+      repairs to 1; page windows reproduce the one GitHub-shaped number/ellipsis sequence. The source gate
+      also pins one in-flight map so identical concurrent page requests share one fetch.
 ---
 
 # measuring page-state

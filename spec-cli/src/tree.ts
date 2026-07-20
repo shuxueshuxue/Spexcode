@@ -12,9 +12,10 @@ export type TreeNode = {
   version?: number
   drift?: number
   ghost?: boolean
-  openIssues?: unknown[]
-  scenarios?: { name: string }[]
-  evals?: { scenario: string; fresh?: boolean }[]
+  reviewSummary?: {
+    issues?: { open: number }
+    evals?: { stalePass: number; staleFail: number }
+  }
 }
 
 export type TreeOpts = { node?: string; depth?: number; color?: boolean }
@@ -27,9 +28,8 @@ const STATUS_ANSI: Record<string, string> = { merged: '32', active: '36', drift:
 // board `evals` is already latest-per-scenario, so this is a straight filter — the same freshness
 // axis the dashboard's grey ✓/✗ badges read (score.jsx readingScore).
 function staleYatsu(n: TreeNode): number {
-  if (!n.scenarios?.length || !n.evals?.length) return 0
-  const latest = new Map(n.evals.map((r) => [r.scenario, r]))
-  return n.scenarios.filter((s) => { const r = latest.get(s.name); return r && r.fresh === false }).length
+  const summary = n.reviewSummary?.evals
+  return summary ? summary.stalePass + summary.staleFail : 0
 }
 
 function childrenIndex(nodes: TreeNode[]): Map<string | null, TreeNode[]> {
@@ -67,7 +67,7 @@ export function renderTree(nodes: TreeNode[], opts: TreeOpts = {}): string {
     if (n.drift) parts.push(c('33', `drift:${n.drift}`))
     const stale = staleYatsu(n)
     if (stale) parts.push(c('90', `stale:${stale}`))
-    if (n.openIssues?.length) parts.push(c('31', `issues:${n.openIssues.length}`))
+    if (n.reviewSummary?.issues?.open) parts.push(c('31', `issues:${n.reviewSummary.issues.open}`))
     return parts.length ? '  ' + parts.join(' ') : ''
   }
 
@@ -109,7 +109,7 @@ export function treeJson(nodes: TreeNode[], opts: TreeOpts = {}): object[] {
     const pruned = opts.depth !== undefined && depth >= opts.depth
     return {
       id: n.id, title: n.title, status: n.status, version: n.version ?? 0,
-      drift: n.drift ?? 0, staleYatsu: staleYatsu(n), openIssues: n.openIssues?.length ?? 0,
+      drift: n.drift ?? 0, staleYatsu: staleYatsu(n), openIssues: n.reviewSummary?.issues?.open ?? 0,
       ...(n.ghost ? { ghost: true } : {}),
       children: pruned ? kids.map((k) => k.id) : kids.map((k) => shape(k, depth + 1)),
     }

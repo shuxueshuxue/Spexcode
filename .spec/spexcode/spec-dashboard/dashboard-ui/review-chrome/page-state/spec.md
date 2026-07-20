@@ -18,6 +18,9 @@ The browser's review client fetches exactly one server page for the route's comm
 responses, exposes loading/failure distinctly, and refreshes the same request after writes or the bounded
 cold interval. It owns no item matcher and no private filter/page state: the hash route is replayed on every
 Back/Forward/direct open, while [[paged-review]] returns the source snapshot and current slice.
+Concurrent consumers or React's development remount join one in-flight request for the identical endpoint;
+they do not double-pay the same page bytes. A later navigation may request that page again because it is a
+new user action, not a hidden app-resident row cache.
 
 The shared page-window projection yields the GitHub Issues number rhythm: all pages for a short set, a
 leading or trailing eight-page window near an edge, and two edge pages around ellipses for a large middle.

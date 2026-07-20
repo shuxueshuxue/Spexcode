@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiUrl } from './project.js'
 
-// the lazily-fetched prose corpus ([[graph-lean]]): the board omits node `body` and slims `scenarios` to
-// {name, tags}, so every surface that shows or ranks prose joins it from ONE `/api/specs/lite` fetch — off
-// the board's hot poll. `bodies` is {id → spec prose}; `scenarios` is {id → {scenario name → {description,
-// expected, code?}}}. Module-cached stale-while-revalidate: the last corpus seeds instantly (ranking and
+// the lazily-fetched NODE prose corpus ([[graph-lean]]). Review rows never ride this endpoint; the palette
+// obtains them from [[paged-review]]. Module-cached stale-while-revalidate: the last corpus seeds instantly (ranking and
 // previews are never cold), and each mount revalidates at most once, the first time `enabled` turns true —
 // so the palette refetches per open (a fresh mount).
 let corpusCache = null
@@ -20,8 +18,6 @@ export function useSpecCorpus(enabled = true) {
       .then((rows) => {
         corpusCache = {
           bodies: Object.fromEntries((rows || []).map((r) => [r.id, r.body || ''])),
-          scenarios: Object.fromEntries((rows || []).filter((r) => r.scenarios?.length)
-            .map((r) => [r.id, Object.fromEntries(r.scenarios.map((s) => [s.name, s]))])),
         }
         setCorpus(corpusCache)
       })

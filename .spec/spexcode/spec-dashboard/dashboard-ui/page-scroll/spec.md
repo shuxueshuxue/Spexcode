@@ -41,9 +41,11 @@ covers the first row. Popovers and tooltips remain above it; neighboring sticky 
 rails keep their own containment. A route with no leading status contributes no empty sticky geometry.
 
 Scroll position is remembered by the full canonical address. When returned content already has its final
-height the primitive restores before paint; when a long list arrives asynchronously, it preserves the
-saved target across the browser's temporary zero clamp and restores as soon as the content can represent
-that position. Pointer, wheel, touch, or keyboard input ends automatic restoration so user intent wins.
+height the primitive restores in the layout phase but does not yield until that target survives the next
+paint: Chromium may still apply its own history scroll after React's first successful write. When a long
+list arrives asynchronously, it preserves the saved target across the browser's temporary zero clamp and
+keeps observing until the content can represent that position. Pointer, wheel, touch, or keyboard input
+ends automatic restoration immediately so user intent wins.
 List to detail is still an ordinary PUSH and browser Back still owns navigation; the primitive only
 restores the nested scrollTop belonging to the returned address. Different query states keep different
 positions. A new address starts at the top, and a hidden warm page keeps its own native state.

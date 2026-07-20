@@ -31,6 +31,7 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
     const targetTop = readPosition(scrollKey)
     let lastTop = targetTop
     let restoring = targetTop > 0
+    let stableFrames = 0
     let frame = 0
     let observer
 
@@ -45,10 +46,18 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
       if (!restoring) return
       const maxTop = Math.max(0, element.scrollHeight - element.clientHeight)
       element.scrollTop = Math.min(targetTop, maxTop)
-      if (maxTop < targetTop) return
+      if (maxTop < targetTop) { stableFrames = 0; return }
+      if (Math.abs(element.scrollTop - targetTop) > 1) {
+        stableFrames = 0
+        frame = requestAnimationFrame(restore)
+        return
+      }
       lastTop = element.scrollTop
       writePosition(scrollKey, lastTop)
-      stopRestoring()
+      // Chromium may apply its native history position after React's layout effect. Require the target
+      // to survive a paint before yielding, so that temporary zero never becomes the remembered value.
+      if (++stableFrames < 2) frame = requestAnimationFrame(restore)
+      else stopRestoring()
     }
     const remember = () => {
       if (restoring) return
@@ -61,9 +70,7 @@ export function PageScroll({ className = '', scrollKey = pageScrollAddress(), ch
     }
 
     element.scrollTop = targetTop
-    if (element.scrollTop === targetTop) {
-      restoring = false
-    } else if (restoring) {
+    if (restoring) {
       observer = new MutationObserver(() => {
         if (!frame) frame = requestAnimationFrame(restore)
       })

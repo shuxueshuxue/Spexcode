@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useT } from './i18n/index.jsx'
 import { STATUS } from './SpecNode.jsx'
-import { ScoreBadge, scenarioStates } from './score.jsx'
+import { ScoreBadge } from './score.jsx'
 import { cycleNext } from './cycle.js'
 
 const STATUS_ORDER = ['merged', 'active', 'drift', 'pending']
@@ -31,14 +31,18 @@ function summarize(specs) {
   for (const n of specs) {
     if (status[n.status]) status[n.status].push(n.id)
     if (n.drift > 0) driftIds.push(n.id)                          // node whose code is ahead of spec
-    const open = n.openIssues || []
-    if (open.length) { issueIds.push(n.id); for (const i of open) issueNumbers.add(i.id) }
-    const seen = new Set()
-    for (const sc of scenarioStates(n.scenarios, n.evals)) {      // [] when no eval.md
-      const bucket = sc.state === 'missing' ? 'empty' : sc.state
-      if (scoreCount[bucket] === undefined) continue
-      scoreCount[bucket]++
-      if (!seen.has(bucket)) { seen.add(bucket); scoreNodes[bucket].push(n.id) }
+    const issueSummary = n.reviewSummary?.issues
+    if (issueSummary?.open) {
+      issueIds.push(n.id)
+      for (const id of issueSummary.openIds || []) issueNumbers.add(id)
+    }
+    const evalSummary = n.reviewSummary?.evals
+    if (evalSummary) {
+      for (const bucket of Object.keys(scoreCount)) {
+        const count = evalSummary[bucket] || 0
+        scoreCount[bucket] += count
+        if (count > 0) scoreNodes[bucket].push(n.id)
+      }
     }
   }
   return { total: specs.length, status, driftIds, issueIds, issueCount: issueNumbers.size, scoreCount, scoreNodes }

@@ -522,35 +522,28 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
     if (has('json')) { console.log(JSON.stringify(r.model, null, 2)); await flushExit(0) }
     const m = r.model
-    // mirror the tab's scenarioStates per node: latest reading per DECLARED scenario (evals arrive
-    // newest-first), so a retired scenario's residual reading contributes no row; the ✦ count is over
-    // these rows — the same number the tab's chip shows.
-    const groups = m.nodes.map((n) => {
-      const latest = new Map<string, (typeof n.evals)[number]>()
-      for (const e of n.evals) if (!latest.has(e.scenario)) latest.set(e.scenario, e)
-      const blind = n.scenarios.filter((s) => !latest.has(s.name))
-      const rows = n.scenarios.filter((s) => latest.has(s.name)).map((s) => latest.get(s.name)!)
-        .sort((a, b) => (Number(b.inSession) - Number(a.inSession)) || (a.ts < b.ts ? 1 : -1))
-      return { n, blind, rows }
-    })
-    const own = groups.reduce((a, g) => a + g.rows.filter((e) => e.inSession).length, 0)
-    console.log(`eval ${m.title}  [${m.id}]`)
-    console.log(`  branch : ${m.branch ?? '—'} · ${m.ahead} commit(s) ahead · ${m.dirtyNonRuntime} uncommitted`)
+    const byNode = new Map<string, any[]>()
+    for (const item of m.items) {
+      const rows = byNode.get(item.node) ?? []
+      rows.push(item)
+      byNode.set(item.node, rows)
+    }
+    const groups = [...byNode].map(([node, rows]) => ({ node, rows }))
+    const own = m.items.filter((item) => item.inSession).length
+    console.log(`eval session  [${m.id}]`)
     console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
     if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited baseline)`)
-    if (!m.nodes.length) console.log('\n  no changed spec nodes — nothing to evaluate yet (empty diff)')
-    for (const { n, blind, rows } of groups) {
-      console.log(`\n${n.title}  [${n.id}]${n.uncoveredFrontend ? '  ⚠ frontend change with NO eval.md — a blind spot: give it a scenario' : ''}`)
-      for (const s of blind) console.log(`      ∅ unmeasured  ${s.name}  — declared, never measured (blind spot)`)
+    if (!m.items.length) console.log('\n  no affected scenarios to evaluate yet')
+    for (const { node, rows } of groups) {
+      console.log(`\n${node}`)
+      for (const item of rows.filter((row) => row.filterKind === 'blind')) console.log(`      ∅ unmeasured  ${item.scenario}  — declared, never measured (blind spot)`)
       let divided = false
-      for (const e of rows) {
-        if (!e.inSession && !divided && rows.some((x) => x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest evals) ──`); divided = true }
+      for (const e of rows.filter((row) => row.filterKind === 'result')) {
+        if (!e.inSession && !divided && rows.some((x) => x.filterKind === 'result' && x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest evals) ──`); divided = true }
         const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
-        const stale = e.fresh ? '' : ` (stale: ${e.staleAxes.join(',')})`
+        const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
         console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
       }
-      if (!n.hasEvalFile && !n.uncoveredFrontend) console.log('      (no eval.md — nothing declared to measure)')
-      else if (n.hasEvalFile && !n.scenarios.length) console.log('      (eval.md declares no scenarios)')
     }
   } else if (['add', 'ls', 'scenario', 'matrix', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.

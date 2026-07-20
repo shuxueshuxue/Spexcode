@@ -2,13 +2,12 @@
 title: graph-lean
 status: active
 hue: 175
-desc: The graph payload is a lean summary — per-node detail that the tree overview never shows is dropped from every fetch and reconstructed or lazy-loaded where it's actually viewed.
+desc: The graph payload is a lean summary — no Issues/Evals row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
 code:
   - spec-cli/src/graph.ts#buildBoard
-  - spec-cli/src/graph.ts#latestPerScenario
-  - spec-cli/src/graph.ts#slimScenarios
 related:
   - spec-cli/src/graph.test.ts
+  - spec-cli/src/reviewSnapshot.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/corpus.js
@@ -47,12 +46,14 @@ above it (a non-OK response is shown but never cached). The search corpus revali
 seeded instantly from the last one; the open overlay is keyed by node id so switching never flashes
 one node's prose under another's header.
 
-**`evals` is cut the same way** (it had grown to ~70% of the payload): the graph carries only the **latest
-reading per scenario** — what every overview surface (badge, stats, search) reduces to anyway, so
-they consume it unchanged — and the eval tab lazy-loads the full timeline from
-`/api/specs/:id/evals` when opened, cache keyed by the summary's newest reading so a fresh filing refetches.
-A failed timeline fetch falls back to the graph's summary readings — truthful, just shallow. Measured: the
-dogfood graph halved again (~576KB → ~270KB).
+**Issues and Evals rows are absent, not merely shortened.** A graph node carries one explicit
+`reviewSummary`: issue open/closed counts plus open ids for distinct-count/walk identity, and Eval state
+counts (`total/pass/fail/stalePass/staleFail/empty`). It carries no `issues`, `openIssues`, `evals`, or
+`scenarios` arrays and no row title/body/evidence from which either main review list could be reconstructed.
+Tile badges, popup captions, graph stats, the CLI tree, and any other first-paint glance consume only this
+projection. The complete local/forge Issue population and current Eval population stay in one server-only
+snapshot produced atomically with the graph build; [[paged-review]] filters/counts/slices that snapshot
+when a row surface actually opens. Server memory is not serialized by graph JSON, graph SSE, or delta units.
 
 **A session row carries its eval glance, never its eval model.** The row's `evalSummary` is
 [[session-eval]]'s cached lean projection: process epoch, monotonic input generation, loading/updating/ready/error
@@ -61,18 +62,18 @@ failed. It is already batch-produced and content-addressed before graph assembly
 splice only attach the cached projection. No graph request, subscriber, or session row calls the full
 `buildSessionEvals`, and scenarios/readings/evidence remain behind their demand routes.
 
-**The `scenarios` declarations are the third cut.** Each declared scenario rides the graph **slim** —
-`{name, tags, test?}`: the fields every overview surface joins state onto plus the normalized test reference
-(`{path}` or `{path, name}`) a measuring hand follows. The opaque case name is metadata only — the graph
-does not parse a test framework or execute anything. Scenario prose (`description` / `expected`) and
-per-scenario `code` join the **lite corpus**: a measurable node's `/api/specs/lite` row carries its scenarios
-whole, so the one corpus fetch ranks scenario prose as it ranks node bodies. The shared fetch (`corpus.js`)
-revalidates once per search-palette mount, when prose is first needed. The eval tab's blind-spot
-rows take `expected`+`code` from the `/evals` fetch it already makes, falling back to the slim graph set — shallow, never wrong. Measured: the fold 73KB → 9KB, the dogfood frame ~304KB → ~240KB (~-21%).
+**Demand routes own rows all the way down.** `/api/specs/lite` remains the node prose corpus but carries no
+scenario declarations; the search palette requests its bounded Issue/Eval planes through [[paged-review]].
+The node popup requests `node:`-filtered Issue rows and a paged Eval timeline through the same protocol.
+A direct Eval detail loads only the selected scenario's complete A/B history plus at most five lightweight
+ordered neighbors through [[paged-review]]'s ONE bounded detail projection; trunk and scoped sources share
+that response shape, and scoped detail keeps [[session-eval]]'s generation/revision fence. Issue detail loads
+its one addressed thread. No failed demand read falls back to graph rows, because there are deliberately none.
+The self-contained session HTML export is the only full-model transport exception.
 
 This node holds the lean-payload contract those cuts extend, beside the freshness-side [[graph-stream]],
 the change-side [[graph-delta]], and the compute-side [[graph-cache]] — the lean payload is now also BUILT
 once per change and served from cache, so a poll storm no longer re-walks git per request, and the
-assembly's fs walks yield the event loop instead of starving the liveness probe. Still duplicated: each
-summary *reading's* `expected` inside `evals` — the annotator lane's follow-up, since `latestPerScenario`
-is a filter, never a projection.
+assembly's fs walks yield the event loop instead of starving the liveness probe. The network budget is
+measured as a whole-app ledger: initial graph bytes/forbidden-row counts plus the first opened list response,
+never an isolated endpoint claim.

@@ -66,6 +66,7 @@ function baseRecord() {
 let board: typeof import('./graph.js')
 let cache: typeof import('./graphCache.js')
 let layout: typeof import('./layout.js')
+let evalProjection: typeof import('../../spec-eval/src/sessioneval.js')
 
 function writeSessionRecord(over: Record<string, unknown>) {
   const rec = { ...baseRecord(), ...over }
@@ -92,6 +93,7 @@ if (gitOk) {
   board = await import('./graph.js')
   cache = await import('./graphCache.js')
   layout = await import('./layout.js')
+  evalProjection = await import('../../spec-eval/src/sessioneval.js')
 
   writeSessionRecord({ status: 'active', note: 'first' })   // one governed record in the isolated store
 }
@@ -100,6 +102,11 @@ if (gitOk) {
 // 1. EQUIVALENCE — spliceSessions(prev) == a fresh buildBoard() when only SESSION state changed.
 // ---------------------------------------------------------------------------------------------------------
 test('spliceSessions is byte-identical to a fresh buildBoard when only session state moved', { skip: !gitOk && 'git not available' }, async () => {
+  // The lean eval projection is an independent async unit. Fix its generation before comparing the two
+  // board assembly paths; otherwise the first assembly may honestly read `loading` while the second reads
+  // the completed `error`/`ready` state, which is a time change rather than a splice-equivalence failure.
+  await board.buildBoard()
+  await evalProjection.awaitSessionEvalProjectionIdle()
   const A = await board.buildBoard()
   assert.equal(A.sessions.length, 1, 'the one governed record is enumerated')
   assert.equal(A.sessions[0].id, SESS_ID)

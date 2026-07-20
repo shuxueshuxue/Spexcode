@@ -1,5 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import {
   completeExportNodeIds,
@@ -7,10 +11,14 @@ import {
   mergeBasePath,
   nodeScore,
   parsePorcelainPaths,
+  parsePorcelainRenames,
   renderExportHtml,
   scopedScenarioReadings,
   scopeSessionScenarioRows,
   selectImpactedScenarios,
+  sessionEvalSummary,
+  sessionEvalContentRevision,
+  SessionEvalProjectionCache,
   sessionEvalNodeCandidate,
   unknownCoveragePaths,
   type ExportModel,
@@ -204,6 +212,9 @@ test('session scope loads a dirty sidecar before commit so a diagnostic reading 
   const current = [scenario('diagnostic')]
   const dirty = parsePorcelainPaths(' M .spec/n/evals.ndjson\0R  .spec/new/evals.ndjson\0.spec/old/evals.ndjson\0')
   assert.deepEqual([...dirty], ['.spec/n/evals.ndjson', '.spec/new/evals.ndjson', '.spec/old/evals.ndjson'])
+  assert.deepEqual([...parsePorcelainRenames('R  .spec/new/eval.md\0.spec/old/eval.md\0')], [
+    ['.spec/new/eval.md', '.spec/old/eval.md'],
+  ])
   assert.equal(sessionEvalNodeCandidate(
     current, [], '.spec/n/eval.md', '.spec/n/evals.ndjson', new Set(), dirty,
   ), true)
@@ -251,4 +262,208 @@ test('export projection counts and renders affected missing scenarios and retain
   assert.match(html, /unmeasured/)
   assert.match(html, /\.spec\/changed-only\/spec\.md/)
   assert.match(html, /no declared scenario is affected by this worktree/)
+})
+
+const summary = (measured: number) => ({
+  measured, total: measured, pass: measured, fail: 0, review: 0, blind: 0, unknown: 0,
+})
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => { resolve = r })
+  return { promise, resolve }
+}
+
+test('sessionEvalSummary is the declared-bounded full/graph projection', () => {
+  const nodes = [{
+    id: 'n', title: 'n', hue: 1, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+    unknownCoverage: ['src/unknown.jsx'],
+    scenarios: [
+      { name: 'pass', expected: '', impact: ['code'] as const },
+      { name: 'fail', expected: '', impact: ['code'] as const },
+      { name: 'stale', expected: '', impact: ['code'] as const },
+      { name: 'blind', expected: '', impact: ['code'] as const },
+    ],
+    evals: [
+      { ...reading({ scenario: 'pass', fresh: true, verdict: { status: 'pass' } }), inSession: false },
+      { ...reading({ scenario: 'fail', fresh: true, verdict: { status: 'fail' } }), inSession: false },
+      { ...reading({ scenario: 'stale', fresh: false, verdict: { status: 'pass' } }), inSession: false },
+    ],
+  }]
+  assert.deepEqual(sessionEvalSummary(nodes), {
+    measured: 3, total: 4, pass: 1, fail: 1, review: 1, blind: 1, unknown: 1,
+  })
+})
+
+test('projection cache coalesces a burst to one latest-generation build and publication', async () => {
+  let builds = 0, publishes = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(builds) }
+  }, () => { publishes++ }, 'epoch')
+  const sessions = [{ id: 's', path: '/wt' }]
+
+  assert.equal(cache.snapshot(sessions).get('s')?.phase, 'loading')
+  await cache.idle()
+  assert.equal(cache.get('s')?.phase, 'ready')
+  assert.equal(builds, 1)
+  for (let i = 0; i < 60; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.equal(builds, 1, 'idle snapshots authorize zero additional computes')
+
+  cache.invalidate({ id: 's' })
+  cache.invalidate({ id: 's' })
+  cache.invalidate({ id: 's' })
+  const updating = cache.snapshot(sessions).get('s')!
+  assert.equal(updating.phase, 'updating')
+  assert.equal(updating.generation, 3)
+  assert.equal(updating.lastKnown?.value.measured, 1)
+  await cache.idle()
+
+  assert.equal(builds, 2, 'three burst writes authorize only one F(inputs@g=3)')
+  assert.equal(publishes, 2, 'one initial and one burst completion publication')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 3, phase: 'ready', revision: 'r2', value: summary(2),
+  })
+})
+
+test('projection cache discards an old response after a newer generation and stays single-flight', async () => {
+  const old = deferred<any>(), fresh = deferred<any>()
+  let builds = 0, active = 0, maxActive = 0, publishes = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++; active++; maxActive = Math.max(maxActive, active)
+    const result = await (builds === 1 ? old.promise : fresh.promise)
+    active--
+    return result
+  }, () => { publishes++ }, 'epoch')
+  const sessions = [{ id: 's', path: '/wt' }]
+
+  cache.snapshot(sessions)
+  await Promise.resolve()
+  cache.invalidate({ id: 's' })
+  const updating = cache.snapshot(sessions).get('s')!
+  assert.equal(updating.generation, 1)
+  old.resolve({ kind: 'stable', revision: 'old', summary: summary(1) })
+  await Promise.resolve()
+  await Promise.resolve()
+  fresh.resolve({ kind: 'stable', revision: 'new', summary: summary(2) })
+  await cache.idle()
+
+  assert.equal(maxActive, 1)
+  assert.equal(publishes, 1, 'the discarded generation publishes nothing')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 1, phase: 'ready', revision: 'new', value: summary(2),
+  })
+})
+
+test('observer holds fence in-flight work and resubscribe computes the missed window once', async () => {
+  const stale = deferred<any>()
+  let builds = 0
+  let latest = 1
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    if (builds === 2) return stale.promise
+    return { kind: 'stable', revision: `r${latest}`, summary: summary(latest) }
+  }, () => {}, 'epoch')
+  const sessions = [{ id: 's', path: '/wt' }]
+
+  cache.snapshot(sessions)
+  await cache.idle()
+  cache.invalidate({ id: 's' })
+  cache.snapshot(sessions)
+  await Promise.resolve()
+
+  assert.equal(cache.holdObserver('refs', 'all'), true)
+  assert.equal(cache.holdObserver('worktree', { path: '/wt' }), true)
+  latest = 3 // a direct edit in the interval where both observers are absent
+  stale.resolve({ kind: 'stable', revision: 'stale', summary: summary(2) })
+  await cache.idle()
+  cache.snapshot(sessions)
+  await cache.idle()
+  assert.equal(builds, 2, 'an observer-held snapshot cannot authorize a replacement compute')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 3, phase: 'updating',
+    lastKnown: { generation: 0, revision: 'r1', value: summary(1) },
+  })
+
+  assert.equal(cache.releaseObserver('worktree'), true)
+  cache.snapshot(sessions)
+  await cache.idle()
+  assert.equal(builds, 2, 'restoring one observer cannot mask a second failed input axis')
+  assert.equal(cache.releaseObserver('refs'), true)
+  cache.snapshot(sessions)
+  await cache.idle()
+
+  assert.equal(builds, 3, 'the fully restored observer set authorizes one latest-window rescan')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 5, phase: 'ready', revision: 'r3', value: summary(3),
+  })
+})
+
+test('projection cache batches initial misses into one publication', async () => {
+  let builds = 0, publishes = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    builds++
+    return { kind: 'stable', revision: `r-${id}`, summary: summary(1) }
+  }, () => { publishes++ }, 'epoch')
+
+  const rows = cache.snapshot([
+    { id: 'a', path: '/wt/a' },
+    { id: 'b', path: '/wt/b' },
+    { id: 'c', path: '/wt/c' },
+  ])
+  assert.deepEqual([...rows.values()].map((row) => row.phase), ['loading', 'loading', 'loading'])
+  await cache.idle()
+
+  assert.equal(builds, 3, 'the one batch computes one lean projection per cold session')
+  assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
+})
+
+test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
+  const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  const priorIssuesDir = process.env.SPEXCODE_ISSUES_DIR
+  process.env.SPEXCODE_ISSUES_DIR = remarks
+  try {
+    git('init', '-b', 'main')
+    git('config', 'user.email', 'eval@example.test')
+    git('config', 'user.name', 'Eval Test')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    mkdirSync(join(root, '.spec/n'), { recursive: true })
+    writeFileSync(join(root, 'src/a.ts'), 'export const a = 1\n')
+    writeFileSync(join(root, '.spec/n/eval.md'), 'scenario contract\n')
+    writeFileSync(join(root, '.spec/n/evals.ndjson'), '{"scenario":"s"}\n')
+    git('add', '.')
+    git('commit', '-m', 'base')
+    git('checkout', '-q', '-b', 'node/test')
+
+    const revisions = [await sessionEvalContentRevision(root)]
+    writeFileSync(join(root, 'src/a.ts'), 'export const a = 2\n')
+    revisions.push(await sessionEvalContentRevision(root))
+    git('add', 'src/a.ts')
+    revisions.push(await sessionEvalContentRevision(root))
+    renameSync(join(root, 'src/a.ts'), join(root, 'src/b.ts'))
+    revisions.push(await sessionEvalContentRevision(root))
+    writeFileSync(join(root, '.spec/n/evals.ndjson'), '{"scenario":"s","retracts":"old"}\n')
+    revisions.push(await sessionEvalContentRevision(root))
+    writeFileSync(join(remarks, 'freshness.md'), [
+      '---', 'concern: eval: n · s', 'by: reviewer', 'status: open',
+      'created: 2026-07-20T00:00:00.000Z', '---', '', 'freshness concern', '',
+      '<!-- reply: reviewer @ 2026-07-20T00:00:00.000Z :: rid=r1 sha=abc -->',
+      'needs another reading', '',
+    ].join('\n'))
+    revisions.push(await sessionEvalContentRevision(root))
+    const tree = git('rev-parse', 'main^{tree}')
+    const movedMain = git('commit-tree', tree, '-p', 'main', '-m', 'main move')
+    git('update-ref', 'refs/heads/main', movedMain)
+    revisions.push(await sessionEvalContentRevision(root))
+
+    assert.equal(new Set(revisions).size, revisions.length)
+  } finally {
+    if (priorIssuesDir === undefined) delete process.env.SPEXCODE_ISSUES_DIR
+    else process.env.SPEXCODE_ISSUES_DIR = priorIssuesDir
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remarks, { recursive: true, force: true })
+  }
 })

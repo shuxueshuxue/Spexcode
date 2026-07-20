@@ -544,6 +544,11 @@ export default {
     commandsLabel: 'available session commands',
     evalLoading: "loading this session's eval summary",
     evalUnavailable: "this session's eval summary is unavailable",
+    evalUpdating: ({ summary }) => `updating this session's eval summary — last known: ${summary}`,
+    evalDisconnected: ({ summary }) => summary
+      ? `graph stream disconnected — last known: ${summary}`
+      : 'graph stream disconnected — eval summary has no last-known value',
+    evalFailedKnown: ({ summary }) => `eval summary update failed — last known: ${summary}`,
     evalMeasured: ({ measured, total }) => `${measured} of ${total} declared scenarios measured`,
     evalPass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and passing`,
     evalFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and failing`,

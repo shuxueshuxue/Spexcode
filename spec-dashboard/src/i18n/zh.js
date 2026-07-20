@@ -536,6 +536,11 @@ export default {
     commandsLabel: '当前可用的会话命令',
     evalLoading: '正在载入此会话的评测概况',
     evalUnavailable: '此会话的评测概况不可用',
+    evalUpdating: ({ summary }) => `正在更新此会话的评测概况 — 上次已知：${summary}`,
+    evalDisconnected: ({ summary }) => summary
+      ? `图数据流已断开 — 上次已知：${summary}`
+      : '图数据流已断开 — 尚无评测概况',
+    evalFailedKnown: ({ summary }) => `评测概况更新失败 — 上次已知：${summary}`,
     evalMeasured: ({ measured, total }) => `已评测 ${measured}/${total} 个已声明场景`,
     evalPass: ({ n }) => `${n} 个场景为新鲜通过`,
     evalFail: ({ n }) => `${n} 个场景为新鲜失败`,

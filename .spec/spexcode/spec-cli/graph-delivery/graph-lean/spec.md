@@ -54,6 +54,13 @@ they consume it unchanged — and the eval tab lazy-loads the full timeline from
 A failed timeline fetch falls back to the graph's summary readings — truthful, just shallow. Measured: the
 dogfood graph halved again (~576KB → ~270KB).
 
+**A session row carries its eval glance, never its eval model.** The row's `evalSummary` is
+[[session-eval]]'s cached lean projection: process epoch, monotonic input generation, loading/updating/ready/error
+phase, content revision when stable, the seven counts, and an optional last-known stable value while updating or
+failed. It is already batch-produced and content-addressed before graph assembly; `buildBoard` and the sessions
+splice only attach the cached projection. No graph request, subscriber, or session row calls the full
+`buildSessionEvals`, and scenarios/readings/evidence remain behind their demand routes.
+
 **The `scenarios` declarations are the third cut.** Each declared scenario rides the graph **slim** —
 `{name, tags, test?}`: the fields every overview surface joins state onto plus the normalized test reference
 (`{path}` or `{path, name}`) a measuring hand follows. The opaque case name is metadata only — the graph

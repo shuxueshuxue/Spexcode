@@ -6,8 +6,12 @@ import { uiCommandsFor } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const feed = readFileSync(new URL('./EvalsFeed.jsx', import.meta.url), 'utf8')
+const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./icons.jsx', import.meta.url), 'utf8')
+const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
+const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('session toolbar separates one Terminal tab from the canonical Eval anchor', () => {
   assert.match(source, /className="si-tabs" role="tablist"/)
@@ -29,6 +33,13 @@ test('session eval glance reuses the shared model aggregation and review-state v
   assert.match(source, /setTimeout\(load, 15_000\)/)
   assert.match(source, /<TabCount kind="eval" state="pass"/)
   assert.match(source, /<TabCount kind="eval" state="fail"/)
+  assert.match(source, /<TabCount kind="eval" state="review" cls="st-review secondary"/)
+  assert.match(source, /summary\.review > 0/)
+  assert.match(feed, /review: entries\.length - pass - fail/)
+  assert.match(reviewShell, /review: \{ icon: 'clock', tone: 'review'/)
+  assert.match(css, /\.review-state\.review \{ color: var\(--yellow\); \}/)
+  assert.match(en, /evalReview: \(\{ n \}\).*stale or unscored and needing review/)
+  assert.match(zh, /evalReview: \(\{ n \}\).*需人工复核/)
   assert.match(source, /<ReviewState kind="eval" state="missing"/)
   assert.match(source, /summary\.measured\}\/\{summary\.total/)
   assert.match(source, /summary\.unknown > 0/)

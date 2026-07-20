@@ -48,6 +48,9 @@ const expected = {
   fail: states.filter((state) => state.reading?.verdict?.status === 'fail').length,
   freshPass: states.filter((state) => state.reading?.fresh && state.reading?.verdict?.status === 'pass').length,
   freshFail: states.filter((state) => state.reading?.fresh && state.reading?.verdict?.status === 'fail').length,
+  needsReview: states.filter((state) => state.reading && !(
+    state.reading.fresh && ['pass', 'fail'].includes(state.reading.verdict?.status)
+  )).length,
   blind: states.filter((state) => !state.reading).length,
   stale: states.filter((state) => state.reading && !state.reading.fresh).length,
   unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length || 0), 0),
@@ -67,10 +70,12 @@ try {
   await page.waitForSelector('.si-eval-stats', { timeout: 20_000 })
   const toolbar = await page.evaluate(() => ({
     fraction: document.querySelector('.si-eval-measured')?.textContent?.trim() || '',
+    review: document.querySelector('.si-eval-stats .st-review')?.textContent?.trim() || '',
     tips: [...document.querySelectorAll('.si-eval-stats [data-tip]')].map((el) => el.getAttribute('data-tip')),
     href: document.querySelector('.si-tab-door')?.getAttribute('href') || '',
   }))
   check('toolbar uses the scoped measured/declared fraction', toolbar.fraction.includes(`${expected.measured}/${expected.total}`), toolbar.fraction)
+  check('toolbar visibly accounts for measured scenarios still needing review', toolbar.review === String(expected.needsReview), `${toolbar.review}/${expected.needsReview}`)
   check('toolbar preserves blind scenarios', expected.blind === 0 || toolbar.tips.some((tip) => tip?.includes(`${expected.blind}`)), JSON.stringify(toolbar.tips))
   check('toolbar reports unknown separately', expected.unknown === 0 || toolbar.tips.some((tip) => tip?.includes(`${expected.unknown}`) && tip?.toLowerCase().includes('unknown')), JSON.stringify(toolbar.tips))
   check('Terminal Eval door has the canonical scoped query', toolbar.href.split('?')[0] === '#/evals'

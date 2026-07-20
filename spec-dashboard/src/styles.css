@@ -1222,6 +1222,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .review-state.open, .review-state.pass { color: var(--green); }
 .review-state.closed { color: var(--magenta); }
 .review-state.fail { color: var(--red); }
+.review-state.review { color: var(--yellow); }
 .review-state.stale, .review-state.empty { color: var(--muted); }
 .review-state-label { font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side

@@ -546,6 +546,7 @@ export default {
     evalMeasured: ({ measured, total }) => `${measured} of ${total} declared scenarios measured`,
     evalPass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and passing`,
     evalFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and failing`,
+    evalReview: ({ n }) => `${n} measured scenario${n === 1 ? '' : 's'} stale or unscored and needing review`,
     evalBlind: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not measured`,
     evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
     evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>

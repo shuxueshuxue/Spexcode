@@ -80,6 +80,8 @@ the current score its own way. The `scope:<id>` token rides the one session mode
 ([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
 spots as inert unmeasured lines. The session model arrives already scenario-scoped by its backend impact
 engine, so list rows and every filter count naturally range over only the worktree's affected/measured
-scenarios; unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
+scenarios. The same shared summary partitions those scenarios into fresh pass, fresh fail, measured-but-needing-
+review (stale or unscored), and blind, so the session toolbar never leaves measured stale work implicit;
+unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
 empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

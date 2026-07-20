@@ -45,13 +45,13 @@ export function LaunchHero() {
 // the page or crossing a lifecycle/liveness edge refreshes immediately; a bounded cadence covers readings filed
 // during one long working state, and a stale response is aborted on tab change.
 function useSessionEvalSummary(sessionId, refreshKey) {
-  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 })
+  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 })
   useEffect(() => {
-    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 }); return }
+    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 }); return }
     let stopped = false
     let timer = null
     let abort = null
-    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 })
+    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 })
     const load = () => {
       abort = new AbortController()
       fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`), { signal: abort.signal })
@@ -61,7 +61,7 @@ function useSessionEvalSummary(sessionId, refreshKey) {
           const nodes = Array.isArray(model?.nodes) ? model.nodes : []
           setSummary({ phase: 'ready', ...sessionEvalSummary(nodes) })
         })
-        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, blind: 0, unknown: 0 }) })
+        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 }) })
         .finally(() => { if (!stopped) timer = setTimeout(load, 15_000) })
     }
     load()
@@ -88,6 +88,9 @@ function SessionEvalStats({ summary }) {
       )}
       {summary.fail > 0 && (
         <TabCount kind="eval" state="fail" cls="st-fail secondary" n={summary.fail} label={t('session.evalFail', { n: summary.fail })} />
+      )}
+      {summary.review > 0 && (
+        <TabCount kind="eval" state="review" cls="st-review secondary" n={summary.review} label={t('session.evalReview', { n: summary.review })} />
       )}
       {summary.blind > 0 && (
         <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.blind} label={t('session.evalBlind', { n: summary.blind })} />

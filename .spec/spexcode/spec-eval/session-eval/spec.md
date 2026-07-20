@@ -49,8 +49,9 @@ diff and both file versions are there to jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
 address of a session's evaluation is `#/evals?q=is:eval state:current scope:<id>` (the list — the same
-[[evals-feed]] row grammar led by the shared scope banner naming this session/worktree, with the
-session's gates strip above, blind spots leading as inert unmeasured rows, then the
+[[evals-feed]] row grammar with the session's gates strip above — its toolbar carrying the icon-only
+terminal door naming this session/worktree in its tooltip/aria ([[evals-view]]) — blind spots leading
+as inert unmeasured rows, then the
 session's own measurements ✦-marked, then the inherited baseline — other sessions' latest readings; a
 reading is the session's own iff THIS session filed it or its `codeSha` is one of the branch's commits,
 derived, never hand-tagged) and `#/evals/<node>/<scenario>?q=scope:<id>` (the [[event-detail]] page whose

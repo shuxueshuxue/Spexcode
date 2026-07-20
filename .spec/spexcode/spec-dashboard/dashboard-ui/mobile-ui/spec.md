@@ -74,7 +74,7 @@ The two planes, made native to touch:
   [[session-eval]] — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,
   lazily loaded and reflowed to one column. And the conversation is DEEP-LINKABLE: a `#/sessions/<id>`
-  address (a shared link, or the scoped eval pages' banner door — [[evals-view]]) opens that session's
+  address (a shared link, or the scoped eval pages' terminal door — [[evals-view]]) opens that session's
   conversation on a cold phone load, one-way route→state — leaving the detail via its back control is
   phone-local and never rewrites the hash. Reading the measured loss is exactly what a
   phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped

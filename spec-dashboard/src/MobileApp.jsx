@@ -248,7 +248,7 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
   const { page, param } = useRoute()
   const plane = page === 'evals' || page === 'issues' ? page : tab
   // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
-  // desktop console's deep link, and what makes the scoped eval pages' banner door ([[evals-view]])
+  // desktop console's deep link, and what makes the scoped eval pages' terminal door ([[evals-view]])
   // a REAL door on a cold phone open. One-way route→state: leaving the detail via its back control
   // is phone-local and never rewrites the hash.
   useEffect(() => {

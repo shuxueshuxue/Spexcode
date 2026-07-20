@@ -53,7 +53,7 @@ test('popup tab captions: no visible key digits; state counts speak the shared R
   assert.doesNotMatch(nodeView, /<kbd>\{i \+ 1\}<\/kbd>/)
   assert.match(nodeView, /\{t\(PANE_LABEL\[p\.key\]\)\}/)
   // one TabCount chip = ReviewState icon + tally; issues AND eval captions consume it
-  assert.match(nodeView, /function TabCount\(\{ kind, state, cls, n, label \}\)[\s\S]{0,300}<ReviewState kind=\{kind\} state=\{state\}/)
+  assert.match(score, /export function TabCount\(\{ kind, state, cls, n, label \}\)[\s\S]{0,300}<ReviewState kind=\{kind\} state=\{state\}/)
   assert.match(nodeView, /<TabCount kind="issue" state="open"/)
   assert.match(nodeView, /<TabCount kind="issue" state="closed"/)
   assert.match(nodeView, /<TabCount kind="eval" state="pass"/)

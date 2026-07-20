@@ -33,13 +33,15 @@ export function addressHash(address) {
 }
 
 // The review details' RETURN GATE ([[review-chrome]]'s compact back anchor): the href derives ONLY from
-// the detail's own page — never history.back, a referrer sniff, or originator presence — so a pushed
-// visit, a direct open, and a reload share one destination. EVERY eval detail returns to the bare
-// #/evals list and an issue detail to #/issues; a scoped (worktree-rooted) eval detail does NOT divert
-// the back anchor to the session console — its session door is the detail's source BANNER ([[evals-view]]),
-// so "back" always means the list and the terminal is an explicit, labelled destination.
-export function detailBackHash(page) {
-  return routeHash(page === 'issues' ? 'issues' : 'evals')
+// the detail's own canonical address — never history.back, a referrer sniff, or originator presence —
+// so a pushed visit, a direct open, and a reload share one destination by construction. An issue detail
+// returns to #/issues; a TRUNK eval detail to the bare #/evals; a SCOPED (worktree-rooted) eval detail
+// to its scoped DEFAULT list — the same one canonical address its session doors mint (`scope:` token
+// kept, projected through sessionEvalAddress), so "back" always means the list on the SAME data-source
+// axis and the terminal console stays the explicit icon-only door ([[evals-view]]), never the back arrow.
+export function detailBackHash(page, scopeId = null) {
+  if (page === 'issues') return routeHash('issues')
+  return scopeId ? addressHash(sessionEvalAddress(scopeId)) : routeHash('evals')
 }
 
 // Graph focus and session tab selection are shell-owned view state; hash-only targets can navigate directly.

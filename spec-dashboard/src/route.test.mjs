@@ -83,17 +83,19 @@ test('legacy and object session-eval addresses converge on the canonical evals h
   assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
 })
 
-test('detailBackHash: every review detail returns to its bare list, scope never diverts it', async () => {
-  const { detailBackHash } = await import('./address.js')
-  // every eval detail — trunk or scoped — returns to the bare list; list filters never ride a detail address
+test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {
+  const { detailBackHash, addressHash, sessionEvalAddress } = await import('./address.js')
+  // a TRUNK eval detail returns to the bare list; list filters never ride a detail address
   assert.equal(detailBackHash('evals'), '#/evals')
-  // the scoped detail's session door is the source BANNER, not the back arrow: no query input exists
-  // in the signature at all, so scope cannot divert the destination
-  assert.equal(detailBackHash('evals').includes('sessions'), false)
+  // a SCOPED eval detail returns to its scoped DEFAULT list — byte-identical to the address the
+  // session doors mint (one projection), scope token kept, never the terminal console
+  assert.equal(detailBackHash('evals', 'abc'), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
+  assert.equal(detailBackHash('evals', 'abc'), addressHash(sessionEvalAddress('abc', null, null)))
+  assert.equal(detailBackHash('evals', 'abc').includes('sessions'), false)
   // an issue detail returns to the issues list
   assert.equal(detailBackHash('issues'), '#/issues')
-  // deterministic: same page → same href, no history/referrer/query input exists in the signature
-  assert.equal(detailBackHash('evals'), detailBackHash('evals'))
+  // deterministic: same page+scope → same href, no history/referrer input exists in the signature
+  assert.equal(detailBackHash('evals', 'abc'), detailBackHash('evals', 'abc'))
 })
 
 test('eval addresses: concrete → the canonical detail, scenario-less → the node-filtered list', () => {

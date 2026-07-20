@@ -541,8 +541,8 @@ export default {
     evalReview: ({ n }) => `${n} 个已评测场景已过期或未评分，需人工复核`,
     evalBlind: ({ n }) => `${n} 个已声明场景尚未评测`,
     evalUnknown: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
-    evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>
-      `打开此会话的 Evals 页 — 已评测 ${measured}/${total}，新鲜通过 ${pass}，新鲜失败 ${fail}，未评测 ${blind}，覆盖未知 ${unknown}`,
+    evalDoorSummary: ({ measured, total, pass, fail, review, blind, unknown }) =>
+      `打开此会话的 Evals 页 — 已评测 ${measured}/${total}，新鲜通过 ${pass}，新鲜失败 ${fail}，待人工复核 ${review}，未评测 ${blind}，覆盖未知 ${unknown}`,
     typeBtn: '终端交互',
     typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',

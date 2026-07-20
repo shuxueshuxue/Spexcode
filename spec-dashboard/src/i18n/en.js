@@ -549,8 +549,8 @@ export default {
     evalReview: ({ n }) => `${n} measured scenario${n === 1 ? '' : 's'} stale or unscored and needing review`,
     evalBlind: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not measured`,
     evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
-    evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>
-      `open this session's Evals page — ${measured}/${total} measured, ${pass} fresh pass, ${fail} fresh fail, ${blind} unmeasured, ${unknown} unknown`,
+    evalDoorSummary: ({ measured, total, pass, fail, review, blind, unknown }) =>
+      `open this session's Evals page — ${measured}/${total} measured, ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

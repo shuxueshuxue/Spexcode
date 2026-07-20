@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: altitude-source-candidates
+    tags: [cli]
+    test: spec-cli/src/lint-source.test.ts
+    description: >-
+      Run the focused source-lint cases through the real `spex spec lint` CLI in temporary git
+      repositories. Exercise a tracked Python file, a tracked extensionless source file, a tracked file
+      removed by `sourceExcludeGlobs`, and an untracked filename admitted only by the legacy
+      `identifierExtensions` override.
+    expected: >-
+      With no identifier-extension configuration, repeated bare `foo.py` and extensionless `Makefile`
+      names trip altitude's identifier-density warning when those files are coverage candidates. An
+      excluded `foo.py` stays silent. An explicit legacy extension still admits an arbitrary matching
+      filename by lowering to a wildcard candidate. Every fixture exits clean because altitude remains
+      advisory.
   - name: govern-capped-at-one
     tags: [cli]
     description: >-

@@ -410,7 +410,9 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            unioned with sourceIncludeGlobs; it has no separate matching path.
   lint.testGlobs           globs EXCLUDED from coverage. Defaults cover .test/.spec names, test/tests/
                            directories, and test_* / *_test conventions; [] governs tests too.
-  lint.identifierExtensions extensions the altitude bare-filename signal recognises.
+  lint.identifierExtensions legacy compatibility extensions for altitude's bare-filename signal. Omit to
+                           derive exact filenames from coverage's tracked source candidates; configured
+                           extensions lower to wildcard filename candidates in that same matcher.
   lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
                            (defaults 50 / 4200 / 35 / 1.3 / 3).
   lint.maxChildren         breadth budget: warn at >= this many direct children (default 8).

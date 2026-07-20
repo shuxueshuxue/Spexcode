@@ -282,7 +282,7 @@ export const MATRIX: MatrixRow[] = [
     aliases: ['pi-ask-note'],
     description: "Matrix row: the live worker runs `spex session ask --note '<question>'` (its own "
       + 'declaration verb, from inside its worktree) with a unique marker in the note.',
-    expected: 'The record flips to `asking` with the note carried verbatim where the board reads it '
+    expected: "The record flips to `asking` with the note carried verbatim in the graph's session entry "
       + '(`spex session show`), attributed to the right record.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
@@ -293,16 +293,16 @@ export const MATRIX: MatrixRow[] = [
         const x = await ctx.show()
         return x && x.lifecycle === 'asking' && (x.note || '').includes(marker) ? x : false
       })
-      if (!s) return { status: 'fail', note: 'record never read asking with the marker note on the board' }
-      return { status: 'pass', note: `record flipped to asking with the note verbatim (${marker}) on the board read` }
+      if (!s) return { status: 'fail', note: 'record never read asking with the marker note in the graph' }
+      return { status: 'pass', note: `record flipped to asking with the note verbatim (${marker}) in the graph's session entry` }
     },
   },
   {
     key: 'deliver-steer',
     aliases: ['pi-deliver-steer', 'deliver-second-message', 'deliver-mid-turn'],
     description: 'Matrix row: `spex session send` a task to the settled (idle) worker that starts a long '
-      + 'turn, then send a SECOND message while that turn is in flight — all under normal board-probe '
-      + 'pressure (the runner polls the board throughout).',
+      + 'turn, then send a SECOND message while that turn is in flight — all under normal graph-probe '
+      + 'pressure (the runner polls the graph throughout).',
     expected: 'Both sends exit 0; the idle send lands EXACTLY once (no duplicate injection of the message '
       + 'text); the mid-turn send reaches the LIVE turn — its steer marker shows in that same turn\'s '
       + 'output — never dropped, never duplicated.',
@@ -336,7 +336,7 @@ export const MATRIX: MatrixRow[] = [
     description: 'Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux '
       + 'killed, worktree kept), `spex session resume` it, then ask for the token back without repeating it.',
     expected: 'The resumed agent continues the SAME conversation — it answers with the seeded token from '
-      + 'prior context in a fresh RECALL=<token> line — never a fresh empty session; the board returns to online.',
+      + 'prior context in a fresh RECALL=<token> line — never a fresh empty session; the graph reports it online again.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const token = `TK${ctx.nonce()}`
@@ -366,7 +366,7 @@ export const MATRIX: MatrixRow[] = [
     aliases: ['pi-liveness', 'liveness-signals'],
     description: "Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane "
       + '(the kill lands outside the launcher boot-grace window; the tmux window and any stale socket file '
-      + 'stay), read board liveness until it flips; then `spex session resume` and read again.',
+      + 'stay), read graph liveness until it flips; then `spex session resume` and read again.',
     expected: 'Liveness reads `offline` within seconds of the kill — a stale socket FILE never reads as '
       + "alive; the adapter's own per-harness signal decides — and after resume the session reads online again.",
     drive: async (ctx) => {
@@ -642,7 +642,7 @@ export async function runMatrix(args: string[]): Promise<number> {
     break
   }
   if (!launcherName) {
-    console.error('usage: spex eval matrix <launcher> [--node <id>] [--rows key1,key2]\n  runs the eight-row live-behavior matrix against a REAL dispatched session of that launcher and files a per-row reading (rows: ' + MATRIX.map((r) => r.key).join(', ') + ')')
+    console.error('usage: spex eval matrix <launcher> [--node <id>] [--rows key1,key2]\n  runs the eight-row live-behavior matrix against a REAL dispatched session of that launcher and files a per-row eval (rows: ' + MATRIX.map((r) => r.key).join(', ') + ')')
     return 2
   }
   let launcher: Launcher

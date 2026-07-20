@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/lint.ts
   - spec-cli/src/lint-source.test.ts
+  - spec-eval/src/scan-source.test.ts
 ---
 
 # adopt-nonweb-ergonomics

@@ -14,6 +14,7 @@ related:
   - spec-eval/src/freshness.ts
   - spec-eval/src/scenariofresh.ts
   - spec-eval/src/scenariofresh.test.ts
+  - spec-eval/src/scan-source.test.ts
   - spec-eval/src/cache.ts
   - spec-eval/src/filing.ts
 ---

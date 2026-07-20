@@ -387,7 +387,7 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
 
 // ListPage is the measured GitHub ListView skeleton: title/action, 32px query, one bordered container with
 // a 48px metadata bar, structured anchor rows, and an empty state. Pages supply domain data only.
-export function ListPage({ notice, error, title, action, search, sections = [], sectionMode = 'tabs', facets, overflow, rows, empty, children }) {
+export function ListPage({ notice, leading, error, title, action, search, sections = [], sectionMode = 'tabs', facets, overflow, rows, empty, children }) {
   const [cur, setCur] = useState(null)
   const tabsId = useId()
   const stateRef = useRef({})
@@ -421,6 +421,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   return (
     <PageScroll className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
+      {leading}
       <div className="rl-content">
         <div className="rl-titlebar">
           <h1>{title}</h1>

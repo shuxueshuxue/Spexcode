@@ -120,5 +120,6 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   content, never layout forks. A change to list rhythm or detail geometry lands HERE once and both pages
   move together; that is the component boundary this node exists to hold. ListPage and DetailShell consume
   the ONE [[page-scroll]] primitive: they never own overflow, gutter, track inset, or restoration
-  themselves. Their sticky header, side rail, and composer pin inside that shared scrollport; Graph canvas,
-  Session terminal, and bounded pane scrollers stay outside it.
+  themselves. Optional route-leading content is the scrollport's first child, never a sibling above it.
+  Their sticky header, side rail, and composer pin inside that shared scrollport; Graph canvas, Session
+  terminal, and bounded pane scrollers stay outside it.

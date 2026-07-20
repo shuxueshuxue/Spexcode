@@ -16,6 +16,7 @@ import { nextQuery } from './ReviewShell.jsx'
 // downloads the eval/annotator family.
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
+const Settings = lazy(() => import('./Settings.jsx'))
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
@@ -246,7 +247,7 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
   // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
   // stay the phone-local planes.
   const { page, param } = useRoute()
-  const plane = page === 'evals' || page === 'issues' ? page : tab
+  const plane = page === 'evals' || page === 'issues' || page === 'settings' ? page : tab
   // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
   // desktop console's deep link, and what makes the scoped eval pages' terminal door ([[evals-view]])
   // a REAL door on a cold phone open. One-way route→state: leaving the detail via its back control
@@ -257,7 +258,7 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
   const pickPlane = (p) => {
     if (p === 'evals' || p === 'issues') { navigate(p); return }
     setTab(p)
-    if (page === 'evals' || page === 'issues') navigate(p === 'specs' ? 'graph' : 'sessions')
+    if (page === 'evals' || page === 'issues' || page === 'settings') navigate(p === 'specs' ? 'graph' : 'sessions')
   }
   // a filer/originator chip click on a review page opens that session's conversation here.
   const openSession = (id) => { setTab('sessions'); setOpenSessionId(id); navigate('sessions', id) }
@@ -275,10 +276,12 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
   return (
     <div className="m-app">
       <main className="m-main">
-        {plane === 'evals' || plane === 'issues' ? (
+        {plane === 'evals' || plane === 'issues' || plane === 'settings' ? (
           <div className="m-review">
             <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
-              {plane === 'evals'
+              {plane === 'settings'
+                ? <Settings />
+                : plane === 'evals'
                 ? <EvalsPage specs={specs} sessions={sessions} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />
                 : <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
             </Suspense>

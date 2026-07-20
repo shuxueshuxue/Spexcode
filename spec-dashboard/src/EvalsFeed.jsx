@@ -81,7 +81,7 @@ const rel = (ts) => {
 // reading to open) — they travel through the SAME engine as reading:false items, so they honestly own
 // only their node/unscored/query/section facts. `queryText`/`onQueryText`: the URL's raw token text and
 // its push writer ([[evals-view]] — the writer owns the default↔bare equivalence).
-export default function EvalsGroup({ entries = [], blind = [], sessions = [], queryText = '', onQueryText, hrefFor, notice = null, error = null, empty = null }) {
+export default function EvalsGroup({ entries = [], blind = [], sessions = [], queryText = '', onQueryText, hrefFor, notice = null, leading = null, error = null, empty = null }) {
   const t = useT()
   const text = String(queryText ?? '').trim() || EVAL_QUERY_DEFAULT
   // every control is a BUILDER over the committed text: token surgery, then one history PUSH.
@@ -127,6 +127,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
   return (
     <ListPage
       notice={notice}
+      leading={leading}
       error={error}
       title={t('evalsFeed.title')}
       search={{

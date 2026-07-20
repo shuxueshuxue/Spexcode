@@ -32,7 +32,8 @@ Projects page. The shell owns its available viewport; the primitive owns the top
 desktop end inset, stable gutter, vertical overscroll containment, and horizontal clipping. Content owns
 its width and padding. Sticky children such as the review list header, detail side rail, and composer pin
 inside this scrollport, so their geometry follows the same viewport instead of the browser document or a
-page-local scroller.
+page-local scroller. Route-specific leading content also stays inside it: the scoped Evals terminal/gates
+strip scrolls as the list's first content and never shifts the scrollbar track below the shared inset.
 
 Scroll position is remembered by the full canonical address. When returned content already has its final
 height the primitive restores before paint; when a long list arrives asynchronously, it preserves the
@@ -45,5 +46,5 @@ positions. A new address starts at the top, and a hidden warm page keeps its own
 The Graph canvas and Session console do not consume this primitive: the graph camera is not document
 scroll, the session list is a bounded pane, and xterm/tmux owns terminal scrollback. Popup, side-rail,
 composer, and mobile timeline scrollers remain local where their contracts require them. At phone width
-the same review pages consume the same primitive above the tab bar, with equal top/bottom track insets,
-no horizontal page overflow, and the detail rail returned to ordinary document flow.
+the same review pages and direct Settings route consume the same primitive above the tab bar, with equal
+top/bottom track insets, no horizontal page overflow, and the detail rail returned to ordinary document flow.

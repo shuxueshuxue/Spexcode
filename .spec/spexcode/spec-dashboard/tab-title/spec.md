@@ -21,8 +21,10 @@ the direct-serving/guest compatibility source when no catalog is available. A bo
 can never rename a scoped catalog route.
 
 Project titles come from `dashboard.title`, else the canonical project-root basename. The fixed gateway
-title identifies the global Projects face. Tabs keep the `· SpexCode` suffix, so identity names the scope,
-not the product.
+title identifies the global Projects face. The tab is exactly the resolved scope title — no product
+suffix — so several open scopes read apart by name alone; the product brand lives in the favicon and
+wordmark, never the tab text. One projection helper turns the resolved identity into the tab, shared by
+every route.
 
 That name is read through one resolved identity helper, so any surface
 that needs to say *which* project shares one source rather than re-deriving it. The **session

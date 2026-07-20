@@ -177,6 +177,8 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
           {usable.map((option) => (
             <button type="button" role="menuitemradio" aria-checked={String(option.value) === String(value)}
               tabIndex={-1} key={String(option.value)} className="rl-menu-item" onFocus={popover.onItemFocus}
+              // close(true) is only the NO-OP fallback: a pick that changes the committed text re-parks
+              // focus in the query input (the continuable-edit replay); an unchanged pick keeps its trigger.
               onClick={() => { popover.close(true); onChange(option.value) }}>
               <Icon name={String(option.value) === String(value) ? 'check' : 'blank'} size={13} />
               <span>{option.label}</span>
@@ -245,20 +247,54 @@ export function ReviewListRow({ state, title, meta, aside }) {
 // so caret/selection/editing stay native, never contenteditable — and a bounded inline-autocomplete
 // listbox: a KEY pick completes `key:` in place and typing continues, a VALUE pick completes the token
 // and submits immediately. Plain Enter submits the typed text verbatim.
+
+// a committed text replays as a CONTINUABLE edit: the visible value is the trimmed tokens plus exactly
+// ONE trailing ASCII space, so the parked caret already sits where the next token starts. Display-only —
+// submit trims the outer whitespace back off, and the URL never carries it.
+export const continuableText = (text) => {
+  const t = String(text ?? '').trim()
+  return t ? `${t} ` : ''
+}
+
 export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys = [], suggest = {} }) {
-  const [draft, setDraft] = useState(value || '')
+  const [draft, setDraft] = useState(() => continuableText(value))
   const [caret, setCaret] = useState(-1)      // -1 = suggestions closed
   const [active, setActive] = useState(-1)    // listbox cursor; -1 = typing, Enter submits
   const inputRef = useRef(null)
   const hlRef = useRef(null)
   const listId = useId()
-  useEffect(() => { setDraft(value || ''); setCaret(-1); setActive(-1) }, [value])
+  const seen = useRef(null)   // last committed value this instance replayed (null = cold)
+  const parkCaret = (focus) => requestAnimationFrame(() => {
+    const input = inputRef.current
+    if (!input) return
+    if (focus) input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+  })
+  // every committed replay — mount, builder push, hand submit, Back/Forward — re-seeds the continuable
+  // form with the caret parked at the end. Only a CHANGED committed value takes focus (the user just
+  // acted, or walked history, and keeps typing); a cold load parks the caret without stealing page
+  // focus. The value compare — not a boolean — keeps StrictMode's replayed mount effect cold too.
+  useEffect(() => {
+    setDraft(continuableText(value)); setCaret(-1); setActive(-1)
+    parkCaret(seen.current !== null && seen.current !== value)
+    seen.current = value
+  }, [value])
   const sug = caret >= 0 ? suggestAt(draft, caret, keys, suggest) : { start: 0, end: 0, items: [] }
   const open = sug.items.length > 0
   useEscLayer(open, () => setCaret(-1))
   const syncScroll = () => { if (hlRef.current && inputRef.current) hlRef.current.scrollLeft = inputRef.current.scrollLeft }
   useEffect(syncScroll)
-  const submit = (text) => { setCaret(-1); setActive(-1); onSubmit(text.trim()) }
+  // submit hands the ENGINE the trimmed text (default-equivalent → bare address, else ?q= with no
+  // outer whitespace) and re-seeds the visible value's continuable form even when the URL is unchanged —
+  // including the emptied submit, which refills from the COMMITTED text (the page re-commits the
+  // default, but an unchanged address never re-fires the [value] replay).
+  const submit = (text) => {
+    setCaret(-1); setActive(-1)
+    const trimmed = text.trim()
+    setDraft(continuableText(trimmed) || continuableText(value))
+    parkCaret(true)
+    onSubmit(trimmed)
+  }
   const pick = (item) => {
     const next = `${draft.slice(0, sug.start)}${item.insert}${draft.slice(sug.end)}`
     setDraft(next)

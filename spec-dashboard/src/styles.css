@@ -252,13 +252,20 @@ body {
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 
 /* ---- routed page containers — ONE pane boundary for every page ([[side-nav]]) ---- */
-.page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
+.page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); }
 /* the graph page is one full-width canvas; node details stay in routed pages and the on-demand popup. */
 .page-pane.page-graph { display: block; position: relative; }
-/* the evals + issues pages keep the master-detail iron rule: the outer page never scrolls, each region scrolls internally */
-.page-evals, .page-issues { overflow: hidden; padding: 0 14px 10px 0; }
-.page-settings { overflow: auto; flex-direction: row; justify-content: center; }
-.settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
+/* ONE document scrollport ([[page-scroll]]): the shell supplies the available flex viewport; this
+   primitive owns overflow, themed gutter, track insets, and overscroll containment. Content supplies its
+   own width/padding. Graph, session panes, xterm, and bounded overlays deliberately do not use it. */
+.page-scroll {
+  flex: 1; min-width: 0; min-height: 0; box-sizing: border-box;
+  margin: 10px 14px 10px 0; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; scrollbar-gutter: stable; background: var(--paper);
+}
+.page-settings-scroll { display: flex; justify-content: center; }
+.page-detail-stack { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.settings-body { width: min(720px, 94%); padding: 16px 0 50px; }
 .page-title { font-size: var(--type-heading); font-weight: var(--weight-bold); color: var(--ink2); margin: 6px 2px 14px; }
 
 /* ---- pane resizers ([[resizable-panes]]) - an invisible col-resize strip straddling a pane border; a
@@ -1138,7 +1145,7 @@ a.scenario-count:hover { background: var(--panel2); }
    list rhythm, sticky head, anchor rows, detail grid, and the phone reflow live here once. ---- */
 /* The LIST page copies GitHub's measured ListView grammar: title/action, a 32px query, then one bordered
    container whose 48px metadata bar owns section tabs at left and invisible facets at right. */
-.lp-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; background: var(--paper); }
+.lp-page { display: flex; flex-direction: column; background: var(--paper); }
 .rl-content { width: min(1136px, calc(100% - 32px)); min-width: 0; margin: 0 auto; padding: 16px 0 24px; }
 .rl-titlebar { height: 32px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .rl-titlebar h1 { min-width: 0; margin: 0; color: var(--ink); font-size: var(--type-title); font-weight: var(--weight-bold); line-height: var(--leading-ui); }
@@ -1219,7 +1226,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .review-state-label { font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
-.ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
+.ds-page { background: var(--paper); padding: 14px 18px 0; }
 /* the header row's ONE geometry contract: the row declares the title's type metric (the same tokens the
    h1 wears), so the back anchor can derive its offset from the SAME first-line box via 1lh — its center
    coincides with the title first line's center at any type token, wrap, width, or language, with no
@@ -1284,6 +1291,9 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the phone reflow (GitHub's measured 390px order): ONE column, side metadata ABOVE the main column —
    pure CSS over the same markup, never a second component. */
 @media (max-width: 760px) {
+  /* Phone scrollbars do not reserve scarce inline width; every phone document page still shares the
+     same 10px track start/end and one-axis overflow contract above the tab bar. */
+  .page-scroll { margin: 10px 0; scrollbar-gutter: auto; }
   .rl-content { width: calc(100% - 32px); padding-top: 16px; }
   .rl-titlebar { margin-bottom: 8px; }
   .rl-query { margin-bottom: 16px; }
@@ -2293,7 +2303,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .cred-submit:disabled { opacity: 0.5; cursor: default; }
 
 /* --- the catalog page --- */
-.page-projects { min-height: 100vh; box-sizing: border-box; overflow-y: auto; }
+.page-projects { height: 100dvh; min-height: 0; box-sizing: border-box; }
+.page-projects-scroll { width: auto; }
 .proj-body { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; box-sizing: border-box; font-family: var(--mono); }
 .proj-brand { margin-bottom: 14px; display: flex; align-items: center; gap: 9px; }
 .proj-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

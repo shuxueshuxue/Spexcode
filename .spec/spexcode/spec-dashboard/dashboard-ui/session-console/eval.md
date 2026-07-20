@@ -115,7 +115,7 @@ scenarios:
       no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
       sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
       (3) Type `/eval` and Enter: the dashboard navigates to the canonical scoped list
-      `#/evals?q=is:eval state:current scope:<id>` — the same address the toolbar's Eval door opens — and no
+      `#/evals?q=is:eval scope:<id>` — the same address the toolbar's Eval door opens — and no
       inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
       tool exposes `aria-pressed=true` and its stable selected state); click the type tool to toggle it back off.
       Screenshot the toolbar

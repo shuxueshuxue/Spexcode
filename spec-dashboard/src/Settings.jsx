@@ -3,6 +3,7 @@ import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { ACT, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
+import { PageScroll } from './PageScroll.jsx'
 
 // @@@ Settings - the settings PAGE (`,`, or the sidebar's bottom entry — #/settings, [[side-nav]]): a
 // routed page like every other top-level surface, not a popup. It accretes sections (see the `settings`
@@ -63,7 +64,7 @@ export default function Settings() {
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
   const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
   return (
-    <>
+    <PageScroll className="page-settings-scroll">
       <div className="settings-body">
       <h1 className="page-title">{t('settings.title')}</h1>
       <section className="legend-sec">
@@ -98,6 +99,6 @@ export default function Settings() {
       </section>
       <Shortcuts t={t} />
       </div>
-    </>
+    </PageScroll>
   )
 }

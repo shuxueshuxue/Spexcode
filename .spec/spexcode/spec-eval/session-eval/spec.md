@@ -48,7 +48,7 @@ behind native toggles (capped so a huge changeset can't bloat the page). Nothing
 diff and both file versions are there to jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
-address of a session's evaluation is `#/evals?q=is:eval state:current scope:<id>` (the list — the same
+address of a session's evaluation is `#/evals?q=is:eval scope:<id>` (the list — the same
 [[evals-feed]] row grammar with the session's gates strip above — its toolbar leading with the
 icon-only terminal door as its first focusable control, labelled by the short localized
 `Back to session terminal` / `返回会话终端` command ([[evals-view]]) — blind spots leading

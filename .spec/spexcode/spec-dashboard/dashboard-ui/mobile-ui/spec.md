@@ -34,12 +34,14 @@ of the phone surface, never a session type selected at launch. The chat body liv
 `replyVia:"note"` fixed); this node's `MobileSessionDetail` is the thin phone wrapper around it
 (identity card, back control, eval entry).
 
-**The review pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
+**The review and Settings pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
 [[side-nav]] route family: a `#/evals`/`#/issues` address (list or detail) opened at phone width renders
 the SAME [[evals-view]]/[[issues-view]] components inside the phone shell, restacked by [[review-chrome]]'s
 one-column reflow (side metadata above the main column — GitHub's own 390px order); the tab bar grows an
 Evals and an Issues entry (tapping navigates the route, the active page lights its tab), and Back is the
-browser's history exactly as on desktop. Specs/Sessions stay the phone-local planes below.
+browser's history exactly as on desktop. A direct `#/settings` address mounts the same [[settings]] page
+and [[page-scroll]] above that tab bar even though Settings is not a fifth primary tab. Specs/Sessions
+stay the phone-local planes below.
 
 **One API, never its own.** Every read/write the phone makes is a route the desktop already
 uses, through the shared `data.js` helpers: the pushed/polled board for both planes, the
@@ -69,7 +71,7 @@ The two planes, made native to touch:
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
   a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that is
-  a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval state:current scope:<id>`, the
+  a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval scope:<id>`, the
   [[address-routing]] projection as its literal href — one ordinary hash push;
   [[session-eval]] — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,

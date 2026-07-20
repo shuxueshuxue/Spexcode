@@ -56,7 +56,7 @@ restores the list.
   is no fake in-app Back button anywhere; the browser's history is the return path.
 - **Legacy review addresses normalize.** `#/sessions/<id>/eval[/<node>/<scenario>]` was the
   un-merged worktree evals' old home; its canonical form is now the [[evals-view]] family
-  (`#/evals?q=is:eval state:current scope:<id>` / `#/evals/<node>/<scenario>?q=scope:<id>`). Likewise the
+  (`#/evals?q=is:eval scope:<id>` / `#/evals/<node>/<scenario>?q=scope:<id>`). Likewise the
   review lists' old STRUCTURED filter params (`state/concluded/store/author/node/filer/verdict/
   freshness/kind/live/ok/session`) replay into the one `?q=` token text ([[review-query]]). The route
   layer rewrites each old shape with replace on arrival — old links keep working, no old shape is ever

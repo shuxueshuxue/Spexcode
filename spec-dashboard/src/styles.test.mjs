@@ -31,11 +31,11 @@ test('dashboard typography declarations use the shared scale', () => {
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
-test('evals and issues pages sit flush against the side rail and top edge', () => {
-  assert.match(
-    css,
-    /\.page-evals,\s*\.page-issues\s*\{[^}]*padding:\s*0\s+14px\s+10px\s+0;/s,
-  )
+test('document pages share one inset page-scroll geometry', () => {
+  assert.match(css, /\.page-pane\s*\{[^}]*overflow:\s*hidden;/s)
+  assert.match(css, /\.page-scroll\s*\{[^}]*margin:\s*10px 14px 10px 0;[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s)
+  assert.match(css, /\.page-scroll\s*\{[^}]*scrollbar-gutter:\s*stable;/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.page-scroll\s*\{[^}]*margin:\s*10px 0;[^}]*scrollbar-gutter:\s*auto;/s)
 })
 
 test('terminal composer docks flush at the bottom and keeps ❯ on the active line', () => {

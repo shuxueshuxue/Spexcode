@@ -4,6 +4,7 @@ status: active
 hue: 280
 desc: A session picks a NAMED launcher profile at create time — a `{ harness, cmd }` pair from config — and the RESOLVED command is PINNED on its record, so resume/relaunch replays the exact same launcher (its command, auth, and config-dir env) instead of re-resolving a since-changed default.
 related:
+  - docs/SECURITY.md
   - spec-cli/src/harness.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/layout.ts
@@ -26,12 +27,15 @@ launcher fuses those two into ONE named profile, so the human picks a single thi
 harness rides along for free. Every launcher is a NAMED entry in `spexcode.json` / `spexcode.local.json`'s
 `sessions.launchers` map — a `{ harness?, cmd }` pair keyed by a portable name the human chooses
 (`claude-glm`, `reclaude`, …); `harness` defaults to `claude`. `claude` and `codex` are NOT a special
-built-in tier resolved from an env var or a `claudeCmd`/`codexCmd` config field: [[spex-init]] SEEDS them as
-ordinary named launchers (`claude` = `{harness: claude, cmd: 'claude --dangerously-skip-permissions'}`,
-`codex` = `{harness: codex, cmd: 'codex --yolo'}`), after which they are edited, renamed, or removed like any
-other entry. A project that must run workers under an auth wrapper (reclaude) sets that launcher's `cmd` in
-the gitignored `spexcode.local.json` — there is NO runtime env that rewrites a launcher's command. So the
-picker lists exactly the config's real launchers, and two names
+built-in tier resolved from an env var or a `claudeCmd`/`codexCmd` config field: [[spex-init]] SEEDS each selected
+harness as an ordinary named launcher whose command preserves that harness's normal permission model
+(`claude`, `codex`, `opencode`, and `pi` all use their plain command), after which the entries are edited,
+renamed, or removed like any other launcher. A project that intentionally wants an auth wrapper (reclaude) or
+an automatic-permission command (`claude --dangerously-skip-permissions`, `codex --yolo`, `opencode --auto`)
+declares that command as an explicit launcher choice in `spexcode.json` or the gitignored
+`spexcode.local.json`; clean init and the old-record compatibility fallback never grant those permissions
+silently. There is NO runtime env or harness-specific branch that rewrites a launcher's command. So the picker
+lists exactly the config's real launchers, and two names
 can never resolve to the same command as ghost duplicates. Because a launcher NAMES a harness, picking a
 launcher is the ONLY user-facing launch selection. The old free-standing harness pick is gone.
 

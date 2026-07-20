@@ -20,12 +20,13 @@ threat model follows from that. Two properties matter:
 
 ### 1. The session layer runs an agent that can execute arbitrary commands
 
-SpexCode's session layer dispatches AI workers that drive a coding-agent harness — **Claude
-Code or Codex**. By default the agent runs with permission prompts disabled (Claude
-`--dangerously-skip-permissions`, Codex `--yolo`; the launch command comes from the named launcher
-profiles in `spexcode.json`/`spexcode.local.json`): it can **read, write, and execute** on your machine
-without per-action prompts — the git worktree is its working directory, not a sandbox. The dashboard's
-live "Sessions" console is a **real terminal** over a WebSocket — i.e. shell access to the host.
+SpexCode's session layer dispatches AI workers that drive a coding-agent harness. Clean init seeds each
+selected harness's ordinary command, preserving that harness's normal permission prompts and sandbox policy.
+An operator can explicitly configure a more permissive named launcher (for example Claude
+`--dangerously-skip-permissions`, Codex `--yolo`, or OpenCode `--auto`) in
+`spexcode.json`/`spexcode.local.json`; such a worker can **read, write, and execute** on your machine without
+per-action prompts. The git worktree is its working directory, and the dashboard's live "Sessions" console is
+a **real terminal** over a WebSocket — i.e. shell access to the host.
 
 This is intended for an interactive, single-operator setup. It also means:
 

@@ -16,13 +16,16 @@ scenarios:
     description: >
       Run the real CLI verb `spex guide settings` and read its stdout. It must print the runtime-settings
       manual for spexcode.json / spexcode.local.json — the Config fields plus the crucial committed-vs-
-      host-local file distinction, with a concrete launcher-profile example. Also probe an unknown topic
-      (`spex guide bogus`) to confirm the fallback still names the real topics.
+      host-local file distinction, with the clean-init launcher commands and a concrete host-local profile
+      example. Also probe an unknown topic (`spex guide bogus`) to confirm the fallback still names the real
+      topics.
     expected: >
       Output names BOTH files by role (spexcode.json = committed/portable, spexcode.local.json =
       gitignored/host-specific), documents the launcher schema
       (launchers: { <name>: { harness, cmd } } and defaultLauncher), and shows the working split — the
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
+      It names `claude`, `codex`, `opencode`, and `pi` as the plain clean-init commands and says automatic-
+      permission variants (`--dangerously-skip-permissions`, `--yolo`, `--auto`) require an explicit launcher.
       Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The sessions
       section explains maxActive's default and that it counts compute slots, not total sessions. The
       unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.

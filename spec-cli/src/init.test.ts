@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,12 @@ const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(join(SRC, '..', 'templates', 'spexcode.json'), 'utf8')).lint.governedRoots)
+const SAFE_LAUNCHERS = {
+  claude: { harness: 'claude', cmd: 'claude' },
+  codex: { harness: 'codex', cmd: 'codex' },
+  opencode: { harness: 'opencode', cmd: 'opencode' },
+  pi: { harness: 'pi', cmd: 'pi' },
+} as const
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -38,7 +44,7 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
     writeFileSync(join(proj, 'AGENTS.md'), '# team agents\nkeep me\n')
   }
   g('add', '-A'); g('commit', '-qm', 'init')
-  return { proj, codex, env, g, spex }
+  return { proj, home, codex, env, g, spex }
 }
 
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -75,35 +81,73 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
   assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
 })
 
-test('Claude-only clean init reports and plants only Claude delivery artifacts', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, codex, spex } = freshRepo()
-  const out = spex('init', '.', '--harness', 'claude')
-  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
-  assert.deepEqual(cfg.harnesses, ['claude'], 'the choice is persisted as the harnesses field')
-  assert.deepEqual(Object.keys(cfg.sessions.launchers), ['claude'], 'unselected harnesses got no launcher')
-  assert.equal(cfg.sessions.defaultLauncher, 'claude', 'defaultLauncher follows the selection')
-  assert.match(out, /contract: CLAUDE\.md/, 'the materialize receipt reports the Claude contract')
-  assert.match(out, /shim: \.claude\/settings\.json/, 'the materialize receipt reports the Claude shim')
-  assert.doesNotMatch(out, /AGENTS\.md|\.codex\/hooks\.json|trust:/, 'no Codex contract, shim, or trust claim')
-  assert.ok(existsSync(join(proj, 'CLAUDE.md')) && existsSync(join(proj, '.claude', 'settings.json')), 'Claude artifacts exist')
-  assert.ok(!existsSync(join(proj, 'AGENTS.md')) && !existsSync(join(proj, '.codex')), 'no Codex artifacts were planted')
-  assert.ok(!existsSync(join(codex, 'config.toml')), 'no Codex trust was planted')
+test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harness config', { skip: !gitAvailable() && 'git not available' }, () => {
+  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude', 'codex', 'opencode', 'pi']]
+  for (const selected of selections) {
+    const { proj, codex, spex } = freshRepo()
+    const out = spex('init', '.', '--harness', selected.join(','))
+    const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+    const expectedNames = Object.keys(SAFE_LAUNCHERS).filter((name) => selected.includes(name))
+    const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SAFE_LAUNCHERS[name as keyof typeof SAFE_LAUNCHERS]]))
+
+    assert.deepEqual(cfg.harnesses, selected, 'the choice is persisted as the harnesses field')
+    assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands stay ordinary')
+    assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
+    assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo|--auto/, 'clean init never grants automatic permissions')
+
+    if (selected.length === 1 && selected[0] === 'claude') {
+      assert.match(out, /contract: CLAUDE\.md/, 'the materialize receipt reports the Claude contract')
+      assert.match(out, /shim: \.claude\/settings\.json/, 'the materialize receipt reports the Claude shim')
+      assert.doesNotMatch(out, /AGENTS\.md|\.codex\/hooks\.json|trust:/, 'no Codex contract, shim, or trust claim')
+      assert.ok(existsSync(join(proj, 'CLAUDE.md')) && existsSync(join(proj, '.claude', 'settings.json')), 'Claude artifacts exist')
+      assert.ok(!existsSync(join(proj, 'AGENTS.md')) && !existsSync(join(proj, '.codex')), 'no Codex artifacts were planted')
+      assert.ok(!existsSync(join(codex, 'config.toml')), 'no Codex trust was planted')
+    }
+    if (selected.length === 1 && selected[0] === 'codex') {
+      assert.match(out, /contract: AGENTS\.md/, 'the materialize receipt reports the Codex contract')
+      assert.match(out, /shim: \.codex\/hooks\.json/, 'the materialize receipt reports the Codex shim')
+      assert.match(out, /trust: .*config\.toml/, 'the materialize receipt reports the Codex trust write')
+      assert.doesNotMatch(out, /CLAUDE\.md|\.claude\/settings\.json/, 'no Claude contract or shim claim')
+      assert.ok(existsSync(join(proj, 'AGENTS.md')) && existsSync(join(proj, '.codex', 'hooks.json')), 'Codex artifacts exist')
+      assert.ok(existsSync(join(codex, 'config.toml')), 'Codex trust exists')
+      assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no claude artifacts for a codex-only selection')
+    }
+  }
 })
 
-test('Codex-only clean init reports and plants only Codex delivery artifacts', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, codex, spex } = freshRepo()
-  const out = spex('init', '.', '--harness', 'codex')
-  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
-  assert.deepEqual(cfg.harnesses, ['codex'], 'the choice is persisted as the harnesses field')
-  assert.deepEqual(Object.keys(cfg.sessions.launchers), ['codex'], 'unselected harnesses got no launcher')
-  assert.equal(cfg.sessions.defaultLauncher, 'codex', 'defaultLauncher follows the selection')
-  assert.match(out, /contract: AGENTS\.md/, 'the materialize receipt reports the Codex contract')
-  assert.match(out, /shim: \.codex\/hooks\.json/, 'the materialize receipt reports the Codex shim')
-  assert.match(out, /trust: .*config\.toml/, 'the materialize receipt reports the Codex trust write')
-  assert.doesNotMatch(out, /CLAUDE\.md|\.claude\/settings\.json/, 'no Claude contract or shim claim')
-  assert.ok(existsSync(join(proj, 'AGENTS.md')) && existsSync(join(proj, '.codex', 'hooks.json')), 'Codex artifacts exist')
-  assert.ok(existsSync(join(codex, 'config.toml')), 'Codex trust exists')
-  assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no Claude artifacts were planted')
+test('a fresh selected-harness default drives no-choice session creation and pins its safe command', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, home, env, spex } = freshRepo()
+  spex('init', '.', '--harness', 'codex')
+
+  // Make the liveness snapshot time out so the real create path leaves the session queued instead of starting
+  // an installed Codex. This exercises CLI → newSession → persisted record without replacing the launcher.
+  const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
+  const fakeTmux = join(fakeBin, 'tmux')
+  writeFileSync(fakeTmux, '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')
+  chmodSync(fakeTmux, 0o755)
+  const createEnv = {
+    ...env,
+    PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+    SPEXCODE_API_URL: 'http://127.0.0.1:1',
+    SPEXCODE_TMUX: `safe-init-${process.pid}`,
+  }
+  const out = execFileSync(TSX, [CLI, 'session', 'new', 'safe default probe'], {
+    cwd: proj,
+    env: createEnv,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 20000,
+  })
+  const created = JSON.parse(out)
+  assert.equal(created.status, 'queued')
+  assert.equal(created.launcher, 'codex')
+  assert.equal(created.harness, 'codex')
+
+  const projectKey = proj.replace(/[/.]/g, '-')
+  const rec = JSON.parse(readFileSync(join(home, 'projects', projectKey, 'sessions', created.id, 'session.json'), 'utf8'))
+  assert.equal(rec.launcher, 'codex')
+  assert.equal(rec.harness, 'codex')
+  assert.equal(rec.launch_cmd, 'codex', 'session creation pins the plain command from the named launcher')
 })
 
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {

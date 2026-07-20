@@ -51,8 +51,11 @@ the agent from one verb, picked by an optional topic:
   / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
-  secrets). The sessions section names the worker cap's default, precedence, and the important meaning of
-  "active": it counts compute slots, not total session rows, so human-waiting sessions do not block launches.
+  secrets). Its launcher table mirrors [[launcher-select]]: clean init's per-harness profiles use ordinary
+  commands that preserve the harness permission model, while automatic-permission commands are explicit
+  authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
+  and the important meaning of "active": it counts compute slots, not total session rows, so human-waiting
+  sessions do not block launches.
   It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields, and it omits fields the type keeps
   only as retired compat for the loud notice), and names [[identity-config]]'s one separate host-level

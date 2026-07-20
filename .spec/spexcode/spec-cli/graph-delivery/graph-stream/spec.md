@@ -51,8 +51,12 @@ both on removal. Root events cover dirty governed source, renames, draft scenari
 sidecars; the gitdir watch covers `index` changes from stage/reset that do not rewrite the working file. Both
 fire 'full'. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
 are ignored; generated project paths are not guessed away, because an adopter may govern them. A
-pathless/overflow-like event, watcher error, or resubscription is treated as an unknown full
-change, never ignored. And (0) the exported explicit nudge (`notifyBoardChanged`) for
+pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
+projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the
+graph rebuild: the affected summary remains updating with last-known and cannot compute current while the source
+is absent. The one immediate resubscribe attempt installs its replacement first, removes only that source's hold,
+then advances and performs an authoritative rebuild; a persistent failure remains held until a later canonical
+registry/request setup retries it. And (0) the exported explicit nudge (`notifyBoardChanged`) for
 a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions', and the
 issue/remark write routes pass 'full' **atomically with their store persist** ([[remark-substrate]]
 write-visibility: the writer's own post-write refetch must never race an asynchronous fs event into the
@@ -83,7 +87,8 @@ subscribers get the zero-cost notify, a closed dashboard costs nothing (both pol
 subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[graph-cache]]'s single-flight
 `getBoard()` (the SSE rebuild and a concurrent `/api/graph` poll share one assembly), broadcasts the patch,
 and notifies plain streams only when the content tag actually moved. Every source is best-effort and never
-throws: a source that can't start leaves that leaf to the patrol — which now actually covers it, and says so.
+throws. The patrol can still repair ordinary graph units and reports that repair; an eval input source that
+cannot start instead leaves its projection observer-held and visibly non-current until the source is restored.
 
 **Reconnect is free, and the ping is a contract.** A backend hot-reload drops the stream; `EventSource`
 auto-reconnects and the fresh `graph-full` re-anchors the patch chain with no client-side repair logic. The

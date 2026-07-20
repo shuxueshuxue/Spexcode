@@ -969,7 +969,10 @@ type ProjectionEntry = {
   current?: { generation: number; revision: string; value: SessionEvalSummary }
   scheduled: number | null
   running: number | null
+  observerHolds: Set<string>
 }
+
+type ProjectionTarget = 'all' | { id?: string; path?: string }
 
 // Pure generation coordinator around an injected stable builder. Snapshot construction only serializes
 // entries and authorizes the newest dirty generations; the async batch runs after that snapshot has captured
@@ -977,6 +980,7 @@ type ProjectionEntry = {
 export class SessionEvalProjectionCache {
   readonly epoch: string
   private readonly entries = new Map<string, ProjectionEntry>()
+  private readonly observerHolds = new Map<string, ProjectionTarget>()
   private batch: Promise<void> | null = null
   private notify: () => void
 
@@ -994,10 +998,23 @@ export class SessionEvalProjectionCache {
     for (const session of sessions) {
       let entry = this.entries.get(session.id)
       if (!entry) {
-        entry = { id: session.id, path: session.path, generation: 0, phase: 'loading', scheduled: null, running: null }
+        entry = {
+          id: session.id,
+          path: session.path,
+          generation: 0,
+          phase: 'loading',
+          scheduled: null,
+          running: null,
+          observerHolds: new Set(),
+        }
         this.entries.set(session.id, entry)
       } else entry.path = session.path
+      entry.observerHolds = new Set([...this.observerHolds]
+        .filter(([, target]) => this.matches(entry!, target))
+        .map(([observer]) => observer))
+      if (entry.observerHolds.size) entry.phase = 'updating'
       if ((entry.phase === 'loading' || entry.phase === 'updating')
+        && entry.observerHolds.size === 0
         && entry.running !== entry.generation && entry.scheduled !== entry.generation) entry.scheduled = entry.generation
       out.set(session.id, this.project(entry))
     }
@@ -1005,7 +1022,7 @@ export class SessionEvalProjectionCache {
     return out
   }
 
-  invalidate(target: 'all' | { id?: string; path?: string } = 'all'): number {
+  invalidate(target: ProjectionTarget = 'all'): number {
     let changed = 0
     for (const entry of this.entries.values()) {
       if (target !== 'all' && target.id !== entry.id && target.path !== entry.path) continue
@@ -1015,6 +1032,36 @@ export class SessionEvalProjectionCache {
       changed++
     }
     return changed
+  }
+
+  holdObserver(observer: string, target: ProjectionTarget = 'all'): boolean {
+    if (this.observerHolds.has(observer)) return false
+    this.observerHolds.set(observer, target)
+    for (const entry of this.entries.values()) {
+      if (!this.matches(entry, target)) continue
+      entry.observerHolds.add(observer)
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+    }
+    return true
+  }
+
+  releaseObserver(observer: string): boolean {
+    if (!this.observerHolds.delete(observer)) return false
+    for (const entry of this.entries.values()) {
+      if (!entry.observerHolds.delete(observer)) continue
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+    }
+    return true
+  }
+
+  isObserverHeld(id: string, path: string): boolean {
+    const entry = this.entries.get(id)
+    if (entry?.observerHolds.size) return true
+    return [...this.observerHolds.values()].some((target) => this.matches({ id, path }, target))
   }
 
   get(id: string): SessionEvalProjection | null {
@@ -1029,7 +1076,7 @@ export class SessionEvalProjectionCache {
 
   accept(id: string, generation: number, revision: string, value: SessionEvalSummary): boolean {
     const entry = this.entries.get(id)
-    if (!entry || entry.generation !== generation) return false
+    if (!entry || entry.generation !== generation || entry.observerHolds.size) return false
     const changed = entry.phase !== 'ready' || entry.current?.revision !== revision
     entry.current = { generation, revision, value }
     entry.phase = 'ready'
@@ -1048,6 +1095,10 @@ export class SessionEvalProjectionCache {
         ? { revision: stable.revision, value: stable.value }
         : stable ? { lastKnown: stable } : {}),
     }
+  }
+
+  private matches(entry: { id: string; path: string }, target: ProjectionTarget): boolean {
+    return target === 'all' || target.id === entry.id || target.path === entry.path
   }
 
   private startBatch(): void {
@@ -1131,6 +1182,15 @@ export function sessionEvalProjections(sessions: { id: string; path: string }[])
 export function invalidateSessionEvalProjections(target: 'all' | { id?: string; path?: string } = 'all'): number {
   return projectionCache.invalidate(target)
 }
+export function holdSessionEvalProjectionObserver(
+  observer: string,
+  target: 'all' | { id?: string; path?: string } = 'all',
+): boolean {
+  return projectionCache.holdObserver(observer, target)
+}
+export function releaseSessionEvalProjectionObserver(observer: string): boolean {
+  return projectionCache.releaseObserver(observer)
+}
 export async function awaitSessionEvalProjectionIdle(): Promise<void> { await projectionCache.idle() }
 
 export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
@@ -1142,14 +1202,17 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
     if (!payload) return null
     const wtPath = worktreePathForBranch(payload.branch)
     if (!wtPath) return null
+    if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
     const known = projectionCache.get(id)
     const generation = known?.generation ?? 0
     const before = await sessionEvalContentRevision(wtPath)
     const model = await buildSessionEvalModel(id, payload, wtPath, false)
     const after = await sessionEvalContentRevision(wtPath)
     const current = projectionCache.get(id)
-    if (before !== after || (current && current.generation !== generation)) {
+    if (before !== after || projectionCache.isObserverHeld(id, wtPath)
+      || (current && current.generation !== generation)) {
       if (before !== after) projectionCache.invalidate({ id })
+      if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
       continue
     }
     const summary = sessionEvalSummary(model.nodes)

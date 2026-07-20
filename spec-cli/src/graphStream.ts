@@ -7,7 +7,9 @@ import { hotSignature, warmSignature } from './sessions.js'
 import { getBoard, invalidateBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 import {
+  holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,
+  releaseSessionEvalProjectionObserver,
   setSessionEvalProjectionNotify,
 } from '../../spec-eval/src/sessioneval.js'
 
@@ -172,17 +174,65 @@ function ensureWatcher(): void {
 
 // ---- event source 2: git refs (a commit/merge reshapes the tree the moment the ref moves) → 'full' ----
 // refs/ recursively for loose refs (heads, worktree branches), plus the common dir itself non-recursively
-// for packed-refs rewrites and HEAD flips. Best-effort like every source: no watch → the cold tick covers.
+// for packed-refs rewrites and HEAD flips. Ordinary graph units still have the patrol; eval projections are
+// observer-held across a failure and only become current after a replacement watch authorizes a rescan.
 let refsWatchers: FSWatcher[] | null = null
-function ensureRefsWatcher(): void {
+const REFS_OBSERVER = 'graph:refs'
+
+export function watchSessionEvalRefs(
+  common: string,
+  onInput: () => void,
+  onFailure: () => void,
+): FSWatcher[] {
+  const attached: FSWatcher[] = []
+  let failed = false
+  const close = () => {
+    for (const watcher of attached) { try { watcher.close() } catch { /* already gone */ } }
+  }
+  const fail = () => {
+    if (failed) return
+    failed = true
+    close()
+    onFailure()
+  }
+  try {
+    attached.push(watch(join(common, 'refs'), { recursive: true }, (_event, file) => {
+      if (file == null) { fail(); return }
+      onInput()
+    }))
+    attached.push(watch(common, (_event, file) => {
+      if (file == null) { fail(); return }
+      if (file === 'packed-refs' || file === 'HEAD') onInput()
+    }))
+    for (const watcher of attached) watcher.on('error', fail)
+    return attached
+  } catch (error) {
+    close()
+    throw error
+  }
+}
+
+function refsWatcherFailed(): void {
+  refsWatchers = null
+  if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
+  setImmediate(() => ensureRefsWatcher(false))
+}
+
+function ensureRefsWatcher(retry = true): void {
   if (refsWatchers) return
-  if (isDisabled('refs')) return
-  refsWatchers = []
+  if (isDisabled('refs')) {
+    if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
+    return
+  }
   try {
     const common = gitCommonDir()
-    try { refsWatchers.push(watch(join(common, 'refs'), { recursive: true }, () => fireChanged('full', 'all'))) } catch { /* loose refs unwatched */ }
-    try { refsWatchers.push(watch(common, (_e, f) => { if (f === 'packed-refs' || f === 'HEAD') fireChanged('full', 'all') })) } catch { /* packed refs unwatched */ }
-  } catch { /* not a repo? the cold tick still covers */ }
+    refsWatchers = watchSessionEvalRefs(common, () => fireChanged('full', 'all'), refsWatcherFailed)
+    if (releaseSessionEvalProjectionObserver(REFS_OBSERVER)) fireChanged('full')
+  } catch {
+    refsWatchers = null
+    if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
+    if (retry) setImmediate(() => ensureRefsWatcher(false))
+  }
 }
 
 // ---- event source 3: worktree registry + working roots + per-worktree indexes → 'full' ----
@@ -193,6 +243,7 @@ let registryWatcher: FSWatcher | null = null
 type WorktreeWatch = { path: string; root: FSWatcher; index: FSWatcher }
 const worktreeWatchers = new Map<string, WorktreeWatch>()
 const worktreeRetryAttempted = new Set<string>()
+const worktreeObserver = (name: string): string => `graph:worktree:${name}`
 
 export function scheduleWorktreeResubscribe(
   name: string,
@@ -243,19 +294,20 @@ export function watchSessionEvalWorktree(
   }
 }
 
-function dropWorktreeWatcher(name: string, mark = true): void {
+function dropWorktreeWatcher(name: string): WorktreeWatch | null {
   const row = worktreeWatchers.get(name)
-  if (!row) return
+  if (!row) return null
   worktreeWatchers.delete(name)
   try { row.root.close() } catch { /* already gone */ }
   try { row.index.close() } catch { /* already gone */ }
-  if (mark) fireChanged('full', { path: row.path })
+  return row
 }
 
-function watcherFailed(name: string): void {
+function watcherFailed(name: string, path: string): void {
   // Failure/overflow has no trustworthy path. Keep last-known, mark the target updating, and immediately
   // resubscribe; the authorized summary build is the one authoritative rescan, never a periodic sweep.
-  dropWorktreeWatcher(name, true)
+  dropWorktreeWatcher(name)
+  if (holdSessionEvalProjectionObserver(worktreeObserver(name), { path })) fireChanged('full')
   scheduleWorktreeResubscribe(name, worktreeRetryAttempted, reconcileWorktrees)
 }
 
@@ -265,6 +317,7 @@ function reconcileWorktrees(): void {
   let ents: import('node:fs').Dirent[] = []
   try { ents = readdirSync(dir, { withFileTypes: true }) } catch { /* no worktrees registry yet */ }
   const live = new Set<string>()
+  let released = false
   for (const e of ents) {
     if (!e.isDirectory()) continue
     live.add(e.name)
@@ -276,37 +329,90 @@ function reconcileWorktrees(): void {
         wtPath,
         join(dir, e.name),
         () => fireChanged('full', { path: wtPath }),
-        () => watcherFailed(e.name),
+        () => watcherFailed(e.name, wtPath),
       )
       const row = { path: wtPath, root, index }
       worktreeWatchers.set(e.name, row)
       worktreeRetryAttempted.delete(e.name)
+      // The replacement is live before its hold is removed. This delta authorizes one double-read rescan,
+      // so edits made anywhere in the unwatched interval are inside the new generation's fingerprint.
+      if (releaseSessionEvalProjectionObserver(worktreeObserver(e.name))) fireChanged('full')
     } catch {
       // An attach failure is observable: mark unknown/full now. The next registry change or explicit graph
       // source setup retries; no patrol is allowed to call the eval projection current.
-      fireChanged('full', 'all')
+      let path: string | null = null
+      try { path = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim()) } catch { /* broken row */ }
+      if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), path ? { path } : 'all')) fireChanged('full')
       scheduleWorktreeResubscribe(e.name, worktreeRetryAttempted, reconcileWorktrees)
     }
   }
-  for (const name of worktreeWatchers.keys()) if (!live.has(name)) dropWorktreeWatcher(name, false)
+  for (const name of worktreeWatchers.keys()) if (!live.has(name)) {
+    dropWorktreeWatcher(name)
+    released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+  }
+  for (const name of worktreeRetryAttempted) if (!live.has(name)) {
+    worktreeRetryAttempted.delete(name)
+    released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+  }
+  if (released) fireChanged('full')
 }
-function ensureWorktreeRegistry(): void {
-  if (registryWatcher) return
-  if (isDisabled('worktrees')) return
+const WORKTREE_REGISTRY_OBSERVER = 'graph:worktree-registry'
+
+export function watchSessionEvalRegistry(
+  dir: string,
+  onInput: () => void,
+  onFailure: () => void,
+): FSWatcher {
+  let watcher: FSWatcher | null = null
+  let failed = false
+  const fail = () => {
+    if (failed) return
+    failed = true
+    try { watcher?.close() } catch { /* already gone */ }
+    onFailure()
+  }
+  try {
+    watcher = watch(dir, (_event, file) => {
+      if (file == null) { fail(); return }
+      onInput()
+    })
+    watcher.on('error', fail)
+    return watcher
+  } catch (error) {
+    try { watcher?.close() } catch { /* partial attach */ }
+    throw error
+  }
+}
+
+function registryWatcherFailed(): void {
+  registryWatcher = null
+  if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
+  setImmediate(() => ensureWorktreeRegistry(false))
+}
+
+function ensureWorktreeRegistry(retry = true): void {
+  if (registryWatcher) { reconcileWorktrees(); return }
+  if (isDisabled('worktrees')) {
+    if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
+    return
+  }
   try {
     const dir = join(gitCommonDir(), 'worktrees')
     try { mkdirSync(dir, { recursive: true }) } catch { /* best-effort */ }
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
-    registryWatcher = watch(dir, () => { worktreeRetryAttempted.clear(); reconcileWorktrees(); fireChanged('full', 'all') })
-    registryWatcher.on('error', () => {
-      try { registryWatcher?.close() } catch { /* already gone */ }
-      registryWatcher = null
+    registryWatcher = watchSessionEvalRegistry(dir, () => {
+      worktreeRetryAttempted.clear()
+      reconcileWorktrees()
       fireChanged('full', 'all')
-      setImmediate(ensureWorktreeRegistry)
-    })
-  } catch { registryWatcher = null }
+    }, registryWatcherFailed)
+  } catch {
+    registryWatcher = null
+    if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
+    if (retry) setImmediate(() => ensureWorktreeRegistry(false))
+  }
   reconcileWorktrees()   // attach for the worktrees that already exist when the source starts
+  if (registryWatcher && releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)) fireChanged('full')
 }
 
 // Attach the canonical filesystem sources before an HTTP snapshot starts summary work. This closes the

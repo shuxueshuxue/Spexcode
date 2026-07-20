@@ -356,6 +356,50 @@ test('projection cache discards an old response after a newer generation and sta
   })
 })
 
+test('observer holds fence in-flight work and resubscribe computes the missed window once', async () => {
+  const stale = deferred<any>()
+  let builds = 0
+  let latest = 1
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    if (builds === 2) return stale.promise
+    return { kind: 'stable', revision: `r${latest}`, summary: summary(latest) }
+  }, () => {}, 'epoch')
+  const sessions = [{ id: 's', path: '/wt' }]
+
+  cache.snapshot(sessions)
+  await cache.idle()
+  cache.invalidate({ id: 's' })
+  cache.snapshot(sessions)
+  await Promise.resolve()
+
+  assert.equal(cache.holdObserver('refs', 'all'), true)
+  assert.equal(cache.holdObserver('worktree', { path: '/wt' }), true)
+  latest = 3 // a direct edit in the interval where both observers are absent
+  stale.resolve({ kind: 'stable', revision: 'stale', summary: summary(2) })
+  await cache.idle()
+  cache.snapshot(sessions)
+  await cache.idle()
+  assert.equal(builds, 2, 'an observer-held snapshot cannot authorize a replacement compute')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 3, phase: 'updating',
+    lastKnown: { generation: 0, revision: 'r1', value: summary(1) },
+  })
+
+  assert.equal(cache.releaseObserver('worktree'), true)
+  cache.snapshot(sessions)
+  await cache.idle()
+  assert.equal(builds, 2, 'restoring one observer cannot mask a second failed input axis')
+  assert.equal(cache.releaseObserver('refs'), true)
+  cache.snapshot(sessions)
+  await cache.idle()
+
+  assert.equal(builds, 3, 'the fully restored observer set authorizes one latest-window rescan')
+  assert.deepEqual(cache.get('s'), {
+    epoch: 'epoch', generation: 5, phase: 'ready', revision: 'r3', value: summary(3),
+  })
+})
+
 test('projection cache batches initial misses into one publication', async () => {
   let builds = 0, publishes = 0
   const cache = new SessionEvalProjectionCache(async (id) => {

@@ -3,6 +3,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
 import { scanQuery, suggestAt } from './reviewQuery.js'
+import { PageScroll } from './PageScroll.jsx'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
 // overflow, row, and state primitives; both detail pages consume the same standalone shell.
@@ -386,7 +387,7 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
 
 // ListPage is the measured GitHub ListView skeleton: title/action, 32px query, one bordered container with
 // a 48px metadata bar, structured anchor rows, and an empty state. Pages supply domain data only.
-export function ListPage({ notice, error, title, action, search, sections = [], facets, overflow, rows, empty, children }) {
+export function ListPage({ notice, error, title, action, search, sections = [], sectionMode = 'tabs', facets, overflow, rows, empty, children }) {
   const [cur, setCur] = useState(null)
   const tabsId = useId()
   const stateRef = useRef({})
@@ -414,10 +415,11 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
   // the tablist ALWAYS exposes one roving tab stop: if a consumer marks no section active (a committed
   // text with no section token), the FIRST tab keeps tabIndex=0 and labels the one results panel.
   const activeSectionIndex = Math.max(0, sections.findIndex((section) => section.active))
+  const sectionsAreTabs = sectionMode === 'tabs'
   const panelId = `${tabsId}-panel`
   const tabId = (index) => `${tabsId}-tab-${index}`
   return (
-    <div className="lp-page">
+    <PageScroll className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
       <div className="rl-content">
         <div className="rl-titlebar">
@@ -428,12 +430,18 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
         {error && <div className="fv-error lp-error" role="alert">{error}</div>}
         <section className="rl-list">
           <header className="lp-head">
-            <div className="rl-sections" role="tablist" aria-label={title} aria-orientation="horizontal">
+            <div className="rl-sections" role={sectionsAreTabs ? 'tablist' : 'group'} aria-label={title}
+              {...(sectionsAreTabs ? { 'aria-orientation': 'horizontal' } : {})}>
               {sections.map((section, index) => (
-                <button type="button" role="tab" aria-selected={section.active} aria-controls={panelId}
-                  id={tabId(index)} key={section.key}
-                  tabIndex={index === activeSectionIndex ? 0 : -1} className={`rl-section ${section.active ? 'active' : ''}`}
+                <button type="button" role={sectionsAreTabs ? 'tab' : undefined}
+                  aria-selected={sectionsAreTabs ? section.active : undefined}
+                  aria-pressed={sectionsAreTabs ? undefined : section.active}
+                  aria-controls={sectionsAreTabs ? panelId : undefined}
+                  id={sectionsAreTabs ? tabId(index) : undefined} key={section.key}
+                  tabIndex={sectionsAreTabs ? (index === activeSectionIndex ? 0 : -1) : undefined}
+                  className={`rl-section ${section.active ? 'active' : ''}`}
                   onClick={section.onSelect} onKeyDown={(event) => {
+                    if (!sectionsAreTabs) return
                     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
                     const tabs = [...event.currentTarget.closest('[role="tablist"]').querySelectorAll('[role="tab"]')]
                     const next = rovingIndex(tabs.indexOf(event.currentTarget), tabs.length, event.key)
@@ -448,7 +456,9 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
             </div>
             <div className="rl-facets">{facets}{overflow}</div>
           </header>
-          <div className="lp-rows" role="tabpanel" id={panelId} aria-labelledby={tabId(activeSectionIndex)}>
+          <div className="lp-rows" role={sectionsAreTabs ? 'tabpanel' : 'region'} id={panelId}
+            aria-labelledby={sectionsAreTabs ? tabId(activeSectionIndex) : undefined}
+            aria-label={sectionsAreTabs ? undefined : title}>
             {rows.length === 0 && <div className="lp-empty">{emptyText}</div>}
             {rows.map((row) => row.href
               ? <a key={row.key} className={`lp-row ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`} href={row.href}>{row.content}</a>
@@ -457,7 +467,7 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
         </section>
       </div>
       {children}
-    </div>
+    </PageScroll>
   )
 }
 
@@ -468,22 +478,22 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
 export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, backHref, backLabel, children }) {
   if (failure) {
     return (
-      <div className="ds-page ds-missing ds-failed" role="alert">
+      <PageScroll className="ds-page ds-missing ds-failed" role="alert">
         <div className="ds-missing-note">{failure}</div>
         {listHref && <a className="ds-backlink" href={listHref}>{listLabel}</a>}
-      </div>
+      </PageScroll>
     )
   }
   if (missing) {
     return (
-      <div className="ds-page ds-missing">
+      <PageScroll className="ds-page ds-missing">
         <div className="ds-missing-note">{missing}</div>
         {listHref && <a className="ds-backlink" href={listHref}>{listLabel}</a>}
-      </div>
+      </PageScroll>
     )
   }
   return (
-    <div className="ds-page">
+    <PageScroll className="ds-page">
       <header className="ds-head">
         {backHref && (
           <a className="ds-back" href={backHref} data-tip={backLabel} aria-label={backLabel}>
@@ -503,7 +513,7 @@ export function DetailShell({ title, titleMeta, status, side, composer, missing,
         </div>
         <aside className="ds-side">{side}</aside>
       </div>
-    </div>
+    </PageScroll>
   )
 }
 

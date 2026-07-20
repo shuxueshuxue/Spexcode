@@ -173,7 +173,7 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
   return (
-    <div className="lp-page">
+    <div className="page-detail-stack">
       {notice && <div className="fv-notice">{notice}</div>}
       <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}

@@ -203,6 +203,10 @@ export default {
     scopedSource: "this reading comes from session {id}'s worktree",
     scopedSourceOpen: 'open the session terminal',
     sideQueue: 'continue reviewing',
+    queuePrev: 'previous',
+    queueNext: 'up next',
+    sideIssue: 'issue',
+    sideNode: 'spec node',
   },
 
   annotator: {

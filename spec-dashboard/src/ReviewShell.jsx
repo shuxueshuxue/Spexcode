@@ -518,3 +518,34 @@ export function SideSection({ label, children }) {
     </div>
   )
 }
+
+// the ONE side-rail metadata VALUE ([[review-chrome]]): every rail row's value on BOTH detail pages
+// renders through this primitive — a plain span, a REAL anchor (`href`), or a button (`onClick`) —
+// sharing one markup shape and one truncation contract: the text container is min-width:0,
+// single-line, shrinkable, ellipsizing when it exceeds the rail, with the full text kept reachable
+// through the shared tooltip/accessible name (`tip` defaults to the text itself). `lead`/`trail`
+// carry fixed-size adornments (a liveness dot, an icon) that never shrink. Pages supply data and an
+// optional identity class — never a parallel inline span/anchor/tooltip variant of the same row.
+export function SideValue({ text, tip, dim = false, mono = false, href = null, external = false, onClick = null, className = '', lead = null, trail = null, label = null }) {
+  const cls = `ds-val${dim ? ' dim' : ''}${mono ? ' mono' : ''}${href || onClick ? ' link' : ''}${className ? ` ${className}` : ''}`
+  const tipText = tip ?? (typeof text === 'string' ? text : undefined)
+  // `label` names the ACTION on the interactive variants (a role-less span exposes no aria-label;
+  // its accessible name is the full text already in the DOM — CSS truncation is visual only).
+  const aria = label ? { 'aria-label': label } : {}
+  const body = (
+    <>
+      {lead}
+      <span className="ds-val-text">{text}</span>
+      {trail}
+    </>
+  )
+  if (href) {
+    return (
+      <a className={cls} href={href} data-tip={tipText} {...aria} {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}>{body}</a>
+    )
+  }
+  if (onClick) {
+    return <button type="button" className={cls} onClick={onClick} data-tip={tipText} {...aria}>{body}</button>
+  }
+  return <span className={cls} data-tip={tipText}>{body}</span>
+}

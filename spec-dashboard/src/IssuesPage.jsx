@@ -6,7 +6,7 @@ import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import Modal from './Modal.jsx'
-import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState, SideSection } from './ReviewShell.jsx'
+import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState, SideSection, SideValue } from './ReviewShell.jsx'
 import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
 import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
@@ -197,24 +197,30 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
       }
       side={
         <>
+          {/* the issue's OWN identity, explicitly typed ([[review-chrome]]'s metadata law — a bare
+              #slug reads as a node): a localized Issue label over the full id, shrink-truncated with
+              the full slug on the tooltip. */}
+          <SideSection label={t('detail.sideIssue')}>
+            <SideValue text={th.id} mono />
+          </SideSection>
           <SideSection label={t('detail.sideStore')}>
-            <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
-            {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })}</a>}
+            <SideValue text={th.store} className={`fv-store fv-store-${local ? 'local' : 'forge'}`} />
+            {th.url && <SideValue text={t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })} href={th.url} external />}
           </SideSection>
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
               session id (join it against the board for liveness, click through when live); a forge issue's
-              `by` is a github login that resolves to no session, so it stays a plain label. */}
+              `by` is a github login that resolves to no session, so it stays a plain labeled value. */}
           {th.by && (
             <SideSection label={t('detail.sideOriginator')}>
               {local
                 ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
-                : <span className="fv-by">{th.by}</span>}
+                : <SideValue text={th.by} dim />}
             </SideSection>
           )}
           {nodes.length > 0 && (
             <SideSection label={t('detail.sideNodes')}>
               {nodes.map((id) => (
-                <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} data-tip={t('session.issuesFocusNode')}>{id}</button>
+                <SideValue key={id} text={id} mono tip={t('session.issuesFocusNode')} onClick={() => onFocusNode?.(id)} />
               ))}
             </SideSection>
           )}

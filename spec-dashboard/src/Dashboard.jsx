@@ -644,7 +644,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
       </PagePane>
       {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
       <PagePane active={page === 'evals'} className="page-evals">
-        <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} onOpenSession={openSession} />
+        <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
       </PagePane>
       {/* the Issues page ([[issues-view]]) — its own route; renders from the app-resident issues list */}
       <PagePane active={page === 'issues'} className="page-issues">

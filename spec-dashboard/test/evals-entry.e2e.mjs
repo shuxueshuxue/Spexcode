@@ -132,8 +132,10 @@ let scopedRowHref = null
     context.waitForEvent('page', { timeout: 8000 }).catch(() => null),
     page.click('.se-door', { modifiers: ['ControlOrMeta'] }),
   ])
-  await popup?.waitForLoadState().catch(() => null)
-  check('Ctrl-click opens the terminal in a new tab', !!popup && await popup.evaluate(() => location.hash) === `#/sessions/${SESSION}`)
+  await popup?.waitForURL((url) => url.hash === `#/sessions/${SESSION}`, { timeout: 15000 }).catch(() => null)
+  await popup?.waitForSelector('.si-term-body', { timeout: 15000 }).catch(() => null)
+  const popupHash = await popup?.evaluate(() => location.hash).catch(() => null)
+  check('Ctrl-click opens the terminal in a new tab', popupHash === `#/sessions/${SESSION}`)
   check('Ctrl-click leaves the scoped list in place', await page.evaluate(() => location.hash) === LIST_HASH)
   const popupVideo = popup?.video() || null
   await popup?.close().catch(() => null)

@@ -672,9 +672,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   return (
     <>
     {/* a routed PAGE ([[side-nav]]), not a lifted modal: no backdrop, no outside-click close — it fills the
-        app's main area and stays MOUNTED while other pages show (display:none) so terminals keep their
-        sockets/scroll warm. */}
-    <div className="si-page" style={open ? undefined : { display: 'none' }}>
+        app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
+        warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
+    <div className="si-page">
       <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
         {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
             surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}

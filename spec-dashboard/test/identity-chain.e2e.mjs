@@ -300,7 +300,10 @@ try {
     { name: /^Spec Node Graph/, hash: '#/graph' },
   ]
   for (const route of routes) {
-    await page.getByRole('button', { name: route.name }).click()
+    // every rail entry is a REAL ANCHOR carrying its page's address ([[side-nav]]) — role link, not button
+    const entry = page.locator('.side-rail').getByRole('link', { name: route.name })
+    assert.equal((await entry.getAttribute('href') || '').startsWith(route.hash), true, `rail entry carries ${route.hash}`)
+    await entry.click()
     await waitFor(() => Promise.resolve(page.url().includes(route.hash)), `rail route ${route.hash}`)
     assert.equal(await page.title(), 'Atlas Lab', `scoped tab title stays the project title on ${route.hash}`)
   }
@@ -308,7 +311,7 @@ try {
   await waitFor(() => Promise.resolve(page.url().includes('#/settings')), 'browser back to settings')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/settings`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  assert.equal(await page.getByRole('button', { name: /^Settings/ }).getAttribute('aria-current'), 'page')
+  assert.equal(await page.getByRole('link', { name: /^Settings/ }).getAttribute('aria-current'), 'page')
   await page.goto('about:blank')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/projects`, { waitUntil: 'domcontentloaded' })
   await page.waitForURL((url) => url.pathname === '/projects')

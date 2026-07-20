@@ -234,8 +234,6 @@ body {
    (graph, session board) are display-toggled in place; forum/settings mount per visit. */
 .app { display: flex; height: 100vh; }
 .app-main { flex: 1; min-width: 0; display: flex; position: relative; }
-/* the graph page is one full-width canvas; node details stay in routed pages and the on-demand popup. */
-.page-graph { flex: 1; min-width: 0; position: relative; }
 
 /* ---- left navigation rail ---- */
 .side-rail {
@@ -243,16 +241,20 @@ body {
   padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line);
 }
 .rail-spacer { flex: 1; }
+/* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
 .rail-btn {
   width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
   background: none; border: none; border-radius: 9px; cursor: pointer; color: var(--muted);
+  text-decoration: none;
 }
 .rail-btn:hover { background: var(--panel2); color: var(--ink2); }
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 
-/* ---- routed page containers (evals, issues, settings) ---- */
+/* ---- routed page containers — ONE pane boundary for every page ([[side-nav]]) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* the graph page is one full-width canvas; node details stay in routed pages and the on-demand popup. */
+.page-pane.page-graph { display: block; position: relative; }
 /* the evals + issues pages keep the master-detail iron rule: the outer page never scrolls, each region scrolls internally */
 .page-evals, .page-issues { overflow: hidden; padding: 0 14px 10px 0; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }

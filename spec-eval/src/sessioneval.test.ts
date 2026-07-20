@@ -134,17 +134,9 @@ test('session measurement keeps an otherwise untouched scenario without consulti
   ])
 })
 
-test('unknown coverage is changed frontend code with no declared scenario axis', () => {
+test('unknown coverage is changed frontend code on a node with no eval.md', () => {
   const changed = new Set(['src/View.jsx', 'src/covered.jsx', 'src/server.ts', 'README.md'])
-  assert.deepEqual(unknownCoveragePaths([], ['src/View.jsx'], changed), ['src/View.jsx'])
-  assert.deepEqual(unknownCoveragePaths(
-    [scenario('explicit', { code: ['src/covered.jsx'] })],
-    ['src/View.jsx', 'src/covered.jsx'],
-    changed,
-  ), ['src/View.jsx'])
-  assert.deepEqual(unknownCoveragePaths(
-    [scenario('inherits')],
-    ['src/View.jsx', 'src/covered.jsx'],
-    changed,
-  ), [])
+  assert.deepEqual(unknownCoveragePaths(['src/View.jsx', 'src/server.ts'], changed), ['src/View.jsx'])
+  assert.deepEqual(unknownCoveragePaths(['src/covered.jsx'], changed), ['src/covered.jsx'])
+  assert.deepEqual(unknownCoveragePaths(['src/server.ts', 'README.md'], changed), [])
 })

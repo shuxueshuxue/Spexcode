@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
   - spec-dashboard/src/EvalsPage.jsx
+  - spec-dashboard/test/session-scope-impact.e2e.mjs
 ---
 # session-eval
 

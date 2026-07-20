@@ -19,8 +19,9 @@ scenarios:
       reviewer can never see the proof claim a deleted scenario as outstanding loss the board has already
       dropped.
   - name: session-scope-bounds-impact
-    tags: [backend-api]
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts]
+    tags: [backend-api, frontend-e2e, desktop]
+    test: spec-dashboard/test/session-scope-impact.e2e.mjs
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
     description: >
       Build a session model over a worktree where one source file and one scenario's semantic contract
       changed, another scenario in that same eval.md did not, a third affected scenario has no reading,

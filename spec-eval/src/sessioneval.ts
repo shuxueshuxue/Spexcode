@@ -38,14 +38,12 @@ export function selectImpactedScenarios(
 }
 
 export function unknownCoveragePaths(
-  current: Scenario[],
   nodeCode: string[],
   changedPaths: ReadonlySet<string>,
 ): string[] {
   return [...changedPaths].filter((path) => (
     isUiPath(path)
     && codeClaims(nodeCode, path)
-    && !current.some((scenario) => codeClaims(scenario.code?.length ? scenario.code : nodeCode, path))
   ))
 }
 
@@ -607,7 +605,9 @@ async function sessionScopeNodes(
   for (const spec of ctx.specs) {
     const evalNode = evalById.get(spec.id)
     const current = evalNode?.scenarios ?? []
-    const unknownCoverage = unknownCoveragePaths(current, spec.code, changedPaths)
+    // Unknown means the node has no measurement contract at all. A node that has eval.md is known even
+    // when individual scenarios narrow their code axes; partial scenario ownership is not a synthetic gap.
+    const unknownCoverage = evalNode ? [] : unknownCoveragePaths(spec.code, changedPaths)
 
     if (!evalNode) {
       if (unknownCoverage.length) {

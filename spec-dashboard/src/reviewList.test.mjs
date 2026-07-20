@@ -417,6 +417,15 @@ test('the detail side rail is sticky on desktop, plain flow at phone width', () 
   assert.match(phone, /\.ds-side \{ position: static; max-height: none; overflow-y: visible; order: -1;/)
 })
 
+test('pagination stays in the list page scroll flow below the list, outside the sticky stack', () => {
+  assert.match(shell, /export function Pagination\(/)
+  assert.match(shell, /<PageScroll className="lp-page">[\s\S]*<section className="rl-list">[\s\S]*<\/section>\s*\{pagination && <Pagination \{\.\.\.pagination\} \/>\}[\s\S]*<\/PageScroll>/)
+  assert.match(css, /\.rl-pagination \{ max-width: 100%; display: flex; flex-wrap: wrap;/)
+  assert.doesNotMatch(css, /\.rl-pagination\s*\{[^}]*position:\s*sticky/)
+  assert.match(css, /\.lp-head \{ position: sticky; top: 0;/)
+  assert.match(css, /\.se-gates \{ position: sticky; top: 0;/)
+})
+
 test('one side-rail value primitive renders every detail metadata row on both pages', () => {
   // the ONE SideValue primitive: shrinkable min-width:0 text with ellipsis, full text on the tooltip
   assert.match(shell, /export function SideValue\(/)

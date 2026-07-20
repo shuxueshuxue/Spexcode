@@ -96,7 +96,12 @@ filter (default off) picking the root.
   [[address-routing]] — one ordinary hash push straight to the final address, never a JS-only button,
   never the legacy `?session` param) — sources the list from one session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
-  rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
+  rows, in-session rows ✦-marked). That backend model is already bounded to scenarios whose own code or
+  semantic contract this worktree affected, plus scenarios this session measured; the page never repeats
+  the impact predicate. An affected declared scenario without a reading remains a blind/unmeasured row and
+  an affected stale reading remains navigable. Changed frontend files with no declared scenario are
+  node-level unknown coverage in the leading strip, never synthetic rows and never part of scenario/filter
+  counts. The detail carries only `?q=scope:<id>` (never list filters) so its
   A/B history walks the worktree-rooted results. Every scoped detail face returns to the SAME list:
   the happy detail's back arrow and the failure/not-found faces' list link all point at the SCOPED
   default view — the door-minted address — keeping the user on the data-source axis their address named

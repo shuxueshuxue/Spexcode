@@ -122,10 +122,12 @@ copy-link/middle-click work for free), and it sits outside the tablist, so click
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
-see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model:
-measured scenarios over declared scenarios is always explicit (including `0/0`); reliable current pass/fail
+see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
+already bounded by [[session-eval]] to scenarios this worktree affected or measured: measured scenarios over
+in-scope declared scenarios is always explicit (including `0/0`); reliable current pass/fail
 counts use [[review-chrome]]'s `ReviewState` vocabulary, and declared-but-unmeasured scenarios remain a visible
-blind-spot count. Loading, load failure, and zero are distinct states — a transport failure is never painted as
+blind-spot count. Node-level unknown frontend coverage is a separate missing-state tally, never part of the
+scenario fraction. Loading, load failure, and zero are distinct states — a transport failure is never painted as
 zero loss. This is a glance and a door, never a scenario menu or an explanatory paragraph.
 While this toolbar is visible, the glance refreshes on a bounded cadence as well as session/page edges, so a
 reading filed during a long `working` stretch becomes visible without forcing a tab switch or lifecycle change.

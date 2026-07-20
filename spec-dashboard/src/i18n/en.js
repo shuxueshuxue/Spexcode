@@ -273,6 +273,7 @@ export default {
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
     unmeasured: 'unmeasured',
+    unknownCoverage: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
   },
 
   time: {
@@ -546,8 +547,9 @@ export default {
     evalPass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and passing`,
     evalFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and failing`,
     evalBlind: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not measured`,
-    evalDoorSummary: ({ measured, total, pass, fail, blind }) =>
-      `open this session's Evals page — ${measured}/${total} measured, ${pass} fresh pass, ${fail} fresh fail, ${blind} unmeasured`,
+    evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
+    evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>
+      `open this session's Evals page — ${measured}/${total} measured, ${pass} fresh pass, ${fail} fresh fail, ${blind} unmeasured, ${unknown} unknown`,
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

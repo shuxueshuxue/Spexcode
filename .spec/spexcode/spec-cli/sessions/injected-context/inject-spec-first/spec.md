@@ -2,47 +2,45 @@
 title: inject-spec-first
 status: active
 hue: 280
-desc: A one-shot PreToolUse nudge — read your node's spec (and its neighbors) before you read or edit code, reconcile against it, never silently diverge.
+desc: A governed-aware PreToolUse read gate — irrelevant and uncovered reads leave it armed; the first governed read blocks once with the actual contract and its neighbors.
 code:
   - .spec/spexcode/.plugins/core/spec-first/spec-first.sh
+related:
+  - spec-cli/hooks/harness.sh
+  - spec-cli/templates/spec/project/.plugins/core/spec-first/spec-first.sh
+  - spec-cli/src/hook-dispatch.test.ts
 ---
 
 # inject-spec-first
 
 ## raw source
 
-The standing contract already tells an agent to read its spec before implementing ([[core]]), but a
-standing instruction is easy to scroll past. Catch it at the moment it matters: the agent's FIRST reach for
-the code. That moment is **reading**, not just writing — a pure analysis or "explain this" session reasons
-straight from the source and never opens the contract at all, which a mutate-only trigger lets sail past.
-So fire at the first code ACCESS, read or edit. Firing exactly once lands when it counts; firing on every
-access would just be noise the agent learns to ignore.
+The standing contract already tells an agent to read a file's governing spec before understanding its code
+([[core]]), but a standing instruction is easy to scroll past. Catch the first READ whose target actually has
+a `code:` governor. An uncovered file has no contract to read, so allowing it must leave the gate armed for a
+later governed read. Firing once on the first actionable boundary lands when it counts; firing on every read
+would become noise.
 
 ## expanded spec
 
-A PreToolUse hook (`spec-first.sh`), wired alongside `mark-active` via `settingsJson`. It acts on the
-code-ACCESS tools (`Read` / `Edit` / `Write` / `NotebookEdit`); everything else passes untouched.
+A `PreToolUse` hook (`spec-first.sh`) runs behind the same manifest and dispatcher on every harness. Native
+hook shims deliver `PreToolUse` broadly; they do not own product filtering. The shell face of the
+[[harness-adapter]] supplies one semantic `read` matcher: Claude's Read payload and Codex's read-shaped Bash
+payload reduce to the same file path, while mutations, unrelated tools, and unresolvable commands reduce to
+nothing. `spec-first.sh` contains no harness branch.
 
-Spec-awareness is UNIVERSAL, so — unlike the board-lifecycle hooks — this is NOT gated on `governed`: it
-serves any agent, dashboard-launched or user-self-launched. It resolves the session's GLOBAL store dir from
-the payload's `session_id` (same scheme as [[state]]) and keeps its sentinel there.
+The path is then resolved through the authoritative spec graph (`spex internal spec-governors`, a stable
+machine projection of the same ownership resolver as `spex spec owner`). Only a real `code:` governor is
+actionable; uncovered and related-only files are ungoverned. The session sentinel (`spec-checked`,
+a sibling of `session.json` under [[runtime]]) therefore has exactly one transition:
 
-**Bless, ignore, or nudge — once per session.** A sentinel (`spec-checked`, a sibling file in the session's
-global store dir — [[runtime]], created on demand even for a self-launched session with no record) makes it
-fire at most once:
+- **armed + irrelevant/unresolvable/ungoverned event -> armed, allow silently**;
+- **armed + governed read -> spent, block once**, naming the actual governor and requiring its relevant parent,
+  siblings, and children before retrying;
+- **spent + any later event -> spent, allow silently**.
 
-- First access touches a **spec file** (`.spec/…` or a `spec.md`) → the agent is *already* grounding → set
-  the sentinel and allow, **silently**. Reading the spec can never be the thing it blocks.
-- First access carries **no resolvable path** → allow **without** consuming the one-shot — neither code nor grounding.
-- First access touches a **code file** → set the sentinel and **block once** with the reminder; the agent
-  reads its spec, re-issues the access, and it passes. Every later access passes too.
-
-The reminder carries the reconcile-against framing of [[core]], not "obey the spec": *read your node's spec
-— resolved from the session record's `node` when it is bound to one, or `spex search <topic>` when it has none —
-AND its neighbors (parent, siblings, children), since a node's intent is only fully legible against the
-surrounding tree; then change the spec if the task changes intent, or make code honor it if it implements
-existing intent; the one forbidden move is code that silently diverges.*
-
-Its own sentinel keeps it from racing `mark-active`'s state write on the same event. Fail-open: an access made
-through `bash cat/sed` slips past — this *reminds*, it does not enforce (the Stop gate is the enforcer). Its
-edit-time twin [[inject-spec-of-file]] names the governing spec at each edit.
+This file governance is independent of the session record's `governed` bit. Dashboard-launched and
+self-launched agents both get the gate, and a self-launched session's store directory is created only when a
+governed read actually spends it. A read performed through a command shape the adapter cannot resolve passes
+without changing state: the hook is a precise reminder, while the Stop gate remains the enforcer. Its
+edit-time twin [[inject-spec-of-file]] keeps governance visible during mutations.

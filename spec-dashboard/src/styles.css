@@ -1219,17 +1219,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
-/* the optional page-supplied source banner above the header ([[review-chrome]]): one restrained line —
-   muted panel, meta type — whose link is a REAL anchor (the scoped eval detail's session door). */
-.ds-banner { max-width: 1180px; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; font-size: var(--type-control); color: var(--ink2); }
-/* the scoped LIST's banner seat ([[evals-view]]'s shared EvalScopeBanner): the list page has no ds-page
-   padding of its own, so the slot supplies it — the banner element inside stays byte-identical to the
-   detail's. */
-.se-banner-slot { padding: 12px 14px 0; }
-.se-banner-slot .ds-banner { margin-bottom: 0; }
-.ds-banner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ds-banner-link { flex: 0 0 auto; color: var(--blue); text-decoration: none; }
-.ds-banner-link:hover { text-decoration: underline; }
 /* the header row's ONE geometry contract: the row declares the title's type metric (the same tokens the
    h1 wears), so the back anchor can derive its offset from the SAME first-line box via 1lh — its center
    coincides with the title first line's center at any type token, wrap, width, or language, with no
@@ -2221,12 +2210,26 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 
 /* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
-.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; min-height: 40px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
-.se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
+/* the strip's trailing action cluster: the model-gated export door and the ALWAYS-rendered terminal
+   door hang together at the row's right edge (one auto margin — two would split the free space). */
+.se-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+.se-export { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
+/* the ONE icon-only terminal door ([[evals-view]]'s EvalScopeDoor): a REAL anchor on a stable 32px hit
+   target, no visible text — the full semantics ride its tooltip/aria-label. Same primitive in both
+   homes: this strip and the detail header's action slot. */
+.se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
+.se-door:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.se-door:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* the detail header's generic action slot ([[review-chrome]] DetailShell): trailing edge, and the SAME
+   first-line geometry contract the back anchor wears — the slot derives its offset from the row's 1lh
+   box, so the 32px action's center coincides with the title first line's (and ds-back's) center at any
+   width or language, no per-page pixel offset. */
+.ds-head-action { --ds-action-size: 32px; margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; margin-top: calc((1lh - var(--ds-action-size)) / 2); }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }
@@ -2422,10 +2425,50 @@ a.scenario-count:hover { background: var(--panel2); }
 
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 
-/* the register, config, and setup drawers ([[projects-hub]]) — same drawer bones, palette
-   tokens only, so every theme preset skins them for free. The transcript block is the spawned spex
-   verb's honest output: monospace, scrollable, never truncated by the UI. */
-.proj-add .proj-add-path { flex: 1 1 220px; }
+/* Add Project is the host filesystem/setup tool: a real modal, with a stable directory viewport and a
+   quiet option band. The fixed tracks keep loading, tags, and init choices from shifting the shell. */
+.proj-add-modal { width: min(720px, 94vw); overflow: hidden; }
+.proj-add-modal .legend-body { padding: 0; }
+.proj-add-flow { display: grid; grid-template-rows: auto minmax(180px, 38vh) auto auto auto; min-width: 0; }
+.proj-add-pathbar { display: flex; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line); }
+.proj-add-pathbar .proj-add-path { min-width: 0; }
+.proj-home-btn { width: 28px; justify-content: center; font-size: var(--type-body); }
+.proj-folder-list { min-height: 180px; overflow-y: auto; background: var(--paper); }
+.proj-folder-row {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto; align-items: center; gap: 7px;
+  width: 100%; min-height: 32px; padding: 5px 12px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-family: var(--mono);
+  font-size: var(--type-control);
+}
+.proj-folder-row:hover, .proj-folder-row:focus-visible { outline: none; background: var(--panel2); color: var(--ink2); }
+.proj-folder-row:disabled { opacity: .55; cursor: default; }
+.proj-folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-folder-tag { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; color: var(--muted); font-size: var(--type-caption); }
+.proj-folder-tag.spex { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); color: var(--green); }
+.proj-folder-empty { display: grid; min-height: 100%; place-items: center; padding: 24px; color: var(--muted); font-size: var(--type-meta); }
+.proj-add-options { display: grid; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.proj-add-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-size: var(--type-meta); }
+.proj-add-state, .proj-add-check { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--ink); font-size: var(--type-control); }
+.proj-add-state code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.proj-add-check { width: fit-content; cursor: pointer; }
+.proj-add-check input, .proj-add-harness input { accent-color: var(--blue); }
+.proj-add-harnesses { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; margin: 0; padding: 0; border: 0; }
+.proj-add-harnesses legend { float: left; margin-right: 4px; color: var(--muted); font-size: var(--type-meta); }
+.proj-add-harness { position: relative; cursor: pointer; }
+.proj-add-harness input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.proj-add-harness span {
+  display: inline-flex; align-items: center; min-height: 25px; padding: 2px 8px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink);
+  font-size: var(--type-meta);
+}
+.proj-add-harness input:checked + span { border-color: var(--blue); color: var(--blue); background: var(--panel2); }
+.proj-add-harness input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.proj-add-result { padding: 0 12px 10px; background: var(--panel); }
+.proj-add-result .proj-log { max-height: 150px; }
+.proj-add-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--line); background: var(--panel2); }
+
+/* the config and setup drawers ([[projects-hub]]) — same drawer bones, palette tokens only, so every
+   theme preset skins them for free. The transcript is the spawned spex verb's honest, uncut output. */
 .proj-full { flex-basis: 100%; }
 .proj-setup, .proj-config { flex-direction: column; align-items: stretch; gap: 6px; }
 .proj-setup-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2478,6 +2521,10 @@ a.scenario-count:hover { background: var(--panel2); }
   .identity-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .identity-choice { min-height: 54px; font-size: var(--type-caption); }
   .proj-config-editor { height: clamp(300px, 62dvh, 540px); min-height: 300px; max-height: calc(100dvh - 200px); }
+  .proj-add-modal { width: min(96vw, 720px); max-height: 92dvh; }
+  .proj-add-flow { grid-template-rows: auto minmax(170px, 34dvh) auto auto auto; }
+  .proj-add-pathbar { display: grid; grid-template-columns: 28px 28px minmax(0, 1fr) auto; padding: 8px; }
+  .proj-folder-row { padding-inline: 9px; }
   .proj-row-main { row-gap: 6px; }
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }

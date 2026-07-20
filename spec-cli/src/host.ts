@@ -11,8 +11,9 @@ import http from 'node:http'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, renameSync, rmSync, readdirSync, openSync, closeSync, existsSync } from 'node:fs'
-import { dirname, join, basename } from 'node:path'
+import { mkdirSync, writeFileSync, readFileSync, renameSync, rmSync, readdirSync, openSync, closeSync, existsSync, realpathSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spexcodeHome, encodeProject } from './layout.js'
 import { git } from './git.js'
@@ -103,13 +104,64 @@ function writeCatalog(entries: CatalogEntry[]): void {
   renameSync(tmp, catalogPath())
 }
 
-// register an existing repo: normalize any path inside the repo to its MAIN checkout (the identity every
-// record and store key uses), require a git repo (matching `spex init`'s own precondition — SpexCode is
-// git-backed), dedupe, persist. Returns the normalized root.
+function existingDirectory(dir: string): string {
+  let path: string
+  try { path = realpathSync(resolve(dir)) }
+  catch { throw new Error(`${dir} is not an existing directory`) }
+  try { if (!statSync(path).isDirectory()) throw new Error('not a directory') }
+  catch { throw new Error(`${dir} is not an existing directory`) }
+  return path
+}
+
+function gitProjectRoot(dir: string): string | null {
+  try { return dirname(git(['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
+  catch { return null }
+}
+
+// The admin folder picker reads directory NAMES only. Its selected-directory projection lets the UI ask
+// before either side effect instead of discovering the Git precondition after submit.
+export type ProjectDirectoryListing = {
+  path: string; parent: string | null; home: string; gitRoot: string | null
+  initialized: boolean; cataloged: boolean
+  entries: Array<{ name: string; path: string; git: boolean; initialized: boolean }>
+}
+export function browseProjectDirectories(dir?: string): ProjectDirectoryListing {
+  const path = existingDirectory((dir ?? '').trim() || homedir())
+  const gitRoot = gitProjectRoot(path)
+  const entries = readdirSync(path, { withFileTypes: true })
+    .filter((entry) => {
+      if (entry.isDirectory()) return true
+      if (!entry.isSymbolicLink()) return false
+      try { return statSync(join(path, entry.name)).isDirectory() } catch { return false }
+    })
+    .map((entry) => {
+      const child = join(path, entry.name)
+      const isGit = existsSync(join(child, '.git'))
+      return {
+        name: entry.name,
+        path: child,
+        git: isGit,
+        initialized: isGit && existsSync(join(child, '.spec')),
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return {
+    path,
+    parent: dirname(path) === path ? null : dirname(path),
+    home: homedir(),
+    gitRoot,
+    initialized: !!gitRoot && existsSync(join(gitRoot, '.spec')),
+    cataloged: !!gitRoot && readCatalog().some((entry) => entry.root === gitRoot),
+    entries,
+  }
+}
+
+// Register a repo by normalizing any path inside it to its MAIN checkout (the identity every record and
+// store key uses), then dedupe + persist it.
 export function addKnownProject(dir: string): string {
-  let root: string
-  try { root = dirname(git(['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
-  catch { throw new Error(`${dir} is not a git repository — SpexCode projects are git-backed (run \`git init\` there first)`) }
+  const path = existingDirectory(dir)
+  const root = gitProjectRoot(path)
+  if (!root) throw new Error(`${dir} is not a git repository — SpexCode projects are git-backed (run \`git init\` there first)`)
   catalogAdd(root)
   return root
 }
@@ -228,6 +280,43 @@ export function runSpex(root: string, args: string[], timeoutMs = 120_000): Prom
   })
 }
 
+export type AddProjectSetup = {
+  initGit?: boolean
+  init?: { harness: string; preset?: string }
+}
+export type AddProjectSetupResult = {
+  ok: boolean; root: string; gitInitialized: boolean
+  init?: { code: number | null; output: string }
+}
+
+// One ordered add transaction: select an existing directory, explicitly create Git when requested, run
+// the real CLI initializer when requested, and only then claim catalog success.
+export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
+  const path = existingDirectory(dir)
+  let root = gitProjectRoot(path)
+  let gitInitialized = false
+  if (!root) {
+    if (!setup.initGit) throw new Error(`${dir} is not a git repository — enable Git initialization to add it`)
+    git(['init', '--quiet', '--', path])
+    gitInitialized = true
+    root = gitProjectRoot(path)
+    if (!root) throw new Error(`git init completed but ${path} is still not a Git repository`)
+  }
+
+  let init: AddProjectSetupResult['init']
+  if (setup.init) {
+    const harness = typeof setup.init.harness === 'string' ? setup.init.harness.trim() : ''
+    if (!harness) throw new Error('SpexCode initialization requires at least one explicit harness target')
+    const preset = typeof setup.init.preset === 'string' ? setup.init.preset.trim() : ''
+    const result = await runSpex(root, ['init', '--harness', harness, ...(preset ? ['--preset', preset] : [])])
+    init = result
+    if (result.code !== 0) return { ok: false, root, gitInitialized, init }
+  }
+
+  catalogAdd(root)
+  return { ok: true, root, gitInitialized, ...(init ? { init } : {}) }
+}
+
 // The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there
 // is no browser-supplied path), works for offline projects, and uses a content revision so a save cannot
 // clobber a concurrent agent/user edit. spexcode.local.json stays outside this surface by contract.
@@ -337,7 +426,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 // gateway or a second auth check beside it. What the host adds rides the hub's extension seam:
 //   listProjects — GET /projects rows come from the instance-validated reconciler + the durable catalog
 //                  (online/offline/root), each carrying the hub's gating state.
-//   adminRoute   — /projects/stream (SSE), POST /projects (register a repo), raw spexcode.json
+//   adminRoute   — /projects/stream (SSE), GET /projects/browse + POST /projects (select/setup/register), raw spexcode.json
 //                  GET|PUT /projects/:id/config, and POST /projects/:id/(init|doctor|serve) — all
 //                  behind the hub's admin scope
 //                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
@@ -390,18 +479,36 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         req.on('close', () => sseClients.delete(res))
         return true
       }
+      if (path === '/projects/browse' && req.method === 'GET') {
+        const requested = new URL(req.url ?? path, 'http://localhost').searchParams.get('path') ?? ''
+        try { json(res, 200, browseProjectDirectories(requested)) }
+        catch (e) { json(res, 400, { error: (e as Error).message }) }
+        return true
+      }
       if (path === '/projects' && req.method === 'POST') {
-        let root = ''
-        try { root = String(JSON.parse(await readBody(req) || '{}')?.root ?? '').trim() } catch { /* malformed body */ }
+        let body: any = {}
+        try { body = JSON.parse(await readBody(req) || '{}') } catch { /* malformed body */ }
+        const root = String(body?.root ?? '').trim()
         if (!root) { json(res, 400, { error: 'body must be {"root": "/abs/path/to/repo"}' }); return true }
+        if (body.init !== undefined && (!body.init || typeof body.init !== 'object' || Array.isArray(body.init))) {
+          json(res, 400, { error: 'init must be {"harness":"<ids>","preset":"<optional>"}' })
+          return true
+        }
         try {
-          const normalized = addKnownProject(root)
-          const entry = (await tick()).find((p) => p.root === normalized)
-          json(res, 200, entry ?? {
-            projectId: encodeProject(normalized), root: normalized,
-            identity: resolveProjectIdentity(normalized, normalized), configRevision: readProjectConfig(normalized).revision,
-            online: false, url: null,
+          const setup = await addKnownProjectWithSetup(root, {
+            initGit: body.initGit === true,
+            ...(body.init ? { init: { harness: body.init.harness, ...(body.init.preset !== undefined ? { preset: body.init.preset } : {}) } } : {}),
           })
+          if (!setup.ok) {
+            json(res, 422, { error: 'spex init failed', ...setup })
+            return true
+          }
+          const entry = (await tick()).find((p) => p.root === setup.root)
+          json(res, 200, { ...(entry ?? {
+            projectId: encodeProject(setup.root), root: setup.root,
+            identity: resolveProjectIdentity(setup.root, setup.root), configRevision: readProjectConfig(setup.root).revision,
+            online: false, url: null,
+          }), setup })
         } catch (e) { json(res, 400, { error: (e as Error).message }) }
         return true
       }

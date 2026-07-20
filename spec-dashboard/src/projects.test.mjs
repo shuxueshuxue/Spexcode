@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   normalizeProject, normalizeProjects, loadProjects, probeProjectHealth,
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
-  addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
+  browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
   saveGatewayIcon, saveProjectIcon,
   selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult,
 } from './projects.js'
@@ -176,14 +176,41 @@ test('submitCredential: 401 wrong-password, 403 locked, a redirected success is 
   assert.deepEqual(redir, { ok: true })
 })
 
-test('addProject posts {root} to /projects and normalizes the returned row', async () => {
+test('browseProjectDirectories normalizes the host folder listing and encodes a requested path', async () => {
   const calls = []
-  const impl = async (url, init) => { calls.push({ url, method: init?.method, body: init?.body }); return jsonRes(200, { id: 'r', projectId: 'r', root: '/home/me/r', name: 'r', online: false, url: null }) }
-  const r = await withFetch(impl, () => addProject('/home/me/r'))
-  assert.deepEqual(calls[0], { url: '/projects', method: 'POST', body: '{"root":"/home/me/r"}' })
+  const impl = async (url) => {
+    calls.push(url)
+    return jsonRes(200, {
+      path: '/home/me/a b', parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
+      initialized: true, cataloged: false,
+      entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }, { nope: true }],
+    })
+  }
+  const r = await withFetch(impl, () => browseProjectDirectories('/home/me/a b'))
+  assert.equal(calls[0], '/projects/browse?path=%2Fhome%2Fme%2Fa%20b')
+  assert.deepEqual(r, {
+    ok: true, path: '/home/me/a b', parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
+    initialized: true, cataloged: false,
+    entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }],
+  })
+})
+
+test('browseProjectDirectories carries host errors and rejects malformed answers', async () => {
+  const refused = await withFetch(async () => jsonRes(400, { error: '/nope is not an existing directory' }), () => browseProjectDirectories('/nope'))
+  assert.match(refused.error, /not an existing directory/)
+  const malformed = await withFetch(async () => jsonRes(200, { path: '/x' }), () => browseProjectDirectories('/x'))
+  assert.deepEqual(malformed, { ok: false, error: 'unexpected answer' })
+})
+
+test('addProject posts explicit initialization choices and normalizes the returned row', async () => {
+  const calls = []
+  const impl = async (url, init) => { calls.push({ url, method: init?.method, body: init?.body }); return jsonRes(200, { id: 'r', projectId: 'r', root: '/home/me/r', name: 'r', online: false, url: null, setup: { gitInitialized: true } }) }
+  const r = await withFetch(impl, () => addProject('/home/me/r', { initGit: true, init: { harness: 'claude,codex' } }))
+  assert.deepEqual(calls[0], { url: '/projects', method: 'POST', body: '{"root":"/home/me/r","initGit":true,"init":{"harness":"claude,codex"}}' })
   assert.equal(r.ok, true)
   assert.equal(r.project.id, 'r')
   assert.equal(r.project.online, false)
+  assert.equal(r.setup.gitInitialized, true)
 })
 
 test('addProject surfaces the host refusal verbatim (400 not-a-repo), tolerates non-JSON and death', async () => {
@@ -194,6 +221,8 @@ test('addProject surfaces the host refusal verbatim (400 not-a-repo), tolerates 
   assert.deepEqual(spa, { ok: false, error: 'unexpected answer' })
   const dead = await withFetch(async () => { throw new TypeError('fetch failed') }, () => addProject('/x'))
   assert.deepEqual(dead, { ok: false, error: 'network' })
+  const initFailed = await withFetch(async () => jsonRes(422, { error: 'spex init failed', init: { code: 1, output: 'unknown harness' } }), () => addProject('/x', { init: { harness: 'nope' } }))
+  assert.deepEqual(initFailed, { ok: false, status: 422, error: 'spex init failed', code: 1, output: 'unknown harness' })
 })
 
 test('project config loads and revision-guarded saves the raw source; ids encoded', async () => {

@@ -78,6 +78,24 @@ test('every control is a token BUILDER over the committed text — no private fi
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
 })
 
+test('the committed text replays as a continuable edit — one trailing space, parked caret, display-only', () => {
+  // the display normalizer: trimmed tokens + exactly ONE trailing ASCII space; empty stays empty
+  assert.match(shell, /export const continuableText = /)
+  assert.match(shell, /return t \? `\$\{t\} ` : ''/)
+  // every committed replay re-seeds the continuable form; only a CHANGED committed value takes focus
+  // (the value compare keeps a cold load — and StrictMode's replayed mount — from stealing page focus)
+  assert.match(shell, /setDraft\(continuableText\(value\)\); setCaret\(-1\); setActive\(-1\)/)
+  assert.match(shell, /parkCaret\(seen\.current !== null && seen\.current !== value\)/)
+  // the parked caret sits at the very end, after the trailing space
+  assert.match(shell, /input\.setSelectionRange\(input\.value\.length, input\.value\.length\)/)
+  // submit stays the normalizing edge: outer whitespace trimmed BEFORE the engine compares/pushes,
+  // and the visible value re-seeds its continuable form even when the URL is unchanged — an emptied
+  // submit refills from the COMMITTED text (the bare address never re-fires the [value] replay)
+  assert.match(shell, /const trimmed = text\.trim\(\)/)
+  assert.match(shell, /setDraft\(continuableText\(trimmed\) \|\| continuableText\(value\)\)/)
+  assert.match(shell, /onSubmit\(trimmed\)/)
+})
+
 test('high-cardinality dimensions are token-only: no enumerating dropdowns, bounded suggestions', () => {
   // the big-list Author/Filer/Spec-node/session-scope menus are GONE
   for (const source of [evals, issues]) {

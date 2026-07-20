@@ -2,11 +2,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest } from './session.js'
+import { sessionAncestorIds, sessionForest, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon } from './icons.jsx'
+import { ReviewState } from './ReviewShell.jsx'
+import { currentEntries } from './EvalsFeed.jsx'
+import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import { useResizable } from './useResizable.js'
@@ -35,6 +38,71 @@ const HERO_WORDMARK = [
 ].join('\n')
 export function LaunchHero() {
   return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
+}
+
+// The toolbar reads the SAME worktree-rooted lean model as the scoped Evals page. `currentEntries` is the
+// shared latest-per-scenario join, so this glance never grows its own freshness/verdict aggregation. Re-entering
+// the page or crossing a lifecycle/liveness edge refreshes immediately; a bounded cadence covers readings filed
+// during one long working state, and a stale response is aborted on tab change.
+function useSessionEvalSummary(sessionId, refreshKey) {
+  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 })
+  useEffect(() => {
+    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 }); return }
+    let stopped = false
+    let timer = null
+    let abort = null
+    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 })
+    const load = () => {
+      abort = new AbortController()
+      fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`), { signal: abort.signal })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((model) => {
+          if (stopped) return
+          const nodes = Array.isArray(model?.nodes) ? model.nodes : []
+          const entries = currentEntries(nodes)
+          const total = nodes.reduce((n, node) => n + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
+          setSummary({
+            phase: 'ready',
+            measured: entries.length,
+            total,
+            pass: entries.filter((entry) => entry.state === 'pass').length,
+            fail: entries.filter((entry) => entry.state === 'fail').length,
+            blind: Math.max(0, total - entries.length),
+          })
+        })
+        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, blind: 0 }) })
+        .finally(() => { if (!stopped) timer = setTimeout(load, 15_000) })
+    }
+    load()
+    return () => { stopped = true; clearTimeout(timer); abort?.abort() }
+  }, [sessionId, refreshKey])
+  return summary
+}
+
+function SessionEvalStats({ summary }) {
+  const t = useT()
+  if (summary.phase === 'loading') {
+    return <span className="si-eval-wait" data-tip={t('session.evalLoading')}><Icon name="loader" size={12} className="si-eval-spinner" /></span>
+  }
+  if (summary.phase !== 'ready') {
+    return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} size={12} /></span>
+  }
+  return (
+    <span className="si-eval-stats" aria-hidden="true">
+      <span className="si-eval-measured" data-tip={t('session.evalMeasured', summary)}>
+        <Icon name="list-checks" size={12} /><span>{summary.measured}/{summary.total}</span>
+      </span>
+      {summary.pass > 0 && (
+        <TabCount kind="eval" state="pass" cls="st-pass secondary" n={summary.pass} label={t('session.evalPass', { n: summary.pass })} />
+      )}
+      {summary.fail > 0 && (
+        <TabCount kind="eval" state="fail" cls="st-fail secondary" n={summary.fail} label={t('session.evalFail', { n: summary.fail })} />
+      )}
+      {summary.blind > 0 && (
+        <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.blind} label={t('session.evalBlind', { n: summary.blind })} />
+      )}
+    </span>
+  )
 }
 
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
@@ -213,6 +281,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [listW, listDrag] = useResizable('spex.siListWidth', 240, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
+  const typeAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness).some((command) => command.name === 'type')
+  const evalRefreshKey = selSession
+    ? `${open}:${selSession.status}:${selSession.liveness}:${selSession.proposal || ''}:${selSession.merges || 0}`
+    : `${open}:new`
+  const evalSummary = useSessionEvalSummary(open && active !== 'new' ? active : null, evalRefreshKey)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
@@ -236,7 +309,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null) }, [active])
-  useEffect(() => { if (selSession?.liveness === 'offline') setTypeMode(false) }, [selSession?.liveness])
+  useEffect(() => { if (!typeAvailable) setTypeMode(false) }, [typeAvailable])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
   // leaving type mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
   // switch or going offline exits type mode too, but the tab-focus effect owns focus there.
@@ -558,13 +631,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
-  const uiCmds = uiCommandsFor(selSession?.status, runners)
+  const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness)
+  const headline = selSession ? sessionHeadline(selSession) : ''
+  const statusWord = selSession ? t(`status.${selSession.status}`) : ''
+  const liveness = selSession?.liveness || 'unknown'
+  const livenessWord = t(`session.liveness.${liveness}`)
+  const livenessColor = STATUS_COLOR[liveness === 'online' ? selSession?.status : liveness] || STATUS_COLOR.unknown
+  const evalDoorTitle = evalSummary.phase === 'ready'
+    ? t('session.evalDoorSummary', evalSummary)
+    : evalSummary.phase === 'loading'
+      ? t('session.evalLoading')
+      : t('session.evalUnavailable')
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, typeAvailable, setTypeMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, typeAvailable, setTypeMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles type mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
@@ -572,7 +655,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // let it through so the console opens rather than toggling type mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
       if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
-        e.preventDefault(); e.stopPropagation(); setTypeMode((v) => !v); return
+        e.preventDefault(); e.stopPropagation()
+        if (typeAvailable) setTypeMode((v) => !v)
+        return
       }
       // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
       // reserved over the console too, type mode included (the same standing as ⌥/⌘+I above): fall through
@@ -785,24 +870,56 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. A horizontal TAB BAR sits above the pane content —
-              the Terminal tab plus the Eval DOOR ([[session-console]]: the session's evaluation lives on
-              the Evals route family, so the entry is a REAL ANCHOR whose href is the canonical scoped
-              default list (`?q=is:eval state:current scope:<id>`, minted by [[address-routing]]) — click
-              is one ordinary hash push, copy-link/middle-click work for free, and no console-local pane
-              ever mounts) — and carries the lifecycle actions on its right. */}
+              WebSockets + scroll survive the tab switch. Its compact toolbar keeps four unlike concerns
+              semantically separate: one real Terminal tab, shared identity/state, one native Eval door with
+              a glance over the scoped lean model, and the state-filtered command registry. */}
           <div
             className="si-session-wrap"
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
-              <div className="si-tabbar">
-                <div className="si-tabs">
-                  <div role="tablist" style={{ display: 'contents' }}>
-                    <button role="tab" aria-selected className="si-tab on">{t('session.tabTerminal')}</button>
+              <header className="si-tabbar" aria-label={t('session.toolbarLabel')}>
+                <div className="si-surface">
+                  <div className="si-tabs" role="tablist" aria-label={t('session.surfaceLabel')}>
+                    <button
+                      type="button"
+                      id="si-terminal-tab"
+                      role="tab"
+                      aria-selected="true"
+                      aria-controls={`si-terminal-panel-${active}`}
+                      className="si-tab on"
+                    >
+                      <Icon name="terminal" size={13} /><span className="si-tab-label">{t('session.tabTerminal')}</span>
+                    </button>
                   </div>
-                  <a className="si-tab si-tab-door" href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null} data-tip={t('session.tabEvalTitle')}>{t('session.tabEval')} ↗</a>
                 </div>
-                <div className="si-actions">
+
+                <div className="si-identity" role="group" aria-label={t('session.identitySummary', { headline, status: statusWord, liveness: livenessWord })}>
+                  <span className="si-th-name" data-tip={headline}>{headline}</span>
+                  <span className="si-session-status" data-tip={statusWord}>
+                    <span className="si-status-glyph" style={{ color: STATUS_COLOR[selSession?.status] || STATUS_COLOR.unknown }} aria-hidden="true">
+                      {STATUS_GLYPH[selSession?.status] || STATUS_GLYPH.unknown}
+                    </span>
+                    <span className="si-status-word">{statusWord}</span>
+                  </span>
+                  <span className="si-session-live" data-tip={livenessWord}>
+                    <span className="si-live-dot" style={{ background: livenessColor }} aria-hidden="true" />
+                    <span className="si-live-word">{livenessWord}</span>
+                  </span>
+                </div>
+
+                <a
+                  className="si-eval-door si-tab-door sc-cyan"
+                  href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
+                  data-tip={evalDoorTitle}
+                  aria-label={evalDoorTitle}
+                >
+                  <Icon name="evals" size={14} />
+                  <span className="si-eval-label">{t('session.tabEval')}</span>
+                  <SessionEvalStats summary={evalSummary} />
+                  <Icon name="chevron-right" size={12} className="si-eval-arrow" />
+                </a>
+
+                <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
                     : uiCmds.filter((c) => c.button).map((c) => {
@@ -819,10 +936,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         )
                       })}
                 </div>
-              </div>
+              </header>
               {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
-              <div className="si-term-body" ref={termRef} style={{ position: 'relative' }}>
+              <div
+                className="si-term-body"
+                id={`si-terminal-panel-${active}`}
+                role="tabpanel"
+                aria-labelledby="si-terminal-tab"
+                ref={termRef}
+                style={{ position: 'relative' }}
+              >
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
                 {[...opened].map((id) => (
                   <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>

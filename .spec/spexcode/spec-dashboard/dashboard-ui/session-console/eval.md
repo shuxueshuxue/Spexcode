@@ -112,8 +112,9 @@ scenarios:
       `/stop` exactly ONCE (the board's coloured row). Then type `/exit`, a name Claude Code ships that the board
       no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
       sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
-      (3) Type `/eval` and Enter: the dashboard navigates to `#/evals?session=<id>` — the same address the
-      bar's Eval door opens — and no inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
+      (3) Type `/eval` and Enter: the dashboard navigates to the canonical scoped list
+      `#/evals?q=is:eval state:current scope:<id>` — the same address the toolbar's Eval door opens — and no
+      inline eval pane mounts in the console. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
       button shows its active `.on` state); click the type button to toggle it back off. Screenshot the tab bar
       and the `/` menu.
     expected: |
@@ -343,27 +344,41 @@ scenarios:
     related: spec-dashboard/src/SessionInterface.jsx
   - name: terminal-proof-tabs
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
     description: >
-      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
-      session. The right pane's tab bar carries the Terminal tab and the Eval DOOR. Confirm the default
-      view is the live terminal with the docked `❯` input below it. Read the tab bar's computed
-      background against the terminal's (`.si-tabbar` vs `.si-term-body`) to confirm they differ (a
-      distinct panel + a bottom separator), and repeat in BOTH light and dark themes. Click the Eval
-      entry and read location.hash + whether the console's terminal stayed mounted behind the page
-      switch (return via the browser Back and confirm the pane is intact). Then the grown-input
-      round-trip: grow the `❯` box multi-line (a several-line draft, unsent), toggle type mode on and
-      off, and re-read the box's height and draft.
+      Through the running dashboard in real Chromium, open a live session and compare a pre-change A
+      capture with the implemented B toolbar. At 1440px, an exact 390px terminal pane, and the narrowest
+      reachable desktop viewport (641px with a persisted 480px list), inspect geometry, overflow, computed
+      theme colours, accessible roles/names, focus order, and keyboard activation; exercise the last case in
+      review/done so both command buttons are present.
+      Repeat B in en/zh, all eight themes, and representative online/offline/review/done/queued fixtures;
+      use a deliberately long shared session headline and enter/leave type mode. Read the Eval door's
+      literal href and network-backed symbolic counts, then activate it by pointer and keyboard. Confirm
+      Terminal's mount and the docked input survive browser Back.
     expected: |
-      The right pane shows the live terminal with the docked `❯` input; the tab bar is a clear
-      horizontal row set VISIBLY APART from the dark terminal — a lighter app-chrome panel (var
-      --panel) with a bottom separator (var --line), distinct from the terminal's var --term-bg in
-      BOTH themes. The Eval entry is a DOOR: clicking it navigates to #/evals?session=<id> (the
-      session's evaluation on the Evals page, carrying the export ↗ link) — no in-console eval pane
-      mounts, and the session pages stay warm across the page switch, so Back returns to the console
-      with the live pane intact (the socket and scrollback survive). The grown `❯` box survives a type
-      mode round-trip: its multi-line draft is still there AND its rendered height matches the
-      pre-switch height — never collapsed back to a single row.
-    related: spec-dashboard/src/SessionInterface.jsx
+      One compact toolbar uses the width instead of leaving an empty gulf: Terminal is the sole
+      role=tab inside the sole tablist and remains the current surface; the shared session headline and
+      lifecycle/liveness state form a distinct identity region; Eval is outside the tablist as a real
+      anchor; only state-valid registry commands render at the right. The long headline ellipses and no
+      toolbar descendant crosses its bounds at 1440px, 390px, or the desktop/mobile boundary (the list yields
+      enough width for the pane instead of clipping controls). Theme tokens keep the
+      toolbar distinct from the dark terminal in all eight themes, with stable geometry in en/zh and
+      across status/type-mode fixtures.
+
+      The Eval anchor's href is exactly the canonical scoped query minted by addressHash(sessionEvalAddress(id)).
+      Its compact symbols report measured/declared scenarios (including honest 0/0 or 0/N), current pass/fail
+      only through ReviewState, and a visible blind-spot count when declared scenarios have no reading;
+      loading/failure never masquerades as zero. Pointer, Enter, and copy-link semantics are native. The
+      terminal stays mounted behind the route and Back returns with its socket, scroll, draft, and geometry
+      intact. Type/merge remain registry-backed typed/click twins, relaunch replaces them only for offline
+      liveness, and queued shows neither an invalid command nor relaunch; the reserved type-mode chord cannot
+      bypass that gate while offline or queued. A summary filed during a stable working lifecycle appears on
+      the toolbar's bounded refresh without requiring navigation.
+    related:
+      - spec-dashboard/src/styles.css
+      - spec-dashboard/src/address.js
+      - spec-dashboard/src/score.jsx
   - name: launcher-picker-opens-on-click
     tags: [frontend-e2e, desktop]
     description: >
@@ -448,7 +463,7 @@ scenarios:
     code: spec-dashboard/src/SessionInterface.jsx
     related: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]
     description: >-
-      On a session-scoped eval detail page (#/evals/<node>/<scenario>?session=<id>) whose viewed reading
+      On a canonical session-scoped eval detail page (#/evals/<node>/<scenario>?q=scope:<id>) whose viewed reading
       was filed by a LIVE session, click the side rail's filer chip. Read the hash and the rendered page
       after the click.
     expected: >-

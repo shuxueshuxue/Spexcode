@@ -16,7 +16,9 @@ related:
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/styles.test.mjs
+  - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/textarea.test.mjs
+  - spec-dashboard/test/session-toolbar.e2e.mjs
 ---
 
 # session-console
@@ -108,21 +110,34 @@ reserves space — growth overlays). The input's panel fill stays inside its vis
 resting and grown states; it never paints through that separator into the terminal. Growth is
 **content-driven**: only real draft content grows the box —
 an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
-strip taller than the space the terminal reserved. Above the pane a **horizontal tab bar** replaces the old title/action
-strip, carrying the **Terminal** tab on the left plus an **Eval door**: Terminal shows the live
-pane with the docked `❯` input; the Eval entry is a **DOOR, not a tab** — a REAL anchor whose href is
+strip taller than the space the terminal reserved. Above the pane, one compact **session toolbar** makes four
+different things legible without pretending they are one control: the current surface, session identity/state,
+evaluation, and available commands. Its surface group contains **Terminal as the sole real tab** (`role=tab` in
+the only `tablist`) and keeps that selected surface visually attached to the live pane. The identity group consumes
+the shared `sessionHeadline` and the existing lifecycle/liveness vocabulary; its headline owns the flexible width
+and ellipses instead of pushing any following control out of the pane. The Eval entry is a **DOOR, not a tab** —
+a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
-copy-link/middle-click work for free), and it sits BESIDE the bar's tablist, not inside it (Terminal is
-the one real `role=tab`; a door is navigation, not tab selection), so clicking it (or the typed
+copy-link/middle-click work for free), and it sits outside the tablist, so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
-see [[live-view]]). The bar wears the app-chrome background with a bottom separator, so it reads
+see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model:
+measured scenarios over declared scenarios is always explicit (including `0/0`); reliable current pass/fail
+counts use [[review-chrome]]'s `ReviewState` vocabulary, and declared-but-unmeasured scenarios remain a visible
+blind-spot count. Loading, load failure, and zero are distinct states — a transport failure is never painted as
+zero loss. This is a glance and a door, never a scenario menu or an explanatory paragraph.
+While this toolbar is visible, the glance refreshes on a bounded cadence as well as session/page edges, so a
+reading filed during a long `working` stretch becomes visible without forcing a tab switch or lifecycle change.
+
+The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
-into that dark edge — the complaint this replaces). Between the tabs and the actions it still carries the
-**shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session
-rows, ellipsing when tight, so it never disagrees with the row that opened it — and the state's lifecycle
-**actions on the right** (below). Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
+into that dark edge — the complaint this replaces). At wide desktop the headline spends the otherwise empty
+middle width; at a narrow pane the same one-line hierarchy progressively drops redundant words and secondary
+tallies while keeping Terminal, an ellipsed identity, the measured/declared Eval count, and every currently
+available command inside the pane. The geometry is stable across all app themes, English/Chinese, lifecycle and
+liveness combinations, and type mode; a persisted wide session list yields at the desktop/mobile boundary rather
+than crushing the terminal lane until toolbar controls clip. Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
 wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
@@ -213,13 +228,15 @@ chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥
 key handling deliberately **falls through unhandled** — type mode included — so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
-reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **tab bar's
-right side** holds the same board-command registry as action buttons, narrowed to the current state:
+reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **toolbar's command
+group** renders the same board-command registry, narrowed to the current state:
 **type** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
-permanent **Eval door**, always available for any selected session (see [[session-eval]]): the bar entry
+permanent **Eval door**, always available for any selected session (see [[session-eval]]): the toolbar entry
 or the typed `/eval`, each navigating to the session-scoped Evals page. There is
+no hidden keyboard escape from this availability: the reserved type-mode chord remains consumed but inert for
+offline/queued sessions, using the same registry judgment as the button and `/type` twin. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed

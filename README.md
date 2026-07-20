@@ -206,11 +206,12 @@ and recorded video evidence in the middle.*
 - **coverage** (warn): unclaimed source files
 - **drift** (warn): governed code changed after its spec's last version, derived live from git
 
-plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors; `breadth`,
+plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors;
 `related-drift`, `owners`, `confusable-id` as warns) — `spex guide spec` lists them all.
 
-`spex doctor` is the opt-in, read-only health diagnosis. Its altitude check reports bodies that look like
-implementation dumps, with the evidence and repair, without putting heuristic judgment in the lint or commit gate.
+`spex doctor` is the opt-in, read-only health diagnosis. Its altitude and breadth checks report bodies that
+look like implementation dumps and nodes with wide child fan-out, with per-node evidence and repair, without
+putting heuristic judgment in the lint or commit gate.
 
 ## Configuration
 

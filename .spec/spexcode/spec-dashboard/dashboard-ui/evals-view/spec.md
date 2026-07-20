@@ -114,9 +114,15 @@ filter (default off) picking the root.
   control, before lint/merge/ahead/committed and export, so the visual and keyboard hierarchy reads
   "back to the session" before the list's local controls at desktop and phone width. The gates strip is a
   leading child inside the SAME [[page-scroll]] as the list, never a sibling that moves the scrollbar
-  track below the shared inset. The door is a REAL
-  anchor to `#/sessions/<id>`, the terminal console, wearing the left-arrow back glyph on a stable 32px hit
-  target. Its tooltip and aria-label use the same short localized imperative without a dynamic id:
+  track below the shared inset. The whole gates toolbar is the scoped list's **sticky status strip**: it
+  pins at that scrollport's shared 10px top inset while the list moves beneath it, with an opaque
+  shared-token theme background and boundary so rows never read through it. Its height is stable at each
+  viewport; at 390px the controls wrap into exactly two contained lines without covering the first row or
+  widening the page. Trunk Evals mounts no strip or empty sticky placeholder, and Issues is unchanged. The
+  strip stays below the shared Filters popover and tooltip layers and does not disturb detail-side sticky
+  containment. The door is a REAL anchor to `#/sessions/<id>`, the terminal console, wearing the left-arrow
+  back glyph on a stable 32px hit target. Its tooltip and aria-label use the same short localized imperative
+  without a dynamic id:
   `Back to session terminal` / `返回会话终端`. It derives ONLY from the canonical address, so a
   door-entry visit, a direct open, and a reload wear the identical list door; trunk faces and every
   detail face wear none. The return hierarchy stays separate by construction: the list door is the one

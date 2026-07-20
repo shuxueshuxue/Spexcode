@@ -101,7 +101,11 @@ scenarios:
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
       by reload, at 1440px and 390px, in en and zh: read the gates strip for the terminal door — tag,
       href, rendered hit-target size, visible text content, exact tooltip/aria, DOM order, screen position,
-      and Tab order. Sweep the whole page for source banners or explanatory copy. Open a scoped DETAIL
+      Tab order, scroll owner, and computed sticky position/z-index/background/border at top/middle/bottom.
+      At each position read whether list text is visible through the strip; at 390px read its line count,
+      stable height, first-row clearance, and horizontal overflow. Open the secondary Filters menu while the
+      strip is pinned, focus the door/export anchors by keyboard, trigger their tooltips, and exercise Back
+      restoration from a list row. Sweep the whole page for source banners or explanatory copy. Open a scoped DETAIL
       from that list and assert its header has only the scoped-list back arrow, no terminal door or action
       container. Follow the list door by click, keyboard Enter, and Ctrl-click/new-tab. Then exercise the
       hierarchy: browser Back from detail, detail back to scoped list with its door still present, then
@@ -111,7 +115,14 @@ scenarios:
     expected: >
       Only the scoped LIST carries the ONE icon-only terminal door: it is the se-gates toolbar's leftmost
       child and first focusable control, before the inert lint/merge/ahead/committed gates and the export
-      action, so visual order and Tab order agree. The door is a REAL
+      action, so visual order and Tab order agree. The toolbar is the one PageScroll's sticky status strip:
+      it stays pinned at that owner's 10px top inset from top through middle and bottom, has an opaque
+      shared-token themed background/boundary with list content passing behind but never reading through,
+      and stays below the open Filters menu and shared tooltip layer. Its height is stable at each viewport;
+      at 390px it occupies exactly two contained lines, does not cover the first row, and creates no
+      horizontal overflow. Back restores the exact list scrollTop with the strip pinned at the same inset.
+      Trunk Evals has no strip or empty sticky geometry, Issues is unchanged, and detail-side sticky remains
+      contained. The door is a REAL
       <a href="#/sessions/<id>"> wearing ONLY the left-arrow back glyph — no visible text — with a stable ≥32px
       hit target; tooltip and aria-label are exactly `Back to session terminal` in en and `返回会话终端`
       in zh, with no dynamic id or worktree explanation. Console-door entry, direct open, and reload wear

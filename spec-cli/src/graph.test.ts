@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { latestPerScenario, slimScenarios } from './graph.js'
+import { latestPerScenario, nodeEvalSummary } from './graph.js'
 
 // Pins the board's eval-summary contract ([[graph-lean]]): the fold keeps the latest reading per scenario
 // as the VERBATIM object — a filter, never a projection. Optional per-kind fields (the annotator's
@@ -29,16 +29,15 @@ test('retained readings are verbatim — every field survives, including video-o
   assert.strictEqual(out[0].timelineBlob, 'tl-456')
 })
 
-// The scenario fold is the opposite contract: a PROJECTION to name/tags/test — prose
-// (description/expected) and per-scenario code must NOT ride the board. The normalized test reference is
-// small measurement metadata and must survive so a measuring hand can select one concrete case.
-test('board scenarios stay slim while preserving normalized test references', () => {
-  const declared = [
-    { name: 'a', description: 'long prose', expected: 'longer prose', tags: ['frontend-e2e'], test: { path: 'x.spec.ts', name: 'case a' }, code: ['x.ts'] },
-    { name: 'b', description: 'd', expected: 'e' },
-  ]
-  assert.deepStrictEqual(slimScenarios(declared), [
-    { name: 'a', tags: ['frontend-e2e'], test: { path: 'x.spec.ts', name: 'case a' } },
-    { name: 'b' },
-  ])
+test('graph eval summary contains counts only while preserving every scenario state', () => {
+  const summary = nodeEvalSummary(
+    [{ name: 'pass' }, { name: 'fail' }, { name: 'stale' }, { name: 'blind' }],
+    [
+      { scenario: 'pass', fresh: true, verdict: { status: 'pass' } },
+      { scenario: 'fail', fresh: true, verdict: { status: 'fail' } },
+      { scenario: 'stale', fresh: false, verdict: { status: 'pass' } },
+    ],
+  )
+  assert.deepStrictEqual(summary, { total: 4, pass: 1, fail: 1, stalePass: 1, staleFail: 0, empty: 1 })
+  assert.equal(JSON.stringify(summary).includes('scenario'), false)
 })

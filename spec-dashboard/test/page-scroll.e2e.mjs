@@ -101,10 +101,11 @@ async function startProjectsHost() {
 async function findScopedSession() {
   const sessions = await (await fetch(`${base}/api/sessions`)).json()
   for (const session of sessions) {
-    const response = await fetch(`${base}/api/sessions/${encodeURIComponent(session.id)}/evals`)
+    const params = new URLSearchParams({ q: `is:eval scope:${session.id}`, page: '1' })
+    const response = await fetch(`${base}/api/evals?${params}`)
     if (!response.ok) continue
-    const model = await response.json()
-    if (model.nodes?.length) return session.id
+    const page = await response.json()
+    if (page.items?.some((item) => item.filterKind === 'blind')) return session.id
   }
   return null
 }
@@ -372,18 +373,15 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await assertPageScroll('evals-list')
 
   assert.ok(scopedSession, 'real session data supplies a scoped Evals model')
-  await page.route(`**/api/sessions/${encodeURIComponent(scopedSession)}/evals`, async (route) => {
-    const response = await route.fetch()
-    const model = await response.json()
-    model.nodes = [{
-      id: 'page-scroll-browser-fixture', hue: 200, evals: [],
-      scenarios: [{ name: 'declared-never-measured', expected: 'Remain reachable outside measured verdict filters.' }],
-    }, ...(model.nodes || [])]
-    await route.fulfill({ response, json: model })
-  })
   const scopedText = `is:eval scope:${scopedSession}`
-  const scopedHash = `#/evals?${new URLSearchParams({ q: scopedText })}`
+  const scopedHash = `#/evals?q=${encodeURIComponent(scopedText)}`
+  const scopedPageWaiting = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname.endsWith('/api/evals') && url.searchParams.get('q') === scopedText
+      && url.searchParams.get('page') === '1'
+  }, { timeout: 30_000 })
   await page.goto(`${base}/${scopedHash}`)
+  const scopedPage = await (await scopedPageWaiting).json()
   await settle('.se-gates')
   await page.locator('.se-blind').first().waitFor({ state: 'visible', timeout: 30_000 })
   const scopedGeometry = await assertGeometry('evals-scoped-list')
@@ -391,26 +389,33 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await assertScopedStatus('evals-scoped-list')
   const scopedTotal = await page.locator('.lp-row').count()
   const blindRows = await page.locator('.se-blind').count()
-  assert.equal(blindRows, 1, 'the controlled declared-never-measured scenario reaches the real scoped UI')
+  assert.ok(blindRows > 0, 'real scoped blind scenarios reach the paged UI')
   const defaultCounts = await sectionCounts()
-  assert.ok(defaultCounts[0] + defaultCounts[1] < scopedTotal, 'Fail/Pass is honestly non-exhaustive')
+  assert.ok(defaultCounts[0] + defaultCounts[1] < scopedPage.total, 'Fail/Pass is honestly non-exhaustive over the full server set')
+  const scopedUpdate = async (action) => {
+    const waiting = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return url.pathname.endsWith('/api/evals') && url.searchParams.get('q')?.includes(`scope:${scopedSession}`)
+        && url.searchParams.get('page') === '1'
+    }, { timeout: 30_000 })
+    await action()
+    const data = await (await waiting).json()
+    await page.waitForFunction((expected) => document.querySelectorAll('.lp-row').length === expected, data.items.length)
+    return data
+  }
 
-  await buttons.nth(0).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => buttons.nth(0).click())
   const failRows = await page.locator('.lp-row').count()
   assert.match(await page.evaluate(() => location.hash), /verdict%3Afail/)
   assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'true')
   await frame('evals-fail')
-  await buttons.nth(0).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => buttons.nth(0).click())
   assert.equal(await page.evaluate(() => location.hash), scopedHash)
   assert.equal(await page.locator('.lp-row').count(), scopedTotal)
-  await buttons.nth(1).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => buttons.nth(1).click())
   const passRows = await page.locator('.lp-row').count()
   assert.equal(await buttons.nth(1).getAttribute('aria-pressed'), 'true')
-  await page.goBack()
-  await settle('.lp-page')
+  await scopedUpdate(() => page.goBack())
   assert.equal(await page.evaluate(() => location.hash), scopedHash)
   assert.equal(await page.locator('.rl-section').nth(1).getAttribute('aria-pressed'), 'false')
 
@@ -418,32 +423,25 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   const reviewGroup = page.getByRole('group', { name: mobile ? /Human review|人工复核/ : 'Human review' })
   await reviewGroup.waitFor({ state: 'visible' })
   assert.match(await reviewGroup.ariaSnapshot(), /radio "Needs review"/)
-  await reviewGroup.getByRole('menuitemradio', { name: 'Needs review' }).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => reviewGroup.getByRole('menuitemradio', { name: 'Needs review' }).click())
   assert.match(await page.evaluate(() => location.hash), /state%3Acurrent/)
   const reviewHash = await page.evaluate(() => location.hash)
   const reviewCounts = await sectionCounts()
-  await buttons.nth(0).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => buttons.nth(0).click())
   assert.deepEqual(await sectionCounts(), reviewCounts, 'verdict counts stay stable under the rest of the query')
   assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'true')
-  await buttons.nth(0).click()
-  await page.waitForTimeout(180)
+  await scopedUpdate(() => buttons.nth(0).click())
   assert.equal(await page.evaluate(() => location.hash), reviewHash, 'second Fail click clears only verdict:')
-  await page.goBack()
-  await settle('.lp-page')
+  await scopedUpdate(() => page.goBack())
   assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'true', 'Back replays the prior Fail state')
-  await page.goBack()
-  await settle('.lp-page')
+  await scopedUpdate(() => page.goBack())
   assert.equal(await page.evaluate(() => location.hash), reviewHash)
   assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'false')
-  await page.goBack()
-  await settle('.lp-page')
+  await scopedUpdate(() => page.goBack())
   assert.equal(await page.evaluate(() => location.hash), scopedHash)
 
   const scopedBefore = await openMiddleRow()
-  await page.goBack()
-  await settle('.se-gates')
+  await scopedUpdate(() => page.goBack())
   assert.equal(await page.locator('.page-scroll').evaluate((element) => element.scrollTop), scopedBefore,
     'scoped Evals Back restores exact list scrollTop')
   const restoredScoped = await readScroll()

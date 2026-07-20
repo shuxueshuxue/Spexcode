@@ -6,9 +6,12 @@ import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
-import { evalNodesAsync, type ScenarioTestReference } from '../../spec-eval/src/scenarios.js'
+import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
+import { publishReviewSnapshot } from './reviewSnapshot.js'
+// @ts-expect-error Shared browser/server scoring keeps graph summary counts aligned with review rows.
+import { evalReviewState } from '../../spec-dashboard/src/reviewFilters.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -21,26 +24,22 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
   return null
 }
 
-// the board's eval summary ([[graph-lean]]): the LATEST reading per scenario, each kept as the VERBATIM
-// reading object — a filter, never a projection. Consumers hang optional fields off a reading (the
-// annotator's timelineBlob rides only video readings), so dropping a field here is a SILENT downstream
-// degradation no error would surface; the field-preservation unit test pins this contract.
+// The server-only review snapshot keeps latest readings verbatim. Graph JSON receives only counts.
 export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
   const seen = new Set<string>()
   return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
 }
 
-// the board's scenario fold ([[graph-lean]]): the declared set rides SLIM — name/tags plus the normalized
-// test reference a measuring hand can follow. Prose and per-scenario code stay off the hot poll, carried by
-// `/api/specs/lite` and `/api/specs/:id/evals`; the opaque test case name is metadata, not an executor seam.
-export function slimScenarios(
-  scenarios: { name: string; tags?: string[]; test?: ScenarioTestReference }[],
-): { name: string; tags?: string[]; test?: ScenarioTestReference }[] {
-  return scenarios.map((s) => ({
-    name: s.name,
-    ...(s.tags?.length ? { tags: s.tags } : {}),
-    ...(s.test ? { test: s.test } : {}),
-  }))
+export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) {
+  type State = 'pass' | 'fail' | 'stalePass' | 'staleFail' | 'empty'
+  const latest = new Map(latestPerScenario(readings).map((reading) => [reading.scenario, reading]))
+  const summary = { total: scenarios.length, pass: 0, fail: 0, stalePass: 0, staleFail: 0, empty: 0 }
+  for (const scenario of scenarios) {
+    const reading = latest.get(scenario.name)
+    const state = (reading ? evalReviewState(reading) : 'empty') as State
+    summary[state]++
+  }
+  return summary
 }
 
 export async function buildBoard() {
@@ -111,10 +110,8 @@ export async function buildBoard() {
     }),
     ...Object.values(ghostById),
   ]
-  // fold each node's issues onto it through the unified Issue port ([[issues]]): the resident forge slice
-  // AND the local store's threads, one merged store-tagged list (full set → issues, open subset →
-  // openIssues, attached only when non-empty). Non-blocking: residentForgeState never waits on `gh` and is
-  // empty absent a forge, so the fold then carries the local slice alone. Sorted open-first, newest first.
+  // Reconcile Issues once. Full rows stay in the server-only review snapshot; graph nodes get counts and
+  // open identity only, enough for tile/stat/tree glances without reconstructing the list.
   const isOpen = (i: { status: string }) => i.status === 'open'
   const merged = mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id))
   // ONE board-level freshness stamp over EVERY issue thread (noded or nodeless, both stores):
@@ -135,28 +132,28 @@ export async function buildBoard() {
   for (const n of nodes) {
     const issues = issuesByNode[n.id]
     if (!issues || !issues.length) continue
-    n.issues = issues
-      .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || b.created.localeCompare(a.created))
-      .map((i) => ({ id: i.id, store: i.store, status: i.status, concern: i.concern, url: i.url }))
-    const open = n.issues.filter(isOpen)
-    if (open.length) n.openIssues = open
+    const open = issues.filter(isOpen)
+    n.reviewSummary = {
+      ...(n.reviewSummary || {}),
+      issues: { open: open.length, closed: issues.length - open.length, openIds: open.map((issue) => issue.id) },
+    }
   }
 
-  // fold each measurable node's eval state onto it — as the LEAN summary ([[graph-lean]]): `evals` carries only
-  // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
-  // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
-  // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
-  // SLIM — name/tags/test only, the fields every overview surface or measuring hand needs — with its prose
-  // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
-  // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
+  // Reconcile current Evals once. Latest rows/declarations stay server-only for paged review; graph nodes
+  // receive the explicit per-state count projection and nothing row-shaped.
   // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-measurable nodes. The
   // eval-file walk rides fs/promises ([[graph-cache]]) so it yields the event loop instead of stalling /health.
   const ynodes = await evalNodesAsync(root)
   const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
-  await Promise.all(nodes.map(async (n) => {
+  const evalReviewNodes = (await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasEvalFile) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }
-  }))
+    if (!tl.hasEvalFile) return null
+    const latest = latestPerScenario(tl.readings)
+    n.reviewSummary = { ...(n.reviewSummary || {}), evals: nodeEvalSummary(tl.scenarios, latest) }
+    return { id: n.id, hue: n.hue, scenarios: tl.scenarios, evals: latest, readings: tl.readings }
+  }))).filter((node): node is NonNullable<typeof node> => node !== null)
+
+  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes })
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })

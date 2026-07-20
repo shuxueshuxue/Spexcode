@@ -58,7 +58,7 @@ export const SpexcodePlugin = async (ctx) => {
   const children = new Set()
   const stamp = (sid) => (sid && children.has(sid) ? { agent_id: sid } : {})
   // opencode MINTS its own session id — report it once so the backend stores it as harness_session_id
-  // (what reopen() resumes with, \`--session <id>\`). Fire-and-forget; a failure only costs resume-by-id.
+  // (the id session resume passes to \`opencode --session <id>\`). Fire-and-forget; a failure only costs resume-by-id.
   let captured = !!rootSession   // a seeded (resumed) id is already on the record — don't re-report it
   const capture = (sid) => {
     if (captured || !sid || !recordId) return
@@ -102,7 +102,7 @@ export const SpexcodePlugin = async (ctx) => {
   const toolPayload = (input, output) => {
     const sid = (input && input.sessionID) || ""
     return {
-      ...stamp(sid),   // agent_id must precede tool_input — harness.sh's hp_is_subagent prefix scan
+      ...stamp(sid),   // agent_id must precede tool_input — hp_is_subagent checks keys only before tool_input
       tool_name: TOOL_NAMES[(input && input.tool) || ""] || ((input && input.tool) || ""),
       tool_input: rt.toolInput(output && output.args, "filePath"),
     }

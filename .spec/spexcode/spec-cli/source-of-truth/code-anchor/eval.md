@@ -73,6 +73,30 @@ scenarios:
       An `integrity` ERROR states the ts-ast extractor cannot run and spells the repair — run
       'npm i -D typescript' or remove the #anchor; exit 1. No silent pass and no regex downgrade:
       the JS family's designated extractor is ts-ast only.
+  - name: python-qualified-anchors
+    tags: [cli]
+    test:
+      path: spec-cli/src/lint-scoped.test.ts
+      name: Python LangSpec resolves module/async/method/nested names and their drift through the real CLI
+    description: >
+      In a fixture repo, pin a Python module function, async function, class method, nested function,
+      and nested-class method in one code: entry. Run `spex spec lint`, then change each unit (including
+      only the async function's decorator) in one commit and lint again.
+    expected: >
+      The initial lint exits 0 with every selector resolved. After the commit, exactly one
+      `anchor-drift` ERROR names all five selectors, preserving same-file OR/dedupe semantics and
+      treating attached decorators as part of the declaration range.
+  - name: python-dead-ambiguous
+    tags: [cli]
+    test:
+      path: spec-cli/src/lint-scoped.test.ts
+      name: Python dead and duplicate qualified symbols keep the generic loud integrity verdicts
+    description: >
+      In a Python fixture, anchor a missing qualified method and a method declared twice under the same
+      class. Run `spex spec lint` through the real CLI.
+    expected: >
+      Lint exits 1 with a `dead anchor` integrity error for the missing qualified name and an
+      `ambiguous anchor` integrity error reporting both duplicate qualified declarations.
 ---
 # code-anchor — measurement
 

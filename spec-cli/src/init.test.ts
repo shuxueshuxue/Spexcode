@@ -44,15 +44,18 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
     writeFileSync(join(proj, 'AGENTS.md'), '# team agents\nkeep me\n')
   }
   g('add', '-A'); g('commit', '-qm', 'init')
-  return { proj, home, env, g, spex }
+  return { proj, home, codex, env, g, spex }
 }
 
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { spex } = freshRepo()
+  const { proj, spex } = freshRepo()
   const out = spex('init', '.', '--harness', 'claude,codex')
   assert.ok(out.includes(`lint.governedRoots starts as ${TEMPLATE_ROOTS}`), `plant message names the template value ${TEMPLATE_ROOTS}: ${out}`)
   assert.ok(out.includes(`(currently ${TEMPLATE_ROOTS})`), 'next-steps names the LIVE planted value')
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')
+  const projectSpec = readFileSync(join(proj, '.spec', 'project', 'spec.md'), 'utf8')
+  assert.match(projectSpec, /`system` contracts[\s\S]*`hook` handlers[\s\S]*`command` presets[\s\S]*`skill`/, 'starter project spec names the initialized plugin surfaces')
+  assert.doesNotMatch(projectSpec, /seed ships `core`|seed ships `tidy`/, 'obsolete core-plus-tidy inventory is gone')
 })
 
 test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -81,8 +84,8 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
 test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harness config', { skip: !gitAvailable() && 'git not available' }, () => {
   const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude', 'codex', 'opencode', 'pi']]
   for (const selected of selections) {
-    const { proj, spex } = freshRepo()
-    spex('init', '.', '--harness', selected.join(','))
+    const { proj, codex, spex } = freshRepo()
+    const out = spex('init', '.', '--harness', selected.join(','))
     const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
     const expectedNames = Object.keys(SAFE_LAUNCHERS).filter((name) => selected.includes(name))
     const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SAFE_LAUNCHERS[name as keyof typeof SAFE_LAUNCHERS]]))
@@ -92,9 +95,22 @@ test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harn
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
     assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo|--auto/, 'clean init never grants automatic permissions')
 
+    if (selected.length === 1 && selected[0] === 'claude') {
+      assert.match(out, /contract: CLAUDE\.md/, 'the materialize receipt reports the Claude contract')
+      assert.match(out, /shim: \.claude\/settings\.json/, 'the materialize receipt reports the Claude shim')
+      assert.doesNotMatch(out, /AGENTS\.md|\.codex\/hooks\.json|trust:/, 'no Codex contract, shim, or trust claim')
+      assert.ok(existsSync(join(proj, 'CLAUDE.md')) && existsSync(join(proj, '.claude', 'settings.json')), 'Claude artifacts exist')
+      assert.ok(!existsSync(join(proj, 'AGENTS.md')) && !existsSync(join(proj, '.codex')), 'no Codex artifacts were planted')
+      assert.ok(!existsSync(join(codex, 'config.toml')), 'no Codex trust was planted')
+    }
     if (selected.length === 1 && selected[0] === 'codex') {
+      assert.match(out, /contract: AGENTS\.md/, 'the materialize receipt reports the Codex contract')
+      assert.match(out, /shim: \.codex\/hooks\.json/, 'the materialize receipt reports the Codex shim')
+      assert.match(out, /trust: .*config\.toml/, 'the materialize receipt reports the Codex trust write')
+      assert.doesNotMatch(out, /CLAUDE\.md|\.claude\/settings\.json/, 'no Claude contract or shim claim')
+      assert.ok(existsSync(join(proj, 'AGENTS.md')) && existsSync(join(proj, '.codex', 'hooks.json')), 'Codex artifacts exist')
+      assert.ok(existsSync(join(codex, 'config.toml')), 'Codex trust exists')
       assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no claude artifacts for a codex-only selection')
-      assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'the selected harness was delivered')
     }
   }
 })

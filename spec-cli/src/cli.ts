@@ -609,7 +609,7 @@ if (cmd === 'serve') {
   // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
   const { materialize } = await import('./materialize.js')
   try {
-    console.log(`materialized — content-hash ${materialize()}`)
+    console.log(`materialized — content-hash ${materialize().contentHash}`)
   } catch (e) {
     // a policy error (e.g. a missing/illegal `harnesses` set) is a user-facing verdict, not a crash — one
     // line + the repair it already carries, never a stack trace.

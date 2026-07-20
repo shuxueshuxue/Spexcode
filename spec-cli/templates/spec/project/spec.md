@@ -12,8 +12,9 @@ made it. This node is the founding spec everything else hangs from — **rewrite
 your own project**, then grow child package/feature nodes beneath it (each its own directory with a
 `spec.md`).
 
-`.plugins/` holds the dev-flow plugins this instance ships — skill-shaped child nodes, each tagged
-with a `surface` field: a `surface: system` node folds into every launched agent's system prompt as
-always-on contract (the seed ships `core`), and a `surface: command` node is a prompt preset the
-new-session dropdown composes over target nodes (the seed ships `tidy`). Add, edit, or
-remove plugins by editing those spec nodes.
+`.plugins/` holds the dev-flow plugins this instance ships — spec-shaped child nodes whose `surface`
+field says how they enter the product. The initialized set includes always-on `system` contracts,
+lifecycle `hook` handlers, new-session `command` presets, and an on-demand `skill`; one plugin may serve
+more than one surface. Grouping shelves carry no surface themselves, and discovery is recursive, so the
+folder layout stays readable without deciding behavior. Add, edit, or remove plugins by editing those
+spec nodes.

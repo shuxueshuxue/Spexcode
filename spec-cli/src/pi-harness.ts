@@ -101,15 +101,16 @@ function readTrust(file: string): Record<string, unknown> {
   }
 }
 
-export function writePiTrust(proj: string): void {
+export function writePiTrust(proj: string): string {
   const dir = piAgentDir()
   const file = join(dir, 'trust.json')
   const key = canonical(proj)
   const data = readTrust(file)
-  if (data[key] === true) return   // already trusted — no churn
+  if (data[key] === true) return file   // already trusted — no churn
   data[key] = true
   mkdirSync(dir, { recursive: true })
   writeFileSync(file, JSON.stringify(data, null, 2) + '\n')
+  return file
 }
 
 export function removePiTrust(proj: string): void {

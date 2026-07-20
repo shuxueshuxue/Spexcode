@@ -10,6 +10,8 @@ related:
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts
   - spec-cli/src/specs.ts
+  - spec-cli/src/lint-scoped.test.ts
+  - spec-cli/src/guide.ts
 ---
 # code-anchor
 
@@ -65,3 +67,13 @@ declaration/boundary patterns today; a row may carry whatever config its engine 
 tree-sitter grammar — so adding a language never adds a branch). Everything language-agnostic — blob-oid
 memoization, dead/ambiguous resolution, hunk∩range — lives outside the seam. Git access stays
 batch/short-lived; no resident process.
+
+Python is one such data row, designated for `.py` and `.pyi`. Its structural vocabulary is ordinary
+`def`, `async def`, and `class` declarations: module functions keep their bare name, while methods and
+nested declarations use their lexical qualified name (`Class.method`, `outer.inner`,
+`Outer.Inner.method`). Significant indentation supplies scope and unit boundaries, including decorator
+lines immediately attached to a declaration. This is deliberately a declaration extractor, not a
+Python runtime or full grammar: lambdas and callables assigned or attached dynamically, imported aliases,
+generated names, and declarations whose name is not on the first physical header line are outside the
+capability. Unsupported names fail as dead anchors, and duplicate qualified declarations stay ambiguous
+through the same language-agnostic resolver used by every extractor.

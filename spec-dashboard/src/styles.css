@@ -1038,9 +1038,11 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .si-list {
   /* a dense INDEX, not where a title lives — kept narrow so it doesn't steal width from the terminal
-     beside it; full headlines are read on demand per row (the :hover/.on reveal below), not by widening. */
+     beside it; full headlines are read on demand per row (the :hover/.on reveal below), not by widening.
+     A persisted wide list yields at the viewport edge: desktop never squeezes the terminal below the toolbar's
+     280px minimum usable lane. */
   flex: 0 0 240px; border-right: 1px solid var(--line); background: var(--panel);
-  display: flex; flex-direction: column; overflow-y: auto;
+  max-width: calc(100% - 280px); display: flex; flex-direction: column; overflow-y: auto;
 }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
@@ -1217,17 +1219,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
-/* the optional page-supplied source banner above the header ([[review-chrome]]): one restrained line —
-   muted panel, meta type — whose link is a REAL anchor (the scoped eval detail's session door). */
-.ds-banner { max-width: 1180px; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; font-size: var(--type-control); color: var(--ink2); }
-/* the scoped LIST's banner seat ([[evals-view]]'s shared EvalScopeBanner): the list page has no ds-page
-   padding of its own, so the slot supplies it — the banner element inside stays byte-identical to the
-   detail's. */
-.se-banner-slot { padding: 12px 14px 0; }
-.se-banner-slot .ds-banner { margin-bottom: 0; }
-.ds-banner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ds-banner-link { flex: 0 0 auto; color: var(--blue); text-decoration: none; }
-.ds-banner-link:hover { text-decoration: underline; }
 /* the header row's ONE geometry contract: the row declares the title's type metric (the same tokens the
    h1 wears), so the back anchor can derive its offset from the SAME first-line box via 1lh — its center
    coincides with the title first line's center at any type token, wrap, width, or language, with no
@@ -1595,20 +1586,92 @@ a.scenario-count:hover { background: var(--panel2); }
 /* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
 .si-content.is-session { --si-dock-h: 44px; }
-/* horizontal TAB BAR in place of the old title/action strip: the two tabs (Terminal | Proof) on the left,
-   the state-narrowed lifecycle actions on the right. It wears the app-chrome `--panel` background + a bottom
-   separator so it reads VISIBLY APART from the dark terminal below it, in every theme (the old
-   flat strip blended into the terminal). */
-.si-tabbar { flex: none; display: flex; align-items: stretch; gap: 8px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.si-tabs { flex: none; display: flex; gap: 2px; }
-/* each tab: a flat text button; the active one is inked and underlined in blue (its bottom border overlaps the
-   bar's separator via the -1px margin, so the selected tab visually connects to its pane). */
-.si-tab { appearance: none; display: inline-block; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: var(--type-control); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; }
-.si-tab:hover { color: var(--ink2); }
-.si-tab.on { color: var(--ink2); border-bottom-color: var(--blue); }
-/* the shared session headline sits between the tabs and the actions, growing to fill and ellipsing when tight
-   (session-activity leans on this `flex:1` + ellipsis — same headline, more width). */
-.si-th-name { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); }
+/* @@@ session toolbar — one row, four semantic regions: current surface | identity/state | Eval door |
+   available commands. The session wrapper is the responsive boundary because the list is draggable: viewport
+   media queries cannot know how narrow the terminal pane actually is. */
+.si-session-wrap { container-type: inline-size; }
+.si-tabbar {
+  flex: none; min-width: 0; min-height: 40px; box-sizing: border-box;
+  display: grid; grid-template-columns: auto minmax(36px, 1fr) auto auto; align-items: stretch;
+  overflow: hidden; background: color-mix(in srgb, var(--panel) 94%, var(--ink) 6%); border-bottom: 1px solid var(--line);
+}
+.si-surface { display: flex; align-items: stretch; min-width: 0; border-right: 1px solid var(--line); }
+.si-tabs { min-width: 0; display: flex; align-items: stretch; }
+/* Terminal is the sole tab. Its icon+word surface grammar is intentionally unlike the bordered Eval door and
+   command buttons; the blue underline visually attaches the selected surface to the pane below. */
+.si-tab {
+  appearance: none; min-width: 0; height: 40px; display: inline-flex; align-items: center; gap: 7px;
+  background: transparent; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 0 11px; cursor: default; color: var(--muted); font-family: var(--mono);
+  font-size: var(--type-control); text-decoration: none; white-space: nowrap;
+}
+.si-tab.on { color: var(--ink); border-bottom-color: var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
+.si-tab svg { flex: none; }
+
+/* Identity spends the formerly empty middle. The headline is the ONE flexible item; state/liveness never
+   steal its min-content width, so an arbitrarily long CJK/Latin headline ellipses before any control overflows. */
+.si-identity {
+  min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border-right: 1px solid var(--line); color: var(--ink2);
+}
+.si-th-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink);
+}
+.si-session-status, .si-session-live {
+  flex: none; min-width: 0; display: inline-flex; align-items: center; gap: 4px;
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); white-space: nowrap;
+}
+.si-status-glyph { width: 11px; text-align: center; font-size: var(--type-control); line-height: var(--leading-none); }
+.si-live-dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 15%, transparent); }
+
+/* Eval is navigation, never a tab: one real anchor carrying the canonical scoped href and a compact glance
+   over the session's lean eval model. ReviewState supplies every pass/fail/blind symbol and tone. */
+.si-eval-door {
+  min-width: 0; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px;
+  border-right: 1px solid var(--line); color: var(--ink2); text-decoration: none; white-space: nowrap;
+  font-family: var(--mono); font-size: var(--type-meta);
+}
+.si-eval-door:hover { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.si-eval-door:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.si-eval-door > svg { flex: none; color: var(--cyan); }
+.si-eval-label { color: var(--ink); font-size: var(--type-control); }
+.si-eval-arrow { opacity: .55; }
+.si-eval-stats { display: inline-flex; align-items: center; gap: 4px; }
+.si-eval-measured, .si-eval-wait {
+  display: inline-flex; align-items: center; gap: 2px; color: var(--muted);
+  font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold);
+}
+.si-eval-measured { color: var(--ink2); }
+.si-eval-stats .ovc { gap: 2px; padding: 0; border: 0; background: transparent; }
+.si-eval-stats .ovc.st-empty { color: var(--muted); }
+.si-eval-spinner { animation: si-attach-spin .8s linear infinite; }
+
+.si-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 8px; }
+.si-actions:empty { display: none; }
+
+@container (max-width: 720px) {
+  .si-live-word { display: none; }
+  .si-identity { gap: 6px; padding-inline: 8px; }
+  .si-eval-door { padding-inline: 8px; }
+}
+@container (max-width: 540px) {
+  .si-tabbar { grid-template-columns: auto minmax(20px, 1fr) auto auto; }
+  .si-status-word, .si-eval-label, .si-eval-stats .secondary { display: none; }
+  .si-identity { gap: 4px; padding-inline: 6px; }
+  .si-eval-door { gap: 4px; padding-inline: 6px; }
+  .si-actions { gap: 3px; padding-inline: 5px; }
+  .si-actions .si-act { padding-inline: 6px; }
+}
+@container (max-width: 390px) {
+  .si-tab-label, .si-eval-arrow { display: none; }
+  .si-tab { width: 34px; padding-inline: 10px; }
+  .si-identity { padding-inline: 4px; }
+  .si-session-live { display: none; }
+  .si-eval-door { padding-inline: 5px; }
+  .si-actions { padding-inline: 4px; }
+  .si-actions .si-act { padding-inline: 4px; }
+}
 /* the terminal body fills the rest of the pane, edge-to-edge, but ENDS ABOVE the docked ❯ box: its
    margin-bottom reserves the resting input strip (--si-dock-h) as REAL layout height, so the terminal —
    fitted to this box — never renders under the resting input and its bottom status line stays visible.
@@ -1699,10 +1762,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: var(--line-input); padding: 0; }
 .si-bottom .si-attach { height: 20px; line-height: var(--line-input); }
 
-/* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
-   free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact
-   `.sess-id` rows, the one display difference between the two surfaces. */
-.si-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+/* command buttons stay text verbs from the one board-command registry; the toolbar grid above owns their
+   placement, while each verb's identity colour remains the same as its typed twin. */
 .si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: var(--type-meta); }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
 .si-act.go { border-color: var(--blue); color: var(--blue); }
@@ -2149,12 +2210,26 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 
 /* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
-.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; min-height: 40px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
-.se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
+/* the strip's trailing action cluster: the model-gated export door and the ALWAYS-rendered terminal
+   door hang together at the row's right edge (one auto margin — two would split the free space). */
+.se-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+.se-export { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
+/* the ONE icon-only terminal door ([[evals-view]]'s EvalScopeDoor): a REAL anchor on a stable 32px hit
+   target, no visible text — the full semantics ride its tooltip/aria-label. Same primitive in both
+   homes: this strip and the detail header's action slot. */
+.se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
+.se-door:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.se-door:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* the detail header's generic action slot ([[review-chrome]] DetailShell): trailing edge, and the SAME
+   first-line geometry contract the back anchor wears — the slot derives its offset from the row's 1lh
+   box, so the 32px action's center coincides with the title first line's (and ds-back's) center at any
+   width or language, no per-page pixel offset. */
+.ds-head-action { --ds-action-size: 32px; margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; margin-top: calc((1lh - var(--ds-action-size)) / 2); }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }

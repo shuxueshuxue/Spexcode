@@ -52,6 +52,16 @@ export function ScenarioCount({ scenarios, evals, href }) {
   return <a className={`scenario-count ${state}`} href={href} data-tip={linked} aria-label={linked}>{body}</a>
 }
 
+// One compact state tally: the NodeView tab captions and the session toolbar share this exact
+// ReviewState + number composition instead of growing parallel pass/fail/missing glyph mappings.
+export function TabCount({ kind, state, cls, n, label }) {
+  return (
+    <span className={`ovc ${cls}`} data-tip={label}>
+      <ReviewState kind={kind} state={state} title={label} size={11} />{n}
+    </span>
+  )
+}
+
 // the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
 // scenario surfaces (search palette and eval tab), so a tag looks identical wherever it appears.
 // Empty/absent → nothing rendered; the tag values are the configured library (lint.scenarioTags).

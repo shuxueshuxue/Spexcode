@@ -38,6 +38,10 @@ type AltitudeConfig = {
   identifierExtensions: string[]
 }
 
+type BreadthConfig = {
+  maxChildren: number
+}
+
 export type HealthFinding = {
   check: string
   spec: string
@@ -55,6 +59,10 @@ const DEFAULT_ALTITUDE: AltitudeConfig = {
   identifierExtensions: [],
 }
 
+const DEFAULT_BREADTH: BreadthConfig = {
+  maxChildren: 8,
+}
+
 function loadAltitudeConfig(root: string): AltitudeConfig {
   const configured = readJsonConfig(join(root, 'spexcode.json'))?.doctor?.altitude ?? {}
   const merged = { ...DEFAULT_ALTITUDE, ...configured }
@@ -62,6 +70,11 @@ function loadAltitudeConfig(root: string): AltitudeConfig {
     ...merged,
     identifierExtensions: (merged.identifierExtensions ?? []).map((ext: string) => ext.replace(/^\.+/, '')),
   }
+}
+
+function loadBreadthConfig(root: string): BreadthConfig {
+  const configured = readJsonConfig(join(root, 'spexcode.json'))?.doctor?.breadth ?? {}
+  return { ...DEFAULT_BREADTH, ...configured }
 }
 
 // Filename rows are lint coverage's exact tracked candidates. Compatibility extensions lower to wildcard
@@ -118,18 +131,30 @@ function altitudeEvidence(body: string, cfg: AltitudeConfig, ident: RegExp): str
 
 export async function specHealthDiagnosis(root: string): Promise<HealthFinding[]> {
   const lint = loadConfig(root)
-  const cfg = loadAltitudeConfig(root)
+  const altitude = loadAltitudeConfig(root)
+  const breadth = loadBreadthConfig(root)
   const governed = trackedSourceFiles(root, lint.governedRoots, lint)
-  const ident = identRe(identifierFilenameCandidates(governed, cfg.identifierExtensions))
+  const ident = identRe(identifierFilenameCandidates(governed, altitude.identifierExtensions))
+  const specs = await loadSpecs(root)
+  const childCount = new Map<string, number>()
+  for (const spec of specs) if (spec.parent) childCount.set(spec.parent, (childCount.get(spec.parent) ?? 0) + 1)
   const findings: HealthFinding[] = []
-  for (const spec of await loadSpecs(root)) {
-    const evidence = altitudeEvidence(spec.body, cfg, ident)
+  for (const spec of specs) {
+    const evidence = altitudeEvidence(spec.body, altitude, ident)
     if (evidence.length) findings.push({
       check: 'altitude',
       spec: spec.id,
       summary: 'body reads like mechanics rather than a contract',
       evidence,
       repair: `rewrite '${spec.id}' around observable intent and invariants; the tidy workflow can perform the semantic review`,
+    })
+    const children = childCount.get(spec.id) ?? 0
+    if (children >= breadth.maxChildren) findings.push({
+      check: 'breadth',
+      spec: spec.id,
+      summary: 'tree fan-out may be missing a natural grouping layer',
+      evidence: [`${children} direct child nodes (>= ${breadth.maxChildren})`],
+      repair: `review '${spec.id}' with the regroup workflow; group only along a real seam and leave genuine peers flat`,
     })
   }
   return findings
@@ -141,7 +166,7 @@ function healthReport(findings: HealthFinding[], adopted: boolean): string[] {
     lines.push('  status          : unavailable — adopt the repository with `spex init`')
     return lines
   }
-  const checks = ['altitude', ...new Set(findings.map((finding) => finding.check).filter((check) => check !== 'altitude'))]
+  const checks = ['altitude', 'breadth', ...new Set(findings.map((finding) => finding.check).filter((check) => check !== 'altitude' && check !== 'breadth'))]
   for (const check of checks) {
     const rows = findings.filter((finding) => finding.check === check)
     lines.push(`  ${check.padEnd(16)}: ${rows.length ? `${rows.length} finding(s)` : 'healthy'}`)
@@ -356,6 +381,9 @@ async function doctor(): Promise<number> {
     })
     line('issues workflow', `${issuesEnabled() ? 'ON' : 'OFF'} (spexcode.json issues.enabled)`)
     if (legacy.length) line('  LEGACY key', `\`proposals\` found in ${legacy.map((f) => join(cfgHome, f)).join(', ')} — no longer read; rename it to "issues": { "enabled": … }`)
+    const projectConfig = readJsonConfig(join(base, 'spexcode.json'))
+    if (Object.prototype.hasOwnProperty.call(projectConfig.lint ?? {}, 'maxChildren'))
+      line('RETIRED key', '`lint.maxChildren` is no longer read — move the value to `doctor.breadth.maxChildren`')
   }
 
   const health = adopted ? await specHealthDiagnosis(base) : []

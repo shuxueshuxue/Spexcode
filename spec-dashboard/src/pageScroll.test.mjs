@@ -55,6 +55,15 @@ test('document pages consume PageScroll while Graph and Sessions keep their own 
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
 })
 
+test('scoped Evals status stays a non-scrolling sticky child without creating trunk geometry', () => {
+  assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
+  assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)
+  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*40px;\s*\}/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;[^}]*\}[\s\S]*\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*80px;/s)
+  assert.doesNotMatch(css, /\.se-gates\s*\{[^}]*position:\s*fixed;/s)
+  assert.doesNotMatch(evalsPage, /sessionId\s*\?\s*\([\s\S]*<PageScroll/)
+})
+
 test('recorded viewport scenarios satisfy the e2e-review one-pair-per-directory contract', () => {
   assert.match(e2e, /const scenarioDir = join\(out, name\)/)
   assert.match(e2e, /const videoPath = join\(scenarioDir, `\$\{name\}\.webm`\)/)
@@ -68,5 +77,9 @@ test('browser proof requires scoped blind rows, real long details, and every the
   assert.match(e2e, /assert\.equal\(blindRows, 1/)
   assert.match(e2e, /defaultCounts\[0\] \+ defaultCounts\[1\] < scopedTotal/)
   assert.match(e2e, /assert\.deepEqual\(await sectionCounts\(\), reviewCounts/)
+  assert.match(e2e, /async function assertScopedStatus/)
+  assert.match(e2e, /scoped status stays pinned at the PageScroll inset/)
+  assert.match(e2e, /secondary Filters menu stays above the scoped status strip/)
+  assert.match(e2e, /scoped Evals Back restores exact list scrollTop/)
   assert.match(e2e, /for \(const \[label, code\] of themes\)[\s\S]*for \(const \[surface, href, selector\] of surfaces\)/)
 })

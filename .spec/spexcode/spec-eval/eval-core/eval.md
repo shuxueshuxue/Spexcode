@@ -16,18 +16,15 @@ scenarios:
     tags: [cli]
     code: [spec-eval/src/cli.ts]
     description: >-
-      Through the real `spex eval lint` in a scratch repo: create a node that governs a NON-frontend
-      source file (a backend `.ts`, and — after setting `lint.sourceExtensions: ["rs"]` in spexcode.json
-      — a Rust `.rs`) with NO eval.md; also a control node governing a `.jsx` file, and a node governing
-      only a non-source file (a `.md` / a `.sh` hook). Run `spex eval lint` and read the `eval-coverage`
-      lines and the summary count.
+      Through the real `spex eval lint` in scratch repos, create nodes with no eval.md that govern Python,
+      Rust, backend TypeScript, and frontend JSX source, plus a node governing only docs/metadata. First use
+      the fresh language-neutral defaults, then set an explicit `lint.sourceExtensions: ["rs"]` override.
+      Read the `eval-coverage` lines and summary count.
     expected: >-
-      `eval-coverage` fires on ANY node governing a file whose extension is in the configured
-      `sourceExtensions` (default ts/tsx/js/jsx) — the backend `.ts` node is flagged, not silently exempt,
-      and the frontend control still flags. Configuring `sourceExtensions: ["rs"]` makes the `.rs` node
-      flag while the `.ts` node stops. A node governing only a non-source file is never flagged. The
-      finding says "governs source code" (not "frontend code"), so a non-web project's loss signal is no
-      longer blind to its own sources.
+      With no extension override, `eval-coverage` fires on every ordinary text source across those languages,
+      while docs/metadata stay out. Configuring `sourceExtensions: ["rs"]` makes only the `.rs` node flag.
+      The finding says "governs source code" (not "frontend code"), so a non-web project's loss signal uses
+      exactly the same source policy as spec coverage and is no longer blind to its own sources.
   - name: schema-gate-rejects-malformed
     tags: [cli]
     test:

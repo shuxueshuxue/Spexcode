@@ -47,7 +47,7 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
   // bottom (active) line via flex-end, so a grown multi-line box keeps ❯ tracking the caret, not mid-box.
   assert.match(
     css,
-    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*flex-end;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-top:\s*1px solid var\(--line\);/s,
+    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*flex-end;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-top:\s*1px solid var\(--line\);[^}]*background-clip:\s*padding-box;/s,
   )
   assert.match(
     css,

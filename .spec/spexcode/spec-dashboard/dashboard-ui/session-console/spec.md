@@ -14,6 +14,8 @@ related:
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
+  - spec-dashboard/src/styles.css
+  - spec-dashboard/src/styles.test.mjs
   - spec-dashboard/src/textarea.test.mjs
 ---
 
@@ -100,7 +102,9 @@ centred** in the strip (equal space above and below), never sunk toward its bott
 it) — the terminal's own bottom status line is therefore never hidden. Only when the box grows multi-line
 does it **overlay** the terminal, expanding
 **upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
-reserves space — growth overlays), and growth is **content-driven**: only real draft content grows the box —
+reserves space — growth overlays). The input's panel fill stays inside its visible top boundary in both the
+resting and grown states; it never paints through that separator into the terminal. Growth is
+**content-driven**: only real draft content grows the box —
 an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
 strip taller than the space the terminal reserved. Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying the **Terminal** tab on the left plus an **Eval door**: Terminal shows the live

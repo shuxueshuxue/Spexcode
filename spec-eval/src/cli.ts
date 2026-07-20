@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
+import { loadConfig } from '../../spec-cli/src/lint.js'
+import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { evalNodes, validateScenarios, resolveEvalNode, scenarioHash, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
@@ -53,9 +54,9 @@ function currentNodeId(root: string): string | null {
 }
 
 // isUiPath answers a FRONTEND-specific question — "does this node need a real BROWSER reading?" — and is
-// consumed by the session-eval's `uncoveredFrontend` blindspot, NOT by eval lint's coverage check. Scan keys off
-// the general `sourceExtensions` knob instead (see the `eval-coverage` branch below), so a non-web project's
-// sources are held to the loss discipline too; this stays web-shaped on purpose.
+// consumed by the session-eval's `uncoveredFrontend` blindspot, NOT by eval lint's coverage check. Scan uses
+// the shared tracked-source classifier instead, so a non-web project's sources are held to the loss discipline
+// too; this stays web-shaped on purpose.
 const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
 export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
 
@@ -87,9 +88,9 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const cfg = loadConfig(root)
-  // eval-coverage fires on ANY governed source file (per the shared `sourceExtensions` knob), not just
-  // frontend — so a backend/CLI/non-web project's sources are held to the loss discipline too, not exempted.
-  const srcRe = sourceExtRe(cfg.sourceExtensions)
+  // eval-coverage fires on ANY governed source file per the same classifier as spec coverage, not just
+  // frontend — so backend/CLI/non-web source is held to the loss discipline too, not exempted.
+  const sourceFiles = new Set(trackedSourceFiles(root, cfg.governedRoots, cfg))
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
@@ -168,7 +169,7 @@ async function scan(args: string[] = []): Promise<number> {
         const names = orphans.map((o) => `'${o.scenario}' (${o.threadId}, ${o.remarks.length} remark${o.remarks.length > 1 ? 's' : ''})`).join(', ')
         findings.push(`  • eval-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex remark resolve <ref>\` / \`spex remark retract <ref>\` or restore the scenario name`)
       }
-    } else if (s.code.some((p) => srcRe.test(p))) {
+    } else if (s.code.some((p) => sourceFiles.has(p))) {
       uncovered++
       findings.push(`  • eval-coverage: '${s.id}' governs source code but has no eval.md — give it a scenario (description + expected) so its loss can be measured`)
     }

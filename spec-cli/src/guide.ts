@@ -145,8 +145,8 @@ before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the
 const EVAL = `spex guide eval — the eval.md file format
 
 An eval.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
-behaviour and the spec. It is optional, but a node that governs SOURCE code (its code: includes a file whose extension is in
-\`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no eval.md is
+behaviour and the spec. It is optional, but a node that governs a file admitted by lint's shared source
+policy (language-neutral tracked-text discovery, or the explicit \`lint.sourceExtensions\` override) with no eval.md is
 a blind spot: \`spex eval lint\` flags it \`eval-coverage\`. The eval system defines no DSL and RUNS
 NOTHING — the agent measures; eval keeps score.
 
@@ -395,8 +395,10 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
                            '.' = the whole project (only git-TRACKED files). Default
                            ["spec-dashboard/src", "spec-cli/src"].
-  lint.sourceExtensions    extensions coverage treats as source. Default ["ts","tsx","js","jsx"].
-  lint.testGlobs           globs EXCLUDED from coverage (default ["**/*.test.*"]; [] to govern tests too).
+  lint.sourceExtensions    optional exact extension override. Omit it for language-neutral discovery from
+                           git-tracked text files; set it (for example ["py"]) to narrow source explicitly.
+  lint.testGlobs           globs EXCLUDED from coverage. Defaults cover .test/.spec names, test/tests/
+                           directories, and test_* / *_test conventions; [] governs tests too.
   lint.identifierExtensions extensions the altitude bare-filename signal recognises.
   lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
                            (defaults 50 / 4200 / 35 / 1.3 / 3).

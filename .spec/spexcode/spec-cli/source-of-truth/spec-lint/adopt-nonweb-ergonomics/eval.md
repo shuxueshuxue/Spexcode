@@ -1,34 +1,30 @@
 ---
 scenarios:
-  - name: nonweb-zero-match-guides
+  - name: fresh-python-discovers-source
     description: >
-      In a non-web (Python) git repo whose spexcode.json sets governedRoots but leaves the web-default
-      sourceExtensions (ts/tsx/js/jsx), run `spex spec lint`. Coverage finds zero source. Read the transcript.
+      In a throwaway git repo with the fresh-adoption config, track Python product files alongside
+      conventional Python tests, docs, vendored/generated/build paths, metadata, and a binary. Run
+      `spex spec lint` through the real CLI and read the coverage transcript.
     expected: >
-      The `coverage` warning is a self-explanatory repair entrypoint, not a dead end: it echoes the
-      CURRENT sourceExtensions and governedRoots values (so the ts-in-a-py-tree mismatch is visible),
-      names BOTH knobs, states they nest under the `lint` key (a top-level key no-ops), and gives
-      copy-pasteable non-web extension examples. Nothing about it points only at governedRoots.
+      Every Python product file is reported uncovered. Python tests, docs, vendored/generated/build
+      paths, metadata, and binary files are absent, and no "governing NOTHING" warning appears.
     tags: [cli]
     code: spec-cli/src/lint.ts
-  - name: forgiving-input-normalized
+  - name: fresh-typescript-and-empty-policy
     description: >
-      In the same Python repo, set sourceExtensions to a DOTTED form `[".py"]` and testGlobs to a
-      slash-less `["*.test.py"]`, with .py sources at src/main.py and src/pkg/util.py and a nested test
-      src/pkg/util.test.py. Run `spex spec lint` and read the coverage findings.
+      Run `spex spec lint` in two more throwaway git repos: one fresh TypeScript project containing
+      product and conventional test/build files, and one containing only tracked docs/metadata.
     expected: >
-      Both forgiving inputs are normalized instead of silently matching zero: the dotted extension is
-      accepted so src/main.py and src/pkg/util.py are enumerated (reported uncovered until governed),
-      and the slash-less test glob is widened to any depth so src/pkg/util.test.py is EXCLUDED from
-      coverage. No "governing NOTHING" warning appears.
+      TypeScript product files are reported uncovered while tests/build output are absent. The repo with
+      no default source candidates gets an honest "governing NOTHING" coverage warning naming the default
+      tracked-text policy, governedRoots, and the `lint.sourceExtensions` override repair entrypoint.
     tags: [cli]
     code: spec-cli/src/lint.ts
 ---
 
 # adopt-nonweb-ergonomics — how its loss is measured
 
-YATU through the real `spex spec lint` CLI, never by reading lint.ts. Stand up a throwaway git repo shaped
-like a non-web adopter (a `.spec/project` node, `.py` sources, a `spexcode.json`), run `spex spec lint` with
-`node spec-cli/bin/spex.mjs spec lint` from that repo's root, and read the emitted coverage transcript. The
-measurement is the actual CLI output an adopter would see — the message text and which files coverage
-does and does not flag — compared against the expected repair-entrypoint wording and normalization.
+YATU through the real `spex spec lint` CLI, never by reading implementation helpers. Stand up throwaway git
+repos shaped like fresh Python and TypeScript adopters, plus an empty-candidate repo, run the CLI from each
+repo root, and compare the emitted coverage transcript with the expected included, excluded, and fail-loud
+paths.

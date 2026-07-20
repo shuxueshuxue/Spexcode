@@ -33,7 +33,7 @@ type Bridge = {
   probeSawBegin: boolean
   refreshBuf: Buffer
   refreshCommandDone: boolean
-  refreshFinishScheduled: boolean
+  refreshFinishTimer?: ReturnType<typeof setTimeout>
   barrierTimer?: ReturnType<typeof setTimeout>
   settleTimer?: ReturnType<typeof setTimeout>
 }
@@ -191,7 +191,7 @@ function ensureBridge(id: string, cols: number, rows: number, voting: boolean): 
     id, proc, probe, cols, rows, stderr: '', refreshWhenReady: false, voting, warmOwner: false,
     probeBuf: Buffer.alloc(0), probeTail: Buffer.alloc(0), syncCapable: synchronizedSessions.has(id),
     barrier: 'none', barrierSawLayout: false, barrierSawBegin: false, probeSawBegin: false,
-    refreshBuf: Buffer.alloc(0), refreshCommandDone: false, refreshFinishScheduled: false,
+    refreshBuf: Buffer.alloc(0), refreshCommandDone: false,
   }
   bridges.set(id, bridge)
   proc.stdout.on('data', (data: Buffer) => onHelperOutput(bridge, data))
@@ -263,7 +263,8 @@ function clearBarrier(bridge: Bridge): void {
   bridge.settleTimer = undefined
   bridge.refreshBuf = Buffer.alloc(0)
   bridge.refreshCommandDone = false
-  bridge.refreshFinishScheduled = false
+  if (bridge.refreshFinishTimer) clearTimeout(bridge.refreshFinishTimer)
+  bridge.refreshFinishTimer = undefined
 }
 
 function awaitAtomicRefresh(bridge: Bridge): void {
@@ -282,12 +283,13 @@ function awaitAtomicRefresh(bridge: Bridge): void {
 }
 
 function scheduleAtomicRefreshFinish(bridge: Bridge): void {
-  if (bridge.barrier !== 'refresh' || !bridge.refreshCommandDone || bridge.refreshFinishScheduled) return
-  bridge.refreshFinishScheduled = true
-  setImmediate(() => {
-    bridge.refreshFinishScheduled = false
+  if (bridge.barrier !== 'refresh' || !bridge.refreshCommandDone) return
+  if (bridge.refreshFinishTimer) clearTimeout(bridge.refreshFinishTimer)
+  bridge.refreshFinishTimer = setTimeout(() => {
+    bridge.refreshFinishTimer = undefined
     finishAtomicRefresh(bridge)
-  })
+  }, 15)
+  bridge.refreshFinishTimer.unref()
 }
 
 function finishAtomicRefresh(bridge: Bridge): void {

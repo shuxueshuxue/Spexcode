@@ -47,8 +47,9 @@ never paints, captures, sizes, or reconstructs a screen; it watches the pane's r
 DEC synchronized-output boundary. Once a pane has demonstrated that capability, resize temporarily withholds
 native-client bytes until the next post-resize begin/end pair completes, discards the intermediate client
 clear/redraws, then requests one final in-band native-client refresh. Bytes remain withheld until that native
-client produces one complete outer begin/end transaction; the transaction is released whole, never by racing
-the observer's end event against a second output stream. This closes the real asynchronous gap:
+client produces one complete outer begin/end transaction. Refresh command completion does not imply that its
+PTY bytes have drained, so a 15 ms transport window coalesces already-queued chunks and releases only the last
+complete transaction, never racing the observer or command reply against a second output stream. This closes the real asynchronous gap:
 an application may clear before opening its synchronized redraw 55ms later, while tmux otherwise renders the
 clear as its own complete update. Completion is the application's explicit end event, not silence or a guessed
 settle duration. A bounded fail-open refresh recovers a broken/missing end marker; it is not the normal path.

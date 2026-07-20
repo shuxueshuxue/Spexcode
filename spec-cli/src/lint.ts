@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { repoRoot, git, driftIndex, historyIndex, rowsFor } from './git.js'
 import { loadSpecs } from './specs.js'
 import { readJsonConfig } from './layout.js'
@@ -14,7 +14,7 @@ export type LintConfig = {
   sourceExcludeGlobs: string[]  // explicit source-policy subtraction
   sourceExtensions: string[] | null // compatibility shorthand compiled into sourceIncludeGlobs
   testGlobs: string[]           // globs EXCLUDED from coverage; set [] to govern tests too
-  identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
+  identifierExtensions: string[]// legacy compatibility globs added to altitude's source-derived filename candidates
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
   maxChildren: number        // breadth budget: warn at >= this many direct children
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
@@ -30,7 +30,7 @@ const DEFAULT_CONFIG: LintConfig = {
   sourceExcludeGlobs: [],
   sourceExtensions: null,
   testGlobs: DEFAULT_TEST_GLOBS,
-  identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
+  identifierExtensions: [],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
   maxChildren: 8,
   maxOwners: 3,
@@ -68,12 +68,34 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-// code-identifier signals: camelCase | snake_case | foo( | `backticked` | /a/path.ext | bare file.ext. Only
-// the bare-filename branch needs the extension allowlist (config, so a non-TS project recognises its own
-// sources) — without it a bare `word.word` would match ordinary prose like "e.g".
-function identRe(extensions: string[]): RegExp {
-  const ext = extensions.join('|')
-  return new RegExp(`[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|\\b[a-z]+_[a-z0-9_]+\\b|\\b\\w+\\(|\`[^\`]+\`|\\/[\\w./-]+\\.\\w+|\\b[\\w-]+\\.(${ext})\\b`, 'g')
+// The filename rows are coverage's exact tracked candidates. The retired extension allowlist survives only
+// as compatibility syntax lowered to wildcard rows before the one matcher is compiled.
+function identifierFilenameCandidates(sourceFiles: string[], compatibilityExtensions: string[]): string[] {
+  return [...new Set([
+    ...sourceFiles.map((path) => basename(path)),
+    ...compatibilityExtensions.map((ext) => `*.${ext}`),
+  ])]
+}
+
+// code-identifier signals: camelCase | snake_case | foo( | `backticked` | /a/path.ext | a filename row.
+// Exact rows naturally include extensionless source; wildcard rows are the legacy `identifierExtensions`
+// shape. Restricting the last branch to candidate data keeps ordinary prose like "e.g" out.
+function identRe(filenameCandidates: string[]): RegExp {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const filenames = filenameCandidates
+    .map((candidate) => candidate.startsWith('*.')
+      ? `[\\w-]+\\.${escape(candidate.slice(2))}`
+      : escape(candidate))
+    .sort((a, b) => b.length - a.length)
+  const signals = [
+    '[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*',
+    '\\b[a-z]+_[a-z0-9_]+\\b',
+    '\\b\\w+\\(',
+    '`[^`]+`',
+    '\\/[\\w./-]+\\.\\w+',
+  ]
+  if (filenames.length) signals.push(`(?<![\\w./-])(?:${filenames.join('|')})(?![\\w.-])`)
+  return new RegExp(signals.join('|'), 'g')
 }
 // step-by-step how-to phrasing: numbered steps, or sequencing connectives that walk through mechanics.
 const STEP_LINE = /^\s*(\d+[.)]\s|[-*]\s*(first|then|next|finally)\b)|(^|[,;]\s*)(first|then|next|finally),/i
@@ -104,7 +126,8 @@ function altitude(body: string, cfg: LintConfig, ident: RegExp): string | null {
 export async function specLint(): Promise<Finding[]> {
   const root = repoRoot()
   const cfg = loadConfig(root)
-  const ident = identRe(cfg.identifierExtensions)
+  const governed = trackedSourceFiles(root, cfg.governedRoots, cfg)
+  const ident = identRe(identifierFilenameCandidates(governed, cfg.identifierExtensions))
   const specs = await loadSpecs()
   const out: Finding[] = []
 
@@ -238,7 +261,6 @@ export async function specLint(): Promise<Finding[]> {
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
-  const governed = trackedSourceFiles(root, cfg.governedRoots, cfg)
   if (governed.length === 0)
     out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
   for (const f of governed)

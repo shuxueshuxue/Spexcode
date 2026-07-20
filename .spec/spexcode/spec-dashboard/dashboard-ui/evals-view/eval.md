@@ -67,8 +67,9 @@ scenarios:
     tags: [frontend-e2e, desktop, mobile]
     description: >
       Open a trunk eval detail from the middle of the #/evals list at 1440px and read the side rail below
-      the metadata sections: the continue-reviewing section's rows — count, order against the list's
-      order, whether each is a real anchor with the shared verdict icon plus scenario and node text, and
+      the metadata sections: the continue-reviewing section's rows — count, order against the source
+      dataset's newest-first order (the default list FACE may hide reviewed rows the queue still walks),
+      whether each is a real anchor with the shared verdict icon plus scenario and node text, and
       whether the current reading appears. Open the FIRST and the LAST list entries' details and re-count.
       Follow a queue anchor by click and by keyboard focus+Enter, then press browser Back. Open a
       session-scoped detail and read the queue hrefs. Resize to 390px and read the column order and

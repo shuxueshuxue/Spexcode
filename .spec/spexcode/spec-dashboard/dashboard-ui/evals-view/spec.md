@@ -62,7 +62,8 @@ filter (default off) picking the root.
   remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).
   The side rail is the reading/session metadata: evaluator, filed time, originator liveness, human-ok,
   staleness readout — then the **continue-reviewing queue**: the viewed reading's NEIGHBORS in the source
-  dataset's stable default order (the same order the list renders), aimed at five total with the window
+  dataset's stable default order (newest-first — the relative order the list renders; a filtered list
+  face may hide rows the queue still walks), aimed at five total with the window
   auto-filling at either boundary, the current reading excluded. This page computes the queue from the ONE
   source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
   state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
@@ -76,8 +77,11 @@ filter (default off) picking the root.
   session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
-  A/B history walks the worktree-rooted readings, while its way BACK to the list is the scoped default
-  view — the same text every door mints. The scoped detail wears a restrained **SOURCE banner** above its
+  A/B history walks the worktree-rooted readings. Two DELIBERATELY different list affordances: the happy
+  detail's back arrow is the uniform bare `#/evals` (its banner already carries the session door), while
+  the failure/not-found faces' list link is the SCOPED default view — those faces have no banner, and
+  that link is the one affordance keeping the user on the data-source axis their broken address named.
+  The scoped detail wears a restrained **SOURCE banner** above its
   header (the [[review-chrome]] DetailShell banner slot): one line naming the session/worktree the
   reading comes from, carrying the ONE explicit session door — a REAL anchor to `#/sessions/<id>`, the
   terminal console — since the compact back anchor now uniformly returns to the list. The banner derives

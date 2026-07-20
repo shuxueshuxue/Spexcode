@@ -78,10 +78,12 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   left-arrow glyph with its localized tooltip + accessible name — Enter follows the href natively, and it
   never calls `history.back` (the page derives the href from the detail's canonical address,
   [[address-routing]]). Browser history remains the finer return path beside it. The header row carries
-  ONE geometry contract: the row declares the title's type metric once, and the back anchor derives its
-  vertical offset from that same first-line box, so the anchor's center coincides with the title FIRST
-  line's visual center — at every width and language, and a wrapping title keeps the anchor tied to line
-  one, never re-centered against the whole block. No page or breakpoint may add its own pixel offset, and
+  ONE geometry contract: the row and the h1 declare the SAME type-scale tokens (the typography law bans
+  `inherit`, so the metric is one pair of shared tokens, not one declaration), and the back anchor
+  derives its vertical offset from the row's first-line box, so the anchor's center coincides with the
+  title FIRST line's visual center — at every width and language, and a wrapping title keeps the anchor
+  tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
+  pixel offset, and
   the anchor keeps its ≥24px hit target and focus ring. Above the header the shell offers an optional
   page-supplied **banner** slot (one restrained source-notice line — the scoped eval detail's
   worktree-source banner rides it, [[evals-view]]): the shell owns its geometry, the page only its

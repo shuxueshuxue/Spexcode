@@ -1251,7 +1251,9 @@ a.scenario-count:hover { background: var(--panel2); }
 .ds-queue-row:hover .ds-queue-scenario { text-decoration: underline; }
 .ds-queue-row .review-state { flex: 0 0 auto; display: inline-flex; }
 .ds-queue-scenario { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ds-queue-node { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+/* the node span carries the heavier shrink factor so a long node id collapses before the PRIMARY
+   scenario text does (the row's data-tip keeps the full pair readable). */
+.ds-queue-node { flex: 0 4 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 /* the honest not-found face — an address naming no object, with the one link back to its list. */
 .ds-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .ds-missing-note { color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }

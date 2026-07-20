@@ -71,6 +71,7 @@ async function main(): Promise<void> {
     await sleep(100)
 
     const all = Buffer.concat(chunks)
+    const finalChunks = chunks.filter((chunk) => chunk.indexOf(FINAL) >= 0)
     const finalIndex = chunks.findIndex((chunk) => chunk.indexOf(FINAL) >= 0)
     const tailIndex = chunks.findIndex((chunk) => chunk.indexOf(LIVE_TAIL) >= 0)
     const order = chunks.map((chunk) => chunk.indexOf(FINAL) >= 0 ? `atomic:${chunk.length}` : chunk.indexOf(LIVE_TAIL) >= 0 ? `tail:${chunk.length}` : `tmux:${chunk.length}`)
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
     if (all.includes(ED2)) throw new Error('pane ED2 escaped tmux as a browser-visible full clear')
     if (all.includes(INTERMEDIATE)) throw new Error('the temporary clear state escaped the resize barrier')
     if (finalIndex < 0) throw new Error('the final synchronized screen was not refreshed')
+    if (finalChunks.length !== 1) throw new Error(`the final screen was replayed ${finalChunks.length} times`)
     const finalChunk = chunks[finalIndex]
     const begin = finalChunk.indexOf(BSU), end = finalChunk.indexOf(ESU)
     if (begin < 0 || end < finalChunk.indexOf(FINAL)) throw new Error('the final screen was not one complete synchronized tmux transaction')

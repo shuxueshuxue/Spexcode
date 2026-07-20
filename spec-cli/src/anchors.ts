@@ -7,8 +7,9 @@ import { gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './
 // Everything below the entry parse splits into two layers:
 //   - the LANGUAGE SEAM: pure extractors (content, filename) -> Unit[] — no git, no cache, no fs.
 //     Each extension maps to exactly ONE designated extractor; there is NO cross-tier fallback.
-//   - the LANGUAGE-AGNOSTIC ENGINE: blob-oid memo, anchor resolution (dead/ambiguous), diff-hunk ∩
-//     unit-range intersection over the drift window. It never knows which language it is measuring.
+//   - the LANGUAGE-AGNOSTIC ENGINE: file-revision memo (keyed by Git object id), anchor resolution
+//     (dead/ambiguous), diff-hunk ∩ unit-range intersection over the drift window. It never knows
+//     which language it is measuring.
 
 export type Unit = { name: string; kind: string; start: number; end: number; typeOnly?: boolean }
 
@@ -356,24 +357,24 @@ export function resolveAnchor(units: Unit[], symbol: string): AnchorResolution {
 
 // ---- the historical hit engine (language-agnostic; batch short-lived git, no resident process) ----
 
-// units of a file AS OF a commit, memoized by (blob oid, extractor id) — a blob is immutable, so the
-// memo never invalidates; distinct file versions in a window are few. 'absent' = no blob at that commit;
-// 'unparseable' = the extractor rejected that version's content (the caller treats it conservatively).
-type BlobUnits = { units: Unit[] } | { absent: true } | { unparseable: string }
-const unitMemo = new Map<string, BlobUnits>()
+// units of a file AS OF a commit, memoized by (Git object id, extractor id). File content identified by
+// an object id is immutable, so the memo never invalidates; distinct file revisions in a window are few.
+// 'absent' = no file at that commit; 'unparseable' = the extractor rejected that revision's content.
+type FileRevisionUnits = { units: Unit[] } | { absent: true } | { unparseable: string }
+const fileRevisionUnitMemo = new Map<string, FileRevisionUnits>()
 const MEMO_MAX = 4096
-async function unitsAt(root: string, commit: string, path: string, x: Extractor): Promise<BlobUnits> {
+async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor): Promise<FileRevisionUnits> {
   const oid = (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
   if (!oid) return { absent: true }
   const key = `${oid}\0${x.id}`
-  const hit = unitMemo.get(key)
+  const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
-  const text = await gitA(['-C', root, 'cat-file', 'blob', oid])
-  let v: BlobUnits
-  try { v = { units: x.extract(text, path) } } catch (e: any) { v = { unparseable: e?.message ?? String(e) } }
-  if (unitMemo.size >= MEMO_MAX) unitMemo.clear()
-  unitMemo.set(key, v)
-  return v
+  const text = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
+  let result: FileRevisionUnits
+  try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
+  if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()
+  fileRevisionUnitMemo.set(key, result)
+  return result
 }
 
 // post-image line ranges of one commit's diff to one file (`@@ -a,b +c,d @@`, --unified=0). d>0 → lines
@@ -417,7 +418,7 @@ export type AnchorHit = { commit: string; selectors: string[]; unparseable?: str
 export async function anchorHitCommits(root: string, win: string[], path: string, symbols: string[], x: Extractor): Promise<AnchorHit[]> {
   const hits: AnchorHit[] = []
   for (const c of win) {
-    const at = await unitsAt(root, c, path, x)
+    const at = await unitsAtFileRevision(root, c, path, x)
     if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
     if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
     const bySym = symbols

@@ -41,8 +41,9 @@ chip with its liveness dot (alive = the session is on the board and not offline,
 shows none), the [[human-ok]] settled mark when signed, and the **stale readout** for a non-fresh viewed
 reading — the freshness axes that moved, and for the code axis which governed files drifted by how many
 commits ([[eval-core]]'s `codeDrift`; reporting only, never deciding) — and, when the page supplies
-neighbors, the **continue-reviewing queue** at the rail's foot ([[evals-view]] computes it from the
-page's source dataset, split into its Previous / Up next positional groups): each row a REAL detail
+    neighbors, the **continue-reviewing queue** at the rail's foot ([[paged-review]] projects at most five
+    lightweight neighbors from the source's stable default order, split into Previous / Up next positional
+    groups): each row a REAL detail
 anchor wearing the ONE shared verdict visual plus its
 scenario and node, an empty group rendering no heading, no private selection state, the whole section
 absent when no neighbor exists. At phone
@@ -94,11 +95,10 @@ visible. Every reading not holding a pip collapses behind ONE accessible **overf
 popover mechanics — menuitemradio rows wearing the same shared verdict visual plus position and filed
 time; picking a row views that reading), so a hundreds-deep history neither wraps the band tall nor loses
 any reading's reach, and no walk or pick ever changes the band's height. The history is
-**SCOPE-PROVIDED, sharing the page's root**: the project scope lazily fetches the node's
-`/api/specs/:id/evals` timeline (the board folds only the latest per scenario, [[graph-lean]]); the
-`?q=scope:<id>` scope supplies the WORKTREE-rooted readings ([[session-eval]]) — the un-merged in-session
-reading lives only in the branch's worktree, and re-fetching the main-checkout timeline would strand the
-current video behind an older inherited one. The strip shows only when a scenario has more than one
+    **SCOPE-PROVIDED, sharing the page's root**: [[paged-review]]'s bounded detail response supplies only the
+    addressed scenario's complete history from either trunk or the WORKTREE-rooted scoped source
+    ([[session-eval]]) — the un-merged in-session reading lives only in the branch's worktree, while no node
+    timeline, session model, or other scenario history enters the browser. The strip shows only when a scenario has more than one
 reading. New readings arrive only from the eval seam's CLI (`spex eval add`, [[eval-core]]); the pane
 never mutates the history.
 

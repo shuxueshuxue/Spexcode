@@ -34,20 +34,18 @@ reading also carries the code axis's per-file drift detail (`codeDrift` — whic
 commits) so the [[event-detail]] stale readout can name it, never re-deriving git in the browser;
 newest-first.
 
-The board carries this timeline as a **summary** ([[graph-lean]]): `buildBoard` folds the latest reading per
-scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so every overview surface — the
-[[eval-score-badge]] tile/stat counts and search — counts the WHOLE set off the one `/api/graph` poll
-(a never-measured scenario still counts as loss). The FULL timeline — each scenario's
-`expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
-opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared eval-file walk.
+The board carries only state **counts** ([[graph-lean]]), so tile/stat/caption glances need no scenario or
+reading rows. Opening the Eval tab requests the first 25 node-timeline rows from `/api/evals` through the
+ONE [[paged-review]] contract with `view=timeline` and the fixed `node:` qualifier. The server performs the
+same filter/facet/count semantics across the whole node timeline before slicing. A scenario detail loads
+that one scenario's full A/B history and at most five lightweight ordered neighbors through
+[[paged-review]]'s bounded detail contract; the popup never downloads every timeline row as fallback.
 Bytes are never folded anywhere: `/api/evidence` serves each evidence entry by its content hash from the
 shared cache, fetched **lazily on expand**, with a per-entry **miss original file** signal when the bytes are gone, MIME
 sniffed from the content.
 
 The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside spec/history/issues, on the
-same `panesFor` registry. It fetches its timeline (readings + declared detail) per node on open, cache keyed
-by the summary's newest reading so a fresh filing refetches; a failed fetch degrades to the board's
-summary. It is a **thin consumer of the chronological-timeline
+same `panesFor` registry. It is a **thin consumer of the chronological-timeline
 scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture, an
 individual row-header toggle, no bulk-expand control, and — on a long timeline — an extremely compact
 embedded face of the canonical Evals filter. The popup and list page share one query parser, conjunctive
@@ -66,7 +64,10 @@ Its evidence is the scenario's **expected** over the captured proof — a **gall
 evidence list (N screenshots, a video, a transcript), each entry showing *miss original file* when its blob
 was pruned.
 
-The tab surfaces the **whole declared set** in **one list**, not only the readings. A **declared scenario
+The tab's server population is the **whole declared set**, not only the readings, while the popup receives
+only its first 25 filtered timeline rows. Its compact summary reads the server's full `total`; when more
+rows exist, a true View all anchor opens the canonical node-filtered Evals list instead of silently presenting
+page 1 as complete. A **declared scenario
 with no reading** leads that list as a **blind-spot row** — the empty score ring over its name, its
 `expected`, and the files it tracks. The ring is the *only* distinction (no fenced-off band, no second
 scrollbar): an unmeasured scenario is outstanding loss and belongs where the attention is, so a node's

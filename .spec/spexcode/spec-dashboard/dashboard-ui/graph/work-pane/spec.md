@@ -39,8 +39,8 @@ an agent-authored *current state* — what's-done is read from the derived statu
 agents hallucinate completion. The proof and
 evolution of that intent live in the **history** tab.
 An **issues** tab lists the unified issue work bound to this node — local and forge, open and closed alike,
-with both counts on the tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]);
-the data already rides the board fold (`node.issues`), so the tab is a no-fetch group, silent when empty.
+with both counts on the tab face (the board shows only the lean counts; see [[dashboard-issues]]). Opening
+the tab requests page 1 from [[paged-review]] with the fixed `node:` qualifier; no issue row rides the board.
 Each entry is the shared compact `IssueCard`, clamped inside the popup and routed to the internal Issues
 page selection (`#/issues/<issue-id>`), not directly to the forge. A long pane earns an **extremely compact
 embedded face of the canonical Issues filter**: the same query parsing, conjunctive facet semantics, and
@@ -63,12 +63,14 @@ plain labels — no visible key-digit markers (the digit keys still switch panes
 state through ONE chip primitive: the shared [[review-chrome]] `ReviewState` icon + count, issues as
 open/closed, eval as fresh pass/fail read from the same `scenarioStates` join every score surface uses
 ([[eval-score-badge]]); a zero count simply doesn't render, on either tab. The compact filter row those
-panes share leads with the ONE result summary — *showing X of Y* from the same filter model that picks the
-rows (`model.shown` over the pane's item total, [[review-filters]]) — full words on desktop, a bare X/Y
+panes share leads with the ONE result summary — *showing X of Y* from [[paged-review]]'s current-page item
+count and full filtered `total`, never by treating the current 25 rows as the whole model — full words on desktop, a bare X/Y
 under the phone breakpoint with the sentence kept in the aria-label; no second control, no facet echo, no
-repeat of what the caption already tallies. `panesFor` also
-registers an **eval** pane (a fourth reference face), but that pane's component and data contract — it
-rides `node.evals`, the board fold — belong to [[eval-tab]], just as the issues tab's content is
+repeat of what the caption already tallies. When `Y > X`, a true **View all** anchor opens the canonical
+Issues/Evals list with the same fixed `node:` and current compact query, so every result remains reachable.
+`panesFor` also
+registers an **eval** pane (a fourth reference face), but that pane's paged timeline data contract belongs
+to [[eval-tab]], just as the issues tab's content is
 [[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
 reframe into a verdict-over-evidence timeline is that node's evolution, never work-pane drift. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and

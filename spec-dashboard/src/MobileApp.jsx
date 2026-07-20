@@ -224,7 +224,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   )
 }
 
-export default function MobileApp({ specs, sessions, issuesData = null, reloadIssues, reloadBoard }) {
+export default function MobileApp({ specs, sessions, reloadBoard }) {
   const t = useT()
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   const root = useMemo(() => specs.find((s) => !s.parent) || specs[0], [specs])
@@ -283,7 +283,7 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
                 ? <Settings />
                 : plane === 'evals'
                 ? <EvalsPage specs={specs} sessions={sessions} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />
-                : <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
+                : <IssuesPage specs={specs} sessions={sessions} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
             </Suspense>
           </div>
         ) : plane === 'specs' ? (

@@ -38,17 +38,21 @@ verbs the CLI uses.
   ONE token query (`is:issue state:open` by default; the [[review-query]] engine): a human's edit, tab,
   or menu pick PUSHES the canonical address — bare `#/issues` for the default view, exactly
   `?q=<raw text>` otherwise — and the list re-derives its whole state from the URL on every hashchange,
-  so Back replays text and results exactly. Legacy structured params
+  so Back replays text, page-address form, rows, and scroll exactly. Page is the shared [[review-chrome]]
+  hash-query view state: initial/filter reset omits page; pagination to page 1 writes `page=1`; page follows
+  `q` when present; direct open/refresh/Back preserve the explicit form. Legacy structured params
   (`state/concluded/store/author/node/live/q`) replay at the route layer as a REPLACE into that token
-  text; old deep links keep working and the old shape is never re-minted. No pagination exists —
-  `/api/issues` has no page semantics and the open list is small; none is invented. A detail address
+  text; old deep links keep working and the old shape is never re-minted. The list reads the ONE server
+  paged-review contract after merged-store source selection and filtering; it never downloads the merged
+  issue population to filter or slice in React. A detail address
   naming no issue renders the shell's honest not-found with a link to the list. Esc routes nothing
   ([[side-nav]]).
-- **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is [[issues]]'s
+- **One merged list, store-tagged — RESIDENT, never cold-fetched.** The source is [[issues]]'s
   `mergedIssues` — which excludes eval-remark threads ([[eval-issue-split]]: a scenario-scoped concern is
   a remark and lives on the Evals pages). It is app-held state beside the board: the page renders
-  instantly from it; freshness inherits the board's pattern (push-signal throttled refetch that DEFERS,
-  never drops; the 15s cold lane; ETag 304s), and a write forces the refetch. Rows render **in API
+  from the backend's resident snapshot; freshness inherits the board's pattern (push-signal throttled
+  refresh that DEFERS, never drops; the 15s cold lane; ETag/revision reuse), and a write forces the
+  refresh. The browser requests only its current 25-row slice. Rows render **in API
   order** — stores interleaved newest first, no salience ranking. Bare query words search the
   concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
   lifecycle switch — token surgery on `state:` only, every other token preserved, counts computed under

@@ -2350,10 +2350,50 @@ a.scenario-count:hover { background: var(--panel2); }
 
 .proj-pw .proj-add-path { flex: 1 1 160px; }
 
-/* the register, config, and setup drawers ([[projects-hub]]) — same drawer bones, palette
-   tokens only, so every theme preset skins them for free. The transcript block is the spawned spex
-   verb's honest output: monospace, scrollable, never truncated by the UI. */
-.proj-add .proj-add-path { flex: 1 1 220px; }
+/* Add Project is the host filesystem/setup tool: a real modal, with a stable directory viewport and a
+   quiet option band. The fixed tracks keep loading, tags, and init choices from shifting the shell. */
+.proj-add-modal { width: min(720px, 94vw); overflow: hidden; }
+.proj-add-modal .legend-body { padding: 0; }
+.proj-add-flow { display: grid; grid-template-rows: auto minmax(180px, 38vh) auto auto auto; min-width: 0; }
+.proj-add-pathbar { display: flex; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line); }
+.proj-add-pathbar .proj-add-path { min-width: 0; }
+.proj-home-btn { width: 28px; justify-content: center; font-size: var(--type-body); }
+.proj-folder-list { min-height: 180px; overflow-y: auto; background: var(--paper); }
+.proj-folder-row {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto; align-items: center; gap: 7px;
+  width: 100%; min-height: 32px; padding: 5px 12px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-family: var(--mono);
+  font-size: var(--type-control);
+}
+.proj-folder-row:hover, .proj-folder-row:focus-visible { outline: none; background: var(--panel2); color: var(--ink2); }
+.proj-folder-row:disabled { opacity: .55; cursor: default; }
+.proj-folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-folder-tag { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; color: var(--muted); font-size: var(--type-caption); }
+.proj-folder-tag.spex { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); color: var(--green); }
+.proj-folder-empty { display: grid; min-height: 100%; place-items: center; padding: 24px; color: var(--muted); font-size: var(--type-meta); }
+.proj-add-options { display: grid; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.proj-add-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-size: var(--type-meta); }
+.proj-add-state, .proj-add-check { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--ink); font-size: var(--type-control); }
+.proj-add-state code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.proj-add-check { width: fit-content; cursor: pointer; }
+.proj-add-check input, .proj-add-harness input { accent-color: var(--blue); }
+.proj-add-harnesses { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; margin: 0; padding: 0; border: 0; }
+.proj-add-harnesses legend { float: left; margin-right: 4px; color: var(--muted); font-size: var(--type-meta); }
+.proj-add-harness { position: relative; cursor: pointer; }
+.proj-add-harness input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.proj-add-harness span {
+  display: inline-flex; align-items: center; min-height: 25px; padding: 2px 8px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink);
+  font-size: var(--type-meta);
+}
+.proj-add-harness input:checked + span { border-color: var(--blue); color: var(--blue); background: var(--panel2); }
+.proj-add-harness input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.proj-add-result { padding: 0 12px 10px; background: var(--panel); }
+.proj-add-result .proj-log { max-height: 150px; }
+.proj-add-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--line); background: var(--panel2); }
+
+/* the config and setup drawers ([[projects-hub]]) — same drawer bones, palette tokens only, so every
+   theme preset skins them for free. The transcript is the spawned spex verb's honest, uncut output. */
 .proj-full { flex-basis: 100%; }
 .proj-setup, .proj-config { flex-direction: column; align-items: stretch; gap: 6px; }
 .proj-setup-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2406,6 +2446,10 @@ a.scenario-count:hover { background: var(--panel2); }
   .identity-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .identity-choice { min-height: 54px; font-size: var(--type-caption); }
   .proj-config-editor { height: clamp(300px, 62dvh, 540px); min-height: 300px; max-height: calc(100dvh - 200px); }
+  .proj-add-modal { width: min(96vw, 720px); max-height: 92dvh; }
+  .proj-add-flow { grid-template-rows: auto minmax(170px, 34dvh) auto auto auto; }
+  .proj-add-pathbar { display: grid; grid-template-columns: 28px 28px minmax(0, 1fr) auto; padding: 8px; }
+  .proj-folder-row { padding-inline: 9px; }
   .proj-row-main { row-gap: 6px; }
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }

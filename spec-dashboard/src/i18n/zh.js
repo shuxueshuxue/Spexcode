@@ -199,7 +199,9 @@ export default {
     sideNodes: '规格节点',
     backToEvals: '返回评测列表',
     backToIssues: '返回 issues 列表',
-    backToSession: '返回会话终端',
+    scopedSource: '此读数来自会话 {id} 的工作树',
+    scopedSourceOpen: '打开会话终端',
+    sideQueue: '继续查看',
   },
 
   annotator: {

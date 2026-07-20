@@ -49,17 +49,42 @@ scenarios:
     description: >
       Open a trunk eval detail (#/evals/<node>/<scenario>) by row click, by direct URL, and by reload —
       read the back anchor's href each time. Then open a session-scoped detail
-      (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways and re-read the href; click it and
-      read where it lands. Compare against an issues detail's anchor. Verify browser Back after clicking
-      the anchor still walks the real history.
+      (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways: re-read the back href, and read the
+      top of the page for a source banner — its role, its text, whether its session link is a real
+      anchor and where it points; click both the back anchor and the banner link and read where each
+      lands. Compare against an issues detail's anchor. Verify browser Back after clicking the anchor
+      still walks the real history.
     expected: >
-      The back anchor's destination derives ONLY from the canonical address: a trunk detail's anchor is
-      href="#/evals" (the list); a detail whose canonical query carries scope:<id> points at
-      #/sessions/<id> — the scope session's terminal console — and clicking it lands there with the
-      session selected; an issue detail's anchor is #/issues. Row-click, direct open, and reload yield
-      byte-identical hrefs (no referrer/history/presence guessing). The anchor is an ordinary push:
-      after following it, browser Back returns to the detail, and Back again to wherever the visit
-      actually began.
+      EVERY eval detail's back anchor is href="#/evals" — trunk and scoped alike; the scope token never
+      diverts the back arrow. An issue detail's anchor is #/issues. The SCOPED detail wears one
+      restrained source banner above the header: it names the session/worktree the reading comes from
+      and carries a REAL <a href="#/sessions/<id>"> to the terminal console — the one explicit session
+      door; clicking it lands on that session. A trunk detail wears no banner. Row-click, direct open,
+      and reload yield byte-identical back hrefs AND banner faces (no referrer/history/presence
+      guessing). The anchor is an ordinary push: after following it, browser Back returns to the detail,
+      and Back again to wherever the visit actually began.
+  - name: continue-reviewing-queue
+    tags: [frontend-e2e, desktop, mobile]
+    description: >
+      Open a trunk eval detail from the middle of the #/evals list at 1440px and read the side rail below
+      the metadata sections: the continue-reviewing section's rows — count, order against the source
+      dataset's newest-first order (the default list FACE may hide reviewed rows the queue still walks),
+      whether each is a real anchor with the shared verdict icon plus scenario and node text, and
+      whether the current reading appears. Open the FIRST and the LAST list entries' details and re-count.
+      Follow a queue anchor by click and by keyboard focus+Enter, then press browser Back. Open a
+      session-scoped detail and read the queue hrefs. Resize to 390px and read the column order and
+      document scroll width. Find a dataset with a single scenario (or a scoped session with one reading)
+      and read whether the section renders.
+    expected: >
+      The queue lists ~5 neighbors of the current reading in the source dataset's stable default order
+      (the list page's order), current excluded; at the first/last entry the window auto-fills from the
+      one available side so the count holds while the dataset allows. Each row is a REAL <a> to the
+      neighbor's canonical detail wearing the ONE shared ReviewState visual + scenario + node — no
+      checkbox, no page-local selection state, no second filter UI. A trunk neighbor's href is the pure
+      detail path; a scoped neighbor's carries the same one scope: token. Click and focus+Enter both
+      navigate (ordinary push — Back returns to the detail just left). At 390px the same rail reflows
+      above the main column with no horizontal overflow. With no neighbor the section is entirely absent
+      — no empty box, no label.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]

@@ -83,20 +83,17 @@ test('legacy and object session-eval addresses converge on the canonical evals h
   assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
 })
 
-test('detailBackHash derives the back anchor ONLY from the canonical address', async () => {
+test('detailBackHash: every review detail returns to its bare list, scope never diverts it', async () => {
   const { detailBackHash } = await import('./address.js')
-  // a trunk eval detail returns to the bare list; list filters never ride a detail address anyway
-  assert.equal(detailBackHash('evals', ''), '#/evals')
+  // every eval detail — trunk or scoped — returns to the bare list; list filters never ride a detail address
   assert.equal(detailBackHash('evals'), '#/evals')
-  // a scoped eval detail's home is its scope session's terminal console
-  assert.equal(detailBackHash('evals', 'scope:s-42'), '#/sessions/s-42')
-  assert.equal(detailBackHash('evals', 'is:eval state:current scope:s-42'), '#/sessions/s-42')
+  // the scoped detail's session door is the source BANNER, not the back arrow: no query input exists
+  // in the signature at all, so scope cannot divert the destination
+  assert.equal(detailBackHash('evals').includes('sessions'), false)
   // an issue detail returns to the issues list
-  assert.equal(detailBackHash('issues', ''), '#/issues')
-  // session PRESENCE facets are never a scope — only the scope: token routes to the console
-  assert.equal(detailBackHash('evals', 'session:present'), '#/evals')
-  // deterministic: same address → same href, no history/referrer input exists in the signature
-  assert.equal(detailBackHash('evals', 'scope:s-42'), detailBackHash('evals', 'scope:s-42'))
+  assert.equal(detailBackHash('issues'), '#/issues')
+  // deterministic: same page → same href, no history/referrer/query input exists in the signature
+  assert.equal(detailBackHash('evals'), detailBackHash('evals'))
 })
 
 test('eval addresses: concrete → the canonical detail, scenario-less → the node-filtered list', () => {

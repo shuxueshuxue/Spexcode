@@ -8,9 +8,11 @@ scenarios:
       HUD/rail label after catalog and board settle; deliberately make one backend board report the other
       project's title as a negative control.
     expected: >-
-      The global tab is `Projects · SpexCode`. Each scoped tab, HUD, rail mark label, and switcher row use
-      the matching URL/catalog identity. A wrong or last-loaded board cannot rename a scoped catalog route;
-      a catalog-denied direct-project guest uses only its authorized board identity and sees no fleet.
+      The global tab is exactly the gateway title (`Projects` by default) and each scoped tab is exactly its
+      project's resolved title — no `· SpexCode` suffix anywhere. Each scoped HUD, rail mark label, and
+      switcher row use the matching URL/catalog identity. A wrong or last-loaded board cannot rename a
+      scoped catalog route; a catalog-denied direct-project guest uses only its authorized board identity
+      and sees no fleet.
     code: spec-dashboard/index.html
     related:
       - spec-dashboard/src/App.jsx

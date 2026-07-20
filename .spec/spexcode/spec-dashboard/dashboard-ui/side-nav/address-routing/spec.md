@@ -40,12 +40,12 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 `addressHash(address)` is the href side: real anchors and copyable links get the canonical hash without
 hand-rolled string assembly in components. `navigateAddress(address, callbacks)` is the SPA side: it follows
 the same projection, with callbacks only for shell-owned state (`graph-node` focus and session tab selection).
-`detailBackHash(page, queryText)` is the review details' **return gate** — the compact back anchor's href
-([[review-chrome]]'s DetailShell), derived ONLY from the detail's own canonical address: `#/issues` from an
-issue detail, `#/evals` from a trunk-rooted eval detail, and `#/sessions/<id>` when the eval detail's
-canonical query carries `scope:<id>` (the worktree reading's home is that session's terminal console). It
-never consults history, referrer, or session presence, so a pushed visit and a direct open share one
-destination.
+`detailBackHash(page)` is the review details' **return gate** — the compact back anchor's href
+([[review-chrome]]'s DetailShell), derived ONLY from the detail's own page: `#/issues` from an issue
+detail, the bare `#/evals` from EVERY eval detail — trunk or scoped alike. The scope token no longer
+diverts the back arrow: a worktree-rooted reading's session door is the detail's explicit source BANNER
+([[evals-view]]), so "back" uniformly means the list. The helper takes no query, history, referrer, or
+session-presence input at all, so a pushed visit and a direct open share one destination by construction.
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
 objects first-class: issue and scenario references land on their owning review pages, never by accident on
 the bound spec node or a node-popup tab.

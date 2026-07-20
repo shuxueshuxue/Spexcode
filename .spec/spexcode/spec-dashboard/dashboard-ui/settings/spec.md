@@ -65,7 +65,8 @@ lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
 - **Live switching.** Picking a language re-renders every `t()` immediately — the choice flows through
   React context, no reload.
 - **The settings page** is a routed page (`#/settings`, [[side-nav]]) — reached from the rail's bottom
-  entry or the `,` hotkey, rendered as a centered readable column in the main area, and the single home
+  entry or the `,` hotkey, rendered as a centered readable column inside the shell's shared page pane
+  (the pane wrapper is [[side-nav]]'s; the component renders only its content), and the single home
   for future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset
   picker. `Esc` (or `,` again) routes home to the graph.
 

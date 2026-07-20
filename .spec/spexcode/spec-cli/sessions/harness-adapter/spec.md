@@ -126,7 +126,9 @@ surface:
     the flag does not suppress the resume review. The version-brittleness the bypass was meant to avoid is
     inherent — codex offers no config to disable the review — so we accept it and keep bypass only as DEFENCE.)
 
-  `bypass_hook_trust` still rides on BOTH thread paths as that defence (so the app-server thread runs the hooks
+  A trust writer returns the path it asserted (or no paths for a harness whose trust mechanism writes
+  nothing), making the materialization receipt and user-facing init report derive from the adapter's real
+  side effect instead of a parallel capability claim. `bypass_hook_trust` still rides on BOTH thread paths as that defence (so the app-server thread runs the hooks
   even if a version bump makes a hash mismatch): (1) the BACKEND-owned `thread/start` (codex-launch) carries
   `config.bypass_hook_trust` — codex applies it **per thread** from the request's `config` override map, NOT from
   the shared app-server's own `--dangerously-bypass-hook-trust` CLI flag (INERT for a thread); (2) the visible

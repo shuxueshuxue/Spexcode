@@ -30,6 +30,18 @@ scenarios:
       Adoption and every materialize still SUCCEED — the field is inert — with a loud, non-fatal stderr notice
       naming the retirement, the removal recipe, and `spex guide footprint`. Removing the field retires
       the notice. Never an exit-nonzero for a retired word.
+  - name: selected-harness-artifact-report
+    tags: [cli]
+    test: spec-cli/src/init.test.ts
+    description: >-
+      In separate fresh git repos with isolated SPEXCODE_HOME/CODEX_HOME, run the real `spex init` once with
+      `--harness claude` and once with `--harness codex`. Compare each materialized-artifact receipt with the
+      contract, shim, and global trust files that actually landed, and read the planted project spec.
+    expected: >-
+      Claude-only reports and plants CLAUDE.md plus the Claude shim, with no AGENTS.md, Codex shim, or trust
+      claim/file. Codex-only reports and plants AGENTS.md, the Codex shim, and scoped Codex trust, with no
+      CLAUDE.md or Claude shim claim/file. The starter project spec describes the initialized system, hook,
+      command, and skill surfaces without the obsolete claim that the seed consists only of core plus tidy.
 ---
 # eval.md — spex-init
 

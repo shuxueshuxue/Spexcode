@@ -1,19 +1,17 @@
-// @@@ spex doctor - the DIAGNOSIS surface ([[doctor]]; command renamed from `self`, which misread as the
-// tool itself / the global install). When a user launches their OWN claude/codex with no SpexCode process
-// in the launch, the workflow reaches that agent only through the files materialize() writes (the manifest
-// in the global store; the in-tree contract blocks + hook shims + codex trust). Bare `spex doctor` answers
-// "is this agent actually governed, or silently running free?" — diagnosing that materialized contract per
-// LAYER, looping the same HARNESSES adapter materialize delivers through (so claude AND codex are covered
-// with no hardcoded paths). It catches the SILENT failure: a shim whose handler is missing, a PATH that
-// can't resolve `spex`, a contract that never landed. The surface is deliberately read-only: the bare
-// report, `--contract` (print the system text any agent reads), and `--conflicts`.
+// @@@ spex doctor - the opt-in, read-only project DIAGNOSIS surface ([[doctor]]). Bare doctor composes
+// spec-health findings with the delivery audit: when a user launches their OWN agent with no SpexCode
+// process in the launch, the workflow reaches it only through the files materialize() writes. The audit
+// loops the same HARNESSES adapter materialize uses and catches missing delivery or duplicate discovery.
+// `--contract` and `--conflicts` remain focused representations of that same diagnosis.
 import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { loadSystemConfig, loadSkillConfig } from './specs.js'
-import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout } from './layout.js'
+import { loadSystemConfig, loadSkillConfig, loadSpecs } from './specs.js'
+import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from './layout.js'
+import { loadConfig } from './lint.js'
+import { trackedSourceFiles } from './source-files.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -30,6 +28,131 @@ function commonHooksDir(dir: string): string | null {
   return common ? join(common, 'hooks') : null
 }
 const read = (f: string): string => { try { return readFileSync(f, 'utf8') } catch { return '' } }
+
+type AltitudeConfig = {
+  lineBudget: number
+  charBudget: number
+  sizeable: number
+  dense: number
+  steps: number
+  identifierExtensions: string[]
+}
+
+export type HealthFinding = {
+  check: string
+  spec: string
+  summary: string
+  evidence: string[]
+  repair: string
+}
+
+const DEFAULT_ALTITUDE: AltitudeConfig = {
+  lineBudget: 50,
+  charBudget: 4200,
+  sizeable: 35,
+  dense: 1.3,
+  steps: 3,
+  identifierExtensions: [],
+}
+
+function loadAltitudeConfig(root: string): AltitudeConfig {
+  const configured = readJsonConfig(join(root, 'spexcode.json'))?.doctor?.altitude ?? {}
+  const merged = { ...DEFAULT_ALTITUDE, ...configured }
+  return {
+    ...merged,
+    identifierExtensions: (merged.identifierExtensions ?? []).map((ext: string) => ext.replace(/^\.+/, '')),
+  }
+}
+
+// Filename rows are lint coverage's exact tracked candidates. Compatibility extensions lower to wildcard
+// rows before the one identifier matcher is compiled.
+function identifierFilenameCandidates(sourceFiles: string[], compatibilityExtensions: string[]): string[] {
+  return [...new Set([
+    ...sourceFiles.map((path) => basename(path)),
+    ...compatibilityExtensions.map((ext) => `*.${ext}`),
+  ])]
+}
+
+function identRe(filenameCandidates: string[]): RegExp {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const filenames = filenameCandidates
+    .map((candidate) => candidate.startsWith('*.')
+      ? `[\\w-]+\\.${escape(candidate.slice(2))}`
+      : escape(candidate))
+    .sort((a, b) => b.length - a.length)
+  const signals = [
+    '[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*',
+    '\\b[a-z]+_[a-z0-9_]+\\b',
+    '\\b\\w+\\(',
+    '`[^`]+`',
+    '\\/[\\w./-]+\\.\\w+',
+  ]
+  if (filenames.length) signals.push(`(?<![\\w./-])(?:${filenames.join('|')})(?![\\w.-])`)
+  return new RegExp(signals.join('|'), 'g')
+}
+
+const STEP_LINE = /^\s*(\d+[.)]\s|[-*]\s*(first|then|next|finally)\b)|(^|[,;]\s*)(first|then|next|finally),/i
+
+function altitudeEvidence(body: string, cfg: AltitudeConfig, ident: RegExp): string[] {
+  const lines = body.split('\n')
+  const nonBlank = lines.filter((line) => line.trim()).length
+  let inFence = false
+  let signals = 0
+  let steps = 0
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue }
+    if (inFence || !line.trim()) continue
+    signals += line.match(ident)?.length ?? 0
+    if (STEP_LINE.test(line)) steps++
+  }
+  const density = signals / Math.max(1, nonBlank)
+  const evidence: string[] = []
+  if (nonBlank > cfg.lineBudget || body.length > cfg.charBudget)
+    evidence.push(`${nonBlank} non-blank lines / ${body.length} chars over budget (${cfg.lineBudget}/${cfg.charBudget})`)
+  if (nonBlank > cfg.sizeable && density > cfg.dense)
+    evidence.push(`code-identifier density ${density.toFixed(2)}/line over ${cfg.dense}`)
+  if (nonBlank > cfg.sizeable && steps >= cfg.steps)
+    evidence.push(`${steps} step-by-step how-to lines`)
+  return evidence
+}
+
+export async function specHealthDiagnosis(root: string): Promise<HealthFinding[]> {
+  const lint = loadConfig(root)
+  const cfg = loadAltitudeConfig(root)
+  const governed = trackedSourceFiles(root, lint.governedRoots, lint)
+  const ident = identRe(identifierFilenameCandidates(governed, cfg.identifierExtensions))
+  const findings: HealthFinding[] = []
+  for (const spec of await loadSpecs(root)) {
+    const evidence = altitudeEvidence(spec.body, cfg, ident)
+    if (evidence.length) findings.push({
+      check: 'altitude',
+      spec: spec.id,
+      summary: 'body reads like mechanics rather than a contract',
+      evidence,
+      repair: `rewrite '${spec.id}' around observable intent and invariants; the tidy workflow can perform the semantic review`,
+    })
+  }
+  return findings
+}
+
+function healthReport(findings: HealthFinding[], adopted: boolean): string[] {
+  const lines = ['Spec health diagnosis (opt-in advisory; never part of spex spec lint)']
+  if (!adopted) {
+    lines.push('  status          : unavailable — adopt the repository with `spex init`')
+    return lines
+  }
+  const checks = ['altitude', ...new Set(findings.map((finding) => finding.check).filter((check) => check !== 'altitude'))]
+  for (const check of checks) {
+    const rows = findings.filter((finding) => finding.check === check)
+    lines.push(`  ${check.padEnd(16)}: ${rows.length ? `${rows.length} finding(s)` : 'healthy'}`)
+    for (const finding of rows) {
+      lines.push(`    ${finding.spec.padEnd(16)}: ${finding.summary}`)
+      for (const evidence of finding.evidence) lines.push(`      evidence      : ${evidence}`)
+      lines.push(`      repair        : ${finding.repair}`)
+    }
+  }
+  return lines
+}
 
 // @@@ contractText - the layer-2 payload: the composed `surface:system` bodies, the SAME join materialize()
 // folds into each harness's contract file — so a BYOA agent reads byte-identical guidance.
@@ -235,6 +358,9 @@ async function doctor(): Promise<number> {
     if (legacy.length) line('  LEGACY key', `\`proposals\` found in ${legacy.map((f) => join(cfgHome, f)).join(', ')} — no longer read; rename it to "issues": { "enabled": … }`)
   }
 
+  const health = adopted ? await specHealthDiagnosis(base) : []
+  L.push('\n' + healthReport(health, adopted).join('\n'))
+
   // --- preconditions: nothing downstream fires without these ---
   L.push('\nPreconditions (without these nothing downstream fires)')
   for (const bin of ['spex', 'claude', 'codex']) {
@@ -353,8 +479,8 @@ function migrationRemoved(): number {
 }
 
 function usage(): number {
-  console.error(`spex doctor — diagnose how the SpexCode workflow reaches your agent
-  (bare)         per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
+  console.error(`spex doctor — diagnose spec health and how the SpexCode workflow reaches your agent
+  (bare)         spec-health findings + delivery report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
   --contract     print the surface:system contract text (hand it to any agent)
   --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)`)
   return 0

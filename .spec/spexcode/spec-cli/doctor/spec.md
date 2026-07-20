@@ -2,16 +2,22 @@
 title: doctor
 status: active
 hue: 160
-desc: `spex doctor` — read-only diagnosis of how the SpexCode workflow reaches a self-launched agent, catching under-delivery and double-delivery and naming the existing repair surface.
+desc: `spex doctor` — one read-only project diagnosis: spec health plus proof that the workflow reaches a self-launched agent.
 code:
   - spec-cli/src/doctor.ts#doctor
+  - spec-cli/src/doctor.ts#specHealthDiagnosis
   - spec-cli/src/doctor.ts#doubleDeliveryReport
 related:
   - spec-cli/src/doctor.test.ts
+  - spec-cli/src/lint-source.test.ts
 ---
 # doctor
 
 ## raw source
+
+`spex doctor` is the one opt-in, read-only health diagnosis for this project. It reports heuristic spec
+health without putting judgment in the deterministic commit gate, and it proves that a self-launched agent
+actually receives the SpexCode workflow rather than running silently free.
 
 When a user launches their OWN claude/codex — no SpexCode process in the launch — the whole workflow has
 to reach that agent through files the harness auto-discovers: the artifacts [[harness-delivery]] writes. So
@@ -24,10 +30,24 @@ never landed — the agent ungoverned while looking fine) and DOUBLE-delivery (t
 through two auto-discovery channels at once — the loose native delivery in the worktree AND a `spexcode`
 plugin bundle the user installed independently or left behind, doubling every hook, shadowing skills).
 
+One diagnosis surface keeps later semantic or agentic checks additive without minting another CLI noun or
+scattering implementations across plugins.
+
 ## expanded spec
 
-Bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS agent. It reads the same
-[[harness-adapter]] registry [[harness-delivery]] materializes through:
+Bare `spex doctor` begins with a structured, human-readable **Spec health diagnosis**. The first check is
+**altitude**: one cheap proxy engine flags a spec body that looks like a mechanics dump because it is over
+the line/character budget, dense with code identifiers, or written as step-by-step how-to. This is advisory
+judgment, never a lint finding, exit gate, or hidden plugin copy. Filename signals derive from the SAME
+git-tracked candidates and source policy [[spec-lint]] uses for coverage, so tracked languages and
+extensionless source participate while configured exclusions stay excluded. `doctor.altitude` in
+`spexcode.json` is the sole threshold owner (`lineBudget`, `charBudget`, `sizeable`, `dense`, `steps`, and
+optional `identifierExtensions` compatibility rows). The report groups findings by check and names the
+affected spec, evidence, and repair; a clean tree says the check is healthy. [[tidy]] explicitly invokes
+this report and adds semantic judgment, never reproducing the proxy thresholds.
+
+The remainder of bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS agent. It
+reads the same [[harness-adapter]] registry [[harness-delivery]] materializes through:
 
 - **preconditions** — without these nothing downstream fires: `spex` (and the harness CLI) must RESOLVE on
   a bare PATH; codex needs its `~/.codex` provider/auth. A missing one is the root cause behind a dozen
@@ -53,7 +73,6 @@ Bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS a
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
 materialized artifact and any slot held by something not ours. Doctor is deliberately READ-ONLY: `--contract`
 and `--conflicts` are focused representations of that diagnosis, not writes. Repairs stay on the lifecycle
-verbs that already own them — [[spex-init]] adopts a repo, `spex materialize` reasserts derived delivery, and
-[[spex-uninstall]] removes it. Doctor prints those repairs but never grows parallel install, uninstall, or
-release-migration actions of its own. A removed migration spelling may remain as a read-only tombstone that
-names the bridge release; it performs no migration and appears in no help surface.
+verbs that already own them — [[spex-init]] adopts a repo, `spex materialize` reasserts derived delivery,
+[[spex-uninstall]] removes it, and [[tidy]] rewrites prose. Doctor prints those repairs but never grows
+parallel install, uninstall, or release-migration actions of its own.

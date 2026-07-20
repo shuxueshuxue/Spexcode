@@ -33,8 +33,9 @@ The lifecycle's stations, each owning its own detail:
   filter for a mixed contract file). Every planted artifact's visibility follows its KIND — and a contract
   file's kind is a live content fact. History is guarded and freshness anchored by [[commit-surgery]]'s
   git-native hooks; no harness event ever triggers a materialize.
-- **[[doctor]]** — the audit of delivery to an *agent*: is this agent actually governed, or silently running
-  free? Under-delivery and double-delivery both caught, with the repair printed.
+- **[[doctor]]** — the project-wide read-only diagnosis surface; this lifecycle contributes its delivery
+  audit: is this agent actually governed, or silently running free? Under-delivery and double-delivery are
+  both caught, with the repair printed.
 - **[[spex-uninstall]]** — departure: materialize(∅) plus the store — every generated artifact removed by
   its identity stamp, the user's own `.spec`/`.plugins` data and prose never touched.
 

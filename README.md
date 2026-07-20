@@ -203,18 +203,18 @@ and recorded video evidence in the middle.*
 
 - **integrity** (error): a `code:` or `related:` path that doesn't exist
 - **living** (error): a changelog heading in a spec body
-- **altitude** (warn): a body that slid from contract prose into an implementation dump. The usual
-  smell is a numbered step list or a wall of function names; this rule is why spec bodies stay
-  short enough to actually read
 - **coverage** (warn): unclaimed source files
 - **drift** (warn): governed code changed after its spec's last version, derived live from git
 
 plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors; `breadth`,
 `related-drift`, `owners`, `confusable-id` as warns) — `spex guide spec` lists them all.
 
+`spex doctor` is the opt-in, read-only health diagnosis. Its altitude check reports bodies that look like
+implementation dumps, with the evidence and repair, without putting heuristic judgment in the lint or commit gate.
+
 ## Configuration
 
-`spexcode.json` (committed, portable: layout, lint budgets, project dashboard identity, launcher names) and
+`spexcode.json` (committed, portable: layout, lint policy, doctor health budgets, project dashboard identity, launcher names) and
 `spexcode.local.json` (gitignored, host-specific: absolute launcher paths, cert paths) cover every
 setting. There is no imperative settings verb: you edit the two files by hand (or ask your agent
 to), and `spex guide settings` documents every field. The Projects admin UI writes a project's icon back

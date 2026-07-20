@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
-import { EVAL_QUERY_DEFAULT, queryParam, readToken, scopedEvalQuery } from './reviewQuery.js'
-import { detailBackHash } from './address.js'
+import { EVAL_QUERY_DEFAULT, queryParam, readToken } from './reviewQuery.js'
+import { addressHash, detailBackHash, evalAddress, sessionAddress, sessionEvalAddress } from './address.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
@@ -63,7 +63,25 @@ function sessionRows(model) {
   return { blind, entries: [...own.sort(byTs), ...inherited.sort(byTs)] }
 }
 
-// The LIST page (`#/evals[?query]`): the session scope's gates strip + export door above the one
+// the ONE scope banner ([[evals-view]]): BOTH scoped faces — the LIST's first screen and the DETAIL
+// above its header — wear this same component, GitHub-review-notice style: one restrained line naming
+// the session/worktree the view's readings come from, carrying the single explicit session door — a
+// REAL anchor to the terminal console ([[address-routing]]'s session projection). It derives ONLY from
+// the canonical address's scope token, so door-entry, direct open, and reload render byte-identical
+// banners; trunk faces render none. The terminal door, the detail's uniform #/evals back arrow, and
+// browser Back are three separate commands — this banner owns exactly the first.
+export function EvalScopeBanner({ sessionId }) {
+  const t = useT()
+  return (
+    <div className="ds-banner" role="note">
+      <Icon name="terminal" size={14} />
+      <span className="ds-banner-text">{t('sessionEval.scopeBanner', { id: sessionId.slice(0, 8) })}</span>
+      <a className="ds-banner-link" href={addressHash(sessionAddress(sessionId))}>{t('sessionEval.scopeBannerOpen')}</a>
+    </div>
+  )
+}
+
+// The LIST page (`#/evals[?query]`): the session scope's banner + gates strip + export door above the one
 // [[evals-feed]] list. All filter state is the URL's one token text; the scope: token (default absent =
 // the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
@@ -77,6 +95,9 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
         : null
   return (
     <>
+      {/* the scoped list leads with the shared scope banner — address-derived, so it renders identically
+          while the model is still loading, after a reload, and at every width/locale. */}
+      {sessionId && <div className="se-banner-slot"><EvalScopeBanner sessionId={sessionId} /></div>}
       {/* the session scope's gates strip — the same reviewPayload numbers `spex session review` prints
           ([[session-eval]]), plus the self-contained HTML export door. */}
       {sessionId && model && (
@@ -133,15 +154,16 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
       : undefined),
     [sessionId, model, node, scenario],
   )
-  // the queue rows ride the SAME source dataset and the SAME href grammar the list rows use: a trunk
-  // neighbor is a pure detail path, a scoped neighbor keeps the one scope token — never list filters.
+  // the queue rows ride the SAME source dataset and the SAME address grammar the list rows use
+  // ([[address-routing]]): a trunk neighbor is a pure detail path, a scoped neighbor keeps the one
+  // scope token — never list filters.
   const queue = useMemo(() => {
     const row = (e) => ({
       key: entryKey(e),
       node: e.node,
       scenario: e.scenario,
       state: e.state,
-      href: routeHash('evals', `${e.node}/${e.scenario}`, sessionId ? { q: `scope:${sessionId}` } : null),
+      href: addressHash(sessionId ? sessionEvalAddress(sessionId, e.node, e.scenario) : evalAddress(e.node, e.scenario)),
     })
     const n = queueNeighbors(scope.entries, `eval:${node}·${scenario}`)
     return { prev: n.prev.map(row), next: n.next.map(row) }
@@ -154,17 +176,10 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
   if (!entry) {
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
-  // the scoped detail's SOURCE banner ([[evals-view]]): names the worktree the reading lives in and
-  // carries the ONE explicit session door — a REAL anchor to the terminal console — now that the compact
-  // back anchor uniformly returns to the list. Derived only from the canonical address, so a pushed
-  // visit, a direct open, and a reload render the identical banner.
-  const banner = sessionId ? (
-    <>
-      <Icon name="terminal" size={14} />
-      <span className="ds-banner-text">{t('detail.scopedSource', { id: sessionId.slice(0, 8) })}</span>
-      <a className="ds-banner-link" href={routeHash('sessions', sessionId)}>{t('detail.scopedSourceOpen')}</a>
-    </>
-  ) : null
+  // the scoped detail wears the SAME [[evals-view]] scope banner the scoped list leads with (through the
+  // DetailShell banner slot) — the one explicit session door, now that the compact back anchor uniformly
+  // returns to the list. A trunk detail wears none.
+  const banner = sessionId ? <EvalScopeBanner sessionId={sessionId} /> : null
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
@@ -196,11 +211,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
     () => (sessionId ? (model && model !== false ? sessionRows(model) : { blind: [], entries: [] }) : { blind: [], entries: currentEntries(specs) }),
     [sessionId, model, specs],
   )
-  const sessionQ = sessionId ? { q: `scope:${sessionId}` } : null   // a DETAIL address carries only the scope
-  const hrefFor = (e) => routeHash('evals', `${e.node}/${e.scenario}`, sessionQ)
-  // the way BACK to the list is a LIST address: the scoped default view, same as every session door —
-  // never a scope-only text (which would show both sections and mark no tab active).
-  const listHref = routeHash('evals', null, sessionId ? { q: scopedEvalQuery(sessionId) } : null)
+  // every scoped address on this page is minted by the ONE [[address-routing]] projection — the row/queue
+  // detail hrefs (a DETAIL address carries only the scope, never list filters), the way back to the list
+  // (the scoped default view, the same text every session door mints — never a scope-only text, which
+  // would show both sections and mark no tab active).
+  const hrefFor = (e) => addressHash(sessionId ? sessionEvalAddress(sessionId, e.node, e.scenario) : evalAddress(e.node, e.scenario))
+  const listHref = sessionId ? addressHash(sessionEvalAddress(sessionId)) : routeHash('evals')
   // the detail chrome's compact back anchor ([[address-routing]]'s return gate): EVERY eval detail —
   // trunk or scoped — returns to the bare #/evals list; the scoped detail's session door is its source
   // banner, never the back arrow.

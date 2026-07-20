@@ -21,7 +21,7 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      Open `#/evals?session=<id>` for a real session and read the DOM: the gates strip, the row list
+      Open the scoped list `#/evals?q=is:eval state:current scope:<id>` for a real session and read the DOM: the gates strip, the row list
       (blind spots vs measured, in-session vs earlier), where evidence bytes load, and the export link.
       Open one row's standalone detail, then follow the export link and check the self-contained HTML still
       renders whole (masthead, gates, evidence inlined, diff drill-down).
@@ -36,7 +36,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-eval/src/sessioneval.ts]
     description: >
-      Open #/evals?session=<id> for a session that filed a reading WITHOUT committing code (its codeSha
+      Open the scoped list (`#/evals?q=is:eval state:current scope:<id>`) for a session that filed a reading WITHOUT committing code (its codeSha
       is the merge-base) over a node carrying older readings by other sessions plus a retired scenario's
       residual reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the
       row order, and whether the retired scenario shows.
@@ -68,20 +68,26 @@ scenarios:
       executes. Help: the map lists eval as its own noun and an --help probe never fires the verb.
   - name: eval-door-one-chrome
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/evals-entry.e2e.mjs
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >
-      Open a session's console in a real browser and read the tab bar: what the Eval entry is and what
-      clicking it does (read location.hash + the rendered page); type /eval in the ❯ box and accept it.
-      On the landed page, compare the DOM skeleton (head, rows, anchors) against the un-scoped #/evals
-      list; read the gates strip and the export link's href. Check no eval pane ever mounts inside the
-      console.
+      Open a session's console in a real browser and read the tab bar: what ELEMENT the Eval entry is
+      (tag, href attribute) and what clicking it does (read location.hash + history.length before/after
+      + the rendered page); type /eval in the ❯ box and accept it. Read the phone session surface's eval
+      door the same way. On the landed page, compare the DOM skeleton (head, rows, anchors) against the
+      un-scoped #/evals list; read the gates strip and the export link's href. Check no eval pane ever
+      mounts inside the console.
     expected: >
-      The console's Eval entry is a DOOR, not a tab: clicking it (or the typed /eval) NAVIGATES to
-      #/evals?session=<id> — a real page switch, history-walked — and the console itself never mounts an
-      eval pane (the terminal's width never reflows). The landed page is the SAME shared list chrome the
-      un-scoped #/evals renders (one component set — no session-only clone), with the session's gates
-      strip above and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss = one
-      canonical home for a session's evaluation, reached through doors.
+      The console's Eval entry is a DOOR and a REAL ANCHOR — an <a> whose href IS the canonical scoped
+      list address, #/evals?q=is:eval state:current scope:<id> (the one scope: token text every session
+      door mints; never the legacy ?session param) — so copy-link/middle-click work for free, and clicking
+      it PUSHES exactly one history entry landing directly on that final address (no intermediate rewrite).
+      The phone session surface's eval door is the same real anchor. The typed /eval navigates to the same
+      address. The console itself never mounts an eval pane (the terminal's width never reflows). The
+      landed page is the SAME shared list chrome the un-scoped #/evals renders (one component set — no
+      session-only clone) wearing the shared scope banner ([[evals-view]]'s scoped-source-banner), the
+      session's gates strip, and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss
+      = one canonical home for a session's evaluation, reached through real-anchor doors.
   - name: session-eval-deep-link
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/route.js, spec-dashboard/src/EvalsPage.jsx]
@@ -92,13 +98,13 @@ scenarios:
       In a fresh browser tab (a cold app load — the MR-reviewer path), open
       '#/sessions/<id>/eval/<node>/<scenario>' for a session holding a reading on that scenario, and read
       location.hash after settle + the rendered page. Also load the bare '#/sessions/<id>/eval' form, the
-      canonical '#/evals/<node>/<scenario>?session=<id>' directly, and a garbage node/scenario under the
+      canonical '#/evals/<node>/<scenario>?q=scope:<id>' directly, and a garbage node/scenario under the
       session scope.
     expected: >
       The LEGACY address normalizes at the route layer (replace) to the canonical evals family:
-      '#/sessions/<id>/eval/<node>/<scenario>' lands on '#/evals/<node>/<scenario>?session=<id>' — the
+      '#/sessions/<id>/eval/<node>/<scenario>' lands on '#/evals/<node>/<scenario>?q=scope:<id>' — the
       scenario's worktree-rooted detail page (media + remark thread + composer), one click from an MR
-      note to the live, remarkable reading; the bare '/eval' form lands on '#/evals?session=<id>' (the
+      note to the live, remarkable reading; the bare '/eval' form lands on the scoped default list ('#/evals?q=is:eval state:current scope:<id>') (the
       session-scoped list). The canonical address opens identically when pasted directly. A name matching
       nothing renders the honest not-found with the link back to the session-scoped list — never a blank
       page or a crash. The old shape never re-appears in the address bar.

@@ -68,11 +68,15 @@ The two planes, made native to touch:
   timeline's pending state reads the GENERIC loading word — never another surface's loading phrase
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
-  a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that
-  navigates to the session-scoped Evals list (`#/evals?q=is:eval state:current scope:<id>`,
+  a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that is
+  a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval state:current scope:<id>`, the
+  [[address-routing]] projection as its literal href — one ordinary hash push;
   [[session-eval]] — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,
-  lazily loaded and reflowed to one column. Reading the measured loss is exactly what a
+  lazily loaded and reflowed to one column. And the conversation is DEEP-LINKABLE: a `#/sessions/<id>`
+  address (a shared link, or the scoped eval pages' banner door — [[evals-view]]) opens that session's
+  conversation on a cold phone load, one-way route→state — leaving the detail via its back control is
+  phone-local and never rewrites the hash. Reading the measured loss is exactly what a
   phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the

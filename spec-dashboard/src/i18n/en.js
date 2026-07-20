@@ -200,8 +200,6 @@ export default {
     sideNodes: 'spec nodes',
     backToEvals: 'back to evals',
     backToIssues: 'back to issues',
-    scopedSource: "this reading comes from session {id}'s worktree",
-    scopedSourceOpen: 'open the session terminal',
     sideQueue: 'continue reviewing',
     queuePrev: 'previous',
     queueNext: 'up next',
@@ -254,6 +252,8 @@ export default {
   sessionEval: {
     btn: 'eval',
     btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
+    scopeBanner: ({ id }) => `you're viewing evals from session ${id}'s worktree`,
+    scopeBannerOpen: 'open the session terminal',
     none: 'no evaluation for this session yet',
     unavailable: 'evaluation unavailable until the session model loads successfully.',
     loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,

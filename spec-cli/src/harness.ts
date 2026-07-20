@@ -113,7 +113,7 @@ export interface Harness {
   // ENABLES the project config layer so codex discovers our hooks at all, a tier bypass_hook_trust does NOT
   // cover. Claude is a no-op (it relies on folder-trust). `cmdFor` MUST be the same per-event command the shim
   // emitted.
-  writeTrust(proj: string, cmdFor: (e: string) => string): void
+  writeTrust(proj: string, cmdFor: (e: string) => string): readonly string[]
 
   // --- the `/` menu ---
   // the slash-command list, computed the way THIS harness computes its own `/` menu.
@@ -917,7 +917,7 @@ function stripCodexTrustFor(cur: string, proj: string, hooksJson: string): strin
 // leave a DUPLICATE key (which breaks codex config loading) and self-heals a config that already carried one.
 // Scoped to THIS project path; never touches the user's other config. CODEX_HOME respected for testability.
 // (`events` may be empty for a trust-only stamp in tests.)
-export function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: string) => string): void {
+export function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: string) => string): string {
   const home = process.env.CODEX_HOME || join(homedir(), '.codex')
   const file = join(home, 'config.toml')
   const hooksJson = join(proj, '.codex', 'hooks.json')
@@ -930,6 +930,7 @@ export function writeCodexTrust(proj: string, events: readonly string[], cmdFor:
   const cleaned = stripCodexTrustFor(existsSync(file) ? readFileSync(file, 'utf8') : '', proj, hooksJson)
   if (!existsSync(home)) mkdirSync(home, { recursive: true })
   writeFileSync(file, cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`)
+  return file
 }
 
 // the inverse of writeCodexTrust: strip THIS project's codex trust from the GLOBAL config.toml — the SAME
@@ -1090,7 +1091,7 @@ export const claudeHarness: Harness = {
   skillDir: (proj) => join(proj, '.claude', 'skills'),
   agentDir: (proj) => join(proj, '.claude', 'agents'),
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
-  writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
+  writeTrust: () => [],                            // Claude relies on folder-trust — no artifact to report
   removeTrust: () => { /* Claude wrote no trust — nothing to strip */ },
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: claudeSlashCommands,
@@ -1157,7 +1158,7 @@ export const codexHarness: Harness = {
   //       the prompt and the worker runs unattended. bypass_hook_trust stays on `thread/start` + the resume flag
   //       as DEFENCE for the non-resume paths (and if a version bump makes a hash mismatch, the app-server
   //       thread still runs the hooks); it does not REPLACE the hashes here.
-  writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
+  writeTrust: (proj, cmdFor) => [writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor)],
   // trust is keyed by the MAIN checkout (where the codex shim materializes) — strip it at the same key.
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },
@@ -1210,7 +1211,7 @@ export const piHarness: Harness = {
     content: piExtensionSource(dispatch, spex),
     cmd: (e: string) => `SPEX='${spex}' bash ${dispatch} pi ${e}`,   // what the extension actually spawns, for parity with buildShim
   }),
-  writeTrust: (proj) => writePiTrust(mainCheckout(proj)),   // trust keys on the MAIN checkout; nearest-parent lookup covers worktrees
+  writeTrust: (proj) => [writePiTrust(mainCheckout(proj))], // trust keys on the MAIN checkout; nearest-parent lookup covers worktrees
   removeTrust: (proj) => removePiTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: piSlashCommands,
@@ -1249,7 +1250,7 @@ export const opencodeHarness: Harness = {
   // content = the plugin source; cmd = the SAME per-event command the plugin bakes into dispatch calls, so
   // any consumer that hashes/inspects commands sees one truth (trust is a no-op here regardless).
   shim: (dispatch, spex) => ({ content: opencodePluginSource(dispatch, spex), cmd: (e) => `SPEX='${spex}' bash ${dispatch} opencode ${e}` }),
-  writeTrust: () => { /* zero-prompt is the launcher's `--auto` flag — nothing to write */ },
+  writeTrust: () => [],                            // zero-prompt is the launcher's `--auto` flag — no artifact to report
   removeTrust: () => { /* nothing was written */ },
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: opencodeSlashCommands,

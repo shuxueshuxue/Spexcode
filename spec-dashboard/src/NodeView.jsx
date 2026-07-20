@@ -387,7 +387,7 @@ export function IssuesPane({ node, sessions = [], filter = {}, onFilter = () => 
       {issues.length > 4 && <CompactReviewFilter value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
         summary={{ shown: model.shown.length, total: issues.length }}
         placeholder={t('nodeView.filterIssues')} searchLabel={t('reviewList.searchIssues')}
-        filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
+        filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />}
       {!shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
       {open.length > 0 && (
         <>
@@ -544,7 +544,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
       summary={{ shown: model.shown.length, total: filterItems.length }}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
-      filterLabel={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
+      filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
     : null
   // Branch on the unfiltered list so a no-match state never flips the tree and remounts the compact search
   // mid-word — a filtered-to-empty timeline stays a ChronoPane with its controls intact.

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import enMessages from './i18n/en.js'
+import zhMessages from './i18n/zh.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const read = (name) => readFileSync(join(here, name), 'utf8')
@@ -23,7 +25,7 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   for (const source of [evals, issues]) {
     assert.match(source, /<ListPage/)
     assert.match(source, /<FacetMenu/)
-    assert.match(source, /<FacetOverflow/)
+    assert.match(source, /<SecondaryFilters/)
     assert.match(source, /<ReviewListRow/)
     assert.doesNotMatch(source, /FilterSelect/)
   }
@@ -154,7 +156,7 @@ test('shared list key ownership preserves native controls and focused anchors', 
 })
 
 test('facet primitives keep an active missing value clearable', () => {
-  const source = shell.match(/export const facetMenuOptions = ([\s\S]*?\n})\n\nexport const rovingIndex/)?.[1]
+  const source = shell.match(/export const facetMenuOptions = ([\s\S]*?\n})\n\nexport const secondaryFilterCounts/)?.[1]
   assert.ok(source, 'facetMenuOptions stays directly testable')
   const options = Function(`return (${source})`)()
   const all = { value: '', label: 'All' }
@@ -164,9 +166,40 @@ test('facet primitives keep an active missing value clearable', () => {
   assert.deepEqual(options([], 'dead-session', 'All'), [all])
   assert.deepEqual(options([{ value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.deepEqual(options([all, { value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
-  assert.match(evals, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
+  assert.match(evals, /<SecondaryFilters[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
   assert.match(evals, /label: sessionFacet\.label, value: sessionFacet\.value/)
-  assert.match(issues, /<FacetOverflow[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
+  assert.match(issues, /<SecondaryFilters[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
+})
+
+test('one semantic secondary Filters trigger owns responsive active-group state', () => {
+  const source = shell.match(/export const secondaryFilterCounts = ([\s\S]*?\n\}, \{ desktop: 0, mobile: 0 \}\))\n\nexport const rovingIndex/)?.[1]
+  assert.ok(source, 'secondaryFilterCounts stays a directly testable shared primitive')
+  const counts = Function(`return (${source})`)()
+
+  assert.deepEqual(counts([]), { desktop: 0, mobile: 0 })
+  assert.deepEqual(counts([
+    { value: 'reviewed' },
+    { value: 'stale', mobileOnly: true },
+    { value: 'image', active: false, mobileOnly: true },
+  ]), { desktop: 1, mobile: 2 })
+
+  const secondary = shell.slice(shell.indexOf('export function SecondaryFilters'), shell.indexOf('export function ReviewListRow'))
+  assert.match(secondary, /<Icon name="filter" size=\{14\} \/>/)
+  assert.match(secondary, /<span>\{label\}<\/span>/)
+  assert.match(secondary, /reviewList\.activeFilters/)
+  assert.match(secondary, /<Icon name="chevron-down" size=\{12\} \/>/)
+  assert.doesNotMatch(secondary, /ellipsis|kebab|More actions|moreFilters/)
+  for (const pageSource of [evals, issues]) {
+    assert.match(pageSource, /secondaryFilters=\{<SecondaryFilters label=\{t\('reviewList\.filters'\)\}/)
+  }
+  assert.equal(enMessages.reviewList.filters, 'Filters')
+  assert.equal(enMessages.reviewList.activeFilters({ n: 1 }), '1 active filter')
+  assert.equal(enMessages.reviewList.activeFilters({ n: 2 }), '2 active filters')
+  assert.equal(zhMessages.reviewList.filters, '筛选')
+  assert.equal(zhMessages.reviewList.activeFilters({ n: 2 }), '2 个已启用筛选')
+  assert.match(css, /\.rl-secondary-filters-trigger \{[^}]*height: 32px;[^}]*font-family: var\(--mono\);/s)
+  assert.match(css, /\.rl-secondary-filter-count\.for-mobile \{ display: none; \}/)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-secondary-filter-count\.for-desktop \{ display: none; \}[\s\S]*\.rl-secondary-filter-count\.for-mobile \{ display: inline-flex; \}/s)
 })
 
 test('menus and section tabs share one keyboard and Escape contract', () => {
@@ -214,7 +247,7 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
 })
 
-test('overflow radios, Issues tabs, and Evals verdict filters expose honest ARIA ownership', () => {
+test('secondary-filter radios, Issues tabs, and Evals verdict filters expose honest ARIA ownership', () => {
   assert.match(shell, /role="group"[\s\S]*aria-labelledby=\{`\$\{groupId\}-group-\$\{index\}`\}/)
   assert.match(shell, /className="rl-menu-label" id=\{`\$\{groupId\}-group-\$\{index\}`\}/)
   assert.match(shell, /role=\{sectionsAreTabs \? 'tablist' : 'group'\} aria-label=\{title\}/)
@@ -273,6 +306,10 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /\.rl-row-grid\s*\{[^}]*min-height:\s*64px;/s)
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*height:\s*49px;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
+  assert.match(shell, /const buttonLabel = selectedLabel \? `\$\{label\}: \$\{selectedLabel\}` : label/)
+  assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)
+  assert.match(css, /\.rl-facet-wrap\.mobile-stay \.rl-facet \{ max-width: 64px; gap: 3px; padding: 0 3px;/)
+  assert.match(css, /\.rl-secondary-filters-trigger:not\(\.compact\) \{ gap: 3px; padding: 0 4px; \}/)
   assert.match(css, /\.rl-row-title\s*\{[^}]*-webkit-line-clamp:\s*3;/s)
 })
 

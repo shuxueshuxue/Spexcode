@@ -9,6 +9,8 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/docs-quickstart.test.ts
+  - README.md
+  - docs/README.zh-CN.md
 ---
 # guide
 
@@ -48,7 +50,8 @@ the agent from one verb, picked by an optional topic:
   unknown topic fails loud (names the real topics), never a silent setup dump.
 - **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide settings` prints every `spexcode.json`
-  / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working
+  / `spexcode.local.json` field (launchers, dashboard icon, deterministic lint policy, doctor health budgets,
+  layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
   secrets). Its launcher table mirrors [[launcher-select]]: clean init's per-harness profiles use ordinary

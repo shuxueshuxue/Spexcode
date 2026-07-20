@@ -47,7 +47,7 @@ source-session presence facet is `session:present|missing` ([[live-session-filte
 autocomplete, never an enumerating dropdown — and `scope:` sources the worktree model ([[evals-view]]).
 Bare words search scenario/node/filer/evaluator; an unknown qualifier matches nothing, honestly. Common
 menus stay visible on desktop, low-frequency/width-displaced ones move
-to the functional overflow, and only the primary facet survives beside the tabs at 390px. **Every pick is
+to the semantic secondary Filters menu, and only the primary facet survives beside the tabs at 390px. **Every pick is
 URL-query state**: a human's action pushes `?q=<raw text>` (the default view stays bare), reload/Back
 fully replay, and no local filter state survives. If live data contracts, an active menu value keeps its
 All off-switch — and the visible text is always the canonical release, whatever state the scope is in.

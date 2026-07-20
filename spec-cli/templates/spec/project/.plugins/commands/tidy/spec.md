@@ -21,19 +21,23 @@ change this?"*
 - **No ⇒ it is contract surface.** Keep it — public names, signatures, return types, invariants, edges/errors, the
   WHEN → outcome a caller observes.
 
-**Diagnose** (read-only — no edits, no commits). For each target report two layers:
+**Diagnose** (read-only — no edits, no commits). Run bare `spex doctor` once and consume its **Spec health
+diagnosis** for every target; never restate or locally reproduce the altitude proxy thresholds. For each target
+report two layers:
 
 - **Deterministic (git + `spex spec lint`):** *Lint* — errors/warnings naming this node (integrity, living, coverage, drift);
   *Drift* — whether its governed `code:` files moved ahead of its latest version, by how much; *Link-gap* — does `code:`
   name every implementing file? an unlinked file is invisible to lint and drift, so the spec silently stops governing it.
 - **Quality grade (judge the body, not the code):** score 1–5 — *declarative*, *refactor-resistant*, *edges*,
-  *testable*, *concise*. Two failure directions: **too low** (a mechanics dump — leaks, code identifiers, how-to; altitude
-  lint catches this) and **too thin** (so vague a refactor couldn't violate it, e.g. "validates input appropriately";
-  only you catch this). End with a one-line verdict (`healthy` | `needs-tidy` | `too-thin` | `drifting` | `link-gap`) and
-  the single highest-value next action. Change nothing.
+  *testable*, *concise*. Include the doctor's altitude finding (or explicit clear result) as the cheap mechanical
+  signal. Two failure directions remain a semantic judgment: **too low** (a mechanics dump — leaks, code identifiers,
+  how-to) and **too thin** (so vague a refactor couldn't violate it, e.g. "validates input appropriately"; only you catch
+  this). End with a one-line verdict (`healthy` | `needs-tidy` | `too-thin` | `drifting` | `link-gap`) and the single
+  highest-value next action. Change nothing.
 
 **Fix** (mutating — one commit per node). Rewrite the body at the right altitude: **preserve the contract** (never drop a
 requirement; rephrase, don't delete meaning), **raise don't hollow out** (keep every testable specific; cut only the
 how — too-thin is as broken as a mechanics dump), **cut redundancy** (say each thing once), **stay a living document**
 (rewrite in place, never a `## vN` history — git carries versions). Commit per node (`spec: <id> — tidy to contract
 altitude`) with a `Session:` trailer; run `spex spec lint` after each — it must stay at 0 errors.
+Then run bare `spex doctor` and confirm the target no longer carries an altitude finding.

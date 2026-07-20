@@ -58,7 +58,10 @@ verbs the CLI uses.
   Menus exist only for the low-cardinality
   data the model actually has: the store pick and the source-session presence facet
   (`session:present|missing` — [[live-session-filter]]); store stays directly reachable at 390px while
-  presence lives in the functional overflow. Originator and spec node are HIGH-cardinality: `author:` /
+  presence lives in [[review-chrome]]'s semantic secondary Filters menu — filter/funnel + localized text
+  + chevron, never a kebab/action affordance. Its stable active-group count reads the presence token.
+  At 390px an active Store face condenses visually to the selected store while retaining its fully
+  qualified accessible name, so Open/Closed, Store, and Filters never overlap. Originator and spec node are HIGH-cardinality: `author:` /
   `node:` tokens, hand-typed or completed from the input's bounded inline autocomplete — no enumerating
   dropdown; an unknown or historical value still submits and yields the honest filtered zero. An ACTIVE
   menu value whose data option disappeared keeps its cheap All off-switch — and the visible text is

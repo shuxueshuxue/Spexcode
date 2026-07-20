@@ -14,7 +14,6 @@ export type LintConfig = {
   sourceExcludeGlobs: string[]  // explicit source-policy subtraction
   sourceExtensions: string[] | null // compatibility shorthand compiled into sourceIncludeGlobs
   testGlobs: string[]           // globs EXCLUDED from coverage; set [] to govern tests too
-  maxChildren: number        // breadth budget: warn at >= this many direct children
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
   scenarioTags: string[]     // the closed vocabulary an eval scenario's `tags:` must draw from; extend it to mint a new tag
   scopedCodeMiss: 'warn' | 'ignore' // the file-level drift ADVISORY on a selector-scoped code: file whose window has no
@@ -28,7 +27,6 @@ const DEFAULT_CONFIG: LintConfig = {
   sourceExcludeGlobs: [],
   sourceExtensions: null,
   testGlobs: DEFAULT_TEST_GLOBS,
-  maxChildren: 8,
   maxOwners: 3,
   scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
   scopedCodeMiss: 'warn',
@@ -180,16 +178,6 @@ export async function specLint(): Promise<Finding[]> {
       if (!inFence && VER_HEADING.test(line))
         out.push({ level: 'error', rule: 'living', spec: s.id, msg: `'${s.id}' has a changelog heading "${line.trim()}" — keep the body current-state; version history lives in git (recent/history tabs)` })
     }
-  }
-
-  // breadth: a deterministic structural comprehensibility bound (WARN — soft, advisory). Children are
-  // derived from the parent links loadSpecs already computes; no explicit child array to keep in sync.
-  const childCount = new Map<string, number>()
-  for (const s of specs) if (s.parent) childCount.set(s.parent, (childCount.get(s.parent) ?? 0) + 1)
-  for (const s of specs) {
-    const n = childCount.get(s.id) ?? 0
-    if (n >= cfg.maxChildren)
-      out.push({ level: 'warn', rule: 'breadth', spec: s.id, msg: `'${s.id}' has ${n} direct child nodes (>= ${cfg.maxChildren}) — is an intermediate grouping layer missing? (a flat list of genuine peers is sometimes right — ignore if so)` })
   }
 
   // coverage: every governed source file must be claimed by at least one spec.

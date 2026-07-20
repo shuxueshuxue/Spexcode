@@ -121,8 +121,6 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       optional leading dot; no space / '/' / '_' / uppercase Latin), and its leaf dir name
                       is unique tree-wide.
   mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
-  breadth    (warn)   a node with >= maxChildren direct children (default 8) — is an intermediate
-                      grouping layer missing?
   coverage   (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift      (warn)   a governed file has commits newer than the node's spec version — it may be stale.
                       ALWAYS advisory: unanchored drift never blocks a commit (the blocking tier is
@@ -142,8 +140,8 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       foundation owner). Selector-scoped governors don't count toward the bound.
   confusable-id (warn) two leaf ids one edit apart read as the same word — rename one to read apart.
 
-Spec-prose quality is deliberately outside this production gate. Bare \`spex doctor\` reports opt-in
-altitude health findings; the tidy workflow consumes that report and adds semantic judgment.
+Heuristic spec health is deliberately outside this production gate. Bare \`spex doctor\` reports opt-in
+altitude and breadth findings; the tidy workflow consumes that report and adds semantic judgment.
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
 before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.`
@@ -411,7 +409,6 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            unioned with sourceIncludeGlobs; it has no separate matching path.
   lint.testGlobs           globs EXCLUDED from coverage. Defaults cover .test/.spec names, test/tests/
                            directories, and test_* / *_test conventions; [] governs tests too.
-  lint.maxChildren         breadth budget: warn at >= this many direct children (default 8).
   lint.maxOwners           warn when a file is governed WHOLE-FILE by > this many nodes (default 3).
                            Selector-scoped governors (code: path#symbol) don't count toward the bound.
                            (lint.driftErrorThreshold is RETIRED: the count-based commit gate is replaced
@@ -428,6 +425,8 @@ Example — govern your own source dir:
   { "lint": { "governedRoots": ["src"] } }
 Example — declare project-specific exclusions (nothing is guessed from these names):
   { "lint": { "governedRoots": ["."], "sourceExcludeGlobs": ["vendor/**", "dist/**", "docs/**"] } }
+Migration: \`lint.maxChildren\` is RETIRED and no longer read; move its value to
+  \`doctor.breadth.maxChildren\`. Bare \`spex doctor\` flags a stale key.
 
 ── DOCTOR HEALTH (spexcode.json — portable advisory-diagnosis budgets) ──
   doctor.altitude         the one altitude proxy config consumed by bare \`spex doctor\`:
@@ -435,8 +434,11 @@ Example — declare project-specific exclusions (nothing is guessed from these n
                           Defaults: 50 / 4200 / 35 / 1.3 / 3 / []. Exact filename signals derive from
                           lint's tracked source candidates; identifierExtensions adds compatibility wildcard
                           rows (".legacy" → "*.legacy") to that same matcher.
-Example — loosen the opt-in altitude diagnosis without changing the lint gate:
-  { "doctor": { "altitude": { "lineBudget": 70 } } }
+  doctor.breadth          the one tree-breadth hypothesis consumed by bare \`spex doctor\`:
+                          { maxChildren }. Default: 8. Reports each affected node's direct child count and
+                          points to the regroup workflow; genuine flat peers may remain flat.
+Example — tune opt-in health diagnosis without changing the lint gate:
+  { "doctor": { "altitude": { "lineBudget": 70 }, "breadth": { "maxChildren": 10 } } }
 
 ── OTHER (spexcode.json unless noted) ──
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default

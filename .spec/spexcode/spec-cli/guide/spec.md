@@ -54,7 +54,8 @@ the agent from one verb, picked by an optional topic:
   layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
-  secrets). Its launcher table mirrors [[launcher-select]]: clean init's per-harness profiles use ordinary
+  secrets). Deterministic lint policy and the doctor's altitude/breadth health budgets remain separate
+  owners. Its launcher table mirrors [[launcher-select]]: clean init's per-harness profiles use ordinary
   commands that preserve the harness permission model, while automatic-permission commands are explicit
   authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
   and the important meaning of "active": it counts compute slots, not total session rows, so human-waiting
@@ -71,10 +72,10 @@ the agent from one verb, picked by an optional topic:
   how the [[content-filter]] behaves on a host-tracked contract file, and the forgetting-law guarantees
   (any-order switching, `spex uninstall` as the empty policy).
 
-Every page describes the PRESENT model only — a retired knob or mechanism is simply absent, never kept
-around as a retirement announcement (history is git's job). Whoever still carries a retired config field
-is reached by the runtime's loud notice, which names the removal recipe itself; the guide never
-duplicates that notice as static text.
+Every page describes the PRESENT model. A retired knob is absent from the active field list; when silently
+ignoring a stale authored field would leave its owner ambiguous, one concise migration note names the live
+replacement and the runtime diagnosis repeats that repair. History remains git's job, not a static
+retirement catalogue.
 
 `guide` is the SKILL layer of the help journey ([[cli-surface]]): **help answers "what do I type",
 guide answers "how do I work".** Command usage — the map (`spex help`) and each command's own page

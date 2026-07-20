@@ -2212,8 +2212,9 @@ a.scenario-count:hover { background: var(--panel2); }
   .an-ab-pos { display: none; }
 }
 
-/* ---- the session-scoped Evals list ([[session-eval]]): return door + gates above shared list chrome. ---- */
-.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; min-height: 40px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
+/* ---- the session-scoped Evals list ([[session-eval]]): sticky return door + gates in PageScroll. ---- */
+.se-gates { position: sticky; top: 0; z-index: 4; flex: 0 0 40px; height: 40px; display: flex; align-items: center; align-content: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.se-gates ~ .rl-content .lp-head { top: 40px; }
 .se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
@@ -2225,6 +2226,10 @@ a.scenario-count:hover { background: var(--panel2); }
 .se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 5px; color: var(--ink2); background: var(--paper); text-decoration: none; }
 .se-door:hover { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--line) 45%, var(--paper)); }
 .se-door:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+@media (max-width: 760px) {
+  .se-gates { flex-basis: 80px; height: 80px; }
+  .se-gates ~ .rl-content .lp-head { top: 80px; }
+}
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }

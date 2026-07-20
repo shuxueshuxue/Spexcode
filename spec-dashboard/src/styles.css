@@ -1217,10 +1217,21 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
-.ds-head { max-width: 1180px; display: flex; align-items: flex-start; gap: 10px; }
+/* the optional page-supplied source banner above the header ([[review-chrome]]): one restrained line —
+   muted panel, meta type — whose link is a REAL anchor (the scoped eval detail's session door). */
+.ds-banner { max-width: 1180px; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; font-size: var(--type-control); color: var(--ink2); }
+.ds-banner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-banner-link { flex: 0 0 auto; color: var(--blue); text-decoration: none; }
+.ds-banner-link:hover { text-decoration: underline; }
+/* the header row's ONE geometry contract: the row declares the title's type metric (the same tokens the
+   h1 wears), so the back anchor can derive its offset from the SAME first-line box via 1lh — its center
+   coincides with the title first line's center at any type token, wrap, width, or language, with no
+   per-page or per-font magic offset. */
+.ds-head { max-width: 1180px; display: flex; align-items: flex-start; gap: 10px; font-size: var(--type-title); line-height: var(--leading-ui); }
 /* the compact back anchor ([[review-chrome]] / [[address-routing]]): a REAL <a href> derived from the
-   canonical address — never a history.back button. */
-.ds-back { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 1px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+   canonical address — never a history.back button. --ds-back-size keeps the ≥24px hit target explicit;
+   the margin centers the box on the title's FIRST line (1lh = the row's declared line box). */
+.ds-back { --ds-back-size: 28px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: var(--ds-back-size); height: var(--ds-back-size); margin-top: calc((1lh - var(--ds-back-size)) / 2); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
 .ds-back:hover { color: var(--ink); background: var(--panel); }
 .ds-back:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .ds-title { margin: 0 0 6px; font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); overflow-wrap: anywhere; min-width: 0; }
@@ -1239,6 +1250,15 @@ a.scenario-count:hover { background: var(--panel2); }
 .ds-side-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--type-meta); color: var(--ink2); }
 .ds-side-line { font-size: var(--type-meta); color: var(--ink2); }
 .ds-side-dim { color: var(--muted); }
+/* the Continue-reviewing queue rows ([[event-detail]] renders them in the side rail): real anchors
+   wearing the ONE shared verdict visual + scenario/node text, one line each, shrink-truncated. */
+.ds-queue-row { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: var(--type-meta); color: var(--ink2); text-decoration: none; }
+.ds-queue-row:hover .ds-queue-scenario { text-decoration: underline; }
+.ds-queue-row .review-state { flex: 0 0 auto; display: inline-flex; }
+.ds-queue-scenario { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the node span carries the heavier shrink factor so a long node id collapses before the PRIMARY
+   scenario text does (the row's data-tip keeps the full pair readable). */
+.ds-queue-node { flex: 0 4 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 /* the honest not-found face — an address naming no object, with the one link back to its list. */
 .ds-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .ds-missing-note { color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }

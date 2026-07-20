@@ -26,9 +26,17 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   32px combobox shows the raw text — Issues defaults to `is:issue state:open`, Evals to
   `is:eval state:current` — and every control is only a query BUILDER over the COMMITTED text: section
   tabs and low-cardinality facet menus perform token surgery and PUSH, so a pick is always visible as
-  text and no control owns private filter state. Syntax highlight is a GitHub-style aria-hidden overlay
-  behind the native input (native caret/selection, never contenteditable); recognized qualifiers color,
-  unknown ones stay plain and run to the honest filtered zero. An emptied submit refills the default.
+  text and no control owns private filter state. **The committed text replays as a CONTINUABLE edit**:
+  the visible value is the trimmed tokens plus exactly ONE trailing ASCII space with the caret parked
+  after it, so the next keystroke starts the next token; a builder pick, a hand submit, and a
+  Back/Forward replay hand focus to the input, while a cold mount — a page load, or arriving from
+  another page — parks the caret without stealing page focus (the list keys stay live). The trailing
+  space is display-only — submit trims the outer
+  whitespace, and the address never carries it. Syntax highlight is a GitHub-style aria-hidden overlay
+  behind the native input (native caret/selection, never contenteditable), mirroring the value
+  glyph-for-glyph including the trailing space; recognized qualifiers color, unknown ones stay plain and
+  run to the honest filtered zero. An emptied submit refills the default — visibly too, even though the
+  bare address does not change.
   High-cardinality dimensions (author/filer/node/scope) get NO enumerating dropdown: hand-typed or picked
   from the input's inline combobox+listbox autocomplete, whose candidates are bounded — values present in
   the data, `scope:` only sessions on the current board — a key pick completes in place, a value pick
@@ -42,11 +50,15 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   freshness, evidence, store, source-session presence); tab counts are computed under the REST of the
   query. No real options means no fake control, and an ACTIVE value whose menu option vanished keeps a
   cheap All off-switch (the visible text is the canonical release).
-  Menu open focuses the checked/first radio; Arrow/Home/End rove, selection/Escape restore the trigger,
-  and outside click keeps clicked focus. Each overflow facet is its own named radio group inside the menu,
+  Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
+  SELECTION releases like every builder — into the query input, its trigger keeping focus only when the
+  pick changed nothing — and outside click keeps clicked focus. Each overflow facet is its own named radio
+  group inside the menu,
   never one mixed set with several checked items. Menus use the ONE LIFO Escape stack. The named horizontal
   tablist exposes one roving tab stop; tabs control one labelled results panel and only Left/Right/Home/End
-  switch it, leaving Up/Down to normal page scrolling. Every query, section, or facet action PUSHES canonical
+  switch it, leaving Up/Down to normal page scrolling — and an arrow activation IS a builder pick, so it
+  too releases focus into the query input (the roving stop is where Tab-return resumes). Every query,
+  section, or facet action PUSHES canonical
   hash state; Back replays it. At 390px the query input keeps its full width and highlight; displaced facets
   join the one functional overflow.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
@@ -77,7 +89,17 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   when the page supplies one (`backHref`/`backLabel`): a REAL `<a href>` wearing the [[icon-system]]
   left-arrow glyph with its localized tooltip + accessible name — Enter follows the href natively, and it
   never calls `history.back` (the page derives the href from the detail's canonical address,
-  [[address-routing]]). Browser history remains the finer return path beside it. Source failure
+  [[address-routing]]). Browser history remains the finer return path beside it. The header row carries
+  ONE geometry contract: the row and the h1 declare the SAME type-scale tokens (the typography law bans
+  `inherit`, so the metric is one pair of shared tokens, not one declaration), and the back anchor
+  derives its vertical offset from the row's first-line box, so the anchor's center coincides with the
+  title FIRST line's visual center — at every width and language, and a wrapping title keeps the anchor
+  tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
+  pixel offset, and
+  the anchor keeps its ≥24px hit target and focus ring. Above the header the shell offers an optional
+  page-supplied **banner** slot (one restrained source-notice line — the scoped eval detail's
+  worktree-source banner rides it, [[evals-view]]): the shell owns its geometry, the page only its
+  content, and a page that supplies none renders no banner box. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with
   side metadata above main content.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute

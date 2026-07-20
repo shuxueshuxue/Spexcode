@@ -118,7 +118,7 @@ function AbOverflow({ hidden, total, histIdx, onPick }) {
   )
 }
 
-export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null, backHref = null, backLabel = null }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null, backHref = null, backLabel = null, banner = null, queue = [] }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -563,6 +563,20 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
             <span className="ds-side-line ds-side-dim">{viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
         </SideSection>
       )}
+      {/* the Continue-reviewing queue ([[evals-view]] computes it from the page's source dataset): the
+          neighbors of the current reading as REAL detail anchors — the one shared ReviewState visual +
+          scenario/node text, no selection state, absent entirely when the dataset holds no neighbor. */}
+      {queue.length > 0 && (
+        <SideSection label={t('detail.sideQueue')}>
+          {queue.map((q) => (
+            <a key={q.key} className="ds-queue-row" href={q.href} data-tip={`${q.node} · ${q.scenario}`}>
+              <ReviewState kind="eval" state={q.state} size={13} />
+              <span className="ds-queue-scenario">{q.scenario}</span>
+              <span className="ds-queue-node">{q.node}</span>
+            </a>
+          ))}
+        </SideSection>
+      )}
     </>
   )
 
@@ -587,6 +601,7 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
       listHref={listHref}
       backHref={backHref}
       backLabel={backLabel}
+      banner={banner}
     >
       {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
       {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}

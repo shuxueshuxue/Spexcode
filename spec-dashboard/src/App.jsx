@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { loadGraph, subscribeBoardLive, loadIssues, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
-import { CATALOG_POLL_MS, loadProjects, selectGatewayIdentity, selectProjectIdentity } from './projects.js'
+import { CATALOG_POLL_MS, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { useT } from './i18n/index.jsx'
@@ -127,7 +127,7 @@ export default function App() {
       : boardIdentity
   useEffect(() => {
     if (!identity) return
-    document.title = identity.title ? `${identity.title} · SpexCode` : 'SpexCode'
+    document.title = tabTitle(identity)
   }, [identity?.title]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!identity) return

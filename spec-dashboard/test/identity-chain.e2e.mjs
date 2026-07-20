@@ -184,7 +184,7 @@ try {
   step('open projects')
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
-  assert.equal(await page.title(), 'Projects · SpexCode')
+  assert.equal(await page.title(), 'Projects')
   const gatewayBefore = await favicon(page)
   assert.match(gatewayBefore, /^data:image\/svg\+xml,/)
   await assertCollapsedPickers(page, 'desktop initial')
@@ -262,7 +262,7 @@ try {
   step('open atlas scope')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Atlas Lab · SpexCode', 'atlas title')
+  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'atlas title')
   const atlasHref = await favicon(page)
   assert.ok(atlasHref.endsWith('/lucide/radar.svg'))
   assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Atlas Lab/)
@@ -278,7 +278,7 @@ try {
   step('switch to rocket')
   await desktopSwitcher.rocketItem.click()
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Rocket Yard · SpexCode', 'rocket title')
+  await waitFor(async () => (await page.title()) === 'Rocket Yard', 'rocket title')
   const rocketHref = await favicon(page)
   assert.notEqual(rocketHref, atlasHref)
   assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Rocket Yard/)
@@ -286,7 +286,7 @@ try {
   step('return atlas after rocket')
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.side-rail').waitFor()
-  await waitFor(async () => (await page.title()) === 'Atlas Lab · SpexCode', 'atlas title after rocket')
+  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'atlas title after rocket')
   assert.equal(await favicon(page), atlasHref, 'last visited project never leaks into atlas')
 
   step('side nav route contract')
@@ -305,6 +305,7 @@ try {
     assert.equal((await entry.getAttribute('href') || '').startsWith(route.hash), true, `rail entry carries ${route.hash}`)
     await entry.click()
     await waitFor(() => Promise.resolve(page.url().includes(route.hash)), `rail route ${route.hash}`)
+    assert.equal(await page.title(), 'Atlas Lab', `scoped tab title stays the project title on ${route.hash}`)
   }
   await page.goBack({ waitUntil: 'domcontentloaded' })
   await waitFor(() => Promise.resolve(page.url().includes('#/settings')), 'browser back to settings')
@@ -402,7 +403,7 @@ try {
   await page.screenshot({ path: join(out, 'atlas-config-mobile-everforest-saved.png'), fullPage: true })
 
   await page.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
-  await waitFor(async () => (await page.title()) === 'Atlas Lab · SpexCode', 'mobile atlas title')
+  await waitFor(async () => (await page.title()) === 'Atlas Lab', 'mobile atlas title')
   assert.ok((await favicon(page)).endsWith('/tabler/radar.svg'), 'mobile broad choice drives the scoped favicon')
   await page.screenshot({ path: join(out, 'atlas-mobile-everforest.png'), fullPage: true })
   assert.notEqual(await favicon(page), atlasLiveHref, 'offline edit persisted through backend and gateway restart')
@@ -417,8 +418,10 @@ try {
   const guestPage = await guest.newPage()
   await guestPage.goto(`${base}/p/${encodeURIComponent(atlas.id)}/#/graph`, { waitUntil: 'domcontentloaded' })
   await guestPage.getByLabel('password').fill('project-pass')
+  await waitFor(async () => (await guestPage.title()) === atlas.id, 'gated scope titles by URL project id, suffix-free')
   await guestPage.getByRole('button', { name: 'unlock' }).click()
   await guestPage.locator('.side-rail').waitFor()
+  await waitFor(async () => (await guestPage.title()) === 'Atlas Lab', 'unlocked guest title from authorized board identity')
   assert.equal(await guestPage.locator('.proj-chip').getAttribute('aria-haspopup'), null)
   assert.equal(await guestPage.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((response) => response.status)), 401)
   assert.equal(await guestPage.locator('.proj-menu').count(), 0)
@@ -448,9 +451,10 @@ try {
     `gateway=${catalog.gateway.icon}`,
     `atlas=${atlas.id}:tabler:radar`,
     `rocket=${rocket.id}:mdi:rocket-launch`,
-    'gatewayTitle=Projects · SpexCode',
-    'atlasTitle=Atlas Lab · SpexCode',
-    'rocketTitle=Rocket Yard · SpexCode',
+    'gatewayTitle=Projects',
+    'atlasTitle=Atlas Lab',
+    'rocketTitle=Rocket Yard',
+    'titles=suffix-free (no · SpexCode), route-invariant across rail routes, gated scope titled by URL id',
     `gatewayFavicon=${gatewayFinalHref}`,
     `atlasFavicon=${await favicon(page)}`,
     `rocketFavicon=${rocketHref}`,

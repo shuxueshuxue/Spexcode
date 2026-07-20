@@ -118,7 +118,7 @@ function AbOverflow({ hidden, total, histIdx, onPick }) {
   )
 }
 
-export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, onFocusNode = null, listHref = null, backHref = null, backLabel = null, banner = null, queue = { prev: [], next: [] } }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, onFocusNode = null, listHref = null, backHref = null, backLabel = null, action = null, queue = { prev: [], next: [] } }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -616,7 +616,7 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
       listHref={listHref}
       backHref={backHref}
       backLabel={backLabel}
-      banner={banner}
+      action={action}
     >
       {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
       {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}

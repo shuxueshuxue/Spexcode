@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { scenarioStates } from './score.jsx'
 import { sessionHeadline } from './session.js'
-import { FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState } from './ReviewShell.jsx'
+import { FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, readToken, setToken } from './reviewQuery.js'
 import { EVAL_FILTER_KIND, evalFilterModel, kindsOf, tokenFilterState } from './reviewFilters.js'
 import { useT } from './i18n/index.jsx'
@@ -179,7 +179,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
           <FacetMenu label={kindFacet.label} value={kindFacet.value} options={kindFacet.options} onChange={(value) => surgery('evidence', value === 'all' ? '' : value)} />
         </>
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+      secondaryFilters={<SecondaryFilters label={t('reviewList.filters')} clearLabel={t('reviewList.all')} groups={[
         { label: reviewFacet.label, value: reviewFacet.value, active: !!reviewFacet.value, options: reviewFacet.options, onChange: (value) => surgery('state', value) },
         { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
         { label: freshnessFacet.label, value: freshnessFacet.value, active: !!freshnessFacet.value, options: freshnessFacet.options, onChange: (value) => surgery('freshness', value), mobileOnly: true },

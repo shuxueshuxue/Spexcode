@@ -6,7 +6,7 @@ import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import Modal from './Modal.jsx'
-import { DetailShell, FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState, SideSection, SideValue } from './ReviewShell.jsx'
+import { DetailShell, FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters, SideSection, SideValue } from './ReviewShell.jsx'
 import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
 import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
 import { navigate, routeHash, useRoute } from './route.js'
@@ -136,7 +136,7 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
       facets={
         <FacetMenu label={storeFacet.label} value={storeFacet.value} options={storeFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('store', value)} mobile />
       }
-      overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+      secondaryFilters={<SecondaryFilters label={t('reviewList.filters')} clearLabel={t('reviewList.all')} groups={[
         { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
       ]} />}
       rows={rows}

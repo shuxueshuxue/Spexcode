@@ -40,14 +40,15 @@ scenarios:
     description: >
       With readings across nodes/filers and sessions on the board, type node:/filer:/scope: prefixes into
       the query and walk the inline suggestions; submit hand-typed unknown and historical values. Inspect
-      desktop direct menus and the functional overflow, then repeat at 390px. Compare row sets and hashes.
+      desktop direct menus and the semantic secondary Filters menu, then repeat at 390px. Compare row sets and hashes.
     expected: |
       Node, filer, and scope are TOKEN-ONLY dimensions: no enumerating dropdown exists for any of them;
       suggestions are bounded to values present in the data — scope to sessions on the current board — and
       an unknown or historical value still submits verbatim to the honest zero. Desktop keeps the
       low-cardinality verdict/freshness/evidence menus direct and source-session presence in the
-      functional overflow. At 390px only Verdict remains direct; freshness/evidence plus presence are
-      usable in the kebab. Suggestion labels may be compact but the completed token writes the full id
+      semantic secondary Filters menu. At 390px only Verdict remains direct; freshness/evidence plus
+      presence are usable through the same filter/funnel + Filters + chevron trigger, whose badge counts
+      the active groups housed there. Suggestion labels may be compact but the completed token writes the full id
       into the visible query. No menu or row widens body/document past 390px.
   - name: filters-live-in-the-url
     tags: [frontend-e2e, desktop]
@@ -64,5 +65,5 @@ scenarios:
 ---
 # evals-feed loss
 
-YATU through the real browser over a live backend: drive the actual query, sections, facet menus, overflow,
+YATU through the real browser over a live backend: drive the actual query, sections, facet menus, secondary filters,
 row anchors, and Back history; inspect DOM geometry, media requests, and screenshots. Helpers are auxiliary.

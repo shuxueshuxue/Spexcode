@@ -6,7 +6,7 @@ import { scanQuery, suggestAt } from './reviewQuery.js'
 import { PageScroll } from './PageScroll.jsx'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
-// overflow, row, and state primitives; both detail pages consume the same standalone shell.
+// secondary-filter, row, and state primitives; both detail pages consume the same standalone shell.
 
 export const REVIEW_STATE_VISUALS = {
   issue: {
@@ -62,6 +62,14 @@ export const facetMenuOptions = (options, value, clearLabel) => {
   if (!active || clearLabel == null || supplied.some((option) => String(option.value) === '')) return supplied
   return [{ value: '', label: clearLabel }, ...supplied]
 }
+
+export const secondaryFilterCounts = (groups = []) => groups.reduce((counts, group) => {
+  const active = group.active ?? (group.value != null && String(group.value) !== '')
+  if (!active) return counts
+  counts.mobile += 1
+  if (!group.mobileOnly) counts.desktop += 1
+  return counts
+}, { desktop: 0, mobile: 0 })
 
 export const rovingIndex = (index, length, key) => {
   if (!length) return -1
@@ -167,11 +175,14 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
   if (!usable.length) return null
   const active = usable.find((option) => String(option.value) === String(value))
   const selectedLabel = value ? (active?.label || String(value)) : ''
+  const buttonLabel = selectedLabel ? `${label}: ${selectedLabel}` : label
   return (
     <div className={`rl-facet-wrap ${mobile ? 'mobile-stay' : ''}`} ref={popover.ref}>
-      <button type="button" className={`rl-facet ${value ? 'active' : ''}`} aria-haspopup="menu" aria-expanded={popover.open}
+      <button type="button" className={`rl-facet ${value ? 'active' : ''}`} aria-label={buttonLabel}
+        aria-haspopup="menu" aria-expanded={popover.open}
         onClick={(event) => popover.toggle(event.currentTarget)} onKeyDown={popover.onTriggerKeyDown}>
-        <span>{selectedLabel ? `${label}: ${selectedLabel}` : label}</span>
+        <span className="rl-facet-label">{buttonLabel}</span>
+        {mobile && <span className="rl-facet-label-mobile" aria-hidden="true">{selectedLabel || label}</span>}
         <Icon name="chevron-down" size={12} />
       </button>
       {popover.open && (
@@ -193,22 +204,40 @@ export function FacetMenu({ label, value = '', options = [], onChange, mobile = 
   )
 }
 
-export function FacetOverflow({ label, groups = [], clearLabel, icon = 'ellipsis', className = '' }) {
+export function SecondaryFilters({ label, groups = [], clearLabel, compact = false, className = '' }) {
+  const t = useT()
   const groupId = useId()
   const usable = groups
     .map((group) => ({ ...group, options: facetMenuOptions(group.options, group.value, group.clearLabel === null ? null : (group.clearLabel || clearLabel)) }))
     .filter((group) => group.options.length)
   const hasDesktop = usable.some((group) => !group.mobileOnly)
-  const hasActive = usable.some((group) => group.active ?? (group.value != null && String(group.value) !== ''))
+  const activeCounts = secondaryFilterCounts(usable)
   const popover = usePopover()
   if (!usable.length) return null
+  const count = (value, viewport) => value > 0 && (
+    <span className={`rl-secondary-filter-count ${viewport}`}>
+      <span aria-hidden="true">{value}</span>
+      <span className="sr-only">{t('reviewList.activeFilters', { n: value })}</span>
+    </span>
+  )
   return (
-    <div className={`rl-overflow ${hasDesktop ? '' : 'mobile-only'} ${hasActive ? 'active' : ''} ${className}`} ref={popover.ref}>
-      <IconButton icon={icon} size={16} className="rl-overflow-btn" label={label}
-        aria-haspopup="menu" aria-expanded={popover.open} onClick={(event) => popover.toggle(event.currentTarget)}
-        onKeyDown={popover.onTriggerKeyDown} />
+    <div className={`rl-secondary-filters ${hasDesktop ? '' : 'mobile-only'} ${activeCounts.desktop ? 'active-desktop' : ''} ${activeCounts.mobile ? 'active-mobile' : ''} ${className}`} ref={popover.ref}>
+      {compact ? (
+        <IconButton icon="filter" size={16} className="rl-secondary-filters-trigger compact" label={label}
+          aria-haspopup="menu" aria-expanded={popover.open} onClick={(event) => popover.toggle(event.currentTarget)}
+          onKeyDown={popover.onTriggerKeyDown} />
+      ) : (
+        <button type="button" className="rl-secondary-filters-trigger" aria-haspopup="menu" aria-expanded={popover.open}
+          onClick={(event) => popover.toggle(event.currentTarget)} onKeyDown={popover.onTriggerKeyDown}>
+          <Icon name="filter" size={14} />
+          <span>{label}</span>
+          {count(activeCounts.desktop, 'for-desktop')}
+          {count(activeCounts.mobile, 'for-mobile')}
+          <Icon name="chevron-down" size={12} />
+        </button>
+      )}
       {popover.open && (
-        <div className="rl-menu rl-overflow-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
+        <div className="rl-menu rl-secondary-filters-menu" role="menu" aria-label={label} ref={popover.menuRef} onKeyDown={popover.onMenuKeyDown}>
           {usable.map((group, index) => (
             <div key={`${group.label}-${group.mobileOnly ? 'mobile' : 'all'}`} role="group"
               aria-labelledby={`${groupId}-group-${index}`} className={`rl-menu-group ${group.mobileOnly ? 'mobile-only' : ''}`}>
@@ -356,7 +385,7 @@ export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys
 }
 
 // Spec Information's compact projection of the same review filter mechanism: direct typing plus the
-// existing accessible overflow popover. It owns no parser, predicate, or modal-only interaction state.
+// existing accessible secondary-filter popover. It owns no parser, predicate, or modal-only interaction state.
 // `summary` ({shown, total}) leads the row with the ONE result count — "showing X of Y" on desktop,
 // bare X/Y under the phone breakpoint (the aria-label keeps the words) — so the filter row's leading
 // space states what the current view yields without repeating the caption's state tallies.
@@ -367,7 +396,7 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
       <span className="rf-search-icon"><Icon name="search" size={13} /></span>
       <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={searchLabel} />
       {value && <IconButton icon="x" size={12} className="rf-clear" label={clearSearchLabel} onClick={() => onChange('')} />}
-      <FacetOverflow label={filterLabel} clearLabel={clearLabel} groups={groups} icon="filter" className="rf-overflow" />
+      <SecondaryFilters label={filterLabel} clearLabel={clearLabel} groups={groups} compact className="rf-secondary-filters" />
     </div>
   )
   if (!summary) return box
@@ -388,7 +417,7 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
 
 // ListPage is the measured GitHub ListView skeleton: title/action, 32px query, one bordered container with
 // a 48px metadata bar, structured anchor rows, and an empty state. Pages supply domain data only.
-export function ListPage({ notice, leading, error, title, action, search, sections = [], sectionMode = 'tabs', facets, overflow, rows, empty, children }) {
+export function ListPage({ notice, leading, error, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, children }) {
   const [cur, setCur] = useState(null)
   const tabsId = useId()
   const stateRef = useRef({})
@@ -456,7 +485,7 @@ export function ListPage({ notice, leading, error, title, action, search, sectio
                 </button>
               ))}
             </div>
-            <div className="rl-facets">{facets}{overflow}</div>
+            <div className="rl-facets">{facets}{secondaryFilters}</div>
           </header>
           <div className="lp-rows" role={sectionsAreTabs ? 'tabpanel' : 'region'} id={panelId}
             aria-labelledby={sectionsAreTabs ? tabId(activeSectionIndex) : undefined}

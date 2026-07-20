@@ -112,7 +112,8 @@ strip taller than the space the terminal reserved. Above the pane a **horizontal
 strip, carrying the **Terminal** tab on the left plus an **Eval door**: Terminal shows the live
 pane with the docked `❯` input; the Eval entry is a **DOOR, not a tab** — a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
-copy-link/middle-click work for free), so clicking it (or the typed
+copy-link/middle-click work for free), and it sits BESIDE the bar's tablist, not inside it (Terminal is
+the one real `role=tab`; a door is navigation, not tab selection), so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;

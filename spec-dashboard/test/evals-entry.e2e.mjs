@@ -105,10 +105,10 @@ const browser = await chromium.launch()
   const dsBack = await p.evaluate(() => document.querySelector('.ds-back')?.getAttribute('href'))
   check('detail ds-back is unconditionally #/evals', dsBack === '#/evals', `ds-back=${dsBack}`)
   const queueScoped = await p.evaluate(() => {
-    const qs = [...document.querySelectorAll('.dq-item, .ds-queue a, .dq-row')].map((a) => a.getAttribute('href')).filter(Boolean)
-    return { n: qs.length, allScoped: qs.every((h) => decodeURIComponent(h).includes(`scope:`)) }
+    const qs = [...document.querySelectorAll('a.ds-queue-row')].map((a) => a.getAttribute('href')).filter(Boolean)
+    return { n: qs.length, allScoped: qs.length > 0 && qs.every((h) => decodeURIComponent(h).includes('scope:')) }
   })
-  check('queue anchors keep the scope token', queueScoped.n === 0 || queueScoped.allScoped, `n=${queueScoped.n}`)
+  check('queue anchors exist and keep the scope token', queueScoped.allScoped, `n=${queueScoped.n}`)
   await p.screenshot({ path: join(OUT, '03-scoped-detail.png') })
 
   // — command 1: browser Back → EXACTLY the scoped list —
@@ -178,18 +178,32 @@ const browser = await chromium.launch()
   const widths = await p.evaluate(() => ({ doc: document.documentElement.scrollWidth, body: document.body.scrollWidth }))
   check('390px no horizontal overflow', widths.doc <= 390 && widths.body <= 390, JSON.stringify(widths))
   await p.screenshot({ path: join(OUT, '07-390-scoped-list.png') })
-  // the phone session surface's eval door: the sessions plane is tab-local — tap the tab bar's sessions
-  // entry (2nd tab), then a session row, and read the detail header's eval entry
+  // the banner's terminal door must be a REAL door on the phone too: tap it and require the session
+  // conversation to render (the deep-linked #/sessions/<id> plane), not just a hash change
+  await p.click('.ds-banner a')
+  await settle(p, 1000)
+  const mTerm = await p.evaluate((sid) => ({
+    hash: location.hash,
+    detail: !!document.querySelector('.m-sessdetail'),
+    id8: document.querySelector('.m-sess-id8')?.textContent || null,
+  }), SESSION)
+  check('390px banner door opens the session conversation', mTerm.hash === `#/sessions/${SESSION}` && mTerm.detail && mTerm.id8 === SHORT, JSON.stringify(mTerm))
+  await p.screenshot({ path: join(OUT, '09-390-terminal-via-banner.png') })
+  // the phone session surface's eval door: reach a session's detail (already open from the banner-door
+  // leg, else tab-bar sessions → tap a row) and read the header's eval entry
   await p.goto(`${BASE}/#/sessions`)
   await settle(p, 1200)
-  await p.evaluate(() => document.querySelectorAll('.m-tabbar-btn')[1]?.click())
-  await settle(p, 600)
-  const tapped = await p.waitForSelector('.m-sess-row', { timeout: 8000 }).then((el) => el.click().then(() => true)).catch(() => false)
-  await settle(p, 800)
-  const mDoor = tapped ? await p.evaluate(() => {
+  const doorThere = await p.evaluate(() => !!document.querySelector('.m-sess-evalbtn'))
+  if (!doorThere) {
+    await p.evaluate(() => document.querySelectorAll('.m-tabbar-btn')[1]?.click())
+    await settle(p, 600)
+    await p.waitForSelector('.m-sess-row', { timeout: 8000 }).then((el) => el.click()).catch(() => null)
+    await settle(p, 800)
+  }
+  const mDoor = await p.evaluate(() => {
     const d = document.querySelector('.m-sess-evalbtn')
     return d ? { tag: d.tagName, href: d.getAttribute('href') } : null
-  }) : null
+  })
   check('phone eval door is a REAL anchor to a scoped list', !!mDoor && mDoor.tag === 'A' && !!mDoor.href && pathOf(mDoor.href) === '#/evals' && (qOf(mDoor.href) || '').startsWith('is:eval state:current scope:'), JSON.stringify(mDoor))
   await p.screenshot({ path: join(OUT, '08-390-sessions-door.png') })
   await p.close(); await ctx.close()

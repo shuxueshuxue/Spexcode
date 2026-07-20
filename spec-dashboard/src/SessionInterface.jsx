@@ -796,8 +796,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
-                <div className="si-tabs" role="tablist">
-                  <button role="tab" aria-selected className="si-tab on">{t('session.tabTerminal')}</button>
+                <div className="si-tabs">
+                  <div role="tablist" style={{ display: 'contents' }}>
+                    <button role="tab" aria-selected className="si-tab on">{t('session.tabTerminal')}</button>
+                  </div>
                   <a className="si-tab si-tab-door" href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null} data-tip={t('session.tabEvalTitle')}>{t('session.tabEval')} ↗</a>
                 </div>
                 <div className="si-actions">

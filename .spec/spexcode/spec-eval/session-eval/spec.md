@@ -88,12 +88,17 @@ completion nudges the existing graph mechanism once.
 **Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
 moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
 watched recursively for dirty source, rename, scenario and sidecar edits, and its gitdir index is watched for
-stage/reset-only changes. Watch failure, a pathless/overflow-like event, or resubscription marks the projection
-updating and performs one authoritative rebuild. No TTL, periodic fingerprint scan, or patrol makes a summary
-current. The patrol may still repair unrelated graph state, but never advances an eval generation or certifies
-this projection. The guarantee is necessarily over events the OS watcher delivers: an operating system that
-silently drops an event without an error exposes no fact a purely event-driven process can detect, and the UI
-must not claim otherwise.
+stage/reset-only changes. Watch failure or a pathless/overflow-like event increments the generation and places a
+keyed observer hold on the affected projection: it stays `updating(lastKnown)` and no compute or demand read may
+certify it current while that input axis is unobservable. Holds compose, so restoring one source cannot mask a
+second failed source. A successful resubscription removes only its own hold, advances the generation again, and
+then performs one authoritative double-read rebuild with the replacement watcher already attached; an edit in
+the unwatched interval is therefore inside that rescan. A persistent attach failure remains explicitly
+non-current instead of falling through to a cache build. No TTL, periodic fingerprint scan, or patrol makes a
+summary current. The patrol may still repair unrelated graph state, but never advances an eval generation or
+certifies this projection. The guarantee is necessarily over events the OS watcher delivers: an operating system
+that silently drops an event without an error exposes no fact a purely event-driven process can detect, and the
+UI must not claim otherwise.
 
 Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
 (base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined

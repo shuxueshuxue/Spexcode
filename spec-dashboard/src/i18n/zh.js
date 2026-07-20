@@ -195,6 +195,12 @@ export default {
     openedAt: ({ at }) => `${at}前发起`,
     verdict: { pass: '通过', fail: '未通过', unscored: '未评分' },
     freshness: { fresh: '最新', stale: '过期' },
+    pagination: '分页',
+    previous: '上一页',
+    next: '下一页',
+    prevPage: '上一页',
+    nextPage: '下一页',
+    page: ({ n }) => `第 ${n} 页`,
   },
 
   reviewShell: {

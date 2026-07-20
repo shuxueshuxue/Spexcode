@@ -17,6 +17,12 @@ const issueCard = read('IssueCard.jsx')
 const dashboard = read('Dashboard.jsx')
 const css = read('styles.css')
 const filters = read('reviewFilters.js')
+const reviewPage = read('reviewPage.js')
+const nodeView = read('NodeView.jsx')
+const palette = read('SpecSearch.jsx')
+const data = read('data.js')
+const serverReviews = read('../../spec-cli/src/reviews.ts')
+const serverIndex = read('../../spec-cli/src/index.ts')
 const icons = read('icons.jsx')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
@@ -37,8 +43,10 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
-  assert.match(evals, /evalFilterModel\(filterItems, tokenFilterState\(text, 'eval'\)/)
-  assert.match(issues, /issueFilterModel\(all, tokenFilterState\(text, 'issue'\)/)
+  for (const source of [evals, issues]) assert.doesNotMatch(source, /(?:eval|issue)FilterModel\(/)
+  assert.match(reviewPage, /export function useReviewPage/)
+  assert.match(serverReviews, /issueFilterModel\(issues, tokenFilterState\(text, 'issue'\)/)
+  assert.match(serverReviews, /evalFilterModel\(items, tokenFilterState\(text, 'eval'\)/)
   assert.match(filters, /export function filterReviewItems/)
 })
 
@@ -65,13 +73,15 @@ test('every control is a token BUILDER over the committed text — no private fi
     assert.match(source, /const surgery = \(key, value\) => /)
     assert.match(source, /setToken\(text, key, value\)/)
   }
-  // ONE parse → ONE matcher: both pages bridge the token text into the shared engine, whose section
-  // counts are computed under the REST of the query (the section never sees its own token)
-  assert.match(evals, /tokenFilterState\(text, 'eval'\)/)
-  assert.match(issues, /tokenFilterState\(text, 'issue'\)/)
-  assert.match(evals, /const failCount = filters\.sections\.fail \|\| 0/)
-  assert.match(evals, /const passCount = filters\.sections\.pass \|\| 0/)
-  assert.match(issues, /const openCount = filters\.sections\.open \|\| 0/)
+  // ONE parse → ONE matcher runs server-side before slicing; pages consume full-set counts from the
+  // response and never rematch the current 25 rows.
+  assert.match(serverReviews, /tokenFilterState\(text, 'eval'\)/)
+  assert.match(serverReviews, /tokenFilterState\(text, 'issue'\)/)
+  assert.match(serverReviews, /paginateReview\(issues, model\.shown/)
+  assert.match(serverReviews, /paginateReview\(items, filtered\.shown/)
+  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| 0/)
+  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| 0/)
+  assert.match(issues, /const openCount = data\?\.counts\?\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
   assert.match(evals, /surgery\('verdict', verdict === 'fail' \? '' : 'fail'\)/)
@@ -80,6 +90,24 @@ test('every control is a token BUILDER over the committed text — no private fi
   // the default view is the BARE address; anything else exactly ?q=<raw text>
   assert.match(issues, /queryParam\(nextText, ISSUE_QUERY_DEFAULT\)/)
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
+})
+
+test('bounded secondary consumers disclose the server total and offer a reachable full list', () => {
+  assert.match(nodeView, /useReviewPage\('issues', query, 1/)
+  assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
+  assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
+  assert.match(nodeView, /summary=\{\{ shown: filterItems\.length, total: page\.data\.total \}\}/)
+  assert.equal((nodeView.match(/reviewListAddress\('evals', query\)/g) || []).length, 1)
+  assert.match(nodeView, /reviewListAddress\('issues', query\)/)
+  assert.doesNotMatch(nodeView, /\bnode\.(?:issues|openIssues|evals|scenarios)\b/)
+
+  assert.match(palette, /useReviewPage\('issues', issueQuery, 1/)
+  assert.match(palette, /useReviewPage\('evals', evalQuery, 1/)
+  assert.match(palette, /key: 'issue:see-all', address: reviewListAddress\('issues', issueQuery\)/)
+  assert.match(palette, /key: 'scenario:see-all', address: reviewListAddress\('evals', evalQuery\)/)
+  assert.match(reviewPage, /const inflightPages = new Map\(\)/)
+  assert.match(reviewPage, /if \(inflightPages\.has\(path\)\) return inflightPages\.get\(path\)/)
+  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)
 })
 
 test('the committed text replays as a continuable edit — one trailing space, parked caret, display-only', () => {
@@ -107,7 +135,8 @@ test('high-cardinality dimensions are token-only: no enumerating dropdowns, boun
     assert.doesNotMatch(source, /authorOptions|nodeOptions|filerOptions|scopeOptions/)
   }
   // suggestions come only from the data — and scope only from the board's sessions
-  assert.match(issues, /suggest: \{\s*author: \[\.\.\.new Set\(all\.map\(\(issue\) => issue\.by\)/)
+  assert.match(issues, /author: facetOptions\(data, 'author'/)
+  assert.match(evals, /node: optionsOf\(pageData, 'node'/)
   assert.match(evals, /scope: sessions\.map\(\(session\) => \(\{ value: session\.id/)
   // the evidence default is a plain enum default, never data-dependent
   assert.doesNotMatch(evals, /hasVideo|hasImage/)
@@ -236,10 +265,9 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(shell, /aria-pressed=\{sectionsAreTabs \? undefined : section\.active\}/)
   // blind rows travel through the SAME result-kind enum and stay in the default population, while
   // Fail/Pass counts come from the shared verdict section under the rest of the query.
-  assert.match(evals, /filterKind: EVAL_FILTER_KIND\.RESULT/)
-  assert.match(evals, /filterKind: EVAL_FILTER_KIND\.BLIND/)
+  assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
+  assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.BLIND/)
   assert.doesNotMatch(evals, /reading: (?:true|false)/)
-  assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === EVAL_FILTER_KIND\.BLIND\)/)
   assert.match(evals, /count: failCount/)
   assert.match(evals, /count: passCount/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
@@ -321,8 +349,8 @@ test('shared list empty state distinguishes a vacant dataset from a filtered zer
   assert.equal(message({ hasData: true, dataset: 'none yet', filtered: 'no match' }), 'no match')
   assert.equal(message('loading'), 'loading')
 
-  assert.match(issues, /hasData: all\.length > 0,[\s\S]*dataset: t\('session\.issuesEmpty'\),[\s\S]*filtered: t\('session\.issuesNoMatch'\)/)
-  assert.match(evals, /hasData: entries\.length > 0 \|\| blind\.length > 0,[\s\S]*dataset: t\('evalsFeed\.datasetEmpty'\),[\s\S]*filtered: t\('evalsFeed\.noMatches'\)/)
+  assert.match(issues, /hasData: \(data\?\.sourceTotal \?\? 0\) > 0,[\s\S]*dataset: t\('session\.issuesEmpty'\),[\s\S]*filtered: t\('session\.issuesNoMatch'\)/)
+  assert.match(evals, /hasData: \(pageData\?\.sourceTotal \?\? 0\) > 0,[\s\S]*dataset: t\('evalsFeed\.datasetEmpty'\),[\s\S]*filtered: t\('evalsFeed\.noMatches'\)/)
   for (const messages of [en, zh]) {
     assert.match(messages, /datasetEmpty:/)
     assert.match(messages, /noMatches:/)
@@ -361,7 +389,7 @@ test('the scoped eval list owns the ONE terminal return door; details have no se
   assert.match(page, /<Icon name="arrow-left" size=\{16\} \/>\s*<\/a>/)
   // Exactly one home, leading the gates DOM before gate spans and the trailing export action.
   assert.equal((page.match(/<EvalScopeDoor sessionId=\{sessionId\} \/>/g) || []).length, 1)
-  assert.match(page, /<div className="se-gates">\s*<EvalScopeDoor sessionId=\{sessionId\} \/>\s*\{model && model\.gates/)
+  assert.match(page, /<div className="se-gates">\s*<EvalScopeDoor sessionId=\{sessionId\} \/>\s*\{pageData && pageData\.gates/)
   assert.doesNotMatch(page, /const action = sessionId|action=\{action\}/)
   // Stable target and dead detail-action geometry removed.
   assert.match(css, /\.se-door \{[^}]*width: 32px; height: 32px;/)
@@ -380,14 +408,13 @@ test('the scoped eval list owns the ONE terminal return door; details have no se
 })
 
 test('the continue-reviewing queue: two positional groups of shared-state anchors, absent when alone', () => {
-  // the queue derives from the page's ONE source dataset (scope.entries) via the pure split helper
-  assert.match(page, /queueNeighbors\(scope\.entries, `eval:\$\{node\}·\$\{scenario\}`\)/)
+  // the queue consumes only the detail endpoint's bounded lightweight projection.
+  assert.match(page, /const n = detail\?\.neighbors \|\| \{ prev: \[\], next: \[\] \}/)
+  assert.doesNotMatch(page, /queueNeighbors|scope\.entries/)
   // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token — both minted
   // by the ONE address projection
   assert.match(page, /href: addressHash\(sessionId \? sessionEvalAddress\(sessionId, e\.node, e\.scenario\) : evalAddress\(e\.node, e\.scenario\)\)/)
-  // two POSITIONAL groups against the stable list order, each nearest-to-current first
-  assert.match(page, /prev: entries\.slice\(idx - prevN, idx\)\.reverse\(\)/)
-  assert.match(page, /next: entries\.slice\(idx \+ 1, idx \+ 1 \+ nextN\)/)
+  assert.match(page, /prev: n\.prev\.map\(row\), next: n\.next\.map\(row\)/)
   // the rail renders the two labeled groups; an empty group renders no heading; no neighbor → no section
   assert.match(detail, /\{\(queue\.prev\.length > 0 \|\| queue\.next\.length > 0\) && \(/)
   assert.match(detail, /\[\['prev', t\('detail\.queuePrev'\)\], \['next', t\('detail\.queueNext'\)\]\]\.map\(\(\[dir, label\]\) => queue\[dir\]\.length > 0 && \(/)
@@ -401,6 +428,14 @@ test('the continue-reviewing queue: two positional groups of shared-state anchor
   }
 })
 
+test('Issue detail is one addressed object and never reconstructs from graph or a list page', () => {
+  assert.match(issues, /const detail = useIssueDetail\(param\)/)
+  assert.match(issues, /const value = await loadIssue\(id\)/)
+  assert.match(data, /apiFetch\(`\/api\/issues\/\$\{encodeURIComponent\(id\)\}`\)/)
+  assert.match(serverIndex, /app\.get\('\/api\/issues\/:id'/)
+  assert.doesNotMatch(issues, /specs\.(?:issues|openIssues)|sessions\.(?:issues|openIssues)|\.find\([^\n]*issue\.id/)
+})
+
 test('the detail side rail is sticky on desktop, plain flow at phone width', () => {
   // desktop: sticky inside the grid column (never fixed) — pins to the scrollport top; only a rail
   // taller than the viewport scrolls internally (bounded max-height + auto overflow)
@@ -409,6 +444,15 @@ test('the detail side rail is sticky on desktop, plain flow at phone width', () 
   // the phone reflow cancels it: static, unbounded, metadata-before-content order kept
   const phone = css.slice(css.indexOf('@media (max-width: 760px)'))
   assert.match(phone, /\.ds-side \{ position: static; max-height: none; overflow-y: visible; order: -1;/)
+})
+
+test('pagination stays in the list page scroll flow below the list, outside the sticky stack', () => {
+  assert.match(shell, /export function Pagination\(/)
+  assert.match(shell, /<PageScroll className="lp-page">[\s\S]*<section className="rl-list">[\s\S]*<\/section>\s*\{pagination && <Pagination \{\.\.\.pagination\} \/>\}[\s\S]*<\/PageScroll>/)
+  assert.match(css, /\.rl-pagination \{ max-width: 100%; display: flex; flex-wrap: wrap;/)
+  assert.doesNotMatch(css, /\.rl-pagination\s*\{[^}]*position:\s*sticky/)
+  assert.match(css, /\.lp-head \{ position: sticky; top: 0;/)
+  assert.match(css, /\.se-gates \{ position: sticky; top: 0;/)
 })
 
 test('one side-rail value primitive renders every detail metadata row on both pages', () => {

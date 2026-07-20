@@ -4,6 +4,7 @@ import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
 import { scanQuery, suggestAt } from './reviewQuery.js'
 import { PageScroll } from './PageScroll.jsx'
+import { paginationTokens } from './reviewPage.js'
 
 // The ONE review vocabulary ([[review-chrome]]): both ListViews consume the same query, section, facet,
 // secondary-filter, row, and state primitives; both detail pages consume the same standalone shell.
@@ -417,7 +418,26 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
 
 // ListPage is the measured GitHub ListView skeleton: title/action, 32px query, one bordered container with
 // a 48px metadata bar, structured anchor rows, and an empty state. Pages supply domain data only.
-export function ListPage({ notice, leading, error, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, children }) {
+export function Pagination({ page, pageCount, prev, next, hrefFor }) {
+  const t = useT()
+  if (pageCount <= 1 && page <= 1) return null
+  const link = (target, label, rel, cls = '') => target == null
+    ? <span className={`rl-page-link disabled ${cls}`} aria-disabled="true">{label}</span>
+    : <a className={`rl-page-link ${cls}`} href={hrefFor(target)} rel={rel} aria-label={rel ? t(`reviewList.${rel}Page`) : t('reviewList.page', { n: target })}>{label}</a>
+  return (
+    <nav className="rl-pagination" aria-label={t('reviewList.pagination')}>
+      {link(prev, t('reviewList.previous'), 'prev', 'direction')}
+      {paginationTokens(page, pageCount).map((token, index) => token === 'gap'
+        ? <span className="rl-page-gap" key={`gap-${index}`} aria-hidden="true">…</span>
+        : <a className="rl-page-link number" key={token} href={hrefFor(token)}
+            aria-label={t('reviewList.page', { n: token })} aria-current={token === page ? 'page' : undefined}>{token}</a>)}
+      {link(next, t('reviewList.next'), 'next', 'direction')}
+    </nav>
+  )
+}
+
+export function ListPage({ notice, leading, error, loading = false, title, action, search, sections = [], sectionMode = 'tabs', facets, secondaryFilters, rows, empty, pagination, children }) {
+  const t = useT()
   const [cur, setCur] = useState(null)
   const tabsId = useId()
   const stateRef = useRef({})
@@ -487,15 +507,16 @@ export function ListPage({ notice, leading, error, title, action, search, sectio
             </div>
             <div className="rl-facets">{facets}{secondaryFilters}</div>
           </header>
-          <div className="lp-rows" role={sectionsAreTabs ? 'tabpanel' : 'region'} id={panelId}
+          <div className="lp-rows" role={sectionsAreTabs ? 'tabpanel' : 'region'} id={panelId} aria-busy={loading || undefined}
             aria-labelledby={sectionsAreTabs ? tabId(activeSectionIndex) : undefined}
             aria-label={sectionsAreTabs ? undefined : title}>
-            {rows.length === 0 && <div className="lp-empty">{emptyText}</div>}
+            {rows.length === 0 && <div className="lp-empty">{loading ? t('common.loading') : emptyText}</div>}
             {rows.map((row) => row.href
               ? <a key={row.key} className={`lp-row ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`} href={row.href}>{row.content}</a>
               : <div key={row.key} className={`lp-row inert ${row.cls || ''}`}>{row.content}</div>)}
           </div>
         </section>
+        {pagination && <Pagination {...pagination} />}
       </div>
       {children}
     </PageScroll>

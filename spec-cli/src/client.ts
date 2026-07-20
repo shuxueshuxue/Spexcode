@@ -1,5 +1,4 @@
 import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
-import type { SessionEvals } from '../../spec-eval/src/sessioneval.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -74,15 +73,38 @@ export async function clientEvalExport(id: string): Promise<ExportResult> {
   return { ok: false, status: r.status }
 }
 
-// GET /api/sessions/:id/evals — the session EVAL model ([[session-eval]]'s interactive face, the same
-// route's default JSON representation): the changed
-// nodes' worktree-rooted reading rows (each carrying `inSession`), no diff enrichment, no inlined evidence
-// bytes — what `spex eval` renders, the dashboard Eval tab's source. 404 → no such session.
-export type EvalsResult = { ok: true; model: SessionEvals } | { ok: false; status: number }
+// The CLI's explicit aggregate walks the same 25-row pages as the dashboard. No server response contains
+// the full session model; aggregation exists only for this one-shot terminal rendering.
+type SessionEvalPage = {
+  items: any[]
+  page: number
+  pageCount: number
+  total: number
+  gates: any[]
+  unknown: number
+  revision: string
+  summary?: any
+  evalRevision?: any
+}
+export type EvalsResult = { ok: true; model: SessionEvalPage & { id: string } } | { ok: false; status: number }
 export async function clientEvals(id: string): Promise<EvalsResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/evals`)
-  if (!r.ok) return { ok: false, status: r.status }
-  return { ok: true, model: await r.json() as SessionEvals }
+  const q = encodeURIComponent(`is:eval scope:${id}`)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const items: any[] = []
+    let first: SessionEvalPage | null = null
+    let changed = false
+    for (let page = 1;; page++) {
+      const r = await apiFetch(`/api/evals?q=${q}&page=${page}`)
+      if (!r.ok) return { ok: false, status: r.status }
+      const current = await r.json() as SessionEvalPage
+      first ??= current
+      if (current.revision !== first.revision) { changed = true; break }
+      items.push(...current.items)
+      if (page >= current.pageCount) break
+    }
+    if (!changed) return { ok: true, model: { ...first!, id, items } }
+  }
+  throw new BackendError(`session eval pages changed while reading ${id}; retry the command`)
 }
 
 // POST /api/sessions/:id/merge — the cockpit's merge DISPATCH (200 {dispatched:true} / 409 {reason}).

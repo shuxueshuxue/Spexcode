@@ -24,8 +24,9 @@ that says the whole-tree figures at a glance. Keep it honest and cheap: it **cou
 ## expanded spec
 
 A strip pinned to the **bottom-left** of the [[node-graph]], always on, sharing the minimal-HUD chrome. It
-reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
-frontend derivation** — every figure folds from the `/api/graph` poll, no new endpoint and no new vocabulary.
+  reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
+  frontend derivation** over each node's explicit [[graph-lean]] `reviewSummary` — no row array, new endpoint,
+  or new vocabulary.
 The composition and attention figures are a **count of distinct things**, never a sum of badges: summing
 per-node badges double-counts whatever spans nodes (an issue linked to several nodes; a shared file that
 drifts under all its owners), so the strip counts the underlying things once. Coverage is the deliberate
@@ -38,13 +39,14 @@ Three clusters, each answering one question:
   ●drift ●pending, the tiles' colours). Mutually exclusive, summing to the total: "how big, and how settled".
 - **Attention — what NEEDS a human.** `⚠N` counts **nodes whose code is ahead of their spec**; `◆N` counts
   **distinct open issues** linked to the tree (deduped by number). Both count distinct things — an issue on
-  three nodes is one issue. The board only knows node-linked issues, so `◆` is the *linked* open set.
+  three nodes is one issue. Lean per-node open ids provide only this dedupe/walk identity, never issue rows;
+  the board only knows node-linked issues, so `◆` is the *linked* open set.
 - **Coverage — how well-MEASURED the tree is.** The eval **score circles**, drawn through the very
   `ScoreBadge` the tiles render ([[eval-score-badge]]) — ONE vocabulary: green `✓` fresh pass, red `✗` fresh
   fail, a **stale** verdict as the **greyed mark inside the ring** (never an invented glyph), and a faint
-  empty ring for a *blind spot* (declares scenarios, no current verdict). Here the count is per **scenario**,
-  not per node: a node owns several scenarios, each in its own state, so each adds to its state's bucket (a
-  never-measured scenario folds into the blind-spot empty). This is the honest unit of loss and gives the row
+  empty ring for a *blind spot* (declares scenarios, no current verdict). Here the server-projected counts
+  remain per **scenario**, not per node: a node owns several scenarios, each in its own state, so each adds
+  to its state's bucket (a never-measured scenario folds into the blind-spot empty). This gives the row
   a larger, truer base than collapsing every node to one worst-first verdict. It counts only what the frontend
   can see — not a "should have a scenario" census, which lives in `spex eval lint`.
 

@@ -51,9 +51,9 @@ function Editors({ data }) {
   )
 }
 
-function IssueBadge({ issues, t }) {
-  if (!issues || issues.length === 0) return null
-  return <span className="issue-badge" data-tip={t('specNode.openIssues', { n: issues.length })}>◆{issues.length}</span>
+function IssueBadge({ summary, t }) {
+  if (!summary?.open) return null
+  return <span className="issue-badge" data-tip={t('specNode.openIssues', { n: summary.open })}>◆{summary.open}</span>
 }
 
 export default function SpecNode({ data, selected }) {
@@ -95,8 +95,8 @@ export default function SpecNode({ data, selected }) {
             ⚠{data.drift}
           </span>
         )}
-        <IssueBadge issues={data.openIssues} t={t} />
-        <ScenarioCount scenarios={data.scenarios} evals={data.evals} />
+        <IssueBadge summary={data.reviewSummary?.issues} t={t} />
+        <ScenarioCount summary={data.reviewSummary?.evals} />
         <Editors data={data} />
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}

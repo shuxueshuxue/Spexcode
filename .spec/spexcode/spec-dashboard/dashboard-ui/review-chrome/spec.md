@@ -2,7 +2,7 @@
 title: review-chrome
 status: active
 hue: 205
-desc: The ONE shared page chrome both review surfaces render — GitHub ListView query/section/facet/secondary-filter chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
+desc: The ONE shared paged-review contract and page chrome both review surfaces render — request-layer slices, GitHub ListView query/section/facet/pagination chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
 code:
   - spec-dashboard/src/ReviewShell.jsx#ListPage
   - spec-dashboard/src/ReviewShell.jsx#DetailShell
@@ -42,8 +42,11 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   the data, `scope:` only sessions on the current board — a key pick completes in place, a value pick
   completes the token and executes; unknown or historical values still submit verbatim. `scope:<id>` is
   the worktree data source and `session:present|missing` the source-session presence — two axes, never
-  conflated, and a detail address carries only the scope token. The default view is the bare address, any
-  other state exactly `?q=<raw text>`; Back restores text and results level by level.
+  conflated, and a detail address carries only the scope token. The initial/reset page-1 view omits
+  `page`; any non-default query starts `?q=<raw text>`, and pagination appends `&page=<n>` after `q`
+  (or starts `?page=<n>` for the default query), INCLUDING `page=1` when a pagination anchor returned
+  there. Back restores text, the exact page-address form, results, and the list scroll position level by
+  level. Omitted page and explicit `page=1` are intentional action/history states, not a dual-address bug.
 - **`ListPage` is the measured GitHub ListView skeleton.** A quiet title/action and the 32px query precede
   ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and ONE
   semantic secondary **Filters** trigger for REAL low-frequency/width-displaced facets — the
@@ -71,6 +74,35 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   join the one secondary Filters menu without widening the page. A low-cardinality facet deliberately kept
   direct may condense its visible face to the selected value while its accessible name stays fully qualified;
   section, direct-facet, and secondary-filter controls never overlap even when both filters are active.
+- **ONE paged-review data contract sits below both pages.** A review request carries the committed token
+  query, positive integer page, and fixed product page size (25, matching the live GitHub Issues
+  observation). The server applies source selection, query/filter semantics, stable merge/sort, and count
+  BEFORE slicing, then returns only `{ items, page, perPage, total, sourceTotal, pageCount, prev, next,
+  revision, counts, facets, section }`: `items` is at most one page; `sourceTotal` distinguishes a vacant
+  source from a filtered-zero view; counts and facet options describe the complete filtered population
+  under their documented rest-of-query rules. The two pages, trunk and scoped Evals, and every
+  issue store consume this same shape. No frontend receives a full collection in order to slice or hide it,
+  and no endpoint wraps a full collection beside a cosmetic page.
+  The revision names the stable source snapshot used for count and slice. Local/aggregate sources define a
+  deterministic merge order and revision; forge adapters push page/per-page/filter/sort to native host
+  pagination when the host can preserve this contract, following the host's pagination links rather than
+  synthesizing an N+1 crawl. A source that cannot provide exact global facets/counts in one request must
+  make that cost explicit at its adapter boundary, never silently fetch every issue per browser request.
+- **Pagination is address state and real navigation.** The shared `Pagination` primitive renders one named
+  navigation landmark with real page/Previous/Next anchors, `aria-current="page"` on the active page, and
+  browser-default Enter/middle-click/copy behavior. Clicking a page PUSHES. Editing/submitting the query or
+  changing an Open/Closed, Fail/Pass, or facet builder resets to page 1 and PUSHES an address without
+  `page`; a pagination anchor returning to page 1 mints `page=1`. Direct open, refresh, Back, and Forward
+  preserve whichever page-1 form history contains and re-request/replay the full query+page state.
+  Opening a row detail PUSHES; browser Back restores query, page, and the review scrollport offset. The
+  detail URL stays independent of list filters, so the explicit DetailShell back anchor still targets the
+  canonical default list.
+  A positive page beyond `pageCount` is not clamped or redirected: the address and requested page remain,
+  `items` is empty, and the filtered-empty face renders. Previous continues to page-1 and Next to page+1,
+  matching the measured GitHub Web behavior; an in-range last page disables Next. Invalid/non-positive page
+  input repairs to the reset page-1 form without `page`. Loading and source failure keep the chrome stable and distinguish
+  themselves from an honest empty page. At 390px the same controls wrap without horizontal overflow; no
+  mobile-only pagination dialect exists.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
   text into that shared Issue/Eval engine and render its data-derived options; [[work-pane]] and
   [[eval-tab]] project the same adapters into one extremely compact embedded control with popup-local

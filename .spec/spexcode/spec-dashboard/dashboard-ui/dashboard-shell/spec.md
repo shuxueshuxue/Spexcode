@@ -44,9 +44,10 @@ face pick extends the same way (a scoped 401 raises the shared credential gate i
 and the root address with no board but a live `/projects` surface boots the hub face instead of the
 classic dashboard). Route params that belong to a feature
 (`#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
-owns their meaning. The app-resident data the shell holds beside the board (the issues list and its
-throttled reloader) reaches BOTH faces — the phone face renders the same routed review pages, so it
-receives the same resident props the desktop does. The shell applies an incoming routed selection before it echoes a page's local selection
+owns their meaning. The shell holds no app-resident Issues/Evals row collection beside the board: both
+faces mount the same routed review pages, and those pages request only their current server slice through
+[[paged-review]]. The board itself stays [[graph-lean]] summary data, never a back door that preloads either
+review list. The shell applies an incoming routed selection before it echoes a page's local selection
 back into the hash, so an external door to `#/sessions/<id>` or another detail route is never overwritten by
 the previously-selected tab during the page switch. Likewise, feature-level shared widgets may add compact
 global style vocabulary here when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and

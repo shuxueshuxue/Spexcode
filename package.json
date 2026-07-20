@@ -18,6 +18,9 @@
     "spec-forge/src",
     "!spec-forge/src/**/*.test.ts",
     "spec-dashboard/dist",
+    "spec-dashboard/src/reviewFilters.js",
+    "spec-dashboard/src/reviewQuery.js",
+    "spec-dashboard/src/session.js",
     "README.md"
   ],
   "engines": {

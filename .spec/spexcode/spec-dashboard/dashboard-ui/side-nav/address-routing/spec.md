@@ -56,3 +56,10 @@ at all, so a pushed visit and a direct open share one destination by constructio
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
 objects first-class: issue and scenario references land on their owning review pages, never by accident on
 the bound spec node or a node-popup tab.
+
+Review list addresses also carry the ONE pagination grammar. Page follows `q` when one exists. Pagination
+anchors preserve q and change only page, including minting explicit `page=1` when returning to the first
+page. Any query builder removes page before it PUSHES, so a new filtered population begins at the omitted
+page-1 form. Direct open, refresh, Back, and Forward retain an explicit `page=1`; the two page-1 forms are
+action/history state, not a canonical-address error. Automatic legacy normalization and invalid/non-positive
+page repair REPLACE; human pagination/filter actions PUSH.

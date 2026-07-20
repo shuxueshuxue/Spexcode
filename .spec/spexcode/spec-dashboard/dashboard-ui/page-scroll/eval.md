@@ -11,8 +11,8 @@ scenarios:
       lists, those long Evals/Issues details, Settings, and a real Projects host face in Chromium at 1440px. For
       every face record the page shell, content viewport, overflow owners, scrollbar gutter and
       track bounds, sticky elements, top/middle/bottom scrolling, horizontal overflow, and browser Back
-      after opening a middle row. Preserve the real scoped model and add one controlled declared-but-never-
-      measured scenario at its HTTP boundary to exercise Fail/Pass, Human review and count stability.
+      after opening a middle row. Preserve the real scoped model and require its real declared-but-never-
+      measured rows to exercise Fail/Pass, Human review and count stability.
       On the scoped list also record the terminal/gates strip's stable geometry, opaque shared-token paint,
       content occlusion, and 10px sticky inset; open Secondary Filters and tooltips over the pinned strip,
       then verify Back restores its nested scroll position. Repeat every document page through all eight themes and capture video
@@ -24,7 +24,10 @@ scenarios:
       through all themes. Scoped gates are the opaque sticky first child inside the same owner: they stay at
       its 10px top inset through top/middle/bottom, do not move its track start or reveal rows through their
       paint, and stay below Filters/tooltips. Trunk Evals contributes no empty strip; Issues and the detail
-      side sticky retain their geometry.
+      side sticky retain their geometry. A browser-native history write that arrives after the layout
+      restore cannot replace the saved target: it must survive a paint before restoration yields; an
+      asynchronously growing list keeps the target pending until its scroll height can represent it.
+      Pointer, wheel, touch, or keyboard input cancels that pending restoration and the user's new position wins.
       Fail/Pass is strictly non-exhaustive when real blind rows exist, and its counts remain stable when
       its own token toggles under Human review. Long-detail scrolling pins sticky rails inside that owner,
       and Back restores the exact prior nested scrollTop for the full list address. Graph has no document scrollport,
@@ -47,7 +50,8 @@ scenarios:
       the scoped status strip stays pinned at the 10px inset in exactly two contained lines, never covers
       the first row or shows it through the strip, and remains below Filters/tooltips. Detail metadata is
       ordinary flow above content, not sticky. Fail/Pass stays a named pressed-button
-      group, Human review remains reachable in overflow, and Back restores the exact list position.
+      group, Human review remains reachable in overflow, and Back restores the exact list position after
+      async rows arrive; a real wheel/touch/key gesture during restoration takes ownership immediately.
       Graph and Sessions remain their purpose-built mobile planes without a document page-scroll wrapper.
 ---
 

@@ -19,7 +19,7 @@ const css = read('styles.css')
 
 test('aggregate counts are anchors minted by the scenario-less evalAddress form only', () => {
   // Information Board stat bar
-  assert.match(nodeView, /<ScenarioCount scenarios=\{node\.scenarios\} evals=\{node\.evals\} href=\{addressHash\(evalAddress\(node\.id\)\)\} \/>/)
+  assert.match(nodeView, /<ScenarioCount summary=\{node\.reviewSummary\?\.evals\} href=\{addressHash\(evalAddress\(node\.id\)\)\} \/>/)
   // ScenarioCount renders a REAL anchor when given the href, a passive span otherwise (the graph tile)
   assert.match(score, /if \(!href\) return <span className={`scenario-count/)
   assert.match(score, /return <a className={`scenario-count \$\{state\}`} href=\{href\}/)
@@ -34,7 +34,8 @@ test('aggregate counts are anchors minted by the scenario-less evalAddress form 
 })
 
 test('eval-tab result rows use the shared discriminator and carry a sibling detail anchor', () => {
-  assert.match(nodeView, /filterKind: EVAL_FILTER_KIND\.RESULT/)
+  assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
+  assert.match(nodeView, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
   assert.doesNotMatch(nodeView, /reading: (?:true|false)/)
   // ChronoPane renders the action AFTER the toggle button closes — a sibling, not a child
   assert.match(nodeView, /<\/button>\s*\{\/\*[\s\S]*?\*\/\}\s*\{renderAction\?\.\(it, i\)\}/)
@@ -60,8 +61,9 @@ test('popup tab captions: no visible key digits; state counts speak the shared R
   assert.match(nodeView, /<TabCount kind="issue" state="closed"/)
   assert.match(nodeView, /<TabCount kind="eval" state="pass"/)
   assert.match(nodeView, /<TabCount kind="eval" state="fail"/)
-  // the tally comes from the ONE scenarioStates join — no second statistics path
-  assert.match(nodeView, /const evalStates = scenarioStates\(node\.scenarios, node\.evals\)/)
+  // captions consume the graph's ONE explicit lean count projection, never row arrays.
+  assert.match(nodeView, /const evalPass = node\.reviewSummary\?\.evals\?\.pass \|\| 0/)
+  assert.match(nodeView, /const evalFail = node\.reviewSummary\?\.evals\?\.fail \|\| 0/)
 })
 
 test('the compact filter row leads with the one showing-X-of-Y summary from the filter model', () => {
@@ -72,8 +74,10 @@ test('the compact filter row leads with the one showing-X-of-Y summary from the 
   assert.match(shell, /className="sr-only">\{label\}/)
   assert.match(shell, /rf-summary-full/)
   assert.match(shell, /rf-summary-compact/)
-  // both popup panes feed it model.shown/total — the SAME filtered result the rows render
-  assert.match(nodeView, /summary=\{\{ shown: model\.shown\.length, total: filterItems\.length \}\}/)
-  assert.match(nodeView, /summary=\{\{ shown: model\.shown\.length, total: issues\.length \}\}/)
+  // both popup panes feed it server full-set totals, never counts recomputed from the current page.
+  assert.match(nodeView, /summary=\{\{ shown: filterItems\.length, total: page\.data\.total \}\}/)
+  assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
+  assert.match(nodeView, /className="pane-view-all" href=\{addressHash\(reviewListAddress\('issues', query\)\)\}/)
+  assert.match(nodeView, /className="pane-view-all" href=\{addressHash\(reviewListAddress\('evals', query\)\)\}/)
   assert.match(css, /@media \(max-width: 640px\) \{\s*\.rf-summary-full \{ display: none; \}/)
 })

@@ -1,16 +1,14 @@
-import { useMemo } from 'react'
-import { scenarioStates } from './score.jsx'
 import { sessionHeadline } from './session.js'
 import { FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, readToken, setToken } from './reviewQuery.js'
-import { EVAL_FILTER_KIND, evalFilterModel, kindsOf, tokenFilterState } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, kindsOf } from './reviewFilters.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
 // The evals list ([[evals-feed]]): the rows + filters of the Evals LIST page ([[evals-view]]), rendered
 // through the shared [[review-chrome]] ListPage. The unit is the SCENARIO, never the reading — latest
-// reading per (node, scenario), fresh AND stale mixed newest-first — so the list is bounded by declared
-// scenarios, not by measurement count (and needs no pagination). Rows use the shared two-level ListView
+// reading per (node, scenario), fresh AND stale mixed newest-first. The server returns one 25-row page
+// after matching/counting the full declared-scenario population. Rows use the shared two-level ListView
 // primitive and remain REAL anchors; media loads only on the detail page. The WHOLE face is ONE visible
 // token query ([[review-query]]) bridged into the ONE field-semantics engine ([[review-filters]]):
 // sections and low-cardinality menus are pure builders doing token surgery + PUSH, node/filer/scope are
@@ -21,40 +19,6 @@ const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
 // the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
 // autocomplete offers; anything else stays plain and matches nothing.
 export const EVAL_QUERY_KEYS = ['is', 'state', 'verdict', 'freshness', 'evidence', 'node', 'filer', 'session', 'scope']
-
-// flatten board nodes → list entries via the ONE latest-per-scenario computation (scenarioStates).
-export function currentEntries(nodes) {
-  const out = []
-  for (const n of nodes) {
-    if (!n.evals?.length) continue
-    for (const s of scenarioStates(n.scenarios, n.evals)) {
-      if (!s.reading) continue   // a never-measured scenario is the session scope's blind-spot row, not a project entry
-      out.push({ ...s.reading, expected: s.expected ?? s.reading.expected, state: s.state, node: n.id, hue: n.hue })
-    }
-  }
-  out.sort((a, b) => (a.ts < b.ts ? 1 : -1))
-  return out
-}
-
-// The session toolbar and scoped-list leading strip summarize the SAME already-scoped backend model.
-// Scenario impact is deliberately absent here: sessioneval.ts has selected the rows before this point.
-export function sessionEvalSummary(nodes = []) {
-  const entries = currentEntries(nodes)
-  const total = nodes.reduce((count, node) => count + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
-  const unknown = nodes.reduce((count, node) => count + (Array.isArray(node.unknownCoverage) ? node.unknownCoverage.length : 0), 0)
-  const pass = entries.filter((entry) => entry.state === 'pass').length
-  const fail = entries.filter((entry) => entry.state === 'fail').length
-  return {
-    measured: entries.length,
-    total,
-    pass,
-    fail,
-    // Measured but neither fresh-pass nor fresh-fail: stale or legacy/unscored, and therefore still review work.
-    review: entries.length - pass - fail,
-    blind: Math.max(0, total - entries.length),
-    unknown,
-  }
-}
 
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
@@ -96,32 +60,27 @@ const rel = (ts) => {
 }
 
 // `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
-// scope from the board prop, the session scope from the worktree-rooted model). `blind`: the session
+// scope from the paged API, the session scope from the worktree-rooted model). `blind`: the session
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
 // reading to open) — they travel through the SAME engine as reading:false items, so they honestly own
 // only their node/unscored/query/section facts. `queryText`/`onQueryText`: the URL's raw token text and
 // its push writer ([[evals-view]] — the writer owns the default↔bare equivalence).
-export default function EvalsGroup({ entries = [], blind = [], sessions = [], queryText = '', onQueryText, hrefFor, notice = null, leading = null, error = null, empty = null }) {
+const optionsOf = (pageData, key, allLabel, labelValue = (value) => value) => (pageData?.facets?.[key]?.options ?? []).map((option) => ({
+  value: option.value,
+  label: option.value === '' ? allLabel : labelValue(option.value),
+}))
+
+export default function EvalsGroup({ pageData, loading = false, sessions = [], queryText = '', onQueryText, hrefFor, notice = null, leading = null, error = null, empty = null, pagination = null }) {
   const t = useT()
   const text = String(queryText ?? '').trim() || EVAL_QUERY_DEFAULT
   // every control is a BUILDER over the committed text: token surgery, then one history PUSH.
   const surgery = (key, value) => onQueryText(setToken(text, key, value))
 
-  const filterItems = useMemo(() => [
-    ...entries.map((entry) => ({ ...entry, filterKind: EVAL_FILTER_KIND.RESULT, source: entry })),
-    ...blind.map((entry) => ({ ...entry, filterKind: EVAL_FILTER_KIND.BLIND, source: entry })),
-  ], [entries, blind])
-  // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
-  // engine state; quick-filter counts come out computed under the REST of the query (sections never see
-  // their own token), so selecting one verdict can never make the other verdict's number jump.
-  const filters = useMemo(
-    () => evalFilterModel(filterItems, tokenFilterState(text, 'eval'), { sessions, t, defaultKind: 'all', defaultSection: '' }),
-    [filterItems, text, sessions, t],
-  )
-  const shown = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
-  const shownBlind = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.BLIND).map((item) => item.source)
-  const failCount = filters.sections.fail || 0
-  const passCount = filters.sections.pass || 0
+  const items = Array.isArray(pageData?.items) ? pageData.items : []
+  const shown = items.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT)
+  const shownBlind = items.filter((item) => item.filterKind === EVAL_FILTER_KIND.BLIND)
+  const failCount = pageData?.counts?.fail || 0
+  const passCount = pageData?.counts?.pass || 0
   const verdict = readToken(text, 'verdict')
 
   const rows = [
@@ -138,10 +97,22 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
 
   // menus are pure query builders over the ADAPTER's data-derived options — zero private state; the
   // evidence default is `all` (a plain enum default, never data-dependent) and All removes the token.
-  const reviewFacet = filters.facets.review
-  const freshnessFacet = filters.facets.freshness
-  const kindFacet = filters.facets.kind
-  const sessionFacet = filters.facets.session
+  const reviewFacet = {
+    label: t('reviewList.facetReview'), value: readToken(text, 'state'),
+    options: optionsOf(pageData, 'review', t('reviewList.all'), (value) => t(value === 'reviewed' ? 'reviewList.reviewed' : 'reviewList.needsReview')),
+  }
+  const freshnessFacet = {
+    label: t('reviewList.facetFreshness'), value: readToken(text, 'freshness'),
+    options: optionsOf(pageData, 'freshness', t('reviewList.all'), (value) => t(`reviewList.freshness.${value}`)),
+  }
+  const kindFacet = {
+    label: t('reviewList.facetKind'), value: readToken(text, 'evidence') || 'all',
+    options: optionsOf(pageData, 'kind', t('evalsFeed.kind.all'), (value) => t(`evalsFeed.kind.${value}`)),
+  }
+  const sessionFacet = {
+    label: t('reviewList.facetSession'), value: readToken(text, 'session'),
+    options: optionsOf(pageData, 'session', t('reviewList.all'), (value) => t(value === 'present' ? 'reviewList.sessionPresent' : 'reviewList.sessionMissing')),
+  }
   const evidenceToken = readToken(text, 'evidence')
 
   return (
@@ -149,6 +120,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
       notice={notice}
       leading={leading}
       error={error}
+      loading={loading}
       title={t('evalsFeed.title')}
       search={{
         value: String(queryText ?? '').trim() ? queryText : EVAL_QUERY_DEFAULT,
@@ -158,8 +130,8 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
         keys: EVAL_QUERY_KEYS,
         // bounded autocomplete candidates: values present in the DATA — and scope, board sessions ONLY.
         suggest: {
-          node: [...new Set(entries.map((e) => e.node).filter(Boolean))].map((value) => ({ value })),
-          filer: [...new Set(entries.map((e) => e.by).filter(Boolean))].map((value) => {
+          node: optionsOf(pageData, 'node', t('reviewList.all')).filter((option) => option.value),
+          filer: optionsOf(pageData, 'filer', t('reviewList.all')).filter((option) => option.value).map(({ value }) => {
             const s = sessions.find((session) => session.id === value)
             return { value, label: s ? sessionHeadline(s) : null }
           }),
@@ -186,8 +158,9 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
         { label: kindFacet.label, value: kindFacet.value, active: !!evidenceToken, options: kindFacet.options, clearLabel: null, onChange: (value) => surgery('evidence', value === 'all' ? '' : value), mobileOnly: true },
       ]} />}
       rows={rows}
+      pagination={pagination}
       empty={empty || {
-        hasData: entries.length > 0 || blind.length > 0,
+        hasData: (pageData?.sourceTotal ?? 0) > 0,
         dataset: t('evalsFeed.datasetEmpty'),
         filtered: t('evalsFeed.noMatches'),
       }}

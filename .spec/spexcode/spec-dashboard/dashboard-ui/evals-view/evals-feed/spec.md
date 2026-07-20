@@ -18,8 +18,8 @@ related:
 The Evals list page ([[evals-view]]) is where a human reads the project's current measured loss — the
 leading review surface. A feed of every result ever filed grows without bound; a feed of the project's
 *current* loss does not. The unit is the **scenario, not the result**: the eval engine already defines
-the latest result per scenario as the current score, so the list is bounded by declared scenarios
-(structural, slow-growing), never by measurement count — which is also why it needs no pagination. Review
+the latest result per scenario as the current score. That population is structural and slow-growing but
+still paged at the request layer, so a large project never pays or renders its whole declared set. Review
 attends to what still counts; and in the GitHub navigation model each row is a LINK to the eval's own
 page, not a selection in a pane.
 
@@ -73,15 +73,12 @@ secondary line at 390px). No media request of any kind occurs in the list, no pe
 (the shared stroke check in a quiet green ring, signer/time as its accessible name). Clicking a row is a
 history PUSH onto the detail page; `j`/`k` move the cursor and Enter opens it ([[review-chrome]]).
 
-**One data path, one computation.** The project scope's nodes arrive as a prop from the app's single
-board poll + SSE — the list fetches nothing of its own — and latest-per-scenario is `scenarioStates`, the
-same computation behind the node badge, graph stats, search, and the node eval tab; the feed never re-derives
-the current score its own way. The `scope:<id>` token rides the one session model the page fetches
-([[evals-view]] / [[session-eval]]) through the SAME row grammar — ✦ marking the in-session rows, blind
-spots as inert unmeasured lines. The session model arrives already scenario-scoped by its backend impact
-engine, so list rows and every filter count naturally range over only the worktree's affected/measured
-scenarios. The same shared summary partitions those scenarios into fresh pass, fresh fail, measured-but-needing-
-review (stale or unscored), and blind, so the session toolbar never leaves measured stale work implicit;
-unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
+**One data path, one computation.** Trunk and worktree scope both request [[paged-review]] with the visible
+query and route page. The server owns latest-per-scenario selection, shared matching, full-population
+counts/facets, stable ordering/revision, and the one 25-row slice; the feed receives only that page and
+owns no local matcher or full-list prop. `scope:<id>` selects the worktree snapshot through the same
+contract and row grammar — ✦ marking the in-session rows, blind spots as inert unmeasured lines — while
+the session toolbar consumes only its canonical lean graph summary ([[session-eval]]), never the list or
+a row model. Unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
 empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

@@ -31,8 +31,9 @@ filter (default off) picking the root.
 
 - **Two pages, one route family.** `#/evals` is the LIST page; `#/evals/<node>/<scenario>` is the DETAIL
   page — each bookmarkable, reloadable, directly openable (hash routing needs no server). The [[side-nav]]
-  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. There is no pagination — the list is
-  bounded by declared scenarios and the API has no page semantics, so none is invented.
+  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
+  25-row paged-review server contract for both trunk and `scope:` sources; it never slices the graph board
+  or the scoped REST model in React.
 - **The list's state is its URL — as ONE token query.** The whole face rides [[review-chrome]]'s visible
   query text (`is:eval` by default; the [[review-query]] engine) — verdict, freshness,
   evidence kind, node, filer, source-session presence, worktree scope, and human-review lifecycle
@@ -42,7 +43,9 @@ filter (default off) picking the root.
   filter history); only an AUTOMATIC rewrite replaces — the legacy address shapes
   (`#/sessions/<id>/eval…` and the old structured `kind/verdict/freshness/node/filer/live/ok/session`
   params) normalize at the route layer into that token text, old links keep working, the old shape is
-  never re-minted. Rows are the
+  never re-minted. Page is hash-query view state: every query/quick-filter/facet change resets by omitting
+  page; pagination serializes page after `q`, including explicit `page=1` on a return to the first page;
+  direct open/refresh/Back preserve that form. Rows are the
   [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
@@ -82,9 +85,10 @@ filter (default off) picking the root.
   time — each ordered nearest-to-current outward. The default total is ~5, split balanced with the
   forward group taking the odd slot; at either boundary the short side's unused budget refills from the
   other side so the total holds while the dataset allows; the current result is excluded. A group with
-  no entries renders no heading. This page computes the queue from the ONE
-  source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
-  state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
+  no entries renders no heading. The ONE bounded detail response projects this queue from the source's
+  stable default order as at most five lightweight neighbors plus total/index/order; the browser receives no
+  other scenario rows or histories, owns no ListPage/filter fork, and holds no private selection state.
+  Each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
   node ([[event-detail]] renders the rows): a trunk neighbor's href is the pure detail path, a scoped
   neighbor's keeps the same one `scope:` token. No neighbors → the section does not render at all. Issues
   details carry no queue. On a phone-width viewport the SAME page reflows to one column with the side
@@ -132,20 +136,24 @@ filter (default off) picking the root.
   the off-switch.
   `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route
   layer normalizes it (replace) to the `#/evals` form — old links keep working, the old shape is never
-  re-minted, and the console exposes only a door that navigates here. The session model has three honest
+  re-minted, and the console exposes only a door that navigates here. The scoped source has three honest
   read states: loading, loaded/not-found, and failed. A failed fetch is never rendered as an empty session
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
-- **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
-  the session mode fetches the one session model only when a scoped list/detail is actually mounted; the
-  terminal toolbar never primes it. The response carries [[session-eval]]'s summary generation and content
-  revision. A response older than the graph session row already seen is discarded and reloaded; an equal
-  generation must match its content revision, so a slow demand read cannot overwrite a newer graph event.
-  A remark or /ok written from the detail refreshes its
-  source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
+- **One data protocol over two source roots.** The project list and scoped list request the same
+  paged-review endpoint/shape; the backend projects the current graph/eval aggregate for trunk and the
+  worktree-rooted session-eval model for `scope:` before filtering/count/slice. The browser never receives
+  the graph's full eval board or a full scoped model merely to hide all but one page. Detail may fetch the
+  one addressed current row, that scenario's complete A/B history, and its at-most-five lightweight neighbor
+  queue; it does not reconstruct the full list or serialize another scenario's history. Trunk and scoped detail
+  use that same response shape. The scoped response carries [[session-eval]]'s summary generation and content revision: a response older
+  than the graph session row already seen is discarded and reloaded, while an equal generation must match
+  its content revision. A remark or /ok written from the detail refreshes its source revision — writes,
+  dispatch echo ([[mentions]]), and evidence behavior are
   unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
   and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
   loaded timeline events, ordinary typed prose, or anchored composer draft. A real
   scope/scenario/A-B-result change re-sources the workspace and clears that draft before the new result is
-  reviewable.
+  reviewable. Interactive browser and CLI rows always travel through paged or bounded review responses;
+  the self-contained scoped HTML export is the only full-model transport exception.

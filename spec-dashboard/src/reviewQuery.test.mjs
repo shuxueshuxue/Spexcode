@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, effectiveTokens, hasLegacyParams,
   legacyQueryText, normalizeQuery, queryParam, readToken, sameQuery, scanQuery, scopedEvalQuery,
-  serialize, setToken, suggestAt, tokenize,
+  reviewRouteQuery, serialize, setToken, suggestAt, tokenize,
 } from './reviewQuery.js'
 
 // The ONE token-text engine ([[review-query]]): parse loses nothing, surgery preserves strangers,
@@ -55,6 +55,9 @@ test('default equivalence: bare address for the default view, ?q verbatim otherw
   assert.equal(queryParam('is:eval', EVAL_QUERY_DEFAULT), null)
   assert.deepEqual(queryParam('is:eval verdict:fail', EVAL_QUERY_DEFAULT), { q: 'is:eval verdict:fail' })
   assert.equal(scopedEvalQuery('abc'), 'is:eval scope:abc')
+  assert.equal(reviewRouteQuery(ISSUE_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT), null)
+  assert.deepEqual(reviewRouteQuery(ISSUE_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, 1), { page: '1' })
+  assert.deepEqual(reviewRouteQuery('is:issue state:closed', ISSUE_QUERY_DEFAULT, 2), { q: 'is:issue state:closed', page: '2' })
 })
 
 test('legacy structured params replay as the FULL visible token state', () => {

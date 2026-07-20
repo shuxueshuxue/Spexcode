@@ -101,6 +101,11 @@ constraint: managed blocks leave the working contract files BEFORE the content f
 arbitrary paths no stamp can enumerate, so they keep the one small ledger of last-emitted folders (in the
 same per-tree slot as the manifest) — the single landing point outside the stamp-erasable set.
 
+The pass returns a **materialization receipt** alongside its content hash: the manifest and the exact contract,
+shim, skill/agent, plugin-bundle, and trust paths asserted by this run. The receipt is populated at those writes,
+with trust paths supplied by the adapter that performed the global write, so callers can report the selected
+harness footprint without maintaining a second harness-artifact inventory.
+
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The materialize's ignore
 rules are one managed `#` block in the per-clone `.git/info/exclude` — the host's tracked `.gitignore` is

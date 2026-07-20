@@ -38,15 +38,18 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
     writeFileSync(join(proj, 'AGENTS.md'), '# team agents\nkeep me\n')
   }
   g('add', '-A'); g('commit', '-qm', 'init')
-  return { proj, env, g, spex }
+  return { proj, codex, env, g, spex }
 }
 
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { spex } = freshRepo()
+  const { proj, spex } = freshRepo()
   const out = spex('init', '.', '--harness', 'claude,codex')
   assert.ok(out.includes(`lint.governedRoots starts as ${TEMPLATE_ROOTS}`), `plant message names the template value ${TEMPLATE_ROOTS}: ${out}`)
   assert.ok(out.includes(`(currently ${TEMPLATE_ROOTS})`), 'next-steps names the LIVE planted value')
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')
+  const projectSpec = readFileSync(join(proj, '.spec', 'project', 'spec.md'), 'utf8')
+  assert.match(projectSpec, /`system` contracts[\s\S]*`hook` handlers[\s\S]*`command` presets[\s\S]*`skill`/, 'starter project spec names the initialized plugin surfaces')
+  assert.doesNotMatch(projectSpec, /seed ships `core`|seed ships `tidy`/, 'obsolete core-plus-tidy inventory is gone')
 })
 
 test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -72,15 +75,35 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
   assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
 })
 
-test('--harness stamps the choice and seeds ONLY the selected harness\'s launcher', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, spex } = freshRepo()
-  spex('init', '.', '--harness', 'codex')
+test('Claude-only clean init reports and plants only Claude delivery artifacts', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, codex, spex } = freshRepo()
+  const out = spex('init', '.', '--harness', 'claude')
+  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  assert.deepEqual(cfg.harnesses, ['claude'], 'the choice is persisted as the harnesses field')
+  assert.deepEqual(Object.keys(cfg.sessions.launchers), ['claude'], 'unselected harnesses got no launcher')
+  assert.equal(cfg.sessions.defaultLauncher, 'claude', 'defaultLauncher follows the selection')
+  assert.match(out, /contract: CLAUDE\.md/, 'the materialize receipt reports the Claude contract')
+  assert.match(out, /shim: \.claude\/settings\.json/, 'the materialize receipt reports the Claude shim')
+  assert.doesNotMatch(out, /AGENTS\.md|\.codex\/hooks\.json|trust:/, 'no Codex contract, shim, or trust claim')
+  assert.ok(existsSync(join(proj, 'CLAUDE.md')) && existsSync(join(proj, '.claude', 'settings.json')), 'Claude artifacts exist')
+  assert.ok(!existsSync(join(proj, 'AGENTS.md')) && !existsSync(join(proj, '.codex')), 'no Codex artifacts were planted')
+  assert.ok(!existsSync(join(codex, 'config.toml')), 'no Codex trust was planted')
+})
+
+test('Codex-only clean init reports and plants only Codex delivery artifacts', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, codex, spex } = freshRepo()
+  const out = spex('init', '.', '--harness', 'codex')
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
   assert.deepEqual(cfg.harnesses, ['codex'], 'the choice is persisted as the harnesses field')
   assert.deepEqual(Object.keys(cfg.sessions.launchers), ['codex'], 'unselected harnesses got no launcher')
   assert.equal(cfg.sessions.defaultLauncher, 'codex', 'defaultLauncher follows the selection')
-  assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no claude artifacts for an unselected harness')
-  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'the selected harness was delivered')
+  assert.match(out, /contract: AGENTS\.md/, 'the materialize receipt reports the Codex contract')
+  assert.match(out, /shim: \.codex\/hooks\.json/, 'the materialize receipt reports the Codex shim')
+  assert.match(out, /trust: .*config\.toml/, 'the materialize receipt reports the Codex trust write')
+  assert.doesNotMatch(out, /CLAUDE\.md|\.claude\/settings\.json/, 'no Claude contract or shim claim')
+  assert.ok(existsSync(join(proj, 'AGENTS.md')) && existsSync(join(proj, '.codex', 'hooks.json')), 'Codex artifacts exist')
+  assert.ok(existsSync(join(codex, 'config.toml')), 'Codex trust exists')
+  assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no Claude artifacts were planted')
 })
 
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {

@@ -11,6 +11,12 @@ import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { plantContractFilter, removeContractFilter, settleIndexStat } from './contract-filter.js'
 
+export type MaterializedArtifact = {
+  kind: 'hook manifest' | 'contract' | 'shim' | 'skill' | 'agent' | 'plugin bundle' | 'trust'
+  path: string
+}
+export type MaterializeResult = { contentHash: string; planted: MaterializedArtifact[] }
+
 // @@@ materialize - the materialize step (≈0.85s), anchored on GIT-NATIVE events only ([[commit-surgery]]):
 // spex verbs (init/materialize), session-worktree creation, and the planted git hooks (pre-commit,
 // post-checkout, post-merge) — never a harness event; the harness is a READER of the materialized files, not
@@ -173,12 +179,19 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   }
 }
 
-// the whole pay-per-change materialize. proj defaults to cwd. Returns the new content-hash it stamped.
-export function materialize(proj = process.cwd()): string {
+// the whole pay-per-change materialize. proj defaults to cwd. Its receipt is populated at each successful
+// write so callers report the actual selected footprint instead of maintaining a second artifact inventory.
+export function materialize(proj = process.cwd()): MaterializeResult {
   const rt = treeSlotDir(proj)                                            // this tree's slot in the global store, not the worktree
   mkdirSync(rt, { recursive: true })
+  const planted: MaterializedArtifact[] = []
+  const record = (kind: MaterializedArtifact['kind'], path: string) => {
+    if (!planted.some((a) => a.kind === kind && a.path === path)) planted.push({ kind, path })
+  }
   // (1) hook manifest (persistent — the dispatcher reads it; regenerated only here, on change).
-  writeFileSync(join(rt, 'hooks-manifest'), compileManifest())
+  const manifest = join(rt, 'hooks-manifest')
+  writeFileSync(manifest, compileManifest())
+  record('hook manifest', manifest)
   // (2) the contract = the tracked docs guide (the hand-written agent/contributor notes — the ONE piece of
   //     in-tree prose) FOLLOWED BY the surface:system bodies (in name order), written WHOLE into EACH harness's
   //     contract file(s) + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
@@ -223,17 +236,18 @@ export function materialize(proj = process.cwd()): string {
   const machinePaths: string[] = []
   const contractPaths: string[] = []
   for (const h of selected) {
-    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); contractPaths.push(f) }
+    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); contractPaths.push(f); record('contract', f) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
     writeFileSync(shimFile, shim.content)
-    h.writeTrust(proj, shim.cmd)
+    record('shim', shimFile)
+    for (const f of h.writeTrust(proj, shim.cmd)) record('trust', f)
     machinePaths.push(shimFile)
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.content); machinePaths.push(anchor) }
+    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.content); machinePaths.push(anchor); record('shim', anchor) }
   }
   // (6) skills + (7) sub-agents — each surface node → the file the harness auto-discovers, one per selected
   //     harness that has the primitive (skillDir/agentDir null skips — the divergence is the adapter's line).
@@ -244,6 +258,7 @@ export function materialize(proj = process.cwd()): string {
       mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, skillArtifact(sk))
       artifactPaths.push(f)
+      record('skill', f)
     }
   }
   for (const ag of agentNodes) {
@@ -253,6 +268,7 @@ export function materialize(proj = process.cwd()): string {
       mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, agentArtifact(ag))
       artifactPaths.push(f)
+      record('agent', f)
     }
   }
   // (8) the PLUGIN target ([[plugin-harness]]): materialize the whole system into one self-contained Claude-plugin
@@ -278,7 +294,10 @@ export function materialize(proj = process.cwd()): string {
       spex: SPEX,
       version: pluginVersion(),
     }
-    for (const p of plugins) emitPlugin(proj, p.folder, bundle)
+    for (const p of plugins) {
+      emitPlugin(proj, p.folder, bundle)
+      record('plugin bundle', pluginBundleDir(proj, p.folder))
+    }
   }
   writeFileSync(ledger, curFolders.join('\n'))
   // (9) the ignore rules — ALWAYS the per-clone .git/info/exclude ([[residence]]): the exclude is not a
@@ -320,5 +339,5 @@ export function materialize(proj = process.cwd()): string {
   // (5) stamp the content-hash marker LAST (a diagnostic freshness record; a crash mid-materialize leaves it stale).
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)
-  return h
+  return { contentHash: h, planted }
 }

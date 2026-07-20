@@ -171,18 +171,20 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     if (installed.length) console.log(`✓ installed git hooks (${installed.join(', ')}) → ${hooksDir}`)
   }
 
-  // 2c. MATERIALIZE the harness-discovered artifacts so a USER-self-launched claude/codex works with zero further
-  // steps: the hook manifest (in the GLOBAL per-project store, not the worktree), the AGENTS.md/CLAUDE.md
-  // <spexcode> contract block (user content preserved), the .claude/.codex shims, and the Codex trust (global,
-  // scoped) so codex self-launch is prompt-free. Runs with cwd = the target so the loaders read the just-seeded
+  // 2c. MATERIALIZE the harness-discovered artifacts so a USER-self-launched harness works with zero further
+  // steps. Runs with cwd = the target so the loaders read the just-seeded
   // .plugins. Idempotent — the planted git hooks (pre-commit/post-checkout/post-merge) keep it fresh
   // thereafter on the git-native anchors ([[commit-surgery]]); no harness event ever triggers a materialize.
   const prevCwd = process.cwd()
   try {
     process.chdir(targetDir)
     const { materialize } = await import('./materialize.js')
-    materialize(targetDir)
-    console.log('✓ materialized harness artifacts (global hook manifest, AGENTS.md/CLAUDE.md block, harness shims, Codex trust)')
+    const result = materialize(targetDir)
+    const display = (path: string) => {
+      const local = relative(targetDir, path)
+      return local && local !== '..' && !local.startsWith('../') && !local.startsWith('..\\') ? local : path
+    }
+    console.log(`✓ materialized harness artifacts (${result.planted.map((a) => `${a.kind}: ${display(a.path)}`).join(', ')})`)
   } catch (e) {
     console.warn(`• materialize skipped (${(e as Error).message}) — run \`spex materialize\` once the packages are installed.`)
   } finally {

@@ -39,6 +39,52 @@ scenarios:
       accessible radio group named by its visible label. The horizontal section tablist is named; every tab
       controls the one results tabpanel, the panel is labelled by the active tab, and Up/Down neither changes
       section nor suppresses normal scrolling.
+  - name: detail-side-rail-sticky
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Open a long eval detail (main column taller than the viewport) and an issue detail at 1440px;
+      scroll each detail page through its full height and read the side rail's computed position and
+      bounding box at several scroll offsets — against the header above, the docked composer, and the
+      page bottom. Shrink the window height below the rail's own height, scroll, and read whether every
+      rail section stays reachable. Resize to 390px and read the column order, the rail's computed
+      position, and the document scroll width while scrolling.
+    expected: >
+      On desktop the side rail is position:sticky inside the detail's own scroll flow (never
+      position:fixed): while a long main column scrolls, the rail pins near the scrollport top and its
+      metadata stays on screen. It never overlaps the header (which scrolls away normally), never floats
+      over the docked composer or past the page bottom (grid containment, not an overlay), and adds no
+      permanent nested scrollbar — only a rail taller than the viewport may scroll internally, so every
+      section stays reachable at any window height. Issues and Evals details behave identically: the ONE
+      DetailShell owns the geometry, no page-local fork. At 390px the rail is NOT sticky — the same
+      markup keeps the existing one-column metadata-before-content flow, scrolls with the document, and
+      adds no horizontal overflow.
+  - name: detail-metadata-primitive
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    description: >
+      At 1440 and 390, in en and zh, open an eval detail whose filer is a full session UUID, a local
+      issue detail with a long slug id, and a forge issue detail. Read every side-rail metadata row's
+      DOM (label, value element tag and classes), each value's computed min-width / white-space /
+      text-overflow, whether a long value ellipsizes inside the rail instead of stretching or
+      overflowing it, and each value's title/accessible name against the full untruncated text. Read
+      the identity rows: what type label the issue detail wears for its own id, the node references'
+      labels and real behavior (focus/navigate) on both pages, and the filer/originator chip's liveness
+      dot, click-through target, and keyboard focusability. Diff the Eval and Issue rails' row markup
+      for parallel implementations, and check the list rows kept their own compact meta grammar.
+    expected: >
+      ONE shared metadata value primitive renders every side-rail value on BOTH detail pages — same
+      markup shape, same CSS, no page-local inline span/anchor/tooltip variant of the same row. Every
+      value container is min-width:0, single-line, shrinkable, ellipsizing when it exceeds the rail: a
+      full session UUID or long issue slug never stretches the rail or widens the page (390 included),
+      and the full text stays reachable through the value's tooltip/accessible name. Information type is
+      EXPLICIT, never guessed from a bare token: the issue detail names its own id under a localized
+      Issue label (the full slug, truncatable); spec-node references wear the localized spec-node label
+      on both pages and keep their real behavior (focus/navigate — the eval detail's node is a real
+      ref); the filer/originator chip keeps its liveness dot, live click-through to the session console,
+      keyboard focus and visible focus ring, and honest fallbacks (a forge login or a legacy reading
+      without a session renders a plain labeled value, no fake liveness). List rows keep their own ONE
+      compact meta grammar — two densities, each a single implementation.
   - name: list-key-routing
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx]

@@ -17,7 +17,10 @@ related:
 
 The pathname selects identity. `/projects` renders the gateway projection from the authorized catalog;
 `/p/<id>/` selects only that id's catalog row. The board projection is the compatibility/direct-serving
-fallback, never a last-loaded or session-local cache. If catalog access is denied, a project guest may use
+fallback, never a last-loaded or session-local cache. While the probes are still pending the selection is
+**unresolved** — it yields no identity at all: in-page marks render their neutral default, and the tab
+head stays unwritten ([[side-nav]]) — a default-mark claim is never minted as if it were an answer. If
+catalog access is denied, a project guest may use
 its authorized board identity but receives no fleet data or management control.
 
 `IdentityIcon` and `IdentityPicker` are the one renderer and chooser over [[icon-presets]]. The renderer

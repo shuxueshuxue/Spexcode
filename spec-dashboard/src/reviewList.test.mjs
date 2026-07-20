@@ -232,7 +232,7 @@ test('graph keeps the full canvas and mounts no persistent focus sidebar', () =>
   assert.match(css, /\.react-flow__node\s*\{[^}]*transition:\s*opacity/s)
   assert.doesNotMatch(css, /\.react-flow__node\s*\{[^}]*transition:[^}]*transform/s)
   assert.doesNotMatch(css, /\.focus-panel|\.fp-sc-|--fp-w/)
-  assert.match(css, /\.page-graph\s*\{[^}]*flex:\s*1;[^}]*position:\s*relative;/s)
+  assert.match(css, /\.page-pane\.page-graph\s*\{[^}]*display:\s*block;[^}]*position:\s*relative;/s)
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
 })
 

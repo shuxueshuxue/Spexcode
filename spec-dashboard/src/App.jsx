@@ -114,27 +114,34 @@ export default function App() {
     const id = setInterval(() => { reload(); reloadIssues() }, 15000)
     return () => { unsub(); clearInterval(id); clearTimeout(issuesTrail.current); issuesTrail.current = null }
   }, [reload, reloadIssues, hub, facePending])
-  const boardIdentity = projectIdentity(board)
+  // the route-selected identity, or null while it is still UNRESOLVED (no catalog row, no board yet).
+  // The head effects below skip the null window ([[side-nav]]): the browser remembers a favicon per page
+  // URL and re-resolves it on every hash navigation, so a placeholder default written during one boot
+  // keeps flashing back on later navigations (the session board's per-tab addresses foremost). Until the
+  // real identity is known the static boot document stands — never the default mark, never the raw id.
+  const boardIdentity = board ? projectIdentity(board) : null
   const identity = PROJECT_ID
     ? selectProjectIdentity(PROJECT_ID, projAccess, boardIdentity)
     : hub
       ? selectGatewayIdentity(projAccess)
       : boardIdentity
   useEffect(() => {
+    if (!identity) return
     document.title = identity.title ? `${identity.title} · SpexCode` : 'SpexCode'
-  }, [identity.title])
+  }, [identity?.title]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (!identity) return
     const fallback = hub ? DEFAULT_GATEWAY_ICON : DEFAULT_PROJECT_ICON
     const href = identityFaviconHref(identity.icon, fallback)
     let link = document.querySelector("link[rel~='icon']")
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
-    link.setAttribute('href', href)
-  }, [identity.icon, hub])
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href)
+  }, [identity?.icon, hub]) // eslint-disable-line react-hooks/exhaustive-deps
   // a 401'd scope shows the unified credential card, wherever it strikes: pre-board it is the whole
   // face; a mid-session lock (an admin just set a password) also re-gates — a 401 means every surface
   // (poll, stream, terminal socket) is dead until the unlock, so keeping a stale board up would lie.
   if (authNeeded && PROJECT_ID) {
-    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={identity.title || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={identity?.title || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
   }
   if (!board) {
     // the hub face: the catalog page IS the app (see the `hub` pick above). A single-project serve /

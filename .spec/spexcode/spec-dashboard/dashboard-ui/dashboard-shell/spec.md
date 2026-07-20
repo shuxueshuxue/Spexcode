@@ -27,9 +27,14 @@ foundation node; features REFERENCE what they touch via `related:` instead of co
 ## expanded spec
 
 dashboard-shell owns the cross-cutting dashboard files: `App.jsx` (the entry — it boots the one shared data
-layer, owns the fail-loud boot below, and picks the face by viewport width), `Dashboard.jsx` (the desktop
-root — it mounts the [[side-nav]] rail and swaps the routed page into the main area beside it, keeping the
-warm pages — the graph, the session board — mounted across switches), `data.js` (the shared polled board
+layer, owns the fail-loud boot below, picks the face by viewport width, and is the **one writer of the
+tab head**: `document.title` and the favicon are written only from *resolved* route-selected identity —
+while the catalog/board probes are still pending the static boot document stands untouched, because a
+placeholder default in the head poisons the browser's per-URL favicon memory, [[side-nav]]),
+`Dashboard.jsx` (the desktop
+root — it mounts the [[side-nav]] rail and swaps the routed page through **one shared page-pane
+boundary**: every page gets the same pane and the same loading fallback, and warm pages — the graph, the
+session board — declare warmth to stay mounted and display-toggle across switches), `data.js` (the shared polled board
 data every view reads), and `styles.css` (the global stylesheet). **The project scope is a shell concern**
 ([[projects-hub]]): `project.js` reads the served pathname once (`/p/<id>/` vs the root) and every `/api`
 URL in the data layer — fetch, SSE, the terminal WebSocket — routes through its one prefixing seam, so a

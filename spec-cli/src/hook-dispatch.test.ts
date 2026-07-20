@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -25,6 +25,99 @@ test('dispatch exits 2 when a blocking handler emits decision:block JSON', () =>
   assert.equal(r.status, 2)
   assert.match(r.stdout, /"decision":"block"/)
 })
+
+type GateHarness = 'claude' | 'codex'
+
+function specFirstRig(harness: GateHarness, sequence: string) {
+  const dir = mkdtempSync(join(tmpdir(), `spex-spec-first-${harness}-${sequence}-`))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = `sid-${harness}-${sequence}`
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, '.spec', 'project', 'governed-contract'), { recursive: true })
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(runtime, { recursive: true })
+  writeFileSync(join(dir, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\nProject scope.\n')
+  writeFileSync(join(dir, '.spec', 'project', 'governed-contract', 'spec.md'), [
+    '---',
+    'title: governed-contract',
+    'status: active',
+    'desc: The contract for the governed fixture.',
+    'code:',
+    '  - src/governed.ts',
+    '---',
+    'Governed behavior.',
+    '',
+  ].join('\n'))
+  writeFileSync(join(dir, 'src', 'governed.ts'), 'export const governed = true\n')
+  writeFileSync(join(dir, 'src', 'ungoverned.ts'), 'export const ungoverned = true\n')
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'spec-first', 'spec-first.sh')
+  writeFileSync(join(dir, 'hooks', 'spec-first.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'PreToolUse\t20\ttrue\thooks/spec-first.sh\n')
+  const env = {
+    ...process.env,
+    SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+    SPEXCODE_HOME: home,
+    SPEX_HOOK_MANIFEST: manifest,
+  }
+  const payload = (path: string, operation: 'read' | 'mutate' = 'read') => harness === 'claude'
+    ? JSON.stringify({
+        session_id: sid,
+        hook_event_name: 'PreToolUse',
+        tool_name: operation === 'read' ? 'Read' : 'Edit',
+        tool_input: { file_path: path },
+      })
+    : JSON.stringify({
+        session_id: sid,
+        hook_event_name: 'PreToolUse',
+        tool_name: operation === 'read' ? 'Bash' : 'apply_patch',
+        tool_input: { command: operation === 'read' ? `sed -n '1p' ${path}` : `*** Update File: ${path}\n@@\n` },
+      })
+  const fire = (path: string, operation: 'read' | 'mutate' = 'read') => spawnSync(
+    'bash', [dispatch, harness, 'PreToolUse'], { cwd: dir, env, input: payload(path, operation), encoding: 'utf8' },
+  )
+  return { fire, sentinel: join(runtime, 'sessions', sid, 'spec-checked') }
+}
+
+for (const harness of ['claude', 'codex'] as const) {
+  test(`${harness} spec-first: ungoverned then governed keeps the gate armed`, () => {
+    const t = specFirstRig(harness, 'ungoverned-governed')
+    const uncovered = t.fire('src/ungoverned.ts')
+    assert.equal(uncovered.status, 0, uncovered.stderr)
+    assert.equal(existsSync(t.sentinel), false, 'an ungoverned read must not consume the session gate')
+
+    const governed = t.fire('src/governed.ts')
+    assert.equal(governed.status, 2, governed.stderr)
+    assert.match(governed.stdout + governed.stderr, /governed-contract/)
+    assert.match(governed.stdout + governed.stderr, /\.spec\/project\/governed-contract\/spec\.md/)
+    assert.match(governed.stdout + governed.stderr, /NEIGHBORS/)
+    assert.equal(existsSync(t.sentinel), true)
+    assert.equal(t.fire('src/governed.ts').status, 0, 'the governed retry proceeds after the one-shot demand')
+  })
+
+  test(`${harness} spec-first: repeated ungoverned reads never mute a later governed read`, () => {
+    const t = specFirstRig(harness, 'repeated-ungoverned')
+    assert.equal(t.fire('src/ungoverned.ts').status, 0)
+    assert.equal(t.fire('src/ungoverned.ts').status, 0)
+    assert.equal(existsSync(t.sentinel), false, 'repeated ungoverned reads leave the state untouched')
+    assert.equal(t.fire('src/governed.ts').status, 2)
+  })
+
+  test(`${harness} spec-first: governed-first blocks exactly once`, () => {
+    const t = specFirstRig(harness, 'governed-first')
+    assert.equal(t.fire('src/governed.ts').status, 2)
+    assert.equal(t.fire('src/governed.ts').status, 0)
+  })
+
+  test(`${harness} spec-first: event-wide non-read delivery leaves the read gate untouched`, () => {
+    const t = specFirstRig(harness, 'mutation-is-irrelevant')
+    assert.equal(t.fire('src/governed.ts', 'mutate').status, 0)
+    assert.equal(existsSync(t.sentinel), false, 'a governed mutation is not a governed read')
+    assert.equal(t.fire('src/governed.ts').status, 2)
+  })
+}
 
 test('codex mark-active resolves by payload thread id despite contaminated SPEXCODE_SESSION_ID', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-codex-'))

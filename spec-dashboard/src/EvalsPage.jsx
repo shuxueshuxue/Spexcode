@@ -97,23 +97,30 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
 }
 
 // the Continue-reviewing queue ([[evals-view]]): the viewed reading's NEIGHBORS in the source dataset's
-// stable default order — aim `want` items total, current excluded, the window sliding to auto-fill at
-// either boundary; alone-in-dataset yields none. Pure over the entries the page already holds — no
+// stable list order, split into two POSITIONAL groups — `prev` holds entries BEFORE the current row,
+// `next` entries AFTER it (list direction, never a time claim), each ordered nearest-to-current outward.
+// `want` is the default total: split balanced with the forward group taking the odd slot, and a
+// boundary's unused budget refills from the other side so the total holds while the dataset allows;
+// current excluded, alone-in-dataset yields none. Pure over the entries the page already holds — no
 // second fetch, no filter fork, no selection state.
 export function queueNeighbors(entries, key, want = 5) {
   const idx = entries.findIndex((e) => entryKey(e) === key)
-  if (idx < 0) return []
-  const take = Math.min(want, entries.length - 1)
-  const start = Math.max(0, Math.min(idx - Math.floor(take / 2), entries.length - (take + 1)))
-  const out = []
-  for (let i = start; out.length < take && i < entries.length; i++) if (i !== idx) out.push(entries[i])
-  return out
+  if (idx < 0) return { prev: [], next: [] }
+  const before = idx
+  const after = entries.length - idx - 1
+  const take = Math.min(want, before + after)
+  const nextN = Math.min(after, Math.max(Math.ceil(take / 2), take - before))
+  const prevN = Math.min(before, take - nextN)
+  return {
+    prev: entries.slice(idx - prevN, idx).reverse(),
+    next: entries.slice(idx + 1, idx + 1 + nextN),
+  }
 }
 
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onWrite, notice }) {
+export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite, notice }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
@@ -128,16 +135,17 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
   )
   // the queue rows ride the SAME source dataset and the SAME href grammar the list rows use: a trunk
   // neighbor is a pure detail path, a scoped neighbor keeps the one scope token — never list filters.
-  const queue = useMemo(
-    () => queueNeighbors(scope.entries, `eval:${node}·${scenario}`).map((e) => ({
+  const queue = useMemo(() => {
+    const row = (e) => ({
       key: entryKey(e),
       node: e.node,
       scenario: e.scenario,
       state: e.state,
       href: routeHash('evals', `${e.node}/${e.scenario}`, sessionId ? { q: `scope:${sessionId}` } : null),
-    })),
-    [scope.entries, node, scenario, sessionId],
-  )
+    })
+    const n = queueNeighbors(scope.entries, `eval:${node}·${scenario}`)
+    return { prev: n.prev.map(row), next: n.next.map(row) }
+  }, [scope.entries, node, scenario, sessionId])
   if (sessionId && error) {
     return <DetailShell failure={t('sessionEval.loadFailed', { reason: error })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
@@ -161,13 +169,13 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
       <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
-        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
+        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
         banner={banner} queue={queue} />
     </div>
   )
 }
 
-export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession }) {
+export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession, onFocusNode = null }) {
   const t = useT()
   const { param, query } = useRoute()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
@@ -205,7 +213,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   return param
     ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
         sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
-        onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
+        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} notice={notice} />
     : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
         queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} />
 }

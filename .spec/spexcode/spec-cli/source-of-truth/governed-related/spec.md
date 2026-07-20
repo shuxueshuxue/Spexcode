@@ -49,7 +49,7 @@ as a scoped claim.
 referenced by … (related)" line. The per-edit `--actionable` hook still stays SILENT for a related-only
 file — a soft edge is not worth interrupting an edit for.
 
-**too-many-owners** — the file-rotated bound (the twin of [[spec-lint]]'s breadth): a file governed by
+**too-many-owners** — the file-rotated bound (the deterministic twin of [[doctor]]'s advisory breadth): a file governed by
 more than `maxOwners` nodes (default 3) fires one summary warning at `spex lint` (the commit gate blocks
 on drift only, never on ownership). It blames the file's size, not its ownership — three moves, split first:
 

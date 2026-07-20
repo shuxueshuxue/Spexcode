@@ -3,11 +3,11 @@
   "lint": {
     "governedRoots": ["spec-dashboard/src", "spec-cli/src", "spec-forge/src", "spec-eval/src"],
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],
-    "maxChildren": 8,
     "scenarioTags": ["frontend-e2e", "backend-api", "cli", "desktop", "mobile"]
   },
   "doctor": {
-    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 }
+    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
+    "breadth": { "maxChildren": 8 }
   },
   "sessions": {
     "maxActive": 8,

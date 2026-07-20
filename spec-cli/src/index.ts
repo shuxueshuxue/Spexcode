@@ -25,7 +25,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, resizeBridge, setViewerVisible, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, prewarmBridge, resizeBridge, setViewerVisible, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 
@@ -464,9 +464,10 @@ app.post('/api/sessions/:id/merge', async (c) => {
 })
 
 // one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary); the
-// view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or
-// {t:'wheel',…}. Visibility changes size ownership without detaching; tmux itself resolves wheel input between copy-mode and a
-// mouse-owning TUI. The bridge never splices capture-pane state into this stream.
+// view takes no keyboard input, so client→server is only a text control frame — resize/prewarm, visibility,
+// or wheel. Server→client text commits a completed resize immediately before its binary tmux transaction;
+// visibility changes size ownership without detaching. tmux itself resolves wheel input between copy-mode
+// and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
 // resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
@@ -486,7 +487,10 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   let ping: ReturnType<typeof setInterval> | undefined
   return {
     onOpen(_evt, ws) {
-      viewer = { send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } } }
+      viewer = {
+        send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } },
+        commitSize: (cols, rows) => { try { ws.send(JSON.stringify({ t: 'resize-commit', cols, rows })) } catch { /* viewer gone */ } },
+      }
       if (!attachViewer(id, viewer, initialSize, initialVisible)) { try { ws.close() } catch { /* already closed */ } return }
       ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
     },
@@ -499,6 +503,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
         try {
           const m = JSON.parse(data)
           if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
+          else if (m?.t === 'prewarm') prewarmBridge(id, viewer, Number(m.cols), Number(m.rows))
           else if (m?.t === 'visible') setViewerVisible(id, viewer, !!m.visible)
           else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
         } catch { /* ignore */ }

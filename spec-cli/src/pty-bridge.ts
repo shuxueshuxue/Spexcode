@@ -9,7 +9,10 @@ const HELPER = fileURLToPath(new URL('./pty-helper.ts', import.meta.url))
 const TSX_IMPORT = import.meta.resolve('tsx')
 const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
 
-export type Viewer = { send: (data: Buffer) => void }
+export type Viewer = {
+  send: (data: Buffer) => void
+  commitSize?: (cols: number, rows: number) => void
+}
 
 type Subscription = { visible: boolean }
 type Bridge = {
@@ -23,6 +26,8 @@ type Bridge = {
   refreshWhenReady: boolean
   voting: boolean
   warmOwner: boolean
+  warmOwnerViewer?: Viewer
+  pendingWarmSize?: { viewer: Viewer; cols: number; rows: number }
   clientTty?: string
   probeBuf: Buffer
   probeTail: Buffer
@@ -61,6 +66,12 @@ function hasVisibleViewer(id: string): boolean {
 function broadcast(id: string, data: Buffer): void {
   for (const viewer of subscribers.get(id)?.keys() ?? []) {
     try { viewer.send(data) } catch { /* socket close owns subscription removal */ }
+  }
+}
+
+function commitSize(bridge: Bridge): void {
+  for (const viewer of subscribers.get(bridge.id)?.keys() ?? []) {
+    try { viewer.commitSize?.(bridge.cols, bridge.rows) } catch { /* socket close owns subscription removal */ }
   }
 }
 
@@ -158,6 +169,13 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
       bridge.warmOwner = ready[2] === 'owner'
       bridge.voting = ready[2] !== 'neutral'
       updateVote(bridge)
+      const pendingWarmSize = bridge.pendingWarmSize
+      bridge.pendingWarmSize = undefined
+      if (bridge.warmOwner && pendingWarmSize && pendingWarmSize.viewer === bridge.warmOwnerViewer) {
+        const size = { cols: pendingWarmSize.cols, rows: pendingWarmSize.rows }
+        lastSize.set(bridge.id, size); lastSizeAny = size
+        resize(bridge, size.cols, size.rows)
+      }
       if (bridge.refreshWhenReady) {
         bridge.refreshWhenReady = false
         void refreshBridge(bridge)
@@ -298,12 +316,14 @@ function finishAtomicRefresh(bridge: Bridge): void {
   const begin = end >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, end) : -1
   if (begin < 0 || end < begin) return
   const transaction = bridge.refreshBuf.subarray(begin, end + ESU.length)
+  commitSize(bridge)
   clearBarrier(bridge)
   broadcast(bridge.id, transaction)
 }
 
 function failOpenBarrier(bridge: Bridge): void {
   if (bridge.barrier === 'none') return
+  commitSize(bridge)
   clearBarrier(bridge)
   void refreshBridge(bridge)
 }
@@ -363,6 +383,7 @@ export function attachViewer(id: string, viewer: Viewer, initialSize?: { cols: n
   if (fitted) { lastSize.set(id, fitted); lastSizeAny = fitted }
   const { bridge, created } = ensureBridge(id, size.cols, size.rows, initialVisible)
   if (!bridge) { subscriptions.delete(viewer); return false }
+  if (created && !initialVisible) bridge.warmOwnerViewer = viewer
   if (fitted) {
     if (initialVisible || !hasVisibleViewer(id)) resize(bridge, fitted.cols, fitted.rows)
     updateVote(bridge)
@@ -388,8 +409,30 @@ export function detachViewer(id: string, viewer: Viewer): void {
     killBridge(id)
   } else {
     const bridge = bridges.get(id)
-    if (bridge) updateVote(bridge)
+    if (bridge) {
+      if (bridge.warmOwnerViewer === viewer) {
+        bridge.warmOwnerViewer = [...subscriptions].find(([, subscription]) => !subscription.visible)?.[0]
+      }
+      if (bridge.pendingWarmSize?.viewer === viewer) bridge.pendingWarmSize = undefined
+      updateVote(bridge)
+    }
   }
+}
+
+export function prewarmBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {
+  const cols = Math.floor(colsValue), rows = Math.floor(rowsValue)
+  if (!(cols > 0 && rows > 0)) return
+  const subscription = subscribers.get(id)?.get(viewer)
+  const bridge = bridges.get(id)
+  if (!subscription || subscription.visible || !bridge || bridge.warmOwnerViewer !== viewer) return
+  if (!bridge.ptyPid) {
+    bridge.pendingWarmSize = { viewer, cols, rows }
+    return
+  }
+  if (!bridge.warmOwner) return
+  const size = { cols, rows }
+  lastSize.set(id, size); lastSizeAny = size
+  resize(bridge, cols, rows)
 }
 
 export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {

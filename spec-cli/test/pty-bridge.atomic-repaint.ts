@@ -56,7 +56,15 @@ async function main(): Promise<void> {
   await tmux('new-session', '-d', '-s', SESSION, '-x', String(FIRST.cols), '-y', String(FIRST.rows))
 
   const chunks: Buffer[] = []
-  const viewer: Viewer = { send: (data) => chunks.push(Buffer.from(data)) }
+  const events: string[] = []
+  const viewer: Viewer = {
+    send: (data) => {
+      const chunk = Buffer.from(data)
+      chunks.push(chunk)
+      events.push(chunk.includes(FINAL) ? 'final' : chunk.includes(LIVE_TAIL) ? 'tail' : 'tmux')
+    },
+    commitSize: (cols, rows) => events.push(`commit:${cols}x${rows}`),
+  }
   try {
     if (!attachViewer(SESSION, viewer, FIRST)) throw new Error('attachViewer failed')
     await sleep(350)
@@ -66,6 +74,7 @@ async function main(): Promise<void> {
     await sleep(100)
 
     chunks.length = 0
+    events.length = 0
     resizeBridge(SESSION, viewer, NEXT.cols, NEXT.rows)
     await waitFor(() => Buffer.concat(chunks).includes(LIVE_TAIL))
     await sleep(100)
@@ -85,6 +94,10 @@ async function main(): Promise<void> {
     if (all.includes(INTERMEDIATE)) throw new Error('the temporary clear state escaped the resize barrier')
     if (finalIndex < 0) throw new Error('the final synchronized screen was not refreshed')
     if (finalChunks.length !== 1) throw new Error(`the final screen was replayed ${finalChunks.length} times`)
+    const commit = `commit:${NEXT.cols}x${NEXT.rows}`
+    if (events.filter((event) => event === commit).length !== 1 || events.indexOf(commit) > events.indexOf('final')) {
+      throw new Error(`grid commit did not immediately precede the final transaction (${events.join(' -> ')})`)
+    }
     const finalChunk = chunks[finalIndex]
     const begin = finalChunk.indexOf(BSU), end = finalChunk.indexOf(ESU)
     if (begin < 0 || end < finalChunk.indexOf(FINAL)) throw new Error('the final screen was not one complete synchronized tmux transaction')

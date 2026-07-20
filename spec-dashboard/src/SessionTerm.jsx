@@ -5,6 +5,8 @@ import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
 
+const SYNC_BEGIN = '\x1b[?2026h'
+
 function terminalTypography() {
   const styles = getComputedStyle(document.documentElement)
   const fontSize = Number.parseFloat(styles.getPropertyValue('--type-terminal'))
@@ -55,11 +57,11 @@ function execCopyFallback(text) {
 export default function SessionTerm({ sessionId, active = true, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
-  // last cols/rows we synced to tmux; a ref (not effect locals) so BOTH the fit path and the renderer
-  // swap can reset it to force the next fit through the "size changed" gate.
+  // Last grid requested from tmux. Measuring a new grid deliberately does not resize xterm yet: the bridge
+  // commits dimensions with the final native transaction so the old buffer never visibly reflows alone.
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
-  // the latest fitAndSync, exposed so the active-driven renderer effect can re-measure after a swap.
-  const fitRef = useRef(null)
+  // The latest geometry request, exposed so activation can re-measure without recreating the terminal.
+  const measureRef = useRef(null)
   // Visibility is a size-ownership signal: every live pane stays warm, the first unopposed hidden helper may
   // pre-size it, and an active pane always votes. Refs expose changes to the long-lived socket effect.
   const activeRef = useRef(active)
@@ -97,6 +99,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(hostRef.current)
+    try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
 
     // xterm has no public "always select"; pin the private selectionService.shouldForceSelection so a plain drag selects under mouse-reporting. Guarded.
     try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
@@ -117,67 +120,68 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
             return `${base}?cols=${d.cols}&rows=${d.rows}&visible=${activeRef.current ? 1 : 0}`
           }
         }
-      } catch { /* activation's fit supplies the first real size */ }
+      } catch { /* the first settled measurement supplies the real size */ }
       return base
     }
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
 
-    // fit xterm to the panel, then tell tmux to match — only when the size actually changed and the
-    // socket is open (a stream of resize events would otherwise spam the backend).
-    const fitAndSync = () => {
+    // Measure the panel and ask tmux for that grid without eagerly resizing xterm's old buffer. A visible
+    // viewer owns the resize; an elected hidden owner prewarms the same transaction before a later click.
+    const measureAndRequest = () => {
       const host = hostRef.current
       if (!host) return
-      // never fit against an unsettled/animating or hidden layout (near-0 host) — it would lock tmux to a tiny cols; a later re-fit sends the real size.
+      // Never measure an unsettled/animating layout (near-0 host): a later settled pass sends the real size.
       if (host.clientWidth < 40 || host.clientHeight < 40) return
-      try { fit.fit() } catch { return }
-      const { cols, rows } = term
+      let dimensions
+      try { dimensions = fit.proposeDimensions() } catch { return }
+      const cols = dimensions?.cols, rows = dimensions?.rows
       if (!cols || !rows) return
       // a tiny col count while the host is plainly wide is a degenerate mid-animation measurement — skip it;
-      // a re-fit at full size will follow with the right number.
+      // A settled full-size measurement follows with the right number.
       if (cols < 20 && host.clientWidth > 200) return
-      // Hidden layers stay laid out and sent their fitted size in the handshake. Only activation sends later
-      // size changes; the bridge may already have elected this helper as the warm owner.
-      if (!activeRef.current) return
       const lastSize = lastSizeRef.current
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: activeRef.current ? 'resize' : 'prewarm', cols, rows }))
     }
-    fitRef.current = fitAndSync
+    measureRef.current = measureAndRequest
     visibilityRef.current = (visible) => {
       if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible }))
     }
 
-    // coalesce pane frames landing in the same tick into one term.write per animation frame, in arrival order.
-    let pending = []
-    let flushRaf = 0
-    const flush = () => {
-      flushRaf = 0
-      if (!pending.length) return
-      let total = 0
-      for (const c of pending) total += c.length
-      const merged = new Uint8Array(total)
-      let off = 0
-      for (const c of pending) { merged.set(c, off); off += c.length }
-      pending = []
-      term.write(merged)
-    }
-    // on (re)open: reset xterm and DROP frames queued from a prior socket (they belong to the old screen) before re-sending the fitted size.
+    // A resize commit and its following binary frame are one browser transaction. Open an xterm synchronized
+    // hold before changing its grid, then feed the complete native tmux transaction which closes that hold.
+    // xterm's own write buffer batches ordinary chunks; a second animation-frame queue only adds latency.
+    let committedSize = null
     sock = createResilientSocket({
       url: socketUrl,
       onState: setConn,
       onOpen: () => {
-        pending = []
-        if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 }
+        committedSize = null
         term.reset()
         lastSizeRef.current = { cols: 0, rows: 0 }
-        if (activeRef.current) fitAndSync()
+        if (activeRef.current) measureAndRequest()
         else visibilityRef.current?.(false)
       },
       onMessage: (e) => {
+        if (typeof e.data === 'string') {
+          try {
+            const message = JSON.parse(e.data)
+            if (message?.t === 'resize-commit' && message.cols > 0 && message.rows > 0) {
+              committedSize = { cols: Math.floor(message.cols), rows: Math.floor(message.rows) }
+            }
+          } catch { /* heartbeat and malformed control text are not terminal output */ }
+          return
+        }
         if (!(e.data instanceof ArrayBuffer)) return
-        pending.push(new Uint8Array(e.data))
-        if (!flushRaf) flushRaf = requestAnimationFrame(flush)
+        const frame = new Uint8Array(e.data)
+        const size = committedSize
+        if (!size) { term.write(frame); return }
+        committedSize = null
+        term.write(SYNC_BEGIN, () => {
+          try { term.resize(size.cols, size.rows) } catch { /* final bytes still restore the visible pane */ }
+          term.write(frame)
+        })
       },
     })
 
@@ -217,22 +221,21 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     document.addEventListener('keydown', onCopyKey)
 
-    const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
-    const ro = new ResizeObserver(fitAndSync)
+    const raf = requestAnimationFrame(measureAndRequest)
+    const ro = new ResizeObserver(measureAndRequest)
     ro.observe(hostRef.current)
-    window.addEventListener('resize', fitAndSync)
+    window.addEventListener('resize', measureAndRequest)
 
     return () => {
       cancelAnimationFrame(raf)
-      if (flushRaf) cancelAnimationFrame(flushRaf)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
       ro.disconnect()
-      window.removeEventListener('resize', fitAndSync)
+      window.removeEventListener('resize', measureAndRequest)
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null
-      fitRef.current = null
+      measureRef.current = null
       visibilityRef.current = null
     }
   }, [sessionId])
@@ -261,8 +264,9 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     if (active) {
       // Force activation through the size gate even when this pane previously used the same geometry: that
       // message makes its already-warm helper the size voter without resetting or reattaching the terminal.
+      visibilityRef.current?.(true)
       lastSizeRef.current = { cols: 0, rows: 0 }
-      fitRef.current?.()
+      measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }
     } else {
       visibilityRef.current?.(false)

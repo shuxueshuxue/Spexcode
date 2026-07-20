@@ -38,9 +38,12 @@ terminal modes or cursor state, clear the browser, and then splice raw pane outp
 frame. tmux already owns the pane grid, history, cursor, modes, and client rendering; the bridge transports
 that client rendering instead of becoming a second terminal emulator.
 
-This boundary also owns resize. The browser fits xterm, the bridge resizes the native client PTY, and tmux
-renders the resulting client update in the same in-band stream as ordinary output. A TUI may respond to
-`SIGWINCH` immediately or later, but SpexCode never inserts an extra full-screen snapshot between updates.
+This boundary also owns resize as one transaction. The browser measures the desired grid without first
+reflowing xterm's old buffer, and the bridge resizes the native client PTY. Once the final native tmux
+transaction is ready, the bridge commits its grid dimensions immediately before those bytes; xterm changes
+grid and applies the transaction under one synchronized-output hold. Until then the already-painted buffer
+remains visible. A TUI may respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor
+an extra full-screen snapshot becomes an intermediate frame.
 
 A pipe-transported tmux control observer accompanies the native client as a **barrier sensor only**. It
 never paints, captures, sizes, or reconstructs a screen; it watches the pane's raw VT stream for the standard
@@ -61,14 +64,16 @@ compatibility window prevents a common delayed clear from becoming a browser fra
 silence is an application guarantee. Once the pane demonstrates DEC 2026, later resizes use the event path.
 
 The browser uses a terminal engine that implements synchronized output. When an application marks a VT
-transaction with DEC mode 2026, rendering is held until that transaction ends; same-tick animation-frame
-coalescing remains only transport batching, never a substitute for a terminal protocol boundary.
+transaction with DEC mode 2026, rendering is held until that transaction ends; xterm's own write queue may
+batch transport chunks, but it is never a substitute for a terminal protocol boundary.
 
-Each warm xterm keeps one stable renderer across visibility changes. Tab activation fits and refreshes that
-existing renderer before the browser's first visible paint; it does not dispose one renderer, expose an empty
-canvas, and asynchronously install another. Hidden pane layers remain laid out at the terminal panel's real
-geometry under `visibility:hidden`, so their buffers render warm without becoming visible or interactive;
-activation changes visibility rather than creating the renderer's first measurable box.
+Each warm xterm keeps one stable renderer across visibility changes. Tab activation refreshes that existing
+renderer before the browser's first visible paint; it does not dispose one renderer, expose an empty canvas,
+and asynchronously install another. Hidden pane layers remain laid out at the terminal panel's real geometry
+under `visibility:hidden`, so their buffers render warm without becoming visible or interactive. A hidden
+helper that owns its session's geometry also follows panel resizes and completes the native resize transaction
+before a later click; activation changes visibility rather than creating the renderer's first measurable box
+or catching its grid up on demand.
 
 ## isolated helper
 
@@ -85,8 +90,9 @@ at the tmux boundary so wide characters are not replaced by host-locale fallback
 ## warm terminals and size ownership
 
 The dashboard keeps every live session pane mounted, so the bridge keeps one helper warm for every live
-session socket too. Pane output continues to update its hidden xterm buffer. Switching tabs therefore uses
-the existing native client and existing browser terminal immediately; it never pays a detach/attach cycle.
+session socket too. Pane output and owner-approved geometry changes continue to update its hidden xterm
+buffer. Switching tabs therefore uses the existing native client and existing browser terminal immediately;
+it never pays a detach/attach or first-visible resize cycle.
 The native helper cost is deliberately paid per live dashboard session to preserve this interaction
 contract, then released when the session socket unmounts.
 

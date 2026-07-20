@@ -12,10 +12,9 @@ scenarios:
       The post-resize socket stream is the native tmux client rendition: it contains no SpexCode
       reconstructed-frame header and no application ED2/scroll-clear exposed as a standalone browser update.
       For a pane that demonstrated synchronized output, the next post-resize BSU/ESU is the measured barrier
-      and the socket resumes with one final native-client refresh. No
-      captured browser frame is blank or partially swept top-to-bottom. The old buffer may reflow before
-      tmux's new grid arrives and the deliberately delayed application may later update content, but there
-      is no synthetic capture state between them and no full-screen flash.
+      and the socket resumes with one final native-client refresh. No captured browser frame is blank,
+      partially swept top-to-bottom, or an eager xterm reflow of the old buffer at the new grid. The old
+      painted frame remains until grid commit and final bytes become one browser paint.
   - name: unsynchronized-resize-is-bounded
     tags: [backend-api]
     description: >-
@@ -32,9 +31,9 @@ scenarios:
       while switching into one session and repeatedly switching between two sessions.
     expected: >-
       The first visible terminal paint already contains the warm xterm buffer at the fitted panel size. No
-      empty renderer, undersized first layout, renderer replacement, socket reconnect, or tmux reattach
-      appears in the switch timeline. Hidden terminal layers retain the panel's measurable geometry while
-      remaining visually hidden and non-interactive.
+      empty renderer, undersized first layout, first-visible resize, renderer replacement, socket reconnect,
+      or tmux reattach appears in the switch timeline. Hidden owner terminals follow panel resizes and settle
+      before activation while all hidden layers remain visually hidden and non-interactive.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-

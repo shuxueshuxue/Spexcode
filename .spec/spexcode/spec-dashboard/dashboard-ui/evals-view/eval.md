@@ -49,22 +49,20 @@ scenarios:
     description: >
       Open a trunk eval detail (#/evals/<node>/<scenario>) by row click, by direct URL, and by reload —
       read the back anchor's href each time. Then open a session-scoped detail
-      (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways: re-read the back href, and read the
-      header for the icon-only terminal door — whether it is a real anchor and where it points; click
-      both the back anchor and the door and read where each lands. Compare against an issues detail's
-      anchor. Verify browser Back after clicking the anchor still walks the real history.
+      (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways: re-read the back href and verify the
+      detail header has no terminal door or generic trailing action. Follow the scoped back anchor to the
+      list, then read and follow that list's terminal door. Compare against an issues detail's anchor.
+      Verify browser Back after each anchor still walks the real history.
     expected: >
       Each eval detail's back anchor returns to the list on its own data-source axis: a TRUNK detail's
       is href="#/evals" (bare — list filters never ride it), a SCOPED detail's is the canonical scoped
       DEFAULT list URL (#/evals?q=is:eval state:current scope:<id> — byte-identical to the address the
       session doors mint, the scope token kept), and an issue detail's anchor is #/issues; nothing else
-      ever diverts it. The SCOPED detail carries the one
-      icon-only terminal door in its header action slot — a REAL <a href="#/sessions/<id>"> to the
-      terminal console, the one explicit session door; clicking it lands on that session. A trunk detail
-      carries no door and no banner. Row-click, direct open, and reload yield byte-identical back hrefs
-      AND door faces (no referrer/history/presence guessing). The anchor is an ordinary push: after
-      following it, browser Back returns to the detail, and Back again to wherever the visit actually
-      began.
+      ever diverts it. Trunk and scoped details alike carry no terminal door, no generic header action,
+      and no banner. Row-click, direct open, and reload yield byte-identical back hrefs (no
+      referrer/history/presence guessing). Following the scoped back anchor lands on the scoped list,
+      where the one real terminal door remains; only that list door lands on #/sessions/<id>. Each anchor
+      is an ordinary push, so browser Back returns through the pages actually visited.
   - name: continue-reviewing-queue
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
@@ -100,30 +98,29 @@ scenarios:
     description: >
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
       by reload, at 1440px and 390px, in en and zh: read the gates strip for the terminal door — tag,
-      href, rendered hit-target size, visible text content, tooltip and aria-label — and sweep the whole
-      page for any source banner or explanatory copy. Open a scoped DETAIL from that list and probe its
-      header action the same way; compare the two doors byte-for-byte. Follow the door by click and by
-      keyboard focus+Enter; open it in a new tab (real anchor semantics). Then exercise the three exits:
-      the detail's compact ds-back, browser Back from a freshly opened detail, and the door itself; on
-      the 390px cold open, tap the door and read whether the real session detail plane renders. Open the
-      bare trunk #/evals list and detail and re-read for doors and banners.
+      href, rendered hit-target size, visible text content, exact tooltip/aria, DOM order, screen position,
+      and Tab order. Sweep the whole page for source banners or explanatory copy. Open a scoped DETAIL
+      from that list and assert its header has only the scoped-list back arrow, no terminal door or action
+      container. Follow the list door by click, keyboard Enter, and Ctrl-click/new-tab. Then exercise the
+      hierarchy: browser Back from detail, detail back to scoped list with its door still present, then
+      list door to the real session terminal. Repeat direct-open/reload plus load-failed and not-found
+      details; at 390px tap the list door and read the real session detail plane. Open trunk list/detail
+      and re-read for doors and horizontal overflow.
     expected: >
-      BOTH scoped pages carry the ONE shared icon-only terminal door (one component, two homes, never a
-      banner): on the LIST it is an action in the se-gates toolbar, same row as the lint/merge/ahead/
-      committed gates and the export door; on the DETAIL it rides the DetailShell header action slot. The
-      door is a REAL <a href="#/sessions/<id>"> wearing ONLY the terminal icon — no visible text — with a
-      stable ≥32px hit target, and the FULL semantics (session id, worktree source, terminal destination)
-      live in its localized tooltip + aria-label, en and zh alike. It derives ONLY from the canonical
-      address: console-door entry, direct open, and reload wear byte-identical doors, at 1440 and 390
-      (no horizontal overflow, the toolbar row intact). NO .ds-banner and no long explanatory copy render
-      anywhere; the trunk list and a trunk detail carry no door at all. The three exit commands never
-      blur: the scoped detail's ds-back returns to the canonical scoped DEFAULT list URL — byte-identical
-      to the address the console door minted, scope token kept, never the terminal — and the landed list
-      still carries the door (a trunk detail's ds-back stays the bare #/evals); browser Back after a
-      list→detail push restores EXACTLY the scoped list URL; and the door is the ONE
-      way from either scoped page to #/sessions/<id> — a phone cold-open tap lands on the real session
-      detail plane. Zero loss = scope stays legible as one restrained icon action, and
-      back/home/terminal stay three separate, explicit affordances.
+      Only the scoped LIST carries the ONE icon-only terminal door: it is the se-gates toolbar's leftmost
+      child and first focusable control, before the inert lint/merge/ahead/committed gates and the export
+      action, so visual order and Tab order agree. The door is a REAL
+      <a href="#/sessions/<id>"> wearing ONLY the left-arrow back glyph — no visible text — with a stable ≥32px
+      hit target; tooltip and aria-label are exactly `Back to session terminal` in en and `返回会话终端`
+      in zh, with no dynamic id or worktree explanation. Console-door entry, direct open, and reload wear
+      the byte-identical list door at 1440 and 390, with zero horizontal overflow. Every detail face —
+      happy, direct, reload, load-failed, and not-found — carries no `.se-door`, no `.ds-head-action`, and
+      no banner. Its sole small return arrow/list link goes to the canonical scoped DEFAULT list,
+      byte-identical to the address the console door minted; that landed list still carries the terminal
+      door. Browser Back after list→detail restores the exact scoped list URL, while the list door alone
+      reaches #/sessions/<id> and keeps native keyboard/new-tab behavior. Trunk list/detail carry no door.
+      Zero loss = Terminal → scoped list → scoped detail is one visible hierarchy, reversed one level at
+      a time.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]
@@ -176,6 +173,9 @@ scenarios:
       a load-failed alert, while the detail shows the distinct load-failed face. It never says the session
       has no evals and never renders the addressed eval as not-found. A genuine missing session/reading uses
       the normal empty/not-found copy instead, and the list's Scope facet remains usable in every state.
+      Failed and not-found details expose only their real link to the canonical scoped list — never a
+      terminal door; once back on that list, its leftmost terminal door is present even while loading or
+      failed.
   - name: mobile-evals-pages
     tags: [frontend-e2e, mobile]
     code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]

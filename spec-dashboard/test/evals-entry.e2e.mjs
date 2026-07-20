@@ -66,7 +66,7 @@ const browser = await chromium.launch()
   const doorQ = door?.href ? qOf(door.href) : null
   check('door href is the canonical scoped list (q token, not legacy ?session)', pathOf(door?.href || '') === '#/evals' && doorQ === SCOPED_Q, `href=${door?.href} q=${doorQ}`)
   await p.screenshot({ path: join(OUT, '01-console-door.png') })
-  if (!door || door.tag !== 'A' || doorQ !== SCOPED_Q) {
+  if (!door || door.tag !== 'A' || pathOf(door.href || '') !== '#/evals' || doorQ !== SCOPED_Q) {
     console.log('ABORT — the desktop console door is missing or not the canonical anchor; refusing to fake the entry with a scripted navigation.')
     await browser.close()
     console.log(`\n${pass} pass, ${fail} fail (aborted at the console door)`)

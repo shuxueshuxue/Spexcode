@@ -191,6 +191,7 @@ a headless Chromium that opens the #/evals pages and reads the live DOM (`.lp-pa
 `.ds-page`, `.ds-side`) + screenshots them. The loss is the gap between that reading and the GitHub-style
 two-page contract: list state in the URL, rows as real links, push on open, Back restoring the filtered
 list, standalone detail pages, and the session scope carrying the un-merged worktree evals. Measurement
-honesty: a probe WAITS for the real surface to render (a cold vite/board load takes over a second — a
-fixed settle races it) and a missing critical entry ABORTS the run loudly; it is never papered over by an
-auto-waiting click or a scripted navigation to the address the entry would have minted.
+honesty: the console-door probe WAITS for the real element to render (a cold vite/board load takes over a
+second — a fixed settle races it) and a missing or non-canonical door ABORTS the run loudly before any
+click; the tested entry is never papered over by an auto-waiting click or a scripted navigation to the
+address it would have minted.

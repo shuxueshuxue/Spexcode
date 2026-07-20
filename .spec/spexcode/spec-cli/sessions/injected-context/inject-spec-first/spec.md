@@ -29,9 +29,6 @@ hook shims deliver `PreToolUse` broadly; they do not own product filtering. The 
 payload reduce to the same file path, while mutations, unrelated tools, and unresolvable commands reduce to
 nothing. `spec-first.sh` contains no harness branch.
 
-The adapter may resolve several read paths from one payload. The hook examines the complete list in order and
-spends the gate on the first governed path, so an earlier ungoverned path cannot hide a later governed read.
-
 The path is then resolved through the authoritative spec graph (`spex internal spec-governors`, a stable
 machine projection of the same ownership resolver as `spex spec owner`). Only a real `code:` governor is
 actionable; uncovered and related-only files are ungoverned. The session sentinel (`spec-checked`,

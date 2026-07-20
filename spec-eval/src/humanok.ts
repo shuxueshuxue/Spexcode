@@ -30,7 +30,7 @@ export function fileHumanOk(nodeId: string, scenario: string, by: string): OkRes
   // the ok's one possible target: the latest EFFECTIVE reading — an ok is a judgment on a measurement that
   // exists and currently counts; an unmeasured (or fully-retracted) scenario has nothing to bless.
   const forScenario = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
-  if (!forScenario.length) return { ok: false, error: `'${node.id}' scenario '${scenario}' has no effective reading — nothing to ok` }
+  if (!forScenario.length) return { ok: false, error: `'${node.id}' scenario '${scenario}' has no effective eval — nothing to ok` }
   const latest = forScenario[forScenario.length - 1]
   // a duplicate ok is idempotent success (the store already IS the requested state — the local-issue
   // close's `already` semantics), never an error and never a second appended row.

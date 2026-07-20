@@ -203,7 +203,7 @@ export default {
   },
 
   detail: {
-    sideReading: '读数',
+    sideReading: '结果',
     sideFiler: '提交者',
     sideOk: '人工签核',
     sideStore: '存储',
@@ -233,12 +233,12 @@ export default {
     abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `更早的读数（${n}）`,
+    abMore: ({ n }) => `更早的结果（${n}）`,
     okd: '已签核',
     okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
     menuReview: '评审命令',
     cmd: {
-      okDesc: '签核这条读数 — 你已复核并认可其判定；只绑定当前最新读数，单调（无撤销）',
+      okDesc: '签核这条结果 — 你已复核并认可其判定；只绑定当前最新结果，单调（无撤销）',
     },
   },
   thread: {
@@ -263,7 +263,7 @@ export default {
   sessionEval: {
     btn: '评测',
     btnTitle: '打开此会话的评测页 —— 测得的评测证据与合并门禁（Evals 页会话视角）',
-    scopeDoor: ({ id }) => `此视图来自会话 ${id} 的工作树——打开其终端`,
+    scopeDoor: '返回会话终端',
     none: '此会话暂无评测',
     unavailable: '会话模型成功加载前无法显示评测。',
     loadFailed: ({ reason }) => `会话评测加载失败 — ${reason}`,
@@ -531,8 +531,6 @@ export default {
     toolbarLabel: '会话终端工具栏',
     surfaceLabel: '当前会话界面',
     commandsLabel: '当前可用的会话命令',
-    identitySummary: ({ headline, status, liveness }) => `${headline} — ${status}，${liveness}`,
-    liveness: { online: '在线', offline: '离线', starting: '启动中', unknown: '未知' },
     evalLoading: '正在载入此会话的评测概况',
     evalUnavailable: '此会话的评测概况不可用',
     evalMeasured: ({ measured, total }) => `已评测 ${measured}/${total} 个已声明场景`,
@@ -544,6 +542,7 @@ export default {
     typeBtn: '终端交互',
     typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
+    relaunchTitle: '重新启动并恢复此会话',
     merge: '合并',
     relaunchResume: '⏵ 重新启动并恢复',
     merges: ({ n }) => `已合并 ×${n}`,

@@ -1,6 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import en from './en.js'
 import zh from './zh.js'
+
+test('eval detail copy names filed measurements as results in both locales', () => {
+  assert.equal(en.detail.sideReading, 'result')
+  assert.equal(en.annotator.abMore({ n: 3 }), 'older results (3)')
+  assert.match(en.annotator.cmd.okDesc, /^sign off this result .* latest result only/)
+  assert.equal(zh.detail.sideReading, '结果')
+  assert.equal(zh.annotator.abMore({ n: 3 }), '更早的结果（3）')
+  assert.match(zh.annotator.cmd.okDesc, /^签核这条结果 .*当前最新结果/)
+})
 
 test('terminal raw-key mode is labeled as terminal interaction in Chinese', () => {
   assert.equal(zh.session.typeBtn, '终端交互')

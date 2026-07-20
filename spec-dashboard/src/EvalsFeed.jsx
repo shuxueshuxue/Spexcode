@@ -3,7 +3,7 @@ import { scenarioStates } from './score.jsx'
 import { sessionHeadline } from './session.js'
 import { FacetMenu, FacetOverflow, ListPage, ReviewListRow, ReviewState } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, readToken, setToken } from './reviewQuery.js'
-import { evalFilterModel, kindsOf, tokenFilterState } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, evalFilterModel, kindsOf, tokenFilterState } from './reviewFilters.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -88,8 +88,8 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
   const surgery = (key, value) => onQueryText(setToken(text, key, value))
 
   const filterItems = useMemo(() => [
-    ...entries.map((entry) => ({ ...entry, reading: true, filterKind: 'reading', source: entry })),
-    ...blind.map((entry) => ({ ...entry, reading: false, filterKind: 'blind', source: entry })),
+    ...entries.map((entry) => ({ ...entry, filterKind: EVAL_FILTER_KIND.RESULT, source: entry })),
+    ...blind.map((entry) => ({ ...entry, filterKind: EVAL_FILTER_KIND.BLIND, source: entry })),
   ], [entries, blind])
   // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
   // engine state; tab counts come out computed under the REST of the query (sections never see their
@@ -98,8 +98,8 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
     () => evalFilterModel(filterItems, tokenFilterState(text, 'eval'), { sessions, t, defaultKind: 'all', defaultSection: '' }),
     [filterItems, text, sessions, t],
   )
-  const shown = filters.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
-  const shownBlind = filters.shown.filter((item) => item.filterKind === 'blind').map((item) => item.source)
+  const shown = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
+  const shownBlind = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.BLIND).map((item) => item.source)
   const currentCount = filters.sections.current || 0
   const reviewedCount = filters.sections['1'] || 0
   const section = readToken(text, 'state')

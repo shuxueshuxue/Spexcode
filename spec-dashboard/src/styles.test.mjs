@@ -61,6 +61,13 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
   )
 })
 
+test('selected nested session keeps its lead separated from the revealed headline', () => {
+  assert.match(
+    css,
+    /\.si-item\.on\s+\.sess-lead\s*\{[^}]*margin-right:\s*7px;/s,
+  )
+})
+
 test('projects hub + credential surfaces read the shared palette, never a one-off color', () => {
   // the whole appended [[projects-hub]] block themes itself through the var set — a raw hex literal
   // there would be a palette the eight theme presets cannot re-skin.

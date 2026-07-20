@@ -10,6 +10,7 @@ code:
   - spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor
 related:
   - spec-dashboard/test/evals-entry.e2e.mjs
+  - spec-dashboard/src/i18n/zh.test.mjs
 ---
 
 # evals-view
@@ -42,7 +43,7 @@ filter (default off) picking the root.
   (`#/sessions/<id>/eval…` and the old structured `kind/verdict/freshness/node/filer/live/ok/session`
   params) normalize at the route layer into that token text, old links keep working, the old shape is
   never re-minted. Rows are the
-  [[evals-feed]] grammar: a shared structured row for each latest reading per scenario, and each row is a
+  [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
 - **List → detail is a history PUSH; Back restores the list exactly.** Clicking a row (or Enter on the
@@ -55,24 +56,24 @@ filter (default off) picking the root.
   DEFAULT list (the same one canonical address the session doors mint, `scope:` token kept) — so "back"
   always means the list on the detail's own data-source axis, and a pushed visit, a direct open, and a
   reload all share one destination, never guessed from a referrer, history state, or the originator's
-  presence. The scoped detail's session door lives in its header's terminal DOOR
-  instead (below). Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
+  presence. A detail carries no terminal exit: its one small return arrow has one meaning, back to its
+  canonical list. Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
   push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
   the list, never a silent rewrite to some other eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
   header naming the scenario (title) and node, a status band (the ONE shared verdict visual + an A/B strip
-  whose reading buttons consume that same visual mapping), then a MAIN
+  whose result buttons consume that same visual mapping), then a MAIN
   column beside a metadata SIDE rail. The main column is the [[event-detail]] evidence WORKSPACE — media
   stage under the review-track scrubber, step rail, gallery/transcripts — followed by the (node, scenario)
   remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).
-  The side rail is the reading/session metadata: evaluator, filed time, originator liveness, human-ok,
-  staleness readout — then the **continue-reviewing queue**: the viewed reading's NEIGHBORS in the source
+  The side rail is the result/session metadata: evaluator, filed time, originator liveness, human-ok,
+  staleness readout — then the **continue-reviewing queue**: the viewed result's NEIGHBORS in the source
   dataset's stable default order (the relative order the list renders; a filtered list
   face may hide rows the queue still walks), split into two POSITIONAL groups — **Previous** (entries
   before the current row) and **Up next** (entries after it), labels claiming list direction, never
   time — each ordered nearest-to-current outward. The default total is ~5, split balanced with the
   forward group taking the odd slot; at either boundary the short side's unused budget refills from the
-  other side so the total holds while the dataset allows; the current reading is excluded. A group with
+  other side so the total holds while the dataset allows; the current result is excluded. A group with
   no entries renders no heading. This page computes the queue from the ONE
   source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
   state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
@@ -88,26 +89,23 @@ filter (default off) picking the root.
   never the legacy `?session` param) — sources the list from one session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
-  A/B history walks the worktree-rooted readings. Every scoped detail face returns to the SAME list:
+  A/B history walks the worktree-rooted results. Every scoped detail face returns to the SAME list:
   the happy detail's back arrow and the failure/not-found faces' list link all point at the SCOPED
   default view — the door-minted address — keeping the user on the data-source axis their address named
-  (the failure faces carry no door; the happy face's terminal door is a separate, additional exit).
-  BOTH scoped faces carry the restrained **terminal DOOR** — the ONE shared EvalScopeDoor primitive,
-  icon-only, never a visible banner or two page-local copies: the scoped LIST seats it as an action in
-  its se-gates toolbar, one row with the lint/merge/ahead/committed gates and the export door (at
-  desktop and phone width, en and zh alike, without breaking the row or overflowing 390px), and the
-  scoped DETAIL seats the SAME primitive in the [[review-chrome]] DetailShell header action slot — a
-  generic data-supplied slot at the header's trailing edge that keeps the shell session-blind. The door
-  is a REAL anchor to `#/sessions/<id>`, the terminal console, wearing only the terminal icon on a
-  stable 32px hit target; the full semantics — which session/worktree the view's readings come from and
-  where the door lands — live in its localized tooltip and aria-label, with no visible text. The door
-  derives ONLY from the canonical address, so a door-entry visit, a direct open, and a
-  reload wear the identical door; trunk faces wear none. Three exit commands stay separate by
-  construction: the door's anchor is the one way to the terminal, the detail's ds-back is the list on
-  the detail's own axis (the scoped default view for a scoped detail — byte-identical to the
-  door-minted address; the bare `#/evals` for a trunk one), and browser Back walks the real history
-  (a scoped list→detail push returns exactly to
-  the scoped list URL) — never blended, never guessed from history.back or a referrer. Scope is the DATA
+  (no detail face carries a terminal door).
+  The scoped LIST alone carries the restrained **terminal DOOR** — the ONE EvalScopeDoor primitive,
+  icon-only and never a visible banner: it is the gates toolbar's LEFTMOST item and first focusable
+  control, before lint/merge/ahead/committed and export, so the visual and keyboard hierarchy reads
+  "back to the session" before the list's local controls at desktop and phone width. The door is a REAL
+  anchor to `#/sessions/<id>`, the terminal console, wearing the left-arrow back glyph on a stable 32px hit
+  target. Its tooltip and aria-label use the same short localized imperative without a dynamic id:
+  `Back to session terminal` / `返回会话终端`. It derives ONLY from the canonical address, so a
+  door-entry visit, a direct open, and a reload wear the identical list door; trunk faces and every
+  detail face wear none. The return hierarchy stays separate by construction: the list door is the one
+  way to the terminal, the detail's ds-back is the list on the detail's own axis (the scoped default
+  view for a scoped detail — byte-identical to the door-minted address; the bare `#/evals` for a trunk
+  one), and browser Back walks the real history (a scoped list→detail push returns exactly to the scoped
+  list URL) — never blended, never guessed from history.back or a referrer. Scope is the DATA
   SOURCE axis and is never conflated with `session:present|missing`, the source-session presence facet.
   A dead or unknown scope id keeps its token and shows the honest empty/error face — the text itself is
   the off-switch.
@@ -116,13 +114,13 @@ filter (default off) picking the root.
   re-minted, and the console exposes only a door that navigates here. The session model has three honest
   read states: loading, loaded/not-found, and failed. A failed fetch is never rendered as an empty session
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
-  detail gets a distinct load-failed face; only a successfully loaded model without the addressed reading
+  detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
 - **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
   the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
   source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
   unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
-  and viewed reading are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
+  and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
   loaded timeline events, ordinary typed prose, or anchored composer draft. A real
-  scope/scenario/A-B-reading change re-sources the workspace and clears that draft before the new reading is
+  scope/scenario/A-B-result change re-sources the workspace and clears that draft before the new result is
   reviewable.

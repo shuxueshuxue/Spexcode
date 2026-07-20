@@ -2,28 +2,32 @@
 scenarios:
   - name: surgical-backout
     description: >
-      In a git repo seeded with a SpexCode footprint AND the user's own data, run `spex uninstall` and
-      inspect the tree + global store. Plant: a managed contract block inside a CLAUDE.md that ALSO has
-      user prose; an AGENTS.md that is WHOLLY the managed block; a `.gitignore` with a user entry plus the
-      managed `#` block; a `.claude/settings.json` shim stamped with `dispatch.sh`; a codex trust block in
-      the global `~/.codex/config.toml` next to a foreign key; a `plugins/spexcode` bundle next to a
-      foreign plugin; and the user's `.spec`/`.plugins` data. Run `spex uninstall` (no flags), then check
-      what survived.
+      Drive one data table over Claude-only and Codex-only disposable Git repositories. Start with tracked
+      user prose and ignore rules, run the public `spex init --harness <id>` and `spex materialize`, add a
+      user-authored agent intent node, and materialize again. Then make the real derived footprint dirty:
+      current and legacy generated skills/agents, a retired `.gitignore` block and skip-worktree bit, current
+      and legacy runtime entries, Codex trust, stale plugin bundles named by current/legacy ledgers plus a
+      hand-dropped standard-host bundle, and exact/modified/user Git hooks. Run the public `spex uninstall`,
+      inspect all non-hook filesystem and Git config surfaces, run it with `--hooks`, then repeat that command.
     expected: >
-      Every SpexCode-generated artifact is gone — the CLAUDE.md managed block stripped (its user prose
-      kept), the wholly-ours AGENTS.md deleted, the `.gitignore` block stripped (the user entry kept), the
-      stamped shim removed, the codex trust block removed (the foreign key kept), the `plugins/spexcode`
-      bundle removed (the foreign plugin kept), and the global per-project store deleted. The user's
-      `.spec`/`.plugins` data is untouched, and the git hooks remain (only `--hooks` removes the
-      spexcode-stamped ones). A second run is a clean no-op.
+      Every SpexCode-derived artifact and project-local state entry is gone by ownership identity: managed
+      contract/ignore/attribute blocks, shims, generated and name-scoped legacy skills/agents, filter config
+      and files, trust entries, plugin bundles from configured/standard/ledger hosts, skip-worktree bits,
+      canonical hooks, and the whole per-project store including manifests, stamps, ledgers, sessions, and
+      legacy files. User prose, `.gitignore` rules, tracked `.spec` including `.plugins`, `spexcode.json`,
+      modified and unrelated hooks, foreign plugins/skills/settings/config, and all other user bytes remain
+      identical. Default uninstall leaves all Git hooks, `--hooks` removes only canonical unchanged templates,
+      and the repeated `--hooks` uninstall is a clean no-op.
     tags: [cli]
+    test:
+      path: spec-cli/src/uninstall.test.ts
+      name: init → materialize → uninstall forgets every derived artifact for Claude-only and Codex-only repos
     code: spec-cli/src/uninstall.ts
 ---
 
 # measuring spex-uninstall
 
-YATU through the real CLI entrypoint: `spex uninstall [dir]` (the `uninstall()` function the CLI route
-calls), against a real on-disk git repo, NOT an internal helper. The proof surface is the filesystem +
-the global store after the command runs — assert the SpexCode footprint is gone and the user's spec asset
-and prose survived. `src/uninstall.test.ts` drives exactly this loop (seed footprint + user data → run
-`uninstall()` → assert surgical removal) and is the transcript evidence for the reading.
+YATU through real CLI entrypoints in fresh processes: `spex init`, `spex materialize`, and `spex uninstall`,
+against real on-disk Git repositories, never an internal helper. The proof surface is the worktree, Git
+common-dir/config, harness global config, and per-project runtime store. `src/uninstall.test.ts` drives the same
+lifecycle and assertions for both native rows from one data definition.

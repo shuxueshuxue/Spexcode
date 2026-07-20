@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals ListView rows and filters through [[review-chrome]] — latest reading per scenario, structured state/title/filer/time/kind rows, Current/Reviewed sections as state: tokens, low-cardinality verdict/freshness/evidence/presence menus and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
+desc: The Evals ListView rows and filters through [[review-chrome]] — latest result per scenario, structured state/title/filer/time/kind rows, Current/Reviewed sections as state: tokens, low-cardinality verdict/freshness/evidence/presence menus and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
@@ -16,18 +16,18 @@ related:
 ## raw source
 
 The Evals list page ([[evals-view]]) is where a human reads the project's current measured loss — the
-leading review surface. A feed of every reading ever filed grows without bound; a feed of the project's
-*current* loss does not. The unit is the **scenario, not the reading**: the eval engine already defines
-the latest reading per scenario as the current score, so the list is bounded by declared scenarios
+leading review surface. A feed of every result ever filed grows without bound; a feed of the project's
+*current* loss does not. The unit is the **scenario, not the result**: the eval engine already defines
+the latest result per scenario as the current score, so the list is bounded by declared scenarios
 (structural, slow-growing), never by measurement count — which is also why it needs no pagination. Review
 attends to what still counts; and in the GitHub navigation model each row is a LINK to the eval's own
 page, not a selection in a pane.
 
 ## expanded spec
 
-Default view: **latest reading per scenario, newest first — fresh and stale mixed**. A stale reading is
+Default view: **latest result per scenario, newest first — fresh and stale mixed**. A stale result is
 real measured loss and remains in the default Current section; freshness is now an honest facet, never a
-default hide. A fresh human-ok'd reading belongs to the Reviewed section while everything else belongs to
+default hide. A fresh human-ok'd result belongs to the Reviewed section while everything else belongs to
 Current, preserving the existing default attention boundary as GitHub-style mutually exclusive tabs with
 counts — `state:current` / `state:reviewed` tokens the tabs rewrite by surgery, counts computed under the
 rest of the query. Every filter is a token in [[review-chrome]]'s ONE visible query ([[review-query]]),
@@ -47,12 +47,14 @@ All off-switch — and the visible text is always the canonical release, whateve
 An inert blind-spot row participates in that SAME conjunctive contract: it can match its real node,
 unscored verdict, and query text, but a selected evidence kind, freshness, filer, or source-session
 presence value excludes it
-because an unmeasured scenario owns none of those reading facts. Blind rows never leak into a filtered
-reading population and never gain an href just to satisfy list structure.
+because an unmeasured scenario owns none of those result facts. Blind rows never leak into a filtered
+result population and never gain an href just to satisfy list structure. Filed results and non-result
+rows form one tagged set through the shared result-kind field; the canonical list and embedded node pane
+consume that same discriminator, with no legacy-name compatibility branch.
 
-**Kinds are honest — and a reading carries a SET of them.** Evidence is a LIST: a reading's kinds are
+**Kinds are honest — and a result carries a SET of them.** Evidence is a LIST: a result's kinds are
 every entry it holds (`video`/`image`/`transcript`; a legacy scalar blob with no kind is an image), plus
-**`note`** when it holds no blob. A MIXED reading belongs to EVERY media filter it contains and its tag
+**`note`** when it holds no blob. A MIXED result belongs to EVERY media filter it contains and its tag
 lists its kinds video-first (`vid·img`); it never advertises media it lacks. `note` and `transcript` are
 data-level kinds only, never filter options — they surface under `all`.
 

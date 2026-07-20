@@ -21,8 +21,8 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
   default `.plugins` of dev-flow plugins, each carrying a `surface` field (the `system` contract `core`
-  flat + `forge-link` under the `prompts/` shelf, the `command` presets under `commands/`, the `skill`
-  plugins under `skills/`), a verbatim copy of the dogfood `.plugins`
+  flat + the auxiliary contracts under the `prompts/` shelf, the `command` presets under `commands/`, the
+  `skill` plugins under `skills/`, and `core`'s lifecycle `hook` children), a projection of the dogfood `.plugins`
   node so a fresh adopt ships the *current* set. That default `.plugins` is the **default preset**; with
   `--preset <name>` a named non-default package under `templates/presets/<name>/` would be copied in **on
   top** — cumulative — though no non-default tier ships today. The spexcode-only plugins live only
@@ -48,7 +48,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
 literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
-seeded `["."]` (the first-minute lie a real field adoption hit).
+seeded `["."]` (the first-minute lie a real field adoption hit). Harness-artifact reporting follows the same
+rule: materialize returns a receipt of the contract, shim, skill/agent, plugin, and trust artifacts its selected
+adapters actually asserted, and init renders that receipt. A Claude-only init therefore cannot claim AGENTS,
+Codex shims, or Codex trust; a Codex-only init cannot claim CLAUDE or Claude shims.
 
 **Adoption asks no footprint question.** The retired `--render` vote is gone: materialized artifacts are
 never tracked

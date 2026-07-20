@@ -194,11 +194,13 @@ test('the tablist always exposes one roving stop and honest tab counts', () => {
   // the pages default their leading section active, so aria-selected agrees with the fallback stop
   assert.match(evals, /active: section !== 'reviewed'/)
   assert.match(issues, /active: section === '' \|\| section === 'open'/)
-  // blind rows travel through the SAME engine as reading:false items: the Current COUNT comes out
+  // blind rows travel through the SAME result-kind enum: the Current COUNT comes out
   // rest-of-query (a blind row keeps counting while Reviewed is displayed) while the RENDERED blind
   // rows still obey the full query, section included
-  assert.match(evals, /reading: false, filterKind: 'blind'/)
-  assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === 'blind'\)/)
+  assert.match(evals, /filterKind: EVAL_FILTER_KIND\.RESULT/)
+  assert.match(evals, /filterKind: EVAL_FILTER_KIND\.BLIND/)
+  assert.doesNotMatch(evals, /reading: (?:true|false)/)
+  assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === EVAL_FILTER_KIND\.BLIND\)/)
   assert.match(evals, /count: currentCount/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection

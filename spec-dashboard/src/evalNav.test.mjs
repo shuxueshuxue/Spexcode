@@ -33,7 +33,9 @@ test('aggregate counts are anchors minted by the scenario-less evalAddress form 
   }
 })
 
-test('eval-tab reading rows carry a sibling detail anchor, never nested in the expand toggle', () => {
+test('eval-tab result rows use the shared discriminator and carry a sibling detail anchor', () => {
+  assert.match(nodeView, /filterKind: EVAL_FILTER_KIND\.RESULT/)
+  assert.doesNotMatch(nodeView, /reading: (?:true|false)/)
   // ChronoPane renders the action AFTER the toggle button closes — a sibling, not a child
   assert.match(nodeView, /<\/button>\s*\{\/\*[\s\S]*?\*\/\}\s*\{renderAction\?\.\(it, i\)\}/)
   // the eval pane's action is the canonical routed detail address

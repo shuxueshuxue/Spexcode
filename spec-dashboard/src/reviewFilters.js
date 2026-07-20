@@ -10,6 +10,13 @@ const text = (value) => String(value ?? '').trim().toLocaleLowerCase()
 const values = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value])
 const unique = (items) => [...new Set(items.flatMap(values).filter((value) => value != null && value !== '').map(String))]
 
+export const EVAL_FILTER_KIND = Object.freeze({
+  RESULT: 'result',
+  BLIND: 'blind',
+  UNMEASURED: 'unmeasured',
+  DANGLING: 'dangling',
+})
+
 export const evidenceList = (reading) =>
   reading?.evidence?.length ? reading.evidence
   : reading?.blob != null ? [{ hash: reading.blob, kind: reading.blobKind || 'image', state: reading.blobState || 'present' }]
@@ -130,9 +137,9 @@ export function issueFilterModel(items, raw = {}, context = {}) {
   return model
 }
 
-const evalIsReading = (entry) => entry.reading !== false
-const verdictOf = (entry) => evalIsReading(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
-const reviewed = (entry) => evalIsReading(entry) && !!(entry.fresh && entry.humanOk)
+const evalIsResult = (entry) => entry.filterKind === EVAL_FILTER_KIND.RESULT
+const verdictOf = (entry) => evalIsResult(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
+const reviewed = (entry) => evalIsResult(entry) && !!(entry.fresh && entry.humanOk)
 const shortSession = (value, sessions) => {
   const session = sessions.find((item) => item.id === value)
   if (session) return sessionHeadline(session)
@@ -157,22 +164,22 @@ const EVAL_CONFIG = {
     { key: 'verdict', label: 'reviewList.facetVerdict', values: verdictOf, labelValue: (value, { t }) => optionLabel(t, `reviewList.verdict.${value}`, value) },
     {
       key: 'freshness', label: 'reviewList.facetFreshness', minValues: 2,
-      values: (entry) => evalIsReading(entry) ? (entry.fresh === true ? 'fresh' : 'stale') : [],
+      values: (entry) => evalIsResult(entry) ? (entry.fresh === true ? 'fresh' : 'stale') : [],
       labelValue: (value, { t }) => optionLabel(t, `reviewList.freshness.${value}`, value),
     },
     {
       key: 'kind', label: 'reviewList.facetKind', fixedValues: ['video', 'image'], minValues: 1,
-      values: (entry) => evalIsReading(entry) ? kindsOf(entry).filter((kind) => kind === 'video' || kind === 'image') : [],
-      matches: (entry, selected) => selected === 'all' || (evalIsReading(entry) && kindsOf(entry).includes(selected)),
+      values: (entry) => evalIsResult(entry) ? kindsOf(entry).filter((kind) => kind === 'video' || kind === 'image') : [],
+      matches: (entry, selected) => selected === 'all' || (evalIsResult(entry) && kindsOf(entry).includes(selected)),
       labelValue: (value, { t }) => optionLabel(t, `evalsFeed.kind.${value}`, value),
       available: (found, _items, state) => found.length > 0 || state.kind !== 'all',
     },
     { key: 'node', label: 'reviewList.facetNode', values: (entry) => entry.node },
     {
-      key: 'filer', label: 'reviewList.facetFiler', values: (entry) => evalIsReading(entry) ? entry.by : [],
+      key: 'filer', label: 'reviewList.facetFiler', values: (entry) => evalIsResult(entry) ? entry.by : [],
       labelValue: (value, { sessions = [] }) => shortSession(value, sessions),
     },
-    presenceFacet((entry, { sessions }) => (evalIsReading(entry)
+    presenceFacet((entry, { sessions }) => (evalIsResult(entry)
       ? (sessionPresent(sessions, entry.by) ? 'present' : 'missing')
       : [])),
   ],

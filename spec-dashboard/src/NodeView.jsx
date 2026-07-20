@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TabCount, TagChips } from './score.jsx'
-import { evidenceList, evalFilterModel, filterMenuGroups, issueFilterModel } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, evidenceList, evalFilterModel, filterMenuGroups, issueFilterModel } from './reviewFilters.js'
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
@@ -530,15 +530,15 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
   const all = timeline.readings
   const filterItems = [
-    ...all.map((reading, index) => ({ ...reading, node: node.id, reading: true, filterKind: 'reading', filterKey: `reading:${index}`, source: reading })),
+    ...all.map((reading, index) => ({ ...reading, node: node.id, filterKind: EVAL_FILTER_KIND.RESULT, filterKey: `${EVAL_FILTER_KIND.RESULT}:${index}`, source: reading })),
     ...scenarioStates(timeline.scenarios, all).filter((scenario) => !scenario.reading)
-      .map((scenario) => ({ ...scenario, scenario: scenario.name, node: node.id, reading: false, filterKind: 'unmeasured', filterKey: `unmeasured:${scenario.name}`, source: scenario })),
-    ...(timeline.dangling || []).map((track) => ({ ...track, node: node.id, reading: false, filterKind: 'dangling', filterKey: `dangling:${track.threadId}`, source: track })),
+      .map((scenario) => ({ ...scenario, scenario: scenario.name, node: node.id, filterKind: EVAL_FILTER_KIND.UNMEASURED, filterKey: `${EVAL_FILTER_KIND.UNMEASURED}:${scenario.name}`, source: scenario })),
+    ...(timeline.dangling || []).map((track) => ({ ...track, node: node.id, filterKind: EVAL_FILTER_KIND.DANGLING, filterKey: `${EVAL_FILTER_KIND.DANGLING}:${track.threadId}`, source: track })),
   ]
   const model = evalFilterModel(filterItems, filter, { sessions, t, defaultKind: 'all', defaultSection: '' })
-  const readings = model.shown.filter((item) => item.filterKind === 'reading').map((item) => item.source)
-  const unmeasured = model.shown.filter((item) => item.filterKind === 'unmeasured').map((item) => item.source)
-  const dangling = model.shown.filter((item) => item.filterKind === 'dangling').map((item) => item.source)
+  const readings = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
+  const unmeasured = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.UNMEASURED).map((item) => item.source)
+  const dangling = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.DANGLING).map((item) => item.source)
   const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'session'])
   const filterEl = filterItems.length > 4
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}

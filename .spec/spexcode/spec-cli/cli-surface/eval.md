@@ -23,12 +23,16 @@ scenarios:
       The machine tokens must be gone from the porcelain top level: `spex trunk`, `spex
       codex-launch`, `spex codex-turn`, `spex propose` each exit non-zero as unknown commands, while
       `spex internal trunk` prints the resolved trunk branch, `spex internal commit-gate` runs the
-      deterministic commit check, and the pre-commit template resolves the trunk through
+      deterministic commit check, and `spex internal spec-governors <path>` prints one stable
+      `id<TAB>spec-path` row per real `code:` owner (empty for an ungoverned/related-only path). The
+      `spec-governors` token must be absent from `spex help` and unknown at the porcelain top level.
+      The pre-commit template resolves the trunk through
       `spex_cli internal trunk` (with its pure-git fallback intact for stale hooks) and shims lint
       through `spex_cli spec lint` + `spex_cli internal check-staged`.
     expected: >
       Old top-level tokens are unknown (exit 2, pointing at `spex help`); `spex internal trunk`
-      prints the trunk; the installed hooks call only new spellings.
+      prints the trunk; `internal spec-governors` returns only real governors without widening the
+      public vocabulary; the installed hooks call only new spellings.
     tags: [cli]
     code: [spec-cli/src/cli.ts]
     related: [spec-cli/src/harness.ts, spec-cli/templates/hooks/pre-commit]

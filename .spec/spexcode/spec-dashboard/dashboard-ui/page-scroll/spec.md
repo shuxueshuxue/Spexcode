@@ -30,10 +30,15 @@ full-page overflow owner.
 `PageScroll` is the one overflow owner for Evals and Issues lists/details, Settings, and the global
 Projects page. The shell owns its available viewport; the primitive owns the top/bottom track inset,
 desktop end inset, stable gutter, vertical overscroll containment, and horizontal clipping. Content owns
-its width and padding. Sticky children such as the review list header, detail side rail, and composer pin
+its width and padding. Sticky children such as a route-leading status strip, the review list header,
+detail side rail, and composer pin
 inside this scrollport, so their geometry follows the same viewport instead of the browser document or a
 page-local scroller. Route-specific leading content also stays inside it: the scoped Evals terminal/gates
-strip scrolls as the list's first content and never shifts the scrollbar track below the shared inset.
+strip is its first child and pins at the scrollport's shared 10px top inset without shifting the scrollbar
+track. It is opaque through shared palette tokens, has a stable per-viewport height, and establishes the
+following content position in normal flow before it sticks, so neither desktop nor a two-line 390px strip
+covers the first row. Popovers and tooltips remain above it; neighboring sticky list headers and detail
+rails keep their own containment. A route with no leading status contributes no empty sticky geometry.
 
 Scroll position is remembered by the full canonical address. When returned content already has its final
 height the primitive restores before paint; when a long list arrives asynchronously, it preserves the

@@ -204,7 +204,7 @@ export default {
   },
 
   detail: {
-    sideReading: 'reading',
+    sideReading: 'result',
     sideFiler: 'filed by',
     sideOk: 'human-ok',
     sideStore: 'store',
@@ -234,12 +234,12 @@ export default {
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `older readings (${n})`,
+    abMore: ({ n }) => `older results (${n})`,
     okd: 'human-ok',
     okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     menuReview: 'review commands',
     cmd: {
-      okDesc: 'sign off this reading — you reviewed it and agree with its verdict; binds to THIS latest reading only, monotonic (no un-ok)',
+      okDesc: 'sign off this result — you reviewed it and agree with its verdict; binds to THIS latest result only, monotonic (no un-ok)',
     },
   },
   thread: {

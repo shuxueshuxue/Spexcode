@@ -252,8 +252,7 @@ export default {
   sessionEval: {
     btn: 'eval',
     btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
-    scopeBanner: ({ id }) => `you're viewing evals from session ${id}'s worktree`,
-    scopeBannerOpen: 'open the session terminal',
+    scopeDoor: ({ id }) => `viewing evals from session ${id}'s worktree — open its terminal`,
     none: 'no evaluation for this session yet',
     unavailable: 'evaluation unavailable until the session model loads successfully.',
     loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,

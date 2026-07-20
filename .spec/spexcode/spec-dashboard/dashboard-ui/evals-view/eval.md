@@ -50,19 +50,18 @@ scenarios:
       Open a trunk eval detail (#/evals/<node>/<scenario>) by row click, by direct URL, and by reload —
       read the back anchor's href each time. Then open a session-scoped detail
       (#/evals/<node>/<scenario>?q=scope:<id>) the same three ways: re-read the back href, and read the
-      top of the page for a source banner — its role, its text, whether its session link is a real
-      anchor and where it points; click both the back anchor and the banner link and read where each
-      lands. Compare against an issues detail's anchor. Verify browser Back after clicking the anchor
-      still walks the real history.
+      header for the icon-only terminal door — whether it is a real anchor and where it points; click
+      both the back anchor and the door and read where each lands. Compare against an issues detail's
+      anchor. Verify browser Back after clicking the anchor still walks the real history.
     expected: >
       EVERY eval detail's back anchor is href="#/evals" — trunk and scoped alike; the scope token never
-      diverts the back arrow. An issue detail's anchor is #/issues. The SCOPED detail wears one
-      restrained source banner above the header: it names the session/worktree the reading comes from
-      and carries a REAL <a href="#/sessions/<id>"> to the terminal console — the one explicit session
-      door; clicking it lands on that session. A trunk detail wears no banner. Row-click, direct open,
-      and reload yield byte-identical back hrefs AND banner faces (no referrer/history/presence
-      guessing). The anchor is an ordinary push: after following it, browser Back returns to the detail,
-      and Back again to wherever the visit actually began.
+      diverts the back arrow. An issue detail's anchor is #/issues. The SCOPED detail carries the one
+      icon-only terminal door in its header action slot — a REAL <a href="#/sessions/<id>"> to the
+      terminal console, the one explicit session door; clicking it lands on that session. A trunk detail
+      carries no door and no banner. Row-click, direct open, and reload yield byte-identical back hrefs
+      AND door faces (no referrer/history/presence guessing). The anchor is an ordinary push: after
+      following it, browser Back returns to the detail, and Back again to wherever the visit actually
+      began.
   - name: continue-reviewing-queue
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
@@ -91,31 +90,35 @@ scenarios:
       (ordinary push — Back returns to the detail just left). At 390px the same rail reflows above the
       main column with no horizontal overflow. With no neighbor the section is entirely absent
       — no empty box, no label.
-  - name: scoped-source-banner
+  - name: scoped-terminal-door
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/evals-entry.e2e.mjs
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/address.js]
     description: >
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
-      by reload, at 1440px and 390px, in en and zh: read the top of the first screen for the source
-      banner — its text, its role, whether its session link is a real anchor and where it points. Open a
-      scoped DETAIL from that list and read its banner the same way; compare the two banners' copy and
-      link byte-for-byte. Then exercise the three exits: click the detail's compact ds-back and read
-      where it lands and whether a banner renders there; press browser Back from a freshly opened detail
-      and read the restored URL; click the banner's session link and read the landed hash. Open the bare
-      trunk #/evals list and detail and re-read for banners.
+      by reload, at 1440px and 390px, in en and zh: read the gates strip for the terminal door — tag,
+      href, rendered hit-target size, visible text content, tooltip and aria-label — and sweep the whole
+      page for any source banner or explanatory copy. Open a scoped DETAIL from that list and probe its
+      header action the same way; compare the two doors byte-for-byte. Follow the door by click and by
+      keyboard focus+Enter; open it in a new tab (real anchor semantics). Then exercise the three exits:
+      the detail's compact ds-back, browser Back from a freshly opened detail, and the door itself; on
+      the 390px cold open, tap the door and read whether the real session detail plane renders. Open the
+      bare trunk #/evals list and detail and re-read for doors and banners.
     expected: >
-      BOTH scoped pages — the list and the detail — wear the ONE shared scope banner (one component, one
-      copy, one door): a restrained single line at the top of the first screen, GitHub-review-notice
-      style, naming the session/worktree the view's readings come from and carrying a REAL
-      <a href="#/sessions/<id>"> to the terminal console as its only door. The banner derives ONLY from
-      the canonical address: console-door entry, direct open, and reload wear byte-identical banners, at
-      1440 and 390 (no horizontal overflow), in en and zh alike. The trunk list and a trunk detail wear
-      NO banner. The three exit commands never blur: the detail's ds-back is unconditionally
-      href="#/evals" (the bare home — never the terminal, scope or not); browser Back after a
-      list→detail push restores EXACTLY the scoped list URL; and the banner's anchor is the ONE way from
-      either scoped page to #/sessions/<id>. Zero loss = scope is legible on every scoped first screen,
-      and back/home/terminal are three separate, explicit affordances.
+      BOTH scoped pages carry the ONE shared icon-only terminal door (one component, two homes, never a
+      banner): on the LIST it is an action in the se-gates toolbar, same row as the lint/merge/ahead/
+      committed gates and the export door; on the DETAIL it rides the DetailShell header action slot. The
+      door is a REAL <a href="#/sessions/<id>"> wearing ONLY the terminal icon — no visible text — with a
+      stable ≥32px hit target, and the FULL semantics (session id, worktree source, terminal destination)
+      live in its localized tooltip + aria-label, en and zh alike. It derives ONLY from the canonical
+      address: console-door entry, direct open, and reload wear byte-identical doors, at 1440 and 390
+      (no horizontal overflow, the toolbar row intact). NO .ds-banner and no long explanatory copy render
+      anywhere; the trunk list and a trunk detail carry no door at all. The three exit commands never
+      blur: the detail's ds-back is unconditionally href="#/evals" (the bare home — never the terminal);
+      browser Back after a list→detail push restores EXACTLY the scoped list URL; and the door is the ONE
+      way from either scoped page to #/sessions/<id> — a phone cold-open tap lands on the real session
+      detail plane. Zero loss = scope stays legible as one restrained icon action, and
+      back/home/terminal stay three separate, explicit affordances.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]

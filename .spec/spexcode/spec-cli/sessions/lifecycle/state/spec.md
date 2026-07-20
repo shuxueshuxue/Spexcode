@@ -86,10 +86,10 @@ independent facts, computed independently:
   (`unknown`), never guess (`offline`).
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
-shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
-the sole exception being `queued`, which has not launched yet and self-starts as a slot frees. `unknown`
-(probe-failed) shows **no** relaunch panel: we have not proven the agent dead, so we must not invite a restore
-that could kill a live worker.
+exposes resume through both the relaunch panel and the console toolbar's compact relaunch tool whatever the
+lifecycle** — a dead `asking` agent still needs you, now resumable — the sole exception being `queued`, which
+has not launched yet and self-starts as a slot frees. `unknown` (probe-failed) exposes neither relaunch entry:
+we have not proven the agent dead, so we must not invite a restore that could kill a live worker.
 
 The **review** reading (an `awaiting` proposal, as the board and `spex watch` surface it) is the
 orthogonality in one example: review means the agent has *stopped active work* — mark-active flips it
@@ -104,7 +104,7 @@ the global record**, so the session simply reads `offline` and the relaunch pane
 conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
 untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`** is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
-conversation only when it is genuinely offline; the frontend exposes this solely as the offline relaunch panel)
+conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action)
 and settles the **resting** lifecycle under the SAME active-only guard `idle` uses — a resumed agent that was
 `active` (working) is now just sitting at its prompt → `idle`, while every deliberate declaration survives the
 resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT

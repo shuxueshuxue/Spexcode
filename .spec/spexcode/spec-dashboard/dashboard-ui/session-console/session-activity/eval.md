@@ -29,26 +29,21 @@ scenarios:
     code:
       - spec-cli/src/sessions.ts
       - spec-dashboard/src/SessionWindow.jsx
-  - name: console-header-matches-headline
+  - name: console-row-is-sole-visible-identity
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-toolbar.e2e.mjs
     description: >-
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE WORKING
       session whose tmux pane title (self-summary) is set, so its headline is the agent's own live line —
-      visibly NOT the bare node name. Read the selected left-sidebar row and the toolbar's `si-th-name`
-      identity beside the lifecycle/liveness state; compare their DOM text verbatim. At 1440px the toolbar
-      uses the free width, then repeat with a deliberately long headline in a 390px terminal pane and confirm
-      only the rendered width ellipses — the accessible identity keeps the full shared line and state.
-      The stable handle (node/branch/id) appears nowhere as a console title. Screenshot the console sidebar
-      beside the toolbar and file with `spex eval add session-activity --scenario
-      console-header-matches-headline --image <png> --pass`.
+      visibly NOT the bare node name. Read the selected left-sidebar row and the terminal toolbar. Repeat with
+      a deliberately long and HTML-bearing launch prompt in a 390px terminal pane, and inspect visible text,
+      `data-tip`, `aria-label`, and accessible names. Screenshot the console sidebar beside the toolbar and file
+      with `spex eval add session-activity --scenario console-row-is-sole-visible-identity --image <png> --pass`.
     expected: >-
-      The toolbar's identity and selected sidebar row are the SAME `sessionHeadline` string: the worker's live
-      tmux self-summary (its pane title), a launch-prompt placeholder only before the agent is up, a human
-      rename always winning — never the stable node/branch name. The toolbar derives no second fallback chain;
-      it spends otherwise-free width and ellipses before Eval/commands when tight, while its named AX group
-      retains the full headline plus lifecycle/liveness. A turn that retitles the board row retitles sidebar
-      and toolbar in lock-step.
+      The selected sidebar row is the console's sole visible session identity/state surface and still uses the
+      shared `sessionHeadline` chain. The toolbar contains no `.si-identity`, headline, lifecycle, or liveness
+      copy, and no prompt/headline payload appears in its tooltips or accessible names. A turn that retitles the
+      row changes only that one identity surface; the compact toolbar geometry stays fixed.
     code:
       - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/session.js
@@ -59,9 +54,9 @@ scenarios:
       Launch a CODEX session into a worktree whose folder name differs from the task (e.g. branch
       `node/codex-naming` → worktree folder `codex-naming`, task "Implement codex session naming"). Codex sets
       its tmux pane title to a spinner glyph + the cwd BASENAME (`⠙ codex-naming`), not a task summary. Open
-      the dashboard and read that session's Row-1 headline (and the Enter console toolbar identity). It must be the
+      the dashboard and read that session's Row-1 headline in the window and console sidebar. It must be the
       TASK — the launch-prompt preview — NOT the worktree folder name `codex-naming`. Contrast a CLAUDE
-      session in the same view: its headline IS its live pane-title self-summary, unchanged. Screenshot both
+      session in the same view: its row headline IS its live pane-title self-summary, unchanged. Screenshot both
       rows and file with `spex eval add session-activity --scenario codex-headline-is-task-not-folder --image <png> --pass`.
     expected: >-
       The codex row's headline is its launch-prompt task, never the worktree folder name its pane title
@@ -103,15 +98,19 @@ scenarios:
       long headlines ellipse at rest. Confirm every row is a dense single line. Now HOVER a truncated row and
       confirm it does NOT expand (only its background tints) — hover must leave the list geometry stable. Then
       CLICK a row whose headline is truncated to select it, and confirm it un-truncates. Read its marker (the
-      status glyph + op tally) and the wrapped headline. Screenshot the list showing the selected, expanded
-      row beside its still-single-line neighbours.
+      status glyph + op tally) and the wrapped headline. Include a parent row with a subtree-count fold pod,
+      and compare the pod-to-headline spacing before and after selecting it. Record the list from rest through
+      hover and selection, with timeline steps for those states, showing the selected expanded row beside its
+      still-single-line neighbours.
     expected: >-
       At rest each row is one line with an ellipsis (a dense index). Hovering does NOT expand a row — reveal is
       tied to SELECTION, so the list stays a stable click surface and rows never shift under the cursor. The
       row you SELECT un-truncates: its headline wraps to the FULL text in place while every other row stays
       single-line, so any title is completely readable without widening the list. On the wrapped row the small
       markers (status glyph + op tally) sit pinned to the headline's FIRST line (top-right), not down a column,
-      so the wrapped lines below them run the full row width.
+      so the wrapped lines below them run the full row width. A selected parent keeps the same natural gap
+      between its subtree-count fold pod and the headline as it had at rest; the count and first title word
+      never touch when selection switches the row into block flow.
     code:
       - spec-dashboard/src/styles.css
 ---
@@ -121,6 +120,8 @@ Product surface, measured by **looking** (YATU): the agent screenshots the rende
 confirms each live row is the compact one-line face whose headline is the worker's pane-title self-summary
 (the launch-prompt placeholder showing only before the agent is up), with the status folded to an inline
 colour-coded glyph and the op tally beside it — filing it as a reading with image evidence and a verdict.
+The on-demand headline reveal is measured as a browser interaction video with a timeline because its resting,
+hovered, and selected states are the behavior under test.
 The scenario scopes its freshness `code:` to the capture (`sessions.ts`) and the render
 (`SessionWindow.jsx`) — not the shared stylesheet — so an unrelated CSS edit elsewhere doesn't stale this
 reading.

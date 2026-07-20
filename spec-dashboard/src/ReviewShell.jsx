@@ -464,11 +464,8 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
 // DetailShell is the standalone detail page's GitHub grammar. At phone width the same markup reflows to
 // one column with side metadata first; failure and not-found remain distinct honest faces. `backHref` is
 // the compact back anchor ([[address-routing]]'s detailBackHash supplies it) — a REAL <a href> derived
-// from the canonical address, never a history.back button. `action` is an optional page-supplied header
-// action node seated at the header's trailing edge — a fully-rendered node (the scoped eval pages' one
-// icon-only terminal door rides it, the SAME primitive the scoped list's toolbar carries), so the shell
-// stays a data-only slot that knows nothing about sessions.
-export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, backHref, backLabel, action, children }) {
+// from the canonical address, never a history.back button.
+export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, backHref, backLabel, children }) {
   if (failure) {
     return (
       <div className="ds-page ds-missing ds-failed" role="alert">
@@ -497,7 +494,6 @@ export function DetailShell({ title, titleMeta, status, side, composer, missing,
           {title}
           {titleMeta && <span className="ds-title-meta">{titleMeta}</span>}
         </h1>
-        {action && <div className="ds-head-action">{action}</div>}
       </header>
       {status && <div className="ds-status">{status}</div>}
       <div className="ds-cols">

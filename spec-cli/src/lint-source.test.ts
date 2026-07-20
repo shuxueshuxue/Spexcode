@@ -44,7 +44,7 @@ function fixture(
   return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` }
 }
 
-test('fresh Python repo discovers product source and excludes tests, docs, vendor, generated/build output, metadata, and binary', { skip }, () => {
+test('fresh Python repo treats every tracked regular text file as source without semantic guesses', { skip }, () => {
   const { code, out } = fixture({
     'src/app.py': 'def main():\n    return 0\n',
     'src/pkg/util.py': 'VALUE = 1\n',
@@ -59,17 +59,19 @@ test('fresh Python repo discovers product source and excludes tests, docs, vendo
     'pyproject.toml': '[project]\nname = "app"\n',
     'assets/logo.svg': '<svg/>\n',
     'assets/blob.dat': new Uint8Array([1, 0, 2, 3]),
+    '.plugins/note.txt': 'SpexCode-owned plugin data\n',
+    'spexcode.local.json': '{}\n',
   }, { governedRoots: ['.'] }, { 'src/untracked.py': 'VALUE = 1\n' })
   assert.equal(code, 0, out)
-  assert.match(out, /coverage: no spec governs: src\/app\.py/)
-  assert.match(out, /coverage: no spec governs: src\/pkg\/util\.py/)
-  for (const excluded of ['untracked.py', 'test_helper.py', 'util_test.py', 'conftest.py', 'dependency.py', 'models.py', 'output.py', 'example.py', 'README.md', 'pyproject.toml', 'logo.svg', 'blob.dat'])
-    assert.ok(!out.includes(excluded), `${excluded} must not be default source: ${out}`)
+  for (const included of ['src/app.py', 'src/pkg/util.py', 'vendor/dependency.py', 'generated/models.py', 'build/output.py', 'docs/example.py', 'README.md', 'pyproject.toml', 'assets/logo.svg'])
+    assert.match(out, new RegExp(`coverage: no spec governs: ${included.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), `${included} is tracked text and must be source: ${out}`)
+  for (const excluded of ['untracked.py', 'test_helper.py', 'util_test.py', 'conftest.py', 'blob.dat', '.plugins/note.txt', 'spexcode.local.json', 'spexcode.json', '.spec/project/spec.md'])
+    assert.ok(!out.includes(`no spec governs: ${excluded}`), `${excluded} must stay outside the candidate set: ${out}`)
   assert.ok(!out.includes('governing NOTHING'), out)
 })
 
-test('fresh TypeScript repo uses the same default policy', { skip }, () => {
-  const { code, out } = fixture({
+test('TypeScript uses the same default; explicit exclude globs alone remove docs/build paths', { skip }, () => {
+  const files = {
     'src/index.ts': 'export const answer = 42\n',
     'src/view.tsx': 'export const View = () => null\n',
     'src/index.test.ts': 'export {}\n',
@@ -77,36 +79,56 @@ test('fresh TypeScript repo uses the same default policy', { skip }, () => {
     'test/helper.ts': 'export {}\n',
     'dist/bundle.js': 'generated\n',
     'docs/example.ts': 'export {}\n',
-  })
-  assert.equal(code, 0, out)
-  assert.match(out, /coverage: no spec governs: src\/index\.ts/)
-  assert.match(out, /coverage: no spec governs: src\/view\.tsx/)
-  for (const excluded of ['index.test.ts', 'view.spec.tsx', 'test/helper.ts', 'dist/bundle.js', 'docs/example.ts'])
-    assert.ok(!out.includes(excluded), `${excluded} must not be default source: ${out}`)
+  }
+  const defaults = fixture(files)
+  assert.equal(defaults.code, 0, defaults.out)
+  for (const included of ['src/index.ts', 'src/view.tsx', 'dist/bundle.js', 'docs/example.ts'])
+    assert.ok(defaults.out.includes(`no spec governs: ${included}`), `${included} must be default source: ${defaults.out}`)
+  for (const testPath of ['src/index.test.ts', 'src/view.spec.tsx', 'test/helper.ts'])
+    assert.ok(!defaults.out.includes(`no spec governs: ${testPath}`), `${testPath} is removed by testGlobs: ${defaults.out}`)
+
+  const configured = fixture(files, { governedRoots: ['.'], sourceExcludeGlobs: ['dist/**', 'docs/**'] })
+  assert.equal(configured.code, 0, configured.out)
+  for (const included of ['src/index.ts', 'src/view.tsx']) assert.ok(configured.out.includes(`no spec governs: ${included}`), configured.out)
+  for (const excluded of ['dist/bundle.js', 'docs/example.ts']) assert.ok(!configured.out.includes(`no spec governs: ${excluded}`), configured.out)
 })
 
-test('explicit extension/test overrides remain exact and tolerate dotted extensions plus slash-less globs', { skip }, () => {
+test('extensions lower into the same include union before explicit exclude/test subtraction', { skip }, () => {
   const { code, out } = fixture({
     'src/app.py': 'VALUE = 1\n',
+    'src/ignore.py': 'VALUE = 2\n',
     'src/pkg/util_test.py': 'def test_util():\n    pass\n',
     'src/engine.rs': 'fn main() {}\n',
-  }, { governedRoots: ['src'], sourceExtensions: ['.py'], testGlobs: ['*_test.py'] })
+    'tools/build.rs': 'fn build() {}\n',
+    'README.md': '# app\n',
+  }, {
+    governedRoots: ['.'],
+    sourceIncludeGlobs: ['tools/*.rs'],
+    sourceExtensions: ['.py'],
+    sourceExcludeGlobs: ['ignore.py'],
+    testGlobs: ['*_test.py'],
+  })
   assert.equal(code, 0, out)
-  assert.match(out, /coverage: no spec governs: src\/app\.py/)
-  assert.ok(!out.includes('src/engine.rs'), out)
-  assert.ok(!out.includes('util_test.py'), `slash-less test glob must match at any depth: ${out}`)
+  for (const included of ['src/app.py', 'tools/build.rs']) assert.ok(out.includes(`no spec governs: ${included}`), out)
+  for (const excluded of ['src/ignore.py', 'src/pkg/util_test.py', 'src/engine.rs', 'README.md'])
+    assert.ok(!out.includes(`no spec governs: ${excluded}`), `${excluded} must be removed by the compiled policy: ${out}`)
 })
 
-test('an empty default candidate set warns with the active policy and both repair knobs', { skip }, () => {
+test('an intentionally empty include set warns with every active policy knob', { skip }, () => {
   const { code, out } = fixture({
     'README.md': '# docs only\n',
     'config/project.toml': '[project]\n',
     'docs/guide.py': 'print("sample")\n',
-  })
+  }, { governedRoots: ['.'], sourceIncludeGlobs: [], sourceExcludeGlobs: ['docs/**'], testGlobs: [] })
   assert.equal(code, 0, out)
   assert.match(out, /coverage: governing NOTHING/)
   assert.match(out, /governedRoots \[\.\]/)
-  assert.match(out, /default tracked-text policy/)
+  assert.match(out, /includes \[\]/)
+  assert.match(out, /sourceExcludeGlobs \[docs\/\*\*\]/)
+  assert.match(out, /testGlobs \[\]/)
   assert.match(out, /under the "lint" key/)
+  assert.match(out, /sourceIncludeGlobs/)
+  assert.match(out, /sourceExcludeGlobs/)
+  assert.match(out, /testGlobs/)
   assert.match(out, /sourceExtensions/)
 })

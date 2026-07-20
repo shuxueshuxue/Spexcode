@@ -167,8 +167,8 @@ The surface mirrors the code-drift report:
   a malformed eval.md (`eval-schema` — missing field,
   unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`eval-drift`), a scenario never
   measured (`eval-missing`), a node governing **source code** with **no eval.md** (`eval-coverage` — the same
-  NAME and shape as [[spec-lint]]'s coverage, keyed off the SAME [[adopt-nonweb-ergonomics]] classifier:
-  language-neutral tracked-text defaults plus the exact `sourceExtensions` project override, so a
+  NAME and shape as [[spec-lint]]'s coverage, keyed off the SAME [[adopt-nonweb-ergonomics]] tracked-text
+  include-minus-exclude/test algebra (with `sourceExtensions` lowered to include globs), so a
   backend/CLI/Rust/Go/Python project's own sources are held to the loss discipline too; no second allowlist),
   an orphaned remark track (`eval-dangling`), and a whole-repo
   summary — a file governed by > `maxOwners` scenarios (`eval-owners`, split it). A `drift`/`missing` line

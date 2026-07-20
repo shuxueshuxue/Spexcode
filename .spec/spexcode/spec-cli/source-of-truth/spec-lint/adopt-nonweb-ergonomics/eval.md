@@ -6,18 +6,20 @@ scenarios:
       conventional Python tests, docs, vendored/generated/build paths, metadata, and a binary. Run
       `spex spec lint` through the real CLI and read the coverage transcript.
     expected: >
-      Every Python product file is reported uncovered. Python tests, docs, vendored/generated/build
-      paths, metadata, and binary files are absent, and no "governing NOTHING" warning appears.
+      Every tracked regular text file is reported uncovered, including Python, README/docs, vendor,
+      generated/build, metadata, and text assets. Conventional tests, the binary, untracked files, and
+      SpexCode-owned data are absent. No "governing NOTHING" warning appears.
     tags: [cli]
     code: spec-cli/src/lint.ts
-  - name: fresh-typescript-and-empty-policy
+  - name: typescript-configured-policy-and-empty-set
     description: >
-      Run `spex spec lint` in two more throwaway git repos: one fresh TypeScript project containing
-      product and conventional test/build files, and one containing only tracked docs/metadata.
+      Run `spex spec lint` in TypeScript temp repos with default tracked-text discovery, configured
+      include/exclude globs, extension compatibility, and an include policy that deliberately matches nothing.
     expected: >
-      TypeScript product files are reported uncovered while tests/build output are absent. The repo with
-      no default source candidates gets an honest "governing NOTHING" coverage warning naming the default
-      tracked-text policy, governedRoots, and the `lint.sourceExtensions` override repair entrypoint.
+      Default discovery includes product, docs, and build text while tests stay excluded. Configured globs
+      select and subtract exactly their matches. Dotted `sourceExtensions` contributes include globs through
+      the same union. The deliberate empty set gets "governing NOTHING" naming roots, includes, excludes,
+      tests, and their `lint` repair knobs.
     tags: [cli]
     code: spec-cli/src/lint.ts
 ---
@@ -25,6 +27,5 @@ scenarios:
 # adopt-nonweb-ergonomics — how its loss is measured
 
 YATU through the real `spex spec lint` CLI, never by reading implementation helpers. Stand up throwaway git
-repos shaped like fresh Python and TypeScript adopters, plus an empty-candidate repo, run the CLI from each
-repo root, and compare the emitted coverage transcript with the expected included, excluded, and fail-loud
-paths.
+repos shaped like fresh Python and TypeScript adopters, plus configured-policy and empty-set cases, run the
+CLI from each repo root, and compare the emitted coverage transcript with the set algebra above.

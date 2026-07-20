@@ -17,14 +17,14 @@ scenarios:
     code: [spec-eval/src/cli.ts]
     description: >-
       Through the real `spex eval lint` in scratch repos, create nodes with no eval.md that govern Python,
-      Rust, backend TypeScript, and frontend JSX source, plus a node governing only docs/metadata. First use
-      the fresh language-neutral defaults, then set an explicit `lint.sourceExtensions: ["rs"]` override.
+      Rust, backend TypeScript, frontend JSX, and README/config text. First use the tracked-text default,
+      then set include/exclude globs and an explicit `lint.sourceExtensions: ["rs"]` compatibility value.
       Read the `eval-coverage` lines and summary count.
     expected: >-
-      With no extension override, `eval-coverage` fires on every ordinary text source across those languages,
-      while docs/metadata stay out. Configuring `sourceExtensions: ["rs"]` makes only the `.rs` node flag.
-      The finding says "governs source code" (not "frontend code"), so a non-web project's loss signal uses
-      exactly the same source policy as spec coverage and is no longer blind to its own sources.
+      With no include policy, `eval-coverage` fires on every tracked regular text file, including README/config.
+      Configured include/exclude globs select and subtract exactly their matches, and `sourceExtensions: ["rs"]`
+      contributes the Rust include through the same pipeline. The finding says "governs source code" and eval
+      coverage uses exactly the same tracked candidate set as spec coverage.
   - name: schema-gate-rejects-malformed
     tags: [cli]
     test:

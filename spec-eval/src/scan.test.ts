@@ -10,17 +10,16 @@ import { DEFAULT_TEST_GLOBS, isSourceFile } from '../../spec-cli/src/source-file
 // ---- the loss-signal classifiers: shared source policy → eval-coverage; isUiPath → the review-proof's
 // FRONTEND blindspot; nodeChanged → --changed scope ----
 
-test('eval-coverage shares the language-neutral default and exact extension override', () => {
+test('eval-coverage shares include-minus-exclude/test source policy', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-eval-source-'))
   mkdirSync(join(root, 'src'))
   for (const file of ['app.py', 'engine.rs', 'view.tsx', 'config.json'])
     writeFileSync(join(root, 'src', file), 'source\n')
-  const auto = { sourceExtensions: null, testGlobs: DEFAULT_TEST_GLOBS }
-  for (const file of ['app.py', 'engine.rs', 'view.tsx'])
+  const auto = { sourceIncludeGlobs: null, sourceExcludeGlobs: [], testGlobs: DEFAULT_TEST_GLOBS }
+  for (const file of ['app.py', 'engine.rs', 'view.tsx', 'config.json'])
     assert.equal(isSourceFile(root, `src/${file}`, auto), true, `${file} is default source without a language branch`)
-  assert.equal(isSourceFile(root, 'src/config.json', auto), false, 'metadata is not default source')
 
-  const rustOnly = { sourceExtensions: ['rs'], testGlobs: DEFAULT_TEST_GLOBS }
+  const rustOnly = { sourceIncludeGlobs: ['**/*.rs'], sourceExcludeGlobs: [], testGlobs: DEFAULT_TEST_GLOBS }
   assert.equal(isSourceFile(root, 'src/engine.rs', rustOnly), true)
   assert.equal(isSourceFile(root, 'src/app.py', rustOnly), false)
 })

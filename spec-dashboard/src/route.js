@@ -17,7 +17,7 @@ export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
 // in navigate() and tests stay byte-stable).
-const QUERY_KEYS = ['q']
+const QUERY_KEYS = ['q', 'page']
 export function queryString(query) {
   if (!query) return ''
   const sp = new URLSearchParams()
@@ -25,7 +25,9 @@ export function queryString(query) {
   for (const k of Object.keys(query).filter((key) => !QUERY_KEYS.includes(key)).sort()) {
     if (query[k] != null && query[k] !== '') sp.set(k, query[k])
   }
-  const s = sp.toString()
+  // GitHub's issue links use percent-encoded spaces in q, not form-style '+'. Both decode the same, but
+  // the URL itself is observable/copyable state, so keep the measured bytes.
+  const s = sp.toString().replace(/\+/g, '%20')
   return s ? `?${s}` : ''
 }
 
@@ -81,6 +83,14 @@ export function legacyReviewHash(hash) {
   return routeHash(page, null, sameQuery(text, defaultText) ? null : { q: text })
 }
 
+export function invalidReviewPageHash(hash) {
+  const { page, param, query } = parseRoute(hash)
+  if ((page !== 'evals' && page !== 'issues') || param != null || query.page == null) return null
+  if (/^[1-9]\d*$/.test(query.page) && Number.isSafeInteger(Number(query.page))) return null
+  const { page: _invalid, ...rest } = query
+  return routeHash(page, null, rest)
+}
+
 // a param's '/'-separated segments are encoded one by one so a multi-segment param (evals' node/scenario)
 // keeps its path shape while each segment stays hash-safe.
 export const routeHash = (page, param, query = null) =>
@@ -103,7 +113,7 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
-  const legacy = legacyEvalHash(window.location.hash) || legacyReviewHash(window.location.hash)
+  const legacy = legacyEvalHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)

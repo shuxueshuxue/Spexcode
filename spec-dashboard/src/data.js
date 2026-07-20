@@ -207,10 +207,10 @@ export async function loadSettings() {
   return res.json()
 }
 
-// the merged issues ([[issues]]) the backend serves at /api/issues: `{ enabled, stores, issues }`, verbatim —
-// the issues page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
-export async function loadIssues() {
-  const res = await apiFetch('/api/issues')
+export async function loadIssue(id) {
+  const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}`)
+  if (res.status === 404) return false
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 

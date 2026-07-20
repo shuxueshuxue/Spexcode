@@ -196,6 +196,12 @@ export default {
     openedAt: ({ at }) => `opened ${at} ago`,
     verdict: { pass: 'Pass', fail: 'Fail', unscored: 'Unscored' },
     freshness: { fresh: 'Fresh', stale: 'Stale' },
+    pagination: 'Pagination',
+    previous: 'Previous',
+    next: 'Next',
+    prevPage: 'Previous Page',
+    nextPage: 'Next Page',
+    page: ({ n }) => `Page ${n}`,
   },
 
   reviewShell: {

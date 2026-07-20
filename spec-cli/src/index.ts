@@ -28,6 +28,7 @@ import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
+import { evalsReview, issuesReview } from './reviews.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -209,12 +210,13 @@ app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? load
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
 // the issues-workflow on/off switch so the frontend hides the view when the feature is OFF.
-app.get('/api/issues', etag(), (c) =>
-  c.json({
-    enabled: issuesEnabled(),
-    stores: issueStores(),
-    issues: mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
-  }))
+app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.query('q'), c.req.query('page'))))
+// Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
+// it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
+app.get('/api/evals', etag(), async (c) => {
+  const page = await evalsReview(c.req.query('q'), c.req.query('page'))
+  return page ? c.json(page) : c.json({ error: 'no such session' }, 404)
+})
 // the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
 // resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
 // id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).

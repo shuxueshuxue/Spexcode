@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react'
-import { postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
+import { useCallback, useEffect, useState, useRef } from 'react'
+import { loadIssue, postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
 import { SpecBody } from './NodeView.jsx'
@@ -7,8 +7,9 @@ import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import Modal from './Modal.jsx'
 import { DetailShell, FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters, SideSection, SideValue } from './ReviewShell.jsx'
-import { ISSUE_QUERY_DEFAULT, queryParam, readToken, setToken } from './reviewQuery.js'
-import { issueFilterModel, reviewActorName, tokenFilterState } from './reviewFilters.js'
+import { ISSUE_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery, setToken } from './reviewQuery.js'
+import { reviewActorName } from './reviewFilters.js'
+import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { detailBackHash } from './address.js'
 import { Icon } from './icons.jsx'
@@ -42,19 +43,23 @@ const issueNumber = (id) => {
 // autocomplete offers; anything else stays plain and matches nothing.
 export const ISSUE_QUERY_KEYS = ['is', 'state', 'store', 'author', 'node', 'session']
 
-// The LIST page (`#/issues[?q=<raw tokens>]`): RESIDENT data — the page renders instantly from app-held
-// state ([[issues-view]]); the WHOLE face is ONE visible token query ([[review-query]]) bridged into the
+// The LIST page (`#/issues[?q=<raw tokens>]`) requests one resident-source page from the server; the WHOLE
+// face is ONE visible token query ([[review-query]]) bridged into the
 // ONE field-semantics engine ([[review-filters]]): sections and low-cardinality menus are pure builders
 // doing token surgery + PUSH over the COMMITTED text, author/node are token-only, and the list
 // re-derives everything from the URL on every hashchange so Back replays it exactly.
-export function IssuesListPage({ data, reloadIssues, specs, sessions, query, notice, flash }) {
+const facetOptions = (data, key, allLabel, labelValue = (value) => value) => (data?.facets?.[key]?.options ?? []).map((option) => ({
+  value: option.value,
+  label: option.value === '' ? allLabel : labelValue(option.value),
+}))
+
+export function IssuesListPage({ data, loading, error, reload, specs, sessions, query, notice, flash }) {
   const t = useT()
   const [composing, setComposing] = useState(false)
   useEscLayer(composing, () => setComposing(false))
-  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
-  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
+  if (data && !data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
-  const all = Array.isArray(data.issues) ? data.issues : []
+  const all = Array.isArray(data?.items) ? data.items : []
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
   // a human's edit/tab/menu action PUSHES the canonical address — bare for the default view, exactly
   // ?q=<raw text> otherwise (GitHub's semantics — Back walks filter history).
@@ -62,15 +67,11 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   const surgery = (key, value) => push(setToken(text, key, value))
 
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
-  const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
-  const writeStores = Array.isArray(data.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
-  // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
-  // engine state; tab counts come out computed under the REST of the query (the section never sees its
-  // own token), and the presence facet is the adapter's session:present|missing.
-  const filters = issueFilterModel(all, tokenFilterState(text, 'issue'), { sessions, t, defaultSection: '' })
-  const issues = filters.shown
-  const openCount = filters.sections.open || 0
-  const closedCount = filters.sections.closed || 0
+  const stores = (data?.facets?.store?.options ?? []).map((option) => option.value).filter(Boolean)
+  const writeStores = Array.isArray(data?.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
+  const issues = all
+  const openCount = data?.counts?.open || 0
+  const closedCount = data?.counts?.closed || 0
   const section = readToken(text, 'state')
 
   // a row leads with the ISSUE (status mark + concern); store/replies are trailing quiet meta —
@@ -106,12 +107,17 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
   })
 
   // menus are pure query builders over the ADAPTER's data-derived options — zero private state.
-  const storeFacet = filters.facets.store
-  const sessionFacet = filters.facets.session
+  const storeFacet = { label: t('reviewList.facetStore'), value: readToken(text, 'store'), options: facetOptions(data, 'store', t('reviewList.all')) }
+  const sessionFacet = {
+    label: t('reviewList.facetSession'), value: readToken(text, 'session'),
+    options: facetOptions(data, 'session', t('reviewList.all'), (value) => t(value === 'present' ? 'reviewList.sessionPresent' : 'reviewList.sessionMissing')),
+  }
 
   return (
     <ListPage
       notice={notice}
+      loading={loading}
+      error={error}
       title={t('reviewList.issuesTitle')}
       action={<button type="button" className="rl-new" onClick={() => setComposing(true)}><Icon name="plus" size={14} />{t('session.issuesNew')}</button>}
       search={{
@@ -123,8 +129,8 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
         // bounded autocomplete candidates for the HIGH-cardinality tokens: values present in the data
         // only; an unknown or historical value still submits verbatim.
         suggest: {
-          author: [...new Set(all.map((issue) => issue.by).filter(Boolean))].map((value) => ({ value })),
-          node: [...new Set(all.flatMap((issue) => issue.nodes || []).filter(Boolean))].map((value) => ({ value })),
+          author: facetOptions(data, 'author', t('reviewList.all')).filter((option) => option.value),
+          node: facetOptions(data, 'node', t('reviewList.all')).filter((option) => option.value),
         },
       }}
       sections={[
@@ -140,8 +146,12 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
         { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
       ]} />}
       rows={rows}
+      pagination={data ? {
+        page: data.page, pageCount: data.pageCount, prev: data.prev, next: data.next,
+        hrefFor: (target) => routeHash('issues', null, reviewRouteQuery(text, ISSUE_QUERY_DEFAULT, target)),
+      } : null}
       empty={{
-        hasData: all.length > 0,
+        hasData: (data?.sourceTotal ?? 0) > 0,
         dataset: t('session.issuesEmpty'),
         filtered: t('session.issuesNoMatch'),
       }}
@@ -149,7 +159,7 @@ export function IssuesListPage({ data, reloadIssues, specs, sessions, query, not
       {composing && (
         <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">
           <NewThreadForm specs={specs} sessions={sessions} stores={writeStores} onCancel={() => setComposing(false)}
-            onDone={async (outcomes) => { setComposing(false); flash(outcomes); await reloadIssues?.(true) }} />
+            onDone={async (outcomes) => { setComposing(false); flash(outcomes); await reload?.() }} />
         </Modal>
       )}
     </ListPage>
@@ -256,26 +266,49 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
   )
 }
 
-export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues }) {
+function useIssueDetail(id) {
+  const [issue, setIssue] = useState(null)
+  const [error, setError] = useState(null)
+  const seq = useRef(0)
+  const reload = useCallback(async () => {
+    if (!id) return null
+    const mine = ++seq.current
+    setError(null)
+    try {
+      const value = await loadIssue(id)
+      if (mine === seq.current) setIssue(value)
+      return value
+    } catch (reason) {
+      if (mine === seq.current) { setIssue(false); setError(reason instanceof Error ? reason.message : String(reason)) }
+      return null
+    }
+  }, [id])
+  useEffect(() => { setIssue(null); setError(null); if (id) reload() }, [id, reload])
+  return { issue, error, reload }
+}
+
+export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [] }) {
   const t = useT()
   const { param, query } = useRoute()
+  const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
+  const page = reviewPageNumber(query.page)
+  const list = useReviewPage('issues', text, page, { enabled: !param, refreshKey: sessions })
+  const detail = useIssueDetail(param)
   const [notice, setNotice] = useState('')
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
-  // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
-  const onWrite = async (outcomes) => { flash(outcomes); await reloadIssues?.(true) }
+  const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }
 
   if (param) {
-    if (issuesData == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
-    if (!issuesData.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
-    const th = (issuesData.issues || []).find((i) => i.id === param)
-    if (!th) {
+    if (detail.issue == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
+    if (detail.error) return <DetailShell failure={detail.error} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
+    if (detail.issue === false) {
       // an address naming no issue renders the honest not-found with the list link ([[review-chrome]]).
       return <DetailShell missing={t('reviewShell.issueNotFound', { id: param })} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
     }
-    return <IssueDetailPage issue={th} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
+    return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
       onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
   }
-  return <IssuesListPage data={issuesData} reloadIssues={reloadIssues} specs={specs} sessions={sessions}
+  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} reload={list.reload} specs={specs} sessions={sessions}
     query={query} notice={notice} flash={flash} />
 }
 

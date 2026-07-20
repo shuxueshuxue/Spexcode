@@ -31,8 +31,9 @@ filter (default off) picking the root.
 
 - **Two pages, one route family.** `#/evals` is the LIST page; `#/evals/<node>/<scenario>` is the DETAIL
   page — each bookmarkable, reloadable, directly openable (hash routing needs no server). The [[side-nav]]
-  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. There is no pagination — the list is
-  bounded by declared scenarios and the API has no page semantics, so none is invented.
+  rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
+  25-row paged-review server contract for both trunk and `scope:` sources; it never slices the graph board
+  or the scoped REST model in React.
 - **The list's state is its URL — as ONE token query.** The whole face rides [[review-chrome]]'s visible
   query text (`is:eval` by default; the [[review-query]] engine) — verdict, freshness,
   evidence kind, node, filer, source-session presence, worktree scope, and human-review lifecycle
@@ -42,7 +43,9 @@ filter (default off) picking the root.
   filter history); only an AUTOMATIC rewrite replaces — the legacy address shapes
   (`#/sessions/<id>/eval…` and the old structured `kind/verdict/freshness/node/filer/live/ok/session`
   params) normalize at the route layer into that token text, old links keep working, the old shape is
-  never re-minted. Rows are the
+  never re-minted. Page is hash-query view state: every query/quick-filter/facet change resets by omitting
+  page; pagination serializes page after `q`, including explicit `page=1` on a return to the first page;
+  direct open/refresh/Back preserve that form. Rows are the
   [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
@@ -131,9 +134,12 @@ filter (default off) picking the root.
   or a missing eval: the list keeps its scope/filter controls mounted beside an explicit error, while a
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
-- **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
-  the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
-  source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
+- **One data protocol over two source roots.** The project list and scoped list request the same
+  paged-review endpoint/shape; the backend projects the current graph/eval aggregate for trunk and the
+  worktree-rooted session-eval model for `scope:` before filtering/count/slice. The browser never receives
+  the graph's full eval board or a full scoped model merely to hide all but one page. Detail may fetch the
+  one addressed reading plus its bounded neighbor queue; it does not reconstruct the full list. A remark
+  or /ok written from the detail refreshes its source revision — writes, dispatch echo ([[mentions]]), and evidence behavior are
   unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
   and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
   loaded timeline events, ordinary typed prose, or anchored composer draft. A real

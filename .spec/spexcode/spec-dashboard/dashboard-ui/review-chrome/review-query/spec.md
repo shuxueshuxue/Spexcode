@@ -6,6 +6,7 @@ desc: The ONE token-query engine behind both review lists — scanner/parser/ser
 code:
   - spec-dashboard/src/reviewQuery.js
 related:
+  - spec-cli/src/reviews.ts
   - spec-dashboard/src/route.js
   - spec-dashboard/src/reviewQuery.test.mjs
 ---

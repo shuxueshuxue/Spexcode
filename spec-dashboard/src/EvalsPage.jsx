@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import EvalsGroup, { currentEntries, entryKey, sessionEvalSummary } from './EvalsFeed.jsx'
+import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
-import { EVAL_QUERY_DEFAULT, queryParam, readToken } from './reviewQuery.js'
+import { EVAL_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery } from './reviewQuery.js'
 import { addressHash, detailBackHash, evalAddress, sessionAddress, sessionEvalAddress } from './address.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
+import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
 // page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
@@ -23,12 +24,12 @@ import { apiUrl } from './project.js'
 // null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
 // A seq guard drops a stale response; `reload` is the write path's refresh (a remark/ok lands in the
 // worktree store, which fires no board SSE).
-function useSessionEvals(sessionId) {
+function useSessionEvals(sessionId, enabled = true) {
   const [model, setModel] = useState(null)
   const [error, setError] = useState(null)
   const seq = useRef(0)
   const load = useCallback(() => {
-    if (!sessionId) return Promise.resolve()
+    if (!sessionId || !enabled) return Promise.resolve()
     const mine = ++seq.current
     setError(null)
     return fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
@@ -39,8 +40,8 @@ function useSessionEvals(sessionId) {
         setModel(false)
         setError(err instanceof Error ? err.message : String(err))
       })
-  }, [sessionId])
-  useEffect(() => { setModel(null); setError(null); if (sessionId) load() }, [sessionId, load])
+  }, [enabled, sessionId])
+  useEffect(() => { setModel(null); setError(null); if (sessionId && enabled) load() }, [enabled, sessionId, load])
   return { model, error, reload: load }
 }
 
@@ -79,21 +80,15 @@ export function EvalScopeDoor({ sessionId }) {
 // The LIST page (`#/evals[?query]`): the session scope's back door + gates strip + export door
 // leading the one [[evals-feed]] list INSIDE its shared PageScroll. All filter state is the URL's one token text; the scope: token
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
-export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
+export function EvalsListPage({ sessionId, pageData, loading, error, sessions, queryText, onQueryText, hrefFor, hrefForPage, notice }) {
   const t = useT()
-  const unknown = model && model !== false ? sessionEvalSummary(model.nodes).unknown : 0
-  const empty = sessionId && model === null
-    ? t('common.loading')
-    : sessionId && error
-      ? t('sessionEval.unavailable')
-      : sessionId && model === false
-        ? t('sessionEval.none')
-        : null
+  const unknown = pageData?.unknown || 0
+  const empty = sessionId && !loading && !error && (pageData?.sourceTotal ?? 0) === 0 ? t('sessionEval.none') : null
   const leading = sessionId ? (
     // The terminal back door leads the toolbar, before every gate and the trailing export action.
         <div className="se-gates">
           <EvalScopeDoor sessionId={sessionId} />
-          {model && model.gates.map((g) => (
+          {pageData && pageData.gates.map((g) => (
             <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}><Icon name={g.ok ? 'check' : 'x'} size={11} /> {g.label}</span>
           ))}
           {unknown > 0 && (
@@ -101,7 +96,7 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
               <Icon name="info" size={11} /> {unknown}
             </span>
           )}
-          {model && (
+          {pageData && (
             <span className="se-acts">
               <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
                 <Icon name="download" size={13} />
@@ -111,9 +106,13 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
         </div>
   ) : null
   return (
-    <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
+    <EvalsGroup pageData={pageData} loading={loading} sessions={sessions}
       queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} leading={leading}
-      error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
+      error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty}
+      pagination={pageData ? {
+        page: pageData.page, pageCount: pageData.pageCount, prev: pageData.prev, next: pageData.next,
+        hrefFor: hrefForPage,
+      } : null} />
   )
 }
 
@@ -192,7 +191,10 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
-  const { model, error, reload: reloadSession } = useSessionEvals(sessionId)
+  const { model, error: detailError, reload: reloadSession } = useSessionEvals(sessionId, !!param)
+  const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
+  const page = reviewPageNumber(query.page)
+  const list = useReviewPage('evals', queryText, page, { enabled: !param, refreshKey: specs })
   const [notice, setNotice] = useState('')
 
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
@@ -222,11 +224,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
   const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })
+  const hrefForPage = (target) => routeHash('evals', null, reviewRouteQuery(queryText, EVAL_QUERY_DEFAULT, target))
 
   return param
-    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={error} specs={specs}
+    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={detailError} specs={specs}
         sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} notice={notice} />
-    : <EvalsListPage scope={scope} sessionId={sessionId} model={model} error={error} sessions={sessions}
-        queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} />
+    : <EvalsListPage sessionId={sessionId} pageData={list.data} loading={list.loading} error={list.error} sessions={sessions}
+        queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} hrefForPage={hrefForPage} notice={notice} />
 }

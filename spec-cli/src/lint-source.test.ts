@@ -62,6 +62,13 @@ function altitudeFixture(
   })
 }
 
+function breadthFiles(children: number): Record<string, Content> {
+  return Object.fromEntries(Array.from({ length: children }, (_, i) => [
+    `.spec/project/child-${i}/spec.md`,
+    `---\ntitle: child-${i}\n---\n# child-${i}\n`,
+  ]))
+}
+
 test('fresh Python repo treats every tracked regular text file as source without semantic guesses', { skip }, () => {
   const { code, out } = fixture({
     'src/app.py': 'def main():\n    return 0\n',
@@ -156,6 +163,43 @@ test('spec lint omits altitude even when the body trips the doctor proxy', { ski
   const { code, out } = fixture({ 'src/foo.py': 'VALUE = 1\n' }, { governedRoots: ['.'], testGlobs: [] }, {}, body)
   assert.equal(code, 0, out)
   assert.doesNotMatch(out, /altitude/i)
+})
+
+test('breadth is reported only by doctor with per-node evidence and repair', { skip }, () => {
+  const files = breadthFiles(8)
+  const lint = fixture(files, { governedRoots: [], maxChildren: 99 }, {}, '# project\n', ['spec', 'lint'], {
+    doctor: { breadth: { maxChildren: 8 } },
+  })
+  assert.equal(lint.code, 0, lint.out)
+  assert.doesNotMatch(lint.out, /breadth/i)
+
+  const doctor = fixture(files, { governedRoots: [], maxChildren: 99 }, {}, '# project\n', ['doctor'], {
+    doctor: { breadth: { maxChildren: 8 } },
+  })
+  assert.equal(doctor.code, 0, doctor.out)
+  assert.match(doctor.out, /breadth\s+: 1 finding\(s\)/)
+  assert.match(doctor.out, /project\s+: tree fan-out may be missing a natural grouping layer/)
+  assert.match(doctor.out, /evidence\s+: 8 direct child nodes \(>= 8\)/)
+  assert.match(doctor.out, /repair\s+: .*regroup workflow/)
+  assert.match(doctor.out, /RETIRED key\s+: `lint\.maxChildren` is no longer read.*`doctor\.breadth\.maxChildren`/)
+})
+
+test('doctor breadth ignores retired lint threshold and obeys only doctor config', { skip }, () => {
+  const { code, out } = fixture(breadthFiles(8), { governedRoots: [], maxChildren: 1 }, {}, '# project\n', ['doctor'], {
+    doctor: { breadth: { maxChildren: 9 } },
+  })
+  assert.equal(code, 0, out)
+  assert.match(out, /breadth\s+: healthy/)
+  assert.doesNotMatch(out, /tree fan-out may be missing/)
+  assert.match(out, /`lint\.maxChildren` is no longer read/)
+})
+
+test('settings guide assigns breadth only to doctor and retires the lint key', { skip }, () => {
+  const { code, out } = fixture({}, {}, {}, '# project\n', ['guide', 'settings'])
+  assert.equal(code, 0, out)
+  assert.match(out, /doctor\.breadth\s+the one tree-breadth hypothesis/)
+  assert.match(out, /`lint\.maxChildren` is RETIRED and no longer read.*doctor\.breadth\.maxChildren/s)
+  assert.doesNotMatch(out, /lint\.maxChildren\s+breadth budget/)
 })
 
 test('doctor altitude recognises a tracked Python basename without configured identifier extensions', { skip }, () => {

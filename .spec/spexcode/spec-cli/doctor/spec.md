@@ -35,16 +35,23 @@ scattering implementations across plugins.
 
 ## expanded spec
 
-Bare `spex doctor` begins with a structured, human-readable **Spec health diagnosis**. The first check is
-**altitude**: one cheap proxy engine flags a spec body that looks like a mechanics dump because it is over
-the line/character budget, dense with code identifiers, or written as step-by-step how-to. This is advisory
-judgment, never a lint finding, exit gate, or hidden plugin copy. Filename signals derive from the SAME
-git-tracked candidates and source policy [[spec-lint]] uses for coverage, so tracked languages and
-extensionless source participate while configured exclusions stay excluded. `doctor.altitude` in
-`spexcode.json` is the sole threshold owner (`lineBudget`, `charBudget`, `sizeable`, `dense`, `steps`, and
-optional `identifierExtensions` compatibility rows). The report groups findings by check and names the
-affected spec, evidence, and repair; a clean tree says the check is healthy. [[tidy]] explicitly invokes
-this report and adds semantic judgment, never reproducing the proxy thresholds.
+Bare `spex doctor` begins with a structured, human-readable **Spec health diagnosis**. Its checks are cheap,
+advisory hypotheses, never lint findings, exit gates, or hidden plugin copies:
+
+- **altitude** flags a spec body that looks like a mechanics dump because it is over the line/character
+  budget, dense with code identifiers, or written as step-by-step how-to. Filename signals derive from the
+  SAME git-tracked candidates and source policy [[spec-lint]] uses for coverage, so tracked languages and
+  extensionless source participate while configured exclusions stay excluded. `doctor.altitude` in
+  `spexcode.json` is the sole threshold owner (`lineBudget`, `charBudget`, `sizeable`, `dense`, `steps`, and
+  optional `identifierExtensions` compatibility rows).
+- **breadth** flags a node at or above `doctor.breadth.maxChildren` direct children (default 8), preserving
+  the actual per-node child count as evidence and pointing at [[regroup]] for repair. A flat fan-out of real
+  peers can be correct, so this is explicitly an unvalidated health hypothesis pending later ablation
+  research, not deterministic graph dishonesty.
+
+The report groups findings by check and names the affected spec, evidence, and repair; a clean tree says each
+check is healthy. [[tidy]] explicitly invokes this shared report and adds semantic judgment, never reproducing
+either check's thresholds.
 
 The remainder of bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS agent. It
 reads the same [[harness-adapter]] registry [[harness-delivery]] materializes through:
@@ -61,7 +68,8 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
 - **backend** — orchestration reachability; absent is NORMAL for a bring-your-own-agent.
 - **settings state** — the Repo section reports the verb-less issues-workflow switch (`issues.enabled`)
-  and flags the no-longer-read legacy key instead of silently honoring it.
+  and flags no-longer-read keys instead of silently honoring them, including the move from
+  `lint.maxChildren` to the sole breadth owner `doctor.breadth.maxChildren`.
 - **double-delivery** — did the contract land TWICE? The [[harness-select]] plugin-exclusivity invariant
   stops US emitting both a native and a plugin delivery, but cannot see a `spexcode` plugin bundle a user added
   out-of-band — so `doctor` catches THAT. By IDENTITY STAMP, never payload: a shim's `dispatch.sh` command line,

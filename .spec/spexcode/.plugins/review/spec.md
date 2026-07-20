@@ -1,6 +1,7 @@
 ---
 title: review
 status: active
+seed: false
 hue: 200
 desc: Grouping shelf for the `surface: review` prose presets — the eval detail's remark-composer `/` commands. A shelf, not a surface — routing stays field-driven per [[surface]].
 ---

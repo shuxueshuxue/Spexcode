@@ -1,6 +1,7 @@
 ---
 title: e2e-review
 status: active
+seed: false
 surface: skill
 hue: 285
 desc: Use after an e2e run that recorded whole-session video with a timeline sidecar, or when the human asks to review/annotate recordings — "审录屏 / 标注 / annotate / review the e2e videos". Splits the recordings into per-scenario clips, files each as video eval evidence, and points the human at the dashboard annotator.

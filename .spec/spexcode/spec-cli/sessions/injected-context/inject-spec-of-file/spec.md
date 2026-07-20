@@ -21,10 +21,11 @@ fire **once per file, never per write**, and never block.
 
 ## expanded spec
 
-A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`. Like [[inject-spec-first]], it is
-NOT gated on `governed` — spec-awareness serves any agent. On the first `Edit` / `Write` / `NotebookEdit` of a
-given file it emits **non-blocking** `additionalContext` naming the file's governing spec; a ledger dedupes so
-each file is annotated **once per session**. That ledger is a sibling file in the session's GLOBAL store dir
+A PostToolUse hook (`spec-of-file.sh`) consumes the harness adapter's complete code-mutation path list. Like
+[[inject-spec-first]], it is NOT gated on `governed` — spec-awareness serves any agent. For every file in one
+tool call, including every path in a Codex multi-file patch, it resolves actionable ownership and combines the
+messages into one **non-blocking** `additionalContext`; a ledger dedupes so each file is annotated **once per
+session**. That ledger is a sibling file in the session's GLOBAL store dir
 (resolved from the payload's `session_id`, [[runtime]]) — the worktree holds no SpexCode state any more. The
 ledger key is the repo-relative path after normalization, so an absolute path and a relative path to the same
 file do not double-speak. Spec files are skipped — not governed code.
@@ -51,6 +52,5 @@ speaks ONLY when there is something to act on, so the annotation stays rare inst
 Non-blocking and once-per-file by design: a pervasive signal earns its keep only by staying rare and
 precise, or it becomes the noise it was meant to cure. The enforcer is still the Stop gate; this annotates.
 
-This node owns both copies of the hook body: the dogfood `.plugins` source that governs SpexCode itself and
-the `spex init` template that fresh adopters receive. They must move together so the behavior a user installs
-matches the behavior SpexCode uses on itself.
+The live `.plugins` handler is the single authoring source. [[init-preset]] projects it into the checked-in
+`spex init` template, whose parity gate makes the behavior a user installs match what SpexCode runs.

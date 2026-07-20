@@ -89,9 +89,10 @@ test('the committed text replays as a continuable edit — one trailing space, p
   // the parked caret sits at the very end, after the trailing space
   assert.match(shell, /input\.setSelectionRange\(input\.value\.length, input\.value\.length\)/)
   // submit stays the normalizing edge: outer whitespace trimmed BEFORE the engine compares/pushes,
-  // and the visible value re-seeds its continuable form even when the URL is unchanged
+  // and the visible value re-seeds its continuable form even when the URL is unchanged — an emptied
+  // submit refills from the COMMITTED text (the bare address never re-fires the [value] replay)
   assert.match(shell, /const trimmed = text\.trim\(\)/)
-  assert.match(shell, /setDraft\(continuableText\(trimmed\)\)/)
+  assert.match(shell, /setDraft\(continuableText\(trimmed\) \|\| continuableText\(value\)\)/)
   assert.match(shell, /onSubmit\(trimmed\)/)
 })
 

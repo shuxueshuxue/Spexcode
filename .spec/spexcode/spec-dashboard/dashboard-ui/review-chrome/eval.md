@@ -62,7 +62,9 @@ scenarios:
       into: load both list pages at the bare address and at a non-default ?q=, reading the combobox value,
       focus, and caret each time; click a section tab and a facet menu option and immediately type a new
       token and press Enter; hand-append outer spaces to a default-equivalent text and submit; walk Back
-      and Forward across every recorded step reading value/focus/caret and the URL; read the aria-hidden
+      and Forward across every recorded step reading value/focus/caret and the URL; empty the input
+      entirely and submit at the bare address; focus the tablist and activate a section by arrow key;
+      read the aria-hidden
       overlay text and geometry against the input; take an ARIA snapshot of the search region; repeat the
       tab-then-type pass at 390px.
     expected: >
@@ -72,8 +74,10 @@ scenarios:
       continues immediately and lands as a well-formed next token. The trailing space is display-only:
       submit trims outer whitespace, a default-equivalent text stays/returns the bare address, any other
       text pushes ?q= with no trailing space, and Back/Forward replay never accumulates spaces or drifts
-      the text. The overlay mirrors the value glyph-for-glyph including the trailing space and stays
-      aligned with the input at 1440 and 390; the input remains one native AX combobox.
+      the text. An emptied submit visibly refills the default (plus the one space) even though the bare
+      address does not change; an arrow-key section activation is a builder pick and likewise releases
+      focus into the input. The overlay mirrors the value glyph-for-glyph including the trailing space
+      and stays aligned with the input at 1440 and 390; the input remains one native AX combobox.
   - name: token-query
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewQuery.js]

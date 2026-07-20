@@ -257,7 +257,7 @@ export const continuableText = (text) => {
 }
 
 export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys = [], suggest = {} }) {
-  const [draft, setDraft] = useState(value || '')
+  const [draft, setDraft] = useState(() => continuableText(value))
   const [caret, setCaret] = useState(-1)      // -1 = suggestions closed
   const [active, setActive] = useState(-1)    // listbox cursor; -1 = typing, Enter submits
   const inputRef = useRef(null)
@@ -285,11 +285,13 @@ export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys
   const syncScroll = () => { if (hlRef.current && inputRef.current) hlRef.current.scrollLeft = inputRef.current.scrollLeft }
   useEffect(syncScroll)
   // submit hands the ENGINE the trimmed text (default-equivalent → bare address, else ?q= with no
-  // outer whitespace) and re-seeds the visible value's continuable form even when the URL is unchanged.
+  // outer whitespace) and re-seeds the visible value's continuable form even when the URL is unchanged —
+  // including the emptied submit, which refills from the COMMITTED text (the page re-commits the
+  // default, but an unchanged address never re-fires the [value] replay).
   const submit = (text) => {
     setCaret(-1); setActive(-1)
     const trimmed = text.trim()
-    setDraft(continuableText(trimmed))
+    setDraft(continuableText(trimmed) || continuableText(value))
     parkCaret(true)
     onSubmit(trimmed)
   }

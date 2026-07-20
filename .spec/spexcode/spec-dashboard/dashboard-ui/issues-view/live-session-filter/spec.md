@@ -24,7 +24,7 @@ question: does the source session still EXIST on the board?
 ## expanded spec
 
 - **One facet, two surfaces, one token.** Both [[issues-view]] and [[evals-feed]] expose it through
-  [[review-chrome]]'s low-cardinality menu mechanism as the `session:present|missing` token — UI wording
+  [[review-chrome]]'s secondary low-cardinality Filters menu as the `session:present|missing` token — UI wording
   "Source session / Present / Missing" (中文「来源会话 / 仍在 / 已不在」). The words live/online/offline
   never appear on this facet: it asks presence, not connectivity. Picking a value is token surgery + a
   history PUSH; All removes the token. Options are data-derived through the [[review-filters]] adapter:
@@ -40,5 +40,5 @@ question: does the source session still EXIST on the board?
   `session:` only classifies entries by their source session's presence. A session id is never a legal
   `session:` value — an id typed there simply matches nothing, honestly.
 - **Composition is honest.** Presence combines conjunctively with the query's other tokens over the same
-  row model; it is not a global stat or a second list. At 390px it remains available through the
-  functional kebab.
+  row model; it is not a global stat or a second list. At 390px it remains available through the semantic
+  secondary Filters trigger, whose active-group count makes the selected token visible as state.

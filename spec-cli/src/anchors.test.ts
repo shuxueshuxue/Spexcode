@@ -68,13 +68,13 @@ test('a selector on a glob is a loud problem (a selector scopes ONE real file)',
   assert.match(r.problems[0], /glob/)
 })
 
-// ---- anchorHitCommits: OR semantics, per-commit dedupe, selector attribution ----
+// ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
 }
 
-test('multi-selector hits: a commit counts ONCE, selectors attribute per commit, unparseable is conservative for all', { skip: !gitAvailable() && 'git not available' }, async () => {
+test('multi-selector hits across file revisions: a commit counts ONCE and unparseable is conservative for all', { skip: !gitAvailable() && 'git not available' }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-anchors-'))
   const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')

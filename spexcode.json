@@ -3,9 +3,11 @@
   "lint": {
     "governedRoots": ["spec-dashboard/src", "spec-cli/src", "spec-forge/src", "spec-eval/src"],
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],
-    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
     "maxChildren": 8,
     "scenarioTags": ["frontend-e2e", "backend-api", "cli", "desktop", "mobile"]
+  },
+  "doctor": {
+    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 }
   },
   "sessions": {
     "maxActive": 8,

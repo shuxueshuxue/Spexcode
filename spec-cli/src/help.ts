@@ -71,15 +71,16 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
     see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {
-    line: 'doctor                diagnose whether the workflow actually reaches this agent  [--contract|--conflicts]',
-    body: `Usage: spex doctor                per-layer coverage report: preconditions · git-hook floor · contract ·
-                                  hooks + handler existence · backend — for every harness materialize delivers to
+    line: 'doctor                diagnose spec health and whether the workflow reaches this agent  [--contract|--conflicts]',
+    body: `Usage: spex doctor                spec-health findings + delivery report: preconditions · git-hook floor ·
+                                  contract · hooks + handler existence · backend · footprint
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
 
-Run it when a worker seems to be missing its contract or hooks — it names the broken layer and the
-repair, instead of you diffing materialized files by hand.`,
-    see: 'spex materialize (re-materialize the artifacts doctor checks)',
+Bare doctor is the opt-in, read-only health surface: it reports altitude findings without putting them
+in the lint gate, then audits workflow delivery. Run it directly or let the tidy workflow consume the
+same visible diagnosis.`,
+    see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   uninstall: {
     line: 'uninstall [dir]       remove all derived artifacts + local state; preserve tracked intent  [--hooks]',
@@ -158,7 +159,7 @@ commit since the spec's version touched an ANCHORED unit's lines, unacked — th
 drift; same-file selectors OR'd, one error naming the hit selectors) · one-govern (a node
 governs >1 DISTINCT file) · living (a "## vN" changelog heading) · id-format (an
 id char outside the whitelist — ascii [a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a
-leaf id reused) · mention (a [[id]] naming no node). Warns: altitude · breadth · coverage · drift
+leaf id reused) · mention (a [[id]] naming no node). Warns: breadth · coverage · drift
 (UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
 "ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
 per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·

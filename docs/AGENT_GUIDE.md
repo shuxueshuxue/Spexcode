@@ -225,18 +225,18 @@ together — that is a project choice, not a git requirement.
   Errors: **integrity** (a `code:`/`related:` path doesn't exist), **one-govern** (a node governs more than
   one file), **living** (a body contains a `## vN` changelog heading instead of staying current-state; see
   "the body is a living document" above), **id-format**, and **mention** (a `[[id]]` naming no node). Warns:
-  **altitude** (a body slid below contract altitude into a mechanics dump: over its line/char budget,
-  code-identifier density > 1.3/line, or ≥3 step-by-step lines; budgets overridable via `spexcode.json`'s
-  `lint` key), **breadth**, **coverage** (a governed source file isn't claimed by any spec), **drift**
+  **breadth**, **coverage** (a governed source file isn't claimed by any spec), **drift**
   (a governed file changed after its spec's last version, derived live from git, no stored hashes),
   **related-drift**, **owners**, and **confusable-id**. `spex guide spec` documents every rule. The
   pre-commit hook is a thin shim over it that blocks on errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
+- `spex doctor` is the opt-in, read-only health diagnosis. Its altitude check reports mechanics-dump
+  proxies with structured evidence and repair; it is never part of `spex spec lint` or the production gate.
 - A spec node declares the file it owns via a `code:` list in its frontmatter (at most ONE file — the
   one-govern error; move the rest to `related:`) plus a `related:` list for files it references — those
   edges are what `spex spec lint` and eval freshness anchor to.
-- To configure SpexCode's runtime settings (launchers, dashboard icon, lint budgets, layout), run
+- To configure SpexCode's runtime settings (launchers, dashboard icon, lint policy, doctor health budgets, layout), run
   **`spex guide settings`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
   field and which of the two files it belongs in (committed & portable vs. gitignored & host-specific).
   Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide eval` carry the authoring
@@ -329,7 +329,7 @@ git-native anchors (an unconditional materialize in pre-commit, plus post-checko
 no harness event ever triggers a materialize) — so a
 fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
 materialize that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
-adoption (launchers, dashboard icon, lint budgets) all live in those two `spexcode.json` /
+adoption (launchers, dashboard icon, lint policy, doctor health budgets) all live in those two `spexcode.json` /
 `spexcode.local.json` files, documented in full by **`spex guide settings`**.
 
 ## Naming

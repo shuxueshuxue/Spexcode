@@ -38,6 +38,15 @@ test('document pages share one inset page-scroll geometry', () => {
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.page-scroll\s*\{[^}]*margin:\s*10px 0;[^}]*scrollbar-gutter:\s*auto;/s)
 })
 
+test('scoped Evals gates are an opaque sticky strip inside that scroll owner', () => {
+  assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
+  assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)
+  assert.match(css, /\.lp-head\s*\{[^}]*z-index:\s*5;/s)
+  assert.match(css, /\.rl-menu\s*\{[^}]*z-index:\s*20;/s)
+  assert.match(css, /\.ui-tip\s*\{[^}]*z-index:\s*100;/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;/s)
+})
+
 test('terminal composer docks flush at the bottom and keeps ❯ on the active line', () => {
   assert.match(
     css,

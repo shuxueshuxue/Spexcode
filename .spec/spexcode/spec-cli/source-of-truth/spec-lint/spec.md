@@ -18,9 +18,9 @@ A spec is the ground truth for the code it governs, but nothing tied the two tog
 drift from its spec silently. The missing edge is a `code:` list in each node's frontmatter naming the
 files it owns, plus a deterministic linter over that graph. Keep the spec↔code **graph and authored
 contract structure** honest; whether prose is semantically good, including whether it sits at the right
-altitude, is an opt-in health diagnosis rather than a production gate. The graph's NAMES are part of its
-honesty too: an id is an unambiguous coordinate, a `[[mention]]` must resolve, and a retired vocabulary
-must stay retired.
+altitude or whether its tree shape is too broad, is an opt-in health diagnosis rather than a production
+gate. The graph's NAMES are part of its honesty too: an id is an unambiguous coordinate, a `[[mention]]`
+must resolve, and a retired vocabulary must stay retired.
 
 ## expanded spec
 
@@ -79,9 +79,6 @@ lists ALL lint rules, always:
 - **related-drift** (warn): the SOFT tier — a `related:` file moved ahead of the node; one summary line,
   never the commit gate, never eval freshness. A selector-scoped related row warns per HIT (selector
   named); its misses are silent.
-- **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — a deterministic
-  structural comprehensibility bound. Advisory: a flat list of true peers is sometimes right, so it asks,
-  not mandates.
 - **owners** (warn): one summary line counting files governed WHOLE-FILE by **> `lint.maxOwners`** nodes
   (default 3) — breadth's mirror on the file (too many owners, not too many children; below the cap is
   ordinary). A selector-scoped governor claims units, not the file, so it stays out of the count. Remedy
@@ -99,12 +96,14 @@ Beside the graph rules sits the **vocabulary backstop**, [[dead-words]]: a CI gr
 concepts' old names, scoped to product surfaces (strings, file names, node dir names) with prose exempt —
 lint keeps the graph honest, dead-words keeps its language from regressing.
 
-Spec-prose quality is deliberately absent from this registry. Bare [[doctor]] owns the opt-in health
-diagnosis, including the one altitude proxy implementation; lint neither emits those findings nor carries
-their thresholds into the commit hook or CI.
+Heuristic spec health is deliberately absent from this registry. Bare [[doctor]] owns the opt-in health
+diagnosis, including the one altitude implementation and the one breadth implementation; lint neither
+emits those findings nor carries their thresholds into the commit hook or CI. The retired
+`lint.maxChildren` key is not a compatibility fallback: doctor names it and its
+`doctor.breadth.maxChildren` replacement so an old settings file cannot silently keep a second owner.
 
 Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, source policy,
-and structural bounds) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values tuned
+and ownership bounds) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values tuned
 to this tree; a different layout or language overrides what fits. `loadConfig` reads it through the shared
 fail-loud `readJsonConfig` ([[portable-layout]]): an ABSENT file defaults silently, but a MALFORMED one
 throws LOUD rather than quietly reverting the author's policy to defaults — a typo that green-washes the

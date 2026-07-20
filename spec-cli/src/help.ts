@@ -77,9 +77,9 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
 
-Bare doctor is the opt-in, read-only health surface: it reports altitude findings without putting them
-in the lint gate, then audits workflow delivery. Run it directly or let the tidy workflow consume the
-same visible diagnosis.`,
+Bare doctor is the opt-in, read-only health surface: it reports altitude and breadth findings without
+putting them in the lint gate, then audits workflow delivery. Run it directly or let the tidy workflow
+consume the same visible diagnosis.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   uninstall: {
@@ -159,7 +159,7 @@ commit since the spec's version touched an ANCHORED unit's lines, unacked — th
 drift; same-file selectors OR'd, one error naming the hit selectors) · one-govern (a node
 governs >1 DISTINCT file) · living (a "## vN" changelog heading) · id-format (an
 id char outside the whitelist — ascii [a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a
-leaf id reused) · mention (a [[id]] naming no node). Warns: breadth · coverage · drift
+leaf id reused) · mention (a [[id]] naming no node). Warns: coverage · drift
 (UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
 "ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
 per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·

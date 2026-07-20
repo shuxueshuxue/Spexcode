@@ -7,6 +7,7 @@ code:
   - spec-cli/src/pty-bridge.ts
 related:
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-cli/test/pty-bridge.atomic-repaint.ts
   - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.fd-leak.ts
   - spec-cli/test/pty-bridge.stress.ts
@@ -74,6 +75,14 @@ the same reason a mode flip **always** repaints (the repaint token dedups), and 
 change — another client resized the shared window with no repaint in flight — re-seeds the viewers rather
 than letting live deltas paint onto stale geometry. No settle-timeout, no geometry poll, no per-repaint
 pull; a repaint whose size already equals the known layout paints at once.
+
+That repaint is the viewer's **one writer** from the resize request until its reconstructed frame lands.
+Resizing sends `SIGWINCH` to the pane, so a TUI commonly emits a top-to-bottom redraw as several `%output`
+events before `capture-pane` answers. Broadcasting those events and then the capture made the browser show
+the redraw as a terminal-wide scroll before replacing it with the coherent frame. The bridge now holds those
+pre-frame events back: the capture already includes every event before its command boundary, then the frame
+lands once and ordinary `%output` resumes as the live tail. No debounce or settle timer is involved, and the
+same ownership covers first-visible, resize, reconnect, mode change, and copy-mode repaint.
 
 ## the size vote — sharing the socket with other instances
 

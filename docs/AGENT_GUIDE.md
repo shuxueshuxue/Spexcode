@@ -225,14 +225,15 @@ together — that is a project choice, not a git requirement.
   Errors: **integrity** (a `code:`/`related:` path doesn't exist), **one-govern** (a node governs more than
   one file), **living** (a body contains a `## vN` changelog heading instead of staying current-state; see
   "the body is a living document" above), **id-format**, and **mention** (a `[[id]]` naming no node). Warns:
-  **breadth**, **coverage** (a governed source file isn't claimed by any spec), **drift**
+  **coverage** (a governed source file isn't claimed by any spec), **drift**
   (a governed file changed after its spec's last version, derived live from git, no stored hashes),
   **related-drift**, **owners**, and **confusable-id**. `spex guide spec` documents every rule. The
   pre-commit hook is a thin shim over it that blocks on errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
-- `spex doctor` is the opt-in, read-only health diagnosis. Its altitude check reports mechanics-dump
-  proxies with structured evidence and repair; it is never part of `spex spec lint` or the production gate.
+- `spex doctor` is the opt-in, read-only health diagnosis. Its altitude and breadth checks report
+  mechanics-dump and child-fan-out proxies with structured per-node evidence and repair; they are never
+  part of `spex spec lint` or the production gate.
 - A spec node declares the file it owns via a `code:` list in its frontmatter (at most ONE file — the
   one-govern error; move the rest to `related:`) plus a `related:` list for files it references — those
   edges are what `spex spec lint` and eval freshness anchor to.

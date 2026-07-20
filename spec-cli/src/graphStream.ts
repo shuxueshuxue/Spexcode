@@ -1,11 +1,15 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
-import { watch, mkdirSync, readdirSync, readFileSync, existsSync, type FSWatcher } from 'node:fs'
+import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
 import { hotSignature, warmSignature } from './sessions.js'
 import { getBoard, invalidateBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
+import {
+  invalidateSessionEvalProjections,
+  setSessionEvalProjectionNotify,
+} from '../../spec-eval/src/sessioneval.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
 // plain mode it gets a bare `graph-changed` and refetches /api/graph (the legacy protocol, kept verbatim
@@ -21,7 +25,7 @@ import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 // Sources: (1) fs.watch on the per-user session store — every lifecycle transition lands as a
 // sessions/<id>/session.json write → 'sessions'; (2) fs.watch on the shared git dir's refs (+
 // packed-refs/HEAD) — a commit/merge moves a ref, reshaping the tree → 'full'; (3) fs.watch on the git
-// worktree REGISTRY (+ each live worktree's `.spec`) — an uncommitted spec edit in a linked worktree → 'full';
+// worktree REGISTRY (+ each live worktree root and gitdir index) — dirty source/spec/sidecar/rename/stage → 'full';
 // (4) two subscriber-gated pollers of the tmux-derived signatures ([[sessions]]) that never touch a file —
 // a 100ms HOT syscall poll and a 1s WARM tmux poll, both → 'sessions'; (5) a delta-gated ~15s cold-tick
 // PATROL that invalidates FULL, rebuilds and diffs — the self-heal authority that catches whatever every
@@ -29,6 +33,7 @@ import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 // without delta subscribers keeps its zero-build behavior: sources just fan out `graph-changed`.
 
 type Scope = 'sessions' | 'full'
+type EvalTarget = 'all' | { id?: string; path?: string }
 type Notify = () => void
 type Frame = { event: string; data: string }
 type DeltaSend = (frame: Frame) => void
@@ -120,7 +125,10 @@ async function rebuildAndBroadcast(): Promise<void> {
 // carries its change SCOPE; the window accumulates the MAX ([[graph-cache]] escalates none→sessions→full).
 // With delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same
 // tag-moved gate — no spurious refetches); without them it stays the zero-build legacy notify.
-function fireChanged(scope: Scope = 'full'): void {
+function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
+  // Advance eval input generations BEFORE invalidating/building the board, so the first frame caused by an
+  // input event is `updating(lastKnown)`. Summary completion calls this function without a target.
+  if (evalTarget) invalidateSessionEvalProjections(evalTarget)
   pendingScope = maxScope(pendingScope, scope)
   // invalidate the route's board cache ([[graph-cache]]) on EVERY change signal, at the accumulated scope,
   // before the debounce guard — a plain-mode client that polls /api/graph (no delta rebuild here) must
@@ -146,7 +154,11 @@ function fireChanged(scope: Scope = 'full'): void {
 // source 1 normally sees the write too. The explicit route call stays because that fs watch is best-effort
 // (it can fail to attach), and the nudge makes the sub-second rename guarantee deterministic. Same
 // debounced funnel as every other source; defaults to 'full' but the rename route passes 'sessions'.
-export const notifyBoardChanged = (scope: Scope = 'full'): void => fireChanged(scope)
+export const notifyBoardChanged = (scope: Scope = 'full'): void =>
+  fireChanged(scope, scope === 'full' ? 'all' : undefined)
+
+// Stable summary batches re-enter the SAME session-unit graph path; this is not a second transport.
+setSessionEvalProjectionNotify(() => fireChanged('sessions'))
 
 // ---- event source 1: the session store (lifecycle status writes) → 'sessions' ----
 let watcher: FSWatcher | null = null
@@ -168,19 +180,85 @@ function ensureRefsWatcher(): void {
   refsWatchers = []
   try {
     const common = gitCommonDir()
-    try { refsWatchers.push(watch(join(common, 'refs'), { recursive: true }, () => fireChanged('full'))) } catch { /* loose refs unwatched */ }
-    try { refsWatchers.push(watch(common, (_e, f) => { if (f === 'packed-refs' || f === 'HEAD') fireChanged('full') })) } catch { /* packed refs unwatched */ }
+    try { refsWatchers.push(watch(join(common, 'refs'), { recursive: true }, () => fireChanged('full', 'all'))) } catch { /* loose refs unwatched */ }
+    try { refsWatchers.push(watch(common, (_e, f) => { if (f === 'packed-refs' || f === 'HEAD') fireChanged('full', 'all') })) } catch { /* packed refs unwatched */ }
   } catch { /* not a repo? the cold tick still covers */ }
 }
 
-// ---- event source 3: the git worktree REGISTRY + each live worktree's `.spec` → 'full' ----
-// An UNCOMMITTED spec edit in a linked worktree moves no ref and writes no session record, so neither
-// source 1 nor 2 sees it — only a watch on the worktree's own `.spec` does. The registry (`<git-common>/
-// worktrees/<name>/`) is the index of live worktrees; watching it non-recursively catches add/remove of a
-// worktree, and on each event we RECONCILE the per-worktree `.spec` watchers (resolving each entry's tree
-// via its `gitdir` file). Everything best-effort: a failed watch just leaves that path to the patrol.
+// ---- event source 3: worktree registry + working roots + per-worktree indexes → 'full' ----
+// Summary inputs include ordinary dirty source and staged-only changes, not just `.spec`. Each registry row
+// therefore owns a recursive working-root watcher plus a non-recursive watcher on git's worktree metadata
+// dir (`index`). A delivered event advances that worktree's eval generation before the graph rebuild.
 let registryWatcher: FSWatcher | null = null
-const specWatchers = new Map<string, FSWatcher>()   // registry entry name → recursive watch on <worktree>/.spec
+type WorktreeWatch = { path: string; root: FSWatcher; index: FSWatcher }
+const worktreeWatchers = new Map<string, WorktreeWatch>()
+const worktreeRetryAttempted = new Set<string>()
+
+export function scheduleWorktreeResubscribe(
+  name: string,
+  attempted: Set<string>,
+  retry: () => void,
+): boolean {
+  if (attempted.has(name)) return false
+  attempted.add(name)
+  setImmediate(retry)
+  return true
+}
+
+const ignoredWorktreePath = (file: string): boolean =>
+  file === '.git' || file.startsWith('.git/') || file === 'node_modules' || file.startsWith('node_modules/')
+
+export function watchSessionEvalWorktree(
+  wtPath: string,
+  gitDir: string,
+  onInput: () => void,
+  onFailure: () => void,
+): { root: FSWatcher; index: FSWatcher } {
+  let failed = false
+  let root: FSWatcher | null = null
+  let index: FSWatcher | null = null
+  const fail = () => {
+    if (failed) return
+    failed = true
+    try { root?.close() } catch { /* already gone */ }
+    try { index?.close() } catch { /* already gone */ }
+    onFailure()
+  }
+  try {
+    root = watch(wtPath, { recursive: true }, (_event, filename) => {
+      if (filename == null) { fail(); return }
+      const file = String(filename)
+      if (!ignoredWorktreePath(file)) onInput()
+    })
+    index = watch(gitDir, (_event, filename) => {
+      if (filename == null) { fail(); return }
+      if (String(filename) === 'index') onInput()
+    })
+    root.on('error', fail)
+    index.on('error', fail)
+    return { root, index }
+  } catch (error) {
+    fail()
+    throw error
+  }
+}
+
+function dropWorktreeWatcher(name: string, mark = true): void {
+  const row = worktreeWatchers.get(name)
+  if (!row) return
+  worktreeWatchers.delete(name)
+  try { row.root.close() } catch { /* already gone */ }
+  try { row.index.close() } catch { /* already gone */ }
+  if (mark) fireChanged('full', { path: row.path })
+}
+
+function watcherFailed(name: string): void {
+  // Failure/overflow has no trustworthy path. Keep last-known, mark the target updating, and immediately
+  // resubscribe; the authorized summary build is the one authoritative rescan, never a periodic sweep.
+  dropWorktreeWatcher(name, true)
+  scheduleWorktreeResubscribe(name, worktreeRetryAttempted, reconcileWorktrees)
+}
+
 function reconcileWorktrees(): void {
   let dir: string
   try { dir = join(gitCommonDir(), 'worktrees') } catch { return }
@@ -190,15 +268,27 @@ function reconcileWorktrees(): void {
   for (const e of ents) {
     if (!e.isDirectory()) continue
     live.add(e.name)
-    if (specWatchers.has(e.name)) continue
+    if (worktreeWatchers.has(e.name)) continue
     try {
       // the entry's `gitdir` file points at the worktree's `<tree>/.git` (file or dir); its parent is the tree.
       const wtPath = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim())
-      const specDir = join(wtPath, '.spec')
-      if (existsSync(specDir)) specWatchers.set(e.name, watch(specDir, { recursive: true }, () => fireChanged('full')))
-    } catch { /* best-effort; the patrol covers an unwatched worktree */ }
+      const { root, index } = watchSessionEvalWorktree(
+        wtPath,
+        join(dir, e.name),
+        () => fireChanged('full', { path: wtPath }),
+        () => watcherFailed(e.name),
+      )
+      const row = { path: wtPath, root, index }
+      worktreeWatchers.set(e.name, row)
+      worktreeRetryAttempted.delete(e.name)
+    } catch {
+      // An attach failure is observable: mark unknown/full now. The next registry change or explicit graph
+      // source setup retries; no patrol is allowed to call the eval projection current.
+      fireChanged('full', 'all')
+      scheduleWorktreeResubscribe(e.name, worktreeRetryAttempted, reconcileWorktrees)
+    }
   }
-  for (const [name, w] of [...specWatchers]) if (!live.has(name)) { try { w.close() } catch { /* already gone */ } ; specWatchers.delete(name) }
+  for (const name of worktreeWatchers.keys()) if (!live.has(name)) dropWorktreeWatcher(name, false)
 }
 function ensureWorktreeRegistry(): void {
   if (registryWatcher) return
@@ -208,9 +298,23 @@ function ensureWorktreeRegistry(): void {
     try { mkdirSync(dir, { recursive: true }) } catch { /* best-effort */ }
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
-    registryWatcher = watch(dir, () => { reconcileWorktrees(); fireChanged('full') })
+    registryWatcher = watch(dir, () => { worktreeRetryAttempted.clear(); reconcileWorktrees(); fireChanged('full', 'all') })
+    registryWatcher.on('error', () => {
+      try { registryWatcher?.close() } catch { /* already gone */ }
+      registryWatcher = null
+      fireChanged('full', 'all')
+      setImmediate(ensureWorktreeRegistry)
+    })
   } catch { registryWatcher = null }
   reconcileWorktrees()   // attach for the worktrees that already exist when the source starts
+}
+
+// Attach the canonical filesystem sources before an HTTP snapshot starts summary work. This closes the
+// request→SSE handoff gap: an edit after the snapshot build has a watcher before it can occur.
+export function ensureBoardFileWatchers(): void {
+  ensureWatcher()
+  ensureRefsWatcher()
+  ensureWorktreeRegistry()
 }
 
 // ---- event source 4: the two-tier tmux-derived pollers (liveness + activity — never a file write) → 'sessions' ----
@@ -265,9 +369,7 @@ function stopSourcesIfIdle(): void {
 // chain re-anchors with no client-side repair logic.
 export function boardStream(c: Context) {
   const delta = c.req.query('mode') === 'delta'
-  ensureWatcher()
-  ensureRefsWatcher()
-  ensureWorktreeRegistry()
+  ensureBoardFileWatchers()
   return streamSSE(c, async (stream) => {
     let aborted = false
     const send: DeltaSend = (frame) => { void stream.writeSSE(frame).catch(() => {}) }

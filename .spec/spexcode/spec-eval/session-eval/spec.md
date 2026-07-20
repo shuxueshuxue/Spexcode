@@ -12,6 +12,7 @@ related:
   - spec-eval/src/sessioneval.test.ts
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/test/session-scope-impact.e2e.mjs
+  - spec-dashboard/src/sessionEvalCoherence.test.mjs
 ---
 # session-eval
 
@@ -63,6 +64,37 @@ list's scenario filter counts. The session toolbar decomposes that fraction visi
 measured-but-stale/unscored work needing review, and blind declarations are mutually exclusive and add back to
 the affected total; unknown remains outside it.
 
+**The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
+affected selector in this engine and reduces the already-scoped model to the seven counts the toolbar needs:
+measured, affected total, fresh pass, fresh fail, measured-but-needing-review, blind, and unknown. The full
+session model carries that exact projection too, so a consumer never re-implements the fold. Each stable build
+also carries one content revision over every input that can move the result: the session HEAD, the base branch
+HEAD and merge-base, the staged and unstaged diff (renames and untracked content included), scenario declarations
+and their semantic hashes/code axes, reading/retraction sidecars, and the trunk remark track that participates in
+freshness. A build reads the revision before and after the fold; a mismatch is discarded and recomputed. Thus a
+summary and a full model bearing the same revision are the same evaluation cut, not two coincidentally similar
+reads.
+
+The backend retains a content-addressed, per-session projection cache. Each entry has a process epoch and a
+monotonic input generation `g`, a single in-flight build, and the last stable projection. A cache miss is
+`loading`; a relevant canonical input event increments `g` synchronously and becomes `updating` while preserving
+the last-known value; a stable build publishes `ready` only when both its generation and content revision still
+match. A changed generation or revision discards the result and the runner follows the newest generation. An
+error is explicit and also preserves last-known. Burst events may coalesce into one build/publication for the
+latest generation, but no older compute can overwrite it. The graph snapshot only batch-reads these cached lean
+projections; it never runs `buildSessionEvals` once per session row. Initial cache misses may start one batch, and
+completion nudges the existing graph mechanism once.
+
+**Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
+moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
+watched recursively for dirty source, rename, scenario and sidecar edits, and its gitdir index is watched for
+stage/reset-only changes. Watch failure, a pathless/overflow-like event, or resubscription marks the projection
+updating and performs one authoritative rebuild. No TTL, periodic fingerprint scan, or patrol makes a summary
+current. The patrol may still repair unrelated graph state, but never advances an eval generation or certifies
+this projection. The guarantee is necessarily over events the OS watcher delivers: an operating system that
+silently drops an event without an error exposes no fact a purely event-driven process can detect, and the UI
+must not claim otherwise.
+
 Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
 (base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined
 behind native toggles (capped so a huge changeset can't bloat the page). File grouping is complete independently
@@ -98,6 +130,13 @@ not-found list links, return to this scoped list; only from the list does the te
 Evals hierarchy. There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the
 real product, not by a language-specific checker; a session with no worktree/diff shows a clean empty
 state.
+
+The full rows model remains demand-only: only mounting a scoped Evals list/detail performs
+`GET /api/sessions/:id/evals`; the terminal toolbar never does. The response carries the same generation,
+content revision, and `sessionEvalSummary` projection as the graph field. If the client has already observed a
+newer graph generation, it rejects the old response and reloads; equal generations must have equal content
+revisions. This fence keeps a slow full read from repainting newer loss while preserving the tier split: summary
+on graph, scenarios/readings on Evals open, evidence bytes on detail expansion.
 
 The **self-contained HTML** (`renderExportHtml`: evidence inlined as data-URIs, every changed file's
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare

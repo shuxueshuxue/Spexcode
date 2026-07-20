@@ -1,13 +1,15 @@
 // [[session-eval]] YATU: real Session terminal -> affected-scenario list -> detail -> browser Back.
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const CHROMIUM = process.env.SPEXCODE_CHROMIUM_PATH || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5174'
 const SESSION = process.env.SESSION
 const OUT = process.env.OUT || '/tmp/session-scope-impact'
+const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 if (!SESSION) throw new Error('SESSION must name a live session')
 mkdirSync(OUT, { recursive: true })
 
@@ -20,13 +22,25 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` - ${detail}` : ''}`)
 }
 
-const modelResponse = await fetch(`${BASE}/api/sessions/${SESSION}/evals`)
+const source = spawnSync(join(ROOT, 'spec-eval/node_modules/.bin/tsx'), ['--test', 'src/sessioneval.test.ts'], {
+  cwd: join(ROOT, 'spec-eval'), encoding: 'utf8',
+})
+check('controlled scope/export fixtures pass', source.status === 0, `exit ${source.status}`)
+
+const [modelResponse, reviewResponse] = await Promise.all([
+  fetch(`${BASE}/api/sessions/${SESSION}/evals`),
+  fetch(`${BASE}/api/sessions/${SESSION}/review`),
+])
 if (!modelResponse.ok) throw new Error(`session model HTTP ${modelResponse.status}`)
-const model = await modelResponse.json()
+if (!reviewResponse.ok) throw new Error(`session review HTTP ${reviewResponse.status}`)
+const [model, review] = await Promise.all([modelResponse.json(), reviewResponse.json()])
 const states = model.nodes.flatMap((node) => node.scenarios.map((scenario) => {
   const reading = node.evals.find((entry) => entry.scenario === scenario.name) || null
-  return { node: node.id, scenario: scenario.name, reading }
+  return { node: node.id, scenario: scenario.name, impact: scenario.impact, reading }
 }))
+check('every API scenario carries an explicit impact reason', states.every((state) => (
+  Array.isArray(state.impact) && state.impact.length > 0
+)), `${states.length} scenarios`)
 const expected = {
   total: states.length,
   measured: states.filter((state) => state.reading).length,
@@ -37,6 +51,7 @@ const expected = {
   blind: states.filter((state) => !state.reading).length,
   stale: states.filter((state) => state.reading && !state.reading.fresh).length,
   unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length || 0), 0),
+  diffFiles: review.diff.length,
   names: states.map((state) => `${state.node}/${state.scenario}`).sort(),
 }
 
@@ -98,6 +113,28 @@ try {
   await page.waitForFunction((count) => document.querySelectorAll('.lp-row').length === count, expected.total)
   check('browser Back restores the exact scoped list and row set', await page.evaluate(() => location.hash) === listHash
     && await page.locator('.lp-row').count() === expected.total)
+
+  const [exportPage] = await Promise.all([
+    context.waitForEvent('page'),
+    page.click('.se-export'),
+  ])
+  await exportPage.waitForSelector('main.evals', { timeout: 20_000 })
+  await exportPage.waitForLoadState('load')
+  await exportPage.waitForFunction(({ scenarios, files }) => (
+    document.querySelectorAll('.eval-entry').length === scenarios
+    && document.querySelectorAll('.fpath').length === files
+  ), { scenarios: expected.total, files: expected.diffFiles }, { timeout: 60_000 })
+  const exported = await exportPage.evaluate(() => ({
+    ribbon: document.querySelector('.ribbon')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    scenarios: document.querySelectorAll('.eval-entry').length,
+    unmeasured: document.querySelectorAll('.eval-entry.unmeasured').length,
+    files: document.querySelectorAll('.fpath').length,
+  }))
+  check('plain export uses affected scenarios as its denominator', exported.ribbon.includes(`${expected.freshPass}/${expected.total} passing`), exported.ribbon)
+  check('plain export renders every affected scenario including blind rows', exported.scenarios === expected.total && exported.unmeasured === expected.blind, `${exported.scenarios} cards, ${exported.unmeasured} unmeasured`)
+  check('plain export retains every review diff file', exported.files === expected.diffFiles, `${exported.files}/${expected.diffFiles}`)
+  await exportPage.screenshot({ path: join(OUT, 'scoped-export.png') })
+  await exportPage.close()
 } finally {
   const video = page.video()
   await page.close()
@@ -106,6 +143,12 @@ try {
   await browser.close()
 }
 
-const result = { session: SESSION, expected, checks, passed: checks.every((item) => item.ok) }
+const result = {
+  session: SESSION,
+  source: { status: source.status, output: `${source.stdout}${source.stderr}`.trim() },
+  expected,
+  checks,
+  passed: checks.every((item) => item.ok),
+}
 writeFileSync(join(OUT, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
 if (!result.passed) process.exitCode = 1

@@ -51,7 +51,10 @@ axis) intersects the worktree diff, when that scenario's semantic contract (desc
 **Fresh** remains the live [[eval-core]] judgment on the latest reading after the scenario has entered scope.
 The impact predicate lives once in `sessioneval.ts`; every session face consumes the already-scoped model.
 Touching a node's spec.md, eval.md, or one sibling scenario therefore never sweeps the eval.md's other scenarios
-into the session. An affected scenario stays visible whether its latest reading is fresh, stale, legacy, or
+into the session. Contract comparison follows an eval.md rename/reparent back to its merge-base path, so a pure
+move changes no scenario; the measurement axis reads the live worktree sidecar, so a reading this session just
+filed is visible before its eventual evidence commit even when the session changed no code. An affected scenario
+stays visible whether its latest reading is fresh, stale, legacy, or
 missing: stale and missing are review work, not reasons to hide it. A declared affected scenario with no
 effective reading is the precise **blind/unmeasured** case (the contract is known, the measurement is absent).
 A changed frontend node with no eval.md is **unknown coverage** (there is no declared contract to count as a
@@ -60,8 +63,10 @@ list's scenario filter counts.
 
 Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
 (base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined
-behind native toggles (capped so a huge changeset can't bloat the page). Nothing is hidden — the whole
-diff and both file versions are there to jump into, no extra fetch.
+behind native toggles (capped so a huge changeset can't bloat the page). File grouping is complete independently
+of scenario impact: a node whose spec.md changed but whose scenarios did not still carries that file row and says
+that no declared scenario is affected. Nothing is hidden — the whole diff and both file versions are there to
+jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
 address of a session's evaluation is `#/evals?q=is:eval scope:<id>` (the list — the same
@@ -97,7 +102,9 @@ diff + before/after drill-down) remains as the **export artifact** — CI attach
 browser — behind the session-scoped list's `export ↗` link (labelled as the export it is — the same
 `GET /api/sessions/:id/evals` route with `?format=html`; bare, it serves the lean JSON model), and
 `spex eval ls --session <SEL> --export` (`--out`/`--open`, a backend client that works against a remote backend
-unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
+unchanged). Its cards and denominator project the scoped declarations, not only readings that happen to exist:
+each affected missing scenario renders as unmeasured and still counts, while stale readings remain visible.
+Inlining everything is the right shape for a file that must stand alone, and the wrong shape
 for an interactive page — that is the whole split.
 
 **The CLI mirrors the vocabulary, not just the artifact.** `spex eval ls --session <SEL>` is the

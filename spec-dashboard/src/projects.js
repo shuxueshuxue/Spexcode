@@ -74,6 +74,11 @@ export function selectProjectIdentity(projectId, catalog, boardIdentity) {
 export const selectGatewayIdentity = (catalog) =>
   catalog?.state === 'ok' ? catalog.gateway.identity : { title: 'Projects', icon: 'gateway' }
 
+// the ONE tab-title projection ([[tab-title]]): the resolved scope identity IS the tab, with no product
+// suffix — several open scopes read apart by name alone. The plain product name appears only while no
+// identity has resolved yet (matching the title index.html ships before the app boots).
+export const tabTitle = (identity) => identity?.title || 'SpexCode'
+
 // GET /projects → { state: 'ok', adminGated, projects } | { state: 'denied', reason } | { state: 'absent' }.
 export async function loadProjects() {
   let res

@@ -9,8 +9,9 @@ scenarios:
       (tag, classes, state/title/meta/aside, hairline divider), menus, and empty-state
       class. Open direct and overflow menus by mouse and keyboard; read focus transfer, checked item,
       Arrow/Home/End roving, trigger restoration, outside dismissal, one-layer Escape, and the Chromium
-      accessibility tree's named group/radio ownership. Read tablist/tab/tabpanel names and relations, and
-      press Up/Down on a horizontal tab. Then open one
+      accessibility tree's named group/radio ownership. On Issues read tablist/tab/tabpanel names and
+      relations and press Up/Down on a horizontal tab; on Evals read the named Fail/Pass button group,
+      pressed states, ReviewState names, and toggle-to-clear behavior. Then open one
       eval detail and one issue detail and compare the detail skeletons: header,
       status band and state SVG, main column, side rail, docked composer classes. Resize list and detail to
       390px; read facet visibility, overflow contents, row geometry, body scroll width, and column order.
@@ -36,9 +37,11 @@ scenarios:
       An active facet whose data option disappeared remains visible with an All off-switch; an inactive facet
       with no real options stays omitted. Menus and section tabs expose one roving tab stop, and Escape peels
       only the top registered layer before focus returns to its trigger. Each overflow facet is a distinct
-      accessible radio group named by its visible label. The horizontal section tablist is named; every tab
+      accessible radio group named by its visible label. Issues' horizontal section tablist is named; every tab
       controls the one results tabpanel, the panel is labelled by the active tab, and Up/Down neither changes
-      section nor suppresses normal scrolling.
+      section nor suppresses normal scrolling. Evals instead exposes a named Fail/Pass button group with
+      honest aria-pressed state: neither is pressed on the default all-verdict result region, and blind or
+      unscored rows remain reachable rather than being forced into either button.
   - name: detail-side-rail-sticky
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
@@ -118,7 +121,7 @@ scenarios:
     expected: >
       Every committed text replays into the combobox as the trimmed tokens plus EXACTLY one trailing ASCII
       space, caret parked after it — on cold load the caret is parked without stealing page focus, while a
-      section/facet/autocomplete pick, a hand submit, and a Back/Forward replay focus the input so typing
+      section/quick-filter/facet/autocomplete pick, a hand submit, and a Back/Forward replay focus the input so typing
       continues immediately and lands as a well-formed next token. The trailing space is display-only:
       submit trims outer whitespace, a default-equivalent text stays/returns the bare address, any other
       text pushes ?q= with no trailing space, and Back/Forward replay never accumulates spaces or drifts
@@ -139,13 +142,14 @@ scenarios:
       switch themes.
     expected: >
       ONE source of truth throughout: the bare address shows the default tokens in the input; every tab
-      or menu pick rewrites ONLY its token in the visible text and pushes ?q=<raw text> exactly once;
+      or quick-filter/menu pick rewrites ONLY its token in the visible text and pushes ?q=<raw text> exactly once;
       recognized qualifiers color in the aria-hidden overlay while an unknown one stays plain, keeps
       running, and lands on the filtered-zero face with the token intact in input and URL. A key pick
       completes `key:` in place without executing; a value pick completes the token and executes;
       `scope:` suggests only sessions on the current board. Back restores URL + input text + result set
       at every level. Legacy addresses replace-normalize to the token form (live=1→session:present,
-      session=<id>→scope:<id>, ok=1→state:reviewed, kind=all→the bare default); a scoped list shows the
+      session=<id>→scope:<id>, ok=1→state:reviewed, kind=all→the bare default); Evals' bare default is
+      `is:eval`, Fail/Pass toggle `verdict:` and Human review builds `state:`; a scoped list shows the
       gates strip and its rows' details carry ?q=scope:<id> alone. At 390px the input keeps full width
       and highlight with no horizontal overflow; every theme keeps the overlay colored and aligned.
   - name: detail-header-alignment

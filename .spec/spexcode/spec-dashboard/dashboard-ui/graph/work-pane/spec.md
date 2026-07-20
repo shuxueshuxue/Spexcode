@@ -85,7 +85,9 @@ latest no longer shipped precomputed); a version with no recorded change says so
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
 shared**: the eval pane ([[eval-tab]]) rides the same component (version rows + diff here, result rows
 + screenshot there). Its embedded filter projects the same result-kind discriminator as [[evals-feed]],
-never a popup-only legacy alias.
+never a popup-only legacy alias. The compact Evals filter projects verdict as its Fail/Pass section and
+human review as the distinct Needs review / Reviewed facet, so moving the canonical page's primary visual
+axis does not fork field semantics inside the popup.
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
 (`Enter`; see [[session-console]] and [[term-input]]), keyed to a session rather than pinned to a node. The

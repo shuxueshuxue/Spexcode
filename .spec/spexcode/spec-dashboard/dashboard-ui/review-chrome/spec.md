@@ -24,7 +24,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
 
 - **ONE visible, editable token query is the whole list state** ([[review-query]] is the engine). The
   32px combobox shows the raw text — Issues defaults to `is:issue state:open`, Evals to
-  `is:eval state:current` — and every control is only a query BUILDER over the COMMITTED text: section
+  `is:eval` — and every control is only a query BUILDER over the COMMITTED text: section
   tabs and low-cardinality facet menus perform token surgery and PUSH, so a pick is always visible as
   text and no control owns private filter state. **The committed text replays as a CONTINUABLE edit**:
   the visible value is the trimmed tokens plus exactly ONE trailing ASCII space with the caret parked
@@ -50,7 +50,9 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   freshness, evidence, store, source-session presence); tab counts are computed under the REST of the
   query. No real options means no fake control, and an ACTIVE value whose menu option vanished keeps a
   cheap All off-switch (the visible text is the canonical release).
-  Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
+  Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
+  as a named Fail/Pass pressed-button quick-filter group because verdict is non-exhaustive; neither button
+  is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
   SELECTION releases like every builder — into the query input, its trigger keeping focus only when the
   pick changed nothing — and outside click keeps clicked focus. Each overflow facet is its own named radio
   group inside the menu,
@@ -116,4 +118,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   at. List rows keep their own one compact meta grammar — two densities, each a single implementation.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute
   content, never layout forks. A change to list rhythm or detail geometry lands HERE once and both pages
-  move together; that is the component boundary this node exists to hold.
+  move together; that is the component boundary this node exists to hold. ListPage and DetailShell consume
+  the ONE [[page-scroll]] primitive: they never own overflow, gutter, track inset, or restoration
+  themselves. Their sticky header, side rail, and composer pin inside that shared scrollport; Graph canvas,
+  Session terminal, and bounded pane scrollers stay outside it.

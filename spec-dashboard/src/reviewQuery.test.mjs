@@ -52,8 +52,9 @@ test('default equivalence: bare address for the default view, ?q verbatim otherw
   assert.equal(queryParam('', ISSUE_QUERY_DEFAULT), null)
   assert.equal(queryParam('   ', ISSUE_QUERY_DEFAULT), null)
   assert.deepEqual(queryParam('is:issue state:closed', ISSUE_QUERY_DEFAULT), { q: 'is:issue state:closed' })
-  assert.deepEqual(queryParam('is:eval state:current verdict:fail', EVAL_QUERY_DEFAULT), { q: 'is:eval state:current verdict:fail' })
-  assert.equal(scopedEvalQuery('abc'), 'is:eval state:current scope:abc')
+  assert.equal(queryParam('is:eval', EVAL_QUERY_DEFAULT), null)
+  assert.deepEqual(queryParam('is:eval verdict:fail', EVAL_QUERY_DEFAULT), { q: 'is:eval verdict:fail' })
+  assert.equal(scopedEvalQuery('abc'), 'is:eval scope:abc')
 })
 
 test('legacy structured params replay as the FULL visible token state', () => {
@@ -69,13 +70,13 @@ test('legacy structured params replay as the FULL visible token state', () => {
   )
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { concluded: '1' }), 'is:issue state:closed')
   assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { ok: '1' }), 'is:eval state:reviewed')
-  assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { kind: 'video' }), 'is:eval state:current evidence:video')
+  assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { kind: 'video' }), 'is:eval evidence:video')
   // kind=all IS the default — replays to the plain default text
   assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { kind: 'all' }), EVAL_QUERY_DEFAULT)
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { live: '1' }), 'is:issue state:open session:present')
-  assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { session: 's-9' }), 'is:eval state:current scope:s-9')
+  assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { session: 's-9' }), 'is:eval scope:s-9')
   assert.equal(legacyQueryText(EVAL_QUERY_DEFAULT, { filer: 'w-2', freshness: 'stale', verdict: 'fail' }),
-    'is:eval state:current verdict:fail freshness:stale filer:w-2')
+    'is:eval verdict:fail freshness:stale filer:w-2')
   // the free q survives — quoted as ONE phrase when it held spaces (the old single-substring search)
   assert.equal(legacyQueryText(ISSUE_QUERY_DEFAULT, { store: 'github', q: 'long title' }),
     'is:issue state:open store:github "long title"')

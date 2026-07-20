@@ -3,14 +3,17 @@ scenarios:
   - name: feed-current-loss-listview
     tags: [frontend-e2e]
     description: >
-      With fresh video/image readings, stale readings, and at least one human-ok'd reading, open #/evals
-      in a real browser. Read the query/header/rows, current and reviewed counts, media element count,
+      With fresh video/image readings, stale readings, at least one human-ok'd reading, and blind/unscored
+      data, open #/evals in a real browser. Read the query/header/rows, Fail and Pass counts, Human review builder, media element count,
       row hrefs, state SVGs, and /api/graph requests; open a video row.
     expected: |
-      The list is one GitHub-style ListView over latest-per-scenario rows: 32px query, Current/Reviewed
-      counted sections, real facets, ~64px desktop structured anchors. Each `.rl-row-grid` leads with the
+      The list is one GitHub-style ListView over latest-per-scenario rows: 32px query, a Fail/Pass
+      counted quick-filter group, real secondary facets, ~64px desktop structured anchors. Each `.rl-row-grid` leads with the
       shared verdict icon, then scenario title, node/filer/time metadata, and kind/scope facts. Fresh
-      human-ok'd readings alone belong to Reviewed; everything else remains Current, newest-first. The
+      human-ok'd readings match Human review: Reviewed; everything else matches Needs review. That
+      lifecycle is a secondary builder and visible state: token, never the top section. The bare address
+      shows `is:eval` and keeps blind/unscored/unknown rows reachable while neither Fail nor Pass is pressed.
+      Fail/Pass counts exclude their own verdict token but honor every other query token. The
       list mounts zero video/image elements and fires zero extra /api/graph reads; media exists only after
       the real anchor opens the standalone detail page. The list state icon matches that detail's icon for
       the same verdict.
@@ -27,10 +30,10 @@ scenarios:
       pass/fail/unscored, freshness the live fresh bit, evidence the reading's kind SET (a mixed reading
       matches each carried kind; the default is all with no data-dependent fallback) and all returns
       non-media readings too. Stale readings stay in the default Current list, never silently hidden.
-      Blind rows match their node/unscored/query facts but disappear under evidence, freshness, filer, or
+      Blind rows match their node/unscored/query facts but disappear under Fail/Pass, evidence, freshness, filer, or
       source-session presence tokens because they own no reading facts; they remain inert when visible,
-      and they keep counting toward the Current tab even while Reviewed is displayed (counts are
-      rest-of-query). Combined tokens are conjunctive and an honest zero says no evals match this view
+      and the default list never hides them merely because the top axis is non-exhaustive. Combined tokens
+      are conjunctive and an honest zero says no evals match this view
       (not that none exist) while all chrome stays releasable. No list media request or fake menu appears.
   - name: token-dimensions-and-overflow
     tags: [frontend-e2e, desktop, mobile]
@@ -49,8 +52,9 @@ scenarios:
   - name: filters-live-in-the-url
     tags: [frontend-e2e, desktop]
     description: >
-      Open #/evals and record history.length. Edit and submit the query text, pick verdict/freshness/
-      evidence from menus, select Reviewed, and add a scope: token; read hash/history after each. Reload,
+      Open #/evals and record history.length. Edit and submit the query text, click Fail, click it again
+      to clear, click Pass, pick Human review/freshness/evidence builders, and add a scope: token; read
+      hash/history and pressed/menu AX state after each. Reload,
       then drive Back one state at a time.
     expected: >
       Every human edit, section, or menu change pushes the ONE canonical address — bare for the default

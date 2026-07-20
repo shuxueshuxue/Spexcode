@@ -37,9 +37,12 @@ consumer that needs canonical review addresses (e.g. eval anchors on other board
   state that keeps the token verbatim and honestly shows nothing — lives in the ONE [[review-filters]]
   engine, reached through its token→state bridge; no second predicate exists here.
 - **Default view = bare address.** queryParam compares token-normalized text against the page default
-  (Issues `is:issue state:open`, Evals `is:eval state:current`) — equal or empty means the bare page
+  (Issues `is:issue state:open`, Evals `is:eval`) — equal or empty means the bare page
   address, anything else exactly `?q=<raw text>`. The evidence default is `all` with no hidden
-  data-dependent fallback.
+  data-dependent fallback. Evals deliberately defaults to the honest whole scenario population: Fail/Pass
+  are non-exhaustive `verdict:` quick filters, while `state:current|reviewed` remains the visible human-review
+  lifecycle token and secondary builder. Blind, unscored, and unknown verdicts therefore remain reachable
+  when no verdict token is active.
 - **Legacy params replay as the full visible state.** An old structured list address rebuilds the
   default text with each param surgically applied — state/concluded→state:, ok=1→state:reviewed,
   kind→evidence: (kind=all → nothing), store/author/node/filer/verdict/freshness→their token,

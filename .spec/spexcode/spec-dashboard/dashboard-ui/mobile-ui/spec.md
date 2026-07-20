@@ -69,7 +69,7 @@ The two planes, made native to touch:
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
   a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that is
-  a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval state:current scope:<id>`, the
+  a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval scope:<id>`, the
   [[address-routing]] projection as its literal href — one ordinary hash push;
   [[session-eval]] — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,

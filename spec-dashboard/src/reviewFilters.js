@@ -35,7 +35,8 @@ const optionsFor = (items, facet, state, context, t) => {
   // a fixed-value ENUM facet keeps its ACTIVE value as a real (checked) row even when no data carries
   // it — an active facet must never hide its own off-switch; data-valued facets stay data-derived.
   const found = facet.fixedValues
-    ? facet.fixedValues.filter((value) => (active && String(state[facet.key]) === String(value))
+    ? facet.fixedValues.filter((value) => facet.enumerateFixed
+      || (active && String(state[facet.key]) === String(value))
       || items.some((item) => values(facet.values(item, context)).map(String).includes(String(value))))
     : unique(items.map((item) => facet.values(item, context)))
   const available = facet.available
@@ -139,7 +140,7 @@ export function issueFilterModel(items, raw = {}, context = {}) {
 
 const evalIsResult = (entry) => entry.filterKind === EVAL_FILTER_KIND.RESULT
 const verdictOf = (entry) => evalIsResult(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
-const reviewed = (entry) => evalIsResult(entry) && !!(entry.fresh && entry.humanOk)
+const reviewStateOf = (entry) => (evalIsResult(entry) && entry.fresh && entry.humanOk ? 'reviewed' : 'current')
 const shortSession = (value, sessions) => {
   const session = sessions.find((item) => item.id === value)
   if (session) return sessionHeadline(session)
@@ -147,21 +148,26 @@ const shortSession = (value, sessions) => {
 }
 
 export function evalFilterState(raw = {}, { defaultKind = 'all', defaultSection = '' } = {}) {
+  const legacyReview = raw.ok === '1' ? 'reviewed' : raw.ok
   return {
     q: raw.q || '', kind: raw.kind || defaultKind, impossible: raw.impossible === true,
     verdict: raw.verdict || '', freshness: raw.freshness || '', node: raw.node || '', filer: raw.filer || '',
-    session: raw.session || '', ok: raw.ok || defaultSection,
+    session: raw.session || '', review: raw.review || legacyReview || defaultSection,
   }
 }
 
 const EVAL_CONFIG = {
   search: (entry) => [entry.scenario, entry.node, entry.by, entry.evaluator],
   section: {
-    key: 'ok', value: (entry) => reviewed(entry) ? '1' : 'current',
-    options: [{ value: 'current', label: 'reviewList.current' }, { value: '1', label: 'reviewList.reviewed' }],
+    key: 'verdict', value: verdictOf,
+    options: [{ value: 'fail', label: 'reviewList.verdict.fail' }, { value: 'pass', label: 'reviewList.verdict.pass' }],
   },
   facets: [
-    { key: 'verdict', label: 'reviewList.facetVerdict', values: verdictOf, labelValue: (value, { t }) => optionLabel(t, `reviewList.verdict.${value}`, value) },
+    {
+      key: 'review', label: 'reviewList.facetReview', fixedValues: ['current', 'reviewed'], enumerateFixed: true,
+      values: reviewStateOf,
+      labelValue: (value, { t }) => optionLabel(t, value === 'reviewed' ? 'reviewList.reviewed' : 'reviewList.needsReview', value),
+    },
     {
       key: 'freshness', label: 'reviewList.facetFreshness', minValues: 2,
       values: (entry) => evalIsResult(entry) ? (entry.fresh === true ? 'fresh' : 'stale') : [],
@@ -192,13 +198,13 @@ export function evalFilterModel(items, raw = {}, context = {}) {
   })
   const model = filterReviewItems(items, state, EVAL_CONFIG, context)
   model.section = {
-    key: 'ok', label: optionLabel(context.t, 'reviewList.facetReview', 'Review'), value: state.ok,
-    meaningful: Object.values(model.sections).filter((count) => count > 0).length > 1 || !!state.ok,
+    key: 'verdict', label: optionLabel(context.t, 'reviewList.facetVerdict', 'Verdict'), value: state.verdict,
+    meaningful: Object.values(model.sections).some((count) => count > 0) || !!state.verdict,
     options: [allOption(context.t), ...EVAL_CONFIG.section.options.map((option) => ({
       value: option.value,
       label: optionLabel(context.t, option.label, option.value),
       count: model.sections[option.value] || 0,
-    }))].filter((option, index) => index === 0 || option.count > 0 || option.value === state.ok),
+    }))].filter((option, index) => index === 0 || option.count > 0 || option.value === state.verdict),
   }
   const kindFacet = model.facets.kind
   if (kindFacet.options.length) {
@@ -242,7 +248,7 @@ const TOKEN_MAPS = {
   },
   eval: {
     is: (v) => (v === 'eval' ? {} : null),
-    state: (v) => ({ ok: v === 'reviewed' ? '1' : v }),
+    state: (v) => ({ review: v }),
     verdict: (v) => ({ verdict: v }),
     freshness: (v) => ({ freshness: v }),
     evidence: (v) => ({ kind: v }),

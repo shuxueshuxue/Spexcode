@@ -539,7 +539,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   const readings = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
   const unmeasured = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.UNMEASURED).map((item) => item.source)
   const dangling = model.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.DANGLING).map((item) => item.source)
-  const groups = filterMenuGroups(model, onFilter, ['section', 'verdict', 'freshness', 'kind', 'filer', 'session'])
+  const groups = filterMenuGroups(model, onFilter, ['section', 'review', 'freshness', 'kind', 'filer', 'session'])
   const filterEl = filterItems.length > 4
     ? <CompactReviewFilter key="filter" value={model.state.q} onChange={(q) => onFilter({ q: q || null })}
       summary={{ shown: model.shown.length, total: filterItems.length }}

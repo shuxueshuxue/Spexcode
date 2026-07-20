@@ -92,17 +92,17 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
     ...blind.map((entry) => ({ ...entry, filterKind: EVAL_FILTER_KIND.BLIND, source: entry })),
   ], [entries, blind])
   // ONE parse ([[review-query]]) → ONE matcher ([[review-filters]]): the token text bridges into the
-  // engine state; tab counts come out computed under the REST of the query (sections never see their
-  // own token), so switching tabs can never make the other tab's number jump.
+  // engine state; quick-filter counts come out computed under the REST of the query (sections never see
+  // their own token), so selecting one verdict can never make the other verdict's number jump.
   const filters = useMemo(
     () => evalFilterModel(filterItems, tokenFilterState(text, 'eval'), { sessions, t, defaultKind: 'all', defaultSection: '' }),
     [filterItems, text, sessions, t],
   )
   const shown = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT).map((item) => item.source)
   const shownBlind = filters.shown.filter((item) => item.filterKind === EVAL_FILTER_KIND.BLIND).map((item) => item.source)
-  const currentCount = filters.sections.current || 0
-  const reviewedCount = filters.sections['1'] || 0
-  const section = readToken(text, 'state')
+  const failCount = filters.sections.fail || 0
+  const passCount = filters.sections.pass || 0
+  const verdict = readToken(text, 'verdict')
 
   const rows = [
     ...shownBlind.map((b) => ({
@@ -118,7 +118,7 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
 
   // menus are pure query builders over the ADAPTER's data-derived options — zero private state; the
   // evidence default is `all` (a plain enum default, never data-dependent) and All removes the token.
-  const verdictFacet = filters.facets.verdict
+  const reviewFacet = filters.facets.review
   const freshnessFacet = filters.facets.freshness
   const kindFacet = filters.facets.kind
   const sessionFacet = filters.facets.session
@@ -146,19 +146,20 @@ export default function EvalsGroup({ entries = [], blind = [], sessions = [], qu
         },
       }}
       sections={[
-        // Current is the DEFAULT section: with no (or an unknown) state: token it stays the active tab,
-        // so the tablist always exposes one roving tab stop and the panel is labelled by a selected tab.
-        { key: 'current', label: t('reviewList.current'), count: currentCount, active: section !== 'reviewed', onSelect: () => surgery('state', 'current') },
-        { key: 'reviewed', label: t('reviewList.reviewed'), count: reviewedCount, active: section === 'reviewed', onSelect: () => surgery('state', 'reviewed') },
+        // Verdict is intentionally NON-exhaustive: neither quick filter is pressed on the honest default,
+        // so blind/unscored/unknown rows remain reachable instead of being forced into a fake binary tab.
+        { key: 'fail', label: <ReviewState kind="eval" state="fail" title={t('reviewList.verdict.fail')} showLabel />, count: failCount, active: verdict === 'fail', onSelect: () => surgery('verdict', verdict === 'fail' ? '' : 'fail') },
+        { key: 'pass', label: <ReviewState kind="eval" state="pass" title={t('reviewList.verdict.pass')} showLabel />, count: passCount, active: verdict === 'pass', onSelect: () => surgery('verdict', verdict === 'pass' ? '' : 'pass') },
       ]}
+      sectionMode="filters"
       facets={
         <>
-          <FacetMenu label={verdictFacet.label} value={verdictFacet.value} options={verdictFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('verdict', value)} mobile />
           <FacetMenu label={freshnessFacet.label} value={freshnessFacet.value} options={freshnessFacet.options} clearLabel={t('reviewList.all')} onChange={(value) => surgery('freshness', value)} />
           <FacetMenu label={kindFacet.label} value={kindFacet.value} options={kindFacet.options} onChange={(value) => surgery('evidence', value === 'all' ? '' : value)} />
         </>
       }
       overflow={<FacetOverflow label={t('reviewList.moreFilters')} clearLabel={t('reviewList.all')} groups={[
+        { label: reviewFacet.label, value: reviewFacet.value, active: !!reviewFacet.value, options: reviewFacet.options, onChange: (value) => surgery('state', value) },
         { label: sessionFacet.label, value: sessionFacet.value, active: !!sessionFacet.value, options: sessionFacet.options, onChange: (value) => surgery('session', value) },
         { label: freshnessFacet.label, value: freshnessFacet.value, active: !!freshnessFacet.value, options: freshnessFacet.options, onChange: (value) => surgery('freshness', value), mobileOnly: true },
         { label: kindFacet.label, value: kindFacet.value, active: !!evidenceToken, options: kindFacet.options, clearLabel: null, onChange: (value) => surgery('evidence', value === 'all' ? '' : value), mobileOnly: true },

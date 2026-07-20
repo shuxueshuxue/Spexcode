@@ -31,7 +31,7 @@ test('issues and evals consume one GitHub ListView primitive set', () => {
   assert.doesNotMatch(issueList, /<select\b/)
   assert.doesNotMatch(evals, /<select\b/)
   assert.match(shell, /className="rl-query rq"/)
-  assert.match(shell, /className="rl-sections" role="tablist"/)
+  assert.match(shell, /className="rl-sections" role=\{sectionsAreTabs \? 'tablist' : 'group'\}/)
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
@@ -67,12 +67,14 @@ test('every control is a token BUILDER over the committed text — no private fi
   // counts are computed under the REST of the query (the section never sees its own token)
   assert.match(evals, /tokenFilterState\(text, 'eval'\)/)
   assert.match(issues, /tokenFilterState\(text, 'issue'\)/)
-  assert.match(evals, /const currentCount = filters\.sections\.current \|\| 0/)
+  assert.match(evals, /const failCount = filters\.sections\.fail \|\| 0/)
+  assert.match(evals, /const passCount = filters\.sections\.pass \|\| 0/)
   assert.match(issues, /const openCount = filters\.sections\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
-  assert.match(evals, /surgery\('state', 'current'\)/)
-  assert.match(evals, /surgery\('state', 'reviewed'\)/)
+  assert.match(evals, /surgery\('verdict', verdict === 'fail' \? '' : 'fail'\)/)
+  assert.match(evals, /surgery\('verdict', verdict === 'pass' \? '' : 'pass'\)/)
+  assert.match(evals, /label: reviewFacet\.label[\s\S]*surgery\('state', value\)/)
   // the default view is the BARE address; anything else exactly ?q=<raw text>
   assert.match(issues, /queryParam\(nextText, ISSUE_QUERY_DEFAULT\)/)
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
@@ -183,36 +185,44 @@ test('menus and section tabs share one keyboard and Escape contract', () => {
   assert.match(popover, /requestAnimationFrame[\s\S]*aria-checked[\s\S]*focusMenuItem/)
   assert.match(popover, /\['ArrowDown', 'ArrowUp', 'Home', 'End'\]/)
   assert.match(shell, /role="menuitemradio"[\s\S]*tabIndex=\{-1\}/)
-  assert.match(shell, /role="tab" aria-selected=\{section\.active\}[\s\S]*tabIndex=\{index === activeSectionIndex \? 0 : -1\}/)
+  assert.match(shell, /role=\{sectionsAreTabs \? 'tab' : undefined\}[\s\S]*aria-selected=\{sectionsAreTabs \? section\.active : undefined\}/)
+  assert.match(shell, /tabIndex=\{sectionsAreTabs \? \(index === activeSectionIndex \? 0 : -1\) : undefined\}/)
 })
 
-test('the tablist always exposes one roving stop and honest tab counts', () => {
+test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive verdict filters', () => {
   // no active section (a committed text without its section token) still leaves tab 0 focusable,
   // and the one results panel stays labelled by that same fallback tab
   assert.match(shell, /const activeSectionIndex = Math\.max\(0, sections\.findIndex/)
-  assert.match(shell, /tabIndex=\{index === activeSectionIndex \? 0 : -1\}/)
-  // the pages default their leading section active, so aria-selected agrees with the fallback stop
-  assert.match(evals, /active: section !== 'reviewed'/)
+  assert.match(shell, /tabIndex=\{sectionsAreTabs \? \(index === activeSectionIndex \? 0 : -1\) : undefined\}/)
+  // Issues remains the exhaustive lifecycle tablist; Evals declares a pressed-button group because
+  // blind/unscored/unknown rows make Fail/Pass non-exhaustive.
   assert.match(issues, /active: section === '' \|\| section === 'open'/)
-  // blind rows travel through the SAME result-kind enum: the Current COUNT comes out
-  // rest-of-query (a blind row keeps counting while Reviewed is displayed) while the RENDERED blind
-  // rows still obey the full query, section included
+  assert.match(evals, /sectionMode="filters"/)
+  assert.match(evals, /active: verdict === 'fail'/)
+  assert.match(evals, /active: verdict === 'pass'/)
+  assert.match(shell, /aria-pressed=\{sectionsAreTabs \? undefined : section\.active\}/)
+  // blind rows travel through the SAME result-kind enum and stay in the default population, while
+  // Fail/Pass counts come from the shared verdict section under the rest of the query.
   assert.match(evals, /filterKind: EVAL_FILTER_KIND\.RESULT/)
   assert.match(evals, /filterKind: EVAL_FILTER_KIND\.BLIND/)
   assert.doesNotMatch(evals, /reading: (?:true|false)/)
   assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === EVAL_FILTER_KIND\.BLIND\)/)
-  assert.match(evals, /count: currentCount/)
+  assert.match(evals, /count: failCount/)
+  assert.match(evals, /count: passCount/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
 })
 
-test('overflow radio sets and section tabs expose complete ARIA ownership', () => {
+test('overflow radios, Issues tabs, and Evals verdict filters expose honest ARIA ownership', () => {
   assert.match(shell, /role="group"[\s\S]*aria-labelledby=\{`\$\{groupId\}-group-\$\{index\}`\}/)
   assert.match(shell, /className="rl-menu-label" id=\{`\$\{groupId\}-group-\$\{index\}`\}/)
-  assert.match(shell, /role="tablist" aria-label=\{title\} aria-orientation="horizontal"/)
-  assert.match(shell, /role="tab" aria-selected=\{section\.active\} aria-controls=\{panelId\}/)
-  assert.match(shell, /role="tabpanel" id=\{panelId\} aria-labelledby=\{tabId\(activeSectionIndex\)\}/)
+  assert.match(shell, /role=\{sectionsAreTabs \? 'tablist' : 'group'\} aria-label=\{title\}/)
+  assert.match(shell, /aria-controls=\{sectionsAreTabs \? panelId : undefined\}/)
+  assert.match(shell, /role=\{sectionsAreTabs \? 'tabpanel' : 'region'\}/)
+  assert.match(shell, /aria-label=\{sectionsAreTabs \? undefined : title\}/)
+  assert.match(evals, /<ReviewState kind="eval" state="fail" title=\{t\('reviewList\.verdict\.fail'\)\} showLabel/)
+  assert.match(evals, /<ReviewState kind="eval" state="pass" title=\{t\('reviewList\.verdict\.pass'\)\} showLabel/)
 
   const tabHandler = shell.slice(shell.indexOf("if (!['ArrowLeft', 'ArrowRight'"), shell.indexOf('tabs[next]?.click()'))
   assert.match(tabHandler, /'ArrowLeft', 'ArrowRight', 'Home', 'End'/)

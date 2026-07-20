@@ -21,7 +21,7 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      Open the scoped list `#/evals?q=is:eval state:current scope:<id>` for a real session and read the DOM: the gates strip, the row list
+      Open the scoped list `#/evals?q=is:eval scope:<id>` for a real session and read the DOM: the gates strip, the row list
       (blind spots vs measured, in-session vs earlier), where evidence bytes load, and the export link.
       Open one row's standalone detail, then follow the export link and check the self-contained HTML still
       renders whole (masthead, gates, evidence inlined, diff drill-down).
@@ -36,7 +36,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-eval/src/sessioneval.ts]
     description: >
-      Open the scoped list (`#/evals?q=is:eval state:current scope:<id>`) for a session that filed a reading WITHOUT committing code (its codeSha
+      Open the scoped list (`#/evals?q=is:eval scope:<id>`) for a session that filed a reading WITHOUT committing code (its codeSha
       is the merge-base) over a node carrying older readings by other sessions plus a retired scenario's
       residual reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the
       row order, and whether the retired scenario shows.
@@ -79,7 +79,7 @@ scenarios:
       mounts inside the console.
     expected: >
       The console's Eval entry is a DOOR and a REAL ANCHOR — an <a> whose href IS the canonical scoped
-      list address, #/evals?q=is:eval state:current scope:<id> (the one scope: token text every session
+      list address, #/evals?q=is:eval scope:<id> (the one scope: token text every session
       door mints; never the legacy ?session param) — so copy-link/middle-click work for free, and clicking
       it PUSHES exactly one history entry landing directly on that final address (no intermediate rewrite).
       The phone session surface's eval door is the same real anchor. The typed /eval navigates to the same
@@ -106,7 +106,7 @@ scenarios:
       The LEGACY address normalizes at the route layer (replace) to the canonical evals family:
       '#/sessions/<id>/eval/<node>/<scenario>' lands on '#/evals/<node>/<scenario>?q=scope:<id>' — the
       scenario's worktree-rooted detail page (media + remark thread + composer), one click from an MR
-      note to the live, remarkable reading; the bare '/eval' form lands on the scoped default list ('#/evals?q=is:eval state:current scope:<id>') (the
+      note to the live, remarkable reading; the bare '/eval' form lands on the scoped default list ('#/evals?q=is:eval scope:<id>') (the
       session-scoped list). The canonical address opens identically when pasted directly. A name matching
       nothing renders the honest not-found with the link back to the session-scoped list — never a blank
       page or a crash. Happy, load-failed, and not-found details carry no terminal door: their sole return

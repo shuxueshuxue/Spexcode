@@ -33,7 +33,7 @@ test('issue adapter composes query, section, facets, and the one presence join',
 
 test('eval adapter gives blind rows only the fields they honestly own', () => {
   const rows = [
-    { scenario: 'video pass', node: 'alpha', filterKind: EVAL_FILTER_KIND.RESULT, by: 'on-board', fresh: true, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
+    { scenario: 'video pass', node: 'alpha', filterKind: EVAL_FILTER_KIND.RESULT, by: 'on-board', fresh: true, humanOk: { by: 'human' }, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
     { scenario: 'image fail', node: 'beta', filterKind: EVAL_FILTER_KIND.RESULT, by: 'vanished', fresh: false, verdict: { status: 'fail' }, evidence: [{ kind: 'image', hash: 'i' }] },
     { scenario: 'never measured', node: 'alpha', filterKind: EVAL_FILTER_KIND.BLIND },
   ]
@@ -46,11 +46,14 @@ test('eval adapter gives blind rows only the fields they honestly own', () => {
   assert.deepEqual(shown({ session: 'present' }), ['video pass'])
   assert.deepEqual(shown({ session: 'missing' }), ['image fail'])
   assert.deepEqual(shown({ q: 'ALPHA' }), ['video pass', 'never measured'])
-  // section counts come out under the REST of the query: the blind row keeps counting toward Current
-  // whichever section is displayed
-  const model = evalFilterModel(rows, { ok: '1' }, { sessions, t, defaultKind: 'all' })
-  assert.equal(model.sections.current, 3)
-  assert.deepEqual(model.shown, [])
+  // Fail/Pass counts come out under the REST of the query: the active verdict never hides the other
+  // button's stable count, while the non-exhaustive blind row belongs to neither count.
+  const model = evalFilterModel(rows, { verdict: 'fail' }, { sessions, t, defaultKind: 'all' })
+  assert.deepEqual(model.sections, { fail: 1, pass: 1 })
+  assert.deepEqual(model.shown.map((item) => item.scenario), ['image fail'])
+  assert.deepEqual(shown({ review: 'reviewed' }), ['video pass'])
+  assert.deepEqual(shown({ review: 'current' }), ['image fail', 'never measured'])
+  assert.deepEqual(model.facets.review.options.map((option) => option.value), ['', 'current', 'reviewed'])
 
   const untagged = { ...rows[0] }
   delete untagged.filterKind
@@ -77,9 +80,9 @@ test('the canonical bridge maps token text into engine state without a second pa
   assert.deepEqual(tokenFilterState('is:issue state:closed store:github "long title" gate', 'issue'),
     { q: ['long title', 'gate'], state: 'closed', store: 'github' })
   assert.deepEqual(tokenFilterState('is:eval state:reviewed evidence:video scope:s-1', 'eval'),
-    { q: [], ok: '1', kind: 'video' })
+    { q: [], review: 'reviewed', kind: 'video' })
   assert.deepEqual(tokenFilterState('state:current session:missing filer:w-1', 'eval'),
-    { q: [], ok: 'current', session: 'missing', filer: 'w-1' })
+    { q: [], review: 'current', session: 'missing', filer: 'w-1' })
   // duplicate qualifiers are last-wins, same as every reader of the text
   assert.deepEqual(tokenFilterState('state:open state:closed', 'issue'), { q: [], state: 'closed' })
   // a quoted colon phrase stays ONE substring end to end (the migrated legacy free q)

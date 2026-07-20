@@ -1244,14 +1244,33 @@ a.scenario-count:hover { background: var(--panel2); }
    affordance is always on screen (the docked-writer geometry every review surface shares). */
 .ds-compose { position: sticky; bottom: 0; z-index: 2; background: var(--paper); padding: 6px 0 12px; border-top: 1px solid var(--line); }
 .ds-compose .fv-compose { margin-top: 0; }
-.ds-side { display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
+/* the side rail rides the page scroll on desktop: STICKY inside its grid column (never fixed — grid
+   containment keeps it off the header above and the page bottom below), pinned to the scrollport top
+   while a long main column scrolls. The max-height keeps the pinned rail inside the scrollport, so
+   only a rail genuinely taller than the viewport scrolls internally — no permanent nested scrollbar.
+   The 100dvh budget assumes the app shell keeps no top chrome (side nav only) — a future top bar
+   must be subtracted here too. */
+.ds-side { position: sticky; top: 0; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
 .ds-side-sec { display: flex; flex-direction: column; gap: 5px; padding-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
 .ds-side-label { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); }
 .ds-side-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--type-meta); color: var(--ink2); }
-.ds-side-line { font-size: var(--type-meta); color: var(--ink2); }
-.ds-side-dim { color: var(--muted); }
+/* the ONE side-rail value primitive ([[review-chrome]]'s SideValue — every metadata row's value on
+   BOTH detail pages): the text container is min-width:0, single-line, shrink-truncated with ellipsis
+   (the full text rides the shared tooltip/accessible name), adornments stay fixed-size beside it.
+   Link/button variants keep a pointer, hover underline, and a visible focus ring. */
+.ds-val { display: flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; font: inherit; font-size: var(--type-meta); color: var(--ink2); background: none; border: 0; padding: 0; text-align: left; text-decoration: none; }
+.ds-val-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-val.dim { color: var(--muted); }
+.ds-val.mono .ds-val-text { font-family: var(--mono); }
+.ds-val.link { cursor: pointer; color: var(--blue); }
+.ds-val.link:hover .ds-val-text { text-decoration: underline; }
+.ds-val.link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
 /* the Continue-reviewing queue rows ([[event-detail]] renders them in the side rail): real anchors
-   wearing the ONE shared verdict visual + scenario/node text, one line each, shrink-truncated. */
+   wearing the ONE shared verdict visual + scenario/node text, one line each, shrink-truncated — in two
+   positional groups (Previous / Up next, [[evals-view]]), each led by a quiet lowercase caption. */
+.ds-queue-group { align-self: stretch; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ds-queue-group + .ds-queue-group { margin-top: 5px; }
+.ds-queue-group-label { font-size: var(--type-caption); color: var(--muted); }
 .ds-queue-row { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: var(--type-meta); color: var(--ink2); text-decoration: none; }
 .ds-queue-row:hover .ds-queue-scenario { text-decoration: underline; }
 .ds-queue-row .review-state { flex: 0 0 auto; display: inline-flex; }
@@ -1283,24 +1302,25 @@ a.scenario-count:hover { background: var(--panel2); }
   .rl-row-aside { grid-column: 2; align-self: start; justify-content: flex-start; flex-wrap: wrap; gap: 5px; margin-top: 6px; padding-left: 0; }
   .rl-menu { max-width: calc(100vw - 34px); }
   .ds-cols { display: flex; flex-direction: column; gap: 0; }
-  .ds-side { order: -1; padding: 10px 0 0; }
+  /* narrow width cancels the sticky rail: back to the plain metadata-before-content document flow. */
+  .ds-side { position: static; max-height: none; overflow-y: visible; order: -1; padding: 10px 0 0; }
   .ds-side-sec { padding-bottom: 8px; }
 }
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); text-align: center; }
 /* the store is metadata, never identity — a borderless muted mini-tag at a row's trailing edge (only
    while stores are mixed) and in the detail's meta strip; never a leading boxed chip, never on a title. */
 .fv-store {
-  flex: none; font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase;
+  font-family: var(--mono); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); text-transform: uppercase;
   color: var(--muted);
 }
 .fv-store-local { color: color-mix(in srgb, var(--blue) 65%, var(--muted)); }
-.fv-by { flex: none; color: var(--muted); font-size: var(--type-meta); }
-/* the originator liveness chip ([[mentions]] loop-in): who filed + whether their session is alive. The dot
-   takes the board's live STATUS_COLOR (inline style); live chips are buttons into that session's tab. */
-.fv-originator { flex: none; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--type-meta); color: var(--muted); background: transparent; border: 0; border-radius: 4px; padding: 1px 3px; }
+/* the originator liveness chip ([[mentions]] loop-in): who filed + whether their session is alive —
+   an IDENTITY skin over the one SideValue primitive (the dot takes the board's live STATUS_COLOR via
+   inline style; live chips are buttons into that session's tab). */
+.fv-originator { border-radius: 4px; padding: 1px 3px; }
+.fv-originator .ds-val-text { color: var(--ink2); font-family: var(--mono); }
 .fv-originator-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.fv-originator-who { color: var(--ink2); font-family: var(--mono); font-size: var(--type-meta); }
-.fv-originator.openable { cursor: pointer; background: color-mix(in srgb, var(--green) 8%, transparent); }
+.fv-originator.openable { background: color-mix(in srgb, var(--green) 8%, transparent); }
 .fv-originator.openable:hover { background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fv-originator.openable:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .fv-originator.offline { opacity: .7; }
@@ -1316,16 +1336,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .fv-close-issue.fv-life-promote:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fvd-body { font-size: var(--type-body); }
 
-/* node chips — the doc-link blue vocabulary, but clickable buttons that focus the node on the board. */
-.fv-chip {
-  font-family: var(--mono); font-size: var(--type-meta); color: var(--blue);
-  background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line));
-  padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: var(--leading-relaxed);
-}
-.fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-/* a forge issue's permalink — read here, discussed there. */
-.fv-link { color: var(--blue); font-size: var(--type-meta); text-decoration: none; }
-.fv-link:hover { text-decoration: underline; }
 .fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 4px 4px 0; transition: background .15s, border-color .15s; }
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }

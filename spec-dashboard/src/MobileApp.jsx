@@ -272,7 +272,7 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
           <div className="m-review">
             <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
               {plane === 'evals'
-                ? <EvalsPage specs={specs} sessions={sessions} reloadBoard={reloadBoard} onOpenSession={openSession} />
+                ? <EvalsPage specs={specs} sessions={sessions} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />
                 : <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
             </Suspense>
           </div>

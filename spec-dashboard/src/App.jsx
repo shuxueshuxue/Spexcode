@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { loadGraph, subscribeBoardLive, projectIdentity } from './data.js'
+import { acceptSessionEvalBoard, loadGraph, subscribeBoardLive, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
 import { CATALOG_POLL_MS, applyCatalogResult, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -35,6 +35,11 @@ export default function App() {
   const t = useT()
   const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
+  const [boardLive, setBoardLive] = useState(false)
+  const summarySeen = useRef(new Map())
+  const applyBoard = useCallback((next, authoritative) => {
+    setBoard(acceptSessionEvalBoard(next, summarySeen.current, authoritative))
+  }, [])
   // fail loudly at boot: a board that never arrives (backend down / proxy dead) shows an error + retry
   // panel, never an eternal spinner. Only the pre-first-board window reads this — once a board has landed,
   // a failed refetch keeps the last good board and the poll/stream keep retrying on their own.
@@ -68,10 +73,10 @@ export default function App() {
       .then((r) => {
         if (mine !== reqSeq.current || !r) return
         if (r.authRequired) { setAuthNeeded(r.authRequired); return }
-        setAuthNeeded(null); setLoadFailed(false); setBoard(r.board); r.seal()
+        setAuthNeeded(null); setLoadFailed(false); applyBoard(r.board, true); r.seal()
       })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
-  }, [])
+  }, [applyBoard])
   // push-first freshness ([[graph-stream]]/[[graph-delta]]): the delta stream carries whole boards (a full on
   // connect, then applied patches) straight into setBoard — no refetch per change. A pushed board is the
   // freshest by channel order, so it bumps the seq to invalidate any older in-flight fetch. The interval is
@@ -88,12 +93,13 @@ export default function App() {
     if (hub || facePending) return
     reload()
     const unsub = subscribeBoardLive({
-      onBoard: (b) => { reqSeq.current++; setLoadFailed(false); setBoard(b) },
+      onBoard: (b, frame) => { reqSeq.current++; setLoadFailed(false); applyBoard(b, !!frame?.authoritative) },
       onLegacyChange: () => { reload() },
+      onStatus: setBoardLive,
     })
     const id = setInterval(() => { reload() }, 15000)
     return () => { unsub(); clearInterval(id) }
-  }, [reload, hub, facePending])
+  }, [reload, applyBoard, hub, facePending])
   // the route-selected identity, or null while it is still UNRESOLVED (no catalog row, no board yet).
   // The head effects below skip the null window ([[side-nav]]): the browser remembers a favicon per page
   // URL and re-resolves it on every hash navigation, so a placeholder default written during one boot
@@ -152,7 +158,7 @@ export default function App() {
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} reloadBoard={reload} />
-        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} identity={identity} catalog={projAccess} />}
+        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} identity={identity} catalog={projAccess} boardLive={boardLive} />}
     </Suspense>
   )
 }

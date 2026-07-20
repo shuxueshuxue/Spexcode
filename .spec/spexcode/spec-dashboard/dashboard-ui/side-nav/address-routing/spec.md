@@ -25,7 +25,10 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 - `session-eval` opens the scoped default list `#/evals?q=is:eval state:current scope:<id>` — or, with
   a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
   [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
-  remarkable, worktree-rooted reading of an un-merged branch. The old
+  remarkable, worktree-rooted reading of an un-merged branch — and the address every session DOOR wears:
+  the console tab bar's and the phone session header's eval entries are REAL anchors whose href is this
+  projection, and the scoped Evals pages mint every scoped href (rows, queue neighbors, the detail's way
+  back to the scoped list) through it too, so the scope grammar lives here and nowhere else. The old
   `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
   on arrival ([[side-nav]]) and nothing mints it anymore.
 - `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
@@ -43,9 +46,10 @@ the same projection, with callbacks only for shell-owned state (`graph-node` foc
 `detailBackHash(page)` is the review details' **return gate** — the compact back anchor's href
 ([[review-chrome]]'s DetailShell), derived ONLY from the detail's own page: `#/issues` from an issue
 detail, the bare `#/evals` from EVERY eval detail — trunk or scoped alike. The scope token no longer
-diverts the back arrow: a worktree-rooted reading's session door is the detail's explicit source BANNER
-([[evals-view]]), so "back" uniformly means the list. The helper takes no query, history, referrer, or
-session-presence input at all, so a pushed visit and a direct open share one destination by construction.
+diverts the back arrow: a worktree-rooted reading's session door is the shared source BANNER both scoped
+Evals faces wear ([[evals-view]]), so "back" uniformly means the list. The helper takes no query,
+history, referrer, or session-presence input at all, so a pushed visit and a direct open share one
+destination by construction.
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
 objects first-class: issue and scenario references land on their owning review pages, never by accident on
 the bound spec node or a node-popup tab.

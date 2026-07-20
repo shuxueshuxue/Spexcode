@@ -199,8 +199,6 @@ export default {
     sideNodes: '规格节点',
     backToEvals: '返回评测列表',
     backToIssues: '返回 issues 列表',
-    scopedSource: '此读数来自会话 {id} 的工作树',
-    scopedSourceOpen: '打开会话终端',
     sideQueue: '继续查看',
     queuePrev: '前面',
     queueNext: '接下来',
@@ -253,6 +251,8 @@ export default {
   sessionEval: {
     btn: '评测',
     btnTitle: '打开此会话的评测页 —— 测得的评测证据与合并门禁（Evals 页会话视角）',
+    scopeBanner: ({ id }) => `此视图来自会话 ${id} 的工作树`,
+    scopeBannerOpen: '打开会话终端',
     none: '此会话暂无评测',
     unavailable: '会话模型成功加载前无法显示评测。',
     loadFailed: ({ reason }) => `会话评测加载失败 — ${reason}`,

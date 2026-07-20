@@ -7,7 +7,7 @@ import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './s
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
 import { navigate, useRoute } from './route.js'
-import { scopedEvalQuery } from './reviewQuery.js'
+import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
 
@@ -112,9 +112,9 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
 // @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail, now a THIN
 // wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
 // is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the
-// header's one extra control — the eval DOOR that navigates to the session-scoped Evals list
-// ([[session-eval]]: the scoped default query `is:eval state:current scope:<id>`, the same canonical
-// pages the desktop uses).
+// header's one extra control — the eval DOOR, a REAL anchor to the session-scoped Evals list
+// ([[session-eval]]: the canonical scoped default address `?q=is:eval state:current scope:<id>`, minted
+// by [[address-routing]] — the same pages the desktop uses, one ordinary hash push).
 function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
   return (
@@ -127,9 +127,9 @@ function MobileSessionDetail({ s, sessions, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
-        <button className="m-sess-evalbtn" onClick={() => navigate('evals', null, { query: { q: scopedEvalQuery(s.id) } })} title={t('sessionEval.btnTitle')}>
+        <a className="m-sess-evalbtn" href={addressHash(sessionEvalAddress(s.id))} title={t('sessionEval.btnTitle')}>
           {t('sessionEval.btn')}
-        </button>
+        </a>
       </div>
       <TimelineChat s={s} sessions={sessions} />
     </div>
@@ -245,8 +245,15 @@ export default function MobileApp({ specs, sessions, issuesData = null, reloadIs
   // #/issues address (list or detail, shared link or tab tap) renders the SAME routed pages the desktop
   // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
   // stay the phone-local planes.
-  const { page } = useRoute()
+  const { page, param } = useRoute()
   const plane = page === 'evals' || page === 'issues' ? page : tab
+  // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
+  // desktop console's deep link, and what makes the scoped eval pages' banner door ([[evals-view]])
+  // a REAL door on a cold phone open. One-way route→state: leaving the detail via its back control
+  // is phone-local and never rewrites the hash.
+  useEffect(() => {
+    if (page === 'sessions' && param) { setTab('sessions'); setOpenSessionId(param) }
+  }, [page, param])
   const pickPlane = (p) => {
     if (p === 'evals' || p === 'issues') { navigate(p); return }
     setTab(p)

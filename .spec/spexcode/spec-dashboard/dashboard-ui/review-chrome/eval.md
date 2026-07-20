@@ -158,14 +158,16 @@ scenarios:
       DetailShell header row: the back anchor's getBoundingClientRect against the title FIRST LINE's box
       (a Range over the title's first text node), the back anchor's tag/href, its hit target, its
       focus-visible ring, whether a wrapped title stays aligned to the first line (never re-centers
-      against the whole block), and document scrollWidth vs clientWidth.
+      against the whole block), whether any generic trailing header-action container exists, and document
+      scrollWidth vs clientWidth.
     expected: >
       One geometry contract, owned by the shared DetailShell CSS: the back anchor's vertical center
       coincides with the title first line's visual center (within 1px) in every cell — both pages, both
       widths, both languages, short and wrapped titles — with NO page-level or hardcoded pixel offset
       tuned to one font size. A multi-line title keeps the anchor tied to its FIRST line. The anchor
       stays a REAL <a href> with a ≥24px hit target and a visible focus-visible ring; long titles wrap
-      with zero horizontal document overflow.
+      with zero horizontal document overflow. DetailShell renders no generic `.ds-head-action` slot;
+      consumers contribute content to the defined shell regions rather than adding a second header exit.
 ---
 # measuring review-chrome
 

@@ -85,7 +85,8 @@ scenarios:
       The phone session surface's eval door is the same real anchor. The typed /eval navigates to the same
       address. The console itself never mounts an eval pane (the terminal's width never reflows). The
       landed page is the SAME shared list chrome the un-scoped #/evals renders (one component set — no
-      session-only clone) carrying the icon-only terminal door in its gates toolbar ([[evals-view]]'s
+      session-only clone) carrying the icon-only terminal door as the gates toolbar's leftmost and first
+      focusable control, with the short localized back-to-terminal command ([[evals-view]]'s
       scoped-terminal-door), the
       session's gates strip, and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss
       = one canonical home for a session's evaluation, reached through real-anchor doors.
@@ -108,7 +109,9 @@ scenarios:
       note to the live, remarkable reading; the bare '/eval' form lands on the scoped default list ('#/evals?q=is:eval state:current scope:<id>') (the
       session-scoped list). The canonical address opens identically when pasted directly. A name matching
       nothing renders the honest not-found with the link back to the session-scoped list — never a blank
-      page or a crash. The old shape never re-appears in the address bar.
+      page or a crash. Happy, load-failed, and not-found details carry no terminal door: their sole return
+      target is the scoped list, whose own leftmost door then returns to the terminal. The old shape never
+      re-appears in the address bar.
   - name: branch-new-node-visible
     tags: [backend-api]
     code: [spec-eval/src/sessioneval.ts, spec-cli/src/specs.ts]

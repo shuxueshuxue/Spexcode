@@ -95,15 +95,9 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   derives its vertical offset from the row's first-line box, so the anchor's center coincides with the
   title FIRST line's visual center — at every width and language, and a wrapping title keeps the anchor
   tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
-  pixel offset, and
-  the anchor keeps its ≥24px hit target and focus ring. At the header's trailing edge the shell offers
-  an optional page-supplied **action** slot (a generic data-only node — the scoped eval pages' one
-  icon-only terminal door rides it, [[evals-view]]): the page supplies the fully-rendered action node —
-  the SAME primitive the scoped eval LIST's toolbar carries, so the two scoped faces can never drift,
-  and the shell never learns what a session is — and a page that supplies none renders no action box.
-  The slot wears the SAME first-line geometry contract the back anchor derives (its offset comes from
-  the row's 1lh box), so the action's center coincides with the title first line's and the back
-  anchor's at any width or language. Source failure
+  pixel offset, and the anchor keeps its ≥24px hit target and focus ring. The header has no generic
+  trailing action slot: detail-local exits belong in their actual content contract, and scoped Evals
+  deliberately expose only the list-return arrow here ([[evals-view]]). Source failure
   and honest not-found are distinct faces. On desktop the SIDE rail is **sticky in its grid column**
   (never `position:fixed`): while a long main column scrolls, the rail pins near the scrollport top so
   the metadata stays on screen — grid containment keeps it off the header (which scrolls away normally)

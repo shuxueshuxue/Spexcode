@@ -19,22 +19,23 @@ scenarios:
     description: >
       Open the console, right-click a session row whose label comes from its live activity (no human rename,
       so its headline differs from its node/branch handle), and pick "rename" to raise the prompt. Read the
-      prompt's title and compare it to that row's card headline and the console header (si-th-name). Cancel —
+      prompt's title and compare it to that row's headline in the left session list. Cancel —
       never submit.
     expected: >
-      The rename prompt's title shows the SAME headline the card and console header show (the session's
-      activity/description, not its node/branch handle), so the human reads the very words they right-clicked
-      and never renames what looks like a different session. The input still prefills with the raw `name`
-      override (blank when none is set), not the headline.
+      The rename prompt's title shows the SAME headline as the row the human right-clicked (the session's
+      activity/description, not its node/branch handle). The terminal toolbar deliberately repeats no identity;
+      its accessible names contain no headline payload. The input still prefills with the raw `name` override
+      (blank when none is set), not the headline.
   - name: close-confirm-titles-by-headline
     tags: [frontend-e2e, desktop]
     description: >
       Open the console, right-click a session row whose label comes from its live activity (no human rename),
       and pick "close" to raise the confirm. Read the confirm's title and compare it to that row's card
-      headline and the console header (si-th-name). Press Escape to dismiss — never confirm the removal.
+      headline in the left session list. Press Escape to dismiss — never confirm the removal.
     expected: >
-      The confirm's title shows the SAME headline the card and console header show (the session's activity/
-      description, not its node/branch handle), so the human reads the very words they right-clicked.
+      The confirm's title shows the SAME headline as the row (the session's activity/description, not its
+      node/branch handle), so the human reads the very words they right-clicked; the terminal toolbar remains
+      free of duplicate identity text.
   - name: close-confirm-removes-row
     tags: [frontend-e2e, desktop]
     description: >

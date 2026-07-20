@@ -1,11 +1,5 @@
-// evals-entry.e2e.mjs — the [[session-eval]]/[[evals-view]] session→Evals entry-chain batch driver,
-// run against a live backend through the real dashboard (BASE env, default the worktree vite):
-//   1. eval-door-one-chrome    — the console Eval door is a REAL anchor to the canonical scoped list
-//   2. scoped-terminal-door    — the ONE icon-only terminal door on scoped LIST (se-gates action) and
-//                                DETAIL (header action slot); no banner, no visible copy, 32px target
-//   3. three commands apart    — terminal door vs ds-back (the list on the detail's own axis: scoped
-//                                default view for a scoped detail, bare #/evals for trunk) vs browser Back
-// Prints a transcript of every check; saves screenshots and whole-journey videos under OUT.
+// [[session-eval]]/[[evals-view]] YATU: Terminal -> scoped LIST -> scoped DETAIL.
+// Records the real desktop/mobile journeys plus screenshots under OUT.
 import { pathToFileURL } from 'node:url'
 import { mkdirSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -19,277 +13,258 @@ const { chromium } = await import(pathToFileURL(PW).href)
 
 const SHORT = SESSION.slice(0, 8)
 const SCOPED_Q = `is:eval state:current scope:${SESSION}`
-
-let pass = 0, fail = 0
-const results = []
+const LIST_HASH = `#/evals?q=${encodeURIComponent(SCOPED_Q).replaceAll('%20', '+')}`
+let pass = 0
+let fail = 0
 const check = (name, ok, detail = '') => {
-  results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
-  console.log(results.at(-1))
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` - ${detail}` : ''}`)
   ok ? pass++ : fail++
 }
-const qOf = (hash) => {
-  const i = hash.indexOf('?')
-  return i < 0 ? null : new URLSearchParams(hash.slice(i + 1)).get('q')
-}
+const qOf = (hash) => new URLSearchParams(hash.slice(hash.indexOf('?') + 1)).get('q')
 const pathOf = (hash) => hash.split('?')[0]
-const settle = (p, ms = 800) => p.waitForTimeout(ms)
+const settle = (page, ms = 700) => page.waitForTimeout(ms)
 
-// the ONE door probe: the icon-only terminal anchor in either home (the list's se-gates action
-// cluster, the detail's ds-head action slot) + a whole-page sweep for any leftover banner markup.
-const doorProbe = (p) => p.evaluate(() => {
-  const d = document.querySelector('.se-gates .se-acts .se-door, .ds-head .ds-head-action .se-door')
-  const r = d?.getBoundingClientRect()
+const listProbe = (page) => page.evaluate(() => {
+  const toolbar = document.querySelector('.se-gates')
+  const door = toolbar?.querySelector(':scope > .se-door')
+  const gate = toolbar?.querySelector(':scope > .se-gate')
+  const rect = door?.getBoundingClientRect()
+  const gateRect = gate?.getBoundingClientRect()
+  const focusables = toolbar
+    ? [...toolbar.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    : []
   return {
-    door: d ? {
-      tag: d.tagName,
-      href: d.getAttribute('href'),
-      text: d.textContent.trim(),
-      aria: d.getAttribute('aria-label'),
-      tip: d.getAttribute('data-tip'),
-      w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
-      inGates: !!d.closest('.se-gates'), inHead: !!d.closest('.ds-head'),
+    door: door ? {
+      tag: door.tagName,
+      href: door.getAttribute('href'),
+      text: door.textContent.trim(),
+      aria: door.getAttribute('aria-label'),
+      tip: door.getAttribute('data-tip'),
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      firstChild: toolbar.firstElementChild === door,
+      firstFocusable: focusables[0] === door,
+      beforeGate: !gateRect || rect.right <= gateRect.left,
     } : null,
+    focusOrder: focusables.map((el) => el.className),
+    doorCount: document.querySelectorAll('.se-door').length,
+    headAction: !!document.querySelector('.ds-head-action'),
     banner: !!document.querySelector('.ds-banner, .se-banner-slot'),
+    widths: { doc: document.documentElement.scrollWidth, body: document.body.scrollWidth },
   }
 })
-const doorOk = (d) => !!d && d.tag === 'A' && d.href === `#/sessions/${SESSION}` && d.text === '' && d.w >= 32 && d.h >= 32
-const sameDoor = (a, b) => !!a && !!b && a.href === b.href && a.aria === b.aria && a.text === b.text
+
+const detailProbe = (page) => page.evaluate(() => ({
+  doorCount: document.querySelectorAll('.se-door').length,
+  headAction: !!document.querySelector('.ds-head-action'),
+  banner: !!document.querySelector('.ds-banner, .se-banner-slot'),
+  back: document.querySelector('.ds-back, .ds-backlink')?.getAttribute('href') || null,
+  failure: !!document.querySelector('.ds-failed'),
+  missing: !!document.querySelector('.ds-missing'),
+  widths: { doc: document.documentElement.scrollWidth, body: document.body.scrollWidth },
+}))
+
+const doorOk = (door, label) => !!door
+  && door.tag === 'A'
+  && door.href === `#/sessions/${SESSION}`
+  && door.text === ''
+  && door.aria === label
+  && door.tip === label
+  && door.w >= 32
+  && door.h >= 32
+  && door.firstChild
+  && door.firstFocusable
+  && door.beforeGate
 
 const browser = await chromium.launch()
+let scopedRowHref = null
 
-// ---------- journey 1: desktop 1440 en — door → scoped list → detail → the three commands ----------
+// Desktop EN: enter through the real console door, then walk every return command.
 {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: OUT, size: { width: 1440, height: 900 } } })
-  const p = await ctx.newPage()
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    recordVideo: { dir: OUT, size: { width: 1440, height: 900 } },
+  })
+  const page = await context.newPage()
+  await page.goto(`${BASE}/#/sessions/${SESSION}`)
+  const consoleDoor = await page.waitForSelector('.si-tab-door', { timeout: 20000 }).catch(() => null)
+  const entry = consoleDoor ? await consoleDoor.evaluate((el) => ({ tag: el.tagName, href: el.getAttribute('href') })) : null
+  check('console Eval entry is a real scoped-list anchor', entry?.tag === 'A' && pathOf(entry.href) === '#/evals' && qOf(entry.href) === SCOPED_Q, JSON.stringify(entry))
+  if (!entry) throw new Error('real console Eval door did not render')
 
-  // — the console door: WAIT for the console to actually render its tab bar (a cold vite/board load
-  // takes over a second; a fixed settle races it), then probe the REAL element. If the door never
-  // appears, or is not the canonical real anchor, the run ABORTS here with a non-zero exit — the entry
-  // is the very thing under test, and continuing (playwright's auto-waiting click would still land)
-  // would turn the remaining checks into evidence for a page the user could not have reached this way.
-  await p.goto(`${BASE}/#/sessions/${SESSION}`)
-  const t0 = Date.now()
-  const doorEl = await p.waitForSelector('.si-tab-door', { timeout: 20000 }).catch(() => null)
-  const door = doorEl ? await doorEl.evaluate((d) => ({ tag: d.tagName, href: d.getAttribute('href'), text: d.textContent.trim() })) : null
-  check('door exists in console tab bar', !!door, `${JSON.stringify(door)} after ${Date.now() - t0}ms`)
-  check('door is a REAL anchor', door?.tag === 'A', `tag=${door?.tag}`)
-  const doorQ = door?.href ? qOf(door.href) : null
-  check('door href is the canonical scoped list (q token, not legacy ?session)', pathOf(door?.href || '') === '#/evals' && doorQ === SCOPED_Q, `href=${door?.href} q=${doorQ}`)
-  await p.screenshot({ path: join(OUT, '01-console-door.png') })
-  if (!door || door.tag !== 'A' || pathOf(door.href || '') !== '#/evals' || doorQ !== SCOPED_Q) {
-    console.log('ABORT — the desktop console door is missing or not the canonical anchor; refusing to fake the entry with a scripted navigation.')
-    await browser.close()
-    console.log(`\n${pass} pass, ${fail} fail (aborted at the console door)`)
-    process.exit(1)
-  }
-  await settle(p, 400)
+  const historyBefore = await page.evaluate(() => history.length)
+  await page.click('.si-tab-door')
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  await page.waitForSelector('.se-export', { timeout: 15000 })
+  await page.waitForSelector('a.lp-row', { timeout: 15000 })
+  check('console door pushes exactly once to canonical scoped list',
+    await page.evaluate(() => location.hash) === LIST_HASH && await page.evaluate(() => history.length) === historyBefore + 1)
 
-  // — click: one PUSH straight to the final address —
-  const lenBefore = await p.evaluate(() => history.length)
-  await p.click('.si-tab-door')
-  await settle(p)
-  const hashAfter = await p.evaluate(() => location.hash)
-  const lenAfter = await p.evaluate(() => history.length)
-  const listHash = hashAfter
-  check('click lands on the canonical scoped list', pathOf(hashAfter) === '#/evals' && qOf(hashAfter) === SCOPED_Q, `hash=${hashAfter}`)
-  check('click is ONE history push', lenAfter === lenBefore + 1, `history ${lenBefore}→${lenAfter}`)
-  const gates = await p.waitForSelector('.se-gates', { timeout: 8000 }).then(() => true).catch(() => false)
-  check('scoped list shows the gates strip', gates)
+  const enList = await listProbe(page)
+  check('list door is leftmost, first focusable, real, and short-labelled', doorOk(enList.door, 'Back to session terminal'), JSON.stringify(enList))
+  check('scoped list has exactly one door and no banner/action seam', enList.doorCount === 1 && !enList.banner && !enList.headAction)
+  check('1440 list has no horizontal overflow', enList.widths.doc <= 1440 && enList.widths.body <= 1440, JSON.stringify(enList.widths))
+  await page.screenshot({ path: join(OUT, 'b-01-scoped-list-1440-en.png') })
 
-  // — the scoped LIST carries the icon-only terminal door as an se-gates action; NO banner —
-  const listDoor = await doorProbe(p)
-  check('scoped LIST se-gates carries the terminal door', !!listDoor.door && listDoor.door.inGates, JSON.stringify(listDoor.door))
-  check('list door is an icon-only REAL 32px anchor to the terminal', doorOk(listDoor.door), JSON.stringify(listDoor.door))
-  check('list door aria-label + tooltip carry the full semantics (session id)', !!listDoor.door && !!listDoor.door.aria && listDoor.door.aria.includes(SHORT) && listDoor.door.tip === listDoor.door.aria, `aria=${listDoor.door?.aria}`)
-  check('scoped LIST renders NO banner markup', !listDoor.banner)
-  check('list door sits in the first screen', !!listDoor.door && listDoor.door.top >= 0 && listDoor.door.top < 300, `top=${listDoor.door?.top}`)
-  await p.screenshot({ path: join(OUT, '02-scoped-list.png') })
+  await page.reload()
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  const reloaded = await listProbe(page)
+  check('reloaded list restores the same canonical door', doorOk(reloaded.door, 'Back to session terminal'))
 
-  // — reload: identical door (derived only from the address) —
-  await p.reload()
-  await settle(p, 1200)
-  const reloadDoor = await doorProbe(p)
-  check('reload wears the identical door', sameDoor(listDoor.door, reloadDoor.door), JSON.stringify(reloadDoor.door))
+  await page.waitForSelector('.se-export', { timeout: 15000 })
+  await page.focus('.se-door')
+  await page.keyboard.press('Tab')
+  check('Tab after the first door reaches trailing export, skipping inert gates',
+    await page.evaluate(() => document.activeElement?.classList.contains('se-export')))
+  await page.keyboard.press('Shift+Tab')
+  check('Shift+Tab returns to the list door', await page.evaluate(() => document.activeElement?.classList.contains('se-door')))
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.si-tab-door', { timeout: 15000 })
+  check('keyboard Enter on list door opens the real session terminal',
+    await page.evaluate(() => location.hash) === `#/sessions/${SESSION}` && await page.evaluate(() => !!document.querySelector('.si-term-body')))
+  await page.goBack()
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('browser Back from terminal restores exact scoped list', await page.evaluate(() => location.hash) === LIST_HASH)
 
-  // — keyboard: focus the door and press Enter — a real anchor follows —
-  await p.focus('.se-door')
-  await p.keyboard.press('Enter')
-  await settle(p)
-  const kbHash = await p.evaluate(() => location.hash)
-  check('focus+Enter on the door lands on the session terminal', kbHash === `#/sessions/${SESSION}`, kbHash)
-  await p.goBack()
-  await settle(p)
-  check('Back from the keyboard-opened terminal restores the scoped list', await p.evaluate(() => location.hash) === listHash)
-
-  // — new-tab semantics: Ctrl+click opens the terminal in a NEW page, the list stays put —
   const [popup] = await Promise.all([
-    ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null),
-    p.click('.se-door', { modifiers: ['ControlOrMeta'] }),
+    context.waitForEvent('page', { timeout: 8000 }).catch(() => null),
+    page.click('.se-door', { modifiers: ['ControlOrMeta'] }),
   ])
-  await popup?.waitForLoadState().catch(() => null)
-  await settle(p, 400)
-  check('Ctrl+click opens the terminal in a new tab (real anchor semantics)', !!popup && (await popup.evaluate(() => location.hash).catch(() => null)) === `#/sessions/${SESSION}`)
-  check('the originating list did not navigate', await p.evaluate(() => location.hash) === listHash)
+  await popup?.waitForURL((url) => url.hash === `#/sessions/${SESSION}`, { timeout: 15000 }).catch(() => null)
+  await popup?.waitForSelector('.si-term-body', { timeout: 15000 }).catch(() => null)
+  const popupHash = await popup?.evaluate(() => location.hash).catch(() => null)
+  check('Ctrl-click opens the terminal in a new tab', popupHash === `#/sessions/${SESSION}`)
+  check('Ctrl-click leaves the scoped list in place', await page.evaluate(() => location.hash) === LIST_HASH)
   const popupVideo = popup?.video() || null
   await popup?.close().catch(() => null)
 
-  // — list → detail: push; detail seats the SAME door in the header action slot + uniform ds-back —
-  await p.waitForSelector('a.lp-row', { timeout: 8000 }).catch(() => null)
-  const rowHref = await p.evaluate(() => document.querySelector('a.lp-row')?.getAttribute('href'))
-  check('scoped row href carries the scope token alone', !!rowHref && qOf(rowHref) === `scope:${SESSION}`, `row=${rowHref}`)
-  await p.click('a.lp-row')
-  await settle(p)
-  const detailHash = await p.evaluate(() => location.hash)
-  check('row click lands on the scoped detail', detailHash.startsWith('#/evals/') && qOf(detailHash) === `scope:${SESSION}`, detailHash)
-  const detailDoor = await doorProbe(p)
-  check('scoped DETAIL header action slot carries the terminal door', !!detailDoor.door && detailDoor.door.inHead, JSON.stringify(detailDoor.door))
-  check('detail door is the icon-only REAL 32px anchor', doorOk(detailDoor.door))
-  check('list and detail doors are the ONE door (same href, same semantics)', sameDoor(listDoor.door, detailDoor.door))
-  check('scoped DETAIL renders NO banner markup', !detailDoor.banner)
-  const dsBack = await p.evaluate(() => document.querySelector('.ds-back')?.getAttribute('href'))
-  check('scoped detail ds-back is the canonical scoped list URL, byte-identical to the door-minted address', dsBack === listHash, `ds-back=${dsBack} vs list=${listHash}`)
-  const queueScoped = await p.evaluate(() => {
-    const qs = [...document.querySelectorAll('a.ds-queue-row')].map((a) => a.getAttribute('href')).filter(Boolean)
-    return { n: qs.length, allScoped: qs.length > 0 && qs.every((h) => decodeURIComponent(h).includes('scope:')) }
-  })
-  check('queue anchors exist and keep the scope token', queueScoped.allScoped, `n=${queueScoped.n}`)
-  await p.screenshot({ path: join(OUT, '03-scoped-detail.png') })
+  scopedRowHref = await page.locator('a.lp-row').first().getAttribute('href')
+  check('scoped row keeps only the scope token', !!scopedRowHref && qOf(scopedRowHref) === `scope:${SESSION}`, scopedRowHref)
+  await page.click('a.lp-row')
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  const detail = await detailProbe(page)
+  check('scoped detail has one list back and no terminal/action duplicate', detail.back === LIST_HASH && detail.doorCount === 0 && !detail.headAction && !detail.banner, JSON.stringify(detail))
+  check('1440 detail has no horizontal overflow', detail.widths.doc <= 1440 && detail.widths.body <= 1440, JSON.stringify(detail.widths))
+  await page.screenshot({ path: join(OUT, 'b-02-scoped-detail-1440-en.png') })
 
-  // — command 1: browser Back → EXACTLY the scoped list —
-  await p.goBack()
-  await settle(p)
-  const backHash = await p.evaluate(() => location.hash)
-  check('browser Back restores the exact scoped list URL', backHash === listHash, `back=${backHash}`)
+  await page.goBack()
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('browser Back from detail restores exact list with door', await page.evaluate(() => location.hash) === LIST_HASH && (await listProbe(page)).doorCount === 1)
+  await page.click('a.lp-row')
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  await page.click('.ds-back')
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('detail back lands on scoped list and its door remains', await page.evaluate(() => location.hash) === LIST_HASH && doorOk((await listProbe(page)).door, 'Back to session terminal'))
+  await page.click('.se-door')
+  await page.waitForSelector('.si-term-body', { timeout: 15000 })
+  check('list door alone completes the return to the real terminal', await page.evaluate(() => location.hash) === `#/sessions/${SESSION}`)
+  await page.goBack()
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
 
-  // — command 2: ds-back → the SCOPED default list, byte-identical to where the door-entry landed;
-  // the landed list still carries the door. Trunk faces (bare #/evals) carry no door at all. —
-  await p.click('a.lp-row')
-  await settle(p)
-  await p.click('.ds-back')
-  await settle(p)
-  const dsBackHash = await p.evaluate(() => location.hash)
-  const afterBackProbe = await doorProbe(p)
-  check('ds-back lands byte-identical to the original scoped list URL', dsBackHash === listHash, `hash=${dsBackHash}`)
-  check('the landed scoped list still carries the door', !!afterBackProbe.door && afterBackProbe.door.inGates && !afterBackProbe.banner, JSON.stringify(afterBackProbe.door))
-  await p.screenshot({ path: join(OUT, '04-scoped-list-after-dsback.png') })
-  await p.goto(`${BASE}/#/evals`)
-  await settle(p, 1000)
-  const bareProbe = await doorProbe(p)
-  check('trunk list carries NO door and NO banner', !bareProbe.door && !bareProbe.banner, JSON.stringify(bareProbe))
+  // Trunk list/detail never grow a terminal door.
+  await page.goto(`${BASE}/#/evals`)
+  await page.waitForSelector('a.lp-row', { timeout: 15000 })
+  check('trunk list has no terminal door', (await listProbe(page)).doorCount === 0)
+  await page.click('a.lp-row')
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  const trunk = await detailProbe(page)
+  check('trunk detail has only bare-list back, no door/action', trunk.back === '#/evals' && trunk.doorCount === 0 && !trunk.headAction)
 
-  // — command 3: the terminal door → #/sessions/<id> —
-  await p.goto(`${BASE}/${listHash}`)
-  await settle(p, 1200)
-  const hasDoor = await p.evaluate(() => !!document.querySelector('.se-door'))
-  if (hasDoor) {
-    await p.click('.se-door')
-    await settle(p)
-    const termHash = await p.evaluate(() => location.hash)
-    check('terminal door lands on the session terminal', termHash === `#/sessions/${SESSION}`, termHash)
-  } else check('terminal door lands on the session terminal', false, 'no door to click')
-  await p.screenshot({ path: join(OUT, '05-terminal-via-door.png') })
-
-  // the journey video must be THIS page's recording, bound via page.video() — a directory scan would
-  // race the popup's own (tiny) recording in this multi-page context and file the wrong bytes.
-  const mainVideo = p.video()
-  await p.close(); await ctx.close()
-  renameSync(await mainVideo.path(), join(OUT, 'journey-desktop-en.webm'))
+  const video = page.video()
+  await page.close()
+  await context.close()
+  renameSync(await video.path(), join(OUT, 'b-journey-1440-en.webm'))
   const popupPath = await popupVideo?.path().catch(() => null)
   if (popupPath) rmSync(popupPath, { force: true })
 }
 
-// ---------- journey 2: direct open + zh — the door derives only from the address ----------
+// Desktop ZH: direct open/reload plus honest not-found all return only to the scoped list.
 {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  const p = await ctx.newPage()
-  await p.addInitScript(() => localStorage.setItem('spexcode.lang', 'zh'))
-  await p.goto(`${BASE}/#/evals?q=${encodeURIComponent(SCOPED_Q)}`)
-  await settle(p, 1500)
-  const zhList = await doorProbe(p)
-  check('zh direct-open scoped list carries the door, no banner', !!zhList.door && zhList.door.inGates && !zhList.banner, JSON.stringify(zhList.door))
-  check('zh door aria is localized + names the session, still icon-only', doorOk(zhList.door) && /[一-鿿]/.test(zhList.door?.aria || '') && (zhList.door?.aria || '').includes(SHORT), `aria=${zhList.door?.aria}`)
-  await p.screenshot({ path: join(OUT, '06-zh-scoped-list.png') })
-  // the session model loads asynchronously — wait for the REAL rows (the fixed settle races a slow
-  // /api/sessions/:id/evals), then open the first one
-  await p.waitForSelector('a.lp-row', { timeout: 15000 }).catch(() => null)
-  const row = await p.evaluate(() => document.querySelector('a.lp-row')?.getAttribute('href'))
-  if (row) {
-    await p.goto(`${BASE}/${row}`)
-    await settle(p, 1200)
-    const zhDetail = await doorProbe(p)
-    check('zh scoped detail carries the SAME door in its header', !!zhDetail.door && zhDetail.door.inHead && sameDoor(zhList.door, zhDetail.door) && !zhDetail.banner, JSON.stringify(zhDetail.door))
-    // the scoped ds-back derives only from the canonical address: direct open and reload mint the
-    // identical scoped-default-list href
-    const zhBack = await p.evaluate(() => document.querySelector('.ds-back')?.getAttribute('href'))
-    check('zh direct-open scoped detail ds-back is the canonical scoped list', zhBack === `#/evals?q=${encodeURIComponent(SCOPED_Q).replaceAll('%20', '+')}`, `ds-back=${zhBack}`)
-    await p.reload()
-    await p.waitForSelector('.ds-back', { timeout: 15000 }).catch(() => null)
-    const zhBack2 = await p.evaluate(() => document.querySelector('.ds-back')?.getAttribute('href'))
-    check('reloaded scoped detail ds-back is byte-identical', zhBack2 === zhBack, `reload=${zhBack2}`)
-  } else check('zh scoped detail carries the SAME door in its header', false, 'no row to open')
-  // a TRUNK detail — an address the MERGED tree actually carries (the scoped scenario may not exist on
-  // main yet, which would render not-found): take the bare list's first row. It carries no door at all
-  // and its ds-back is the bare list.
-  await p.goto(`${BASE}/#/evals`)
-  await p.waitForSelector('a.lp-row', { timeout: 15000 }).catch(() => null)
-  const trunkRow = await p.evaluate(() => document.querySelector('a.lp-row')?.getAttribute('href'))
-  if (trunkRow) {
-    await p.goto(`${BASE}/${trunkRow}`)
-    await p.waitForSelector('.ds-back', { timeout: 15000 }).catch(() => null)
-    const trunk = await doorProbe(p)
-    const trunkBack = await p.evaluate(() => document.querySelector('.ds-back')?.getAttribute('href'))
-    check('trunk detail carries NO door and NO banner', !trunk.door && !trunk.banner, JSON.stringify(trunk))
-    check('trunk detail ds-back is the bare #/evals', trunkBack === '#/evals', `ds-back=${trunkBack}`)
-  } else {
-    check('trunk detail carries NO door and NO banner', false, 'no trunk row to open')
-    check('trunk detail ds-back is the bare #/evals', false, 'no trunk row to open')
-  }
-  await p.close(); await ctx.close()
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
+  await page.addInitScript(() => localStorage.setItem('spexcode.lang', 'zh'))
+  await page.goto(`${BASE}/${LIST_HASH}`)
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  await page.waitForSelector('a.lp-row', { timeout: 15000 })
+  const zh = await listProbe(page)
+  check('zh list uses the exact short local command', doorOk(zh.door, '返回会话终端') && !zh.door.aria.includes(SHORT), JSON.stringify(zh.door))
+  await page.screenshot({ path: join(OUT, 'b-03-scoped-list-1440-zh.png') })
+
+  await page.goto(`${BASE}/${scopedRowHref}`)
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  const direct = await detailProbe(page)
+  check('direct-open scoped detail has only canonical list back', direct.back === LIST_HASH && direct.doorCount === 0 && !direct.headAction)
+  await page.reload()
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  const reload = await detailProbe(page)
+  check('reloaded scoped detail preserves that single return target', reload.back === LIST_HASH && reload.doorCount === 0 && !reload.headAction)
+
+  await page.goto(`${BASE}/#/evals/not-a-node/not-a-scenario?q=${encodeURIComponent(`scope:${SESSION}`)}`)
+  await page.waitForSelector('.ds-missing', { timeout: 15000 })
+  const missing = await detailProbe(page)
+  check('not-found detail has only scoped-list link, no terminal door', missing.missing && missing.back === LIST_HASH && missing.doorCount === 0 && !missing.headAction)
+  await page.click('.ds-backlink')
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('not-found link lands on list with its zh terminal door', doorOk((await listProbe(page)).door, '返回会话终端'))
+  await page.close()
+  await context.close()
 }
 
-// ---------- journey 3: 390px phone — same door, no overflow; cold-open reaches the session detail ----------
+// Transport failure is a distinct detail face on the same data-source axis.
 {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, recordVideo: { dir: OUT, size: { width: 390, height: 844 } }, isMobile: true, hasTouch: true })
-  const p = await ctx.newPage()
-  await p.goto(`${BASE}/#/evals?q=${encodeURIComponent(SCOPED_Q)}`)
-  await settle(p, 1500)
-  const mProbe = await doorProbe(p)
-  check('390px scoped list carries the door, no banner', !!mProbe.door && mProbe.door.inGates && !mProbe.banner, JSON.stringify(mProbe.door))
-  check('390px door keeps the 32px target in the first screen', doorOk(mProbe.door) && mProbe.door.top < 300, `top=${mProbe.door?.top} ${mProbe.door?.w}×${mProbe.door?.h}`)
-  const widths = await p.evaluate(() => ({ doc: document.documentElement.scrollWidth, body: document.body.scrollWidth }))
-  check('390px no horizontal overflow', widths.doc <= 390 && widths.body <= 390, JSON.stringify(widths))
-  await p.screenshot({ path: join(OUT, '07-390-scoped-list.png') })
-  // the door must be a REAL door on the phone too: tap it and require the session conversation to
-  // render (the deep-linked #/sessions/<id> plane), not just a hash change
-  await p.click('.se-door')
-  await settle(p, 1000)
-  const mTerm = await p.evaluate(() => ({
-    hash: location.hash,
-    detail: !!document.querySelector('.m-sessdetail'),
-    id8: document.querySelector('.m-sess-id8')?.textContent || null,
-  }))
-  check('390px door opens the session conversation', mTerm.hash === `#/sessions/${SESSION}` && mTerm.detail && mTerm.id8 === SHORT, JSON.stringify(mTerm))
-  await p.screenshot({ path: join(OUT, '09-390-terminal-via-door.png') })
-  // the phone session surface's eval door: reach a session's detail (already open from the door leg,
-  // else tab-bar sessions → tap a row) and read the header's eval entry
-  await p.goto(`${BASE}/#/sessions`)
-  await settle(p, 1200)
-  const doorThere = await p.evaluate(() => !!document.querySelector('.m-sess-evalbtn'))
-  if (!doorThere) {
-    await p.evaluate(() => document.querySelectorAll('.m-tabbar-btn')[1]?.click())
-    await settle(p, 600)
-    await p.waitForSelector('.m-sess-row', { timeout: 8000 }).then((el) => el.click()).catch(() => null)
-    await settle(p, 800)
-  }
-  const mDoor = await p.evaluate(() => {
-    const d = document.querySelector('.m-sess-evalbtn')
-    return d ? { tag: d.tagName, href: d.getAttribute('href') } : null
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
+  await page.route(`**/api/sessions/${SESSION}/evals`, (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'forced failure' }))
+  await page.goto(`${BASE}/${scopedRowHref}`)
+  await page.waitForSelector('.ds-failed', { timeout: 15000 })
+  const failed = await detailProbe(page)
+  check('load-failed detail has only scoped-list link, no terminal door', failed.failure && failed.back === LIST_HASH && failed.doorCount === 0 && !failed.headAction)
+  await page.click('.ds-backlink')
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  const failedList = await listProbe(page)
+  check('failed scoped list still leads with its real terminal door', doorOk(failedList.door, 'Back to session terminal'))
+  await page.close()
+  await context.close()
+}
+
+// Phone EN: identical hierarchy, no overflow, and the terminal destination is the real mobile session plane.
+{
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    recordVideo: { dir: OUT, size: { width: 390, height: 844 } },
+    isMobile: true,
+    hasTouch: true,
   })
-  check('phone eval door is a REAL anchor to a scoped list', !!mDoor && mDoor.tag === 'A' && !!mDoor.href && pathOf(mDoor.href) === '#/evals' && (qOf(mDoor.href) || '').startsWith('is:eval state:current scope:'), JSON.stringify(mDoor))
-  await p.screenshot({ path: join(OUT, '08-390-sessions-door.png') })
-  const mVideo = p.video()
-  await p.close(); await ctx.close()
-  renameSync(await mVideo.path(), join(OUT, 'journey-390.webm'))
+  const page = await context.newPage()
+  await page.goto(`${BASE}/${LIST_HASH}`)
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  await page.waitForSelector('a.lp-row', { timeout: 15000 })
+  const mobile = await listProbe(page)
+  check('390 list keeps the leftmost first-focus door', doorOk(mobile.door, 'Back to session terminal') && mobile.door.top < 300, JSON.stringify(mobile.door))
+  check('390 list has zero horizontal overflow', mobile.widths.doc <= 390 && mobile.widths.body <= 390, JSON.stringify(mobile.widths))
+  await page.screenshot({ path: join(OUT, 'b-04-scoped-list-390-en.png') })
+
+  await page.click('a.lp-row')
+  await page.waitForSelector('.ds-back', { timeout: 15000 })
+  const mobileDetail = await detailProbe(page)
+  check('390 detail has only scoped-list back and zero overflow', mobileDetail.back === LIST_HASH && mobileDetail.doorCount === 0 && !mobileDetail.headAction && mobileDetail.widths.doc <= 390 && mobileDetail.widths.body <= 390, JSON.stringify(mobileDetail))
+  await page.click('.ds-back')
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('390 detail back restores list door', doorOk((await listProbe(page)).door, 'Back to session terminal'))
+  await page.click('.se-door')
+  await page.waitForSelector('.m-sessdetail', { timeout: 15000 })
+  const mobileTerminal = await page.evaluate(() => ({ hash: location.hash, id: document.querySelector('.m-sess-id8')?.textContent }))
+  check('390 list door reaches the real mobile session terminal plane', mobileTerminal.hash === `#/sessions/${SESSION}` && mobileTerminal.id === SHORT, JSON.stringify(mobileTerminal))
+  await page.goBack()
+  await page.waitForSelector('.se-gates > .se-door', { timeout: 15000 })
+  check('390 browser Back returns exactly to scoped list', await page.evaluate(() => location.hash) === LIST_HASH)
+
+  const video = page.video()
+  await page.close()
+  await context.close()
+  renameSync(await video.path(), join(OUT, 'b-journey-390-en.webm'))
 }
 
 await browser.close()

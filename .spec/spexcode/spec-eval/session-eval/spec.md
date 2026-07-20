@@ -49,8 +49,9 @@ diff and both file versions are there to jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
 address of a session's evaluation is `#/evals?q=is:eval state:current scope:<id>` (the list — the same
-[[evals-feed]] row grammar with the session's gates strip above — its toolbar carrying the icon-only
-terminal door naming this session/worktree in its tooltip/aria ([[evals-view]]) — blind spots leading
+[[evals-feed]] row grammar with the session's gates strip above — its toolbar leading with the
+icon-only terminal door as its first focusable control, labelled by the short localized
+`Back to session terminal` / `返回会话终端` command ([[evals-view]]) — blind spots leading
 as inert unmeasured rows, then the
 session's own measurements ✦-marked, then the inherited baseline — other sessions' latest readings; a
 reading is the session's own iff THIS session filed it or its `codeSha` is one of the branch's commits,
@@ -67,7 +68,9 @@ landing directly on the final address — never a console-local eval pane, never
 the legacy `?session` param; the typed `/eval`
 board command opens the same door. The LEGACY address `#/sessions/<id>/eval[/<node>/<scenario>]`
 normalizes to the canonical form at the route layer ([[side-nav]] — replace, old links keep working).
-There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the
+The scoped detail exposes no second terminal door: its one small back arrow, plus load-failed and
+not-found list links, return to this scoped list; only from the list does the terminal door leave the
+Evals hierarchy. There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the
 real product, not by a language-specific checker; a session with no worktree/diff shows a clean empty
 state.
 

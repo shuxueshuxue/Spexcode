@@ -40,7 +40,14 @@ backend so scoped pages are drivable without a hub.
 
 **One global admin page over the landed contract.** `ProjectsPage` renders the host's reconciled
 KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex serve` in it, or through
-the page's add drawer (`POST /projects` with the repo root; a non-repo's refusal is shown verbatim).
+the page's dedicated Add Project modal. The modal is a focused host-folder picker, not another inline
+drawer: an editable absolute-path bar and parent/home navigation select one directory while a bounded list
+shows its child folders. The selected folder's actual state drives a compact setup section. An existing Git
+repo can be added as-is; a plain folder requires an explicit checked Git initialization choice. SpexCode
+initialization is independently optional, recognizes an already-initialized repo, and requires explicit
+harness targets before submit. One submit runs the host's unified add workflow; it stays pending through
+the requested real `git init` / `spex init`, keeps the modal open on failure with the command's full
+transcript, and closes only after the catalog row truly exists.
 Each row shows its [[project-identity]] icon/title and liveness — the host's instance-validated `online`
 refined by a probed `/p/:id/health` dot
 when online, while an offline row calmly reads *stopped*, never probed into a false red — the gating

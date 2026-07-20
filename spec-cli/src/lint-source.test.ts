@@ -22,6 +22,8 @@ function fixture(
   lint: Record<string, unknown> = { governedRoots: ['.'] },
   untracked: Record<string, Content> = {},
   specBody = '# project\n',
+  args: string[] = ['spec', 'lint'],
+  extraConfig: Record<string, unknown> = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), 'spex-source-'))
   const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' })
@@ -30,7 +32,7 @@ function fixture(
   git('config', 'user.name', 'Test')
   mkdirSync(join(root, '.spec/project'), { recursive: true })
   writeFileSync(join(root, '.spec/project/spec.md'), `---\ntitle: project\n---\n${specBody}`)
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ lint }) + '\n')
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ lint, ...extraConfig }) + '\n')
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
@@ -41,7 +43,7 @@ function fixture(
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
   }
-  const result = spawnSync(TSX, [CLI, 'spec', 'lint'], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync(TSX, [CLI, ...args], { cwd: root, encoding: 'utf8' })
   return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` }
 }
 
@@ -49,13 +51,15 @@ function altitudeFixture(
   files: Record<string, Content>,
   token: string,
   lint: Record<string, unknown> = {},
+  identifierExtensions: string[] = [],
 ) {
   return fixture(files, {
     governedRoots: ['.'],
     testGlobs: [],
-    altitude: { sizeable: 0, dense: 1 },
     ...lint,
-  }, {}, `# project\n\n${token} ${token} ${token}\n`)
+  }, {}, `# project\n\n${token} ${token} ${token}\n`, ['doctor'], {
+    doctor: { altitude: { sizeable: 0, dense: 1, identifierExtensions } },
+  })
 }
 
 test('fresh Python repo treats every tracked regular text file as source without semantic guesses', { skip }, () => {
@@ -147,33 +151,42 @@ test('an intentionally empty include set warns with every active policy knob', {
   assert.match(out, /sourceExtensions/)
 })
 
-test('altitude recognises a tracked Python basename without configured identifier extensions', { skip }, () => {
+test('spec lint omits altitude even when the body trips the doctor proxy', { skip }, () => {
+  const body = Array.from({ length: 55 }, (_, i) => `${i + 1}. callThing(foo_bar)`).join('\n')
+  const { code, out } = fixture({ 'src/foo.py': 'VALUE = 1\n' }, { governedRoots: ['.'], testGlobs: [] }, {}, body)
+  assert.equal(code, 0, out)
+  assert.doesNotMatch(out, /altitude/i)
+})
+
+test('doctor altitude recognises a tracked Python basename without configured identifier extensions', { skip }, () => {
   const { code, out } = altitudeFixture({ 'src/foo.py': 'VALUE = 1\n' }, 'foo.py')
   assert.equal(code, 0, out)
-  assert.match(out, /altitude: 'project' body reads low-altitude/)
+  assert.match(out, /altitude\s+: 1 finding\(s\)/)
+  assert.match(out, /project\s+: body reads like mechanics rather than a contract/)
 })
 
-test('altitude recognises an extensionless tracked source basename', { skip }, () => {
+test('doctor altitude recognises an extensionless tracked source basename', { skip }, () => {
   const { code, out } = altitudeFixture({ Makefile: 'all:\n\ttrue\n' }, 'Makefile')
   assert.equal(code, 0, out)
-  assert.match(out, /altitude: 'project' body reads low-altitude/)
+  assert.match(out, /altitude\s+: 1 finding\(s\)/)
 })
 
-test('altitude does not recognise a basename removed by source exclusions', { skip }, () => {
+test('doctor altitude does not recognise a basename removed by source exclusions', { skip }, () => {
   const { code, out } = altitudeFixture({
     'src/main.rs': 'fn main() {}\n',
     'generated/foo.py': 'VALUE = 1\n',
   }, 'foo.py', { sourceExcludeGlobs: ['generated/**'] })
   assert.equal(code, 0, out)
-  assert.doesNotMatch(out, /altitude:/)
+  assert.match(out, /altitude\s+: healthy/)
 })
 
-test('legacy identifierExtensions lowers to wildcard filename candidates', { skip }, () => {
+test('doctor altitude identifierExtensions lowers to wildcard filename candidates', { skip }, () => {
   const { code, out } = altitudeFixture(
     { 'src/main.rs': 'fn main() {}\n' },
     'untracked.legacy',
-    { identifierExtensions: ['.legacy'] },
+    {},
+    ['.legacy'],
   )
   assert.equal(code, 0, out)
-  assert.match(out, /altitude: 'project' body reads low-altitude/)
+  assert.match(out, /altitude\s+: 1 finding\(s\)/)
 })

@@ -121,10 +121,8 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       optional leading dot; no space / '/' / '_' / uppercase Latin), and its leaf dir name
                       is unique tree-wide.
   mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
-  altitude   (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
-                      code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
-  breadth    (warn)   a node with >= maxChildren direct children (default 8) — altitude's structural
-                      twin; is an intermediate grouping layer missing?
+  breadth    (warn)   a node with >= maxChildren direct children (default 8) — is an intermediate
+                      grouping layer missing?
   coverage   (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift      (warn)   a governed file has commits newer than the node's spec version — it may be stale.
                       ALWAYS advisory: unanchored drift never blocks a commit (the blocking tier is
@@ -143,6 +141,9 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       it so each governor owns its own module (or merge the nodes, or give it one
                       foundation owner). Selector-scoped governors don't count toward the bound.
   confusable-id (warn) two leaf ids one edit apart read as the same word — rename one to read apart.
+
+Spec-prose quality is deliberately outside this production gate. Bare \`spex doctor\` reports opt-in
+altitude health findings; the tidy workflow consumes that report and adds semantic judgment.
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
 before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.`
@@ -260,14 +261,14 @@ settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. 
 PORTABILITY, and picking the right one is the whole discipline:
 
   spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
-                        identity, lint budgets, launcher NAMES. "Git is the database": tracked so the
+                        identity, lint policy, doctor health budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
                         paths. Layered OVER spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+icon, lint policy, doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
@@ -410,11 +411,6 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            unioned with sourceIncludeGlobs; it has no separate matching path.
   lint.testGlobs           globs EXCLUDED from coverage. Defaults cover .test/.spec names, test/tests/
                            directories, and test_* / *_test conventions; [] governs tests too.
-  lint.identifierExtensions legacy compatibility extensions for altitude's bare-filename signal. Omit to
-                           derive exact filenames from coverage's tracked source candidates; configured
-                           extensions lower to wildcard filename candidates in that same matcher.
-  lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
-                           (defaults 50 / 4200 / 35 / 1.3 / 3).
   lint.maxChildren         breadth budget: warn at >= this many direct children (default 8).
   lint.maxOwners           warn when a file is governed WHOLE-FILE by > this many nodes (default 3).
                            Selector-scoped governors (code: path#symbol) don't count toward the bound.
@@ -428,10 +424,19 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            freshness. A project policy → committed spexcode.json.
   lint.scenarioTags        the closed vocabulary an eval scenario's tags: must draw from (default
                            ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
-Example — govern your own source dir and loosen the altitude budget:
-  { "lint": { "governedRoots": ["src"], "altitude": { "lineBudget": 70 } } }
+Example — govern your own source dir:
+  { "lint": { "governedRoots": ["src"] } }
 Example — declare project-specific exclusions (nothing is guessed from these names):
   { "lint": { "governedRoots": ["."], "sourceExcludeGlobs": ["vendor/**", "dist/**", "docs/**"] } }
+
+── DOCTOR HEALTH (spexcode.json — portable advisory-diagnosis budgets) ──
+  doctor.altitude         the one altitude proxy config consumed by bare \`spex doctor\`:
+                          { lineBudget, charBudget, sizeable, dense, steps, identifierExtensions }
+                          Defaults: 50 / 4200 / 35 / 1.3 / 3 / []. Exact filename signals derive from
+                          lint's tracked source candidates; identifierExtensions adds compatibility wildcard
+                          rows (".legacy" → "*.legacy") to that same matcher.
+Example — loosen the opt-in altitude diagnosis without changing the lint gate:
+  { "doctor": { "altitude": { "lineBudget": 70 } } }
 
 ── OTHER (spexcode.json unless noted) ──
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default

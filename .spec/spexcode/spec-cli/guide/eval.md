@@ -26,9 +26,10 @@ scenarios:
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
       It names `claude`, `codex`, `opencode`, and `pi` as the plain clean-init commands and says automatic-
       permission variants (`--dangerously-skip-permissions`, `--yolo`, `--auto`) require an explicit launcher.
-      Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The sessions
-      section explains maxActive's default and that it counts compute slots, not total sessions. The
-      unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.
+      Field coverage spans layout, dashboard, sessions, serve, issues, deterministic lint policy, and
+      doctor health budgets. Altitude thresholds appear only under `doctor.altitude`, not under `lint`.
+      The sessions section explains maxActive's default and that it counts compute slots, not total
+      sessions. The unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.
     tags: cli
     code: spec-cli/src/guide.ts
   - name: eval-topic-keeps-step-names-label-only

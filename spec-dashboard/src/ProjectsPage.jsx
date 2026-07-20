@@ -10,6 +10,7 @@ import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
 import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
 import Modal from './Modal.jsx'
+import { PageScroll } from './PageScroll.jsx'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
@@ -570,14 +571,16 @@ export default function ProjectsPage() {
 
   return (
     <div className="page-pane page-projects">
-      <div className="proj-body">
-        <div className="cred-brand proj-brand">
-          <IdentityIcon icon={gatewayIdentity.icon} fallback="gateway" size={30} />
-          <span>$ spexcode</span>
+      <PageScroll className="page-projects-scroll">
+        <div className="proj-body">
+          <div className="cred-brand proj-brand">
+            <IdentityIcon icon={gatewayIdentity.icon} fallback="gateway" size={30} />
+            <span>$ spexcode</span>
+          </div>
+          <h1 className="page-title">{t('projects.title')}</h1>
+          {body}
         </div>
-        <h1 className="page-title">{t('projects.title')}</h1>
-        {body}
-      </div>
+      </PageScroll>
       {adding && <AddProjectModal t={t} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); refresh() }} />}
     </div>
   )

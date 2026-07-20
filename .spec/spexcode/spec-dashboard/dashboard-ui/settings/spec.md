@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/Settings.jsx#Settings
   - spec-dashboard/src/Settings.jsx#Shortcuts
 related:
+  - spec-dashboard/src/PageScroll.jsx
   - spec-dashboard/src/i18n/index.jsx
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
@@ -66,10 +67,10 @@ lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
   React context, no reload.
 - **The settings page** is a routed page (`#/settings`, [[side-nav]]) — reached from the rail's bottom
   entry or the `,` hotkey, rendered as a centered readable column inside the shell's shared page pane
-  (the pane wrapper is [[side-nav]]'s; the component renders only its content), and the single home
-  for future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset
-  picker. `,` again routes home to the graph; Esc routes nothing ([[side-nav]] — it only closes
-  in-page overlays).
+  through [[page-scroll]] (the pane supplies the viewport, the shared primitive supplies overflow and
+  scrollbar geometry, and this component supplies only its centered content), and the single home for
+  future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset picker.
+  `,` again routes home to the graph; Esc routes nothing ([[side-nav]] — it only closes in-page overlays).
 
 ### the hotkey
 

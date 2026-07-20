@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/App.jsx#App
 related:
   - spec-dashboard/src/Dashboard.jsx
+  - spec-dashboard/src/PageScroll.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/project.js
   - spec-dashboard/src/heartbeat.js
@@ -93,6 +94,11 @@ persists. To avoid a wrong-palette flash before the module boots, `index.html` r
 script in `<head>` that applies the same choice (same fallback to Minimal) to `<html data-theme>`
 before first paint — its inline code list mirrors THEMES and must move with it. The [[settings]]
 page carries the live picker; preset labels are proper nouns and deliberately untranslated.
+
+**One document scrollport.** The shell's page pane defines the available viewport, while [[page-scroll]]
+is the one overflow owner used by document-shaped pages. Pages contribute content width and sticky
+children, never another full-page scrollbar. Graph camera geometry, session panes, terminal scrollback,
+and bounded overlays keep their own non-document contracts.
 
 **One type system.** Dashboard chrome reads font size, line height, weight, and letter spacing from one
 small semantic scale in `styles.css`: caption/meta, control, body, subtitle, title, heading, and display

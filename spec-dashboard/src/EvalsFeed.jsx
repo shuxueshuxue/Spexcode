@@ -42,11 +42,15 @@ export function sessionEvalSummary(nodes = []) {
   const entries = currentEntries(nodes)
   const total = nodes.reduce((count, node) => count + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
   const unknown = nodes.reduce((count, node) => count + (Array.isArray(node.unknownCoverage) ? node.unknownCoverage.length : 0), 0)
+  const pass = entries.filter((entry) => entry.state === 'pass').length
+  const fail = entries.filter((entry) => entry.state === 'fail').length
   return {
     measured: entries.length,
     total,
-    pass: entries.filter((entry) => entry.state === 'pass').length,
-    fail: entries.filter((entry) => entry.state === 'fail').length,
+    pass,
+    fail,
+    // Measured but neither fresh-pass nor fresh-fail: stale or legacy/unscored, and therefore still review work.
+    review: entries.length - pass - fail,
     blind: Math.max(0, total - entries.length),
     unknown,
   }

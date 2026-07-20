@@ -538,6 +538,7 @@ export default {
     evalMeasured: ({ measured, total }) => `已评测 ${measured}/${total} 个已声明场景`,
     evalPass: ({ n }) => `${n} 个场景为新鲜通过`,
     evalFail: ({ n }) => `${n} 个场景为新鲜失败`,
+    evalReview: ({ n }) => `${n} 个已评测场景已过期或未评分，需人工复核`,
     evalBlind: ({ n }) => `${n} 个已声明场景尚未评测`,
     evalUnknown: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
     evalDoorSummary: ({ measured, total, pass, fail, blind, unknown }) =>

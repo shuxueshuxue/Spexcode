@@ -38,7 +38,9 @@ scenarios:
       part of measured/declared or filter counts. A dirty own reading is immediately measurement-impacted and
       a pure eval.md move impacts nothing. Export retains every changed file and counts/renders missing affected
       scenarios in its denominator. Toolbar, scoped list, detail reachability, CLI, and export consume this one
-      scoped model without a second impact predicate; the browser proves the real UI wiring and Back behavior.
+      scoped model without a second impact predicate. The toolbar's visible fresh-pass, fresh-fail, needs-review,
+      and blind tallies add back to the affected total (unknown stays separate); the browser proves that
+      accounting, the real UI wiring, and Back behavior.
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >

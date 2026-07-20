@@ -59,7 +59,9 @@ missing: stale and missing are review work, not reasons to hide it. A declared a
 effective reading is the precise **blind/unmeasured** case (the contract is known, the measurement is absent).
 A changed frontend node with no eval.md is **unknown coverage** (there is no declared contract to count as a
 scenario) and remains called out separately; it never inflates the measured/declared scenario fraction or the
-list's scenario filter counts.
+list's scenario filter counts. The session toolbar decomposes that fraction visibly: fresh pass, fresh fail,
+measured-but-stale/unscored work needing review, and blind declarations are mutually exclusive and add back to
+the affected total; unknown remains outside it.
 
 Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
 (base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined

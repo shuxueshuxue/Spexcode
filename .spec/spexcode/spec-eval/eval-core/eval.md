@@ -16,18 +16,15 @@ scenarios:
     tags: [cli]
     code: [spec-eval/src/cli.ts]
     description: >-
-      Through the real `spex eval lint` in a scratch repo: create a node that governs a NON-frontend
-      source file (a backend `.ts`, and — after setting `lint.sourceExtensions: ["rs"]` in spexcode.json
-      — a Rust `.rs`) with NO eval.md; also a control node governing a `.jsx` file, and a node governing
-      only a non-source file (a `.md` / a `.sh` hook). Run `spex eval lint` and read the `eval-coverage`
-      lines and the summary count.
+      Through the real `spex eval lint` in scratch repos, create nodes with no eval.md that govern Python,
+      Rust, backend TypeScript, frontend JSX, and README/config text. First use the tracked-text default,
+      then set include/exclude globs and an explicit `lint.sourceExtensions: ["rs"]` compatibility value.
+      Read the `eval-coverage` lines and summary count.
     expected: >-
-      `eval-coverage` fires on ANY node governing a file whose extension is in the configured
-      `sourceExtensions` (default ts/tsx/js/jsx) — the backend `.ts` node is flagged, not silently exempt,
-      and the frontend control still flags. Configuring `sourceExtensions: ["rs"]` makes the `.rs` node
-      flag while the `.ts` node stops. A node governing only a non-source file is never flagged. The
-      finding says "governs source code" (not "frontend code"), so a non-web project's loss signal is no
-      longer blind to its own sources.
+      With no include policy, `eval-coverage` fires on every tracked regular text file, including README/config.
+      Configured include/exclude globs select and subtract exactly their matches, and `sourceExtensions: ["rs"]`
+      contributes the Rust include through the same pipeline. The finding says "governs source code" and eval
+      coverage uses exactly the same tracked candidate set as spec coverage.
   - name: schema-gate-rejects-malformed
     tags: [cli]
     test:

@@ -2,36 +2,48 @@
 title: adopt-nonweb-ergonomics
 status: active
 hue: 190
-desc: A non-web adopter's coverage config never fails SILENTLY — a zero-match state is a self-explanatory repair entrypoint naming both knobs, and forgiving input (dotted extensions, slash-less test globs) is normalized instead of matching nothing.
+desc: Source coverage is one explicit set algebra over tracked regular text: roots and includes select; SpexCode data, excludes, and tests subtract; an empty result warns honestly.
+code:
+  - spec-cli/src/source-files.ts
 related:
   - spec-cli/src/lint.ts
+  - spec-cli/src/lint-source.test.ts
+  - spec-eval/src/scan-source.test.ts
 ---
 
 # adopt-nonweb-ergonomics
 
 ## raw source
 
-Adopting SpexCode on a non-web project (Rust/Go/Python) kept hitting the same dead end: coverage
-enumerated zero source files and the board read falsely clean, or the warning misdiagnosed the fix.
-Three distinct config mistakes all collapse to one silent symptom — **zero files matched, no signal
-why**. A loss signal that silently governs nothing is worse than a loud one, so every zero-match path
-must become a self-explanatory repair entrypoint or be normalized to what the adopter obviously meant.
+Fresh SpexCode adoption inherited a web-only source-extension default, then risked replacing that allowlist
+with a blacklist of guessed non-source names. Both shapes make SpexCode decide that a user's tracked file is
+irrelevant. Source discovery must instead be a small set algebra over the repository fact SpexCode already
+trusts: git-tracked current regular text. A loss signal that silently governs nothing is worse than a loud
+one, but a noisy guess about README, docs, config, vendor, build, generated, or language names is not honesty.
 
 ## expanded spec
 
-Three footguns, all of the class *config silently matches zero files*, fixed at the [[spec-lint]]
-coverage/config seam so both coverage and eval lint's coverage check inherit the fix:
+The [[spec-lint]] coverage/config seam supplies one source set to spec coverage and eval coverage:
 
-- **Zero-match is a repair entrypoint, not a dead end.** When coverage finds no source at all, the
-  "governing NOTHING" warning echoes the *current* `sourceExtensions` and `governedRoots` values (so the
-  mismatch is visible — hunting `ts` in a `py` tree), names BOTH knobs, states they nest under the `lint`
-  key (a top-level key silently no-ops), and gives copy-pasteable non-web examples. The warning IS the fix.
-- **A leading dot on an extension is normalized.** The matcher anchors on `.ext`, so a literal `.py`
-  extension matches nothing; leading dots are stripped so `py` and `.py` both work — the prose long showed
-  dotted forms, so this accepts what the adopter read rather than punishing it.
-- **A slash-less test glob is widened to any depth.** Globs anchor to the full repo-relative path, so a
-  bare `*.test.py` matches only ROOT-level files and leaks every nested test into coverage; a slash-less
-  glob gets a `**/` prefix so it matches that basename at any depth, as the default already does.
+`tracked beneath governedRoots ∩ current regular text ∩ configured includes`
+`− SpexCode-owned data − configured excludes − configured tests`
 
-The two normalizations live in `normalizeConfig`, applied inside `loadConfig` — the single seam every
-consumer reads through, so coverage, the uncovered check, and altitude all see canonical values.
+- **Tracked text is authoritative.** Omitted includes mean every tracked current regular text file under
+  `governedRoots`; no built-in language, directory, basename, extension, generated, or minified vocabulary
+  decides relevance. Binary/non-regular/missing worktree entries cannot be source. SpexCode subtracts only
+  data it owns: `.spec/**`, `.plugins/**`, `spexcode.json`, and `spexcode.local.json`.
+- **Policy is data.** `lint.sourceIncludeGlobs` optionally selects a subset; `lint.sourceExcludeGlobs` and
+  `lint.testGlobs` subtract from it. Each list is ordinary repo-relative globs, and a slash-less glob means
+  the basename at any depth. An explicit empty include list intentionally selects nothing.
+- **`sourceExtensions` is compatibility syntax, not a second path.** Leading dots are stripped and every
+  extension lowers to an include glob (`py` → `**/*.py`), unioned with explicit include globs before the one
+  matcher runs. Thus old projects retain exact extension selection without a branch in source discovery.
+- **Python tests remain expressible without Python semantics in lint.** The configured test-glob defaults
+  include `test_*.*`, `*_test.*`, test directories, and common `.test.*` / `.spec.*` names; a project may
+  replace that list, including with `[]` to govern tests.
+- **Zero-match is honest.** An empty result warns with the active roots, include policy, exclude globs, and
+  test globs, then names the same `lint` knobs as the repair entrypoint.
+
+`normalizeConfig` compiles extension compatibility and forgiving slash-less globs into canonical policy.
+The source module consumes only that policy and never imports the language-adapter registry; language
+structure and semantics remain solely behind the adapter seam.

@@ -15,6 +15,15 @@ scenarios:
       governing node at rank 1. So a session with no assigned node is sent to a search that actually lands on
       the right contract — the loop closes: first code access blocked → told to `spex spec search` → search hits
       the governing node, instead of being told to eyeball the whole board.
+  - name: codex-multi-file-access
+    tags: [cli]
+    description: >-
+      Feed the real spec-first hook one adapter-shaped access containing both a spec path and a code path,
+      as a Codex multi-file patch does, with no prior sentinel. Then repeat with only spec paths.
+    expected: >-
+      The mixed access emits decision:block because every resolved path is considered and at least one is
+      code. The spec-only access stays silent and writes the sentinel. A later path in one patch can neither
+      bypass grounding nor be lost behind the first path.
 ---
 # eval.md — spec-first
 

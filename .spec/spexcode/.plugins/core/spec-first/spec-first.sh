@@ -23,14 +23,23 @@ rec="$sdir/session.json"
 sent="$sdir/spec-checked"
 [ -f "$sent" ] && exit 0           # already reminded or blessed this session → silent, every later access passes
 
-# the code file about to be read/edited (empty when this tool is not a code access, or no path resolved) →
-# don't consume the one-shot for a non-code tool.
-path=$(hp_code_path "$payload" access)
-[ -n "$path" ] || exit 0
+# the code file(s) about to be read/edited (empty when this tool is not a code access, or no path resolved) →
+# don't consume the one-shot for a non-code tool. A codex multi-file apply_patch yields several paths (one per
+# line); this tool is a code access if ANY resolved path is a non-spec file.
+paths=$(hp_code_path "$payload" access)
+[ -n "$paths" ] || exit 0
 
-# reading or editing the spec itself IS spec-first → bless silently (set the sentinel, allow). MUST come
-# first: the nudge tells the agent to read its spec, so a spec access can never be the thing we block.
-case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) mkdir -p "$sdir"; : > "$sent"; exit 0 ;; esac
+# fires if ANY touched path is code; a touch that is ALL spec files IS spec-first → bless silently (set the
+# sentinel, allow). MUST come first: the nudge tells the agent to read its spec, so a spec-only access can
+# never be the thing we block.
+is_code=0
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  case "$p" in */.spec/*|.spec/*|*/spec.md|spec.md) ;; *) is_code=1 ;; esac
+done <<EOF
+$paths
+EOF
+[ "$is_code" = 1 ] || { mkdir -p "$sdir"; : > "$sent"; exit 0; }
 
 # first code access without having touched the spec → set the sentinel (so this fires exactly once), nudge once.
 mkdir -p "$sdir"; : > "$sent"

@@ -39,7 +39,6 @@ const toolbarProbe = (page) => page.evaluate(() => {
     const r = element.getBoundingClientRect()
     return r.left < bounds.x - 0.5 || r.right > bounds.right + 0.5
   }).map((element) => element.className || element.tagName)
-  const headline = document.querySelector('.si-th-name')
   const door = document.querySelector('.si-eval-door')
   const term = document.querySelector('.si-term-body')
   const style = getComputedStyle(toolbar)
@@ -49,16 +48,26 @@ const toolbarProbe = (page) => page.evaluate(() => {
     overflow,
     scrollWidth: toolbar.scrollWidth,
     clientWidth: toolbar.clientWidth,
-    headline: { text: headline.textContent, clientWidth: headline.clientWidth, scrollWidth: headline.scrollWidth },
+    identityCount: toolbar.querySelectorAll('.si-identity, .si-th-name, .si-session-status, .si-session-live').length,
     sidebarHeadline: document.querySelector('.si-item.on .sess-id')?.textContent || null,
     door: { tag: door.tagName, href: door.getAttribute('href'), label: door.getAttribute('aria-label'), inTablist: !!door.closest('[role=tablist]') },
     roles: {
       tablists: toolbar.querySelectorAll('[role=tablist]').length,
       tabs: toolbar.querySelectorAll('[role=tab]').length,
       selected: toolbar.querySelector('[role=tab]')?.getAttribute('aria-selected'),
-      actions: [...toolbar.querySelectorAll('.si-actions button')].map((button) => button.textContent.trim()),
+      actions: [...toolbar.querySelectorAll('.si-actions button')].map((button) => button.dataset.command),
     },
+    actionDetails: [...toolbar.querySelectorAll('.si-actions button')].map((button) => ({
+      name: button.dataset.command,
+      text: button.textContent.trim(),
+      label: button.getAttribute('aria-label'),
+      tip: button.getAttribute('data-tip'),
+      pressed: button.getAttribute('aria-pressed'),
+      icon: button.querySelector('svg')?.outerHTML || null,
+      box: rect(button),
+    })),
     text: toolbar.innerText.replace(/\s+/g, ' ').trim(),
+    html: toolbar.outerHTML,
     toolbarBackground: style.backgroundColor,
     terminalBackground: term ? getComputedStyle(term).backgroundColor : null,
   }
@@ -83,9 +92,10 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     : null
   check('wide toolbar stays inside its pane', result.wide.overflow.length === 0 && result.wide.scrollWidth === result.wide.clientWidth, result.wide)
   check('one selected Terminal tab', result.wide.roles.tablists === 1 && result.wide.roles.tabs === 1 && result.wide.roles.selected === 'true', result.wide.roles)
-  check('toolbar and selected sidebar share one headline', result.wide.headline.text === result.wide.sidebarHeadline, { toolbar: result.wide.headline.text, sidebar: result.wide.sidebarHeadline })
+  check('toolbar omits duplicate identity and headline payload', result.wide.identityCount === 0 && !result.wide.text.includes(result.wide.sidebarHeadline) && !result.wide.html.includes(result.wide.sidebarHeadline), { identityCount: result.wide.identityCount, toolbar: result.wide.text, sidebar: result.wide.sidebarHeadline })
   check('Eval is a canonical real anchor outside tablist', result.wide.door.tag === 'A' && !result.wide.door.inTablist && decodeURIComponent(result.wide.door.href).includes(`scope:${SESSION}`), result.wide.door)
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
+  check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)
   await page.screenshot({ path: join(OUT, 'B-wide-1440.png'), fullPage: true })
 
   await page.locator('[role=tab]').focus()
@@ -94,17 +104,17 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.keyboard.press('Tab')
   const secondTab = await page.evaluate(() => ({ className: document.activeElement.className, tag: document.activeElement.tagName }))
   result.wide.keyboardOrder = [firstTab, secondTab]
-  check('focus order reaches Eval then a command', firstTab.tag === 'A' && String(firstTab.className).includes('si-eval-door') && secondTab.tag === 'BUTTON' && String(secondTab.className).includes('si-act'), result.wide.keyboardOrder)
+  check('focus order reaches Eval then a command', firstTab.tag === 'A' && String(firstTab.className).includes('si-eval-door') && secondTab.tag === 'BUTTON' && String(secondTab.className).includes('si-tool'), result.wide.keyboardOrder)
 
   const input = page.locator('.si-bottom textarea')
   await input.fill('/type')
   await page.keyboard.press('Escape')
   await page.keyboard.press('Enter')
   await page.locator('.si-bottom.type').waitFor({ state: 'visible' })
-  check('typed /type activates the registry twin', await page.locator('.si-act.type.on').count() === 1)
-  await page.locator('.si-act.type').click()
+  check('typed /type activates the registry twin', await page.locator('.si-tool.type.on[aria-pressed="true"]').count() === 1)
+  await page.locator('.si-tool.type').click()
   await input.waitFor({ state: 'visible' })
-  check('click twin exits type mode', await page.locator('.si-act.type.on').count() === 0)
+  check('click twin exits type mode', await page.locator('.si-tool.type[aria-pressed="false"]').count() === 1)
   step('typed and clicked type')
 
   const warm = `warm-${Date.now()}`
@@ -163,7 +173,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.status = status
     session.lifecycle = status === 'review' || status === 'done' ? 'awaiting' : 'active'
     session.liveness = liveness
-    session.headline = 'An intentionally enormous shared session headline for validating real ellipsis across English and 中文 without moving commands or navigation'
+    session.headline = 'An intentionally enormous <section data-test="headline-noise"> shared session headline for validating English and 中文 without moving commands or navigation'
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
   await page.route(`**/api/sessions/${SESSION}/evals`, (route) => {
@@ -194,8 +204,8 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     ? await page.locator('.si-tabbar').ariaSnapshot()
     : null
   check('390px pane has no toolbar overflow', Math.round(result.narrow.bounds.width) === 390 && result.narrow.overflow.length === 0 && result.narrow.scrollWidth === result.narrow.clientWidth, result.narrow)
-  check('long headline really ellipses', result.narrow.headline.scrollWidth > result.narrow.headline.clientWidth && result.narrow.headline.clientWidth > 0, result.narrow.headline)
-  check('narrow AX keeps full identity and state', !result.narrow.aria || (result.narrow.aria.includes('group') && result.narrow.aria.includes('working') && result.narrow.aria.includes('online')), result.narrow.aria)
+  check('long and HTML-like headline stays out of toolbar channels', result.narrow.identityCount === 0 && !result.narrow.text.includes('headline-noise') && !result.narrow.html.includes('headline-noise'), { text: result.narrow.text, identityCount: result.narrow.identityCount })
+  check('narrow AX contains no repeated identity or liveness noise', !result.narrow.aria || (!result.narrow.aria.includes('headline-noise') && !result.narrow.aria.includes('working, online')), result.narrow.aria)
   check('mixed eval model is honest and symbolic', result.narrow.door.label.includes('2/3') && result.narrow.door.label.includes('1 fresh pass') && result.narrow.door.label.includes('1 fresh fail') && result.narrow.door.label.includes('1 unmeasured'), result.narrow.door)
   await page.screenshot({ path: join(OUT, 'B-pane-390.png'), fullPage: true })
   await context.close()
@@ -219,7 +229,7 @@ for (const lang of ['en', 'zh']) {
     const probe = await toolbarProbe(page)
     const row = { lang, theme, height: probe.bounds.height, overflow: probe.overflow, chromeDistinct: probe.toolbarBackground !== probe.terminalBackground }
     result.themes.push(row)
-    check(`${lang}/${theme} theme geometry`, row.height === 40 && row.overflow.length === 0 && row.chromeDistinct, row)
+    check(`${lang}/${theme} theme geometry`, row.height === 32 && row.overflow.length === 0 && row.chromeDistinct, row)
     await context.close()
   }
 }
@@ -235,11 +245,14 @@ for (const state of [
   const probe = await toolbarProbe(page)
   if (state.liveness === 'offline' || state.status === 'queued') await page.keyboard.press('Alt+i')
   const shortcutType = await page.locator('.si-bottom.type').count() > 0
-  const row = { ...state, actual: probe.roles.actions, overflow: probe.overflow, shortcutType }
+  const row = { ...state, actual: probe.roles.actions, tools: probe.actionDetails, overflow: probe.overflow, shortcutType }
   result.states.push(row)
   check(`${state.status}/${state.liveness} commands`, JSON.stringify(row.actual) === JSON.stringify(state.actions) && row.overflow.length === 0 && (!shortcutType || state.liveness === 'online'), row)
   await context.close()
 }
+
+const relaunch = result.states.find((state) => state.liveness === 'offline' && state.status === 'asking')?.tools?.[0]
+check('offline relaunch uses the same icon-tool primitive', relaunch?.name === 'relaunch' && relaunch?.icon && !relaunch?.text && relaunch?.box?.width === 24 && relaunch?.box?.height === 24, relaunch)
 
 for (const evalMode of ['zero', 'error']) {
   const { context, page } = await fixturePage({ evalMode })

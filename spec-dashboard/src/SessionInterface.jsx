@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+import { sessionAncestorIds, sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
-import { Icon } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
 import { currentEntries } from './EvalsFeed.jsx'
 import { TabCount } from './score.jsx'
@@ -440,7 +440,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (sm) {
       // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
       // stable prefix rank, so the board set keeps its lead within each score band.
-      const ui = uiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
+      const ui = typedUiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
       // a board command OVERRIDES a same-named CC command — one identity, one row, never a duplicate.
       const owned = new Set(ui.map((c) => c.name))
       const items = matchSlash([...ui, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
@@ -459,7 +459,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!item || !menu) return
     if (menu.kind === 'slash') {
       // a board command RUNS on pick (the typed twin of its button); CC commands only insert text.
-      if (item.ui) { const c = uiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
+      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -515,7 +515,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
-    const cmd = uiCmds.find((c) => raw.trim() === `/${c.name}`)
+    const cmd = typedUiCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
@@ -618,8 +618,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // after a bulk delete: leave the mode and re-read the board so the removed rows drop off every surface.
   const onBulkClosed = () => { exitSelect(); reload?.() }
 
-  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
-  // button's onClick fires; `uiCmds` narrows the registry to the current session state. See [[term-input]].
+  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
+  // tool and typed twin call; `uiCmds` narrows the registry to current session state. See [[term-input]].
   const runners = {
     type: () => setTypeMode((v) => !v),
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
@@ -628,15 +628,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // address as a REAL anchor.
     eval: () => { if (active !== 'new') navigateAddress(sessionEvalAddress(active)) },
     merge: () => act('merge'),
+    relaunch: () => act('resume'),
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness)
-  const headline = selSession ? sessionHeadline(selSession) : ''
-  const statusWord = selSession ? t(`status.${selSession.status}`) : ''
-  const liveness = selSession?.liveness || 'unknown'
-  const livenessWord = t(`session.liveness.${liveness}`)
-  const livenessColor = STATUS_COLOR[liveness === 'online' ? selSession?.status : liveness] || STATUS_COLOR.unknown
+  const typedUiCmds = uiCmds.filter((command) => command.typed !== false)
   const evalDoorTitle = evalSummary.phase === 'ready'
     ? t('session.evalDoorSummary', evalSummary)
     : evalSummary.phase === 'loading'
@@ -870,9 +867,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. Its compact toolbar keeps four unlike concerns
-              semantically separate: one real Terminal tab, shared identity/state, one native Eval door with
-              a glance over the scoped lean model, and the state-filtered command registry. */}
+              WebSockets + scroll survive the tab switch. The compact toolbar carries one real Terminal tab,
+              one native Eval door, and registry-filtered icon tools. Identity/state already lives in the
+              selected sidebar row and is deliberately not repeated here. */}
           <div
             className="si-session-wrap"
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
@@ -893,20 +890,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 </div>
 
-                <div className="si-identity" role="group" aria-label={t('session.identitySummary', { headline, status: statusWord, liveness: livenessWord })}>
-                  <span className="si-th-name" data-tip={headline}>{headline}</span>
-                  <span className="si-session-status" data-tip={statusWord}>
-                    <span className="si-status-glyph" style={{ color: STATUS_COLOR[selSession?.status] || STATUS_COLOR.unknown }} aria-hidden="true">
-                      {STATUS_GLYPH[selSession?.status] || STATUS_GLYPH.unknown}
-                    </span>
-                    <span className="si-status-word">{statusWord}</span>
-                  </span>
-                  <span className="si-session-live" data-tip={livenessWord}>
-                    <span className="si-live-dot" style={{ background: livenessColor }} aria-hidden="true" />
-                    <span className="si-live-word">{livenessWord}</span>
-                  </span>
-                </div>
-
                 <a
                   className="si-eval-door si-tab-door sc-cyan"
                   href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
@@ -920,21 +903,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </a>
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
-                  {showRelaunch
-                    ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
-                    : uiCmds.filter((c) => c.button).map((c) => {
-                        // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
-                        // thinks a select menu is up (the pulse that invites type mode).
-                        const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
-                        return (
-                          <button
-                            key={c.name}
-                            className={`si-act ui sc-${c.color} ${c.name}${state}`}
-                            data-tip={t(c.titleKey)}
-                            onClick={c.run}
-                          >{t(c.labelKey)}</button>
-                        )
-                      })}
+                  {uiCmds.filter((c) => c.button).map((c) => {
+                    // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
+                    // thinks a select menu is up (the pulse that invites type mode).
+                    const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
+                    return (
+                      <IconButton
+                        key={c.name}
+                        icon={c.icon}
+                        size={14}
+                        label={t(c.titleKey)}
+                        className={`si-tool sc-${c.color} ${c.name}${state}`}
+                        data-command={c.name}
+                        aria-pressed={c.name === 'type' ? typeMode : undefined}
+                        onClick={c.run}
+                      />
+                    )
+                  })}
                 </div>
               </header>
               {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals

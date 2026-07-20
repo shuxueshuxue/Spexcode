@@ -445,7 +445,7 @@ async function okCmd(args: string[]): Promise<number> {
     return 2
   }
   if (envSessionId()) {
-    console.error('spex eval ok: refusing under a governed session — human-ok is the HUMAN\'s sign-off, never an agent\'s self-blessing. Ask the human to ok it from the dashboard or their own terminal; an agent\'s judgment on a reading is a remark (`spex remark add`).')
+    console.error('spex eval ok: refusing under a governed session — human-ok is the HUMAN\'s sign-off, never an agent\'s self-blessing. Ask the human to ok it from the dashboard or their own terminal; an agent\'s judgment on an eval is a remark (`spex remark add`).')
     return 1
   }
   const sel = positional(args)
@@ -464,10 +464,10 @@ async function okCmd(args: string[]): Promise<number> {
   const r = fileHumanOk(res.node.id, scenario, 'human')
   if (!r.ok) { console.error(`spex eval ok: ${r.error}`); return 1 }
   if (r.already) {
-    console.log(`spex eval ok: '${res.node.id}' scenario '${scenario}' reading @ ${r.humanOk.okTs} is already human-ok'd (by ${r.humanOk.by}, ${r.humanOk.ts}) — monotonic, nothing appended`)
+    console.log(`spex eval ok: '${res.node.id}' scenario '${scenario}' eval @ ${r.humanOk.okTs} is already human-ok'd (by ${r.humanOk.by}, ${r.humanOk.ts}) — monotonic, nothing appended`)
     return 0
   }
-  console.log(`  ☑ '${res.node.id}' scenario '${scenario}' reading @ ${r.humanOk.okTs} (${r.humanOk.okSha.slice(0, 7)}) human-ok'd`)
+  console.log(`  ☑ '${res.node.id}' scenario '${scenario}' eval @ ${r.humanOk.okTs} (${r.humanOk.okSha.slice(0, 7)}) human-ok'd`)
   console.log(r.landed === 'committed'
     ? 'spex eval ok: 1 sign-off filed (committed straight to the trunk)'
     : 'spex eval ok: 1 sign-off filed (an appended event — commit the sidecar so the sign-off lands)')

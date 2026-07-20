@@ -6,6 +6,7 @@ import { useLaunchers } from './launch.js'
 import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
+import { SideValue } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 
@@ -85,24 +86,13 @@ export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', 
   const alive = !!s
   const color = alive ? (STATUS_COLOR[s.status] || STATUS_COLOR.working) : STATUS_COLOR.offline
   const title = t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })
-  const body = (
-    <>
-      <span className="fv-originator-dot" style={{ background: color }} aria-hidden="true" />
-      <span className="fv-originator-who">{originator}</span>
-    </>
-  )
-  if (alive && onOpenSession) {
-    return (
-      <button type="button" className="fv-originator alive openable" data-tip={title} aria-label={title} onClick={() => onOpenSession(originator)}>
-        {body}
-      </button>
-    )
-  }
+  const dot = <span className="fv-originator-dot" style={{ background: color }} aria-hidden="true" />
+  // the chip is an identity SKIN over the one SideValue rail primitive ([[review-chrome]]): the value
+  // text shrinks/ellipsizes inside the rail while the tooltip/accessible name keeps the full id.
   return (
-    <span className={`fv-originator ${alive ? 'alive' : 'offline'}`}
-          data-tip={title}>
-      {body}
-    </span>
+    <SideValue text={originator} tip={title} label={title} lead={dot}
+      className={`fv-originator ${alive ? 'alive' : 'offline'}${alive && onOpenSession ? ' openable' : ''}`}
+      onClick={alive && onOpenSession ? () => onOpenSession(originator) : null} />
   )
 }
 

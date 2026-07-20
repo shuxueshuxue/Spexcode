@@ -81,9 +81,14 @@ verbs the CLI uses.
   issue-state primitive as the list mark, now with its label. MAIN
   column: the **markdown-rendered body** (SpecBody — the
   one spec dialect, no raw `##`/pipes) then the reply thread, with the **composer docked at the column's
-  foot**. SIDE rail: the store tag, the ORIGINATOR + liveness (a local thread's `by` is a session id — a
+  foot**. SIDE rail — every value through [[review-chrome]]'s ONE SideValue metadata primitive
+  (min-width:0 shrink, single-line ellipsis, full text on the tooltip; information type explicitly
+  labeled, never guessed from a bare token): the issue's OWN id under a localized **Issue** label (the
+  full slug, truncatable — a bare `#slug` reads as a node), the store tag, the ORIGINATOR + liveness (a
+  local thread's `by` is a session id — a
   live one is a click-through chip to `#/sessions/<id>`, painted by the board's STATUS_COLOR join; a
-  forge login stays a plain label), the node chips (click focuses the graph), and a forge permalink
+  forge login stays a plain labeled value), the spec-node refs under their localized label (click
+  focuses the graph), and a forge permalink
   labeled with the store's concrete display name ("Open on GitHub"/"Open on GitLab" — canonical
   display-name data, never a URL sniff, never the word "forge"; a local issue renders none). At phone
   width the side metadata reflows ABOVE the body in the one column. A forge issue's comments render as

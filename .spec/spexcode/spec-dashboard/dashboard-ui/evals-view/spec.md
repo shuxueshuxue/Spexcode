@@ -62,9 +62,13 @@ filter (default off) picking the root.
   remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).
   The side rail is the reading/session metadata: evaluator, filed time, originator liveness, human-ok,
   staleness readout — then the **continue-reviewing queue**: the viewed reading's NEIGHBORS in the source
-  dataset's stable default order (newest-first — the relative order the list renders; a filtered list
-  face may hide rows the queue still walks), aimed at five total with the window
-  auto-filling at either boundary, the current reading excluded. This page computes the queue from the ONE
+  dataset's stable default order (the relative order the list renders; a filtered list
+  face may hide rows the queue still walks), split into two POSITIONAL groups — **Previous** (entries
+  before the current row) and **Up next** (entries after it), labels claiming list direction, never
+  time — each ordered nearest-to-current outward. The default total is ~5, split balanced with the
+  forward group taking the odd slot; at either boundary the short side's unused budget refills from the
+  other side so the total holds while the dataset allows; the current reading is excluded. A group with
+  no entries renders no heading. This page computes the queue from the ONE
   source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
   state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
   node ([[event-detail]] renders the rows): a trunk neighbor's href is the pure detail path, a scoped

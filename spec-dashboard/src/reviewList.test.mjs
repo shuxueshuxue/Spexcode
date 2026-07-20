@@ -316,17 +316,62 @@ test('the scoped eval detail wears a source banner whose session door is a real 
   }
 })
 
-test('the continue-reviewing queue: shared-state anchors from the source dataset, absent when alone', () => {
-  // the queue derives from the page's ONE source dataset (scope.entries) via the pure window helper
+test('the continue-reviewing queue: two positional groups of shared-state anchors, absent when alone', () => {
+  // the queue derives from the page's ONE source dataset (scope.entries) via the pure split helper
   assert.match(page, /queueNeighbors\(scope\.entries, `eval:\$\{node\}·\$\{scenario\}`\)/)
   // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token
   assert.match(page, /href: routeHash\('evals', `\$\{e\.node\}\/\$\{e\.scenario\}`, sessionId \? \{ q: `scope:\$\{sessionId\}` \} : null\)/)
-  // the rail renders REAL anchors wearing the ONE shared verdict visual; no private selection state
-  assert.match(detail, /\{queue\.length > 0 && \(/)
+  // two POSITIONAL groups against the stable list order, each nearest-to-current first
+  assert.match(page, /prev: entries\.slice\(idx - prevN, idx\)\.reverse\(\)/)
+  assert.match(page, /next: entries\.slice\(idx \+ 1, idx \+ 1 \+ nextN\)/)
+  // the rail renders the two labeled groups; an empty group renders no heading; no neighbor → no section
+  assert.match(detail, /\{\(queue\.prev\.length > 0 \|\| queue\.next\.length > 0\) && \(/)
+  assert.match(detail, /\[\['prev', t\('detail\.queuePrev'\)\], \['next', t\('detail\.queueNext'\)\]\]\.map\(\(\[dir, label\]\) => queue\[dir\]\.length > 0 && \(/)
   assert.match(detail, /<a key=\{q\.key\} className="ds-queue-row" href=\{q\.href\}/)
   assert.match(detail, /<ReviewState kind="eval" state=\{q\.state\} size=\{13\} \/>/)
-  // localized section label exists in both dictionaries
-  for (const dict of [en, zh]) assert.match(dict, /sideQueue:/)
+  // localized section + group labels exist in both dictionaries
+  for (const dict of [en, zh]) {
+    assert.match(dict, /sideQueue:/)
+    assert.match(dict, /queuePrev:/)
+    assert.match(dict, /queueNext:/)
+  }
+})
+
+test('the detail side rail is sticky on desktop, plain flow at phone width', () => {
+  // desktop: sticky inside the grid column (never fixed) — pins to the scrollport top; only a rail
+  // taller than the viewport scrolls internally (bounded max-height + auto overflow)
+  assert.match(css, /\.ds-side \{ position: sticky; top: 0; max-height: calc\(100dvh - 24px\); overflow-y: auto;/)
+  assert.doesNotMatch(css, /\.ds-side[^}]*position: fixed/)
+  // the phone reflow cancels it: static, unbounded, metadata-before-content order kept
+  const phone = css.slice(css.indexOf('@media (max-width: 760px)'))
+  assert.match(phone, /\.ds-side \{ position: static; max-height: none; overflow-y: visible; order: -1;/)
+})
+
+test('one side-rail value primitive renders every detail metadata row on both pages', () => {
+  // the ONE SideValue primitive: shrinkable min-width:0 text with ellipsis, full text on the tooltip
+  assert.match(shell, /export function SideValue\(/)
+  assert.match(css, /\.ds-val \{ display: flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0;/)
+  assert.match(css, /\.ds-val-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/)
+  assert.match(css, /\.ds-val\.link:focus-visible \{ outline: 2px solid var\(--blue\);/)
+  // the originator liveness chip is an identity SKIN over SideValue, not a parallel span/button pair
+  const thread = read('Thread.jsx')
+  assert.match(thread, /<SideValue text=\{originator\} tip=\{title\} label=\{title\} lead=\{dot\}/)
+  assert.doesNotMatch(thread, /fv-originator-who/)
+  // the issue detail names its own id under a localized Issue label; nodes/store/permalink/forge-by all
+  // ride SideValue — the page keeps no parallel inline variant (fv-by / fv-chip / fv-link are gone)
+  assert.match(issues, /<SideSection label=\{t\('detail\.sideIssue'\)\}>\s*<SideValue text=\{th\.id\} mono \/>/)
+  assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} onClick=\{\(\) => onFocusNode\?\.\(id\)\} \/>/)
+  for (const src of [issues, detail]) assert.doesNotMatch(src, /fv-by|fv-chip|fv-link|ds-side-line/)
+  assert.doesNotMatch(css, /\.fv-by|\.fv-chip|\.fv-link \{|\.ds-side-line|\.fv-originator-who/)
+  // the eval detail shows its spec node as a REAL labeled ref through the shell's graph-focus door
+  assert.match(detail, /<SideSection label=\{t\('detail\.sideNode'\)\}>/)
+  assert.match(detail, /onClick=\{onFocusNode \? \(\) => onFocusNode\(entry\.node\) : null\}/)
+  assert.match(dashboard, /<EvalsPage[^>]*onFocusNode=/)
+  // localized type labels exist in both dictionaries
+  for (const dict of [en, zh]) {
+    assert.match(dict, /sideIssue:/)
+    assert.match(dict, /sideNode:/)
+  }
 })
 
 test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced width', () => {

@@ -4,7 +4,7 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './reviewFilters.js'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
-import { DetailShell, ReviewState, SideSection, usePopover } from './ReviewShell.jsx'
+import { DetailShell, ReviewState, SideSection, SideValue, usePopover } from './ReviewShell.jsx'
 import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -118,7 +118,7 @@ function AbOverflow({ hidden, total, histIdx, onPick }) {
   )
 }
 
-export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null, backHref = null, backLabel = null, banner = null, queue = [] }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, onFocusNode = null, listHref = null, backHref = null, backLabel = null, banner = null, queue = { prev: [], next: [] } }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -534,12 +534,20 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   )
 
   // the SIDE rail — reading/session metadata, GitHub's sidebar sections ([[review-chrome]]; reflows above
-  // the workspace at phone width).
+  // the workspace at phone width). Every value renders through the ONE SideValue primitive — shrinkable,
+  // ellipsizing, full text on the tooltip — never a bare page-local span.
   const side = (
     <>
       <SideSection label={t('detail.sideReading')}>
-        {viewing.evaluator && <span className="ds-side-line">{viewing.evaluator}</span>}
-        <span className="ds-side-line">{new Date(viewing.ts).toLocaleString()}</span>
+        {viewing.evaluator && <SideValue text={viewing.evaluator} />}
+        <SideValue text={new Date(viewing.ts).toLocaleString()} />
+      </SideSection>
+      {/* the reading's spec node as a REAL ref (explicitly labeled — information type is never guessed
+          from a bare token): the shell's graph-focus door when the host wires one, a plain labeled
+          value otherwise. */}
+      <SideSection label={t('detail.sideNode')}>
+        <SideValue text={entry.node} mono tip={onFocusNode ? t('session.issuesFocusNode') : entry.node}
+          onClick={onFocusNode ? () => onFocusNode(entry.node) : null} />
       </SideSection>
       {filer && (
         <SideSection label={t('detail.sideFiler')}>
@@ -550,30 +558,37 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
       )}
       {viewing.humanOk && (
         <SideSection label={t('detail.sideOk')}>
-          <span className="ds-side-line">☑ {viewing.humanOk.by}</span>
-          <span className="ds-side-line ds-side-dim">{new Date(viewing.humanOk.ts).toLocaleString()}</span>
+          <SideValue text={`☑ ${viewing.humanOk.by}`} />
+          <SideValue text={new Date(viewing.humanOk.ts).toLocaleString()} dim />
         </SideSection>
       )}
       {/* a stale reading is shown, not hidden — the side rail EXPLAINS how far it's fallen behind: which
           axes moved, and (for the code axis) which governed files drifted + by how many commits. */}
       {!viewing.fresh && (viewing.staleAxes?.length ?? 0) > 0 && (
         <SideSection label={t('nodeView.eval.staleLabel')}>
-          <span className="ds-side-line" data-tip={t('nodeView.eval.staleReadoutTitle')}>{viewing.staleAxes.join(' · ')}</span>
+          <SideValue text={viewing.staleAxes.join(' · ')} tip={t('nodeView.eval.staleReadoutTitle')} />
           {(viewing.codeDrift?.length ?? 0) > 0 &&
-            <span className="ds-side-line ds-side-dim">{viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
+            <SideValue text={viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')} dim />}
         </SideSection>
       )}
       {/* the Continue-reviewing queue ([[evals-view]] computes it from the page's source dataset): the
           neighbors of the current reading as REAL detail anchors — the one shared ReviewState visual +
-          scenario/node text, no selection state, absent entirely when the dataset holds no neighbor. */}
-      {queue.length > 0 && (
+          scenario/node text — in two POSITIONAL groups against the dataset's stable list order (Previous
+          = before the current row, Up next = after it; nearest-to-current first — list direction, never
+          a time claim). A group with no entries renders no heading; no neighbor at all, no section. */}
+      {(queue.prev.length > 0 || queue.next.length > 0) && (
         <SideSection label={t('detail.sideQueue')}>
-          {queue.map((q) => (
-            <a key={q.key} className="ds-queue-row" href={q.href} data-tip={`${q.node} · ${q.scenario}`}>
-              <ReviewState kind="eval" state={q.state} size={13} />
-              <span className="ds-queue-scenario">{q.scenario}</span>
-              <span className="ds-queue-node">{q.node}</span>
-            </a>
+          {[['prev', t('detail.queuePrev')], ['next', t('detail.queueNext')]].map(([dir, label]) => queue[dir].length > 0 && (
+            <div className="ds-queue-group" key={dir}>
+              <span className="ds-queue-group-label">{label}</span>
+              {queue[dir].map((q) => (
+                <a key={q.key} className="ds-queue-row" href={q.href} data-tip={`${q.node} · ${q.scenario}`}>
+                  <ReviewState kind="eval" state={q.state} size={13} />
+                  <span className="ds-queue-scenario">{q.scenario}</span>
+                  <span className="ds-queue-node">{q.node}</span>
+                </a>
+              ))}
+            </div>
           ))}
         </SideSection>
       )}

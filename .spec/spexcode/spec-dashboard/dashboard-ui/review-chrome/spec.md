@@ -100,8 +100,22 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   page-supplied **banner** slot (one restrained source-notice line — the scoped eval detail's
   worktree-source banner rides it, [[evals-view]]): the shell owns its geometry, the page only its
   content, and a page that supplies none renders no banner box. Source failure
-  and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with
-  side metadata above main content.
+  and honest not-found are distinct faces. On desktop the SIDE rail is **sticky in its grid column**
+  (never `position:fixed`): while a long main column scrolls, the rail pins near the scrollport top so
+  the metadata stays on screen — grid containment keeps it off the header (which scrolls away normally)
+  and the page bottom, and it adds no permanent nested scrollbar: only a rail taller than the viewport
+  scrolls internally, keeping every section reachable. At phone width the SAME themed markup becomes one
+  column with side metadata above main content — NOT sticky, plain document flow.
+- **Side-rail metadata is ONE value primitive.** Every rail row's value on BOTH detail pages renders
+  through the shared `SideValue` — a plain span, a REAL anchor, or a button sharing one markup shape and
+  one truncation contract: the text container is min-width:0, single-line, shrinkable, ellipsizing when
+  it exceeds the rail, the full text kept reachable through the shared tooltip/accessible name, so a
+  session UUID or long slug never stretches the rail or the page. Link/button variants keep a pointer,
+  hover underline, and a visible focus ring; identity skins (the originator liveness chip's dot + tint)
+  layer OVER the primitive, never beside it as a parallel span/anchor/tooltip variant. Information type
+  is explicit: an issue's own id wears a localized Issue label, a spec-node reference wears the
+  localized spec-node label and its real focus/navigate behavior — no bare `#slug` left to be guessed
+  at. List rows keep their own one compact meta grammar — two densities, each a single implementation.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute
   content, never layout forks. A change to list rhythm or detail geometry lands HERE once and both pages
   move together; that is the component boundary this node exists to hold.

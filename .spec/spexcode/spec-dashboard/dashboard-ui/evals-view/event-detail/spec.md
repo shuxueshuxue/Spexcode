@@ -32,15 +32,20 @@ structure exists for its sake. "Annotator" was never a real concept (U1): an ann
 `EventDetail` fills the [[review-chrome]] `DetailShell` for one (node, scenario): the **header** names the
 scenario (title) with the node as its trailing meta; the **status band** carries the verdict badge and the
 **A/B strip**; the **MAIN column** is the evidence workspace then the remark thread with its composer
-docked at the foot; the **SIDE rail** is the reading/session metadata — evaluator, filed time, the FILER
+docked at the foot; the **SIDE rail** is the reading/session metadata, every value through
+[[review-chrome]]'s ONE SideValue primitive (shrink + ellipsis, full text on the tooltip — a filer UUID
+never stretches the rail) — evaluator, filed time, the reading's **spec node as a REAL labeled ref**
+(the shell's graph-focus door; a host wiring none still shows the labeled value), the FILER
 chip with its liveness dot (alive = the session is on the board and not offline, painted by the live
 `STATUS_COLOR`, [[state]]; a live chip click-throughs to `#/sessions/<id>`; a legacy reading without `by`
 shows none), the [[human-ok]] settled mark when signed, and the **stale readout** for a non-fresh viewed
 reading — the freshness axes that moved, and for the code axis which governed files drifted by how many
 commits ([[eval-core]]'s `codeDrift`; reporting only, never deciding) — and, when the page supplies
 neighbors, the **continue-reviewing queue** at the rail's foot ([[evals-view]] computes it from the
-page's source dataset): each row a REAL detail anchor wearing the ONE shared verdict visual plus its
-scenario and node, no private selection state, the whole section absent when no neighbor exists. At phone
+page's source dataset, split into its Previous / Up next positional groups): each row a REAL detail
+anchor wearing the ONE shared verdict visual plus its
+scenario and node, an empty group rendering no heading, no private selection state, the whole section
+absent when no neighbor exists. At phone
 width the side metadata reflows ABOVE the workspace in one column ([[review-chrome]]), and the composer
 stays a sticky bar at the
 column's foot. The composer's review identity is the source scope + (node, scenario) + currently viewed

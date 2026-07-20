@@ -202,6 +202,10 @@ export default {
     scopedSource: '此读数来自会话 {id} 的工作树',
     scopedSourceOpen: '打开会话终端',
     sideQueue: '继续查看',
+    queuePrev: '前面',
+    queueNext: '接下来',
+    sideIssue: '议题',
+    sideNode: '规格节点',
   },
 
   annotator: {

@@ -67,6 +67,39 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
   assert.doesNotMatch(blindRows, /href:/)
 })
 
+test('queueNeighbors splits balanced positional groups with boundary refill', () => {
+  // the pure split, evaluated from the page source (behavioral, not a shape regex): strictly
+  // positional over the entries' stable order, nearest-to-current first in each group, ~5 total
+  // balanced with the forward group taking the odd slot, boundary budget refilling the other side.
+  const src = page.match(/export function queueNeighbors[\s\S]*?\n\}/)[0].replace('export ', '')
+  const entryKey = (e) => `eval:${e.node}·${e.scenario}`
+  const queueNeighbors = new Function('entryKey', `${src}; return queueNeighbors`)(entryKey)
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ node: 'n', scenario: `s${i}` }))
+  const key = (i) => `eval:n·s${i}`
+  const names = (g) => g.map((e) => e.scenario)
+
+  const mid = queueNeighbors(mk(20), key(10))
+  assert.deepEqual(names(mid.prev), ['s9', 's8'])
+  assert.deepEqual(names(mid.next), ['s11', 's12', 's13'])
+  const first = queueNeighbors(mk(20), key(0))
+  assert.deepEqual(names(first.prev), [])
+  assert.deepEqual(names(first.next), ['s1', 's2', 's3', 's4', 's5'])
+  const last = queueNeighbors(mk(20), key(19))
+  assert.deepEqual(names(last.next), [])
+  assert.deepEqual(names(last.prev), ['s18', 's17', 's16', 's15', 's14'])
+  const nearStart = queueNeighbors(mk(20), key(1))
+  assert.deepEqual(names(nearStart.prev), ['s0'])
+  assert.deepEqual(names(nearStart.next), ['s2', 's3', 's4', 's5'])
+  const nearEnd = queueNeighbors(mk(20), key(18))
+  assert.deepEqual(names(nearEnd.next), ['s19'])
+  assert.deepEqual(names(nearEnd.prev), ['s17', 's16', 's15', 's14'])
+  const tiny = queueNeighbors(mk(3), key(1))
+  assert.deepEqual(names(tiny.prev), ['s0'])
+  assert.deepEqual(names(tiny.next), ['s2'])
+  assert.deepEqual(queueNeighbors(mk(1), key(0)), { prev: [], next: [] })
+  assert.deepEqual(queueNeighbors(mk(5), 'eval:n·absent'), { prev: [], next: [] })
+})
+
 test('the A/B strip is bounded: a recent window, the current pip always visible, one overflow menu', () => {
   // the window constant + the current-outside-window slot rule
   assert.match(detail, /export const AB_WINDOW = 8/)

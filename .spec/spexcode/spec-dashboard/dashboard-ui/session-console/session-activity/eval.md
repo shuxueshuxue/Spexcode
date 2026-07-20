@@ -31,25 +31,24 @@ scenarios:
       - spec-dashboard/src/SessionWindow.jsx
   - name: console-header-matches-headline
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
     description: >-
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE WORKING
       session whose tmux pane title (self-summary) is set, so its headline is the agent's own live line —
-      visibly NOT the bare node name. Read the slim strip over the terminal's top edge: it must carry ONLY
-      the tabs and the lifecycle actions — no `si-th-name` headline element renders there any more (the strip
-      that once repeated the sidebar's line was dropped: the sidebar already identifies the session). Then
-      read where the console DOES name the session — the left sidebar's selected row — and compare its
-      headline text to that session's row headline in the board's top-left window: one shared line, verbatim.
-      The stable handle (node/branch/id) appears nowhere as a console title. Screenshot the console (sidebar
-      beside the strip) next to the board row and file with `spex eval add session-activity --scenario
+      visibly NOT the bare node name. Read the selected left-sidebar row and the toolbar's `si-th-name`
+      identity beside the lifecycle/liveness state; compare their DOM text verbatim. At 1440px the toolbar
+      uses the free width, then repeat with a deliberately long headline in a 390px terminal pane and confirm
+      only the rendered width ellipses — the accessible identity keeps the full shared line and state.
+      The stable handle (node/branch/id) appears nowhere as a console title. Screenshot the console sidebar
+      beside the toolbar and file with `spex eval add session-activity --scenario
       console-header-matches-headline --image <png> --pass`.
     expected: >-
-      The console repeats no headline over the terminal: the top strip is tabs + actions only, with NO
-      `si-th-name` element in the DOM. The session is identified once, by its sidebar row — whose headline is
-      the SAME line as the board-window row that opened it: the worker's live tmux self-summary (its pane
-      title), a launch-prompt placeholder only before the agent is up, a human rename always winning — never
-      the stable node/branch name. The selected sidebar row un-truncates in place, so the full headline is
-      readable without any second copy of it. A turn that retitles the board row retitles the sidebar row in
-      lock-step.
+      The toolbar's identity and selected sidebar row are the SAME `sessionHeadline` string: the worker's live
+      tmux self-summary (its pane title), a launch-prompt placeholder only before the agent is up, a human
+      rename always winning — never the stable node/branch name. The toolbar derives no second fallback chain;
+      it spends otherwise-free width and ellipses before Eval/commands when tight, while its named AX group
+      retains the full headline plus lifecycle/liveness. A turn that retitles the board row retitles sidebar
+      and toolbar in lock-step.
     code:
       - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/session.js
@@ -60,7 +59,7 @@ scenarios:
       Launch a CODEX session into a worktree whose folder name differs from the task (e.g. branch
       `node/codex-naming` → worktree folder `codex-naming`, task "Implement codex session naming"). Codex sets
       its tmux pane title to a spinner glyph + the cwd BASENAME (`⠙ codex-naming`), not a task summary. Open
-      the dashboard and read that session's Row-1 headline (and the Enter console action strip). It must be the
+      the dashboard and read that session's Row-1 headline (and the Enter console toolbar identity). It must be the
       TASK — the launch-prompt preview — NOT the worktree folder name `codex-naming`. Contrast a CLAUDE
       session in the same view: its headline IS its live pane-title self-summary, unchanged. Screenshot both
       rows and file with `spex eval add session-activity --scenario codex-headline-is-task-not-folder --image <png> --pass`.

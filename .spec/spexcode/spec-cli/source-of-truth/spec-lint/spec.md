@@ -81,8 +81,12 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
   named); its misses are silent.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
-  chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
-  concise specs pass and only a dump warns.
+  chars over a soft budget), thick with code identifiers, or step-by-step how-to. Its bare-filename
+  vocabulary is derived from the SAME git-tracked source candidates as coverage, so every tracked
+  language and extensionless source participates while configured exclusions stay excluded. The legacy
+  `identifierExtensions` override lowers to wildcard filename candidates in that same matcher; there is no
+  default language list or parallel language branch. Budgets default so concise specs pass and only a dump
+  warns.
 - **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — altitude's
   structural twin, the same "hold it in your head" limit on tree breadth, so passing altitude can't relocate
   sprawl into a flat fan-out. Advisory: a flat list of true peers is sometimes right, so it asks, not mandates.

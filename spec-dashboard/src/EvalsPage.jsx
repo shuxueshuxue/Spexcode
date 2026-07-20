@@ -21,8 +21,8 @@ import { apiUrl } from './project.js'
 
 // the session scope's worktree-rooted lean model (`GET /api/sessions/:id/evals`, [[session-eval]]) —
 // null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
-// A seq guard drops a stale response; `reload` is the write path's refresh (a remark/ok lands in the
-// worktree store, which fires no board SSE).
+// A seq guard drops a stale response; `reload` gives the active write surface immediate full-row read-back
+// while the same write independently invalidates the canonical graph summary projection.
 const sessionModelCache = new Map()
 const sessionModelInflight = new Map()
 

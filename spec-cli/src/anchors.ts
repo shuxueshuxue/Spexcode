@@ -150,9 +150,20 @@ export type LangSpec = {
   id: string
   extensions: string[]
   // column-0 declaration patterns; capture group 1 = the unit name (or the declarator list when declList)
-  decls: { re: RegExp; kind: string; typeOnly?: boolean; classOpener?: boolean; declList?: boolean }[]
+  decls: {
+    re: RegExp
+    kind: string
+    typeOnly?: boolean
+    classOpener?: boolean
+    declList?: boolean
+    scopeOpener?: boolean
+    memberOf?: { parentKind: string; kind: string }
+  }[]
   // class-member pattern, active while inside a classOpener's balanced-bracket body (name -> Class.name)
   member?: { re: RegExp; blacklist?: RegExp }
+  // indentation-significant languages use declaration nesting for qualified names and ranges. The
+  // declaration regexes remain language data; this only selects a generic boundary strategy.
+  indentScopes?: { decorator?: RegExp }
   // a column-0 line matching this ENDS the previous unit (comment-aware so trailing comment blocks
   // attach to the NEXT unit, not the previous one)
   boundary: RegExp
@@ -172,12 +183,72 @@ function declNames(head: string): string[] {
   return segs.map((s) => s.match(/^\s*([A-Za-z_$][\w$]*)\s*(?::|=|$)/)?.[1]).filter((x): x is string => !!x)
 }
 
+const indentation = (line: string): number => {
+  let n = 0
+  for (const ch of line) {
+    if (ch === ' ') n++
+    else if (ch === '\t') n += 8 - (n % 8)
+    else break
+  }
+  return n
+}
+
+function extractIndentScoped(content: string, spec: LangSpec): Unit[] {
+  const lines = content.split('\n')
+  type ScopedUnit = Unit & { declaration: number; indent: number }
+  const units: ScopedUnit[] = []
+  const scopes: { indent: number; name: string; kind: string }[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim() || /^\s*#/.test(line)) continue
+    const indent = indentation(line)
+    while (scopes.length && scopes[scopes.length - 1].indent >= indent) scopes.pop()
+    for (const d of spec.decls) {
+      const m = line.match(d.re)
+      if (!m) continue
+      const local = m[1]
+      const name = [...scopes.map((s) => s.name), local].join('.')
+      const parent = scopes[scopes.length - 1]
+      const kind = d.memberOf && parent?.kind === d.memberOf.parentKind ? d.memberOf.kind : d.kind
+      let start = i + 1
+      if (spec.indentScopes?.decorator) {
+        for (let j = i - 1; j >= 0; j--) {
+          if (indentation(lines[j]) !== indent || !spec.indentScopes.decorator.test(lines[j])) break
+          start = j + 1
+        }
+      }
+      units.push({ name, kind, start, end: i + 1, declaration: i, indent, ...(d.typeOnly ? { typeOnly: true } : {}) })
+      if (d.scopeOpener) scopes.push({ indent, name: local, kind: d.kind })
+      break
+    }
+  }
+
+  for (const unit of units) {
+    let boundary: number | null = null
+    for (let i = unit.declaration + 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (!line.trim()) continue
+      const indent = indentation(line)
+      if (/^\s*#/.test(line)) {
+        if (indent <= unit.indent && boundary === null) boundary = i
+        continue
+      }
+      if (indent <= unit.indent) { boundary ??= i; break }
+      boundary = null
+    }
+    unit.end = Math.max(unit.start, (boundary ?? lines.length) )
+  }
+  return units.map(({ declaration: _declaration, indent: _indent, ...unit }) => unit)
+}
+
 export function heuristicExtractor(spec: LangSpec): Extractor {
   return {
     id: spec.id,
     claims: (ext) => spec.extensions.includes(ext),
     ready: () => true,
     extract(content) {
+      if (spec.indentScopes) return extractIndentScoped(content, spec)
       const lines = content.split('\n')
       const units: Unit[] = []
       let cls: string | null = null, depth = 0
@@ -236,12 +307,32 @@ export const JS_LANG_R5B: LangSpec = {
   boundary: /^(?:[A-Za-z_$]|\/\/|\/\*)/,
 }
 
+// Python is a LangSpec DATA row over the same generic engine: declaration names come from patterns;
+// significant indentation supplies lexical qualification and ranges. It is intentionally structural,
+// not a Python runtime or full grammar (the user-facing boundary is documented by [[code-anchor]]).
+const PY_ID = String.raw`[\p{ID_Start}_][\p{ID_Continue}_]*`
+export const PYTHON_LANG: LangSpec = {
+  id: 'heuristic-python',
+  extensions: ['py', 'pyi'],
+  decls: [
+    {
+      re: new RegExp(`^\\s*(?:async\\s+)?def\\s+(${PY_ID})\\s*\\(`, 'u'),
+      kind: 'function',
+      scopeOpener: true,
+      memberOf: { parentKind: 'class', kind: 'method' },
+    },
+    { re: new RegExp(`^\\s*class\\s+(${PY_ID})(?:\\s*\\(|\\s*:)`, 'u'), kind: 'class', scopeOpener: true },
+  ],
+  indentScopes: { decorator: /^\s*@/ },
+  boundary: /^\S/,
+}
+
 // ---- registry: extension -> its ONE designated extractor ----
 // The registry's shape is the Extractor INTERFACE, not any engine: a future language row may be a
 // heuristicExtractor(LangSpec) or a web-tree-sitter extractor carrying its own wasm-grammar/query
 // config — whatever the implementation needs rides inside its own factory, never in the registry.
 export function extractors(root: string): Extractor[] {
-  return [tsAstExtractor(root)]
+  return [tsAstExtractor(root), ...[PYTHON_LANG].map(heuristicExtractor)]
 }
 // first claiming extractor IS the designation (the registry order defines it); null = no anchor support
 // for this language yet (lint ERRORS — the remedy is a LangSpec data row, or dropping the anchor).

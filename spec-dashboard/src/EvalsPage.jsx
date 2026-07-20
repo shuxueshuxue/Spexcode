@@ -77,7 +77,7 @@ export function EvalScopeDoor({ sessionId }) {
 }
 
 // The LIST page (`#/evals[?query]`): the session scope's back door + gates strip + export door
-// above the one [[evals-feed]] list. All filter state is the URL's one token text; the scope: token
+// leading the one [[evals-feed]] list INSIDE its shared PageScroll. All filter state is the URL's one token text; the scope: token
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
   const t = useT()
@@ -88,10 +88,8 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
       : sessionId && model === false
         ? t('sessionEval.none')
         : null
-  return (
-    <>
-      {/* The terminal back door leads the toolbar, before every gate and the trailing export action. */}
-      {sessionId && (
+  const leading = sessionId ? (
+    // The terminal back door leads the toolbar, before every gate and the trailing export action.
         <div className="se-gates">
           <EvalScopeDoor sessionId={sessionId} />
           {model && model.gates.map((g) => (
@@ -105,11 +103,11 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
             </span>
           )}
         </div>
-      )}
-      <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
-        queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice}
-        error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
-    </>
+  ) : null
+  return (
+    <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
+      queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} leading={leading}
+      error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty} />
   )
 }
 

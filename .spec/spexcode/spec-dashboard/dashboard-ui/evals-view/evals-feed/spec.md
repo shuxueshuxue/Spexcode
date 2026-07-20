@@ -35,6 +35,8 @@ Counts are computed under the rest of the query, excluding the active verdict to
 clears it back to the honest whole list. A fresh human-ok'd result is `state:reviewed`; everything else is
 `state:current`. That lifecycle remains transparent in the query and editable through the secondary
 **Human review** builder (Needs review / Reviewed), but no longer occupies the top visual hierarchy.
+When the worktree scope contributes its terminal/gates strip, the feed hands it to ListPage as leading
+content inside the shared [[page-scroll]]; it never wraps the list with a second shell or moves the track.
 Every filter is a token in [[review-chrome]]'s ONE visible query ([[review-query]]),
 and matching travels through [[review-filters]]'s Eval adapter — page code only bridges the parsed text
 into the shared engine, so the embedded node list cannot acquire different parsing or matching semantics:

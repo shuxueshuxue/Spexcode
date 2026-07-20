@@ -70,7 +70,9 @@ lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
   through [[page-scroll]] (the pane supplies the viewport, the shared primitive supplies overflow and
   scrollbar geometry, and this component supplies only its centered content), and the single home for
   future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset picker.
-  `,` again routes home to the graph; Esc routes nothing ([[side-nav]] — it only closes in-page overlays).
+  The direct route mounts that same page inside the phone shell above its tab bar, without inventing a
+  mobile Settings clone or a fifth primary tab. `,` again routes home to the graph; Esc routes nothing
+  ([[side-nav]] — it only closes in-page overlays).
 
 ### the hotkey
 

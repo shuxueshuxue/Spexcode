@@ -98,7 +98,34 @@ async function startProjectsHost() {
   } }
 }
 
-async function runScenario(browser, projectsBase, { name, title, viewport, mobile }) {
+async function findLongDetail(browser, route) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
+  try {
+    await page.goto(`${base}/#/${route}`)
+    await page.locator('.lp-row[href]').first().waitFor({ state: 'visible', timeout: 30_000 })
+    const hrefs = await page.locator('.lp-row[href]').evaluateAll((rows) => rows.map((row) => row.getAttribute('href')))
+    let best = { href: null, scrollHeight: 0, clientHeight: 0 }
+    for (const href of hrefs.slice(0, 150)) {
+      await page.evaluate((next) => { location.hash = next }, href)
+      await page.waitForFunction((next) => location.hash === next, href)
+      await page.locator('.ds-page').waitFor({ state: 'visible' })
+      await page.waitForTimeout(40)
+      const size = await page.locator('.page-scroll').evaluate((element) => ({
+        scrollHeight: element.scrollHeight, clientHeight: element.clientHeight,
+      }))
+      if (size.scrollHeight > best.scrollHeight) best = { href, ...size }
+      if (size.scrollHeight > size.clientHeight + 400) break
+    }
+    assert.ok(best.href && best.scrollHeight > best.clientHeight + 400,
+      `${route}: real data must provide a desktop detail long enough to exercise sticky scrolling`)
+    return best
+  } finally {
+    await context.close()
+  }
+}
+
+async function runScenario(browser, projectsBase, { name, title, viewport, mobile, longDetails }) {
   // e2e-review's splitter pairs the lone WebM and timeline beside each other. Keep each recorded
   // scenario in its own directory so concurrent viewport recordings cannot be cross-paired.
   const scenarioDir = join(out, name)
@@ -148,19 +175,23 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
       })),
     }
   })
-  const assertPageScroll = async (label, { scroll = true, sidePosition = null } = {}) => {
-    const top = await readScroll()
-    assert.equal(top.count, 1, `${label}: exactly one page-scroll owner`)
-    assert.equal(top.owner.y, 10, `${label}: track begins at 10px`)
-    assert.equal(top.shell.bottom - top.owner.bottom, 10, `${label}: track ends 10px above shell bottom`)
-    assert.equal(top.overflowX, 'hidden', `${label}: one-axis page scroll`)
-    assert.equal(top.overflowY, 'auto', `${label}: vertical owner`)
-    assert.equal(top.gutter, mobile ? 'auto' : 'stable', `${label}: responsive gutter contract`)
+  const assertGeometry = async (label, { sidePosition = null } = {}) => {
+    const geometry = await readScroll()
+    assert.equal(geometry.count, 1, `${label}: exactly one page-scroll owner`)
+    assert.equal(geometry.owner.y, 10, `${label}: track begins at 10px`)
+    assert.equal(geometry.shell.bottom - geometry.owner.bottom, 10, `${label}: track ends 10px above shell bottom`)
+    assert.equal(geometry.overflowX, 'hidden', `${label}: one-axis page scroll`)
+    assert.equal(geometry.overflowY, 'auto', `${label}: vertical owner`)
+    assert.equal(geometry.gutter, mobile ? 'auto' : 'stable', `${label}: responsive gutter contract`)
     assert.deepEqual(await horizontalOverflow(), { document: 0, body: 0, scrollers: [] }, `${label}: no horizontal overflow`)
     if (sidePosition) {
-      const side = top.sticky.find((item) => String(item.className).includes('ds-side'))
+      const side = geometry.sticky.find((item) => String(item.className).includes('ds-side'))
       assert.equal(side?.position, sidePosition, `${label}: detail rail position`)
     }
+    return geometry
+  }
+  const assertPageScroll = async (label, { scroll = true, sidePosition = null } = {}) => {
+    const top = await assertGeometry(label, { sidePosition })
     await frame(`${label}-top`)
     if (scroll && top.scrollHeight > top.clientHeight + 1) {
       await page.locator('.page-scroll').evaluate((element) => { element.scrollTop = (element.scrollHeight - element.clientHeight) / 2 })
@@ -168,14 +199,37 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
       const middle = await readScroll()
       const head = middle.sticky.find((item) => String(item.className).includes('lp-head'))
       if (head) assert.ok(Math.abs(head.y - middle.owner.y) <= 1, `${label}: sticky header pins to page-scroll top`)
+      const side = middle.sticky.find((item) => String(item.className).includes('ds-side'))
+      const topSide = top.sticky.find((item) => String(item.className).includes('ds-side'))
+      if (sidePosition === 'sticky') {
+        assert.ok(side.y < topSide.y, `${label}: detail rail moves into its sticky position`)
+        assert.ok(side.y >= middle.owner.y && side.bottom <= middle.owner.bottom, `${label}: sticky detail rail stays inside page-scroll`)
+      }
       await frame(`${label}-middle`)
       await page.locator('.page-scroll').evaluate((element) => { element.scrollTop = element.scrollHeight })
       await page.waitForTimeout(180)
+      if (sidePosition === 'sticky') {
+        const bottom = await readScroll()
+        const bottomSide = bottom.sticky.find((item) => String(item.className).includes('ds-side'))
+        assert.ok(Math.abs(bottomSide.y - side.y) <= 1, `${label}: detail rail stays pinned through bottom`)
+        assert.ok(bottomSide.bottom <= bottom.owner.bottom, `${label}: pinned detail rail never escapes page-scroll`)
+      }
       await frame(`${label}-bottom`)
     }
     readings[label] = top
     return top
   }
+  const sectionCounts = () => page.locator('.rl-section').evaluateAll((buttons) => buttons.map((button) => Number(button.innerText.trim().split(/\s+/).at(-1))))
+  const findScopedModel = () => page.evaluate(async () => {
+    const sessions = await (await fetch('/api/sessions')).json()
+    const candidates = await Promise.all(sessions.map(async (session) => {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(session.id)}/evals`)
+      if (!response.ok) return null
+      const model = await response.json()
+      return model.nodes?.length ? session.id : null
+    }))
+    return candidates.find(Boolean) || null
+  })
   const openMiddleRow = async () => {
     const rows = page.locator('.lp-row[href]')
     const row = rows.nth(Math.floor((await rows.count()) * .45))
@@ -214,6 +268,30 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   assert.match(await page.locator('.rl-sections').ariaSnapshot(), /group "Evals"[\s\S]*button "Fail \d+"[\s\S]*button "Pass \d+"/)
   await assertPageScroll('evals-list')
 
+  const scopedSession = await findScopedModel()
+  assert.ok(scopedSession, 'real session data supplies a scoped Evals model')
+  await page.route(`**/api/sessions/${encodeURIComponent(scopedSession)}/evals`, async (route) => {
+    const response = await route.fetch()
+    const model = await response.json()
+    model.nodes = [{
+      id: 'page-scroll-browser-fixture', hue: 200, evals: [],
+      scenarios: [{ name: 'declared-never-measured', expected: 'Remain reachable outside measured verdict filters.' }],
+    }, ...(model.nodes || [])]
+    await route.fulfill({ response, json: model })
+  })
+  const scopedText = `is:eval scope:${scopedSession}`
+  const scopedHash = `#/evals?${new URLSearchParams({ q: scopedText })}`
+  await page.goto(`${base}/${scopedHash}`)
+  await settle('.se-gates')
+  await page.locator('.se-blind').first().waitFor({ state: 'visible', timeout: 30_000 })
+  const scopedGeometry = await assertPageScroll('evals-scoped-list')
+  assert.equal(scopedGeometry.owner.y, 10, 'scoped gates live inside, not above, the shared scrollport')
+  const scopedTotal = await page.locator('.lp-row').count()
+  const blindRows = await page.locator('.se-blind').count()
+  assert.equal(blindRows, 1, 'the controlled declared-never-measured scenario reaches the real scoped UI')
+  const defaultCounts = await sectionCounts()
+  assert.ok(defaultCounts[0] + defaultCounts[1] < scopedTotal, 'Fail/Pass is honestly non-exhaustive')
+
   await buttons.nth(0).click()
   await page.waitForTimeout(180)
   const failRows = await page.locator('.lp-row').count()
@@ -222,15 +300,15 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await frame('evals-fail')
   await buttons.nth(0).click()
   await page.waitForTimeout(180)
-  assert.equal(await page.evaluate(() => location.hash), '#/evals')
-  assert.equal(await page.locator('.lp-row').count(), total)
+  assert.equal(await page.evaluate(() => location.hash), scopedHash)
+  assert.equal(await page.locator('.lp-row').count(), scopedTotal)
   await buttons.nth(1).click()
   await page.waitForTimeout(180)
   const passRows = await page.locator('.lp-row').count()
-  assert.ok(failRows + passRows <= total, 'Fail/Pass stays non-exhaustive')
+  assert.equal(await buttons.nth(1).getAttribute('aria-pressed'), 'true')
   await page.goBack()
   await settle('.lp-page')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals')
+  assert.equal(await page.evaluate(() => location.hash), scopedHash)
   assert.equal(await page.locator('.rl-section').nth(1).getAttribute('aria-pressed'), 'false')
 
   await page.locator('.rl-overflow-btn').click()
@@ -240,42 +318,96 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await reviewGroup.getByRole('menuitemradio', { name: 'Needs review' }).click()
   await page.waitForTimeout(180)
   assert.match(await page.evaluate(() => location.hash), /state%3Acurrent/)
+  const reviewHash = await page.evaluate(() => location.hash)
+  const reviewCounts = await sectionCounts()
+  await buttons.nth(0).click()
+  await page.waitForTimeout(180)
+  assert.deepEqual(await sectionCounts(), reviewCounts, 'verdict counts stay stable under the rest of the query')
+  assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'true')
+  await buttons.nth(0).click()
+  await page.waitForTimeout(180)
+  assert.equal(await page.evaluate(() => location.hash), reviewHash, 'second Fail click clears only verdict:')
   await page.goBack()
   await settle('.lp-page')
+  assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'true', 'Back replays the prior Fail state')
+  await page.goBack()
+  await settle('.lp-page')
+  assert.equal(await page.evaluate(() => location.hash), reviewHash)
+  assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'false')
+  await page.goBack()
+  await settle('.lp-page')
+  assert.equal(await page.evaluate(() => location.hash), scopedHash)
 
+  await page.goto(`${base}/#/evals`)
+  await settle('.lp-page')
   const evalBefore = await openMiddleRow()
-  await assertPageScroll('evals-detail', { sidePosition: mobile ? 'static' : 'sticky' })
   await page.goBack()
   await settle('.lp-page')
   assert.equal(await page.locator('.page-scroll').evaluate((element) => element.scrollTop), evalBefore, 'Evals Back restores exact list scrollTop')
   await frame('evals-back-restored')
+  await page.goto(`${base}/${longDetails.evals.href}`)
+  await settle('.ds-page')
+  const evalDetail = await assertPageScroll('evals-detail', { sidePosition: mobile ? 'static' : 'sticky' })
+  assert.ok(evalDetail.scrollHeight > evalDetail.clientHeight + 400, 'Evals detail uses real long content')
 
   await page.goto(`${base}/#/issues`)
   await settle('.lp-page')
   assert.equal(await page.locator('.rl-sections').getAttribute('role'), 'tablist')
   await assertPageScroll('issues-list')
   const issueBefore = await openMiddleRow()
-  await assertPageScroll('issues-detail', { sidePosition: mobile ? 'static' : 'sticky' })
   await page.goBack()
   await settle('.lp-page')
   assert.equal(await page.locator('.page-scroll').evaluate((element) => element.scrollTop), issueBefore, 'Issues Back restores exact list scrollTop')
   await frame('issues-back-restored')
+  await page.goto(`${base}/${longDetails.issues.href}`)
+  await settle('.ds-page')
+  const issueDetail = await assertPageScroll('issues-detail', { sidePosition: mobile ? 'static' : 'sticky' })
+  assert.ok(issueDetail.scrollHeight > issueDetail.clientHeight + 400, 'Issues detail uses real long content')
 
   if (!mobile) {
-    await page.goto(`${base}/#/settings`)
-    await settle('.page-settings-scroll')
     const themes = [
       ['Minimal', 'minimal'], ['Things', 'things'], ['Tokyo Night', 'tokyonight'], ['Catppuccin', 'catppuccin'],
       ['Everforest', 'everforest'], ['Gruvbox', 'gruvbox'], ['Rosé Pine Dawn', 'rosepine'], ['Dracula', 'dracula'],
     ]
+    const themeReadings = {}
+    const surfaces = [
+      ['evals-list', `${base}/#/evals`, '.lp-page'],
+      ['evals-detail', `${base}/${longDetails.evals.href}`, '.ds-page'],
+      ['issues-list', `${base}/#/issues`, '.lp-page'],
+      ['issues-detail', `${base}/${longDetails.issues.href}`, '.ds-page'],
+      ['settings', `${base}/#/settings`, '.page-settings-scroll'],
+    ]
     for (const [label, code] of themes) {
+      await page.goto(`${base}/#/settings`)
+      await settle('.page-settings-scroll')
       await page.getByRole('button', { name: label, exact: true }).click()
       assert.equal(await page.locator('html').getAttribute('data-theme'), code)
-      const geometry = await readScroll()
-      assert.equal(geometry.owner.y, 10)
-      assert.equal(geometry.shell.bottom - geometry.owner.bottom, 10)
+      themeReadings[code] = {}
+      for (const [surface, href, selector] of surfaces) {
+        await page.goto(href)
+        await page.locator(selector).first().waitFor({ state: 'visible' })
+        await page.waitForTimeout(80)
+        const geometry = await assertGeometry(`${code}-${surface}`)
+        themeReadings[code][surface] = { owner: geometry.owner, shell: geometry.shell, gutter: geometry.gutter }
+      }
+      await page.goto(`${projectsBase}/projects`)
+      await settle('.page-projects-scroll')
+      await page.evaluate((theme) => {
+        localStorage.setItem('spexcode.theme', theme)
+        document.documentElement.setAttribute('data-theme', theme)
+      }, code)
+      assert.equal(await page.locator('html').getAttribute('data-theme'), code)
+      const projectsGeometry = await assertGeometry(`${code}-projects`)
+      themeReadings[code].projects = { owner: projectsGeometry.owner, shell: projectsGeometry.shell, gutter: projectsGeometry.gutter }
     }
-    await assertPageScroll('settings', { scroll: false })
+    readings.themes = themeReadings
+    await page.goto(`${base}/#/settings`)
+    await settle('.page-settings-scroll')
+    await assertPageScroll('settings')
+  } else {
+    await page.goto(`${base}/#/settings`)
+    await settle('.page-settings-scroll')
+    await assertPageScroll('settings')
   }
 
   await page.goto(`${projectsBase}/projects`)
@@ -288,7 +420,7 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   renameSync(await video.path(), videoPath)
   rmSync(rawDir, { recursive: true, force: true })
   writeFileSync(join(scenarioDir, `${name}.timeline.json`), `${JSON.stringify({ events }, null, 2)}\n`)
-  return { name, viewport, failRows, passRows, total, readings, events }
+  return { name, viewport, failRows, passRows, total, scopedTotal, blindRows, readings, events }
 }
 
 let browser
@@ -297,15 +429,19 @@ const results = []
 try {
   projects = await startProjectsHost()
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
+  const longDetails = {
+    evals: await findLongDetail(browser, 'evals'),
+    issues: await findLongDetail(browser, 'issues'),
+  }
   results.push(await runScenario(browser, projects.base, {
     name: 'shared-page-scroll-desktop', title: '1440 page scroll, verdict hierarchy, themes, and Back',
-    viewport: { width: 1440, height: 900 }, mobile: false,
+    viewport: { width: 1440, height: 900 }, mobile: false, longDetails,
   }))
   results.push(await runScenario(browser, projects.base, {
     name: 'shared-page-scroll-mobile', title: '390 page scroll, one-axis overflow, and Back',
-    viewport: { width: 390, height: 844 }, mobile: true,
+    viewport: { width: 390, height: 844 }, mobile: true, longDetails,
   }))
-  writeFileSync(join(out, 'result.json'), `${JSON.stringify({ base, projectsBase: projects.base, results }, null, 2)}\n`)
+  writeFileSync(join(out, 'result.json'), `${JSON.stringify({ base, projectsBase: projects.base, longDetails, results }, null, 2)}\n`)
   console.log(`PASS page-scroll e2e — evidence: ${out}`)
 } finally {
   if (browser) await browser.close()

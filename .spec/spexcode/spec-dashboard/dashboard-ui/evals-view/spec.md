@@ -104,7 +104,9 @@ filter (default off) picking the root.
   The scoped LIST alone carries the restrained **terminal DOOR** — the ONE EvalScopeDoor primitive,
   icon-only and never a visible banner: it is the gates toolbar's LEFTMOST item and first focusable
   control, before lint/merge/ahead/committed and export, so the visual and keyboard hierarchy reads
-  "back to the session" before the list's local controls at desktop and phone width. The door is a REAL
+  "back to the session" before the list's local controls at desktop and phone width. The gates strip is a
+  leading child inside the SAME [[page-scroll]] as the list, never a sibling that moves the scrollbar
+  track below the shared inset. The door is a REAL
   anchor to `#/sessions/<id>`, the terminal console, wearing the left-arrow back glyph on a stable 32px hit
   target. Its tooltip and aria-label use the same short localized imperative without a dynamic id:
   `Back to session terminal` / `返回会话终端`. It derives ONLY from the canonical address, so a

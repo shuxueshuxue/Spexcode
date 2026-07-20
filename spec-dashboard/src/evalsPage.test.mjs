@@ -31,6 +31,12 @@ test('session model failures are distinct from genuine not-found states', () => 
   assert.match(shell, /className="ds-page ds-missing ds-failed" role="alert"/)
 })
 
+test('scoped gates are leading content inside the shared ListPage scrollport', () => {
+  assert.match(page, /const leading = sessionId \? \([\s\S]*className="se-gates"/)
+  assert.match(page, /<EvalsGroup[\s\S]*leading=\{leading\}/)
+  assert.match(shell, /<PageScroll className="lp-page">[\s\S]*\{leading\}[\s\S]*className="rl-content"/)
+})
+
 test('opening a filer or originator session uses no retired eval-view state', () => {
   const callback = dashboard.match(/const openSession = useCallback\([\s\S]*?\n\s*const startNew/)?.[0] || ''
   assert.match(callback, /setSessionSel\(id\)/)

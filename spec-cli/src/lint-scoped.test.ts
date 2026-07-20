@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
 // engine internals): multi-hit dedupe, cross-file one-govern, duplicate/mix integrity, owners
 // exclusion, the scopedCodeMiss setting (default warn / ignore), related selector hit vs miss, bare
-// compatibility, and the unsupported-extractor error.
+// compatibility, Python's LangSpec row, and the unsupported-extractor error.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
@@ -175,12 +175,80 @@ test('no hidden selector cap: 4 valid same-file selectors lint clean and OR into
   assert.match(hit.out, /anchor-drift.*src\/calc\.ts#fourth/)
 })
 
+const PYTHON = (suffix: string) => `def module_fn():
+    return "module-${suffix}"
+
+@trace("${suffix}")
+async def async_fn():
+    return "async"
+
+class Service:
+    def method(self):
+        return "method-${suffix}"
+
+def outer():
+    def inner():
+        return "inner-${suffix}"
+    return inner()
+
+class Outer:
+    class Inner:
+        async def work(self):
+            return "work-${suffix}"
+`
+
+test('Python LangSpec resolves module/async/method/nested names and their drift through the real CLI', { skip }, () => {
+  const fx = fixture()
+  writeFileSync(join(fx.proj, 'src/tool.py'), PYTHON('v1'))
+  fx.node('py', [
+    'code:',
+    '  - src/tool.py#module_fn',
+    '  - src/tool.py#async_fn',
+    '  - src/tool.py#Service.method',
+    '  - src/tool.py#outer.inner',
+    '  - src/tool.py#Outer.Inner.work',
+  ].join('\n'))
+  fx.commit('v1')
+
+  const clean = fx.lint()
+  assert.equal(clean.code, 0, `all supported Python names resolve: ${clean.out}`)
+  assert.ok(!clean.out.includes('integrity'), clean.out)
+
+  writeFileSync(join(fx.proj, 'src/tool.py'), PYTHON('v2'))
+  fx.commit('move every pinned Python unit')
+  const hit = fx.lint()
+  assert.equal(hit.code, 1)
+  const rows = hit.out.split('\n').filter((line) => line.includes('anchor-drift'))
+  assert.equal(rows.length, 1, `same-file Python selectors retain OR/dedupe semantics: ${hit.out}`)
+  for (const selector of ['module_fn', 'async_fn', 'Service.method', 'outer.inner', 'Outer.Inner.work'])
+    assert.ok(rows[0].includes(`#${selector}`), `missing #${selector}: ${rows[0]}`)
+})
+
+test('Python dead and duplicate qualified symbols keep the generic loud integrity verdicts', { skip }, () => {
+  const fx = fixture()
+  writeFileSync(join(fx.proj, 'src/tool.py'), `class Service:
+    def repeat(self):
+        return 1
+
+    def repeat(self):
+        return 2
+`)
+  fx.node('dead', 'related:\n  - src/tool.py#Service.missing')
+  fx.node('duplicate', 'code:\n  - src/tool.py#Service.repeat')
+  fx.commit('v1')
+
+  const { code, out } = fx.lint()
+  assert.equal(code, 1)
+  assert.match(out, /dead anchor: src\/tool\.py#Service\.missing \('dead'\)/)
+  assert.match(out, /ambiguous anchor: src\/tool\.py#Service\.repeat \('duplicate'\) names 2 same-named units/)
+})
+
 test('a selector on a language with no designated extractor is an integrity error with the repair', { skip }, () => {
   const fx = fixture()
-  writeFileSync(join(fx.proj, 'src/tool.py'), 'def f():\n    pass\n')
-  fx.node('py', 'code:\n  - src/tool.py#f')
+  writeFileSync(join(fx.proj, 'src/tool.rb'), 'def f\nend\n')
+  fx.node('ruby', 'code:\n  - src/tool.rb#f')
   fx.commit('v1')
   const { code, out } = fx.lint()
   assert.equal(code, 1)
-  assert.match(out, /integrity: 'py' anchors src\/tool\.py#f.*no extractor is designated/)
+  assert.match(out, /integrity: 'ruby' anchors src\/tool\.rb#f.*no extractor is designated/)
 })

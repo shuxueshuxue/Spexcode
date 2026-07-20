@@ -2209,27 +2209,19 @@ a.scenario-count:hover { background: var(--panel2); }
   .an-ab-pos { display: none; }
 }
 
-/* ---- the session-scoped Evals list ([[session-eval]]): the gates strip above the shared list chrome. ---- */
+/* ---- the session-scoped Evals list ([[session-eval]]): return door + gates above shared list chrome. ---- */
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; min-height: 40px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .se-gate { font-family: var(--mono); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
-/* the strip's trailing action cluster: the model-gated export door and the ALWAYS-rendered terminal
-   door hang together at the row's right edge (one auto margin — two would split the free space). */
+/* The model-gated export is the strip's only trailing action. */
 .se-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
 .se-export { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
 .se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
-/* the ONE icon-only terminal door ([[evals-view]]'s EvalScopeDoor): a REAL anchor on a stable 32px hit
-   target, no visible text — the full semantics ride its tooltip/aria-label. Same primitive in both
-   homes: this strip and the detail header's action slot. */
-.se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
-.se-door:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); background: color-mix(in srgb, var(--line) 45%, transparent); }
+/* The scoped list's one terminal return door: a left-edge back affordance and real 32px anchor. */
+.se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 5px; color: var(--ink2); background: var(--paper); text-decoration: none; }
+.se-door:hover { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--line) 45%, var(--paper)); }
 .se-door:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-/* the detail header's generic action slot ([[review-chrome]] DetailShell): trailing edge, and the SAME
-   first-line geometry contract the back anchor wears — the slot derives its offset from the row's 1lh
-   box, so the 32px action's center coincides with the title first line's (and ds-back's) center at any
-   width or language, no per-page pixel offset. */
-.ds-head-action { --ds-action-size: 32px; margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; margin-top: calc((1lh - var(--ds-action-size)) / 2); }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }

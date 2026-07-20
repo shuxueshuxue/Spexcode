@@ -1,7 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, mergeBaseDiff, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -98,4 +102,30 @@ test('an off-history spec version yields 0 drift (no basis on HEAD to measure fr
     specNodes: new Map([['LOST', new Set(['X'])]]),
   })
   assert.equal(driftFor(i, 'LOST', 'f.ts'), 0)
+})
+
+test('mergeBaseDiff preserves the old path of a pure rename for merge-base readers', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-merge-diff-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' })
+  run('init', '-q')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'test')
+  const oldPath = '.spec/old-parent/n/eval.md'
+  const newPath = '.spec/new-parent/n/eval.md'
+  mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+  writeFileSync(join(root, oldPath), '---\nscenarios: []\n---\n')
+  run('add', '.')
+  run('commit', '-qm', 'base')
+  run('branch', 'base')
+  mkdirSync(dirname(join(root, newPath)), { recursive: true })
+  run('mv', oldPath, newPath)
+  run('commit', '-qm', 'move eval')
+
+  assert.deepEqual(await mergeBaseDiff(root, 'base'), [{
+    path: newPath,
+    oldPath,
+    status: 'renamed',
+    additions: 0,
+    deletions: 0,
+  }])
 })

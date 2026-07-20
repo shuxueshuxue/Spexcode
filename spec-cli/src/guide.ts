@@ -33,7 +33,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    loopback-only by default; \`--host\` widens its bind as described by \`spex dashboard --help\`.
 
 5. Govern your layout (optional)
-     spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.
+     spexcode.json sets lint's governedRoots/include/exclude/test source policy and any non-default layout.
      \`spex spec lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
 
 Look these up on demand — the formats an agent authors, and the settings it configures:
@@ -145,8 +145,8 @@ before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the
 const EVAL = `spex guide eval — the eval.md file format
 
 An eval.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
-behaviour and the spec. It is optional, but a node that governs SOURCE code (its code: includes a file whose extension is in
-\`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no eval.md is
+behaviour and the spec. It is optional, but a node that governs a file admitted by lint's shared tracked-text
+include-minus-exclude/test policy with no eval.md is
 a blind spot: \`spex eval lint\` flags it \`eval-coverage\`. The eval system defines no DSL and RUNS
 NOTHING — the agent measures; eval keeps score.
 
@@ -395,8 +395,14 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
                            '.' = the whole project (only git-TRACKED files). Default
                            ["spec-dashboard/src", "spec-cli/src"].
-  lint.sourceExtensions    extensions coverage treats as source. Default ["ts","tsx","js","jsx"].
-  lint.testGlobs           globs EXCLUDED from coverage (default ["**/*.test.*"]; [] to govern tests too).
+  lint.sourceIncludeGlobs  optional repo-relative includes. Omit = ALL tracked current regular text under
+                           governedRoots; [] = intentionally none. Slash-less globs match at any depth.
+  lint.sourceExcludeGlobs  repo-relative paths subtracted from the includes (default []). Nothing about
+                           docs/vendor/build/config is guessed: exclude it here when that is project policy.
+  lint.sourceExtensions    compatibility shorthand compiled into include globs (".py" → "**/*.py") and
+                           unioned with sourceIncludeGlobs; it has no separate matching path.
+  lint.testGlobs           globs EXCLUDED from coverage. Defaults cover .test/.spec names, test/tests/
+                           directories, and test_* / *_test conventions; [] governs tests too.
   lint.identifierExtensions extensions the altitude bare-filename signal recognises.
   lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
                            (defaults 50 / 4200 / 35 / 1.3 / 3).
@@ -415,6 +421,8 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
                            ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
 Example — govern your own source dir and loosen the altitude budget:
   { "lint": { "governedRoots": ["src"], "altitude": { "lineBudget": 70 } } }
+Example — declare project-specific exclusions (nothing is guessed from these names):
+  { "lint": { "governedRoots": ["."], "sourceExcludeGlobs": ["vendor/**", "dist/**", "docs/**"] } }
 
 ── OTHER (spexcode.json unless noted) ──
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default

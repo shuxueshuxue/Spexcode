@@ -1,16 +1,19 @@
-import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot, git, driftIndex, historyIndex, rowsFor } from './git.js'
 import { loadSpecs } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
+import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
 export type LintConfig = {
-  governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage). '.' = whole project (safe: only git-TRACKED files, so node_modules/build/nested worktrees never count).
-  sourceExtensions: string[]    // extensions coverage treats as source files
-  testGlobs: string[]           // globs EXCLUDED from coverage — tests aren't governed product (default ['**/*.test.*']; set [] to govern tests too)
+  governedRoots: string[]       // dirs whose tracked source files must each be governed by a spec. '.' = whole project.
+  sourceIncludeGlobs: string[] | null // null includes every tracked regular text file; [] intentionally includes none
+  sourceExcludeGlobs: string[]  // explicit source-policy subtraction
+  sourceExtensions: string[] | null // compatibility shorthand compiled into sourceIncludeGlobs
+  testGlobs: string[]           // globs EXCLUDED from coverage; set [] to govern tests too
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
   maxChildren: number        // breadth budget: warn at >= this many direct children
@@ -23,8 +26,10 @@ export type LintConfig = {
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
-  sourceExtensions: ['ts', 'tsx', 'js', 'jsx'],
-  testGlobs: ['**/*.test.*'],
+  sourceIncludeGlobs: null,
+  sourceExcludeGlobs: [],
+  sourceExtensions: null,
+  testGlobs: DEFAULT_TEST_GLOBS,
   identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
   maxChildren: 8,
@@ -40,63 +45,27 @@ export function loadConfig(root: string): LintConfig {
   return normalizeConfig(merged)
 }
 
-// canonicalize two adopter-input footguns that would otherwise SILENTLY match ZERO files (the same failure
-// class as an unset governedRoots — a green board that governs nothing). Both are natural mistakes a non-web
-// adopter makes reading the prose, so we accept-what-they-meant rather than reject:
-//  - a LEADING DOT on an extension: the matcher is `\.(ext)$`, so a literal ".ts" becomes `\..ts$` and never
-//    matches. Strip leading dots → ["ts"] and [".ts"] both work (prose historically showed ".ts").
-//  - a testGlob with NO "/": globs anchor to the full repo-relative path, so a bare "*.test.ts" matches only
-//    ROOT-level files and leaks every nested test into coverage. A slash-less glob is a basename intent →
-//    prepend "**/" so it matches that basename at any depth (the default "**/*.test.*" already does).
+// Compile every author-facing source selector into one include-minus-exclude/test policy. In particular,
+// sourceExtensions is compatibility syntax only: it contributes include globs and never reaches discovery.
 export function normalizeConfig(cfg: LintConfig): LintConfig {
   // a mistyped enum silently reverting to the default would green-wash (or over-warn) exactly the
   // advisory the author meant to tune — same fail-loud rule as a malformed spexcode.json.
   if (cfg.scopedCodeMiss !== 'warn' && cfg.scopedCodeMiss !== 'ignore')
     throw new Error(`spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
   const dedot = (xs: string[]) => xs.map((x) => x.replace(/^\.+/, ''))
+  const anyDepth = (xs: string[]) => xs.map((g) => (g.includes('/') ? g : `**/${g}`))
+  const extensions = cfg.sourceExtensions === null ? null : dedot(cfg.sourceExtensions)
+  const includes = cfg.sourceIncludeGlobs === null && extensions === null
+    ? null
+    : [...new Set([...anyDepth(cfg.sourceIncludeGlobs ?? []), ...(extensions ?? []).map((ext) => `**/*.${ext}`)])]
   return {
     ...cfg,
-    sourceExtensions: dedot(cfg.sourceExtensions),
+    sourceIncludeGlobs: includes,
+    sourceExcludeGlobs: anyDepth(cfg.sourceExcludeGlobs),
+    sourceExtensions: extensions,
     identifierExtensions: dedot(cfg.identifierExtensions),
-    testGlobs: cfg.testGlobs.map((g) => (g.includes('/') ? g : `**/${g}`)),
+    testGlobs: anyDepth(cfg.testGlobs),
   }
-}
-
-// the source-file matcher, built from the configurable `sourceExtensions` knob. Coverage uses it to decide
-// which tracked files must be governed; eval lint's `eval-coverage` reuses THE SAME knob so ONE setting
-// defines "source" for both coverage axes — a non-web project (Rust/Go/Python .rs/.go/.py) sets it once and
-// both the coverage warning and the loss-signal blind-spot check follow, with no second web-only allowlist.
-export const sourceExtRe = (extensions: string[]) => new RegExp(`\\.(${extensions.join('|')})$`)
-
-// a minimal glob → RegExp anchored to the full repo-relative path: `**` = any dirs, `*` = within a segment.
-function globToRe(glob: string): RegExp {
-  const body = glob.split(/(\*\*\/|\*\*|\*|\?)/).map((seg) => {
-    if (seg === '**/') return '(?:.*/)?'
-    if (seg === '**') return '.*'
-    if (seg === '*') return '[^/]*'
-    if (seg === '?') return '[^/]'
-    return seg.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-  }).join('')
-  return new RegExp(`^${body}$`)
-}
-
-// coverage enumerates source via GIT-TRACKED files (`git ls-files`, through git() which strips the hook's
-// GIT_DIR), NOT a raw fs walk. Tracked-only auto-excludes node_modules + build output (gitignored), nested
-// or linked worktrees + submodules (a separate index), `.git`, and anything untracked — so governedRoots
-// '.' means "all tracked source" with no fs explosion and no hand-maintained skip list (git IS the database).
-// Test files drop per cfg.testGlobs (default *.test.*; set [] to govern tests too).
-function trackedSourceFiles(root: string, roots: string[], src: RegExp, testGlobs: string[]): string[] {
-  const testRes = testGlobs.map(globToRe)
-  const out = new Set<string>()
-  for (const r of roots) {
-    let listed = ''
-    try { listed = git(['-C', root, 'ls-files', '-z', '--', r]) } catch { continue }
-    for (const f of listed.split('\0')) {
-      if (!f || !src.test(f) || testRes.some((re) => re.test(f))) continue
-      out.add(f)
-    }
-  }
-  return [...out]
 }
 
 // code-identifier signals: camelCase | snake_case | foo( | `backticked` | /a/path.ext | bare file.ext. Only
@@ -136,7 +105,6 @@ export async function specLint(): Promise<Finding[]> {
   const root = repoRoot()
   const cfg = loadConfig(root)
   const ident = identRe(cfg.identifierExtensions)
-  const srcRe = sourceExtRe(cfg.sourceExtensions)
   const specs = await loadSpecs()
   const out: Finding[] = []
 
@@ -270,15 +238,9 @@ export async function specLint(): Promise<Finding[]> {
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
-  const governed = trackedSourceFiles(root, cfg.governedRoots, srcRe, cfg.testGlobs)
-  // no governed source found at all → make it a SELF-EXPLANATORY repair entrypoint, not a dead end. The two
-  // knobs governing this are BOTH web-tuned by default (extensions ts/tsx/js/jsx; roots this repo's own dirs),
-  // so a non-web adopter (Rust/Go/Python) hits zero source two ways: right dir but wrong extension, or an
-  // unset root. Naming BOTH knobs, echoing their CURRENT values (so the mismatch is visible — "searching .ts
-  // in a .py tree"), and stating the `lint`-key nesting (a top-level key silently no-ops) turns the warning
-  // into the fix. Concrete non-web extension examples so the repair is copy-pasteable, not a schema hunt.
+  const governed = trackedSourceFiles(root, cfg.governedRoots, cfg)
   if (governed.length === 0)
-    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source files matched extensions [${cfg.sourceExtensions.join(', ')}] under governedRoots [${cfg.governedRoots.join(', ')}]. Both knobs live under the "lint" key in spexcode.json (a top-level key is ignored): set governedRoots to your source dir(s) (e.g. ["src"]) AND sourceExtensions to your language (e.g. ["rs"] / ["go"] / ["py"]).` })
+    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 

@@ -48,10 +48,15 @@ only in the store slot its own root encodes to, and only to a loopback url — t
 `--api-port`/API_URL pairing survives at this surface; `spex serve ui` remains the explicit pairing.
 
 **The durable known-project catalog remembers what records cannot.** Records die with their serve; the
-catalog (`~/.spexcode/projects.json`) is the host's memory, populated by explicit registration
-(`POST /projects {root}` — normalized to the repo's main checkout, git-repo required, matching init's own
-precondition) and by auto-adoption of any validated live record. Its project operations ride the same
-hub admin scope. `GET|PUT /projects/:id/config` is the narrow source-file seam for the project's raw,
+catalog (`~/.spexcode/projects.json`) is the host's memory, populated by explicit registration and by
+auto-adoption of any validated live record. Explicit registration is one admin-scoped workflow over the
+real host filesystem: a read-only directory browser selects an existing folder, then `POST /projects`
+normalizes it to the repo's main checkout. An existing Git repo can be cataloged directly; a plain folder
+enters only after the user explicitly chooses the bounded `git init` side effect. Optional SpexCode setup
+still runs the real `spex init` with an explicit harness choice, never a dashboard-owned initializer. A
+failed init returns its exit code and complete transcript and does not claim catalog success; the catalog
+write happens only after every requested setup step succeeds. Its project operations ride the same hub
+admin scope. `GET|PUT /projects/:id/config` is the narrow source-file seam for the project's raw,
 committed `spexcode.json`: it works while the backend is offline, treats an absent file as `{}`, accepts
 only a top-level JSON object, writes atomically, and rejects a stale revision rather than overwriting a
 concurrent edit. It never exposes `spexcode.local.json`, whose machine-specific layer may carry sensitive

@@ -13,6 +13,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
+  browseProjectDirectories, addKnownProjectWithSetup,
   reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
 import { encodeProject } from './layout.js'
@@ -133,6 +134,37 @@ test('addKnownProject normalizes to the main checkout and requires a git repo', 
   assert.throws(() => addKnownProject(notRepo), /not a git repository/)
 })
 
+test('directory browse reports folder state; explicit setup initializes Git then the real SpexCode CLI before cataloging', async () => {
+  freshHome('add-setup')
+  const parent = mkdtempSync(join(tmpdir(), 'spex-host-browse-'))
+  const plain = join(parent, 'plain-project')
+  mkdirSync(plain)
+
+  const parentListing = browseProjectDirectories(parent)
+  assert.equal(parentListing.entries.find((entry) => entry.name === 'plain-project')?.git, false)
+  const before = browseProjectDirectories(plain)
+  assert.equal(before.gitRoot, null)
+  assert.equal(before.initialized, false)
+
+  const added = await addKnownProjectWithSetup(plain, { initGit: true, init: { harness: 'codex' } })
+  assert.equal(added.ok, true)
+  assert.equal(added.gitInitialized, true)
+  assert.equal(added.init?.code, 0)
+  assert.equal(existsSync(join(plain, '.git')), true)
+  assert.equal(existsSync(join(plain, '.spec')), true)
+  assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])
+  assert.deepEqual(readCatalog().map((entry) => entry.root), [plain])
+
+  const broken = join(parent, 'broken-project')
+  mkdirSync(broken)
+  const failed = await addKnownProjectWithSetup(broken, { initGit: true, init: { harness: 'not-a-harness' } })
+  assert.equal(failed.ok, false)
+  assert.notEqual(failed.init?.code, 0)
+  assert.match(failed.init?.output ?? '', /unknown harness/)
+  assert.equal(existsSync(join(broken, '.git')), true, 'the explicitly requested bounded Git step remains visible')
+  assert.equal(readCatalog().some((entry) => entry.root === broken), false, 'failed SpexCode setup never claims catalog success')
+})
+
 test('structured gateway and offline-project icon writes are admin-only', async () => {
   const home = freshHome('identity-auth')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-auth-repo-'))
@@ -144,6 +176,14 @@ test('structured gateway and offline-project icon writes are admin-only', async 
   const gw = startHostDashboard({ port, host: '127.0.0.1', distDir: dist })
   await new Promise<void>((res) => gw.server.once('listening', () => res()))
   try {
+    const deniedBrowse = await fetch(`http://127.0.0.1:${port}/projects/browse?path=${encodeURIComponent(repo)}`)
+    assert.equal(deniedBrowse.status, 401)
+    const deniedAdd = await fetch(`http://127.0.0.1:${port}/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ root: repo, initGit: true }),
+    })
+    assert.equal(deniedAdd.status, 401)
+    assert.equal(existsSync(join(repo, '.git')), false, 'authorization runs before the requested Git side effect')
     for (const path of ['/projects/icon', `/projects/${encodeProject(repo)}/icon`]) {
       const denied = await fetch(`http://127.0.0.1:${port}${path}`, {
         method: 'PUT', headers: { 'content-type': 'application/json' },
@@ -245,6 +285,11 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     // an op on an unknown project 404s with the repair.
     const repo = mkdtempSync(join(tmpdir(), 'spex-host-addrepo-'))
     execFileSync('git', ['init', '-q'], { cwd: repo })
+    const browse = await getJson(`${base}/projects/browse?path=${encodeURIComponent(repo)}`)
+    assert.equal(browse.status, 200)
+    assert.equal(browse.body.path, repo)
+    assert.equal(browse.body.gitRoot, repo)
+    assert.equal(Array.isArray(browse.body.entries), true)
     const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
     assert.equal(added.status, 200)
     assert.equal((await added.json()).online, false)

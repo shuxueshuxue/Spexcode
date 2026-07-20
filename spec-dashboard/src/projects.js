@@ -3,7 +3,8 @@
 //   GET  /projects                      → { adminGated, gateway, projects: [{ id, identity, root, online, url, gated }] }
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
-//   POST /projects {root}                register an existing repo into the durable catalog
+//   GET  /projects/browse?path=…          browse host directories + selected Git/SpexCode state
+//   POST /projects {root, initGit?, init?} explicitly initialize as requested, then register
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
@@ -158,21 +159,46 @@ export async function submitCredential(scope, password) {
   return res.ok || res.redirected ? { ok: true } : { ok: false, error: `http-${res.status}` }
 }
 
-// register an existing repo by its root path — POST /projects {root}, admin scope. The host normalizes
-// any path inside the repo to its main checkout and requires a git repo (the same precondition `spex
-// init` holds); the 400 it answers for a non-repo carries the human-readable reason, surfaced verbatim.
-export async function addProject(root) {
+export async function browseProjectDirectories(path = '') {
+  let res
+  try {
+    const query = path ? `?path=${encodeURIComponent(path)}` : ''
+    res = await fetch(`/projects/browse${query}`, { cache: 'no-store', headers: { Accept: 'application/json' } })
+  } catch { return { ok: false, error: 'network' } }
+  const data = await jsonOf(res)
+  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  if (typeof data?.path !== 'string' || !Array.isArray(data?.entries)) return { ok: false, error: 'unexpected answer' }
+  return {
+    ok: true,
+    path: data.path,
+    parent: typeof data.parent === 'string' ? data.parent : null,
+    home: typeof data.home === 'string' ? data.home : data.path,
+    gitRoot: typeof data.gitRoot === 'string' ? data.gitRoot : null,
+    initialized: !!data.initialized,
+    cataloged: !!data.cataloged,
+    entries: data.entries.filter((entry) => entry && typeof entry.name === 'string' && typeof entry.path === 'string').map((entry) => ({
+      name: entry.name, path: entry.path, git: !!entry.git, initialized: !!entry.initialized,
+    })),
+  }
+}
+
+// One host add workflow: options describe explicit setup side effects, and the host writes its catalog
+// only after they succeed. A failed real `spex init` carries its exit code + transcript for the modal.
+export async function addProject(root, setup = {}) {
   let res
   try {
     res = await fetch('/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ root }),
+      body: JSON.stringify({ root, ...setup }),
     })
   } catch { return { ok: false, error: 'network' } }
   const data = await jsonOf(res)
-  if (!res.ok) return { ok: false, status: res.status, error: data?.error || `http-${res.status}` }
+  if (!res.ok) return {
+    ok: false, status: res.status, error: data?.error || `http-${res.status}`,
+    ...(data?.init && typeof data.init === 'object' ? { code: data.init.code ?? null, output: String(data.init.output ?? '') } : {}),
+  }
   const project = normalizeProject(data)
-  return project ? { ok: true, project } : { ok: false, error: 'unexpected answer' }
+  return project ? { ok: true, project, setup: data.setup ?? null } : { ok: false, error: 'unexpected answer' }
 }
 
 // Raw portable project settings — the host fixes the file at <root>/spexcode.json and serves it even

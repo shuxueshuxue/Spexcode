@@ -96,6 +96,20 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
   )
 }
 
+// the Continue-reviewing queue ([[evals-view]]): the viewed reading's NEIGHBORS in the source dataset's
+// stable default order — aim `want` items total, current excluded, the window sliding to auto-fill at
+// either boundary; alone-in-dataset yields none. Pure over the entries the page already holds — no
+// second fetch, no filter fork, no selection state.
+export function queueNeighbors(entries, key, want = 5) {
+  const idx = entries.findIndex((e) => entryKey(e) === key)
+  if (idx < 0) return []
+  const take = Math.min(want, entries.length - 1)
+  const start = Math.max(0, Math.min(idx - Math.floor(take / 2), entries.length - (take + 1)))
+  const out = []
+  for (let i = start; out.length < take && i < entries.length; i++) if (i !== idx) out.push(entries[i])
+  return out
+}
+
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
@@ -112,6 +126,18 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
       : undefined),
     [sessionId, model, node, scenario],
   )
+  // the queue rows ride the SAME source dataset and the SAME href grammar the list rows use: a trunk
+  // neighbor is a pure detail path, a scoped neighbor keeps the one scope token — never list filters.
+  const queue = useMemo(
+    () => queueNeighbors(scope.entries, `eval:${node}·${scenario}`).map((e) => ({
+      key: entryKey(e),
+      node: e.node,
+      scenario: e.scenario,
+      state: e.state,
+      href: routeHash('evals', `${e.node}/${e.scenario}`, sessionId ? { q: `scope:${sessionId}` } : null),
+    })),
+    [scope.entries, node, scenario, sessionId],
+  )
   if (sessionId && error) {
     return <DetailShell failure={t('sessionEval.loadFailed', { reason: error })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
@@ -120,11 +146,23 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
   if (!entry) {
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
+  // the scoped detail's SOURCE banner ([[evals-view]]): names the worktree the reading lives in and
+  // carries the ONE explicit session door — a REAL anchor to the terminal console — now that the compact
+  // back anchor uniformly returns to the list. Derived only from the canonical address, so a pushed
+  // visit, a direct open, and a reload render the identical banner.
+  const banner = sessionId ? (
+    <>
+      <Icon name="terminal" size={14} />
+      <span className="ds-banner-text">{t('detail.scopedSource', { id: sessionId.slice(0, 8) })}</span>
+      <a className="ds-banner-link" href={routeHash('sessions', sessionId)}>{t('detail.scopedSourceOpen')}</a>
+    </>
+  ) : null
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
       <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
-        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel} />
+        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
+        banner={banner} queue={queue} />
     </div>
   )
 }
@@ -155,10 +193,11 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // the way BACK to the list is a LIST address: the scoped default view, same as every session door —
   // never a scope-only text (which would show both sections and mark no tab active).
   const listHref = routeHash('evals', null, sessionId ? { q: scopedEvalQuery(sessionId) } : null)
-  // the detail chrome's compact back anchor ([[address-routing]]'s return gate): derived ONLY from the
-  // canonical address — a trunk detail returns to #/evals, a scope:<id> detail to that session's console.
-  const backHref = detailBackHash('evals', query.q || '')
-  const backLabel = sessionId ? t('detail.backToSession') : t('detail.backToEvals')
+  // the detail chrome's compact back anchor ([[address-routing]]'s return gate): EVERY eval detail —
+  // trunk or scoped — returns to the bare #/evals list; the scoped detail's session door is its source
+  // banner, never the back arrow.
+  const backHref = detailBackHash('evals')
+  const backLabel = t('detail.backToEvals')
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).
   const onQueryText = (text) => navigate('evals', null, { query: queryParam(text, EVAL_QUERY_DEFAULT) })

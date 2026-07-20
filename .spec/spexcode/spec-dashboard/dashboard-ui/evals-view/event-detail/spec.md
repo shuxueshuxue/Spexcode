@@ -37,8 +37,12 @@ chip with its liveness dot (alive = the session is on the board and not offline,
 `STATUS_COLOR`, [[state]]; a live chip click-throughs to `#/sessions/<id>`; a legacy reading without `by`
 shows none), the [[human-ok]] settled mark when signed, and the **stale readout** for a non-fresh viewed
 reading — the freshness axes that moved, and for the code axis which governed files drifted by how many
-commits ([[eval-core]]'s `codeDrift`; reporting only, never deciding). At phone width the side metadata
-reflows ABOVE the workspace in one column ([[review-chrome]]), and the composer stays a sticky bar at the
+commits ([[eval-core]]'s `codeDrift`; reporting only, never deciding) — and, when the page supplies
+neighbors, the **continue-reviewing queue** at the rail's foot ([[evals-view]] computes it from the
+page's source dataset): each row a REAL detail anchor wearing the ONE shared verdict visual plus its
+scenario and node, no private selection state, the whole section absent when no neighbor exists. At phone
+width the side metadata reflows ABOVE the workspace in one column ([[review-chrome]]), and the composer
+stays a sticky bar at the
 column's foot. The composer's review identity is the source scope + (node, scenario) + currently viewed
 reading: an unrelated board repaint keeps that identity, the A/B cursor, timeline, ordinary typed prose,
 and anchored prefill intact; changing scope, scenario, or A/B reading changes it and remounts the composer,

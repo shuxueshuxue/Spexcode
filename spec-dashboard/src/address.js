@@ -1,5 +1,5 @@
 import { navigate, parseRoute, routeHash } from './route.js'
-import { nodeEvalQuery, readToken, scopedEvalQuery } from './reviewQuery.js'
+import { nodeEvalQuery, scopedEvalQuery } from './reviewQuery.js'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
@@ -33,16 +33,13 @@ export function addressHash(address) {
 }
 
 // The review details' RETURN GATE ([[review-chrome]]'s compact back anchor): the href derives ONLY from
-// the detail's own canonical address — never history.back, a referrer sniff, or originator presence — so
-// a pushed visit, a direct open, and a reload share one destination. A trunk eval detail returns to
-// #/evals, an issue detail to #/issues; an eval detail whose canonical query carries `scope:<id>` is a
-// worktree-rooted reading whose home is that session's terminal console, #/sessions/<id>.
-export function detailBackHash(page, queryText = '') {
-  if (page === 'evals') {
-    const scope = readToken(queryText || '', 'scope')
-    return scope ? routeHash('sessions', scope) : routeHash('evals')
-  }
-  return routeHash('issues')
+// the detail's own page — never history.back, a referrer sniff, or originator presence — so a pushed
+// visit, a direct open, and a reload share one destination. EVERY eval detail returns to the bare
+// #/evals list and an issue detail to #/issues; a scoped (worktree-rooted) eval detail does NOT divert
+// the back anchor to the session console — its session door is the detail's source BANNER ([[evals-view]]),
+// so "back" always means the list and the terminal is an explicit, labelled destination.
+export function detailBackHash(page) {
+  return routeHash(page === 'issues' ? 'issues' : 'evals')
 }
 
 // Graph focus and session tab selection are shell-owned view state; hash-only targets can navigate directly.

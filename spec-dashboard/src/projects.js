@@ -56,13 +56,18 @@ export const normalizeProjects = (body) => {
   return list ? list.map(normalizeProject).filter(Boolean) : null
 }
 
-// Path scope wins before any board can paint. While the catalog probe is pending (or an authorized
-// catalog lacks the requested id), use the URL id + default mark rather than a possibly misrouted board.
-// A denied/absent catalog is the direct-project compatibility case: its authorized board may identify it.
+// Path scope wins before any board can paint. While the catalog probe is PENDING the selection is
+// UNRESOLVED (null): projections hold their neutral placeholder and the tab head stays unwritten
+// ([[side-nav]]) — a default mark is never minted as an answer, and a possibly misrouted board is
+// never consulted early. A DENIED/ABSENT catalog is different: it is an answer. A direct guest may
+// use its authorized board identity, and a still-locked scope resolves to its ANONYMOUS identity —
+// the URL id + default mark, all a guest is entitled to see — which is a resolved state, not a
+// placeholder.
 export function selectProjectIdentity(projectId, catalog, boardIdentity) {
   if (!projectId) return boardIdentity
-  if (!catalog || catalog.state === 'ok') {
-    const match = catalog?.projects?.find((project) => project.id === projectId)
+  if (!catalog) return null
+  if (catalog.state === 'ok') {
+    const match = catalog.projects?.find((project) => project.id === projectId)
     return match?.identity || { title: projectId, icon: 'spexcode' }
   }
   return {
@@ -78,6 +83,13 @@ export const selectGatewayIdentity = (catalog) =>
 // suffix — several open scopes read apart by name alone. The plain product name appears only while no
 // identity has resolved yet (matching the title index.html ships before the app boots).
 export const tabTitle = (identity) => identity?.title || 'SpexCode'
+
+// The catalog projection keeps LAST-GOOD, mirroring the board's failed-refetch behavior: the catalog is
+// identity-bearing, so a blipped poll ('absent' after a proven ok — a gateway restart mid-poll) must not
+// regress a resolved identity to the anonymous default and re-teach the browser a default favicon
+// ([[side-nav]]). ok and denied always apply — denied is an ANSWER (a mid-session lock must re-gate).
+export const applyCatalogResult = (prev, next) =>
+  (next?.state === 'absent' && prev && prev.state !== 'absent' ? prev : next)
 
 // GET /projects → { state: 'ok', adminGated, projects } | { state: 'denied', reason } | { state: 'absent' }.
 export async function loadProjects() {

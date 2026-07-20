@@ -52,6 +52,21 @@ const CHORDS = {
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
+// ONE page boundary ([[side-nav]]): every routed page renders inside the same pane with the same loading
+// fallback — a page whose lazy chunk is still arriving shows the shared loading state in place, never a
+// blank main area, and no loading intermediate touches the document head or unmounts the shell. `warm`
+// pages (the graph's camera, the session console's terminals) stay mounted and display-toggle instead of
+// unmounting — a property any page may claim, never a session-board special case.
+function PagePane({ active, warm = false, className, children }) {
+  const t = useT()
+  if (!warm && !active) return null
+  return (
+    <div className={className ? `page-pane ${className}` : 'page-pane'} style={active ? undefined : { display: 'none' }}>
+      <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>{children}</Suspense>
+    </div>
+  )
+}
+
 function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues, catalog }) {
   const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
@@ -537,9 +552,9 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
-      <SideBar page={page} onNav={navigate} identity={identity} catalog={catalog} />
+      <SideBar page={page} identity={identity} catalog={catalog} />
       <div className="app-main">
-      <div className="page-graph" style={{ display: page === 'graph' ? undefined : 'none' }}>
+      <PagePane active={page === 'graph'} warm className="page-graph">
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -603,14 +618,14 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
         {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
 
-      </div>
+      </PagePane>
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
       {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} onClose={() => setOverlay(false)} />}
-      {/* the console mounts immediately (warm terminals) — its chunk just arrives a beat after the shell;
-          nothing renders in its place while it loads (it's hidden unless routed to anyway). */}
-      <Suspense fallback={null}>
+      {/* the console mounts immediately (warm terminals — its chunk is fetched right after the shell
+          paints); visibility is the pane's, its loading intermediate the shared fallback, like any page. */}
+      <PagePane active={page === 'sessions'} warm className="page-sessions">
         <SessionInterface
           sessions={sessions}
           specs={specs}
@@ -626,29 +641,19 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
           onOpenSearch={() => setSearch('sessions')}
           reload={reload}
         />
-      </Suspense>
+      </PagePane>
       {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
-      {page === 'evals' && (
-        <div className="page-pane page-evals">
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} onOpenSession={openSession} />
-          </Suspense>
-        </div>
-      )}
+      <PagePane active={page === 'evals'} className="page-evals">
+        <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} onOpenSession={openSession} />
+      </PagePane>
       {/* the Issues page ([[issues-view]]) — its own route; renders from the app-resident issues list */}
-      {page === 'issues' && (
-        <div className="page-pane page-issues">
-          <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
-          </Suspense>
-        </div>
-      )}
+      <PagePane active={page === 'issues'} className="page-issues">
+        <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+      </PagePane>
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
-      {page === 'settings' && (
-        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-          <Settings />
-        </Suspense>
-      )}
+      <PagePane active={page === 'settings'} className="page-settings">
+        <Settings />
+      </PagePane>
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a
           routed page: it must float above whichever page is showing (the graph's `/`, the session board's
           ⌘+/ and Search pill), and a page's display:none must never swallow it. */}

@@ -37,7 +37,9 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page never unmounts it — the terminals keep their sockets and scroll warm. The console **follows
+Leaving the page never unmounts it — the terminals keep their sockets and scroll warm; page visibility
+itself belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and
+never toggles its own display. The console **follows
 the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a

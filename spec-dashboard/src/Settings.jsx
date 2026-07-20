@@ -63,7 +63,7 @@ export default function Settings() {
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
   const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
   return (
-    <div className="page-pane page-settings">
+    <>
       <div className="settings-body">
       <h1 className="page-title">{t('settings.title')}</h1>
       <section className="legend-sec">
@@ -98,6 +98,6 @@ export default function Settings() {
       </section>
       <Shortcuts t={t} />
       </div>
-    </div>
+    </>
   )
 }

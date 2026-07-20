@@ -5,7 +5,7 @@ import {
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
   saveGatewayIcon, saveProjectIcon,
-  selectGatewayIdentity, selectProjectIdentity, tabTitle,
+  selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
@@ -81,8 +81,22 @@ test('pathname-selected catalog identity cannot be replaced by the last board th
   assert.deepEqual(selectProjectIdentity('spex', catalog, wrongLastBoard), { title: 'SpexCode', icon: 'compass' })
   assert.deepEqual(selectProjectIdentity('rocket', catalog, { title: 'SpexCode', icon: 'compass' }), { title: 'Rocket', icon: 'mdi:rocket-launch' })
   assert.deepEqual(selectGatewayIdentity(catalog), { title: 'Fleet', icon: 'gateway' })
-  assert.deepEqual(selectProjectIdentity('spex', null, wrongLastBoard), { title: 'spex', icon: 'spexcode' }, 'pending catalog never flashes the board identity')
+  assert.equal(selectProjectIdentity('spex', null, wrongLastBoard), null, 'pending catalog is UNRESOLVED — never the board, never a minted default ([[side-nav]])')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
+  assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, null), { title: 'spex', icon: 'spexcode' }, 'a still-locked scope resolves to its anonymous identity — an answer, not a placeholder')
+})
+
+test('applyCatalogResult: a blipped poll never regresses a resolved catalog — ok/denied always apply', () => {
+  const ok = { state: 'ok', projects: [] }
+  const denied = { state: 'denied', reason: 'admin-login' }
+  const absent = { state: 'absent' }
+  assert.equal(applyCatalogResult(ok, absent), ok, 'absent after a proven ok is a transient: keep last-good')
+  assert.equal(applyCatalogResult(denied, absent), denied, 'absent after denied: keep the answered state')
+  assert.equal(applyCatalogResult(null, absent), absent, 'boot: absent is the genuine no-catalog answer')
+  assert.equal(applyCatalogResult(absent, absent), absent)
+  assert.equal(applyCatalogResult(ok, denied), denied, 'denied is an ANSWER — a mid-session lock re-gates')
+  const ok2 = { state: 'ok', projects: [{ id: 'a' }] }
+  assert.equal(applyCatalogResult(ok, ok2), ok2, 'a fresh ok always applies')
 })
 
 test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () => {
@@ -93,7 +107,7 @@ test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () =>
   assert.equal(tabTitle(selectProjectIdentity('atlas', catalog, null)), 'Atlas Lab', 'project scope: exactly the catalog title')
   assert.equal(tabTitle(selectGatewayIdentity(catalog)), 'Fleet', 'gateway scope: exactly the gateway title')
   assert.equal(tabTitle(selectGatewayIdentity(null)), 'Projects', 'hub before/without a catalog: the fixed global face')
-  assert.equal(tabTitle(selectProjectIdentity('atlas', null, null)), 'atlas', 'pending catalog on a scoped route: the URL project id')
+  assert.deepEqual(selectProjectIdentity('atlas', { state: 'denied' }, null), { title: 'atlas', icon: 'spexcode' }, 'still-locked scope: the ANONYMOUS identity (URL id + default mark) — a resolved answer, not a placeholder')
   assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: '', icon: '' })), 'atlas', 'gated/denied scope: still the URL project id')
   assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: 'Atlas Lab', icon: 'compass' })), 'Atlas Lab', 'unlocked direct guest: the authorized board title')
   assert.equal(tabTitle({ title: '', icon: 'spexcode' }), 'SpexCode', 'root scope before the first board: the pre-resolve product title')

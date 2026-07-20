@@ -17,6 +17,24 @@ scenarios:
       one full-page redirect to `/projects`, where the global management page renders. Zero loss = the
       scoped rail, the URL, and the visible page never disagree while project management has one home.
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js]
+  - name: resolved-identity-head
+    tags: [frontend-e2e, desktop]
+    description: >
+      Boot the dashboard cold on #/sessions in a real browser while sampling every document.title and
+      favicon-link href write frame-by-frame (rAF + head MutationObserver), across: scoped custom-icon,
+      GLOBAL custom-icon (direct serve — no catalog), scoped default-icon, and with /api/graph delayed
+      2.5-3s. Then cycle graph → sessions → evals → issues with a lazy page chunk delayed 1.5s, watching
+      the main area, the head, and history.length; audit what element each rail entry is.
+    expected: >
+      The head carries ONLY resolved identity: no frame ever shows the default mark or the raw project id
+      as a placeholder — a cold boot goes straight from the static boot document (empty icon href, bare
+      SpexCode title) to the real title + icon in one write, at ANY board/catalog latency. Hash navigation
+      and lazy/loading intermediates never rewrite the favicon href or unmount the shell; a page whose
+      chunk is still arriving shows the shared in-pane loading state, never a blank main area, with the
+      same pane for all four pages (warm pages display-toggle). Every rail entry is a real anchor
+      (href = its page's hash address). Zero loss = the tab's identity never flashes through the SpexCode
+      default on entering Sessions (or any page), and the four routes share one navigation transaction.
+    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SideBar.jsx]
   - name: global-alt-vocabulary
     tags: [frontend-e2e, desktop]
     description: >

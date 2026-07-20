@@ -61,7 +61,7 @@ async function main() {
 
   if (fffd !== 0) { console.error(`FAIL: ${fffd} U+FFFD replacement chars — UTF-8 was shattered`); process.exit(1) }
   if (hits < REPEATS * 0.9) { console.error(`FAIL: only ${hits} intact payload copies, expected ~${REPEATS}`); process.exit(1) }
-  console.log('PASS: 0 U+FFFD, payload intact across a real -CC flood')
+  console.log('PASS: 0 U+FFFD, payload intact across the isolated native-client helper')
   process.exit(0)
 }
 

@@ -25,7 +25,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, setViewerVisible, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 
@@ -462,11 +462,10 @@ app.post('/api/sessions/:id/merge', async (c) => {
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// one WS over a shared tmux control-mode client (pty-bridge): server→client = raw pane bytes (binary); the
+// one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary); the
 // view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or
-// {t:'wheel',…}. The bridge resolves the wheel against tmux pane state: copy-mode repaint for normal panes,
-// SGR mouse report injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent
-// frame and live bytes arrive as events.
+// {t:'wheel',…}. Visibility changes size ownership without detaching; tmux itself resolves wheel input between copy-mode and a
+// mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
 // resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
@@ -481,12 +480,13 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   // first frame is drawn at the true size. Absent/garbage → undefined, and the bridge falls back to prewarm.
   const qc = Number(c.req.query('cols')), qr = Number(c.req.query('rows'))
   const initialSize = qc > 0 && qr > 0 ? { cols: qc, rows: qr } : undefined
+  const initialVisible = c.req.query('visible') !== '0'
   let viewer: Viewer | null = null
   let ping: ReturnType<typeof setInterval> | undefined
   return {
     onOpen(_evt, ws) {
       viewer = { send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } } }
-      if (!attachViewer(id, viewer, initialSize)) { try { ws.close() } catch { /* already closed */ } return }
+      if (!attachViewer(id, viewer, initialSize, initialVisible)) { try { ws.close() } catch { /* already closed */ } return }
       ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
     },
     onMessage(evt) {
@@ -497,7 +497,8 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
       if (typeof data === 'string') {
         try {
           const m = JSON.parse(data)
-          if (m?.t === 'resize') resizeBridge(id, Number(m.cols), Number(m.rows), !!m.full)
+          if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
+          else if (m?.t === 'visible') setViewerVisible(id, viewer, !!m.visible)
           else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
         } catch { /* ignore */ }
       }
@@ -571,7 +572,7 @@ const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' })
 installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
-superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant
+superviseBridges()   // restore warm helpers after failure; their viewer subscriptions survive helper replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)

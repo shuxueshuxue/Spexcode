@@ -1,236 +1,101 @@
 ---
 scenarios:
-  - name: resize-repaint-is-one-frame
+  - name: resize-has-one-compositor
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
-      Through the running dashboard in a real browser, connect one viewer to a scratch tmux pane whose
-      program handles SIGWINCH by clearing and rewriting a terminal-sized grid in one large output burst
-      (large enough for tmux control mode to split it into several `%output` events). Record the whole run
-      as video and capture the viewer's raw WebSocket payload order. Open the session terminal, let its first
-      frame settle, then resize the browser so SessionTerm sends a real `{t:'resize'}` through the socket.
-      Classify a reconstructed frame by its pen-reset + home/viewport-clear header and keep recording until
-      a later ordinary live-tail marker arrives. File with `spex eval add live-view --scenario
-      resize-repaint-is-one-frame --pass --video <webm> --timeline <json>`.
+      Through the running dashboard in a real browser, view a scratch tmux session whose program responds
+      to SIGWINCH after a deliberate delay: first issue an unwrapped full clear, wait again, then write a
+      terminal-sized final grid inside DEC synchronized-output markers. Record the WebSocket bytes, browser
+      resize/geometry timeline, whole-session video, and every painted browser frame while shrinking the
+      terminal from a large viewport to a small one.
     expected: >-
-      After each resize request, the FIRST pane payload visible to the browser is ONE reconstructed frame at
-      the converged size; ZERO raw SIGWINCH redraw chunks precede it. The recording therefore shows the new
-      terminal grid appear coherently, never a top-to-bottom terminal-wide scroll followed by a corrective
-      repaint. A later ordinary live-tail marker still arrives after the frame, proving repaint ownership is
-      bounded rather than muting the pane. The browser viewport itself stays at scrollTop=0 with no scroll
-      event: this is atomic terminal repaint, not a hidden browser-scroll workaround.
-  - name: unwatched-warm-bridge-stays-silent
+      The post-resize socket stream is the native tmux client rendition: it contains no SpexCode
+      reconstructed-frame header and no application ED2/scroll-clear exposed as a standalone browser update.
+      For a pane that demonstrated synchronized output, the next post-resize BSU/ESU is the measured barrier
+      and the socket resumes with one final native-client refresh. No
+      captured browser frame is blank or partially swept top-to-bottom. The old buffer may reflow before
+      tmux's new grid arrives and the deliberately delayed application may later update content, but there
+      is no synthetic capture state between them and no full-screen flash.
+  - name: unsynchronized-resize-is-bounded
     tags: [backend-api]
     description: >-
-      Measure that the bridge supervisor does NO periodic work for an unwatched session. Through the real
-      product surface (the dashboard viewing session A, CDP capturing every WebSocket frame — or the
-      equivalent attachViewer/resizeBridge API drive), hold a sized viewer on session A for several
-      supervisor ticks (≥40s) while another live-but-quiet session B keeps a hidden (never-sized)
-      subscriber. Count the frames B's socket receives and classify them: reconstructed frames carry the
-      frame header signature (pen reset + viewport clear, `\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J…`); genuine
-      live `%output` does not. Also confirm the keep-alive ping still arrives on cadence, and that tmux's
-      window size for B is not being asserted each tick (its geometry stays wherever the last sized viewer
-      left it). File with `spex eval add live-view --scenario unwatched-warm-bridge-stays-silent --result <txt>`.
+      Resize a scratch TUI that never emits DEC 2026, deliberately clears, waits 120 ms, draws its full final
+      grid, then resumes ordinary output. Capture exact viewer chunks and elapsed resize time.
     expected: >-
-      B's hidden socket receives ZERO supervisor-driven reconstructed frames across the ticks — no per-tick
-      capture, no per-tick broadcast, no refresh-client assert (the old warm-hold path, measured at one
-      identical ~3.4KB full frame every reconcile tick per unwatched session while anyone voted, is gone;
-      its threat model — windows drifting while unwatched — is already closed by bare-attach-asserts-nothing
-      plus neutral clients yielding). The only idle traffic on B's socket is the 10s keep-alive ping;
-      genuine `%output` from B's own TUI still flows through untouched, and event-driven repaints
-      (re-bind, mode change) remain intact.
-  - name: foreign-instance-size-neutrality
+      The intermediate clear never reaches the viewer. A 160 ms quiescence window or 400 ms ceiling requests
+      one complete native tmux refresh containing the final grid, after which ordinary output resumes. The
+      compatibility path remains bounded and is replaced by the semantic event path once a pane emits DEC 2026.
+  - name: warm-tab-switch-paints-immediately
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Let hidden live-session terminals prewarm through the real dashboard, then record every browser paint
+      while switching into one session and repeatedly switching between two sessions.
+    expected: >-
+      The first visible terminal paint already contains the warm xterm buffer at the fitted panel size. No
+      empty renderer, undersized first layout, renderer replacement, socket reconnect, or tmux reattach
+      appears in the switch timeline. Hidden terminal layers retain the panel's measurable geometry while
+      remaining visually hidden and non-interactive.
+  - name: synchronized-output-is-atomic
+    tags: [frontend-e2e, desktop]
+    description: >-
+      In a real browser terminal, send a DEC 2026 synchronized-output transaction containing a clear and a
+      large multi-chunk redraw with delays between chunks. Observe xterm render events and record every
+      painted frame from begin through end.
+    expected: >-
+      No intermediate clear or partial grid is painted while the transaction is open; one complete final
+      grid appears when it closes. A missing end marker fails open on the terminal engine's bounded safety
+      timeout rather than freezing the renderer forever.
+  - name: hidden-helper-stays-warm-and-size-neutral
     tags: [backend-api]
     description: >-
-      Measure the multi-instance shrink that hit the live deploy: a second backend instance (a worktree's
-      test `spex serve`) shares the tmux socket, its dashboard's board-load opens HIDDEN (never-sized)
-      viewers on every session, and any layout event makes its bridges repaint and assert their own cold
-      size — collapsing the terminal a human is watching on the main instance to 120x40, unreclaimable
-      (the main bridge's counter-assert is a same-client-size no-op). Run
-      `SPEXCODE_TMUX=foreign-$$ npx tsx test/pty-bridge.foreign-instance.ts` (from spec-cli/): TWO real
-      bridge instances in separate processes on one scratch socket — instance A with a sized viewer
-      (221x63), instance B with only a hidden viewer at the cold default — then two layout events, and
-      read the window size tmux reports. File with `spex yatsu eval live-view --scenario
-      foreign-instance-size-neutrality --result <txt>`.
+      Open hidden terminal sockets for several live sessions, let their panes produce output, then make one
+      session visible and switch repeatedly between sessions while inspecting helper identity, tmux client
+      flags, pane geometry, and time to first already-buffered pixels.
     expected: >-
-      The watched window stays at the sized viewer's size (the script's final resize, 219x63) — a bridge
-      whose viewers never sized it is size-NEUTRAL: its client carries tmux's ignore-size flag, so its
-      refresh-client -C cannot move a window while a sized viewer votes, and the foreign instance's client
-      list shows the ignore-size flag. The bug path (every bridge client votes, so a viewer-less foreign
-      bridge's cold-size assert wins and sticks) must be absent.
-  - name: set-size-to-first-frame-is-event-driven
+      Every live socket keeps the same helper and native tmux client across tab switches, and hidden xterm
+      buffers continue receiving output. Switching shows terminal content immediately with no reattach or
+      pane replay. With no prior size owner, the first hidden helper pre-sizes the pane at final panel geometry;
+      a later hidden helper detects that owner, carries ignore-size, and cannot change its watched geometry.
+  - name: helper-isolates-pty-masters
     tags: [backend-api]
     description: >-
-      Measure the "visible → full screen" gap: how long from setting a size to the viewer receiving the
-      coherent full frame, and whether it converges on the asked size. On a tmux socket, warm a bridge
-      through the real API (attachViewer at a first size), then — with the bridge already up (the warm
-      case, which is the real path when a hidden pane becomes visible) — call resizeBridge to a new size
-      (e.g. 100×30) and time it to the viewer's next frame. Confirm (1) that latency is event-level (a few
-      ms, well under the ~320ms the old pty-resize + geometry-poll path cost), (2) tmux's window converged
-      to exactly the asked size (the frame is drawn on the settled geometry, no half-frame), and (3) no
-      polling is involved — the frame is driven by tmux's %layout-change + capture-pane reply, not a
-      geometry read loop. File with `spex yatsu eval live-view --scenario
-      set-size-to-first-frame-is-event-driven --result <txt>`.
+      Create four visible bridges on one scratch tmux socket through the real bridge API, inspect each
+      helper and tmux client fd table, kill one helper, and continue producing output on the other sessions.
     expected: >-
-      A warm resize produces the full frame in ~5–20ms (event-driven: refresh-client -C sets the size,
-      %layout-change confirms convergence, a bounded capture-pane seeds the frame), an order of magnitude
-      under the ~320ms polling path it replaces. tmux's window equals the asked size when the frame lands,
-      so the screen is coherent at the converged geometry — never a mid-flight half-frame. The frame is one
-      clear+home + the real pane rows (with escapes/UTF-8 intact), and live pane output continues to arrive
-      as %output events after it.
-  - name: attach-seed-carries-pre-attach-history
+      The backend owns no PTY master, every helper owns only its own master, and tmux clients inherit no
+      sibling master. Pipe-only barrier observers own no PTY. Killing one helper detaches only its session's
+      raw client/observer pair; the other panes and the shared tmux server remain responsive.
+  - name: attach-and-rebind-replay-current-screen
     tags: [backend-api]
     description: >-
-      Measure that the wheel can reach output from BEFORE the client attached (the "wheel scrolls real
-      history" contract, in control mode). On a tmux socket, print far more lines than the visible screen
-      holds (e.g. 1200 lines into a 24-row pane) so most scroll into tmux history BEFORE any bridge exists.
-      Then attach a viewer through the real API (attachViewer with a size) and inspect its first frame: it
-      must carry the visible tmux view without seeding a browser-owned history buffer. Send wheel-up frames
-      through the same WebSocket/API path the dashboard uses
-      and confirm tmux enters copy-mode, `#{scroll_position}` increases, and the viewer receives repainted
-      older rows from the copy-mode viewport reconstructed from tmux's own scroll position, not the bottom
-      pane screen that plain `capture-pane` would return. While still scrolled in copy-mode, produce fresh
-      pane output and confirm it does not paint over that frozen viewport; mode repaint, not `%output`, owns
-      the screen until copy-mode exits. Then send wheel-down frames and confirm the copy-mode view moves
-      back toward the bottom. Finally detach fully and re-attach (a fresh bridge) and confirm history is still
-      reachable through the same tmux-owned wheel path. File with `spex yatsu
-      eval live-view --scenario attach-seed-carries-pre-attach-history --result <txt>`.
+      Produce normal-screen history and a live alternate-screen display before any viewer exists. Attach a
+      visible viewer, add a second viewer at the same size, then kill and restore the shared helper while
+      both sockets stay open.
     expected: >-
-      Wheel-up on a NORMAL-screen pane enters tmux copy-mode and increases `#{scroll_position}` while the
-      viewer receives a coherent repaint of older tmux history from the same scroll window tmux reports;
-      live pane output is held back while that copy-mode viewport is active, and wheel-down moves that same tmux view back
-      toward the bottom. The browser does not expose or scroll an independent xterm history buffer, and no
-      mouse bytes are littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports
-      still gets forwarded wheel reports, so the app scrolls itself.
-  - name: scroll-osc8-hyperlink-no-underline-leak
+      Native attach/refresh supplies each blank xterm with the current complete tmux screen through the same
+      raw stream; helper restoration updates both existing subscriptions without a socket reconnect,
+      capture splice, doubled bottom UI, or stale cursor-relative redraw.
+  - name: wheel-uses-real-tmux-client
     tags: [backend-api]
     description: >-
-      Measure the "whole screen goes underlined when I scroll" regression through the real bridge surface. On
-      a tmux socket, print a line carrying an OSC 8 hyperlink whose closing ST lands at the row's end
-      (`printf '\033]8;;https://example/x\033\\LINK\033]8;;\033\\\n'` — the same shape Claude Code emits for a
-      URL, which xterm renders underlined), then push it up into tmux history behind filler. Attach a viewer
-      through the real API (attachViewer) and send wheel-up frames (forwardWheel, the dashboard's exact path)
-      until copy-mode repaints the link row from history. Capture the bytes the bridge broadcasts and inspect
-      every OSC 8 close (`\x1b]8;;`): each must be properly ST/BEL terminated, never a bare `\x1b]8;;` cut off
-      at a line boundary. File with `spex yatsu eval live-view --scenario
-      scroll-osc8-hyperlink-no-underline-leak --result <txt>`.
+      Through the dashboard wheel path, scroll a normal shell with pre-attach history and a full-screen TUI
+      that owns SGR mouse input, then return the shell to its live bottom.
     expected: >-
-      The repainted copy-mode frame carries the hyperlink's close with its `\x1b\\` (ST) intact — ZERO
-      truncated closes — so xterm terminates the link and the underline stays on the link text alone, not the
-      rest of the screen. The bug path (running capture-reply BODY lines through the DCS-exit strip, which eats
-      a trailing `\x1b\\`) must be absent: capture bodies are pushed byte-verbatim, and each frame additionally
-      leads with an SGR reset + OSC 8 close so no open-hyperlink state survives the viewport clear.
-  - name: scroll-updown-no-doubled-redraw
-    tags: [backend-api]
-    description: >-
-      Measure the "bottom garbles when I scroll up then back down" regression through the real bridge. Run an
-      Ink-style redrawer in a tmux pane that reproduces the real pane shape — the cursor parked on the input
-      line ABOVE trailing content (a separator + hint), redrawing each frame RELATIVE to that parked cursor
-      (up to the frame top, clear to end, rewrite). Attach a viewer through the real API (attachViewer), send
-      wheel-up frames (forwardWheel) to enter copy-mode and freeze while the pane keeps advancing, then
-      wheel-down past the bottom to exit copy-mode and resume live output onto the re-seed. Replay the bytes the
-      bridge broadcast through a small VT emulator and count how many copies of the frame's single marker line
-      survive on the final screen. File with `spex yatsu eval live-view --scenario
-      scroll-updown-no-doubled-redraw --result <txt>`.
-    expected: >-
-      Exactly ONE copy of the frame's marker on the final screen — the copy-mode-exit re-seed restored the
-      pane's real cursor position (`\x1b[y;xH` from cursor_x/cursor_y), so the TUI's next cursor-relative redraw
-      erased its previous frame from the right row. The bug path (a re-seed that leaves the cursor at the body's
-      end) doubles the frame — the old and new bottom UI stacked — and must be absent.
-  - name: reconnect-reseed-no-doubled-redraw
-    tags: [backend-api]
-    description: >-
-      Measure the SAME doubled-bottom glitch as scroll-updown, but from the trigger a fresh session hits on a
-      deploy WITHOUT scrolling: a reconnect / refit re-seed. Run the Ink-style relative redrawer (cursor parked
-      above trailing content) in a tmux pane, attach a viewer through the real API, and — while it is mid-render
-      — force a bare full-frame re-seed at the SAME size (resizeBridge(cols, rows, full=true), which is what a
-      viewer reconnect / unsolicited layout-change drives). The pane gets no SIGWINCH, so the TUI keeps doing
-      cursor-relative redraws onto the re-seed. Replay the broadcast through the VT emulator and count copies of
-      the frame's single marker. File with `spex yatsu eval live-view --scenario
-      reconnect-reseed-no-doubled-redraw --result <txt>`.
-    expected: >-
-      Exactly ONE copy of the marker — the re-seed restored the pane's real cursor, so the next relative redraw
-      erased its previous frame correctly even with no scroll and no resize. The bug path (a re-seed that leaves
-      the cursor at the body's end) doubles the frame, which is why every fresh session on the deploy garbled at
-      the bottom; it must be absent.
+      tmux enters and renders its own copy-mode for the shell, including history produced before attach,
+      while the TUI receives its own wheel events. The browser has no independent scrollback or scrollbar,
+      and no pane-mode capture/reconstruction path is involved.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-
-      Measure that wide characters survive the live %output byte path (the regression that shattered the
-      display). On a tmux socket, attach a control-mode bridge through the real API, then flood the pane with
-      MANY lines of CJK + box-drawing + emoji (e.g. `星★号😀笑脸└─┘中文🀄🎉αβγ` ×thousands) — enough bytes that
-      the multi-byte characters straddle the transport's read boundaries, the exact condition that used to
-      corrupt them. Capture the bytes the bridge broadcasts to a viewer, decode as UTF-8, and count U+FFFD +
-      check the payload survived. File with `spex yatsu eval live-view --scenario
-      output-preserves-utf8-wide-chars --result <txt>`.
+      Flood a real visible bridge with CJK, box-drawing, emoji, and Greek text across many PTY reads, capture
+      the exact viewer output, and decode it as UTF-8.
     expected: >-
-      The broadcast bytes decode to ZERO U+FFFD and every flooded payload copy is intact — because the bridge
-      parses the stream as BYTES end-to-end (the client's stdout gives raw Buffers, lines split on the newline
-      byte, %output un-escaped at the byte level and forwarded raw, no string round-trip). A path that decodes
-      transport chunks to a string first shatters any wide char split across two reads into a U+FFFD; that
-      path must be absent.
-  - name: bridge-client-holds-only-its-stdio
-    tags: [backend-api]
-    description: >-
-      Measure the fd inheritance that wedged the whole tmux server and blacked out every dashboard terminal
-      at once. Run `SPEXCODE_TMUX=fdleak-$$ npx tsx test/pty-bridge.fd-leak.ts` (from spec-cli/): drive the
-      REAL bridge (attachViewer, the dashboard's path) for four sessions on one scratch socket, in order —
-      the ordering is what builds the staircase — then read each spawned tmux control client's own /proc fd
-      table and count its pty masters and the fds it INHERITED from the backend process (fd >2 aliasing an
-      fd the backend holds; tmux's own post-exec fds — its server socket, its self-pipe — are legitimately
-      its own and are not leaks). Linux-only: /proc is the measurement surface and the sole affected
-      platform. File with `spex eval add live-view --scenario bridge-client-holds-only-its-stdio
-      --result <txt>`.
-    expected: >-
-      Every bridge client holds ZERO inherited pty masters and ZERO fds inherited from the backend. The bug
-      path must be absent: node-pty's Linux forkpty(3) returns a master with no FD_CLOEXEC and execs without
-      closing inherited fds, so client N inherited the masters of clients 0..N-1 (a measured staircase:
-      1, 2, 3 masters). That is what made a killed bridge's pts outlive it inside a sibling — no EIO, so tmux
-      never dropped the dead client, its tty write buffer filled, and the tmux SERVER blocked forever in one
-      write(2), freezing every bridge on the socket. A pipe-transported control client (`tmux -C` over
-      child_process stdio) inherits nothing, so the wedge has no mechanism.
-  - name: hidden-connect-defers-undersized-first-paint
-    tags: [backend-api]
-    description: >-
-      Measure the undersized first frame a hidden (0×0) connect used to receive. On a tmux socket, warm a
-      bridge through the real API (attachViewer spawns the shared client, resizeBridge sets a "prewarm"
-      size). Then attach a SECOND viewer with NO initial size — the warm-and-hidden dashboard connect — via
-      attachViewer, and count the pane bytes it receives. Probe three things: (1) over ~300ms BEFORE any
-      resize it must receive ZERO frames — the first paint is driven PURELY by the first resize, with no timer
-      fallback that would paint on its own; (2) send the client's first resize (resizeBridge to the real
-      visible size, e.g. 214×57) and confirm it now receives the deferred first frame and tmux's window
-      converges to that size; (3) a SEPARATE viewer that never resizes receives NOTHING — fail-loud, no timer,
-      because a pane no one makes visible is a pane no one looks at and so needs no frame. File with `spex
-      yatsu eval live-view --scenario hidden-connect-defers-undersized-first-paint --result <txt>`.
-    expected: >-
-      The hidden, no-size viewer receives NO pane bytes until its first resize — the server draws no
-      undersized prewarm frame into a still-hidden buffer (first-visible, not first-connect), and no timer
-      ever paints one either. Its first resize draws the one first frame at the real visible size (the window
-      converges to it; the viewer receives bytes). A viewer that never resizes stays blank forever — the
-      first-paint path holds zero timers, so a frame arrives only as the pure consequence of a resize event.
+      The stream contains zero replacement characters and the payload copies remain intact across helper
+      and WebSocket boundaries.
 ---
-# eval.md — live-view
+# eval.md - live-view
 
-The live terminal's product surface is measured through the **real bridge API** the dashboard drives
-(`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —
-not an internal probe. The losses, about a pane behaving wrong the moment a human opens it:
-
-- **unwatched idle cost** — the supervisor doing periodic work for sessions nobody is looking at. Zero
-  loss is an unwatched warm bridge that is completely silent (no per-tick assert/capture/broadcast; a
-  hidden pane's idle traffic is the keep-alive ping alone), with window geometry owned by sized viewers
-  and simply kept between them.
-- **undersized first frame** — a warm pane connects while still hidden (0×0), so a guessed-size first
-  frame would land short and then snap to full when the human looks. Zero loss is the server **deferring**
-  that first paint **purely** to the client's first resize (drawn at the real visible size), with **no timer
-  fallback** — a pane that never resizes is one no one makes visible, so it needs no frame, keeping the
-  first-paint path event-driven and zero-timer just like the resize convergence.
-- **visible → full-screen latency** — the gap from a pane becoming visible (its size set) to its coherent
-  full frame. The control-mode boundary makes this **event-driven and timer-free** — `refresh-client -C` sets
-  the size, the guaranteed `%layout-change` confirms convergence, a bounded `capture-pane` seeds the frame — so
-  zero loss is a few ms on the converged geometry, an order of magnitude under the ~320ms the old poll cost.
-- **wide-character integrity** — `%output` passes high bytes through raw, so decoding them as anything but
-  UTF-8 truncates every CJK / box-drawing / emoji character to one wrong byte (the regression that shattered
-  the display). Zero loss is a wide-character line round-tripping through the real bridge byte-for-byte.
-- **history reach** — with control mode streaming only post-attach `%output`, the wheel would reach nothing
-  from before the client attached. Zero loss is the pane's real history reachable through tmux itself:
-  a normal-screen pane scrolls tmux copy-mode and repaints that view; a full-screen TUI receives forwarded
-  wheel mouse reports so the app scrolls itself.
+The loss signal is visual first. The resize scenario is accepted only from the real dashboard with video,
+per-frame images or hashes, and a WebSocket/geometry timeline; network ordering without pixels is not proof
+of a non-flashing terminal. Backend probes support the architectural invariants: one compositor, isolated
+PTY ownership, warm geometry ownership, real tmux navigation, durable subscriptions, and UTF-8 integrity.

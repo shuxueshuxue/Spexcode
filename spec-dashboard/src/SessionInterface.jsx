@@ -863,13 +863,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </div>
             </div>
           )}
-          {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. The compact toolbar carries one real Terminal tab,
+          {/* the session pane stays LAID OUT under the New tab so warm terminals keep their final geometry;
+              visibility hides it without a 0x0 renderer. The compact toolbar carries one real Terminal tab,
               one native Eval door, and registry-filtered icon tools. Identity/state already lives in the
               selected sidebar row and is deliberately not repeated here. */}
           <div
             className="si-session-wrap"
-            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            aria-hidden={active === 'new'}
+            style={{
+              display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0,
+              position: active === 'new' ? 'absolute' : 'relative',
+              inset: active === 'new' ? 0 : undefined,
+              visibility: active === 'new' ? 'hidden' : 'visible',
+              pointerEvents: active === 'new' ? 'none' : 'auto',
+            }}
           >
               <header className="si-tabbar" aria-label={t('session.toolbarLabel')}>
                 <div className="si-surface">
@@ -932,8 +939,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               >
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
                 {[...opened].map((id) => (
-                  <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                    {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
+                  <div key={id} className="si-term-layer" style={{
+                    position: 'absolute', inset: 0,
+                    visibility: id === active ? 'visible' : 'hidden',
+                    pointerEvents: id === active ? 'auto' : 'none',
+                  }}>
                     <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
                   </div>
                 ))}

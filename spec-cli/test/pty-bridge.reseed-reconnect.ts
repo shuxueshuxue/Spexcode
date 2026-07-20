@@ -1,15 +1,11 @@
-// Companion to pty-bridge.scroll-redraw.ts, proving the cursor-restore fix is TRIGGER-INDEPENDENT: the bottom
-// doubles on ANY repaint re-seed that drops the cursor, not just copy-mode exit. A fresh session on the deploy
-// hits this without scrolling — a reconnect (SSE/socket drop → the viewer reopens → a FULL re-seed) or an
-// unsolicited layout-change re-seeds the grid while the inline TUI keeps doing cursor-RELATIVE redraws (no
-// SIGWINCH, so it never full-redraws to self-correct). This drives that path through the real bridge:
-// resizeBridge(SAME size, full) forces a bare full-frame re-seed mid-render, then a live relative redraw lands.
+// Companion to pty-bridge.scroll-redraw.ts. Kill the isolated helper while the viewer subscription stays
+// open, let the bridge restore a fresh native client, then prove cursor-relative redraws remain coherent.
 //
 // Run (from spec-cli/): SPEXCODE_TMUX=reconnect-<pid> npx tsx test/pty-bridge.reseed-reconnect.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFileSync } from 'node:fs'
-import { attachViewer, detachViewer, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { attachViewer, detachViewer, superviseBridges, type Viewer } from '../src/pty-bridge.js'
 import { emulate } from './vt-emulate.js'
 
 const pexec = promisify(execFile)
@@ -19,6 +15,18 @@ const COLS = 80, ROWS = 16
 const MARKER = 'MARKER-SENTINEL'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 async function tmux(...a: string[]) { return pexec('tmux', ['-L', SOCK, ...a]) }
+
+function helperPid(): number | undefined {
+  const children = readFileSync(`/proc/${process.pid}/task/${process.pid}/children`, 'utf8').trim()
+  for (const raw of children.split(/\s+/)) {
+    const pid = Number(raw)
+    if (!pid) continue
+    try {
+      if (readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('pty-helper.ts')) return pid
+    } catch { /* child raced away */ }
+  }
+  return undefined
+}
 
 // same Ink-style redrawer as the scroll proof: cursor parked ABOVE trailing content, each frame erased
 // relative to that parked cursor.
@@ -44,15 +52,16 @@ async function main() {
 
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (d) => { chunks.push(Buffer.from(d)) } }
+  superviseBridges(250)
   if (!attachViewer(SESSION, viewer, { cols: COLS, rows: ROWS })) throw new Error('attachViewer failed')
   await sleep(500)
   await tmux('send-keys', '-t', SESSION, '-l', `node ${progFile}`); await tmux('send-keys', '-t', SESSION, 'Enter')
   await sleep(1500)   // several live redraws
 
-  // a reconnect/refit re-seed WITHOUT resizing the pane: same size, full frame. The TUI gets no SIGWINCH, so it
-  // keeps doing relative redraws onto the re-seeded screen — the exact condition that doubles the bottom.
-  resizeBridge(SESSION, COLS, ROWS, true)
-  await sleep(1500)   // let the relative redraws land on the re-seed
+  const helper = helperPid()
+  if (!helper) throw new Error('helper did not start')
+  process.kill(helper, 'SIGKILL')
+  await sleep(2500)
 
   detachViewer(SESSION, viewer)
   await tmux('kill-session', '-t', SESSION).catch(() => {})

@@ -2,7 +2,7 @@
 title: review-chrome
 status: active
 hue: 205
-desc: The ONE shared page chrome both review surfaces render — GitHub ListView query/section/facet/overflow chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
+desc: The ONE shared page chrome both review surfaces render — GitHub ListView query/section/facet/secondary-filter chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
 code:
   - spec-dashboard/src/ReviewShell.jsx#ListPage
   - spec-dashboard/src/ReviewShell.jsx#DetailShell
@@ -45,24 +45,32 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   conflated, and a detail address carries only the scope token. The default view is the bare address, any
   other state exactly `?q=<raw text>`; Back restores text and results level by level.
 - **`ListPage` is the measured GitHub ListView skeleton.** A quiet title/action and the 32px query precede
-  ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and REAL
-  low-frequency/width-displaced facets in overflow — the low-cardinality set only (state, verdict,
-  freshness, evidence, store, source-session presence); tab counts are computed under the REST of the
-  query. No real options means no fake control, and an ACTIVE value whose menu option vanished keeps a
-  cheap All off-switch (the visible text is the canonical release).
+  ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and ONE
+  semantic secondary **Filters** trigger for REAL low-frequency/width-displaced facets — the
+  low-cardinality set only (state, verdict, freshness, evidence, store, source-session presence); this
+  menu never houses commands or non-filter actions. The trigger is the same visual family as a facet
+  button: the icon system's filter/funnel glyph, localized Filters text, and chevron-down — never a kebab,
+  ellipsis, or "More actions" affordance. A stable badge counts ACTIVE filter GROUPS currently housed in
+  that menu (not matching rows): desktop excludes a facet still visible beside the trigger, while 390px
+  includes every displaced group; zero has no badge. Its accessible name includes the same active count.
+  Tab counts are computed under the REST of the query. No real options means no fake control, and an
+  ACTIVE value whose menu option vanished keeps a cheap All off-switch (the visible text is the canonical
+  release).
   Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
   as a named Fail/Pass pressed-button quick-filter group because verdict is non-exhaustive; neither button
   is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
   SELECTION releases like every builder — into the query input, its trigger keeping focus only when the
-  pick changed nothing — and outside click keeps clicked focus. Each overflow facet is its own named radio
-  group inside the menu,
+  pick changed nothing — and outside click keeps clicked focus. Each secondary facet is its own named
+  radio group inside the menu,
   never one mixed set with several checked items. Menus use the ONE LIFO Escape stack. The named horizontal
   tablist exposes one roving tab stop; tabs control one labelled results panel and only Left/Right/Home/End
   switch it, leaving Up/Down to normal page scrolling — and an arrow activation IS a builder pick, so it
   too releases focus into the query input (the roving stop is where Tab-return resumes). Every query,
   section, or facet action PUSHES canonical
   hash state; Back replays it. At 390px the query input keeps its full width and highlight; displaced facets
-  join the one functional overflow.
+  join the one secondary Filters menu without widening the page. A low-cardinality facet deliberately kept
+  direct may condense its visible face to the selected value while its accessible name stays fully qualified;
+  section, direct-facet, and secondary-filter controls never overlap even when both filters are active.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
   text into that shared Issue/Eval engine and render its data-derived options; [[work-pane]] and
   [[eval-tab]] project the same adapters into one extremely compact embedded control with popup-local

@@ -5,7 +5,7 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/session.js]
     description: >-
       Run the dashboard with sessions on the board behind some issues and eval readings. On each
-      ListView open the overflow's Source session group, pick Present and then Missing, compare rows
+      ListView open the secondary Filters trigger's Source session group, pick Present and then Missing, compare rows
       against the board's session ids, and read the visible query text and hash after each pick; clear
       with All. Repeat at 390px and after combining another token.
     expected: >-
@@ -15,13 +15,14 @@ scenarios:
       still resolves to a board session; Evals retain exactly readings whose filer does — the ONE
       `sessionPresent` membership join, any zone, no liveness judgment and no live/online/offline
       wording anywhere on the facet. present|missing partition every entry. Back replays each state;
-      the group stays usable in the mobile kebab with no horizontal overflow.
+      the group stays usable in the mobile secondary Filters menu with no horizontal overflow, and the
+      trigger's active count reads one while the token is selected.
   - name: presence-facet-never-strands
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/IssuesPage.jsx]
     description: >-
       With `session:present` active, reduce the matching count to zero (combine tokens or use a board
-      with no present sources). Reopen the overflow and clear the filter; also delete the token from the
+      with no present sources). Reopen the secondary Filters menu and clear the filter; also delete the token from the
       query text directly. Repeat on both pages.
     expected: >-
       At zero results the list shows the honest filtered-empty face while the Source session group stays
@@ -31,5 +32,4 @@ scenarios:
 # measuring live-session-filter
 
 YATU through the real ListViews against the real board: compare visible rows to /api/sessions membership,
-drive the real overflow menu, the visible query text, and browser history; repeat after data contracts.
-
+drive the real secondary Filters menu, the visible query text, and browser history; repeat after data contracts.

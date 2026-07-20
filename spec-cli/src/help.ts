@@ -82,13 +82,14 @@ repair, instead of you diffing materialized files by hand.`,
     see: 'spex materialize (re-materialize the artifacts doctor checks)',
   },
   uninstall: {
-    line: 'uninstall [dir]       surgical inverse of init — removes generated artifacts, keeps your .spec  [--hooks]',
+    line: 'uninstall [dir]       remove all derived artifacts + local state; preserve tracked intent  [--hooks]',
     body: `Usage: spex uninstall [dir=cwd] [--hooks]
 
-Removes every SpexCode-GENERATED artifact (harness shims · contract blocks · trust entries ·
-exclude/ignore blocks · global store · plugin bundle) and never your .spec/.plugins data or your own
-prose. Git hooks are preserved unless --hooks.`,
-    see: 'spex init (re-adopt later — your .spec survives)',
+Removes all SpexCode-derived wiring and project-local state: contract blocks, harness shims,
+generated skills/agents, plugin bundles, trust/filter/exclude entries, and the global per-project
+store. Your tracked intent (.spec including .plugins, plus spexcode.json) and surrounding user prose
+are preserved. Git hooks remain unless --hooks; that flag removes only unmodified canonical copies.`,
+    see: 'spex init (re-adopt later — your tracked intent survives)',
   },
   serve: {
     line: 'serve [api|ui]        api (default) = the backend :8787 · ui = the dashboard :5173 on top of it',

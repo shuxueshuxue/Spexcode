@@ -221,6 +221,8 @@ const evalFixture = {
 
 async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', evalMode = 'mixed' }) {
   let evalReads = 0
+  let lastEvalReadAt = 0
+  let evalRefreshed = false
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
@@ -244,13 +246,16 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
   await page.route(`**/api/sessions/${SESSION}/evals`, (route) => {
+    const now = Date.now()
+    if (lastEvalReadAt && now - lastEvalReadAt > 1_000) evalRefreshed = true
+    lastEvalReadAt = now
     evalReads++
     if (evalMode === 'error') return route.fulfill({ status: 503, body: 'fixture unavailable' })
     const refreshModel = {
       nodes: [{
         id: 'session-console', hue: 280,
         scenarios: [{ name: 'refresh-case', expected: 'measured' }],
-        evals: evalReads > 1 ? [{ scenario: 'refresh-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true }] : [],
+        evals: evalRefreshed ? [{ scenario: 'refresh-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true }] : [],
       }],
       gates: [],
     }

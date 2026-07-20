@@ -67,7 +67,7 @@ function PagePane({ active, warm = false, className, children }) {
   )
 }
 
-function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues, catalog }) {
+function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues, catalog, boardLive }) {
   const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
@@ -639,6 +639,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
           onOpenSearch={() => setSearch('sessions')}
+          boardLive={boardLive}
           reload={reload}
         />
       </PagePane>

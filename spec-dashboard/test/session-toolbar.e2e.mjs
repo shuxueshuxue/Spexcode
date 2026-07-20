@@ -138,9 +138,9 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   // The parity scenario names Claude Code's /exit specifically. Feed the backend's real Claude command
   // catalog to this browser fixture even when the live proof session itself was launched through Codex.
   await page.route('**/api/slash-commands*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(claudeSlash) }))
-  const timeline = []
+  const timeline = [{ atMs: 0, kind: 'narrate', label: '▶ session-summary-coherence · coherent session toolbar' }]
   const started = Date.now()
-  const step = (name) => timeline.push({ at: Date.now() - started, step: name })
+  const step = (name) => timeline.push({ atMs: Date.now() - started, kind: 'frame', label: `📷 ${name}` })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   await page.locator('.si-eval-measured').waitFor({ state: 'visible', timeout: 20000 })
@@ -254,7 +254,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.screenshot({ path: join(OUT, 'B-wide-return.png'), fullPage: true })
   result.requests = evalRequests
   result.frames = await page.evaluate(() => window.__toolbarFrames)
-  writeFileSync(join(OUT, 'B-timeline.json'), JSON.stringify({ v: 2, axis: 'time', events: timeline }, null, 2))
+  writeFileSync(join(OUT, 'B-toolbar.timeline.json'), JSON.stringify({ events: timeline }, null, 2))
   const video = page.video()
   await context.close()
   await video.saveAs(join(OUT, 'B-toolbar.webm'))

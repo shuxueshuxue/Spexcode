@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlow, ReactFlowProvider, MarkerType, useReactFlow } from '@xyflow/react'
+import { ReactFlow, ReactFlowProvider, MarkerType, Position, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
@@ -32,87 +32,15 @@ const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
 
 const nodeTypes = { spec: SpecNode }
-// Layout coordinates name the node centre, so camera framing never needs to duplicate the rendered tile size.
+// Layout coordinates name the node centre. Initial dimensions let React Flow place a new fixed-format tile
+// and its edges on the first render instead of painting one unmeasured frame before its ResizeObserver fires.
 const NODE_ORIGIN = [0.5, 0.5]
+const NODE_SIZE = { width: 176, height: 50 }
+const NODE_HANDLES = [
+  { type: 'target', position: Position.Left, x: -1.5, y: 22.5, width: 5, height: 5 },
+  { type: 'source', position: Position.Right, x: 172.5, y: 22.5, width: 5, height: 5 },
+]
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
-const STRUCTURE_MOTION_MS = 220
-
-const samePosition = (a, b) => a?.x === b?.x && a?.y === b?.y
-
-// React Flow must own the moving geometry: when node positions change here, its SVG edges recompute from
-// those same positions on every frame. A CSS transform transition moves only the tile pixels and leaves the
-// already-replotted edges behind. New children start just beyond their parent's outgoing side, then unfold.
-function useConnectedNodes(targetNodes) {
-  const [renderedNodes, setRenderedNodes] = useState(targetNodes)
-  const renderedRef = useRef(targetNodes)
-  const frameRef = useRef(0)
-
-  useLayoutEffect(() => {
-    cancelAnimationFrame(frameRef.current)
-    const current = renderedRef.current
-    const currentById = new Map(current.map((node) => [node.id, node]))
-    const geometryChanged = current.length !== targetNodes.length || targetNodes.some((node) => {
-      const before = currentById.get(node.id)
-      return !before || !samePosition(before.position, node.position)
-    })
-
-    if (!geometryChanged || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      renderedRef.current = targetNodes
-      setRenderedNodes(targetNodes)
-      return undefined
-    }
-
-    const targetById = new Map(targetNodes.map((node) => [node.id, node]))
-    const starts = targetNodes.map((node) => {
-      const before = currentById.get(node.id)
-      if (before) return { ...node, position: before.position }
-
-      const parentTarget = targetById.get(node.data.parent)
-      if (!parentTarget) return node
-      const parentStart = currentById.get(parentTarget.id)?.position || parentTarget.position
-      return {
-        ...node,
-        position: {
-          x: parentStart.x + (node.position.x - parentTarget.position.x) * 0.7,
-          y: parentStart.y,
-        },
-      }
-    })
-
-    // A branch closing can change membership without moving any survivor. Remove it and its edges in one
-    // render instead of running an animation whose every frame has identical geometry.
-    if (starts.every((node, index) => samePosition(node.position, targetNodes[index].position))) {
-      renderedRef.current = targetNodes
-      setRenderedNodes(targetNodes)
-      return undefined
-    }
-
-    renderedRef.current = starts
-    setRenderedNodes(starts)
-    const startedAt = performance.now()
-    const step = (now) => {
-      const progress = Math.min(1, (now - startedAt) / STRUCTURE_MOTION_MS)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      const next = targetNodes.map((node, index) => {
-        const from = starts[index].position
-        return {
-          ...node,
-          position: {
-            x: from.x + (node.position.x - from.x) * eased,
-            y: from.y + (node.position.y - from.y) * eased,
-          },
-        }
-      })
-      renderedRef.current = next
-      setRenderedNodes(next)
-      if (progress < 1) frameRef.current = requestAnimationFrame(step)
-    }
-    frameRef.current = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(frameRef.current)
-  }, [targetNodes])
-
-  return renderedNodes
-}
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
@@ -149,7 +77,6 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   const graphRef = useRef(null)
-  const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
   const [kbdMode, setKbdMode] = useState(false)
   const kbdRef = useRef(false); kbdRef.current = kbdMode
@@ -277,7 +204,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
   const upTarget    = useMemo(() => nearestY('up'), [nearestY])
 
   // per-node className: focus-kin dimming, or overlay spotlight when a session is locked; recomputed each poll
-  const targetNodes = useMemo(() => {
+  const nodes = useMemo(() => {
     return specs2.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     let className
@@ -300,13 +227,14 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: { ...s, ...extra },
+      initialWidth: NODE_SIZE.width, initialHeight: NODE_SIZE.height,
+      handles: NODE_HANDLES,
       draggable: false, selected: s.id === focusId, className,
     }
     })
   }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
-  const nodes = useConnectedNodes(targetNodes)
 
-  const targetEdges = useMemo(() => {
+  const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
       const hot = s.id === focusId || s.parent === focusId
       return {
@@ -321,47 +249,22 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
       const stroke = labelColor(mv.seed)
       moves.push({
         id: `move-${s.id}-${mv.toParent}`, source: s.id, target: mv.toParent, type: 'smoothstep',
-        animated: true, zIndex: 2, className: 'move-edge',
+        zIndex: 2, className: 'move-edge',
         style: { stroke, strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.6 },
         markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
       })
     }
     return [...tree, ...moves]
   }, [focusId, specs2, byId])
-  // On the first layout pass for a newly-visible child, omit its edge until the controlled node has joined
-  // the rendered set. The next synchronous layout pass mounts both at the child's connected start point.
-  const renderedIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes])
-  const edges = useMemo(
-    () => targetEdges.filter((edge) => renderedIds.has(edge.source) && renderedIds.has(edge.target)),
-    [targetEdges, renderedIds],
-  )
 
-  // flat-pan the viewport to centre a target node.
-  const animateView = useCallback((target, dur) => {
-    const start = getViewport()
-    const t0 = performance.now()
-    cancelAnimationFrame(animRef.current)
-    const step = (now) => {
-      const p = dur ? Math.min(1, (now - t0) / dur) : 1
-      const e = 1 - Math.pow(1 - p, 3)
-      setViewport({
-        x: start.x + (target.x - start.x) * e,
-        y: start.y + (target.y - start.y) * e,
-        zoom: start.zoom + (target.zoom - start.zoom) * e,
-      })
-      if (p < 1) animRef.current = requestAnimationFrame(step)
-    }
-    animRef.current = requestAnimationFrame(step)
-  }, [getViewport, setViewport])
-
-  // Frame a node at the graph pane's geometric centre; when `zoom` is omitted (arrow-nav) the current zoom is reused,
-  // so this remains a pure flat-pan.
-  const centerOn = useCallback((node, zoom, dur = 300) => {
+  // Frame a node at the graph pane's geometric centre in one update. When `zoom` is omitted (arrow-nav)
+  // the current zoom is reused, so this remains a pure flat-pan without a camera transition.
+  const centerOn = useCallback((node, zoom) => {
     const el = graphRef.current
     if (!el) return
     const z = zoom ?? getViewport().zoom
-    animateView({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z }, dur)
-  }, [animateView, getViewport])
+    setViewport({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z })
+  }, [getViewport, setViewport])
 
   // Frame the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
   // camera. Gated on the route: a deep-load on another page keeps the graph hidden (zero-sized), so framing
@@ -371,7 +274,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
     if (framedRef.current || page !== 'graph') return
     const id = requestAnimationFrame(() => {
       framedRef.current = true
-      centerOn(focus, undefined, 0)
+      centerOn(focus)
     })
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus, page])
@@ -534,9 +437,9 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
       if (firesKey('nav.parent', e.key)) return go(parent, e)
       if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
+      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2)) }
+      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2)) }
+      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85) }
       else if (firesKey('graph.info', e.key)) { e.preventDefault(); setOverlay(true) }
       // overlay cycle: o / O walk focus through changed nodes (scope follows the lock), wrapping
       else if (firesKey('graph.cycle', e.key) || firesKey('graph.cycleRev', e.key)) {

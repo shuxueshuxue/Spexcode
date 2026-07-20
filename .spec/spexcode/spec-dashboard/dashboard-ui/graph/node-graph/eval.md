@@ -32,18 +32,20 @@ scenarios:
       A tile's handles are fully invisible (computed style transparent/zero-opacity, no border ring) and
       non-interactive, while the parent→child edges still render anchored at the tile edges. Zero loss =
       no butt-circle on any tile edge, `▸N` tabs intact, edge count unchanged.
-  - name: structural-motion-stays-connected
+  - name: structural-updates-are-atomic
     tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard on the graph and drill right into a collapsed branch so children are newly
-      revealed and the existing neighbourhood re-plots. Record the whole transition and inspect frames
-      from its beginning, middle, and end. Track each visible solid parent→child edge against the source
-      and target tile handles while the tiles are moving, then wait through an unchanged graph refresh.
+      revealed and the existing neighbourhood re-plots. Record the interaction at browser-frame cadence
+      and compare the last frame before the topology update with every frame after it. Inspect node
+      transforms, solid edge paths, the viewport transform, and the computed transition on React Flow's
+      node containers.
     expected: >-
-      Newly revealed children unfold outward from their parent's outgoing side and existing tiles glide
-      to their new slots as one connected structure: throughout the transition every solid edge terminates
-      on both moving tiles, with no detached line or teleporting endpoint. The settled layout is unchanged,
-      and a refresh with unchanged geometry does not replay the motion. The filed reading carries video.
+      The first rendered topology after the drill is already final: newly revealed children and their
+      solid edges appear together, persisting nodes occupy their final slots, and no later frame changes a
+      node's graph position, an edge path, or the viewport after its one snap to the new focus. Node containers
+      declare no transition. The filed reading carries video of the interaction because a settled still cannot
+      prove the absence of intermediate motion.
 ---
 # eval.md — node-graph
 
@@ -51,5 +53,5 @@ This view is product surface — it is measured by **looking** (YATU), not by a 
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
 the marks and any live editors' avatars on Row 2 — with focus at the graph pane's geometric centre. The
-recording and screenshot ride together with the verdict. Structural-motion readings sample the moving
-frames themselves: a still of the settled graph cannot prove that edges stayed attached in transit.
+recording and screenshot ride together with the verdict. Atomic-update readings sample browser frames around
+the interaction: a still of the settled graph cannot prove that no intermediate motion occurred.

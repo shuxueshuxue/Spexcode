@@ -237,7 +237,7 @@ ${MENTION_NOTE}`,
        spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
        spex eval matrix <launcher> [--node <id>] [--rows k1,k2]   the harness live-behavior matrix
        spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
-       spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest reading
+       spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest measurement
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
@@ -258,7 +258,7 @@ matrix — run the eight-row harness live-behavior matrix against a REAL dispatc
 launcher (the harness-adapter acceptance rule, defined once in spec-eval/src/matrix.ts): it syncs the
 rows into the \`<harness>-harness\` node's eval.md scenarios, drives one worker through undeclared-stop ·
 pretooluse-block · ask-note · deliver-steer · resume · liveness · commit-gate · close-residue, and files
-a per-row reading with its evidence transcript. A new harness needs only its launcher + spec node.
+a per-row measurement with its evidence transcript. A new harness needs only its launcher + spec node.
 
 lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
 stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source with no eval.md
@@ -266,10 +266,10 @@ stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source 
 files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
 commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
 
-ok — the human's reviewed-and-agreed mark on the scenario's LATEST reading: an appended, monotonic
-sign-off bound to that one immutable reading (a newer reading or staleness releases it on its own —
+ok — the human's reviewed-and-agreed mark on the scenario's LATEST measurement: an appended, monotonic
+sign-off bound to that one immutable measurement (a newer measurement or staleness releases it on its own —
 no un-ok exists). The evals feed default-hides a fresh, ok'd scenario; a governed session is refused
-(an agent's judgment on a reading is a remark, never a self-blessing).
+(an agent's judgment on a measurement is a remark, never a self-blessing).
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
 deletes a line); the previous eval becomes latest again, or the scenario honestly returns to

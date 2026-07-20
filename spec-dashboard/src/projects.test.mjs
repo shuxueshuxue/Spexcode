@@ -5,7 +5,7 @@ import {
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
   saveGatewayIcon, saveProjectIcon,
-  selectGatewayIdentity, selectProjectIdentity, tabTitle,
+  selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
@@ -84,6 +84,19 @@ test('pathname-selected catalog identity cannot be replaced by the last board th
   assert.equal(selectProjectIdentity('spex', null, wrongLastBoard), null, 'pending catalog is UNRESOLVED — never the board, never a minted default ([[side-nav]])')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, null), { title: 'spex', icon: 'spexcode' }, 'a still-locked scope resolves to its anonymous identity — an answer, not a placeholder')
+})
+
+test('applyCatalogResult: a blipped poll never regresses a resolved catalog — ok/denied always apply', () => {
+  const ok = { state: 'ok', projects: [] }
+  const denied = { state: 'denied', reason: 'admin-login' }
+  const absent = { state: 'absent' }
+  assert.equal(applyCatalogResult(ok, absent), ok, 'absent after a proven ok is a transient: keep last-good')
+  assert.equal(applyCatalogResult(denied, absent), denied, 'absent after denied: keep the answered state')
+  assert.equal(applyCatalogResult(null, absent), absent, 'boot: absent is the genuine no-catalog answer')
+  assert.equal(applyCatalogResult(absent, absent), absent)
+  assert.equal(applyCatalogResult(ok, denied), denied, 'denied is an ANSWER — a mid-session lock re-gates')
+  const ok2 = { state: 'ok', projects: [{ id: 'a' }] }
+  assert.equal(applyCatalogResult(ok, ok2), ok2, 'a fresh ok always applies')
 })
 
 test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () => {

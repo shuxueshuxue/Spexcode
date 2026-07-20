@@ -68,7 +68,8 @@ lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
   entry or the `,` hotkey, rendered as a centered readable column inside the shell's shared page pane
   (the pane wrapper is [[side-nav]]'s; the component renders only its content), and the single home
   for future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset
-  picker. `Esc` (or `,` again) routes home to the graph.
+  picker. `,` again routes home to the graph; Esc routes nothing ([[side-nav]] — it only closes
+  in-page overlays).
 
 ### the hotkey
 

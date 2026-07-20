@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { loadGraph, subscribeBoardLive, loadIssues, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
-import { CATALOG_POLL_MS, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
+import { CATALOG_POLL_MS, applyCatalogResult, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { useT } from './i18n/index.jsx'
@@ -48,9 +48,13 @@ export default function App() {
   const [projAccess, setProjAccess] = useState(null)
   useEffect(() => {
     let live = true
+    // applyCatalogResult keeps last-good: the catalog is identity-bearing, so one blipped poll (a
+    // gateway restart answers 'absent' for a beat) must not regress a resolved identity to the
+    // anonymous default and re-teach the browser a default favicon ([[side-nav]]); ok/denied always
+    // apply — denied is an answer, a mid-session lock must re-gate.
     const refresh = () => loadProjects()
-      .then((result) => { if (live) setProjAccess(result) })
-      .catch(() => { if (live) setProjAccess({ state: 'absent' }) })
+      .then((result) => { if (live) setProjAccess((prev) => applyCatalogResult(prev, result)) })
+      .catch(() => { if (live) setProjAccess((prev) => applyCatalogResult(prev, { state: 'absent' })) })
     refresh()
     const id = setInterval(refresh, CATALOG_POLL_MS)
     return () => { live = false; clearInterval(id) }

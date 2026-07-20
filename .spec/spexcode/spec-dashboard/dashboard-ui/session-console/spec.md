@@ -129,7 +129,8 @@ counts use [[review-chrome]]'s `ReviewState` vocabulary, measured stale or legac
 visible clock tally as work still needing review, and declared-but-unmeasured scenarios remain a visible
 blind-spot count. These mutually exclusive tallies explain the whole scenario fraction at a glance:
 `fresh pass + fresh fail + needs review + blind = affected declarations`. Node-level unknown frontend coverage
-is a separate missing-state tally, never part of the scenario fraction. Loading, load failure, and zero are
+is a separate missing-state tally, never part of the scenario fraction. The door's accessible name speaks this
+same complete decomposition; the visible glance is never hidden from assistive technology. Loading, load failure, and zero are
 distinct states — a transport failure is never painted as
 zero loss. This is a glance and a door, never a scenario menu or an explanatory paragraph.
 While this toolbar is visible, the glance refreshes on a bounded cadence as well as session/page edges, so a

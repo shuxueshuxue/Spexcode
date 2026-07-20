@@ -300,24 +300,34 @@ test('the detail shell back affordance is a real derived anchor, never history.b
   }
 })
 
-test('the scoped eval pages wear the ONE shared scope banner whose session door is a real anchor', () => {
-  // DetailShell's banner slot renders the page-supplied node ABOVE the header — the SAME EvalScopeBanner
-  // component the scoped list leads with, so the two faces cannot drift
-  assert.match(shell, /\{banner\}\s*<header className="ds-head">/)
-  // the ONE banner component: minted ONLY from the canonical scope token (sessionId), with a REAL
-  // anchor to the session terminal through the address projection — direct open and reload derive the
-  // identical face
-  assert.match(page, /export function EvalScopeBanner\(\{ sessionId \}\)/)
-  assert.match(page, /<a className="ds-banner-link" href=\{addressHash\(sessionAddress\(sessionId\)\)\}>/)
-  // both scoped faces render it: the detail through the shell slot, the list at its first screen
-  assert.match(page, /const banner = sessionId \? <EvalScopeBanner sessionId=\{sessionId\} \/> : null/)
-  assert.match(page, /\{sessionId && <div className="se-banner-slot"><EvalScopeBanner sessionId=\{sessionId\} \/><\/div>\}/)
-  // issues never passes a banner
-  assert.doesNotMatch(issues, /banner=/)
-  // localized banner strings exist in both dictionaries
+test('the scoped eval pages carry the ONE icon-only terminal door — two homes, no banner', () => {
+  // DetailShell's generic header action slot: a data-only node at the header's trailing edge — the
+  // shell knows nothing about sessions, and no banner slot exists above the header
+  assert.match(shell, /\{action && <div className="ds-head-action">\{action\}<\/div>\}/)
+  // the ONE door component: an icon-only REAL anchor minted from the canonical scope token, the full
+  // semantics riding the localized tooltip + aria-label — no visible text child
+  assert.match(page, /export function EvalScopeDoor\(\{ sessionId \}\)/)
+  assert.match(page, /<a className="se-door" href=\{addressHash\(sessionAddress\(sessionId\)\)\} data-tip=\{label\} aria-label=\{label\}>/)
+  assert.match(page, /<Icon name="terminal" size=\{15\} \/>\s*<\/a>/)
+  assert.match(icons, /\n  terminal: \{/)
+  // two homes, same primitive: the scoped list's se-gates action cluster and the scoped detail's
+  // header action slot; both sessionId-gated, so trunk faces mint none
+  assert.match(page, /<span className="se-acts">[\s\S]*?<EvalScopeDoor sessionId=\{sessionId\} \/>[\s\S]*?<\/span>/)
+  assert.match(page, /const action = sessionId \? <EvalScopeDoor sessionId=\{sessionId\} \/> : null/)
+  // the stable 32px hit target
+  assert.match(css, /\.se-door \{[^}]*width: 32px; height: 32px;/)
+  // the banner era is fully retired: no component, no markup, no parallel copy anywhere
+  for (const src of [shell, page, detail, css]) {
+    assert.doesNotMatch(src, /EvalScopeBanner/)
+    assert.doesNotMatch(src, /ds-banner/)
+    assert.doesNotMatch(src, /se-banner/)
+  }
+  // issues never seats a header action
+  assert.doesNotMatch(issues, /EvalScopeDoor|ds-head-action/)
+  // the one short full-semantics door label exists in both dictionaries; the long banner copy is gone
   for (const dict of [en, zh]) {
-    assert.match(dict, /scopeBanner:/)
-    assert.match(dict, /scopeBannerOpen:/)
+    assert.match(dict, /scopeDoor:/)
+    assert.doesNotMatch(dict, /scopeBanner/)
   }
 })
 

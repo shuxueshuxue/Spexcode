@@ -7,7 +7,7 @@ code:
   - spec-dashboard/src/EvalsPage.jsx#EvalsPage
   - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
   - spec-dashboard/src/EvalsPage.jsx#EvalDetailPage
-  - spec-dashboard/src/EvalsPage.jsx#EvalScopeBanner
+  - spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor
 related:
   - spec-dashboard/test/evals-entry.e2e.mjs
 ---
@@ -53,8 +53,8 @@ filter (default off) picking the root.
   its destination is UNIFORMLY the bare `#/evals` list ([[address-routing]]'s one back helper) — for a
   trunk detail and a `scope:<id>` detail alike, so "back" always means the same thing and a pushed visit,
   a direct open, and a reload all share one destination, never guessed from a referrer, history state,
-  or the originator's presence. The scoped detail's session door lives in its SOURCE BANNER instead
-  (below). Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
+  or the originator's presence. The scoped detail's session door lives in its header's terminal DOOR
+  instead (below). Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
   push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
   the list, never a silent rewrite to some other eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
@@ -87,18 +87,21 @@ filter (default off) picking the root.
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
   A/B history walks the worktree-rooted readings. Two DELIBERATELY different list affordances: the happy
-  detail's back arrow is the uniform bare `#/evals` (its banner already carries the session door), while
-  the failure/not-found faces' list link is the SCOPED default view — those faces have no banner, and
+  detail's back arrow is the uniform bare `#/evals` (its header already carries the session door), while
+  the failure/not-found faces' list link is the SCOPED default view — those faces carry no door, and
   that link is the one affordance keeping the user on the data-source axis their broken address named.
-  BOTH scoped faces wear the restrained **SOURCE banner** — the ONE shared EvalScopeBanner component,
-  GitHub-review-notice style, never two page-local copies: the scoped LIST leads its first screen with it
-  (above the gates strip, at desktop and phone width, en and zh alike) and the scoped DETAIL carries it
-  above its header (the [[review-chrome]] DetailShell banner slot). One line naming the session/worktree
-  the view's readings come from, carrying the ONE explicit session door — a REAL anchor to
-  `#/sessions/<id>`, the terminal console — since the compact back anchor now uniformly returns to the
-  list. The banner derives ONLY from the canonical address, so a door-entry visit, a direct open, and a
-  reload wear the identical banner; trunk faces wear none. Three exit commands stay separate by
-  construction: the banner's anchor is the one way to the terminal, the detail's ds-back is the bare
+  BOTH scoped faces carry the restrained **terminal DOOR** — the ONE shared EvalScopeDoor primitive,
+  icon-only, never a visible banner or two page-local copies: the scoped LIST seats it as an action in
+  its se-gates toolbar, one row with the lint/merge/ahead/committed gates and the export door (at
+  desktop and phone width, en and zh alike, without breaking the row or overflowing 390px), and the
+  scoped DETAIL seats the SAME primitive in the [[review-chrome]] DetailShell header action slot — a
+  generic data-supplied slot at the header's trailing edge that keeps the shell session-blind. The door
+  is a REAL anchor to `#/sessions/<id>`, the terminal console, wearing only the terminal icon on a
+  stable 32px hit target; the full semantics — which session/worktree the view's readings come from and
+  where the door lands — live in its localized tooltip and aria-label, with no visible text. The door
+  derives ONLY from the canonical address, so a door-entry visit, a direct open, and a
+  reload wear the identical door; trunk faces wear none. Three exit commands stay separate by
+  construction: the door's anchor is the one way to the terminal, the detail's ds-back is the bare
   `#/evals` home, and browser Back walks the real history (a scoped list→detail push returns exactly to
   the scoped list URL) — never blended, never guessed from history.back or a referrer. Scope is the DATA
   SOURCE axis and is never conflated with `session:present|missing`, the source-session presence facet.

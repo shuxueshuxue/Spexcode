@@ -85,7 +85,8 @@ scenarios:
       The phone session surface's eval door is the same real anchor. The typed /eval navigates to the same
       address. The console itself never mounts an eval pane (the terminal's width never reflows). The
       landed page is the SAME shared list chrome the un-scoped #/evals renders (one component set — no
-      session-only clone) wearing the shared scope banner ([[evals-view]]'s scoped-source-banner), the
+      session-only clone) carrying the icon-only terminal door in its gates toolbar ([[evals-view]]'s
+      scoped-terminal-door), the
       session's gates strip, and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss
       = one canonical home for a session's evaluation, reached through real-anchor doors.
   - name: session-eval-deep-link

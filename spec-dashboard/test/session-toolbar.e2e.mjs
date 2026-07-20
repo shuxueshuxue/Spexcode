@@ -17,9 +17,11 @@ const board = await fetch(`${BASE}/api/graph`).then((response) => response.json(
 const claudeSlash = await fetch(`${BASE}/api/slash-commands?harness=claude`).then((response) => response.json())
 const SESSION = process.env.SESSION || board.sessions.find((session) => session.node === 'session-console')?.id
 if (!SESSION) throw new Error('no session-console session on the live board; pass SESSION=<id>')
+const SWITCH_SESSION = board.sessions.find((session) => session.id !== SESSION && !session.parent)?.id
+if (!SWITCH_SESSION) throw new Error('A→B→A proof needs a second top-level session row')
 
 const checks = []
-const result = { base: BASE, session: SESSION, checks, wide: null, narrow: null, themes: [], states: [], evalModels: [] }
+const result = { base: BASE, session: SESSION, checks, wide: null, narrow: null, themes: [], states: [], evalModels: [], requests: [], frames: [] }
 const check = (name, ok, detail = null) => {
   checks.push({ name, ok, detail })
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail == null ? '' : ` - ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`)
@@ -79,6 +81,15 @@ const toolbarProbe = (page) => page.evaluate(() => {
   }
 })
 
+const evalValue = {
+  mixed: { measured: 2, total: 3, pass: 1, fail: 1, review: 0, blind: 1, unknown: 0 },
+  zero: { measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 },
+  refresh: { measured: 0, total: 1, pass: 0, fail: 0, review: 0, blind: 1, unknown: 0 },
+}
+const evalProjection = (mode, generation = 1, value = evalValue[mode]) => mode === 'error'
+  ? { epoch: 'fixture', generation, phase: 'error' }
+  : { epoch: 'fixture', generation, phase: 'ready', revision: `fixture-${generation}`, value }
+
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 
 // Real session journey: native focus order, typed/click twin, native Eval navigation, warm return.
@@ -88,26 +99,65 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     window.EventSource = class FixtureEventSource {
       constructor() { throw new Error('fixture disables board SSE') }
     }
+    window.__toolbarFrames = []
+    const sample = (at) => {
+      const toolbar = document.querySelector('.si-tabbar')
+      window.__toolbarFrames.push({
+        at,
+        text: toolbar?.innerText?.replace(/\s+/g, ' ').trim() || '',
+        label: document.querySelector('.si-eval-door')?.getAttribute('aria-label') || '',
+      })
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
   })
   const page = await context.newPage()
+  const evalRequests = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === `/api/sessions/${SESSION}/evals` && !url.searchParams.has('format')) {
+      evalRequests.push({ at: Date.now(), method: request.method(), url: request.url() })
+    }
+  })
   await page.route('**/api/graph*', async (route) => {
     const graph = structuredClone(board)
     const session = graph.sessions.find((candidate) => candidate.id === SESSION)
     session.status = 'review'
     session.lifecycle = 'awaiting'
     session.liveness = 'online'
+    session.evalSummary = evalProjection('refresh', 10, { measured: 9, total: 10, pass: 1, fail: 0, review: 8, blind: 1, unknown: 0 })
+    const other = graph.sessions.find((candidate) => candidate.id === SWITCH_SESSION)
+    if (other) {
+      other.status = 'review'
+      other.lifecycle = 'awaiting'
+      other.liveness = 'online'
+      other.evalSummary = evalProjection('refresh', 20, { measured: 4, total: 5, pass: 1, fail: 0, review: 3, blind: 1, unknown: 0 })
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
   // The parity scenario names Claude Code's /exit specifically. Feed the backend's real Claude command
   // catalog to this browser fixture even when the live proof session itself was launched through Codex.
   await page.route('**/api/slash-commands*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(claudeSlash) }))
-  const timeline = []
+  const timeline = [{ atMs: 0, kind: 'narrate', label: '▶ session-summary-coherence · coherent session toolbar' }]
   const started = Date.now()
-  const step = (name) => timeline.push({ at: Date.now() - started, step: name })
+  const step = (name) => timeline.push({ atMs: Date.now() - started, kind: 'frame', label: `📷 ${name}` })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   await page.locator('.si-eval-measured').waitFor({ state: 'visible', timeout: 20000 })
   step('toolbar loaded')
+  const firstLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"]`).click()
+  await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"].on`).waitFor({ state: 'visible' })
+  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('4/5'))
+  const otherLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  await page.locator(`.si-item[data-sid="${SESSION}"]`).click()
+  await page.locator(`.si-item[data-sid="${SESSION}"].on`).waitFor({ state: 'visible' })
+  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('9/10'))
+  const returnedLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  check('A→B→A keeps graph summaries warm with zero full-model reads',
+    firstLabel.includes('9/10') && otherLabel.includes('4/5') && returnedLabel.includes('9/10') && evalRequests.length === 0,
+    { firstLabel, otherLabel, returnedLabel, requests: evalRequests.length })
+  step('A→B→A summaries stayed warm')
   result.wide = await toolbarProbe(page)
   result.wide.aria = typeof page.locator('.si-tabbar').ariaSnapshot === 'function'
     ? await page.locator('.si-tabbar').ariaSnapshot()
@@ -179,60 +229,63 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.keyboard.press('Escape')
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => location.hash.startsWith('#/evals'))
+  await page.locator('.se-gates').waitFor({ state: 'visible', timeout: 30_000 })
   const typedEval = { history: await page.evaluate(() => history.length), hash: await page.evaluate(() => location.hash) }
+  const requestsAfterFirstOpen = evalRequests.length
   await page.goBack()
   await waitToolbar(page)
   const historyBefore = await page.evaluate(() => history.length)
   await page.locator('.si-eval-door').focus()
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => location.hash.startsWith('#/evals'))
+  await page.locator('.se-gates').waitFor({ state: 'visible', timeout: 30_000 })
   const historyAfter = await page.evaluate(() => history.length)
   const anchorHash = await page.evaluate(() => location.hash)
   // Back preserves the forward entry in history.length; the anchor push replaces that forward slot, so the
   // length stays stable on the second visit. The following Back assertion proves the anchor still pushed a
   // navigable entry rather than replacing the sessions page.
   check('typed /eval and keyboard anchor share one canonical door', typedEval.history === typedHistoryBefore + 1 && historyAfter === historyBefore && typedEval.hash === anchorHash && typedEval.hash === doorHref, { typedEval, anchor: { historyBefore, historyAfter, hash: anchorHash }, doorHref })
+  check('full session model is demand-only and reused after Back', requestsAfterFirstOpen === 1 && evalRequests.length === 1,
+    { beforeOpen: 0, afterFirstOpen: requestsAfterFirstOpen, afterSecondOpen: evalRequests.length })
   await page.goBack()
   await waitToolbar(page)
   check('Back returns to the same warm terminal DOM', await page.locator('.si-term-body').getAttribute('data-warm-probe') === warm)
   step('Eval door and warm Back')
   await page.screenshot({ path: join(OUT, 'B-wide-return.png'), fullPage: true })
-  writeFileSync(join(OUT, 'B-timeline.json'), JSON.stringify({ v: 2, axis: 'time', events: timeline }, null, 2))
+  result.requests = evalRequests
+  result.frames = await page.evaluate(() => window.__toolbarFrames)
+  writeFileSync(join(OUT, 'B-toolbar.timeline.json'), JSON.stringify({ events: timeline }, null, 2))
   const video = page.video()
   await context.close()
   await video.saveAs(join(OUT, 'B-toolbar.webm'))
 }
 
-const evalFixture = {
-  nodes: [{
-    id: 'session-console', hue: 280,
-    scenarios: [
-      { name: 'pass-case', expected: 'pass' },
-      { name: 'fail-case', expected: 'fail' },
-      { name: 'blind-case', expected: 'measured' },
-    ],
-    evals: [
-      { scenario: 'pass-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true },
-      { scenario: 'fail-case', ts: '2026-07-20T00:59:00Z', fresh: true, verdict: { status: 'fail' }, inSession: true },
-    ],
-  }],
-  gates: [],
-}
-
 async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', evalMode = 'mixed' }) {
   let evalReads = 0
-  let lastEvalReadAt = 0
-  let evalRefreshed = false
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
     localStorage.setItem('spexcode.lang', lang)
     localStorage.setItem('spexcode.theme', theme)
-    // The initial HTTP graph below is the fixture source of truth. Disable the live SSE lane so its
-    // immediate real-board snapshot cannot overwrite the fixture before the toolbar is measured.
+    // The initial HTTP graph below is the fixture source of truth. The in-page EventSource records the
+    // canonical envelope without opening a second transport; focused cases can emit graph-full explicitly.
     window.EventSource = class FixtureEventSource {
-      constructor() { throw new Error('fixture disables board SSE') }
+      constructor() { this.listeners = {}; window.__boardSource = this }
+      addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn) }
+      close() {}
+      emit(name, data) { for (const fn of this.listeners[name] || []) fn({ data: JSON.stringify(data) }) }
     }
+    window.__toolbarFrames = []
+    const sample = (at) => {
+      const toolbar = document.querySelector('.si-tabbar')
+      window.__toolbarFrames.push({
+        at,
+        text: toolbar?.innerText?.replace(/\s+/g, ' ').trim() || '',
+        label: document.querySelector('.si-eval-door')?.getAttribute('aria-label') || '',
+      })
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
   }, { listWidth, lang, theme })
   const page = await context.newPage()
   await page.route('**/api/graph*', async (route) => {
@@ -243,24 +296,12 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.lifecycle = status === 'review' || status === 'done' ? 'awaiting' : 'active'
     session.liveness = liveness
     session.headline = 'An intentionally enormous <section data-test="headline-noise"> shared session headline for validating English and 中文 without moving commands or navigation'
+    session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
-  await page.route(`**/api/sessions/${SESSION}/evals`, (route) => {
-    const now = Date.now()
-    if (lastEvalReadAt && now - lastEvalReadAt > 1_000) evalRefreshed = true
-    lastEvalReadAt = now
-    evalReads++
-    if (evalMode === 'error') return route.fulfill({ status: 503, body: 'fixture unavailable' })
-    const refreshModel = {
-      nodes: [{
-        id: 'session-console', hue: 280,
-        scenarios: [{ name: 'refresh-case', expected: 'measured' }],
-        evals: evalRefreshed ? [{ scenario: 'refresh-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true }] : [],
-      }],
-      gates: [],
-    }
-    const model = evalMode === 'zero' ? { nodes: [], gates: [] } : evalMode === 'refresh' ? refreshModel : evalFixture
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(model) })
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path === `/api/sessions/${SESSION}/evals`) evalReads++
   })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
@@ -338,11 +379,17 @@ for (const evalMode of ['zero', 'error']) {
 {
   const { context, page, evalReads } = await fixturePage({ evalMode: 'refresh' })
   const first = await page.locator('.si-eval-door').getAttribute('aria-label')
+  const refreshedGraph = structuredClone(board)
+  refreshedGraph.sessions.find((session) => session.id === SESSION).evalSummary = evalProjection(
+    'refresh', 2, { measured: 1, total: 1, pass: 1, fail: 0, review: 0, blind: 0, unknown: 0 },
+  )
+  await page.evaluate((graph) => window.__boardSource.emit('graph-full', { to: 'fixture-refresh-2', graph }), refreshedGraph)
   await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('1/1'), null, { timeout: 20_000 })
   const refreshed = await page.locator('.si-eval-door').getAttribute('aria-label')
-  const row = { first, refreshed, requests: evalReads() }
+  const frames = await page.evaluate(() => window.__toolbarFrames)
+  const row = { first, refreshed, requests: evalReads(), frames }
   result.evalModels.push({ evalMode: 'refresh', ...row })
-  check('stable working session refreshes its eval glance', first.includes('0/1') && refreshed.includes('1/1') && row.requests >= 2, row)
+  check('graph-full refreshes the glance with zero full-model reads', first.includes('0/1') && refreshed.includes('1/1') && row.requests === 0, row)
   await context.close()
 }
 

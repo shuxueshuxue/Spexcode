@@ -1,8 +1,11 @@
-import { dirname, relative } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { dirname, join, relative } from 'node:path'
 import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
+import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
 import { parseScenarios, scenarioHash, type Scenario } from './scenarios.js'
@@ -193,11 +196,14 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
   // extra fetch. Capped at MAX_ENRICHED_FILES so a huge changeset can't bloat the page; the rest keep their
   // row but say so (omitted), never silently blank.
-  const [base, shaRows, dirtyPaths] = wtPath ? await Promise.all([
+  const [base, shaRows, dirtyState] = wtPath ? await Promise.all([
     gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
     gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
-    worktreeDirtyPaths(wtPath),
-  ]) : ['', '', new Set<string>()] as const
+    worktreeDirtyState(wtPath),
+  ]) : ['', '', { paths: new Set<string>(), oldPaths: new Map<string, string>() }] as const
+  const dirtyPaths = dirtyState.paths
+  for (const path of dirtyPaths) changedPaths.add(path)
+  for (const [path, oldPath] of dirtyState.oldPaths) if (!oldPaths.has(path)) oldPaths.set(path, oldPath)
   const shas = new Set(shaRows.split('\n').filter(Boolean))
   const scopedNodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas)
   const enriched = new Map<string, ExportFile>()
@@ -454,9 +460,22 @@ export function parsePorcelainPaths(out: string): Set<string> {
   return paths
 }
 
-async function worktreeDirtyPaths(wtPath: string): Promise<Set<string>> {
+export function parsePorcelainRenames(out: string): Map<string, string> {
+  const renames = new Map<string, string>()
+  const records = out.split('\0')
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    if (!record) continue
+    const status = record.slice(0, 2)
+    const path = record.slice(3)
+    if ((status.includes('R') || status.includes('C')) && records[i + 1]) renames.set(path, records[++i])
+  }
+  return renames
+}
+
+async function worktreeDirtyState(wtPath: string): Promise<{ paths: Set<string>; oldPaths: Map<string, string> }> {
   const out = await gitA(['-C', wtPath, '-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'])
-  return parsePorcelainPaths(out)
+  return { paths: parsePorcelainPaths(out), oldPaths: parsePorcelainRenames(out) }
 }
 
 // ---- the renderer ----
@@ -719,6 +738,60 @@ export type SessionEvals = {
   dirtyNonRuntime: number
   gates: ExportGate[]
   nodes: SessionEvalNode[]
+  summary: SessionEvalSummary
+  evalRevision: SessionEvalRevision
+}
+
+export type SessionEvalSummary = {
+  measured: number
+  total: number
+  pass: number
+  fail: number
+  review: number
+  blind: number
+  unknown: number
+}
+
+export type SessionEvalRevision = {
+  epoch: string
+  generation: number
+  content: string
+}
+
+export type SessionEvalProjection = {
+  epoch: string
+  generation: number
+  phase: 'loading' | 'updating' | 'ready' | 'error'
+  revision?: string
+  value?: SessionEvalSummary
+  lastKnown?: { generation: number; revision: string; value: SessionEvalSummary }
+}
+
+// The one count projection over the already-affected rows. This is the backend source both the graph
+// glance and the demand full model carry; consumers never repeat impact selection or score classification.
+export function sessionEvalSummary(nodes: SessionEvalNode[]): SessionEvalSummary {
+  let total = 0, measured = 0, pass = 0, fail = 0, unknown = 0
+  for (const node of nodes) {
+    total += node.scenarios.length
+    unknown += node.unknownCoverage.length
+    const latest = new Map(latestPerScenario(node.evals).map((reading) => [reading.scenario, reading]))
+    for (const scenario of node.scenarios) {
+      const reading = latest.get(scenario.name)
+      if (!reading) continue
+      measured++
+      if (reading.fresh && reading.verdict?.status === 'pass') pass++
+      else if (reading.fresh && reading.verdict?.status === 'fail') fail++
+    }
+  }
+  return {
+    measured,
+    total,
+    pass,
+    fail,
+    review: measured - pass - fail,
+    blind: Math.max(0, total - measured),
+    unknown,
+  }
 }
 
 async function sessionScopeNodes(
@@ -729,6 +802,7 @@ async function sessionScopeNodes(
   oldPaths: ReadonlyMap<string, string>,
   base: string,
   shas: ReadonlySet<string>,
+  latestOnly = false,
 ): Promise<SessionEvalNode[]> {
   const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
   const nodes: SessionEvalNode[] = []
@@ -781,19 +855,24 @@ async function sessionScopeNodes(
       scenarios: scoped.scenarios,
       // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
       // honest downstream states; impact selection never removes a row because its reading is stale.
-      evals: scoped.evals,
+      evals: latestOnly ? latestPerScenario(scoped.evals) as (EvalEntry & { inSession: boolean })[] : scoped.evals,
     })
   }
 
   return nodes
 }
 
-export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
-  const payload = await reviewPayload(id)
-  if (!payload) return null
+type ReviewPayloadValue = NonNullable<Awaited<ReturnType<typeof reviewPayload>>>
+type SessionEvalModel = Omit<SessionEvals, 'summary' | 'evalRevision'>
+
+async function buildSessionEvalModel(
+  id: string,
+  payload: ReviewPayloadValue,
+  wtPath: string | null,
+  latestOnly: boolean,
+): Promise<SessionEvalModel> {
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
-  const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
   const specs = await loadSpecs(ctxRoot)
   const specById = new Map(specs.map((s) => [s.id, s]))
@@ -801,14 +880,19 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   const changedPaths = new Set(payload.diff.map((file) => file.path))
   const oldPaths = new Map(payload.diff.flatMap((file) => file.oldPath ? [[file.path, file.oldPath] as const] : []))
-  const [base, shaRows, dirtyPaths] = wtPath ? await Promise.all([
+  const [base, shaRows, dirtyState] = wtPath ? await Promise.all([
     gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
     gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
-    worktreeDirtyPaths(wtPath),
-  ]) : ['', '', new Set<string>()] as const
+    worktreeDirtyState(wtPath),
+  ]) : ['', '', { paths: new Set<string>(), oldPaths: new Map<string, string>() }] as const
+  const dirtyPaths = dirtyState.paths
+  // A session evaluation is the proposal as it exists now, not only its committed slice. A dirty source,
+  // staged rename, draft eval.md, or uncommitted sidecar therefore enters the SAME affected selector.
+  for (const path of dirtyPaths) changedPaths.add(path)
+  for (const [path, oldPath] of dirtyState.oldPaths) if (!oldPaths.has(path)) oldPaths.set(path, oldPath)
   // this session's own commits — the membership test behind `inSession` and measurement impact
   const shas = new Set(shaRows.split('\n').filter(Boolean))
-  const nodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas)
+  const nodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas, latestOnly)
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
@@ -823,5 +907,323 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
     dirtyNonRuntime: payload.dirtyNonRuntime,
     gates: gateRows(payload),
     nodes,
+  }
+}
+
+function untrackedPaths(status: string): string[] {
+  const out: string[] = []
+  const records = status.split('\0')
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    if (!record) continue
+    const code = record.slice(0, 2)
+    const path = record.slice(3)
+    if (code === '??' && path) out.push(path)
+    if ((code.includes('R') || code.includes('C')) && records[i + 1]) i++
+  }
+  return out.sort()
+}
+
+// One content fingerprint over every axis that can alter the scoped summary. Committed declarations,
+// sidecars and governed code are covered by HEAD; the moving comparison base by the base ref;
+// index/worktree/rename content by the HEAD-relative binary diff; untracked bytes are folded explicitly.
+// Remark tracks are folded directly as well as through main: the disposable plain-file issue store used by
+// controlled runs has no ref move, but it is still the same freshness input and must obey the same fence.
+export async function sessionEvalContentRevision(wtPath: string): Promise<string> {
+  const base = mainBranch()
+  const [mainSha, headSha, mergeBase, status, dirtyDiff] = await Promise.all([
+    gitA(['-C', wtPath, 'rev-parse', base]).then((out) => out.trim()),
+    gitA(['-C', wtPath, 'rev-parse', 'HEAD']).then((out) => out.trim()),
+    gitA(['-C', wtPath, 'merge-base', base, 'HEAD']).then((out) => out.trim()),
+    gitA(['-C', wtPath, '-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all']),
+    gitA(['-C', wtPath, 'diff', 'HEAD', '--binary', '--no-ext-diff', '--']),
+  ])
+  const untracked = await Promise.all(untrackedPaths(status).map(async (path) => {
+    try {
+      const bytes = await readFile(join(wtPath, path))
+      return `${path}\0${createHash('sha256').update(bytes).digest('hex')}`
+    } catch {
+      return `${path}\0<gone>`
+    }
+  }))
+  const remarks = [...loadEvalRemarkTracks()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, track]) => [key, track.thread])
+  return createHash('sha256')
+    .update([mainSha, headSha, mergeBase, status, dirtyDiff, ...untracked, JSON.stringify(remarks)].join('\0'))
+    .digest('hex')
+}
+
+type SummaryBuildResult =
+  | { kind: 'stable'; revision: string; summary: SessionEvalSummary }
+  | { kind: 'unstable' }
+  | { kind: 'missing' }
+
+export type SessionEvalSummaryBuilder = (id: string, path: string) => Promise<SummaryBuildResult>
+
+type ProjectionEntry = {
+  id: string
+  path: string
+  generation: number
+  phase: SessionEvalProjection['phase']
+  current?: { generation: number; revision: string; value: SessionEvalSummary }
+  scheduled: number | null
+  running: number | null
+  observerHolds: Set<string>
+}
+
+type ProjectionTarget = 'all' | { id?: string; path?: string }
+
+// Pure generation coordinator around an injected stable builder. Snapshot construction only serializes
+// entries and authorizes the newest dirty generations; the async batch runs after that snapshot has captured
+// `updating(lastKnown)`, then emits one completion nudge for all stable/error results in the batch.
+export class SessionEvalProjectionCache {
+  readonly epoch: string
+  private readonly entries = new Map<string, ProjectionEntry>()
+  private readonly observerHolds = new Map<string, ProjectionTarget>()
+  private batch: Promise<void> | null = null
+  private notify: () => void
+
+  constructor(private readonly build: SessionEvalSummaryBuilder, notify: () => void = () => {}, epoch = randomUUID()) {
+    this.notify = notify
+    this.epoch = epoch
+  }
+
+  setNotify(notify: () => void): void { this.notify = notify }
+
+  snapshot(sessions: { id: string; path: string }[]): Map<string, SessionEvalProjection> {
+    const live = new Set(sessions.map((session) => session.id))
+    for (const id of this.entries.keys()) if (!live.has(id)) this.entries.delete(id)
+    const out = new Map<string, SessionEvalProjection>()
+    for (const session of sessions) {
+      let entry = this.entries.get(session.id)
+      if (!entry) {
+        entry = {
+          id: session.id,
+          path: session.path,
+          generation: 0,
+          phase: 'loading',
+          scheduled: null,
+          running: null,
+          observerHolds: new Set(),
+        }
+        this.entries.set(session.id, entry)
+      } else entry.path = session.path
+      entry.observerHolds = new Set([...this.observerHolds]
+        .filter(([, target]) => this.matches(entry!, target))
+        .map(([observer]) => observer))
+      if (entry.observerHolds.size) entry.phase = 'updating'
+      if ((entry.phase === 'loading' || entry.phase === 'updating')
+        && entry.observerHolds.size === 0
+        && entry.running !== entry.generation && entry.scheduled !== entry.generation) entry.scheduled = entry.generation
+      out.set(session.id, this.project(entry))
+    }
+    queueMicrotask(() => this.startBatch())
+    return out
+  }
+
+  invalidate(target: ProjectionTarget = 'all'): number {
+    let changed = 0
+    for (const entry of this.entries.values()) {
+      if (target !== 'all' && target.id !== entry.id && target.path !== entry.path) continue
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+      changed++
+    }
+    return changed
+  }
+
+  holdObserver(observer: string, target: ProjectionTarget = 'all'): boolean {
+    if (this.observerHolds.has(observer)) return false
+    this.observerHolds.set(observer, target)
+    for (const entry of this.entries.values()) {
+      if (!this.matches(entry, target)) continue
+      entry.observerHolds.add(observer)
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+    }
+    return true
+  }
+
+  releaseObserver(observer: string): boolean {
+    if (!this.observerHolds.delete(observer)) return false
+    for (const entry of this.entries.values()) {
+      if (!entry.observerHolds.delete(observer)) continue
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+    }
+    return true
+  }
+
+  isObserverHeld(id: string, path: string): boolean {
+    const entry = this.entries.get(id)
+    if (entry?.observerHolds.size) return true
+    return [...this.observerHolds.values()].some((target) => this.matches({ id, path }, target))
+  }
+
+  get(id: string): SessionEvalProjection | null {
+    const entry = this.entries.get(id)
+    return entry ? this.project(entry) : null
+  }
+
+  async idle(): Promise<void> {
+    await Promise.resolve()
+    while (this.batch) await this.batch
+  }
+
+  accept(id: string, generation: number, revision: string, value: SessionEvalSummary): boolean {
+    const entry = this.entries.get(id)
+    if (!entry || entry.generation !== generation || entry.observerHolds.size) return false
+    const changed = entry.phase !== 'ready' || entry.current?.revision !== revision
+    entry.current = { generation, revision, value }
+    entry.phase = 'ready'
+    entry.scheduled = null
+    if (changed) this.notify()
+    return true
+  }
+
+  private project(entry: ProjectionEntry): SessionEvalProjection {
+    const stable = entry.current
+    return {
+      epoch: this.epoch,
+      generation: entry.generation,
+      phase: entry.phase,
+      ...(entry.phase === 'ready' && stable
+        ? { revision: stable.revision, value: stable.value }
+        : stable ? { lastKnown: stable } : {}),
+    }
+  }
+
+  private matches(entry: { id: string; path: string }, target: ProjectionTarget): boolean {
+    return target === 'all' || target.id === entry.id || target.path === entry.path
+  }
+
+  private startBatch(): void {
+    if (this.batch) return
+    const hasScheduled = () => [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
+    if (!hasScheduled()) return
+    this.batch = (async () => {
+      let publish = false
+      while (hasScheduled()) {
+        const jobs = [...this.entries.values()].filter((entry) => entry.scheduled != null && entry.running == null)
+        const changed = await Promise.all(jobs.map((entry) => this.runEntry(entry)))
+        publish = publish || changed.some(Boolean)
+      }
+      if (publish) this.notify()
+    })().finally(() => {
+      this.batch = null
+      if (hasScheduled()) this.startBatch()
+    })
+  }
+
+  private async runEntry(entry: ProjectionEntry): Promise<boolean> {
+    const generation = entry.scheduled!
+    entry.scheduled = null
+    entry.running = generation
+    let result: SummaryBuildResult
+    try { result = await this.build(entry.id, entry.path) }
+    catch (error) {
+      console.warn(`spec-eval: session summary build failed for ${entry.id}: ${error instanceof Error ? error.message : String(error)}`)
+      result = { kind: 'missing' }
+    }
+    entry.running = null
+    if (this.entries.get(entry.id) !== entry || entry.generation !== generation) return false
+    if (result.kind === 'unstable') {
+      entry.generation++
+      entry.phase = 'updating'
+      entry.scheduled = null
+      this.notify()
+      return false
+    }
+    if (result.kind === 'missing') {
+      entry.phase = 'error'
+      return true
+    }
+    entry.current = { generation, revision: result.revision, value: result.summary }
+    entry.phase = 'ready'
+    return true
+  }
+}
+
+async function buildSummaryAttempt(id: string, path: string): Promise<SummaryBuildResult> {
+  const before = await sessionEvalContentRevision(path)
+  const cacheKey = `${id}\0${before}`
+  const cached = summaryByContent.get(cacheKey)
+  if (cached) {
+    const after = await sessionEvalContentRevision(path)
+    return before === after
+      ? { kind: 'stable', revision: after, summary: cached }
+      : { kind: 'unstable' }
+  }
+  const payload = await reviewPayload(id)
+  if (!payload) return { kind: 'missing' }
+  const wtPath = worktreePathForBranch(payload.branch)
+  if (!wtPath) return { kind: 'missing' }
+  const model = await buildSessionEvalModel(id, payload, wtPath, true)
+  const after = await sessionEvalContentRevision(path)
+  if (before !== after) return { kind: 'unstable' }
+  const summary = sessionEvalSummary(model.nodes)
+  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
+  for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
+  summaryByContent.set(cacheKey, summary)
+  return { kind: 'stable', revision: after, summary }
+}
+
+const summaryByContent = new Map<string, SessionEvalSummary>()
+const projectionCache = new SessionEvalProjectionCache(buildSummaryAttempt)
+
+export function setSessionEvalProjectionNotify(notify: () => void): void { projectionCache.setNotify(notify) }
+export function sessionEvalProjections(sessions: { id: string; path: string }[]): Map<string, SessionEvalProjection> {
+  return projectionCache.snapshot(sessions)
+}
+export function invalidateSessionEvalProjections(target: 'all' | { id?: string; path?: string } = 'all'): number {
+  return projectionCache.invalidate(target)
+}
+export function holdSessionEvalProjectionObserver(
+  observer: string,
+  target: 'all' | { id?: string; path?: string } = 'all',
+): boolean {
+  return projectionCache.holdObserver(observer, target)
+}
+export function releaseSessionEvalProjectionObserver(observer: string): boolean {
+  return projectionCache.releaseObserver(observer)
+}
+export async function awaitSessionEvalProjectionIdle(): Promise<void> { await projectionCache.idle() }
+
+export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
+  // A full model is demand-only. It fences itself against both the content fingerprint and the graph cache's
+  // generation, and only publishes its summary when it is still the newest observed generation.
+  for (;;) {
+    await projectionCache.idle()
+    const payload = await reviewPayload(id)
+    if (!payload) return null
+    const wtPath = worktreePathForBranch(payload.branch)
+    if (!wtPath) return null
+    if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
+    const known = projectionCache.get(id)
+    const generation = known?.generation ?? 0
+    const before = await sessionEvalContentRevision(wtPath)
+    const model = await buildSessionEvalModel(id, payload, wtPath, false)
+    const after = await sessionEvalContentRevision(wtPath)
+    const current = projectionCache.get(id)
+    if (before !== after || projectionCache.isObserverHeld(id, wtPath)
+      || (current && current.generation !== generation)) {
+      if (before !== after) projectionCache.invalidate({ id })
+      if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
+      continue
+    }
+    const summary = sessionEvalSummary(model.nodes)
+    const cacheKey = `${id}\0${after}`
+    for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
+    summaryByContent.set(cacheKey, summary)
+    if (current) projectionCache.accept(id, generation, after, summary)
+    return {
+      ...model,
+      summary,
+      evalRevision: { epoch: projectionCache.epoch, generation, content: after },
+    }
   }
 }

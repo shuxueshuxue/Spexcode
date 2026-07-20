@@ -8,6 +8,7 @@ import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { evalNodesAsync, type ScenarioTestReference } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
+import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -159,7 +160,13 @@ export async function buildBoard() {
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
-  const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
+  const evalProjections = sessionEvalProjections(sessions)
+  const sess = sessions.map((s) => ({
+    ...s,
+    source: s.path,
+    ops: opsByPath[s.path] || [],
+    evalSummary: evalProjections.get(s.id),
+  }))
 
   // One resolved identity projection feeds title, favicon, rail, and catalog compatibility. A worktree
   // backend reads the actual served tree's branch config and identity; endpoint registration uses the
@@ -179,8 +186,14 @@ export async function buildBoard() {
 // splice is byte-indistinguishable from a full rebuild whenever only session state moved.
 export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>): Promise<Awaited<ReturnType<typeof buildBoard>>> {
   const sessions = await listSessions()
+  const evalProjections = sessionEvalProjections(sessions)
   const opsByPath: Record<string, any[]> = {}
   for (const s of prev.sessions) opsByPath[s.source] = s.ops
-  const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
+  const sess = sessions.map((s) => ({
+    ...s,
+    source: s.path,
+    ops: opsByPath[s.path] || [],
+    evalSummary: evalProjections.get(s.id),
+  }))
   return { ...prev, sessions: sess }
 }

@@ -144,8 +144,12 @@ filter (default off) picking the root.
   paged-review endpoint/shape; the backend projects the current graph/eval aggregate for trunk and the
   worktree-rooted session-eval model for `scope:` before filtering/count/slice. The browser never receives
   the graph's full eval board or a full scoped model merely to hide all but one page. Detail may fetch the
-  one addressed reading plus its bounded neighbor queue; it does not reconstruct the full list. A remark
-  or /ok written from the detail refreshes its source revision — writes, dispatch echo ([[mentions]]), and evidence behavior are
+  one addressed reading plus its bounded neighbor queue; it does not reconstruct the full list. Only a
+  scoped detail opens the full demand model; the scoped list and terminal toolbar never prime it. That
+  detail response carries [[session-eval]]'s summary generation and content revision: a response older
+  than the graph session row already seen is discarded and reloaded, while an equal generation must match
+  its content revision. A remark or /ok written from the detail refreshes its source revision — writes,
+  dispatch echo ([[mentions]]), and evidence behavior are
   unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
   and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,
   loaded timeline events, ordinary typed prose, or anchored composer draft. A real

@@ -5,6 +5,8 @@ hue: 185
 desc: The graph is BUILT once per change, not once per poll — a single-flight, change-invalidated cache in front of buildBoard, so a poll storm costs one build and the assembly never blocks the liveness probe.
 code:
   - spec-cli/src/graphCache.ts
+related:
+  - spec-cli/src/graphScope.test.ts
 ---
 
 # graph-cache
@@ -36,8 +38,9 @@ The graph is built **once per change, not once per poll — and only as much of 
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move, a worktree/.spec event, the
   patrol) runs the whole `buildBoard()`. The splice runs under the SAME single-flight promise, watchdog
   and generation rules as a full build; a 'full' invalidation landing mid-splice leaves the cache
-  full-dirty for the next read. The equivalence obligation — a splice is indistinguishable from a full
-  rebuild whenever only session state moved — is pinned by test, and the patrol's repair accounting
+  full-dirty for the next read. The equivalence obligation — at one fixed eval-projection generation, a
+  splice is indistinguishable from a full rebuild whenever only session state moved — is pinned by test,
+  and the patrol's repair accounting
   ([[graph-stream]]) is the live alarm if it ever breaks.
 - **Cache until change.** A completed build is served verbatim until a real change invalidates it, so a
   quiet poll storm costs ZERO builds (100 cached reads measured at ~0.1ms total). Invalidation is called
@@ -45,6 +48,13 @@ The graph is built **once per change, not once per poll — and only as much of 
   a change the stream would push; a change landing MID-build leaves the cache dirty (generation counter)
   so the next read rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
+
+Session rows' eval summaries compose with this cache rather than hiding inside it ([[session-eval]]): graph
+assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated
+entries. A summary completion invalidates the board at `sessions` scope, so the sessions splice attaches the
+new stable projection without rebuilding node/eval/issue units. Lifecycle-only splices reuse unchanged summary
+entries; a relevant refs/worktree/remark event first advances their own generations, then invalidates the board.
+The graph cache therefore never fans out a full session-eval build, and a quiet cache hit starts zero eval work.
 
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the

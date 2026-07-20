@@ -8,7 +8,6 @@ import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
-import { sessionEvalSummary } from './EvalsFeed.jsx'
 import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
@@ -40,46 +39,31 @@ export function LaunchHero() {
   return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
 }
 
-// The toolbar reads the SAME worktree-rooted lean model as the scoped Evals page. `currentEntries` is the
-// shared latest-per-scenario join, so this glance never grows its own freshness/verdict aggregation. Re-entering
-// the page or crossing a lifecycle/liveness edge refreshes immediately; a bounded cadence covers readings filed
-// during one long working state, and a stale response is aborted on tab change.
-function useSessionEvalSummary(sessionId, refreshKey) {
-  const [summary, setSummary] = useState({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 })
-  useEffect(() => {
-    if (!sessionId) { setSummary({ phase: 'idle', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 }); return }
-    let stopped = false
-    let timer = null
-    let abort = null
-    setSummary({ phase: 'loading', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 })
-    const load = () => {
-      abort = new AbortController()
-      fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`), { signal: abort.signal })
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-        .then((model) => {
-          if (stopped) return
-          const nodes = Array.isArray(model?.nodes) ? model.nodes : []
-          setSummary({ phase: 'ready', ...sessionEvalSummary(nodes) })
-        })
-        .catch((err) => { if (!stopped && err?.name !== 'AbortError') setSummary({ phase: 'error', measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 }) })
-        .finally(() => { if (!stopped) timer = setTimeout(load, 15_000) })
-    }
-    load()
-    return () => { stopped = true; clearTimeout(timer); abort?.abort() }
-  }, [sessionId, refreshKey])
-  return summary
+// The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
+// tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
+export function sessionEvalDisplay(projection, connected = true) {
+  if (!projection) return { phase: 'loading' }
+  const stable = projection.phase === 'ready' && projection.value
+    ? projection.value
+    : projection.lastKnown?.value
+  if (!connected) return stable ? { phase: 'disconnected', ...stable } : { phase: 'disconnected' }
+  if (projection.phase === 'ready' && projection.value) return { phase: 'ready', ...projection.value }
+  if (projection.phase === 'updating') return stable ? { phase: 'updating', ...stable } : { phase: 'loading' }
+  if (projection.phase === 'error') return stable ? { phase: 'error', ...stable } : { phase: 'error' }
+  return { phase: 'loading' }
 }
 
 function SessionEvalStats({ summary }) {
   const t = useT()
-  if (summary.phase === 'loading') {
+  const hasValue = Number.isInteger(summary.total)
+  if (!hasValue && summary.phase === 'loading') {
     return <span className="si-eval-wait" data-tip={t('session.evalLoading')}><Icon name="loader" size={12} className="si-eval-spinner" /></span>
   }
-  if (summary.phase !== 'ready') {
+  if (!hasValue) {
     return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} size={12} /></span>
   }
   return (
-    <span className="si-eval-stats" aria-hidden="true">
+    <span className={`si-eval-stats ${summary.phase}`} aria-hidden="true">
       <span className="si-eval-measured" data-tip={t('session.evalMeasured', summary)}>
         <Icon name="list-checks" size={12} /><span>{summary.measured}/{summary.total}</span>
       </span>
@@ -97,6 +81,10 @@ function SessionEvalStats({ summary }) {
       )}
       {summary.unknown > 0 && (
         <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.unknown} label={t('session.evalUnknown', { n: summary.unknown })} />
+      )}
+      {summary.phase === 'updating' && <Icon name="loader" size={11} className="si-eval-spinner si-eval-phase" />}
+      {(summary.phase === 'disconnected' || summary.phase === 'error') && (
+        <ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} className="si-eval-phase" size={11} />
       )}
     </span>
   )
@@ -219,7 +207,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -279,10 +267,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
   const typeAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness).some((command) => command.name === 'type')
-  const evalRefreshKey = selSession
-    ? `${open}:${selSession.status}:${selSession.liveness}:${selSession.proposal || ''}:${selSession.merges || 0}`
-    : `${open}:new`
-  const evalSummary = useSessionEvalSummary(open && active !== 'new' ? active : null, evalRefreshKey)
+  const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
@@ -631,11 +616,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false)
+  const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
   const evalDoorTitle = evalSummary.phase === 'ready'
-    ? t('session.evalDoorSummary', evalSummary)
-    : evalSummary.phase === 'loading'
-      ? t('session.evalLoading')
-      : t('session.evalUnavailable')
+    ? evalKnownTitle
+    : evalSummary.phase === 'updating'
+      ? t('session.evalUpdating', { summary: evalKnownTitle })
+      : evalSummary.phase === 'disconnected'
+        ? t('session.evalDisconnected', { summary: evalKnownTitle })
+        : evalSummary.phase === 'loading'
+          ? t('session.evalLoading')
+          : evalKnownTitle
+            ? t('session.evalFailedKnown', { summary: evalKnownTitle })
+            : t('session.evalUnavailable')
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, typeAvailable, setTypeMode, sendRawKey }

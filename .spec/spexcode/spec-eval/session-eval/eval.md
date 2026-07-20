@@ -41,6 +41,27 @@ scenarios:
       scoped model without a second impact predicate. The toolbar's visible fresh-pass, fresh-fail, needs-review,
       and blind tallies add back to the affected total (unknown stays separate); the browser proves that
       accounting, the real UI wiring, and Back behavior.
+  - name: session-summary-coherence
+    tags: [backend-api, frontend-e2e, desktop]
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
+    description: >
+      Start from a cold graph projection and drive a real Chromium session toolbar through first paint,
+      A→B→A session switching, an input-generation change, graph disconnect/reconnect, the scoped Evals
+      door, full-model settle, and Back. Count every session /evals request and record the toolbar text on
+      every animation frame. In controlled backend fixtures, race an old projection build against a newer
+      generation, burst several writes, hold the system idle, and edit/rename/stage source plus change a
+      scenario sidecar and trunk remark/main ref.
+    expected: >
+      The toolbar reads only the session unit carried by graph-full/graph-delta: a cache miss is loading,
+      a changed generation is updating with the prior counts intact, disconnect is explicitly last-known,
+      and only ready may claim current or show a genuine 0/0. A→B→A never resets or fetches. Burst writes
+      publish only the latest generation, an old build cannot overwrite it, and idle time creates zero
+      summary requests or computes. Direct dirty source, rename, index-only, sidecar, remark and main moves
+      all enter the canonical watcher/invalidation chain. Reconnect graph-full authoritatively re-anchors.
+      The first /api/sessions/:id/evals request occurs only after opening scoped Evals; its revision matches
+      the graph summary, Back preserves the toolbar value, and no summary-specific SSE/WebSocket/REST poll
+      exists.
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >

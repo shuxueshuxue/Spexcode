@@ -87,7 +87,7 @@ export const specUrl = (id, ...parts) =>
 // converges within ~a second of becoming visible — no visibilitychange hook needed. EventSource still
 // auto-reconnects on a clean drop (a backend hot-reload); the dead-man only covers the silent-death case the
 // browser can't see. The fallback poll stays as the final belt. Returns an unsubscribe.
-export function subscribeBoardLive({ onBoard, onLegacyChange }) {
+export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   let es = null
   let closed = false
   let values = null   // unit-value map, the client's copy of the server's decomposition
@@ -109,6 +109,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   // watching the replacement, and fire onLegacyChange so the caller's ETag refetch races the reconnect.
   const deadman = createDeadman(() => {
     if (!es || closed) return
+    onStatus?.(false)
     reopen(); deadman.arm(); onLegacyChange?.()
   })
   const bump = () => deadman.arm()   // heartbeat: every event proves the stream still lives
@@ -121,7 +122,8 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
       values = unitize(graph)
       tag = to
       clearBoardTag()   // the display's identity is now this frame's tag — the HTTP lane must re-earn its 304s
-      onBoard(graph)
+      onBoard(graph, { authoritative: true, tag: to })
+      onStatus?.(true)
     })
     es.addEventListener('graph-delta', (e) => {
       bump()
@@ -131,15 +133,56 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
       for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
       tag = d.to
       clearBoardTag()
-      onBoard(boardFrom(values))
+      onBoard(boardFrom(values), { authoritative: false, tag: d.to })
+      onStatus?.(true)
     })
     es.addEventListener('graph-changed', () => { bump(); onLegacyChange?.() })
+    es.addEventListener('error', () => onStatus?.(false))
     es.addEventListener('ping', bump)     // keep-alive, carries no board — only proves liveness
     es.addEventListener('ready', bump)    // stream-open ack — likewise a pure liveness beat
   }
   open()
+  onStatus?.(false)
   bump()   // arm from the subscribe instant, so a stream that never comes up at all still breaches
   return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
+}
+
+// Session eval generations are ordered inside one backend epoch. A full graph may authoritatively rebase
+// the epoch after a backend restart; a delta or same-epoch full may only advance. Rejected rows retain the
+// last accepted projection, so a malformed/late board can never roll the toolbar backward.
+export function acceptSessionEvalBoard(board, seen, authoritative = false) {
+  if (!board?.sessions) return board
+  const live = new Set(board.sessions.map((session) => session.id))
+  if (authoritative) for (const id of seen.keys()) if (!live.has(id)) seen.delete(id)
+  let changed = false
+  const sessions = board.sessions.map((session) => {
+    const projection = session.evalSummary
+    if (!projection || !Number.isInteger(projection.generation) || !projection.epoch) return session
+    const prior = seen.get(session.id)
+    const newEpoch = prior && prior.epoch !== projection.epoch
+    const accept = !prior
+      || (newEpoch ? authoritative : projection.generation >= prior.generation)
+    if (accept) {
+      // A restarted backend may authoritatively rebase to a cold `loading` generation. The old epoch can
+      // never remain current, but its stable value is still useful as explicit last-known until this epoch
+      // publishes ready. This prevents a reconnect/remount from flashing 0/0 without weakening the rebase.
+      const oldStable = prior?.projection?.phase === 'ready' && prior.projection.value
+        ? { generation: prior.projection.generation, revision: prior.projection.revision, value: prior.projection.value }
+        : prior?.projection?.lastKnown
+      const accepted = newEpoch && !projection.value && !projection.lastKnown && oldStable
+        ? { ...projection, lastKnown: oldStable }
+        : projection
+      seen.set(session.id, { epoch: accepted.epoch, generation: accepted.generation, projection: accepted })
+      if (accepted !== projection) {
+        changed = true
+        return { ...session, evalSummary: accepted }
+      }
+      return session
+    }
+    changed = true
+    return { ...session, evalSummary: prior.projection }
+  })
+  return changed ? { ...board, sessions } : board
 }
 
 // The backend carries one resolved identity object. Legacy fields remain read-only compatibility for a

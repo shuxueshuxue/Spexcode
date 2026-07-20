@@ -57,6 +57,8 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
 
   const scoped = scopedEvalReviewItems({
     id: 's', node: 'n', branch: 'node/n', title: 'n', ahead: 1, dirtyNonRuntime: 0, gates: [],
+    summary: { measured: 1, total: 2, pass: 1, fail: 0, review: 0, blind: 1, unknown: 0 },
+    evalRevision: { epoch: 'test', generation: 1, content: 'fixture' },
     nodes: [{
       id: 'n', title: 'n', hue: 10, desc: '', hasEvalFile: true, uncoveredFrontend: false,
       unknownCoverage: [], scenarios: [{ name: 'blind', expected: '', impact: ['code'] }, { name: 'own', expected: '', impact: ['code'] }],

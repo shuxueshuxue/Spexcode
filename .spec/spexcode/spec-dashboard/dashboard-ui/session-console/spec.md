@@ -110,12 +110,12 @@ reserves space — growth overlays). The input's panel fill stays inside its vis
 resting and grown states; it never paints through that separator into the terminal. Growth is
 **content-driven**: only real draft content grows the box —
 an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
-strip taller than the space the terminal reserved. Above the pane, one compact **session toolbar** makes four
-different things legible without pretending they are one control: the current surface, session identity/state,
-evaluation, and available commands. Its surface group contains **Terminal as the sole real tab** (`role=tab` in
-the only `tablist`) and keeps that selected surface visually attached to the live pane. The identity group consumes
-the shared `sessionHeadline` and the existing lifecycle/liveness vocabulary; its headline owns the flexible width
-and ellipses instead of pushing any following control out of the pane. The Eval entry is a **DOOR, not a tab** —
+strip taller than the space the terminal reserved. Above the pane, one genuinely single-line **session toolbar**
+contains only three things: the current surface, evaluation, and available commands. Its surface group contains
+**Terminal as the sole real tab** (`role=tab` in the only `tablist`) and keeps that selected surface visually
+attached to the live pane. Session identity, lifecycle, and liveness do **not** repeat here: the selected row in the
+left session list is the console's visible identity/state surface, so a second headline/status group only spends
+height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
 a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
 copy-link/middle-click work for free), and it sits outside the tablist, so clicking it (or the typed
@@ -132,12 +132,14 @@ reading filed during a long `working` stretch becomes visible without forcing a 
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
-into that dark edge — the complaint this replaces). At wide desktop the headline spends the otherwise empty
-middle width; at a narrow pane the same one-line hierarchy progressively drops redundant words and secondary
-tallies while keeping Terminal, an ellipsed identity, the measured/declared Eval count, and every currently
-available command inside the pane. The geometry is stable across all app themes, English/Chinese, lifecycle and
-liveness combinations, and type mode; a persisted wide session list yields at the desktop/mobile boundary rather
-than crushing the terminal lane until toolbar controls clip. Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
+into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
+focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
+narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping Terminal, the
+measured/declared Eval count, and every currently available icon tool inside the pane. The bar never grows or
+overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
+all app themes, English/Chinese, lifecycle and liveness combinations, and type mode; a persisted wide session list
+yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.
+Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
 wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
@@ -158,8 +160,9 @@ the running session's send, the New Session launch Enter, and a completion menu'
 a candidate never fires the line. Only a plain Enter that ends no composition sends. The exception is the **board commands** —
 a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
 only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
-ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity
-colour**, never two codepaths. The two terminal verbs split by what they destroy: **`/stop`** stops this
+feeds both the typed rows and every available toolbar tool; where a command has a visible twin, they share one
+action and one **identity colour**, never two codepaths. The two terminal verbs split by what they destroy:
+**`/stop`** stops this
 session (`act('stop')`, **muted grey** — v0.3.0 respelled it off the old `/exit`, which collided with Claude
 Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux but **keeps the worktree**, so
 the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
@@ -229,9 +232,13 @@ key handling deliberately **falls through unhandled** — type mode included —
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
 reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **toolbar's command
-group** renders the same board-command registry, narrowed to the current state:
-**type** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
-identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
+group** renders the same board-command registry, narrowed to the current state: **type** whenever live and
+**merge** at review/done. Every visible action uses one shared compact icon-toolbutton primitive and a familiar
+[[icon-system]] / Lucide mark (keyboard/type, git-merge, rotate/relaunch), with its registry identity colour;
+there is no emoji, visible text label, or toolbar-local icon/action mapping. The registry remains the single row
+that decides availability, colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution.
+Type exposes `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) swaps the
+registry commands for the same primitive's relaunch action, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
 permanent **Eval door**, always available for any selected session (see [[session-eval]]): the toolbar entry
 or the typed `/eval`, each navigating to the session-scoped Evals page. There is
@@ -277,8 +284,8 @@ compact one-line layout; only the avatar differs (the map-side window keeps it, 
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
-everywhere they appear (window row, console tab + header, @-mention and search rows,
-the mobile card). Deliberately just **four hues — a traffic
+everywhere they appear (window row, console sidebar row, @-mention and search rows, the mobile card).
+The toolbar deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour

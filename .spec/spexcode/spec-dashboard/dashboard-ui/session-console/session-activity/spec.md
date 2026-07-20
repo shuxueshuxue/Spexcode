@@ -90,15 +90,8 @@ When the selected row belongs to the nesting forest, its leading connector/fold 
 gap before the headline after the row changes from flex to block flow; revealing a title never glues the
 subtree count to its first word.
 
-**The console toolbar repeats the shared headline as identity, not as a second naming rule.** The selected
-sidebar row remains the full on-demand reading surface, while the terminal toolbar consumes that SAME
-`sessionHeadline` beside lifecycle/liveness state so the pane stays identified when the narrow list row is
-outside the viewer's scan. Its one-line `si-th-name` takes only otherwise-free width and ellipses before the
-Eval door or commands; it never derives a stable handle or another fallback chain. Row and toolbar therefore
-renarrate in lock-step and cannot disagree.
-
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
-which session this is* — rows, window, the console sidebar and toolbar, **the search palette, the
+which session this is* — rows, window, the console sidebar, **the search palette, the
 lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —
 the same live line the board rows show, never the stable label beside it) all show the identical line, so
 wherever a session is named it reads the same. (Pinning any of them to the stable handle bought nothing —
@@ -114,6 +107,12 @@ truncation), which is the whole search promise: a session is found by the stable
 by, while raw id/node/branch fragments are deliberately not promised searchable. That the door is *named* `sessionHandle`,
 not `sessionName`, is what keeps this guarantee from eroding again — a new pick-list can't grab the stable
 label by reflex ([[session-label]]).
+
+The selected console sidebar row is also the terminal pane's **sole visible identity/state surface**. The
+toolbar deliberately carries neither `sessionHeadline` nor lifecycle/liveness text: repeating the selected row
+spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or HTML-derived text into
+tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the shared row face
+as the one place the console identifies the selected session.
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop

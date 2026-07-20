@@ -23,6 +23,14 @@ const ESU = Buffer.from('\x1b[?2026l')
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const tmux = (...args: string[]) => pexec('tmux', ['-L', SOCK, ...args])
 
+async function waitFor(check: () => boolean, timeout = 5000): Promise<void> {
+  const deadline = Date.now() + timeout
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error('timed out waiting for fixture output')
+    await sleep(25)
+  }
+}
+
 const PROG = String.raw`
 const W = process.stdout
 const draw = (label) => {
@@ -54,11 +62,13 @@ async function main(): Promise<void> {
     await sleep(350)
     await tmux('send-keys', '-t', SESSION, '-l', `node ${progFile}`)
     await tmux('send-keys', '-t', SESSION, 'Enter')
-    await sleep(500)
+    await waitFor(() => Buffer.concat(chunks).includes(Buffer.from('READY')))
+    await sleep(100)
 
     chunks.length = 0
     resizeBridge(SESSION, viewer, NEXT.cols, NEXT.rows)
-    await sleep(1400)
+    await waitFor(() => Buffer.concat(chunks).includes(LIVE_TAIL))
+    await sleep(100)
 
     const all = Buffer.concat(chunks)
     const finalIndex = chunks.findIndex((chunk) => chunk.indexOf(FINAL) >= 0)

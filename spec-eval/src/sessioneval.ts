@@ -47,11 +47,65 @@ export function unknownCoveragePaths(
   ))
 }
 
+export function sessionEvalNodeCandidate(
+  current: Scenario[],
+  nodeCode: string[],
+  evalPath: string,
+  sidecarPath: string,
+  changedPaths: ReadonlySet<string>,
+  dirtyPaths: ReadonlySet<string>,
+): boolean {
+  if (changedPaths.has(evalPath) || changedPaths.has(sidecarPath) || dirtyPaths.has(sidecarPath)) return true
+  return current.some((scenario) => {
+    const codeAxis = scenario.code?.length ? scenario.code : nodeCode
+    return [...changedPaths].some((path) => codeClaims(codeAxis, path))
+  })
+}
+
+type SessionEvalReading = EvalEntry & { inSession: boolean }
+
+export function scopeSessionScenarioRows(
+  current: Scenario[],
+  base: Scenario[],
+  scenarioInfo: ScenarioInfo[],
+  nodeCode: string[],
+  changedPaths: ReadonlySet<string>,
+  evalFileChanged: boolean,
+  evals: SessionEvalReading[],
+): { scenarios: SessionScenarioInfo[]; evals: SessionEvalReading[] } {
+  const measured = new Set(evals.filter((reading) => reading.inSession).map((reading) => reading.scenario))
+  const selected = selectImpactedScenarios(current, base, nodeCode, changedPaths, evalFileChanged, measured)
+  const infoByName = new Map(scenarioInfo.map((scenario) => [scenario.name, scenario]))
+  const scenarios: SessionScenarioInfo[] = selected.map(({ scenario, impact }) => ({
+    ...(infoByName.get(scenario.name) ?? {
+      name: scenario.name, expected: scenario.expected,
+      ...(scenario.tags?.length ? { tags: scenario.tags } : {}),
+      ...(scenario.test ? { test: scenario.test } : {}),
+      ...(scenario.code?.length ? { code: scenario.code } : {}),
+    }),
+    impact,
+  }))
+  const names = new Set(scenarios.map((scenario) => scenario.name))
+  return { scenarios, evals: evals.filter((reading) => names.has(reading.scenario)) }
+}
+
+export function completeExportNodeIds(
+  changedNodeIds: Iterable<string>,
+  scopedNodeIds: Iterable<string>,
+): string[] {
+  return [...new Set([...changedNodeIds, ...scopedNodeIds])]
+}
+
+export function mergeBasePath(path: string, oldPaths: ReadonlyMap<string, string>): string {
+  return oldPaths.get(path) ?? path
+}
+
 // one eval reading rendered for the export: the latest measurement of one scenario, with its evidence
 // resolved to inline bytes (an image data-URI, or transcript text) so the document is self-contained.
 export type ExportReading = {
   scenario: string
   expected: string
+  impact: ScenarioImpactReason[]
   verdict?: EvalEntry['verdict']
   fresh: boolean
   staleAxes: string[]
@@ -66,6 +120,12 @@ export type ExportReading = {
     | { kind: 'data'; text: string }
     | { kind: 'miss' }
     | { kind: 'none' }
+}
+
+export type ExportUnmeasured = {
+  scenario: string
+  expected: string
+  impact: ScenarioImpactReason[]
 }
 
 // patch ''/old·new null = nothing to show (added → no old, deleted → no new), past the enrichment cap (omitted), or too large (truncated)
@@ -89,8 +149,10 @@ export type ExportNode = {
   deletions: number
   hasEvalFile: boolean
   uncoveredFrontend: boolean
+  affectedScenarios: number
   score: ScoreState
   readings: ExportReading[]
+  unmeasured: ExportUnmeasured[]
 }
 
 export type ExportGate = { label: string; ok: boolean; detail: string }
@@ -125,14 +187,19 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
 
   const changedPaths = new Set(payload.diff.map((file) => file.path))
+  const oldPaths = new Map(payload.diff.flatMap((file) => file.oldPath ? [[file.path, file.oldPath] as const] : []))
 
   // enrich each changed file with its unified diff + full before/after content (derived from the session
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
   // extra fetch. Capped at MAX_ENRICHED_FILES so a huge changeset can't bloat the page; the rest keep their
   // row but say so (omitted), never silently blank.
-  const base = wtPath ? (await gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD'])).trim() : ''
-  const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
-  const scopedNodes = await sessionScopeNodes(id, ctx, changedPaths, base, shas)
+  const [base, shaRows, dirtyPaths] = wtPath ? await Promise.all([
+    gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
+    gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
+    worktreeDirtyPaths(wtPath),
+  ]) : ['', '', new Set<string>()] as const
+  const shas = new Set(shaRows.split('\n').filter(Boolean))
+  const scopedNodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas)
   const enriched = new Map<string, ExportFile>()
   let budget = MAX_ENRICHED_FILES
   for (const f of payload.diff) {
@@ -151,31 +218,44 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   }
   const nodes: ExportNode[] = []
   let passed = 0, total = 0, fresh = 0
-  for (const scoped of scopedNodes) {
-    const files = byNode.get(scoped.id) ?? []
-    const latest = latestPerScenario(scoped.evals)
-    const readings = await Promise.all(latest.map(toExportReading))
-    for (const r of latest) {
-      total++
+  const scopedById = new Map(scopedNodes.map((node) => [node.id, node]))
+  const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
+  const nodeIds = completeExportNodeIds(byNode.keys(), scopedById.keys())
+  for (const id of nodeIds) {
+    const scoped = scopedById.get(id)
+    const spec = specById.get(id)!
+    const files = byNode.get(id) ?? []
+    const projection = scoped ? scopedScenarioReadings(scoped.scenarios, scoped.evals) : { latest: [], unmeasured: [] }
+    const impactByName = new Map(scoped?.scenarios.map((scenario) => [scenario.name, scenario.impact]) ?? [])
+    const readings = await Promise.all(projection.latest.map((reading) => toExportReading(reading, impactByName.get(reading.scenario) ?? [])))
+    const unmeasured = projection.unmeasured.map((scenario) => ({
+      scenario: scenario.name,
+      expected: scenario.expected,
+      impact: scenario.impact,
+    }))
+    total += scoped?.scenarios.length ?? 0
+    for (const r of projection.latest) {
       if (r.fresh) fresh++
       if (r.fresh && r.verdict?.status === 'pass') passed++
     }
     nodes.push({
-      id: scoped.id,
-      title: scoped.title,
-      hue: scoped.hue,
-      desc: scoped.desc,
+      id,
+      title: scoped?.title ?? spec.title,
+      hue: scoped?.hue ?? spec.hue,
+      desc: scoped?.desc ?? spec.desc,
       files,
       additions: files.reduce((a, f) => a + f.additions, 0),
       deletions: files.reduce((a, f) => a + f.deletions, 0),
-      hasEvalFile: scoped.hasEvalFile,
-      uncoveredFrontend: scoped.uncoveredFrontend,
-      score: nodeScore(scoped.hasEvalFile, latest),
+      hasEvalFile: scoped?.hasEvalFile ?? evalById.has(id),
+      uncoveredFrontend: scoped?.uncoveredFrontend ?? false,
+      affectedScenarios: scoped?.scenarios.length ?? 0,
+      score: nodeScore(scoped?.hasEvalFile ?? evalById.has(id), projection.latest, scoped?.scenarios.length ?? 0),
       readings,
+      unmeasured,
     })
   }
-  // measured nodes first, then by amount changed — the strongest evidence and the biggest change lead.
-  nodes.sort((a, b) => (b.readings.length - a.readings.length) || ((b.additions + b.deletions) - (a.additions + a.deletions)))
+  // affected scenarios first, then by amount changed — review work leads while every changed file remains.
+  nodes.sort((a, b) => (b.affectedScenarios - a.affectedScenarios) || ((b.additions + b.deletions) - (a.additions + a.deletions)))
 
   // the headline is DERIVED — the node the session is on, else its branch, else the id. No agent claim.
   const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
@@ -212,9 +292,10 @@ const MAX_ENRICHED_FILES = 60
 const MAX_FILE_BYTES = 200_000
 async function enrichFile(wtPath: string, base: string, f: ReviewDiffFile): Promise<ExportFile> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  const paths = f.oldPath ? [f.oldPath, f.path] : [f.path]
   const [patchRaw, oldRaw, newRaw] = await Promise.all([
-    run(['diff', '-M', `${base}..HEAD`, '--', f.path]),
-    f.status === 'added' ? Promise.resolve('') : run(['show', `${base}:${f.path}`]),
+    run(['diff', '-M', `${base}..HEAD`, '--', ...paths]),
+    f.status === 'added' ? Promise.resolve('') : run(['show', `${base}:${f.oldPath ?? f.path}`]),
     f.status === 'deleted' ? Promise.resolve('') : run(['show', `HEAD:${f.path}`]),
   ])
   const cap = (s: string) => (s.length > MAX_FILE_BYTES ? { text: s.slice(0, MAX_FILE_BYTES), cut: true } : { text: s, cut: false })
@@ -232,9 +313,9 @@ async function enrichFile(wtPath: string, base: string, f: ReviewDiffFile): Prom
 // resolve a reading's evidence to inline bytes so the proof is a self-contained file: an image → a base64
 // data-URI; a transcript → its text; the cache miss / no-capture states pass through. the eval cache owns the bytes
 // (the content-addressed cache) — the proof only asks for them by hash.
-async function toExportReading(r: EvalEntry): Promise<ExportReading> {
+async function toExportReading(r: EvalEntry, impact: ScenarioImpactReason[]): Promise<ExportReading> {
   const base = {
-    scenario: r.scenario, expected: r.expected, verdict: r.verdict, fresh: r.fresh,
+    scenario: r.scenario, expected: r.expected, impact, verdict: r.verdict, fresh: r.fresh,
     staleAxes: r.staleAxes, score: readingScore(r), evaluator: r.evaluator, ts: r.ts,
   }
   if (r.blobState !== 'present' || !r.blob) return { ...base, evidence: { kind: r.blobState === 'miss' ? 'miss' : 'none' } }
@@ -259,6 +340,21 @@ function latestPerScenario(readings: EvalEntry[]): EvalEntry[] {
   const out: EvalEntry[] = []
   for (const r of readings) if (!seen.has(r.scenario)) { seen.add(r.scenario); out.push(r) }
   return out
+}
+
+export function scopedScenarioReadings(
+  scenarios: SessionScenarioInfo[],
+  readings: EvalEntry[],
+): { latest: EvalEntry[]; unmeasured: SessionScenarioInfo[] } {
+  const latestByName = new Map(latestPerScenario(readings).map((reading) => [reading.scenario, reading]))
+  const latest: EvalEntry[] = []
+  const unmeasured: SessionScenarioInfo[] = []
+  for (const scenario of scenarios) {
+    const reading = latestByName.get(scenario.name)
+    if (reading) latest.push(reading)
+    else unmeasured.push(scenario)
+  }
+  return { latest, unmeasured }
 }
 
 // the DECLARED scenarios' latest reading — the SAME declared-bounded computation every other eval face reads
@@ -286,13 +382,13 @@ function readingScore(r: EvalEntry): ScoreState {
 
 // worst-first aggregate over the latest reading per scenario: any fresh fail → fail; else any stale → grey
 // (✗ if any stale last-failed, else ✓); else any unscored scenario → empty; else every scenario fresh-passes.
-export function nodeScore(hasEvalFile: boolean, latest: EvalEntry[]): ScoreState {
+export function nodeScore(hasEvalFile: boolean, latest: EvalEntry[], affectedScenarios = latest.length): ScoreState {
   if (!hasEvalFile) return null
-  if (!latest.length) return 'empty'
+  if (!affectedScenarios || !latest.length) return 'empty'
   if (latest.some((r) => r.fresh && verdictMark(r) === 'cross')) return 'fail'
   const stale = latest.filter((r) => !r.fresh && verdictMark(r))
   if (stale.length) return stale.some((r) => verdictMark(r) === 'cross') ? 'staleFail' : 'stalePass'
-  if (latest.some((r) => !verdictMark(r))) return 'empty'
+  if (latest.length < affectedScenarios || latest.some((r) => !verdictMark(r))) return 'empty'
   return 'pass'
 }
 
@@ -344,6 +440,25 @@ function worktreePathForBranch(branch: string | null): string | null {
   return null
 }
 
+export function parsePorcelainPaths(out: string): Set<string> {
+  const paths = new Set<string>()
+  const records = out.split('\0')
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    if (!record) continue
+    const status = record.slice(0, 2)
+    const path = record.slice(3)
+    if (path) paths.add(path)
+    if ((status.includes('R') || status.includes('C')) && records[i + 1]) paths.add(records[++i])
+  }
+  return paths
+}
+
+async function worktreeDirtyPaths(wtPath: string): Promise<Set<string>> {
+  const out = await gitA(['-C', wtPath, '-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  return parsePorcelainPaths(out)
+}
+
 // ---- the renderer ----
 
 // escape interpolated text for HTML (the proof inlines derived data — file paths, scenarios, expected — so
@@ -379,6 +494,7 @@ function renderReading(r: ExportReading): string {
     <div class="rhead">
       ${scoreBadge(r.score, r.fresh ? undefined : `stale: ${r.staleAxes.join(', ')}`)}
       <span class="scenario">${esc(r.scenario)}</span>
+      <span class="impact">${esc(r.impact.join(' + '))}</span>
       ${verdictBadge(r.verdict)}
       ${stale}
       <span class="rmeta">${r.evaluator ? `${esc(r.evaluator)} · ` : ''}${esc(r.ts)}</span>
@@ -386,6 +502,18 @@ function renderReading(r: ExportReading): string {
     ${r.expected ? `<div class="expected"><b>expected</b> ${esc(r.expected)}</div>` : ''}
     ${note}
     <figure class="evidence">${body}</figure>
+  </div>`
+}
+
+function renderUnmeasured(scenario: ExportUnmeasured): string {
+  return `<div class="eval-entry unmeasured">
+    <div class="rhead">
+      ${scoreBadge('empty', 'unmeasured')}
+      <span class="scenario">${esc(scenario.scenario)}</span>
+      <span class="impact">${esc(scenario.impact.join(' + '))}</span>
+      <span class="verdict legacy">unmeasured</span>
+    </div>
+    ${scenario.expected ? `<div class="expected"><b>expected</b> ${esc(scenario.expected)}</div>` : ''}
   </div>`
 }
 
@@ -416,9 +544,9 @@ function renderNode(n: ExportNode): string {
   const stat = `<span class="diffstat"><span class="add">+${n.additions}</span> <span class="del">−${n.deletions}</span> · ${n.files.length} file(s)</span>`
   const fileList = n.files.length ? `<div class="files">${n.files.map(renderFile).join('')}</div>` : ''
   let proof: string
-  if (n.readings.length) proof = n.readings.map(renderReading).join('')
+  if (n.affectedScenarios) proof = [...n.unmeasured.map(renderUnmeasured), ...n.readings.map(renderReading)].join('')
   else if (n.uncoveredFrontend) proof = `<div class="blindspot">⚠ a frontend node with no eval.md — its loss is unmeasured. Give it a scenario so this change can be verified.</div>`
-  else if (n.hasEvalFile) proof = `<div class="blindspot">declares scenarios but has no eval yet — measure with <code>spex eval add ${esc(n.id)}</code></div>`
+  else if (n.hasEvalFile) proof = `<div class="noev">no declared scenario is affected by this worktree</div>`
   else proof = `<div class="noev">no measurable surface (no eval.md)</div>`
   return `<article class="node" style="--hue:${n.hue}">
     <div class="nhead">
@@ -438,7 +566,7 @@ export function renderExportHtml(m: ExportModel): string {
   const idShort = m.id.slice(0, 8)
   const ribbon = [
     ...m.gates.map((g) => `<span class="chip ${g.ok ? 'ok' : 'bad'}" title="${esc(g.detail)}">${g.ok ? '✓' : '✗'} ${esc(g.label)}</span>`),
-    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="scenarios fresh-passing (of those measured); ${m.score.fresh}/${m.score.total} fresh">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no evals filed on the changed nodes">★ no measured loss</span>`,
+    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="affected scenarios fresh-passing; ${m.score.fresh}/${m.score.total} have a fresh reading">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no scenario is affected by this worktree">★ no affected scenarios</span>`,
   ].join('')
   const gates = m.gates.map((g) => `<li class="${g.ok ? 'ok' : 'bad'}"><span class="gmark">${g.ok ? '✓' : '✗'}</span><span class="glabel">${esc(g.label)}</span><span class="gdetail">${esc(g.detail)}</span></li>`).join('')
   const otherBlock = m.otherFiles.length
@@ -529,6 +657,7 @@ h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:upperca
 .eval-entry{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 .rhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .scenario{font-weight:600;color:#dde7f1}
+.impact{font:600 10px/1 ui-monospace,monospace;color:var(--accent)}
 .rmeta{margin-left:auto;font:11px/1 ui-monospace,monospace;color:var(--dim)}
 .verdict{font:600 11px/1 ui-monospace,monospace;padding:3px 8px;border-radius:6px;border:1px solid var(--line)}
 .verdict.pass{color:var(--green);border-color:#1c3a26}.verdict.fail{color:var(--red);border-color:#3a1f1f}
@@ -596,6 +725,8 @@ async function sessionScopeNodes(
   id: string,
   ctx: Awaited<ReturnType<typeof evalContext>>,
   changedPaths: ReadonlySet<string>,
+  dirtyPaths: ReadonlySet<string>,
+  oldPaths: ReadonlyMap<string, string>,
   base: string,
   shas: ReadonlySet<string>,
 ): Promise<SessionEvalNode[]> {
@@ -622,12 +753,7 @@ async function sessionScopeNodes(
 
     const evalFileChanged = changedPaths.has(evalNode.evalPath)
     const sidecarPath = relative(ctx.root, evalNode.sidecarPath)
-    const sidecarChanged = changedPaths.has(sidecarPath)
-    const codeChanged = current.some((scenario) => {
-      const codeAxis = scenario.code?.length ? scenario.code : spec.code
-      return [...changedPaths].some((path) => codeClaims(codeAxis, path))
-    })
-    if (!evalFileChanged && !sidecarChanged && !codeChanged && !unknownCoverage.length) continue
+    if (!sessionEvalNodeCandidate(current, spec.code, evalNode.evalPath, sidecarPath, changedPaths, dirtyPaths)) continue
 
     const timeline = await evalTimeline(spec.id, ctx)
     // A reading is this session's own when the session filed it OR its anchor is a branch commit. This is
@@ -637,36 +763,25 @@ async function sessionScopeNodes(
       ...reading,
       inSession: reading.by === id || shas.has(reading.codeSha),
     }))
-    const measured = new Set(evals.filter((reading) => reading.inSession).map((reading) => reading.scenario))
+    const baseEvalPath = mergeBasePath(evalNode.evalPath, oldPaths)
     const baseHasEval = evalFileChanged && base
-      ? (await gitA(['-C', ctx.root, 'ls-tree', '--name-only', base, '--', evalNode.evalPath])).trim() !== ''
+      ? (await gitA(['-C', ctx.root, 'ls-tree', '--name-only', base, '--', baseEvalPath])).trim() !== ''
       : false
     const baseScenarios = baseHasEval
-      ? parseScenarios(await gitA(['-C', ctx.root, 'show', `${base}:${evalNode.evalPath}`]))
+      ? parseScenarios(await gitA(['-C', ctx.root, 'show', `${base}:${baseEvalPath}`]))
       : []
-    const selected = selectImpactedScenarios(current, baseScenarios, spec.code, changedPaths, evalFileChanged, measured)
-    if (!selected.length && !unknownCoverage.length) continue
+    const scoped = scopeSessionScenarioRows(current, baseScenarios, timeline.scenarios, spec.code, changedPaths, evalFileChanged, evals)
+    if (!scoped.scenarios.length && !unknownCoverage.length) continue
 
-    const infoByName = new Map(timeline.scenarios.map((scenario) => [scenario.name, scenario]))
-    const scenarios: SessionScenarioInfo[] = selected.map(({ scenario, impact }) => ({
-      ...(infoByName.get(scenario.name) ?? {
-        name: scenario.name, expected: scenario.expected,
-        ...(scenario.tags?.length ? { tags: scenario.tags } : {}),
-        ...(scenario.test ? { test: scenario.test } : {}),
-        ...(scenario.code?.length ? { code: scenario.code } : {}),
-      }),
-      impact,
-    }))
-    const names = new Set(scenarios.map((scenario) => scenario.name))
     nodes.push({
       id: spec.id, title: spec.title, hue: spec.hue, desc: spec.desc,
       hasEvalFile: timeline.hasEvalFile,
       uncoveredFrontend: !timeline.hasEvalFile && unknownCoverage.length > 0,
       unknownCoverage,
-      scenarios,
+      scenarios: scoped.scenarios,
       // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
       // honest downstream states; impact selection never removes a row because its reading is stale.
-      evals: evals.filter((reading) => names.has(reading.scenario)),
+      evals: scoped.evals,
     })
   }
 
@@ -685,10 +800,15 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   const changedPaths = new Set(payload.diff.map((file) => file.path))
-  const base = wtPath ? (await gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD'])).trim() : ''
+  const oldPaths = new Map(payload.diff.flatMap((file) => file.oldPath ? [[file.path, file.oldPath] as const] : []))
+  const [base, shaRows, dirtyPaths] = wtPath ? await Promise.all([
+    gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
+    gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
+    worktreeDirtyPaths(wtPath),
+  ]) : ['', '', new Set<string>()] as const
   // this session's own commits — the membership test behind `inSession` and measurement impact
-  const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
-  const nodes = await sessionScopeNodes(id, ctx, changedPaths, base, shas)
+  const shas = new Set(shaRows.split('\n').filter(Boolean))
+  const nodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas)
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))

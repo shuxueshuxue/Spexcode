@@ -443,7 +443,7 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
   return rows
 }
 
-export type ReviewDiffFile = { path: string; status: string; additions: number; deletions: number }
+export type ReviewDiffFile = { path: string; oldPath?: string; status: string; additions: number; deletions: number }
 const DIFF_STATUS: Record<string, string> = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
 export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
@@ -453,14 +453,21 @@ export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<R
     run(['diff', '--numstat', '-M', `${base}..HEAD`]),
     run(['diff', '--name-status', '-M', `${base}..HEAD`]),
   ])
-  const status = new Map<string, string>()
-  for (const r of parseNameStatus(statusOut)) status.set(r.to, DIFF_STATUS[r.code] ?? r.code)
+  const status = new Map<string, { status: string; from: string }>()
+  for (const r of parseNameStatus(statusOut)) status.set(r.to, { status: DIFF_STATUS[r.code] ?? r.code, from: r.from })
   const files: ReviewDiffFile[] = []
   for (const line of numstatOut.split('\n')) {
     const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
     if (!m) continue
-    const { to } = parseStatPath(m[3])   // numstat renders a rename as `{old => new}`; keep the final path
-    files.push({ path: to, status: status.get(to) ?? 'modified', additions: m[1] === '-' ? 0 : +m[1], deletions: m[2] === '-' ? 0 : +m[2] })
+    const { from, to } = parseStatPath(m[3])
+    const detail = status.get(to)
+    files.push({
+      path: to,
+      ...(from !== to ? { oldPath: detail?.from ?? from } : {}),
+      status: detail?.status ?? 'modified',
+      additions: m[1] === '-' ? 0 : +m[1],
+      deletions: m[2] === '-' ? 0 : +m[2],
+    })
   }
   return files
 }

@@ -21,20 +21,24 @@ scenarios:
   - name: session-scope-bounds-impact
     tags: [backend-api, frontend-e2e, desktop]
     test: spec-dashboard/test/session-scope-impact.e2e.mjs
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/git.ts, spec-cli/src/git.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
     description: >
-      Build a session model over a worktree where one source file and one scenario's semantic contract
+      Run the controlled source fixture over a session model where one source file and one scenario's semantic contract
       changed, another scenario in that same eval.md did not, a third affected scenario has no reading,
       a fourth affected scenario has only a stale reading, and the session filed a reading for a scenario
-      whose code did not move. Include a changed frontend node with no eval.md. Read the model's scenario
-      membership, impact reasons, latest reading states, and unknown coverage separately from the UI.
+      whose code did not move. Exercise a dirty session sidecar before commit, a pure eval.md reparent, a
+      changed-only node in the HTML export, and a changed frontend node with no eval.md. Then drive a real
+      browser from the session terminal through the scoped list, detail, and Back; compare toolbar/list/filter
+      projections with the lean model while treating the source fixture, not that API echo, as the membership oracle.
     expected: >
       The model contains exactly the scenarios whose own code axis intersects the diff, whose own
       description/expected hash changed, or which this session measured. The untouched sibling is absent.
       The stale reading and the declared-but-unmeasured scenario remain in scope; the latter is the precise
       blind/unmeasured case. The no-eval frontend node is unknown coverage, not a synthetic scenario and not
-      part of measured/declared or filter counts. Toolbar, scoped list, detail reachability, CLI, and export
-      consume this one scoped model without a second impact predicate.
+      part of measured/declared or filter counts. A dirty own reading is immediately measurement-impacted and
+      a pure eval.md move impacts nothing. Export retains every changed file and counts/renders missing affected
+      scenarios in its denominator. Toolbar, scoped list, detail reachability, CLI, and export consume this one
+      scoped model without a second impact predicate; the browser proves the real UI wiring and Back behavior.
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
@@ -147,6 +151,8 @@ scenarios:
 ---
 # session-eval loss
 
-YATU through the real dashboard: a session with real changes + readings, the session-scoped Evals pages
-read from the live DOM (rows, gates, request waterfall — the tier check is a NETWORK assertion), and the
-export artifact opened as a plain document. Never asserted from the engine code.
+The controlled source fixture proves scenario membership, impact reasons, dirty-sidecar and rename edges,
+and export completeness against explicit inputs. YATU then drives the real dashboard with a session carrying
+real changes + readings: the session-scoped Evals pages are read from the live DOM (toolbar, rows, filters,
+gates, detail, Back), and the export artifact is opened as a plain document. The browser may prove that every
+face consumes the lean API model; it never uses that same API response as the independent membership oracle.

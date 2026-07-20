@@ -37,7 +37,7 @@ EOF
 [ -n "$owner" ] || exit 0
 
 mkdir -p "$sdir"; : > "$sent"
-reason="Before reading $path, read its governing spec FIRST: $owner. Read the relevant NEIGHBORS too: the parent that scopes it, the siblings it borders, and the children that refine it. Then reconcile deliberately: change the spec if the intent is changing, or make the code honor it. The one forbidden move is code that silently diverges from its spec. (Fires once per session, at the first governed code read.)"
+reason="Before accessing governed source $path, read its governing spec FIRST: $owner. Read the relevant NEIGHBORS too: the parent that scopes it, the siblings it borders, and the children that refine it. Then reconcile deliberately: change the spec if the intent is changing, or make the code honor it. The one forbidden move is code that silently diverges from its spec. (Fires once per session, at the first governed code read.)"
 esc=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
 printf '{"decision":"block","reason":"%s"}\n' "$esc"
 exit 0

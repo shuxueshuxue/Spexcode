@@ -1,5 +1,29 @@
 ---
 scenarios:
+  - name: paged-review-yatu
+    test: spec-dashboard/test/review-pagination.e2e.mjs
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewPage.js]
+    description: >
+      Against a real backend in Chromium, start the byte/item ledger at first app entry, then open Issues,
+      trunk Evals, and scoped Evals. Measure the graph bootstrap and every paged response; compare response
+      items with rendered rows. Exercise pagination to page 2 and back to explicit page 1, refresh,
+      Back/Forward, query/section reset, last page, page 41 and 999999, row detail then browser Back, and
+      loading/failure. At 390px measure wrapping, target geometry, scroll ownership, horizontal overflow,
+      keyboard activation, and the accessibility navigation snapshot. Record videos, screenshots, timeline,
+      and a JSON network ledger.
+    expected: >
+      The initial graph carries no Issues/Evals item, scenario, or reading arrays from which either main
+      list can be reconstructed. Opening a list adds one response whose items and DOM rows are both at most
+      25 while totals/counts/facets still describe the full match; scoped Evals does not fetch its former
+      full session model. Pagination uses real anchors and PUSH: initial/reset page 1 omits page, pagination
+      back to first creates page=1, and direct/refresh/Back/Forward preserve that explicit form. Query and
+      section changes reset without page. Overflow remains HTTP 200 at the requested address with zero rows
+      and real requested-1/requested+1 anchors; an in-range last page disables Next. Detail Back restores
+      q+page+the exact list scroll. Loading and failure are distinct from empty. Pagination remains ordinary
+      flow content below the list in the same PageScroll as sticky scoped gates/header; at 390px it wraps
+      with 32px-or-larger targets, zero horizontal overflow, a named navigation landmark, real page links,
+      and Enter activation.
   - name: one-chrome-two-pages
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]

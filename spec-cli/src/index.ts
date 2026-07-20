@@ -489,8 +489,8 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
-      // no keyboard input: the only client→server messages are the resize frame and the wheel frame. Binary
-      // is ignored; pane navigation stays inside the tmux bridge instead of becoming browser scroll state.
+      // No keyboard input: client→server text only measures/prewarms, changes visibility, or forwards wheel
+      // navigation. Binary is ignored; pane navigation stays in the tmux bridge instead of browser scroll state.
       if (typeof data === 'string') {
         try {
           const m = JSON.parse(data)

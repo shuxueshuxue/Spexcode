@@ -63,25 +63,20 @@ function sessionRows(model) {
   return { blind, entries: [...own.sort(byTs), ...inherited.sort(byTs)] }
 }
 
-// the ONE scope door ([[evals-view]]): BOTH scoped faces carry this same icon-only terminal anchor —
-// the scoped LIST as an action in its se-gates toolbar, the scoped DETAIL through the DetailShell
-// header action slot — never a visible banner or explanatory copy. A REAL <a> to `#/sessions/<id>`,
-// the terminal console, on a stable 32px hit target; the full semantics (which session/worktree the
-// view's readings come from, where the door lands) live in the localized tooltip + aria-label. It
-// derives ONLY from the canonical address's scope token, so door-entry, direct open, and reload render
-// byte-identical doors; trunk faces render none. The terminal door, the detail's uniform #/evals back
-// arrow, and browser Back are three separate commands — this door owns exactly the first.
+// The scoped LIST's one way back to the session terminal ([[evals-view]]): a real icon-only anchor,
+// first in the gates toolbar's visual and focus order. Details return here first through their own
+// canonical list back anchor; trunk faces and every detail face render no terminal door.
 export function EvalScopeDoor({ sessionId }) {
   const t = useT()
-  const label = t('sessionEval.scopeDoor', { id: sessionId.slice(0, 8) })
+  const label = t('sessionEval.scopeDoor')
   return (
     <a className="se-door" href={addressHash(sessionAddress(sessionId))} data-tip={label} aria-label={label}>
-      <Icon name="terminal" size={15} />
+      <Icon name="arrow-left" size={16} />
     </a>
   )
 }
 
-// The LIST page (`#/evals[?query]`): the session scope's gates strip + terminal door + export door
+// The LIST page (`#/evals[?query]`): the session scope's back door + gates strip + export door
 // above the one [[evals-feed]] list. All filter state is the URL's one token text; the scope: token
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
@@ -95,23 +90,20 @@ export function EvalsListPage({ scope, sessionId, model, error, sessions, queryT
         : null
   return (
     <>
-      {/* the session scope's toolbar — the gates strip (`spex session review`'s numbers, [[session-eval]])
-          plus the trailing action cluster: the HTML export door once the model is loaded, and ALWAYS the
-          address-derived terminal door, so it renders identically while the model is still loading, after
-          a reload, and at every width/locale. */}
+      {/* The terminal back door leads the toolbar, before every gate and the trailing export action. */}
       {sessionId && (
         <div className="se-gates">
+          <EvalScopeDoor sessionId={sessionId} />
           {model && model.gates.map((g) => (
             <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}><Icon name={g.ok ? 'check' : 'x'} size={11} /> {g.label}</span>
           ))}
-          <span className="se-acts">
-            {model && (
+          {model && (
+            <span className="se-acts">
               <a className="se-export" href={apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`)} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
                 <Icon name="download" size={13} />
               </a>
-            )}
-            <EvalScopeDoor sessionId={sessionId} />
-          </span>
+            </span>
+          )}
         </div>
       )}
       <EvalsGroup entries={scope.entries} blind={scope.blind} sessions={sessions}
@@ -180,16 +172,12 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
   if (!entry) {
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
-  // the scoped detail seats the SAME [[evals-view]] icon-only terminal door the scoped list's toolbar
-  // carries (through the DetailShell header action slot) — the one explicit session door, now that the
-  // compact back anchor uniformly returns to the list. A trunk detail seats none.
-  const action = sessionId ? <EvalScopeDoor sessionId={sessionId} /> : null
   return (
     <div className="lp-page">
       {notice && <div className="fv-notice">{notice}</div>}
       <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
-        action={action} queue={queue} />
+        queue={queue} />
     </div>
   )
 }
@@ -223,8 +211,8 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const listHref = sessionId ? addressHash(sessionEvalAddress(sessionId)) : routeHash('evals')
   // the detail chrome's compact back anchor ([[address-routing]]'s return gate, fed only the detail's
   // own canonical scope): a trunk detail returns to the bare #/evals list, a scoped detail to its
-  // scoped DEFAULT list — the same address the session doors mint, scope token kept; the session door
-  // itself is the header's terminal door, never the back arrow.
+  // scoped DEFAULT list — the same address the session doors mint, scope token kept. The scoped list's
+  // own first control is the separate route back to the session terminal.
   const backHref = detailBackHash('evals', sessionId)
   const backLabel = t('detail.backToEvals')
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,

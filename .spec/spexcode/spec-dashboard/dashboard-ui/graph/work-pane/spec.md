@@ -83,8 +83,9 @@ persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
 latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
-shared**: the eval pane ([[eval-tab]]) rides the same component (version rows + diff here, reading rows
-+ screenshot there).
+shared**: the eval pane ([[eval-tab]]) rides the same component (version rows + diff here, result rows
++ screenshot there). Its embedded filter projects the same result-kind discriminator as [[evals-feed]],
+never a popup-only legacy alias.
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
 (`Enter`; see [[session-console]] and [[term-input]]), keyed to a session rather than pinned to a node. The

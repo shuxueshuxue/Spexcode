@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { join, resolve, relative } from 'node:path'
+import { basename, join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { HARNESSES, type HarnessArtifacts } from './harness.js'
@@ -14,11 +14,11 @@ import { dematerialize } from './materialize.js'
 // and the optional git hooks. EVERY removal is gated on a SpexCode IDENTITY STAMP (the managed-block
 // sentinels, the shim's own dispatch.sh command line, the trust sentinels, the generated mark / name-scoped
 // on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated. The one
-// inviolable rule: the user's spec ASSET (.spec/.plugins) is NEVER touched — uninstall removes only generated
-// WIRING, not the spec graph that wiring served.
+// inviolable rule: the user's tracked intent ASSET (.spec/.plugins + spexcode.json) is NEVER touched — uninstall
+// removes only generated WIRING and local runtime state, not the spec graph and adoption config they served.
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
-const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex'] as const
+const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex', '.zcode'] as const
 
 // Init and uninstall share one ownership source for generated git hooks: the shipped canonical templates.
 // Exact bytes prove the destination is still our derivative; any user edit withdraws that ownership.
@@ -27,7 +27,7 @@ const HOOK_TEMPLATES = fileURLToPath(new URL('../templates/hooks', import.meta.u
 // is this dir a SpexCode plugin bundle? Either its folder name is the identity stamp, or its
 // `.claude-plugin/plugin.json` declares `name: spexcode`. Read-gated so a user's other plugin is never touched.
 function isSpexcodeBundle(dir: string): boolean {
-  if (dir.split('/').pop() === 'spexcode') return true
+  if (basename(dir) === 'spexcode') return true
   const manifest = join(dir, '.claude-plugin', 'plugin.json')
   if (!existsSync(manifest)) return false
   try {
@@ -55,6 +55,26 @@ function sweepPluginBundles(proj: string, hosts: readonly string[]): string[] {
     }
   }
   return removed
+}
+
+// Arbitrary plugin landing folders are the one materialized path set that cannot be reconstructed from stamps
+// alone, so materialize records them as data. Read every current per-tree ledger plus the legacy project-global
+// ledger before uninstall removes the store; a stale bundle remains removable even after current config stopped
+// naming its former host folder.
+function pluginLedgerHosts(store: string): string[] {
+  const ledgers = [join(store, 'plugin-folders')]
+  const trees = join(store, 'trees')
+  if (existsSync(trees)) {
+    for (const e of readdirSync(trees, { withFileTypes: true })) {
+      if (e.isDirectory()) ledgers.push(join(trees, e.name, 'plugin-folders'))
+    }
+  }
+  const hosts: string[] = []
+  for (const ledger of ledgers) {
+    if (!existsSync(ledger)) continue
+    hosts.push(...readFileSync(ledger, 'utf8').split('\n').map((line) => line.trim()).filter(Boolean))
+  }
+  return hosts
 }
 
 // resolve the repo's shared git hooks dir (the common dir's hooks/), or null when <dir> isn't a git repo.
@@ -108,19 +128,20 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   //    erase phase every materialize runs, asserted against the empty policy. One inverse, never a parallel one.
   dematerialize(proj, arts)
 
-  // 3. the global per-project store — the per-tree materialize slots (trees/<enc>: manifest + content-hash +
-  //    plugin ledger), any legacy pre-slot manifest, and the session records. This is the runtime tier,
-  //    not the user's spec asset, so the whole dir is ours.
+  // 3. Locate the global per-project store and recover every current/legacy plugin landing folder from its
+  //    ledgers BEFORE deleting it. The store is the runtime tier, not the user's tracked intent asset.
   let store: string | null = null
+  let ledgerHosts: string[] = []
   try {
     store = runtimeRoot(proj)
-    rmSync(store, { recursive: true, force: true })
   } catch {
     store = null
   }
+  if (store) ledgerHosts = pluginLedgerHosts(store)
 
-  // 4. any spexcode-stamped plugin bundle, under the configured + standard plugin-host folders.
-  let pluginHosts: string[] = [...DEFAULT_PLUGIN_HOSTS]
+  // 4. Any spexcode-stamped plugin bundle under configured, standard, or ledger-recovered hosts. The ledger
+  //    input is what closes plugin-folder A -> native/folder B even when the previous materialize never finished.
+  let pluginHosts: string[] = [...DEFAULT_PLUGIN_HOSTS, ...ledgerHosts]
   try {
     const targets = resolveHarnessTargets(readConfig(mainCheckout(proj)).harnesses)
     pluginHosts = [...pluginHosts, ...targets.filter((t) => t.kind === 'plugin').map((t) => (t as { folder: string }).folder)]
@@ -129,8 +150,15 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   }
   const bundles = sweepPluginBundles(proj, pluginHosts)
 
+  // 5. The whole store: per-tree manifests/hashes/ledgers, legacy project-global products, and sessions.
+  let removedStore: string | null = null
+  if (store && existsSync(store)) {
+    rmSync(store, { recursive: true, force: true })
+    removedStore = store
+  }
+
   console.log(`✓ dematerialized (contract blocks, shims, Codex trust, skills, sub-agents, ignore blocks, content filter) for ${HARNESSES.map((h) => h.id).join(', ')}`)
-  if (store) console.log(`✓ removed the global per-project store (${store})`)
+  if (removedStore) console.log(`✓ removed the global per-project store (${removedStore})`)
   if (bundles.length) console.log(`✓ removed plugin bundle(s): ${bundles.join(', ')}`)
 
   // Git hooks are per-clone and may carry user logic → preserved unless --hooks (and even then only while
@@ -145,6 +173,6 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
 
   console.log(`
 SpexCode wiring removed. Your spec data is untouched:
-  • .spec/ and .plugins/ remain — your spec graph is YOURS, never deleted by uninstall.
+  • .spec/ (including .plugins/) and spexcode.json remain — your tracked intent is never deleted by uninstall.
   • To re-adopt later: \`spex init\` regenerates the shims, contract, trust, and global store.`)
 }

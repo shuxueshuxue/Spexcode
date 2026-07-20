@@ -27,11 +27,11 @@ scenarios:
       run the identical command again; run it against an unmeasured scenario; and run it once under a
       governed session identity (SPEXCODE_SESSION set).
     expected: >-
-      The first ok appends one 'human-ok' line anchored to the latest reading's ts+codeSha and lands as
+      The first ok appends one 'human-ok' line anchored to the latest eval's ts+codeSha and lands as
       a trunk commit touching only that sidecar (no pre-commit gate run); the repeat is idempotent
       success ("already human-ok'd", nothing appended); the unmeasured scenario is refused loud
       ("nothing to ok"); the governed session is refused with the remark repair — an agent never
-      self-blesses. `spex eval ls` shows the ☑ human-ok tag on the blessed reading only.
+      self-blesses. `spex eval ls` shows the ☑ human-ok tag on the blessed eval only.
 ---
 
 Measured YATU: the browser loop drives the deployed dashboard surface a human reviewer actually uses

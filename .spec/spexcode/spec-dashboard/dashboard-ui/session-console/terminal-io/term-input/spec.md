@@ -26,9 +26,10 @@ realised wherever a live terminal sits beside spec navigation.
   pretend it sent. A **set of `/` commands never reaches the agent** — the *board* commands, handled by
   the dashboard itself: `/stop` stops the session but **keeps** its worktree (it goes offline, resumable),
   `/close` removes the worktree (the no-prompt discard), `/merge` merges it, `/type` toggles type mode, `/eval`
-  opens the session-scoped Evals list ([[evals-view]]'s scoped default query). Each is the **typed twin of its header action or navigation door** — drawn from
-  **one registry**, so the command and its button are one action, one identity colour, and can never
-  drift. Sending these words to a live agent would only drive the agent's own process, not the board.
+  opens the session-scoped Evals list ([[evals-view]]'s scoped default query). Each is the **typed twin of its
+  toolbar icon tool or navigation door** — drawn from **one registry**, so availability, identity colour,
+  localized accessible label, icon, pressed state, and execution can never drift into a parallel mapping.
+  Sending these words to a live agent would only drive the agent's own process, not the board.
   Realised in [[session-console]].
 
 ## completion menus answer different questions
@@ -36,7 +37,7 @@ realised wherever a live terminal sits beside spec navigation.
 A trigger token under the caret opens a dropdown. For **authoring** rows — `[[` nodes, config presets,
 Claude Code's own commands — a row **only ever edits token text** and **never runs anything**; they are
 authoring aids, not a second control plane. The **one exception** is a **board command** (below): its row
-is the typed twin of a header button, so accepting it **runs the action** — it *is* the board's control
+is the typed twin of a toolbar tool, so accepting it **runs the action** — it *is* the board's control
 plane, not a hint toward one.
 
 - **`[[` — spec nodes (a topic), on every prompt.** Which node does this target? Typing `[[` opens the
@@ -54,7 +55,7 @@ plane, not a hint toward one.
   preserving the prose around it; a URL or slash inside a word stays inert.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
   board's own commands (`/stop`·`/close`·`/merge`·`/type`·`/eval`) **lead** the list, each in its **identity
-  colour** with a `[board]` tag, visibly apart from CC's blue command rows below — because there you talk
+  colour** with a `[ui]` tag, visibly apart from CC's blue command rows below — because there you talk
   to a live agent (CC commands make sense), but the board commands act HERE on the dashboard.
 
 ## the New Session `/` composes at launch

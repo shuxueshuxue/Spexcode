@@ -28,7 +28,9 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   remarkable, worktree-rooted reading of an un-merged branch — and the address every session DOOR wears:
   the console tab bar's and the phone session header's eval entries are REAL anchors whose href is this
   projection, and the scoped Evals pages mint every scoped href (rows, queue neighbors, the detail's way
-  back to the scoped list) through it too, so the scope grammar lives here and nowhere else. The old
+  back to the scoped list) through it too. Only that scoped list exposes the separate real anchor back
+  to `#/sessions/<id>`; details first return to their canonical scoped list, so the scope grammar lives
+  here and nowhere else. The old
   `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
   on arrival ([[side-nav]]) and nothing mints it anymore.
 - `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
@@ -48,8 +50,8 @@ the same projection, with callbacks only for shell-owned state (`graph-node` foc
 an issue detail, the bare `#/evals` from a TRUNK eval detail, and the scoped DEFAULT list (the same
 `session-eval` projection the doors mint, `scope:` token kept) from a SCOPED eval detail — "back" always
 means the list on the detail's own data-source axis. The scope never diverts the back arrow to the
-session console: a worktree-rooted reading's session door is the icon-only terminal DOOR both scoped
-Evals faces carry ([[evals-view]]). The helper takes no history, referrer, or session-presence input
+session console: a worktree-rooted reading reaches the terminal only through the scoped LIST's icon-only
+door ([[evals-view]]). The helper takes no history, referrer, or session-presence input
 at all, so a pushed visit and a direct open share one destination by construction.
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
 objects first-class: issue and scenario references land on their owning review pages, never by accident on

@@ -204,7 +204,7 @@ export default {
   },
 
   detail: {
-    sideReading: 'reading',
+    sideReading: 'result',
     sideFiler: 'filed by',
     sideOk: 'human-ok',
     sideStore: 'store',
@@ -234,12 +234,12 @@ export default {
     abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
     abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `older readings (${n})`,
+    abMore: ({ n }) => `older results (${n})`,
     okd: 'human-ok',
     okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
     menuReview: 'review commands',
     cmd: {
-      okDesc: 'sign off this reading — you reviewed it and agree with its verdict; binds to THIS latest reading only, monotonic (no un-ok)',
+      okDesc: 'sign off this result — you reviewed it and agree with its verdict; binds to THIS latest result only, monotonic (no un-ok)',
     },
   },
   thread: {
@@ -264,7 +264,7 @@ export default {
   sessionEval: {
     btn: 'eval',
     btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
-    scopeDoor: ({ id }) => `viewing evals from session ${id}'s worktree — open its terminal`,
+    scopeDoor: 'Back to session terminal',
     none: 'no evaluation for this session yet',
     unavailable: 'evaluation unavailable until the session model loads successfully.',
     loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,
@@ -539,8 +539,6 @@ export default {
     toolbarLabel: 'session terminal toolbar',
     surfaceLabel: 'current session surface',
     commandsLabel: 'available session commands',
-    identitySummary: ({ headline, status, liveness }) => `${headline} — ${status}, ${liveness}`,
-    liveness: { online: 'online', offline: 'offline', starting: 'starting', unknown: 'unknown' },
     evalLoading: "loading this session's eval summary",
     evalUnavailable: "this session's eval summary is unavailable",
     evalMeasured: ({ measured, total }) => `${measured} of ${total} declared scenarios measured`,
@@ -552,6 +550,7 @@ export default {
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
+    relaunchTitle: 'relaunch and resume this session',
     merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
     merges: ({ n }) => `merged ×${n}`,

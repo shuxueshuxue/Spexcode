@@ -100,6 +100,24 @@ scenarios:
       session=<id>→scope:<id>, ok=1→state:reviewed, kind=all→the bare default); a scoped list shows the
       gates strip and its rows' details carry ?q=scope:<id> alone. At 390px the input keeps full width
       and highlight with no horizontal overflow; every theme keeps the overlay colored and aligned.
+  - name: detail-header-alignment
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/styles.css]
+    related: [spec-dashboard/src/ReviewShell.jsx]
+    description: >
+      In a real browser at a live backend, open one Issue detail and one Eval detail, each with a short
+      title and with a long title that wraps, at 1440px and 390px, in en and zh. In each cell measure the
+      DetailShell header row: the back anchor's getBoundingClientRect against the title FIRST LINE's box
+      (a Range over the title's first text node), the back anchor's tag/href, its hit target, its
+      focus-visible ring, whether a wrapped title stays aligned to the first line (never re-centers
+      against the whole block), and document scrollWidth vs clientWidth.
+    expected: >
+      One geometry contract, owned by the shared DetailShell CSS: the back anchor's vertical center
+      coincides with the title first line's visual center (within 1px) in every cell — both pages, both
+      widths, both languages, short and wrapped titles — with NO page-level or hardcoded pixel offset
+      tuned to one font size. A multi-line title keeps the anchor tied to its FIRST line. The anchor
+      stays a REAL <a href> with a ≥24px hit target and a visible focus-visible ring; long titles wrap
+      with zero horizontal document overflow.
 ---
 # measuring review-chrome
 

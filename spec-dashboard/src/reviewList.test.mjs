@@ -287,15 +287,46 @@ test('the detail shell back affordance is a real derived anchor, never history.b
   assert.match(icons, /'arrow-left':/)
   // no review surface ever navigates by history.back — the href derives from the canonical address
   for (const src of [shell, page, detail, issues]) assert.doesNotMatch(src, /history\.back\(/)
-  // both pages derive the href through the ONE address helper ([[address-routing]])
-  assert.match(page, /detailBackHash\('evals', query\.q \|\| ''\)/)
+  // both pages derive the href through the ONE address helper ([[address-routing]]); the eval detail's
+  // back is UNIFORM — no query/scope input reaches the helper, so scope cannot divert it
+  assert.match(page, /detailBackHash\('evals'\)/)
   assert.match(issues, /backHref=\{detailBackHash\('issues'\)\}/)
-  // localized labels exist in both dictionaries
+  // localized labels exist in both dictionaries; the retired console-back label is gone
   for (const dict of [en, zh]) {
     assert.match(dict, /backToEvals:/)
     assert.match(dict, /backToIssues:/)
-    assert.match(dict, /backToSession:/)
+    assert.doesNotMatch(dict, /backToSession:/)
   }
+})
+
+test('the scoped eval detail wears a source banner whose session door is a real anchor', () => {
+  // DetailShell owns the banner slot ABOVE the header — page-supplied content, no layout fork
+  assert.match(shell, /\{banner && <div className="ds-banner" role="note">\{banner\}<\/div>\}/)
+  assert.match(shell, /\{banner && <div className="ds-banner"[\s\S]*?<header className="ds-head">/)
+  // the evals page mints the banner ONLY from the canonical scope token (sessionId), with a REAL
+  // anchor to the session terminal — direct open and reload derive the identical face
+  assert.match(page, /const banner = sessionId \? \(/)
+  assert.match(page, /<a className="ds-banner-link" href=\{routeHash\('sessions', sessionId\)\}>/)
+  // issues never passes a banner
+  assert.doesNotMatch(issues, /banner=/)
+  // localized banner strings exist in both dictionaries
+  for (const dict of [en, zh]) {
+    assert.match(dict, /scopedSource:/)
+    assert.match(dict, /scopedSourceOpen:/)
+  }
+})
+
+test('the continue-reviewing queue: shared-state anchors from the source dataset, absent when alone', () => {
+  // the queue derives from the page's ONE source dataset (scope.entries) via the pure window helper
+  assert.match(page, /queueNeighbors\(scope\.entries, `eval:\$\{node\}·\$\{scenario\}`\)/)
+  // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token
+  assert.match(page, /href: routeHash\('evals', `\$\{e\.node\}\/\$\{e\.scenario\}`, sessionId \? \{ q: `scope:\$\{sessionId\}` \} : null\)/)
+  // the rail renders REAL anchors wearing the ONE shared verdict visual; no private selection state
+  assert.match(detail, /\{queue\.length > 0 && \(/)
+  assert.match(detail, /<a key=\{q\.key\} className="ds-queue-row" href=\{q\.href\}/)
+  assert.match(detail, /<ReviewState kind="eval" state=\{q\.state\} size=\{13\} \/>/)
+  // localized section label exists in both dictionaries
+  for (const dict of [en, zh]) assert.match(dict, /sideQueue:/)
 })
 
 test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced width', () => {

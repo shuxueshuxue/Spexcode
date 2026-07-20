@@ -47,11 +47,11 @@ filter (default off) picking the root.
   one, and Back returns to the previous list URL with its query intact. The detail page renders standalone:
   a direct open or reload works with no list mounted. Its chrome carries ONE compact **back anchor** — the
   shared [[review-chrome]] DetailShell left arrow, a REAL `<a href>` and never a `history.back` button:
-  the destination derives ONLY from the detail's own canonical address ([[address-routing]]'s one back
-  helper) — `#/evals` for a trunk-rooted detail, and for a detail whose canonical query carries
-  `scope:<id>` the scope session's terminal console `#/sessions/<id>` — so a pushed visit, a direct open,
-  and a reload all share one destination, never guessed from a referrer, history state, or the
-  originator's presence. Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
+  its destination is UNIFORMLY the bare `#/evals` list ([[address-routing]]'s one back helper) — for a
+  trunk detail and a `scope:<id>` detail alike, so "back" always means the same thing and a pushed visit,
+  a direct open, and a reload all share one destination, never guessed from a referrer, history state,
+  or the originator's presence. The scoped detail's session door lives in its SOURCE BANNER instead
+  (below). Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
   push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
   the list, never a silent rewrite to some other eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
@@ -61,16 +61,32 @@ filter (default off) picking the root.
   stage under the review-track scrubber, step rail, gallery/transcripts — followed by the (node, scenario)
   remark thread with its composer docked at the column's foot ([[event-detail]] owns that interior).
   The side rail is the reading/session metadata: evaluator, filed time, originator liveness, human-ok,
-  staleness readout. On a phone-width viewport the SAME page reflows to one column with the side metadata
-  ABOVE the workspace (GitHub's 390px order), never a shrunken two-column.
+  staleness readout — then the **continue-reviewing queue**: the viewed reading's NEIGHBORS in the source
+  dataset's stable default order (newest-first — the relative order the list renders; a filtered list
+  face may hide rows the queue still walks), aimed at five total with the window
+  auto-filling at either boundary, the current reading excluded. This page computes the queue from the ONE
+  source dataset it already holds — no second fetch, no ListPage or filter fork, no private selection
+  state — and each entry is a REAL detail anchor wearing the shared verdict visual with its scenario and
+  node ([[event-detail]] renders the rows): a trunk neighbor's href is the pure detail path, a scoped
+  neighbor's keeps the same one `scope:` token. No neighbors → the section does not render at all. Issues
+  details carry no queue. On a phone-width viewport the SAME page reflows to one column with the side
+  metadata ABOVE the workspace (GitHub's 390px order), never a shrunken two-column.
 - **Un-merged session/worktree evals are the SAME pages behind the `scope:` token.** `scope:<id>` in the
   query text — hand-typed, completed from the input's autocomplete (candidates: sessions on the current
   board only), or minted by the session doors as the scoped default view — sources the list from one
   session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
-  A/B history walks the worktree-rooted readings, while its way BACK to the list is the scoped default
-  view — the same text every door mints. Scope is the DATA SOURCE axis and is never conflated
+  A/B history walks the worktree-rooted readings. Two DELIBERATELY different list affordances: the happy
+  detail's back arrow is the uniform bare `#/evals` (its banner already carries the session door), while
+  the failure/not-found faces' list link is the SCOPED default view — those faces have no banner, and
+  that link is the one affordance keeping the user on the data-source axis their broken address named.
+  The scoped detail wears a restrained **SOURCE banner** above its
+  header (the [[review-chrome]] DetailShell banner slot): one line naming the session/worktree the
+  reading comes from, carrying the ONE explicit session door — a REAL anchor to `#/sessions/<id>`, the
+  terminal console — since the compact back anchor now uniformly returns to the list. The banner derives
+  ONLY from the canonical address, so a pushed visit, a direct open, and a reload wear the identical
+  banner; a trunk detail wears none. Scope is the DATA SOURCE axis and is never conflated
   with `session:present|missing`, the source-session presence facet. A dead or unknown scope id keeps
   its token and shows the honest empty/error face — the text itself is the off-switch.
   `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route

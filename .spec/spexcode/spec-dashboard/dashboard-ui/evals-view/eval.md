@@ -91,6 +91,31 @@ scenarios:
       (ordinary push — Back returns to the detail just left). At 390px the same rail reflows above the
       main column with no horizontal overflow. With no neighbor the section is entirely absent
       — no empty box, no label.
+  - name: scoped-source-banner
+    tags: [frontend-e2e, desktop, mobile]
+    test: spec-dashboard/test/evals-entry.e2e.mjs
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/address.js]
+    description: >
+      Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
+      by reload, at 1440px and 390px, in en and zh: read the top of the first screen for the source
+      banner — its text, its role, whether its session link is a real anchor and where it points. Open a
+      scoped DETAIL from that list and read its banner the same way; compare the two banners' copy and
+      link byte-for-byte. Then exercise the three exits: click the detail's compact ds-back and read
+      where it lands and whether a banner renders there; press browser Back from a freshly opened detail
+      and read the restored URL; click the banner's session link and read the landed hash. Open the bare
+      trunk #/evals list and detail and re-read for banners.
+    expected: >
+      BOTH scoped pages — the list and the detail — wear the ONE shared scope banner (one component, one
+      copy, one door): a restrained single line at the top of the first screen, GitHub-review-notice
+      style, naming the session/worktree the view's readings come from and carrying a REAL
+      <a href="#/sessions/<id>"> to the terminal console as its only door. The banner derives ONLY from
+      the canonical address: console-door entry, direct open, and reload wear byte-identical banners, at
+      1440 and 390 (no horizontal overflow), in en and zh alike. The trunk list and a trunk detail wear
+      NO banner. The three exit commands never blur: the detail's ds-back is unconditionally
+      href="#/evals" (the bare home — never the terminal, scope or not); browser Back after a
+      list→detail push restores EXACTLY the scoped list URL; and the banner's anchor is the ONE way from
+      either scoped page to #/sessions/<id>. Zero loss = scope is legible on every scoped first screen,
+      and back/home/terminal are three separate, explicit affordances.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]

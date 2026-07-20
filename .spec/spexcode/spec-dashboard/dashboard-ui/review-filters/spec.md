@@ -48,3 +48,6 @@ canonical Evals on Current with the evidence default `all` (a plain enum default
 while a node popup initially shows its complete bound
 record. Once a value is active, parsing and matching are identical. A node-local list naturally omits node
 and scope facets because they have no choice; this is absence of data, not a special-case branch.
+Eval consumers present one tagged set to the adapter: a filed measurement is a result, while blind,
+unmeasured, and dangling rows are distinct non-result kinds. That shared kind enum is the only discriminator;
+the canonical list and embedded node pane do not carry a parallel legacy boolean or dual-name fallback.

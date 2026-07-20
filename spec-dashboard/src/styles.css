@@ -1247,7 +1247,9 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the side rail rides the page scroll on desktop: STICKY inside its grid column (never fixed — grid
    containment keeps it off the header above and the page bottom below), pinned to the scrollport top
    while a long main column scrolls. The max-height keeps the pinned rail inside the scrollport, so
-   only a rail genuinely taller than the viewport scrolls internally — no permanent nested scrollbar. */
+   only a rail genuinely taller than the viewport scrolls internally — no permanent nested scrollbar.
+   The 100dvh budget assumes the app shell keeps no top chrome (side nav only) — a future top bar
+   must be subtracted here too. */
 .ds-side { position: sticky; top: 0; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 14px 0 20px; }
 .ds-side-sec { display: flex; flex-direction: column; gap: 5px; padding-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
 .ds-side-label { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--muted); }

@@ -529,6 +529,8 @@ export function SideSection({ label, children }) {
 export function SideValue({ text, tip, dim = false, mono = false, href = null, external = false, onClick = null, className = '', lead = null, trail = null, label = null }) {
   const cls = `ds-val${dim ? ' dim' : ''}${mono ? ' mono' : ''}${href || onClick ? ' link' : ''}${className ? ` ${className}` : ''}`
   const tipText = tip ?? (typeof text === 'string' ? text : undefined)
+  // `label` names the ACTION on the interactive variants (a role-less span exposes no aria-label;
+  // its accessible name is the full text already in the DOM — CSS truncation is visual only).
   const aria = label ? { 'aria-label': label } : {}
   const body = (
     <>
@@ -545,5 +547,5 @@ export function SideValue({ text, tip, dim = false, mono = false, href = null, e
   if (onClick) {
     return <button type="button" className={cls} onClick={onClick} data-tip={tipText} {...aria}>{body}</button>
   }
-  return <span className={cls} data-tip={tipText} {...aria}>{body}</span>
+  return <span className={cls} data-tip={tipText}>{body}</span>
 }

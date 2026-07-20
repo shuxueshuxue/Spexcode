@@ -1220,6 +1220,11 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the optional page-supplied source banner above the header ([[review-chrome]]): one restrained line —
    muted panel, meta type — whose link is a REAL anchor (the scoped eval detail's session door). */
 .ds-banner { max-width: 1180px; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; font-size: var(--type-control); color: var(--ink2); }
+/* the scoped LIST's banner seat ([[evals-view]]'s shared EvalScopeBanner): the list page has no ds-page
+   padding of its own, so the slot supplies it — the banner element inside stays byte-identical to the
+   detail's. */
+.se-banner-slot { padding: 12px 14px 0; }
+.se-banner-slot .ds-banner { margin-bottom: 0; }
 .ds-banner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-banner-link { flex: 0 0 auto; color: var(--blue); text-decoration: none; }
 .ds-banner-link:hover { text-decoration: underline; }
@@ -1598,7 +1603,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-tabs { flex: none; display: flex; gap: 2px; }
 /* each tab: a flat text button; the active one is inked and underlined in blue (its bottom border overlaps the
    bar's separator via the -1px margin, so the selected tab visually connects to its pane). */
-.si-tab { appearance: none; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: var(--type-control); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.si-tab { appearance: none; display: inline-block; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: var(--type-control); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; }
 .si-tab:hover { color: var(--ink2); }
 .si-tab.on { color: var(--ink2); border-bottom-color: var(--blue); }
 /* the shared session headline sits between the tabs and the actions, growing to fill and ellipsing when tight
@@ -1884,10 +1889,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-sess-status { font-size: var(--type-control); color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
 
-/* the header's eval entry ([[session-eval]] on the phone): a DOOR to the session-scoped Evals page. */
+/* the header's eval entry ([[session-eval]] on the phone): a REAL-anchor DOOR to the session-scoped Evals page. */
 .m-sess-evalbtn {
   flex: none; margin-left: auto; padding: 6px 13px; font-size: var(--type-control); font-family: var(--mono);
   color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: 15px; cursor: pointer;
+  text-decoration: none;
 }
 /* the routed review pages inside the phone shell ([[mobile-ui]]): the same lp-/ds- chrome, one column. */
 .m-review { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

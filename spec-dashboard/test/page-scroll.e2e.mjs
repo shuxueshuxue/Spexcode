@@ -99,7 +99,10 @@ async function startProjectsHost() {
 }
 
 async function runScenario(browser, projectsBase, { name, title, viewport, mobile }) {
-  const rawDir = join(out, `raw-${name}`)
+  // e2e-review's splitter pairs the lone WebM and timeline beside each other. Keep each recorded
+  // scenario in its own directory so concurrent viewport recordings cannot be cross-paired.
+  const scenarioDir = join(out, name)
+  const rawDir = join(scenarioDir, 'raw')
   mkdirSync(rawDir, { recursive: true })
   const context = await browser.newContext({ viewport, recordVideo: { dir: rawDir, size: viewport } })
   const page = await context.newPage()
@@ -281,10 +284,10 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await assertPageScroll('projects')
 
   await context.close()
-  const videoPath = join(out, `${name}.webm`)
+  const videoPath = join(scenarioDir, `${name}.webm`)
   renameSync(await video.path(), videoPath)
   rmSync(rawDir, { recursive: true, force: true })
-  writeFileSync(join(out, `${name}.timeline.json`), `${JSON.stringify({ events }, null, 2)}\n`)
+  writeFileSync(join(scenarioDir, `${name}.timeline.json`), `${JSON.stringify({ events }, null, 2)}\n`)
   return { name, viewport, failRows, passRows, total, readings, events }
 }
 

@@ -41,4 +41,6 @@ scenarios:
 # measuring page-scroll
 
 YATU through the actual routed pages and host Projects surface. DOM probes explain geometry; screenshots
-and whole-flow video prove what the reader sees while moving through it.
+and whole-flow video prove what the reader sees while moving through it. Each viewport scenario emits its
+WebM and timeline as the only pair in its own directory, so the review splitter cannot cross-pair desktop
+and mobile recordings.

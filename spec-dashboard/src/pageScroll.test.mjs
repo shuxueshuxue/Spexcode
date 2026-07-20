@@ -13,6 +13,7 @@ const projects = read('ProjectsPage.jsx')
 const dashboard = read('Dashboard.jsx')
 const evalsPage = read('EvalsPage.jsx')
 const css = read('styles.css')
+const e2e = read('../test/page-scroll.e2e.mjs')
 
 test('one page scroll primitive owns address-keyed restoration', () => {
   assert.match(scroll, /export function PageScroll/)
@@ -48,4 +49,10 @@ test('document pages consume PageScroll while Graph and Sessions keep their own 
   assert.match(css, /\.page-detail-stack\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s)
   assert.match(css, /\.si-term-body\s*\{[^}]*overflow:\s*hidden;/s)
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
+})
+
+test('recorded viewport scenarios satisfy the e2e-review one-pair-per-directory contract', () => {
+  assert.match(e2e, /const scenarioDir = join\(out, name\)/)
+  assert.match(e2e, /const videoPath = join\(scenarioDir, `\$\{name\}\.webm`\)/)
+  assert.match(e2e, /writeFileSync\(join\(scenarioDir, `\$\{name\}\.timeline\.json`\)/)
 })

@@ -86,6 +86,9 @@ small **markers** (the status glyph, the op tally) stay pinned to its **first li
 the row's flow rather than reserving a column down every line, so the wrapped lines beneath run the **full
 width**. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule; the
 meta line stays the parking spot for any further at-a-glance metadata added later.
+When the selected row belongs to the nesting forest, its leading connector/fold pod keeps the same natural
+gap before the headline after the row changes from flex to block flow; revealing a title never glues the
+subtree count to its first word.
 
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
 which session this is* — rows, window, the console sidebar, **the search palette, the

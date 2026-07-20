@@ -26,11 +26,15 @@ restores the list.
 
 ## expanded spec
 
-- **One rail, five pages.** A slim always-visible icon rail on the app's left edge is the page switch:
-  Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the bottom. Evals and Issues are
+- **One rail, five pages — every entry a real anchor.** A slim always-visible icon rail on the app's left
+  edge is the page switch: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
+  bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
   current measured loss is what review attends to first). The active page wears the accent; labels live in
-  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. The rail is chrome, not a
+  tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. Each entry is an `<a>`
+  carrying its page's address (`href="#/…"`): a click is a native hash navigation — the *same transaction*
+  the address bar, a bookmark, ⌥digit, or any in-page door produces — so middle-click/new-tab/copy-address
+  come free and no click handler re-implements routing. The rail is chrome, not a
   page — it never scrolls away and never overlays content.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
   unknown hash lands here), `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
@@ -59,11 +63,24 @@ restores the list.
   re-minted.
   The retired scoped `#/projects` admin route crosses a pathname boundary instead: arrival at
   `/p/<id>/#/projects` performs one full-page redirect to the canonical global `/projects` surface.
-- **Pages are peers, not layers.** Navigation swaps which page fills the main area beside the rail;
-  nothing dims or floats. Surfaces that must stay warm across switches (the graph's camera, the session
-  board's live terminals) stay mounted and display-toggled — a route change may never cost a terminal
-  its socket. True transient overlays (help, search, the node popup) remain modals *within* a page and
-  close when the page changes.
+- **Pages are peers behind one boundary, not layers.** Navigation swaps which page fills the main area
+  beside the rail; nothing dims or floats. Every routed page renders inside the same shell-owned pane with
+  the same loading fallback — a page whose lazy chunk is still arriving shows that shared loading state in
+  place, never a blank main area — and no lazy/loading intermediate ever touches the document head or
+  unmounts the shell. Surfaces that must stay warm across switches (the graph's camera, the session
+  board's live terminals) declare warmth: their pane stays mounted and display-toggles instead of
+  unmounting — a property any page may claim, never a session-board special case — so a route change may
+  never cost a terminal its socket, and a warm page's focus/scroll context survives Back into it. True
+  transient overlays (help, search, the node popup) remain modals *within* a page and close when the page
+  changes.
+- **Only resolved identity reaches the tab.** `document.title` and the favicon belong to the shared shell
+  alone ([[dashboard-shell]] holds the one writer; [[project-identity]] resolves the value) — no page,
+  chunk, or loading state writes them. The shell writes the head only once the route-selected identity has
+  actually resolved (a catalog row, or the board's own answer); while it is pending, the static boot
+  document stands — the default mark and the raw project id are never written as placeholders. The browser
+  remembers a favicon per page URL and re-resolves it on every same-document navigation, so a placeholder
+  default written during one boot keeps flashing back on later navigations — foremost on the session
+  board's freshly-minted per-tab addresses. A placeholder in the head is poisoning, not cosmetics.
 - **Catalog-gated project switching, never project management.** Under the multi-project gateway
   ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
   project-owned page entries. Its mark and label come from the route-matched [[project-identity]], never

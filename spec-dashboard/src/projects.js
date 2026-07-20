@@ -56,18 +56,22 @@ export const normalizeProjects = (body) => {
   return list ? list.map(normalizeProject).filter(Boolean) : null
 }
 
-// Path scope wins before any board can paint. While the catalog probe is pending (or an authorized
-// catalog lacks the requested id), use the URL id + default mark rather than a possibly misrouted board.
-// A denied/absent catalog is the direct-project compatibility case: its authorized board may identify it.
+// Path scope wins before any board can paint. While the catalog probe is pending the selection is
+// UNRESOLVED (null): projections hold their neutral placeholder and the tab head stays unwritten
+// ([[side-nav]]) — a default mark is never minted as an answer, and a possibly misrouted board is
+// never consulted early. A denied/absent catalog is the direct-project compatibility case: its
+// authorized board may identify it (null until that board lands).
 export function selectProjectIdentity(projectId, catalog, boardIdentity) {
   if (!projectId) return boardIdentity
-  if (!catalog || catalog.state === 'ok') {
-    const match = catalog?.projects?.find((project) => project.id === projectId)
+  if (!catalog) return null
+  if (catalog.state === 'ok') {
+    const match = catalog.projects?.find((project) => project.id === projectId)
     return match?.identity || { title: projectId, icon: 'spexcode' }
   }
+  if (!boardIdentity) return null
   return {
-    title: boardIdentity?.title || projectId,
-    icon: boardIdentity?.icon || 'spexcode',
+    title: boardIdentity.title || projectId,
+    icon: boardIdentity.icon || 'spexcode',
   }
 }
 

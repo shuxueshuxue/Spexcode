@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
-import { PAGES } from './route.js'
+import { PAGES, routeHash } from './route.js'
 import { IdentityIcon } from './IdentityIcon.jsx'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
 // always visible, one entry per top-level page (graph · sessions · evals · issues, settings pinned at the
-// bottom). Clicking navigates the URL layer (route.js); the active page wears the accent. Glyphs come from
+// bottom). Every entry is a REAL ANCHOR carrying its page's address, so a click is a native hash
+// navigation — the same transaction the address bar, a bookmark, or ⌥digit produces — and
+// middle-click/new-tab/copy-address come free; the active page wears the accent. Glyphs come from
 // the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria — the rail stays slim.
 // Under the multi-project gateway ([[projects-hub]]) a scoped page adds the persistent current-project
 // selector chip at the top. A successful catalog probe gives it same-tab switching plus the global
@@ -16,18 +18,17 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 
 const ENTRIES = PAGES.filter((page) => page !== 'settings')
 
-function RailButton({ page, active, onNav, label }) {
+function RailLink({ page, active, label }) {
   return (
-    <button
-      type="button"
+    <a
       className={active ? 'rail-btn on' : 'rail-btn'}
       data-tip={label}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
-      onClick={() => onNav(page)}
+      href={routeHash(page)}
     >
       <Icon name={page} size={18} />
-    </button>
+    </a>
   )
 }
 
@@ -83,7 +84,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
   )
 }
 
-export default function SideBar({ page, onNav, identity, catalog }) {
+export default function SideBar({ page, identity, catalog }) {
   const t = useT()
   const catalogOk = catalog?.state === 'ok'
   return (
@@ -95,10 +96,10 @@ export default function SideBar({ page, onNav, identity, catalog }) {
         t={t}
       />}
       {ENTRIES.map((p) => (
-        <RailButton key={p} page={p} active={page === p} onNav={onNav} label={t(`nav.${p}`)} />
+        <RailLink key={p} page={p} active={page === p} label={t(`nav.${p}`)} />
       ))}
       <div className="rail-spacer" />
-      <RailButton page="settings" active={page === 'settings'} onNav={onNav} label={t('nav.settings')} />
+      <RailLink page="settings" active={page === 'settings'} label={t('nav.settings')} />
     </nav>
   )
 }

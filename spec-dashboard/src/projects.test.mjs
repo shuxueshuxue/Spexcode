@@ -81,8 +81,9 @@ test('pathname-selected catalog identity cannot be replaced by the last board th
   assert.deepEqual(selectProjectIdentity('spex', catalog, wrongLastBoard), { title: 'SpexCode', icon: 'compass' })
   assert.deepEqual(selectProjectIdentity('rocket', catalog, { title: 'SpexCode', icon: 'compass' }), { title: 'Rocket', icon: 'mdi:rocket-launch' })
   assert.deepEqual(selectGatewayIdentity(catalog), { title: 'Fleet', icon: 'gateway' })
-  assert.deepEqual(selectProjectIdentity('spex', null, wrongLastBoard), { title: 'spex', icon: 'spexcode' }, 'pending catalog never flashes the board identity')
+  assert.equal(selectProjectIdentity('spex', null, wrongLastBoard), null, 'pending catalog is UNRESOLVED — never the board, never a minted default ([[side-nav]])')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
+  assert.equal(selectProjectIdentity('spex', { state: 'denied' }, null), null, 'denied catalog with no board yet stays unresolved')
 })
 
 test('loadProjects: 200 hub envelope → ok with adminGated', async () => {

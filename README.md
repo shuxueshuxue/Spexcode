@@ -80,25 +80,29 @@ the spec and the evals; the diff gets read once, at merge time.
 Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 
 ```sh
-npm i -g spexcode        # installs the `spex` command
+npm i -g spexcode           # installs the `spex` command
 cd your-repo
 spex init --harness claude  # seeds .spec/, installs hooks, materializes the agent contract
-spex serve               # this project's backend; registers itself for the current user
-# In another shell, once per user:
-spex dashboard           # shared host gateway + UI on :5173
 ```
 
-Run `spex serve` from every project you want online; use a free backend port such as
-`spex serve --port 8788` for an additional project. Each backend self-registers in the current
-user's host registry. The single `spex dashboard` discovers backends that are already running and
-ones started later, exposes `/projects` for project switching and management, and serves each
-project dashboard under `/p/:id/`. There is no per-project dashboard process or API/UI port pairing.
+That's the whole adoption. `--harness` selects the agent integration to materialize (`codex` is
+another built-in choice). `spex init` is additive: it works on any existing git repo and never
+overwrites your files — it creates a root `.spec/project/spec.md` and a starter `spexcode.json`,
+installs the git hooks, and writes the selected harness's managed contract, so any agent working in
+the repo discovers the workflow on its own.
 
-`--harness` selects the agent integration to materialize (`codex` is another built-in choice).
-`spex init` is additive. It works on any existing git repo and never overwrites your files: it
-creates a root `.spec/project/spec.md` and a starter `spexcode.json`, installs the git hooks, and
-writes the selected harness's managed contract so agents working in the repo discover the workflow
-on their own.
+When you want the live board — the graph, sessions, evals — start the runtime:
+
+```sh
+spex serve       # this project's backend — prints its URL, registers itself for your user
+spex dashboard   # once per user, any directory: the one dashboard — open the URL it prints
+```
+
+Run `spex serve` from each project you want online. Every backend registers itself, and the single
+`spex dashboard` finds them all — backends already running and ones you start later, in any order.
+`/projects` switches and manages projects; each project's board lives under `/p/:id/`. There is no
+per-project dashboard process and no port pairing to remember: if a port is taken, give that
+backend its own with `spex serve --port <n>`, and trust the URL each command prints.
 
 Those are installed-user commands. Contributors working from this source checkout use `npm run api`
 for the reloadable backend and `npm run web` for the Vite/HMR frontend; see

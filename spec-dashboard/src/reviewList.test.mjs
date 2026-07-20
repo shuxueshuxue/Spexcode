@@ -288,9 +288,10 @@ test('the detail shell back affordance is a real derived anchor, never history.b
   assert.match(icons, /'arrow-left':/)
   // no review surface ever navigates by history.back — the href derives from the canonical address
   for (const src of [shell, page, detail, issues]) assert.doesNotMatch(src, /history\.back\(/)
-  // both pages derive the href through the ONE address helper ([[address-routing]]); the eval detail's
-  // back is UNIFORM — no query/scope input reaches the helper, so scope cannot divert it
-  assert.match(page, /detailBackHash\('evals'\)/)
+  // both pages derive the href through the ONE address helper ([[address-routing]]); the eval detail
+  // feeds the gate ONLY its canonical scope — trunk returns to the bare list, a scoped detail to its
+  // scoped default list (the door-minted address), never diverted by history or referrer
+  assert.match(page, /detailBackHash\('evals', sessionId\)/)
   assert.match(issues, /backHref=\{detailBackHash\('issues'\)\}/)
   // localized labels exist in both dictionaries; the retired console-back label is gone
   for (const dict of [en, zh]) {

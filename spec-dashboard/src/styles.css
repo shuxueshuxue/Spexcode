@@ -2153,9 +2153,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: 5px; color: var(--blue); text-decoration: none; }
 .se-door:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); background: color-mix(in srgb, var(--line) 45%, transparent); }
 .se-door:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-/* the detail header's generic action slot ([[review-chrome]] DetailShell): trailing edge, aligned on
-   the same first-line box the back anchor derives from. */
-.ds-head-action { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; }
+/* the detail header's generic action slot ([[review-chrome]] DetailShell): trailing edge, and the SAME
+   first-line geometry contract the back anchor wears — the slot derives its offset from the row's 1lh
+   box, so the 32px action's center coincides with the title first line's (and ds-back's) center at any
+   width or language, no per-page pixel offset. */
+.ds-head-action { --ds-action-size: 32px; margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; margin-top: calc((1lh - var(--ds-action-size)) / 2); }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: var(--type-body); }

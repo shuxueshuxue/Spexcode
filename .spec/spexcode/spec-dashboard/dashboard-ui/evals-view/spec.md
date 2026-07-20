@@ -50,10 +50,12 @@ filter (default off) picking the root.
   one, and Back returns to the previous list URL with its query intact. The detail page renders standalone:
   a direct open or reload works with no list mounted. Its chrome carries ONE compact **back anchor** — the
   shared [[review-chrome]] DetailShell left arrow, a REAL `<a href>` and never a `history.back` button:
-  its destination is UNIFORMLY the bare `#/evals` list ([[address-routing]]'s one back helper) — for a
-  trunk detail and a `scope:<id>` detail alike, so "back" always means the same thing and a pushed visit,
-  a direct open, and a reload all share one destination, never guessed from a referrer, history state,
-  or the originator's presence. The scoped detail's session door lives in its header's terminal DOOR
+  its destination derives ONLY from the detail's own canonical address through [[address-routing]]'s one
+  back helper — a trunk detail returns to the bare `#/evals` list, a `scope:<id>` detail to its scoped
+  DEFAULT list (the same one canonical address the session doors mint, `scope:` token kept) — so "back"
+  always means the list on the detail's own data-source axis, and a pushed visit, a direct open, and a
+  reload all share one destination, never guessed from a referrer, history state, or the originator's
+  presence. The scoped detail's session door lives in its header's terminal DOOR
   instead (below). Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
   push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
   the list, never a silent rewrite to some other eval.
@@ -86,10 +88,10 @@ filter (default off) picking the root.
   never the legacy `?session` param) — sources the list from one session's WORKTREE-rooted model
   ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
   rows, in-session rows ✦-marked); the detail carries only `?q=scope:<id>` (never list filters) so its
-  A/B history walks the worktree-rooted readings. Two DELIBERATELY different list affordances: the happy
-  detail's back arrow is the uniform bare `#/evals` (its header already carries the session door), while
-  the failure/not-found faces' list link is the SCOPED default view — those faces carry no door, and
-  that link is the one affordance keeping the user on the data-source axis their broken address named.
+  A/B history walks the worktree-rooted readings. Every scoped detail face returns to the SAME list:
+  the happy detail's back arrow and the failure/not-found faces' list link all point at the SCOPED
+  default view — the door-minted address — keeping the user on the data-source axis their address named
+  (the failure faces carry no door; the happy face's terminal door is a separate, additional exit).
   BOTH scoped faces carry the restrained **terminal DOOR** — the ONE shared EvalScopeDoor primitive,
   icon-only, never a visible banner or two page-local copies: the scoped LIST seats it as an action in
   its se-gates toolbar, one row with the lint/merge/ahead/committed gates and the export door (at
@@ -101,8 +103,10 @@ filter (default off) picking the root.
   where the door lands — live in its localized tooltip and aria-label, with no visible text. The door
   derives ONLY from the canonical address, so a door-entry visit, a direct open, and a
   reload wear the identical door; trunk faces wear none. Three exit commands stay separate by
-  construction: the door's anchor is the one way to the terminal, the detail's ds-back is the bare
-  `#/evals` home, and browser Back walks the real history (a scoped list→detail push returns exactly to
+  construction: the door's anchor is the one way to the terminal, the detail's ds-back is the list on
+  the detail's own axis (the scoped default view for a scoped detail — byte-identical to the
+  door-minted address; the bare `#/evals` for a trunk one), and browser Back walks the real history
+  (a scoped list→detail push returns exactly to
   the scoped list URL) — never blended, never guessed from history.back or a referrer. Scope is the DATA
   SOURCE axis and is never conflated with `session:present|missing`, the source-session presence facet.
   A dead or unknown scope id keeps its token and shows the honest empty/error face — the text itself is

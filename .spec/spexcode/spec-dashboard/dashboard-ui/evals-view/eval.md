@@ -54,8 +54,11 @@ scenarios:
       both the back anchor and the door and read where each lands. Compare against an issues detail's
       anchor. Verify browser Back after clicking the anchor still walks the real history.
     expected: >
-      EVERY eval detail's back anchor is href="#/evals" — trunk and scoped alike; the scope token never
-      diverts the back arrow. An issue detail's anchor is #/issues. The SCOPED detail carries the one
+      Each eval detail's back anchor returns to the list on its own data-source axis: a TRUNK detail's
+      is href="#/evals" (bare — list filters never ride it), a SCOPED detail's is the canonical scoped
+      DEFAULT list URL (#/evals?q=is:eval state:current scope:<id> — byte-identical to the address the
+      session doors mint, the scope token kept), and an issue detail's anchor is #/issues; nothing else
+      ever diverts it. The SCOPED detail carries the one
       icon-only terminal door in its header action slot — a REAL <a href="#/sessions/<id>"> to the
       terminal console, the one explicit session door; clicking it lands on that session. A trunk detail
       carries no door and no banner. Row-click, direct open, and reload yield byte-identical back hrefs
@@ -114,8 +117,10 @@ scenarios:
       address: console-door entry, direct open, and reload wear byte-identical doors, at 1440 and 390
       (no horizontal overflow, the toolbar row intact). NO .ds-banner and no long explanatory copy render
       anywhere; the trunk list and a trunk detail carry no door at all. The three exit commands never
-      blur: the detail's ds-back is unconditionally href="#/evals" (the bare home — never the terminal);
-      browser Back after a list→detail push restores EXACTLY the scoped list URL; and the door is the ONE
+      blur: the scoped detail's ds-back returns to the canonical scoped DEFAULT list URL — byte-identical
+      to the address the console door minted, scope token kept, never the terminal — and the landed list
+      still carries the door (a trunk detail's ds-back stays the bare #/evals); browser Back after a
+      list→detail push restores EXACTLY the scoped list URL; and the door is the ONE
       way from either scoped page to #/sessions/<id> — a phone cold-open tap lands on the real session
       detail plane. Zero loss = scope stays legible as one restrained icon action, and
       back/home/terminal stay three separate, explicit affordances.

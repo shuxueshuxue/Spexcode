@@ -221,10 +221,11 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // would show both sections and mark no tab active).
   const hrefFor = (e) => addressHash(sessionId ? sessionEvalAddress(sessionId, e.node, e.scenario) : evalAddress(e.node, e.scenario))
   const listHref = sessionId ? addressHash(sessionEvalAddress(sessionId)) : routeHash('evals')
-  // the detail chrome's compact back anchor ([[address-routing]]'s return gate): EVERY eval detail —
-  // trunk or scoped — returns to the bare #/evals list; the scoped detail's session door is its header's
-  // terminal door, never the back arrow.
-  const backHref = detailBackHash('evals')
+  // the detail chrome's compact back anchor ([[address-routing]]'s return gate, fed only the detail's
+  // own canonical scope): a trunk detail returns to the bare #/evals list, a scoped detail to its
+  // scoped DEFAULT list — the same address the session doors mint, scope token kept; the session door
+  // itself is the header's terminal door, never the back arrow.
+  const backHref = detailBackHash('evals', sessionId)
   const backLabel = t('detail.backToEvals')
   // a human's edit/tab/menu action lands here: PUSH the canonical address — bare for the default view,
   // exactly ?q=<raw text> otherwise ([[review-query]]'s equivalence owns the compare).

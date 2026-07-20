@@ -69,8 +69,8 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   assert.ok(text('core/spec.md').includes('`codeSha` anchors to HEAD'))
   assert.ok(text('prompts/reproduce-before-fix/spec.md').includes('fix, verify, commit, then file (pass)'))
   assert.ok(text('prompts/reproduce-before-fix/spec.md').includes('`codeSha` names the very commit you measured'))
-  assert.ok(text('core/spec-first/spec-first.sh').includes('multi-file apply_patch yields several paths'))
-  assert.ok(text('core/spec-first/spec-first.sh').includes('ANY resolved path'))
+  assert.ok(text('core/spec-first/spec-first.sh').includes('while IFS= read -r candidate'))
+  assert.ok(text('core/spec-first/spec-first.sh').includes('spec-governors "$candidate"'))
   assert.ok(text('core/spec-of-file/spec-of-file.sh').includes('multi-file apply_patch yields several paths'))
   assert.ok(text('core/spec-of-file/spec-of-file.sh').includes('annotate EACH governed code file'))
   assert.ok(!projection.has('prompts/deploy-runbook/spec.md'), 'SpexCode fleet runbook is an explicit holdback')
@@ -82,7 +82,7 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   assert.deepEqual(projectionDiff(projection), [], 'the checked-in production seed is the current projection')
 })
 
-test('Codex multi-file hooks consider every path in one mutation', () => {
+test('Codex multi-file hooks consider every path in one payload', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-multi-file-hooks-'))
   const store = join(fixture, 'store')
   const lib = join(fixture, 'harness.sh')
@@ -94,11 +94,24 @@ test('Codex multi-file hooks consider every path in one mutation', () => {
       'hp_code_path() { printf \'%s\\n\' "$HOOK_PATHS"; }',
       '',
     ].join('\n'))
+    execFileSync('git', ['init', '-q'], { cwd: fixture })
+    write(join(fixture, 'src', 'a.ts'), 'a\n')
+    write(join(fixture, 'src', 'b.ts'), 'b\n')
+    write(owner, [
+      '#!/bin/sh',
+      'if [ "$1" = internal ] && [ "$2" = spec-governors ]; then',
+      '  [ "$3" = src/a.ts ] && printf \'a\\t.spec/project/a/spec.md\\n\'',
+      '  exit 0',
+      'fi',
+      'printf "owner:%s" "$3"',
+      '',
+    ].join('\n'), 0o755)
     const env = {
       ...process.env,
       SPEXCODE_HARNESS_LIB: lib,
+      SPEX: owner,
       HOOK_STORE: store,
-      HOOK_PATHS: '.spec/project/spec.md\nsrc/a.ts',
+      HOOK_PATHS: 'src/ungoverned.ts\nsrc/a.ts',
     }
     const first = execFileSync('bash', [join(LIVE_PLUGINS, 'core', 'spec-first', 'spec-first.sh')], {
       cwd: fixture,
@@ -106,12 +119,9 @@ test('Codex multi-file hooks consider every path in one mutation', () => {
       input: '{}',
       encoding: 'utf8',
     })
-    assert.match(first, /"decision":"block"/, 'one non-spec path makes the whole multi-file access actionable')
+    assert.match(first, /"decision":"block"/, 'a later governed path makes the multi-file read actionable')
+    assert.match(first, /\.spec\/project\/a\/spec\.md/)
 
-    execFileSync('git', ['init', '-q'], { cwd: fixture })
-    write(join(fixture, 'src', 'a.ts'), 'a\n')
-    write(join(fixture, 'src', 'b.ts'), 'b\n')
-    write(owner, '#!/bin/sh\nprintf "owner:%s" "$3"\n', 0o755)
     const annotate = execFileSync('bash', [join(LIVE_PLUGINS, 'core', 'spec-of-file', 'spec-of-file.sh')], {
       cwd: fixture,
       env: { ...env, HOOK_PATHS: 'src/a.ts\nsrc/b.ts', SPEX: owner },

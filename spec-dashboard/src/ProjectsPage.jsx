@@ -3,17 +3,18 @@ import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import {
   CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
-  setAdminPassword, clearAdminPassword, addProject, loadProjectConfig, saveProjectConfig,
+  setAdminPassword, clearAdminPassword, browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig,
   initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
 import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
+import Modal from './Modal.jsx'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
 // durable catalog plus the machine's live backend records, so a project appears by running `spex serve`
-// in its repo OR by registering its repo root through the add drawer here (POST /projects). Each row
+// in its repo OR through the Add Project modal's host-folder/setup transaction (POST /projects). Each row
 // shows liveness (the host's instance-validated `online` refined by a probed /p/:id/health dot for the
 // end-to-end truth), the gating state, a password set/clear drawer, and either Open (online — a plain
 // project-scoped link, `/p/<id>/#/graph`) or Start (offline — POST /projects/:id/serve boots the real
@@ -57,36 +58,146 @@ function PasswordForm({ onSet, onClear, placeholder, busy, t }) {
   )
 }
 
-// the register-a-repo drawer: one path input → POST /projects. The host normalizes the path to the
-// repo's main checkout and answers 400 with the human reason for a non-repo — shown verbatim.
-function AddProjectForm({ onAdded, t }) {
-  const [root, setRoot] = useState('')
+// One modal over the host add transaction: browse a real directory, explicitly choose its setup side
+// effects, then let the host run Git → real spex init → catalog in that order.
+function AddProjectModal({ onAdded, onClose, t }) {
+  const [path, setPath] = useState('')
+  const [listing, setListing] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [output, setOutput] = useState('')
+  const [initGit, setInitGit] = useState(false)
+  const [initSpex, setInitSpex] = useState(false)
+  const [harnesses, setHarnesses] = useState([])
+
+  const browse = useCallback(async (target) => {
+    if (busy) return
+    setLoading(true); setError(null); setOutput('')
+    const r = await browseProjectDirectories(target)
+    setLoading(false)
+    if (!r.ok) { setError(r.error === 'network' ? t('projects.actionFailed') : r.error); return }
+    setListing(r); setPath(r.path)
+    setInitGit(false); setInitSpex(false); setHarnesses([])
+  }, [busy, t])
+
+  useEffect(() => { browse('') }, []) // initial host home; browse is intentionally one boot call
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+
+  const selected = !!listing && path === listing.path
+  const needsGit = selected && !listing.gitRoot
+  const needsSpex = selected && !listing.initialized
+  const canSubmit = selected && !loading && !busy && !listing.cataloged &&
+    (!needsGit || initGit) && (!initSpex || !!harnesses.length)
+  const toggleHarness = (id) => setHarnesses((all) => all.includes(id) ? all.filter((item) => item !== id) : [...all, id])
+
   const submit = async (e) => {
     e.preventDefault()
-    if (!root.trim() || busy) return
-    setBusy(true); setError(null)
-    const r = await addProject(root.trim())
+    if (!canSubmit) return
+    setBusy(true); setError(null); setOutput('')
+    const r = await addProject(listing.path, {
+      ...(needsGit ? { initGit } : {}),
+      ...(needsSpex && initSpex ? { init: { harness: harnesses.join(',') } } : {}),
+    })
     setBusy(false)
-    if (r.ok) { setRoot(''); onAdded() }
-    else setError(r.error === 'network' ? t('projects.actionFailed') : r.error)
+    if (r.ok) { onAdded(r.project); return }
+    setError(r.error === 'network' ? t('projects.actionFailed') : r.error)
+    setOutput(r.output || '')
   }
+
   return (
-    <form className="proj-drawer proj-add" onSubmit={submit}>
-      <input
-        className="proj-add-path"
-        value={root}
-        onChange={(e) => setRoot(e.target.value)}
-        placeholder={t('projects.addPlaceholder')}
-        aria-label={t('projects.addPlaceholder')}
-        spellCheck={false}
-      />
-      <button className="proj-act primary" type="submit" disabled={!root.trim() || busy}>
-        {busy ? t('projects.addBusy') : t('projects.addSubmit')}
-      </button>
-      {error && <div className="proj-err proj-full">{error}</div>}
-    </form>
+    <Modal title={t('projects.addTitle')} closeLabel={t('common.close')} onClose={() => { if (!busy) onClose() }} className="proj-add-modal">
+      <form className="proj-add-flow" onSubmit={submit}>
+        <div className="proj-add-pathbar">
+          <IconButton
+            icon="arrow-left" size={14} className="proj-act icon"
+            label={t('projects.browseParent')} disabled={!listing?.parent || loading || busy}
+            onClick={() => browse(listing.parent)}
+          />
+          <button
+            type="button" className="proj-act icon proj-home-btn" data-tip={t('projects.browseHome')}
+            aria-label={t('projects.browseHome')} disabled={!listing?.home || loading || busy}
+            onClick={() => browse(listing.home)}
+          >~</button>
+          <input
+            className="proj-add-path" value={path} autoFocus spellCheck={false}
+            onChange={(e) => { setPath(e.target.value); setError(null) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (path.trim()) browse(path.trim()) } }}
+            placeholder={t('projects.addPlaceholder')} aria-label={t('projects.addPlaceholder')}
+            disabled={busy}
+          />
+          <button className="proj-act" type="button" disabled={!path.trim() || loading || busy} onClick={() => browse(path.trim())}>
+            {loading ? t('projects.browseLoading') : t('projects.browseGo')}
+          </button>
+        </div>
+
+        <div className="proj-folder-list" aria-label={t('projects.folderList')} aria-busy={loading}>
+          {!loading && listing?.entries.map((entry) => (
+            <button key={entry.path} type="button" className="proj-folder-row" onClick={() => browse(entry.path)} disabled={busy}>
+              <Icon name="chevron-right" size={13} />
+              <span className="proj-folder-name">{entry.name}</span>
+              {entry.git && <span className="proj-folder-tag">Git</span>}
+              {entry.initialized && <span className="proj-folder-tag spex">SpexCode</span>}
+            </button>
+          ))}
+          {!loading && listing && !listing.entries.length && <div className="proj-folder-empty">{t('projects.folderEmpty')}</div>}
+          {loading && <div className="proj-folder-empty">{t('projects.browseLoading')}</div>}
+        </div>
+
+        {selected && (
+          <div className="proj-add-options">
+            <div className="proj-add-selected" title={listing.path}>{listing.path}</div>
+            {listing.gitRoot ? (
+              <div className="proj-add-state"><Icon name="check" size={13} /> Git <code>{listing.gitRoot}</code></div>
+            ) : (
+              <label className="proj-add-check">
+                <input type="checkbox" checked={initGit} onChange={(e) => setInitGit(e.target.checked)} disabled={busy} />
+                <span>{t('projects.initGit')}</span>
+              </label>
+            )}
+            {listing.initialized ? (
+              <div className="proj-add-state"><Icon name="check" size={13} /> {t('projects.spexInitialized')}</div>
+            ) : (
+              <>
+                <label className="proj-add-check">
+                  <input type="checkbox" checked={initSpex} onChange={(e) => { setInitSpex(e.target.checked); setOutput(''); setError(null) }} disabled={busy} />
+                  <span>{t('projects.initSpex')}</span>
+                </label>
+                {initSpex && (
+                  <fieldset className="proj-add-harnesses" disabled={busy}>
+                    <legend>{t('projects.harnessTargets')}</legend>
+                    {HARNESS_IDS.map((id) => (
+                      <label key={id} className="proj-add-harness">
+                        <input type="checkbox" checked={harnesses.includes(id)} onChange={() => toggleHarness(id)} />
+                        <span>{id}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </>
+            )}
+            {listing.cataloged && <div className="proj-op-status ok">{t('projects.alreadyAdded')}</div>}
+          </div>
+        )}
+
+        {(error || output) && (
+          <div className="proj-add-result">
+            {error && <div className="proj-err">{error}</div>}
+            {output && <pre className="proj-log">{output}</pre>}
+          </div>
+        )}
+        <div className="proj-add-actions">
+          <button className="proj-act" type="button" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
+          <button className="proj-act primary" type="submit" disabled={!canSubmit}>
+            {busy ? t('projects.addBusy') : t('projects.addSubmit')}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -365,7 +476,8 @@ export default function ProjectsPage() {
   const t = useT()
   const [state, setState] = useState({ kind: 'loading' }) // loading | ok | denied | absent
   const [health, setHealth] = useState({})                // id → 'running' | 'unreachable' (probed)
-  const [drawer, setDrawer] = useState(null)              // 'admin' | 'add' | null
+  const [drawer, setDrawer] = useState(null)              // 'admin' | null
+  const [adding, setAdding] = useState(false)
   const [adminBusy, setAdminBusy] = useState(false)
   const [adminErr, setAdminErr] = useState(null)
   const seq = useRef(0)
@@ -418,7 +530,7 @@ export default function ProjectsPage() {
       <>
         <div className="proj-head">
           <span className="proj-count">{t('projects.count', { n: state.projects.length })}</span>
-          <button className={drawer === 'add' ? 'proj-act on' : 'proj-act'} onClick={() => setDrawer((v) => (v === 'add' ? null : 'add'))}>
+          <button className={adding ? 'proj-act on' : 'proj-act'} onClick={() => setAdding(true)}>
             <Icon name="plus" size={12} /> {t('projects.add')}
           </button>
           <button className={drawer === 'admin' ? 'proj-act on' : 'proj-act'} onClick={() => { setDrawer((v) => (v === 'admin' ? null : 'admin')); setAdminErr(null) }}>
@@ -427,11 +539,6 @@ export default function ProjectsPage() {
         </div>
         {!state.adminGated && (
           <div className="proj-hint">{t('projects.adminUngated')}</div>
-        )}
-        {drawer === 'add' && (
-          <div className="proj-admin-pw">
-            <AddProjectForm t={t} onAdded={() => { setDrawer(null); refresh() }} />
-          </div>
         )}
         {drawer === 'admin' && (
           <div className="proj-admin-pw">
@@ -471,6 +578,7 @@ export default function ProjectsPage() {
         <h1 className="page-title">{t('projects.title')}</h1>
         {body}
       </div>
+      {adding && <AddProjectModal t={t} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); refresh() }} />}
     </div>
   )
 }

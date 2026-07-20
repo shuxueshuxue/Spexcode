@@ -65,10 +65,11 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
   `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
-  project (node_modules/build/nested-worktrees are never in the index). What counts as source is the
-  **`lint.sourceExtensions`** knob (default ts/tsx/js/jsx) — the SAME setting eval lint's `eval-coverage` reuses
-  (one knob, both coverage axes: a Rust/Go/Python tree sets it once), so there is no second web-only allowlist.
-  **`lint.testGlobs`** (default `**/*.test.*`) drops tests; roots matching no tracked file warn "governing nothing".
+  project. The source set is one explicit algebra: current regular text under those roots, selected by
+  optional `sourceIncludeGlobs`, minus SpexCode-owned data, `sourceExcludeGlobs`, and `testGlobs`. There is
+  no guessed language/path/file-type blacklist. The compatibility `sourceExtensions` lowers into include
+  globs before that same matcher. Eval lint reuses the resulting tracked set, and an empty set warns
+  "governing nothing" with every active policy knob. See [[adopt-nonweb-ergonomics]].
 - **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.

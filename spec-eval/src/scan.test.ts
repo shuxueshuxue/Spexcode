@@ -1,20 +1,27 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 import { isUiPath, nodeChanged } from './cli.js'
-import { sourceExtRe } from '../../spec-cli/src/lint.js'
+import { DEFAULT_TEST_GLOBS, isSourceFile } from '../../spec-cli/src/source-files.js'
 
-// ---- the loss-signal classifiers: sourceExtRe → scan's eval-coverage (any governed source, per the
-// configurable sourceExtensions knob); isUiPath → the review-proof's FRONTEND blindspot; nodeChanged → --changed scope ----
+// ---- the loss-signal classifiers: shared source policy → eval-coverage; isUiPath → the review-proof's
+// FRONTEND blindspot; nodeChanged → --changed scope ----
 
-test('sourceExtRe: eval-coverage keys off the configurable sourceExtensions, not a hardcoded web allowlist', () => {
-  const web = sourceExtRe(['ts', 'tsx', 'js', 'jsx'])   // the default knob
-  assert.equal(web.test('spec-cli/src/sessions.ts'), true, 'backend .ts is source under the default knob')
-  assert.equal(web.test('spec-dashboard/src/NodeView.jsx'), true, 'frontend still counts')
-  assert.equal(web.test('crates/engine/src/lib.rs'), false, 'a .rs file is NOT source under the default knob')
-  const rust = sourceExtRe(['rs'])                       // a non-web project reconfigures it
-  assert.equal(rust.test('crates/engine/src/lib.rs'), true, 'configuring sourceExtensions=[rs] makes .rs source')
-  assert.equal(rust.test('spec-cli/src/sessions.ts'), false, 'and .ts stops counting for that project')
+test('eval-coverage shares include-minus-exclude/test source policy', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-eval-source-'))
+  mkdirSync(join(root, 'src'))
+  for (const file of ['app.py', 'engine.rs', 'view.tsx', 'config.json'])
+    writeFileSync(join(root, 'src', file), 'source\n')
+  const auto = { sourceIncludeGlobs: null, sourceExcludeGlobs: [], testGlobs: DEFAULT_TEST_GLOBS }
+  for (const file of ['app.py', 'engine.rs', 'view.tsx', 'config.json'])
+    assert.equal(isSourceFile(root, `src/${file}`, auto), true, `${file} is default source without a language branch`)
+
+  const rustOnly = { sourceIncludeGlobs: ['**/*.rs'], sourceExcludeGlobs: [], testGlobs: DEFAULT_TEST_GLOBS }
+  assert.equal(isSourceFile(root, 'src/engine.rs', rustOnly), true)
+  assert.equal(isSourceFile(root, 'src/app.py', rustOnly), false)
 })
 
 test('isUiPath: a UI file (component/style anywhere, or anything in the dashboard package) is a frontend surface', () => {

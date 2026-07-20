@@ -46,17 +46,23 @@ scenarios:
     description: >
       Serve the REAL host gateway (`startHostDashboard` — the hub + host extensions + the built SPA,
       one process) and, in a real browser at the hub face, take a THROWAWAY git repo through the whole
-      graphical management workflow: register it by root path via the add drawer (plus one non-repo
-      path for the refusal); open its settings gear, confirm the raw `spexcode.json` editor starts at
-      `{}` when the file is absent, occupies about half the desktop viewport and a large bounded mobile
+      graphical management workflow: open the Add Project modal, browse into a plain throwaway directory,
+      explicitly choose Git initialization and SpexCode initialization with a harness target, and submit;
+      also exercise an invalid/unreadable path and a failed init so their errors remain in the modal. Open
+      the added row's settings gear, confirm the raw `spexcode.json` editor contains the initialized
+      source, occupies about half the desktop viewport and a large bounded mobile
       height without covering its controls, save a valid project setting, and confirm the file changed on disk;
       open the separate setup action and run init — first confirming the button refuses with no harness
       chip picked, then with an explicit harness choice; run doctor; press Start; then follow Open.
       Repeat the visual pass at 375px and in a second theme.
     expected: >
-      The add drawer registers the repo (the row appears on the next poll, dot calmly 'stopped', Start
-      as the primary action — never a dead Open); the non-repo path shows the host's own refusal
-      verbatim inline. The gear opens a monospace editor containing the project's actual portable
+      Add Project is a centred, responsive modal rather than an inline page drawer. Its path bar,
+      parent/home controls, and bounded child-directory list browse the real host filesystem. The selected
+      plain folder is not silently mutated: submit remains unavailable until Git initialization is explicitly
+      checked; SpexCode initialization independently requires at least one harness target. Submitting runs
+      the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
+      catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
+      never a dead Open. The gear opens a monospace editor containing the project's actual portable
       `spexcode.json`; valid JSON saves through the admin surface, invalid JSON cannot save, and a
       concurrent disk change is refused visibly rather than overwritten. The editor is the drawer's large
       work area at desktop and 375px; icon details start collapsed below it, expand in flow without overlap,

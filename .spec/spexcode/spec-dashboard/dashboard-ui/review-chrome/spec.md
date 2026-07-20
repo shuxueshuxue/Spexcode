@@ -97,9 +97,10 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
   pixel offset, and
   the anchor keeps its ≥24px hit target and focus ring. Above the header the shell offers an optional
-  page-supplied **banner** slot (one restrained source-notice line — the scoped eval detail's
-  worktree-source banner rides it, [[evals-view]]): the shell owns its geometry, the page only its
-  content, and a page that supplies none renders no banner box. Source failure
+  page-supplied **banner** slot (one restrained source-notice line — the scoped eval pages' shared
+  EvalScopeBanner rides it, [[evals-view]]): the page supplies the fully-rendered notice node — the
+  SAME component the scoped eval LIST leads with, so the two scoped faces can never drift — and a page
+  that supplies none renders no banner box. Source failure
   and honest not-found are distinct faces. On desktop the SIDE rail is **sticky in its grid column**
   (never `position:fixed`): while a long main column scrolls, the rail pins near the scrollport top so
   the metadata stays on screen — grid containment keeps it off the header (which scrolls away normally)

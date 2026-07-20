@@ -83,7 +83,7 @@ test('pathname-selected catalog identity cannot be replaced by the last board th
   assert.deepEqual(selectGatewayIdentity(catalog), { title: 'Fleet', icon: 'gateway' })
   assert.equal(selectProjectIdentity('spex', null, wrongLastBoard), null, 'pending catalog is UNRESOLVED — never the board, never a minted default ([[side-nav]])')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
-  assert.equal(selectProjectIdentity('spex', { state: 'denied' }, null), null, 'denied catalog with no board yet stays unresolved')
+  assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, null), { title: 'spex', icon: 'spexcode' }, 'a still-locked scope resolves to its anonymous identity — an answer, not a placeholder')
 })
 
 test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () => {
@@ -94,7 +94,7 @@ test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () =>
   assert.equal(tabTitle(selectProjectIdentity('atlas', catalog, null)), 'Atlas Lab', 'project scope: exactly the catalog title')
   assert.equal(tabTitle(selectGatewayIdentity(catalog)), 'Fleet', 'gateway scope: exactly the gateway title')
   assert.equal(tabTitle(selectGatewayIdentity(null)), 'Projects', 'hub before/without a catalog: the fixed global face')
-  assert.equal(selectProjectIdentity('atlas', null, null), null, 'pending catalog on a scoped route: UNRESOLVED — the head is never written from a placeholder ([[side-nav]])')
+  assert.deepEqual(selectProjectIdentity('atlas', { state: 'denied' }, null), { title: 'atlas', icon: 'spexcode' }, 'still-locked scope: the ANONYMOUS identity (URL id + default mark) — a resolved answer, not a placeholder')
   assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: '', icon: '' })), 'atlas', 'gated/denied scope: still the URL project id')
   assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: 'Atlas Lab', icon: 'compass' })), 'Atlas Lab', 'unlocked direct guest: the authorized board title')
   assert.equal(tabTitle({ title: '', icon: 'spexcode' }), 'SpexCode', 'root scope before the first board: the pre-resolve product title')

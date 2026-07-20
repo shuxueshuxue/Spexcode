@@ -1212,13 +1212,18 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the DETAIL page: header (title + trailing meta) → status band → main column beside the metadata side
    rail. No fake back button — browser history is the return path. */
 .ds-page { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 14px 18px 0; }
-.ds-head { max-width: 1180px; display: flex; align-items: flex-start; gap: 10px; }
+/* the header row's ONE geometry contract: the row declares the title's type metric ONCE (font-size +
+   line-height, inherited by the h1), so the back anchor can derive its offset from the SAME first-line
+   box via 1lh — its center coincides with the title first line's center at any type token, wrap, width,
+   or language, with no per-page or per-font magic offset. */
+.ds-head { max-width: 1180px; display: flex; align-items: flex-start; gap: 10px; font-size: var(--type-title); line-height: var(--leading-ui); }
 /* the compact back anchor ([[review-chrome]] / [[address-routing]]): a REAL <a href> derived from the
-   canonical address — never a history.back button. */
-.ds-back { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 1px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+   canonical address — never a history.back button. --ds-back-size keeps the ≥24px hit target explicit;
+   the margin centers the box on the title's FIRST line (1lh = the row's declared line box). */
+.ds-back { --ds-back-size: 28px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: var(--ds-back-size); height: var(--ds-back-size); margin-top: calc((1lh - var(--ds-back-size)) / 2); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
 .ds-back:hover { color: var(--ink); background: var(--panel); }
 .ds-back:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.ds-title { margin: 0 0 6px; font-size: var(--type-title); font-weight: var(--weight-bold); color: var(--ink); line-height: var(--leading-ui); overflow-wrap: anywhere; min-width: 0; }
+.ds-title { margin: 0 0 6px; font-size: inherit; font-weight: var(--weight-bold); color: var(--ink); line-height: inherit; overflow-wrap: anywhere; min-width: 0; }
 .ds-title-meta { margin-left: 10px; font-size: var(--type-meta); font-weight: var(--weight-regular); color: var(--muted); }
 .ds-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1180px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .ds-status-pill { display: inline-flex; align-items: center; gap: 5px; }

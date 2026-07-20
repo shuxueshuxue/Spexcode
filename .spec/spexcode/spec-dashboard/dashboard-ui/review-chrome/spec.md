@@ -77,7 +77,12 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   when the page supplies one (`backHref`/`backLabel`): a REAL `<a href>` wearing the [[icon-system]]
   left-arrow glyph with its localized tooltip + accessible name — Enter follows the href natively, and it
   never calls `history.back` (the page derives the href from the detail's canonical address,
-  [[address-routing]]). Browser history remains the finer return path beside it. Source failure
+  [[address-routing]]). Browser history remains the finer return path beside it. The header row carries
+  ONE geometry contract: the row declares the title's type metric once, and the back anchor derives its
+  vertical offset from that same first-line box, so the anchor's center coincides with the title FIRST
+  line's visual center — at every width and language, and a wrapping title keeps the anchor tied to line
+  one, never re-centered against the whole block. No page or breakpoint may add its own pixel offset, and
+  the anchor keeps its ≥24px hit target and focus ring. Source failure
   and honest not-found are distinct faces. At phone width the SAME themed markup becomes one column with
   side metadata above main content.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute

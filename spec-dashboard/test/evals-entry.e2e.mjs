@@ -52,18 +52,27 @@ const browser = await chromium.launch()
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: OUT, size: { width: 1440, height: 900 } } })
   const p = await ctx.newPage()
 
-  // — the console door —
+  // — the console door: WAIT for the console to actually render its tab bar (a cold vite/board load
+  // takes over a second; a fixed settle races it), then probe the REAL element. If the door never
+  // appears, or is not the canonical real anchor, the run ABORTS here with a non-zero exit — the entry
+  // is the very thing under test, and continuing (playwright's auto-waiting click would still land)
+  // would turn the remaining checks into evidence for a page the user could not have reached this way.
   await p.goto(`${BASE}/#/sessions/${SESSION}`)
-  await settle(p, 1500)
-  const door = await p.evaluate(() => {
-    const d = document.querySelector('.si-tab-door')
-    return d ? { tag: d.tagName, href: d.getAttribute('href'), text: d.textContent.trim() } : null
-  })
-  check('door exists in console tab bar', !!door, JSON.stringify(door))
+  const t0 = Date.now()
+  const doorEl = await p.waitForSelector('.si-tab-door', { timeout: 20000 }).catch(() => null)
+  const door = doorEl ? await doorEl.evaluate((d) => ({ tag: d.tagName, href: d.getAttribute('href'), text: d.textContent.trim() })) : null
+  check('door exists in console tab bar', !!door, `${JSON.stringify(door)} after ${Date.now() - t0}ms`)
   check('door is a REAL anchor', door?.tag === 'A', `tag=${door?.tag}`)
   const doorQ = door?.href ? qOf(door.href) : null
   check('door href is the canonical scoped list (q token, not legacy ?session)', pathOf(door?.href || '') === '#/evals' && doorQ === SCOPED_Q, `href=${door?.href} q=${doorQ}`)
   await p.screenshot({ path: join(OUT, '01-console-door.png') })
+  if (!door || door.tag !== 'A' || pathOf(door.href || '') !== '#/evals' || doorQ !== SCOPED_Q) {
+    console.log('ABORT — the desktop console door is missing or not the canonical anchor; refusing to fake the entry with a scripted navigation.')
+    await browser.close()
+    console.log(`\n${pass} pass, ${fail} fail (aborted at the console door)`)
+    process.exit(1)
+  }
+  await settle(p, 400)
 
   // — click: one PUSH straight to the final address —
   const lenBefore = await p.evaluate(() => history.length)

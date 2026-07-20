@@ -67,23 +67,28 @@ scenarios:
     tags: [frontend-e2e, desktop, mobile]
     description: >
       Open a trunk eval detail from the middle of the #/evals list at 1440px and read the side rail below
-      the metadata sections: the continue-reviewing section's rows — count, order against the source
-      dataset's newest-first order (the default list FACE may hide reviewed rows the queue still walks),
-      whether each is a real anchor with the shared verdict icon plus scenario and node text, and
-      whether the current reading appears. Open the FIRST and the LAST list entries' details and re-count.
-      Follow a queue anchor by click and by keyboard focus+Enter, then press browser Back. Open a
-      session-scoped detail and read the queue hrefs. Resize to 390px and read the column order and
-      document scroll width. Find a dataset with a single scenario (or a scoped session with one reading)
-      and read whether the section renders.
+      the metadata sections: the continue-reviewing section's group headings and rows — which group each
+      neighbor sits in and its order against the source dataset's stable list order (the default list
+      FACE may hide reviewed rows the queue still walks), whether each is a real anchor with the shared
+      verdict icon plus scenario and node text, and whether the current reading appears. Open the FIRST
+      and the LAST list entries' details and re-read groups and counts. Follow a queue anchor by click
+      and by keyboard focus+Enter, then press browser Back. Open a session-scoped detail and read the
+      queue hrefs. Resize to 390px and read the column order and document scroll width. Find a dataset
+      with a single scenario (or a scoped session with one reading) and read whether the section renders.
     expected: >
-      The queue lists ~5 neighbors of the current reading in the source dataset's stable default order
-      (the list page's order), current excluded; at the first/last entry the window auto-fills from the
-      one available side so the count holds while the dataset allows. Each row is a REAL <a> to the
-      neighbor's canonical detail wearing the ONE shared ReviewState visual + scenario + node — no
-      checkbox, no page-local selection state, no second filter UI. A trunk neighbor's href is the pure
-      detail path; a scoped neighbor's carries the same one scope: token. Click and focus+Enter both
-      navigate (ordinary push — Back returns to the detail just left). At 390px the same rail reflows
-      above the main column with no horizontal overflow. With no neighbor the section is entirely absent
+      The queue renders as TWO groups under the one continue-reviewing section — Previous, then Up next —
+      strictly POSITIONAL against the source dataset's stable list order (the list page's order; the
+      labels claim list direction, never time): Previous holds entries BEFORE the current row, Up next
+      entries AFTER it, each group ordered nearest-to-current first, the current reading excluded. The
+      default total stays ~5, split balanced across the groups (the forward group takes the odd slot);
+      at either boundary the short side's unused budget refills from the other side so the total holds
+      while the dataset allows. A group with no entries renders NO heading; with no neighbor at all the
+      whole section is absent — no empty box, no label. Each row is a REAL <a> to the neighbor's
+      canonical detail wearing the ONE shared ReviewState visual + scenario + node — no checkbox, no
+      page-local selection state, no second filter UI. A trunk neighbor's href is the pure detail path;
+      a scoped neighbor's carries the same one scope: token. Click and focus+Enter both navigate
+      (ordinary push — Back returns to the detail just left). At 390px the same rail reflows above the
+      main column with no horizontal overflow. With no neighbor the section is entirely absent
       — no empty box, no label.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]

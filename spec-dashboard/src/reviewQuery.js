@@ -95,6 +95,14 @@ export const queryParam = (text, defaultText) => {
   return { q: trimmed }
 }
 
+// A query/filter action resets by omitting page; a PAGINATION action passes a page (including 1) and
+// therefore records GitHub's explicit page=1 history form. The distinction is the action, not equivalence.
+export const reviewRouteQuery = (text, defaultText, page = null) => {
+  const query = queryParam(text, defaultText) || {}
+  if (page != null) query.page = String(page)
+  return Object.keys(query).length ? query : null
+}
+
 // LEGACY structured params → token pairs. `kind=all` maps to nothing: the evidence default IS all.
 const LEGACY_PARAMS = {
   state: (v) => ['state', v],

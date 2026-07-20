@@ -141,6 +141,12 @@ export function issueFilterModel(items, raw = {}, context = {}) {
 const evalIsResult = (entry) => entry.filterKind === EVAL_FILTER_KIND.RESULT
 const verdictOf = (entry) => evalIsResult(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
 const reviewStateOf = (entry) => (evalIsResult(entry) && entry.fresh && entry.humanOk ? 'reviewed' : 'current')
+export const evalReviewState = (reading) => {
+  const status = reading?.verdict?.status
+  if (status !== 'pass' && status !== 'fail') return 'empty'
+  if (reading.fresh) return status
+  return status === 'pass' ? 'stalePass' : 'staleFail'
+}
 const shortSession = (value, sessions) => {
   const session = sessions.find((item) => item.id === value)
   if (session) return sessionHeadline(session)

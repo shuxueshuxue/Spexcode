@@ -1,0 +1,67 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { paginateReview, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+
+const model = {
+  sections: { open: 61, closed: 7 },
+  section: { key: 'state', value: 'open', options: [{ value: 'open', count: 61 }] },
+  facets: { store: { value: '', options: [{ value: '' }, { value: 'local' }, { value: 'github' }] } },
+}
+
+test('count and facets describe the full set while items contain one 25-row slice', () => {
+  const source = Array.from({ length: 68 }, (_, id) => ({ id, state: id < 61 ? 'open' : 'closed' }))
+  const shown = source.slice(0, 61)
+  const page = paginateReview(source, shown, model, '2', { source })
+  assert.equal(page.page, 2)
+  assert.equal(page.perPage, 25)
+  assert.equal(page.items.length, 25)
+  assert.deepEqual(page.items.map((item) => item.id), Array.from({ length: 25 }, (_, index) => index + 25))
+  assert.equal(page.total, 61)
+  assert.equal(page.sourceTotal, 68)
+  assert.equal(page.pageCount, 3)
+  assert.deepEqual(page.counts, { open: 61, closed: 7 })
+  assert.deepEqual(page.facets.store.options.map((option) => option.value), ['', 'local', 'github'])
+})
+
+test('overflow preserves the requested page and continues real prev/next targets without clamping', () => {
+  const source = Array.from({ length: 1000 }, (_, id) => ({ id }))
+  for (const requested of [41, 999999]) {
+    const page = paginateReview(source, source, model, String(requested), { source })
+    assert.equal(page.page, requested)
+    assert.deepEqual(page.items, [])
+    assert.equal(page.prev, requested - 1)
+    assert.equal(page.next, requested + 1)
+  }
+  const last = paginateReview(source, source, model, '40', { source })
+  assert.equal(last.items.length, 25)
+  assert.equal(last.next, null)
+})
+
+test('revision is stable for one snapshot and changes with observable input', () => {
+  const source = [{ id: 1 }]
+  const a = paginateReview(source, source, model, 1, { source })
+  const b = paginateReview(source, source, model, 1, { source })
+  const c = paginateReview([{ id: 2 }], [{ id: 2 }], model, 1, { source: [{ id: 2 }] })
+  assert.equal(a.revision, b.revision)
+  assert.notEqual(a.revision, c.revision)
+  assert.equal(reviewPageNumber('0'), 1)
+  assert.equal(reviewPageNumber('999999'), 999999)
+})
+
+test('trunk and scoped eval sources produce one tagged stable item vocabulary', () => {
+  const reading = (scenario: string, ts: string, inSession = false) => ({
+    scenario, ts, fresh: true, verdict: { status: 'pass' }, inSession,
+  })
+  const trunk = trunkEvalReviewItems([{ id: 'n', hue: 10, scenarios: [{ name: 'a' }], evals: [reading('a', '2026-01-01')] }])
+  assert.deepEqual(trunk.map((item) => [item.node, item.scenario, item.filterKind, item.state]), [['n', 'a', 'result', 'pass']])
+
+  const scoped = scopedEvalReviewItems({
+    id: 's', node: 'n', branch: 'node/n', title: 'n', ahead: 1, dirtyNonRuntime: 0, gates: [],
+    nodes: [{
+      id: 'n', title: 'n', hue: 10, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+      unknownCoverage: [], scenarios: [{ name: 'blind', expected: '', impact: ['code'] }, { name: 'own', expected: '', impact: ['code'] }],
+      evals: [reading('own', '2026-01-02', true) as any],
+    }],
+  })
+  assert.deepEqual(scoped.map((item) => [item.scenario, item.filterKind]), [['blind', 'blind'], ['own', 'result']])
+})

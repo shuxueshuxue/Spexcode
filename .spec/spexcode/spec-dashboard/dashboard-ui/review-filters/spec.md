@@ -6,6 +6,7 @@ desc: One pure Issues/Evals filter engine with domain data adapters — the sing
 code:
   - spec-dashboard/src/reviewFilters.js
 related:
+  - spec-cli/src/reviews.ts
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/EvalsFeed.jsx
@@ -32,7 +33,9 @@ conjunctively — `q` is one substring or an array of them (the token text's bar
 section counts UNDER the rest of the query and data-backed options, and keeps a vanished active value
 clearable. It invents no field and silently omits a facet with no meaningful choice.
 
-The two consumers own different state homes, not different semantics. [[issues-view]] and [[evals-feed]]
+The consumers own different state homes, not different semantics. [[paged-review]] imports this SAME pure
+module on the server, applies it before slicing, and returns the resulting full-population counts/facets;
+the canonical pages render that result and never re-match a current-page subset. [[issues-view]] and [[evals-feed]]
 own ONE visible token text ([[review-query]] parses it; [[review-chrome]] renders it): the canonical
 bridge maps parsed tokens into engine state — duplicate qualifiers last-wins, `scope:` to no predicate
 (it picks the data source upstream), and any qualifier outside the page's map to the IMPOSSIBLE state,

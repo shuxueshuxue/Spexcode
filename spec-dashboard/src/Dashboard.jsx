@@ -77,6 +77,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   const graphRef = useRef(null)
+  const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
   const [kbdMode, setKbdMode] = useState(false)
   const kbdRef = useRef(false); kbdRef.current = kbdMode
@@ -249,7 +250,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
       const stroke = labelColor(mv.seed)
       moves.push({
         id: `move-${s.id}-${mv.toParent}`, source: s.id, target: mv.toParent, type: 'smoothstep',
-        zIndex: 2, className: 'move-edge',
+        animated: true, zIndex: 2, className: 'move-edge',
         style: { stroke, strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.6 },
         markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
       })
@@ -257,14 +258,31 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
     return [...tree, ...moves]
   }, [focusId, specs2, byId])
 
-  // Frame a node at the graph pane's geometric centre in one update. When `zoom` is omitted (arrow-nav)
-  // the current zoom is reused, so this remains a pure flat-pan without a camera transition.
-  const centerOn = useCallback((node, zoom) => {
+  // Flat-pan the viewport without moving graph-space node/edge geometry.
+  const animateView = useCallback((target, dur) => {
+    const start = getViewport()
+    const t0 = performance.now()
+    cancelAnimationFrame(animRef.current)
+    const step = (now) => {
+      const p = dur ? Math.min(1, (now - t0) / dur) : 1
+      const eased = 1 - Math.pow(1 - p, 3)
+      setViewport({
+        x: start.x + (target.x - start.x) * eased,
+        y: start.y + (target.y - start.y) * eased,
+        zoom: start.zoom + (target.zoom - start.zoom) * eased,
+      })
+      if (p < 1) animRef.current = requestAnimationFrame(step)
+    }
+    animRef.current = requestAnimationFrame(step)
+  }, [getViewport, setViewport])
+
+  // Frame a node at the graph pane's geometric centre; when zoom is omitted the current zoom is reused.
+  const centerOn = useCallback((node, zoom, dur = 300) => {
     const el = graphRef.current
     if (!el) return
     const z = zoom ?? getViewport().zoom
-    setViewport({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z })
-  }, [getViewport, setViewport])
+    animateView({ x: el.clientWidth / 2 - node.x * z, y: el.clientHeight / 2 - node.y * z, zoom: z }, dur)
+  }, [animateView, getViewport])
 
   // Frame the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
   // camera. Gated on the route: a deep-load on another page keeps the graph hidden (zero-sized), so framing
@@ -274,7 +292,7 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
     if (framedRef.current || page !== 'graph') return
     const id = requestAnimationFrame(() => {
       framedRef.current = true
-      centerOn(focus)
+      centerOn(focus, undefined, 0)
     })
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus, page])
@@ -437,9 +455,9 @@ function Dashboard({ specs, sessions, reload, identity, issuesData, reloadIssues
       if (firesKey('nav.parent', e.key)) return go(parent, e)
       if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2)) }
-      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2)) }
-      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85) }
+      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
+      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
+      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
       else if (firesKey('graph.info', e.key)) { e.preventDefault(); setOverlay(true) }
       // overlay cycle: o / O walk focus through changed nodes (scope follows the lock), wrapping
       else if (firesKey('graph.cycle', e.key) || firesKey('graph.cycleRev', e.key)) {

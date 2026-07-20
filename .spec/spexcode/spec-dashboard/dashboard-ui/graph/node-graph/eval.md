@@ -38,14 +38,15 @@ scenarios:
       Open the dashboard on the graph and drill right into a collapsed branch so children are newly
       revealed and the existing neighbourhood re-plots. Record the interaction at browser-frame cadence
       and compare the last frame before the topology update with every frame after it. Inspect node
-      transforms, solid edge paths, the viewport transform, and the computed transition on React Flow's
-      node containers.
+      graph transforms, solid edge paths, the viewport transform, and the computed transition properties
+      on React Flow's node containers.
     expected: >-
       The first rendered topology after the drill is already final: newly revealed children and their
-      solid edges appear together, persisting nodes occupy their final slots, and no later frame changes a
-      node's graph position, an edge path, or the viewport after its one snap to the new focus. Node containers
-      declare no transition. The filed reading carries video of the interaction because a settled still cannot
-      prove the absence of intermediate motion.
+      solid edges appear together, persisting nodes occupy their final graph slots, and no later frame visibly
+      changes a node's graph transform or solid edge path. Meanwhile the viewport crosses progressive screen
+      positions before settling with focus centred, preserving the move's direction; node containers may
+      transition opacity but never transform. The filed reading carries video because a settled still cannot
+      distinguish a connected camera move from detached structural animation.
 ---
 # eval.md — node-graph
 
@@ -53,5 +54,6 @@ This view is product surface — it is measured by **looking** (YATU), not by a 
 the dashboard, records navigation through the drill-down tree (→/← drill in/out, the camera following
 focus), and screenshots the settled two-row tiles — identity plus the right-edge op-glyphs-or-age on Row 1,
 the marks and any live editors' avatars on Row 2 — with focus at the graph pane's geometric centre. The
-recording and screenshot ride together with the verdict. Atomic-update readings sample browser frames around
-the interaction: a still of the settled graph cannot prove that no intermediate motion occurred.
+recording and screenshot ride together with the verdict. Structural readings sample browser frames around
+the interaction and distinguish graph-space geometry from the moving viewport: a still cannot prove that the
+tree stayed connected while the camera supplied direction.

@@ -362,6 +362,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .graph-stats .score-badge { width: 13px; height: 13px; font-size: var(--type-caption); }
 .graph-stats .score-badge.empty { opacity: .6; }                         /* a touch louder than on a tile */
 
+/* Focus emphasis may settle gently; graph-space positions never transition here because React Flow's
+   solid edges already use final coordinates. Direction comes from the viewport pan, not detached tiles. */
+.react-flow__node { transition: opacity .18s ease; }
 .react-flow__node.is-far { opacity: .35; }
 
 /* react-flow zoom controls, themed through the palette vars */

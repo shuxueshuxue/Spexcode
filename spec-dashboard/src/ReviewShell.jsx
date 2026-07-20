@@ -465,8 +465,9 @@ export function ListPage({ notice, error, title, action, search, sections = [], 
 // one column with side metadata first; failure and not-found remain distinct honest faces. `backHref` is
 // the compact back anchor ([[address-routing]]'s detailBackHash supplies it) — a REAL <a href> derived
 // from the canonical address, never a history.back button. `banner` is an optional page-supplied source
-// notice rendered ABOVE the header (the scoped eval detail's worktree-source banner rides it) — content
-// only, the shell owns its geometry.
+// notice rendered ABOVE the header — a fully-rendered node (the scoped eval pages' shared EvalScopeBanner
+// rides it, the SAME component the scoped list leads with), so the notice owns its own chrome and the two
+// scoped faces can never drift apart.
 export function DetailShell({ title, titleMeta, status, side, composer, missing, failure, listHref, listLabel, backHref, backLabel, banner, children }) {
   if (failure) {
     return (
@@ -486,7 +487,7 @@ export function DetailShell({ title, titleMeta, status, side, composer, missing,
   }
   return (
     <div className="ds-page">
-      {banner && <div className="ds-banner" role="note">{banner}</div>}
+      {banner}
       <header className="ds-head">
         {backHref && (
           <a className="ds-back" href={backHref} data-tip={backLabel} aria-label={backLabel}>

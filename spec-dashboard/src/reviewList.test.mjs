@@ -200,8 +200,9 @@ test('the tablist always exposes one roving stop and honest tab counts', () => {
   assert.match(evals, /reading: false, filterKind: 'blind'/)
   assert.match(evals, /filters\.shown\.filter\(\(item\) => item\.filterKind === 'blind'\)/)
   assert.match(evals, /count: currentCount/)
-  // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text
-  assert.match(page, /const listHref = routeHash\('evals', null, sessionId \? \{ q: scopedEvalQuery\(sessionId\) \} : null\)/)
+  // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
+  // ONE address projection
+  assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
 })
 
 test('overflow radio sets and section tabs expose complete ARIA ownership', () => {
@@ -299,28 +300,33 @@ test('the detail shell back affordance is a real derived anchor, never history.b
   }
 })
 
-test('the scoped eval detail wears a source banner whose session door is a real anchor', () => {
-  // DetailShell owns the banner slot ABOVE the header — page-supplied content, no layout fork
-  assert.match(shell, /\{banner && <div className="ds-banner" role="note">\{banner\}<\/div>\}/)
-  assert.match(shell, /\{banner && <div className="ds-banner"[\s\S]*?<header className="ds-head">/)
-  // the evals page mints the banner ONLY from the canonical scope token (sessionId), with a REAL
-  // anchor to the session terminal — direct open and reload derive the identical face
-  assert.match(page, /const banner = sessionId \? \(/)
-  assert.match(page, /<a className="ds-banner-link" href=\{routeHash\('sessions', sessionId\)\}>/)
+test('the scoped eval pages wear the ONE shared scope banner whose session door is a real anchor', () => {
+  // DetailShell's banner slot renders the page-supplied node ABOVE the header — the SAME EvalScopeBanner
+  // component the scoped list leads with, so the two faces cannot drift
+  assert.match(shell, /\{banner\}\s*<header className="ds-head">/)
+  // the ONE banner component: minted ONLY from the canonical scope token (sessionId), with a REAL
+  // anchor to the session terminal through the address projection — direct open and reload derive the
+  // identical face
+  assert.match(page, /export function EvalScopeBanner\(\{ sessionId \}\)/)
+  assert.match(page, /<a className="ds-banner-link" href=\{addressHash\(sessionAddress\(sessionId\)\)\}>/)
+  // both scoped faces render it: the detail through the shell slot, the list at its first screen
+  assert.match(page, /const banner = sessionId \? <EvalScopeBanner sessionId=\{sessionId\} \/> : null/)
+  assert.match(page, /\{sessionId && <div className="se-banner-slot"><EvalScopeBanner sessionId=\{sessionId\} \/><\/div>\}/)
   // issues never passes a banner
   assert.doesNotMatch(issues, /banner=/)
   // localized banner strings exist in both dictionaries
   for (const dict of [en, zh]) {
-    assert.match(dict, /scopedSource:/)
-    assert.match(dict, /scopedSourceOpen:/)
+    assert.match(dict, /scopeBanner:/)
+    assert.match(dict, /scopeBannerOpen:/)
   }
 })
 
 test('the continue-reviewing queue: two positional groups of shared-state anchors, absent when alone', () => {
   // the queue derives from the page's ONE source dataset (scope.entries) via the pure split helper
   assert.match(page, /queueNeighbors\(scope\.entries, `eval:\$\{node\}·\$\{scenario\}`\)/)
-  // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token
-  assert.match(page, /href: routeHash\('evals', `\$\{e\.node\}\/\$\{e\.scenario\}`, sessionId \? \{ q: `scope:\$\{sessionId\}` \} : null\)/)
+  // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token — both minted
+  // by the ONE address projection
+  assert.match(page, /href: addressHash\(sessionId \? sessionEvalAddress\(sessionId, e\.node, e\.scenario\) : evalAddress\(e\.node, e\.scenario\)\)/)
   // two POSITIONAL groups against the stable list order, each nearest-to-current first
   assert.match(page, /prev: entries\.slice\(idx - prevN, idx\)\.reverse\(\)/)
   assert.match(page, /next: entries\.slice\(idx \+ 1, idx \+ 1 \+ nextN\)/)

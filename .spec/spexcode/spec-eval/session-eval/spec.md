@@ -1,7 +1,7 @@
 ---
 title: session-eval
 hue: 150
-desc: A session's fully-derived evaluation — the worktree-rooted engine (sessioneval.ts) whose interactive face is now the Evals route family scoped by ?session=<id> ([[evals-view]] — the console and phone expose navigation doors, never a local Eval tab), its CLI twin `spex eval ls --session <SEL>`, and the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
+desc: A session's fully-derived evaluation — the worktree-rooted engine (sessioneval.ts) whose interactive face is now the Evals route family scoped by the `scope:<id>` query token ([[evals-view]] — the console and phone expose real-anchor navigation doors, never a local Eval tab), its CLI twin `spex eval ls --session <SEL>`, and the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
 code:
   - spec-eval/src/sessioneval.ts
 related:
@@ -48,18 +48,22 @@ behind native toggles (capped so a huge changeset can't bloat the page). Nothing
 diff and both file versions are there to jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
-address of a session's evaluation is `#/evals?session=<id>` (the list — the same [[evals-feed]] row
-grammar with the session's gates strip above, blind spots leading as inert unmeasured rows, then the
+address of a session's evaluation is `#/evals?q=is:eval state:current scope:<id>` (the list — the same
+[[evals-feed]] row grammar led by the shared scope banner naming this session/worktree, with the
+session's gates strip above, blind spots leading as inert unmeasured rows, then the
 session's own measurements ✦-marked, then the inherited baseline — other sessions' latest readings; a
 reading is the session's own iff THIS session filed it or its `codeSha` is one of the branch's commits,
-derived, never hand-tagged) and `#/evals/<node>/<scenario>?session=<id>` (the [[event-detail]] page whose
+derived, never hand-tagged) and `#/evals/<node>/<scenario>?q=scope:<id>` (the [[event-detail]] page whose
 A/B history walks the WORKTREE-rooted readings — the live, remarkable reading of a still-open branch,
 what a CI/MR note links; merging first is not required, and the inert `?format=html` export is not the
 link). The face fetches the LEAN model (`GET /api/sessions/:id/evals` — rows only, worktree-rooted, no
 diff enrichment, no inlined bytes) and rides the tiered loading every eval face shares: rows first,
 evidence streamed from `/api/evidence` only on the detail page. The console and phone session surfaces expose
-**DOORS** that navigate to the session-scoped Evals list
-(a real page switch, history-walked) instead of mounting a console-local eval pane; the typed `/eval`
+**DOORS** that are REAL ANCHORS — the console tab bar's `eval ↗` entry and the phone session header's
+eval button carry the canonical scoped-list address as their literal href ([[address-routing]]'s one
+projection; copy-link and middle-click work for free) and clicking one is a single ordinary hash push
+landing directly on the final address — never a console-local eval pane, never a JS-only button, never
+the legacy `?session` param; the typed `/eval`
 board command opens the same door. The LEGACY address `#/sessions/<id>/eval[/<node>/<scenario>]`
 normalizes to the canonical form at the route layer ([[side-nav]] — replace, old links keep working).
 There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the

@@ -12,8 +12,7 @@ import SessionSelectBar from './SessionSelectBar.jsx'
 import { useResizable } from './useResizable.js'
 import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
-import { navigate } from './route.js'
-import { scopedEvalQuery } from './reviewQuery.js'
+import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
 
@@ -551,8 +550,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const runners = {
     type: () => setTypeMode((v) => !v),
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
-    // navigate to the session-scoped list (a real page switch, history-walked), never a console-local pane.
-    eval: () => { if (active !== 'new') navigate('evals', null, { query: { q: scopedEvalQuery(active) } }) },
+    // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
+    // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
+    // address as a REAL anchor.
+    eval: () => { if (active !== 'new') navigateAddress(sessionEvalAddress(active)) },
     merge: () => act('merge'),
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
@@ -786,9 +787,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
               WebSockets + scroll survive the tab switch. A horizontal TAB BAR sits above the pane content —
               the Terminal tab plus the Eval DOOR ([[session-console]]: the session's evaluation lives on
-              the Evals route family, so the entry NAVIGATES to the scoped default list (`?q=is:eval
-              state:current scope:<id>`) instead of mounting a
-              console-local pane) — and carries the lifecycle actions on its right. */}
+              the Evals route family, so the entry is a REAL ANCHOR whose href is the canonical scoped
+              default list (`?q=is:eval state:current scope:<id>`, minted by [[address-routing]]) — click
+              is one ordinary hash push, copy-link/middle-click work for free, and no console-local pane
+              ever mounts) — and carries the lifecycle actions on its right. */}
           <div
             className="si-session-wrap"
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
@@ -796,7 +798,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div className="si-tabbar">
                 <div className="si-tabs" role="tablist">
                   <button role="tab" aria-selected className="si-tab on">{t('session.tabTerminal')}</button>
-                  <button className="si-tab si-tab-door" onClick={() => runners.eval()} data-tip={t('session.tabEvalTitle')}>{t('session.tabEval')} ↗</button>
+                  <a className="si-tab si-tab-door" href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null} data-tip={t('session.tabEvalTitle')}>{t('session.tabEval')} ↗</a>
                 </div>
                 <div className="si-actions">
                   {showRelaunch

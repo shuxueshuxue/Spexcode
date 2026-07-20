@@ -74,7 +74,7 @@ const browser = await chromium.launch()
   const listHash = hashAfter
   check('click lands on the canonical scoped list', pathOf(hashAfter) === '#/evals' && qOf(hashAfter) === SCOPED_Q, `hash=${hashAfter}`)
   check('click is ONE history push', lenAfter === lenBefore + 1, `history ${lenBefore}→${lenAfter}`)
-  const gates = await p.evaluate(() => !!document.querySelector('.se-gates'))
+  const gates = await p.waitForSelector('.se-gates', { timeout: 8000 }).then(() => true).catch(() => false)
   check('scoped list shows the gates strip', gates)
 
   // — the scoped LIST wears the shared scope banner, top of the first screen —
@@ -92,6 +92,7 @@ const browser = await chromium.launch()
   check('reload wears the identical banner', !!listBanner && !!reloadBanner && reloadBanner.text === listBanner.text && reloadBanner.linkHref === listBanner.linkHref, JSON.stringify(reloadBanner))
 
   // — list → detail: push; detail wears the SAME banner + uniform ds-back —
+  await p.waitForSelector('a.lp-row', { timeout: 8000 }).catch(() => null)
   const rowHref = await p.evaluate(() => document.querySelector('a.lp-row')?.getAttribute('href'))
   check('scoped row href carries the scope token alone', !!rowHref && qOf(rowHref) === `scope:${SESSION}`, `row=${rowHref}`)
   await p.click('a.lp-row')
@@ -177,14 +178,18 @@ const browser = await chromium.launch()
   const widths = await p.evaluate(() => ({ doc: document.documentElement.scrollWidth, body: document.body.scrollWidth }))
   check('390px no horizontal overflow', widths.doc <= 390 && widths.body <= 390, JSON.stringify(widths))
   await p.screenshot({ path: join(OUT, '07-390-scoped-list.png') })
-  // the phone session surface's eval door
+  // the phone session surface's eval door: the sessions plane is tab-local — tap the tab bar's sessions
+  // entry (2nd tab), then a session row, and read the detail header's eval entry
   await p.goto(`${BASE}/#/sessions`)
   await settle(p, 1200)
-  const mDoor = await p.evaluate((sid) => {
-    const btns = [...document.querySelectorAll('.m-sess-evalbtn')]
-    const d = btns[0]
-    return d ? { tag: d.tagName, href: d.getAttribute('href'), n: btns.length } : null
-  }, SESSION)
+  await p.evaluate(() => document.querySelectorAll('.m-tabbar-btn')[1]?.click())
+  await settle(p, 600)
+  const tapped = await p.waitForSelector('.m-sess-row', { timeout: 8000 }).then((el) => el.click().then(() => true)).catch(() => false)
+  await settle(p, 800)
+  const mDoor = tapped ? await p.evaluate(() => {
+    const d = document.querySelector('.m-sess-evalbtn')
+    return d ? { tag: d.tagName, href: d.getAttribute('href') } : null
+  }) : null
   check('phone eval door is a REAL anchor to a scoped list', !!mDoor && mDoor.tag === 'A' && !!mDoor.href && pathOf(mDoor.href) === '#/evals' && (qOf(mDoor.href) || '').startsWith('is:eval state:current scope:'), JSON.stringify(mDoor))
   await p.screenshot({ path: join(OUT, '08-390-sessions-door.png') })
   await p.close(); await ctx.close()

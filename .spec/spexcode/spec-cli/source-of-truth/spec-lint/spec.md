@@ -65,12 +65,11 @@ Errors block; warns advise. The full registry (every rule, its level, its one-li
   `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
-  project. By default a small language-neutral policy keeps ordinary tracked text source while removing
-  conventional tests, docs/metadata/assets, vendored trees, generated/build output, and binary files; it
-  naturally covers Python and neighboring languages without a language list in lint. An explicit
-  **`lint.sourceExtensions`** keeps the previous exact-extension override semantics. Eval lint's
-  `eval-coverage` reuses the SAME classifier, and an empty candidate set warns "governing nothing" with the
-  active policy and repair knobs instead of presenting a falsely clean graph. See [[adopt-nonweb-ergonomics]].
+  project. The source set is one explicit algebra: current regular text under those roots, selected by
+  optional `sourceIncludeGlobs`, minus SpexCode-owned data, `sourceExcludeGlobs`, and `testGlobs`. There is
+  no guessed language/path/file-type blacklist. The compatibility `sourceExtensions` lowers into include
+  globs before that same matcher. Eval lint reuses the resulting tracked set, and an empty set warns
+  "governing nothing" with every active policy knob. See [[adopt-nonweb-ergonomics]].
 - **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.

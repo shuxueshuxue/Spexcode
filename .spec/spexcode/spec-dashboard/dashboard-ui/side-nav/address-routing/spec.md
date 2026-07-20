@@ -22,7 +22,7 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 
 - `graph-node` focuses a node on `#/graph`; the focused id is shell view state, not a hash segment.
 - `session` opens `#/sessions/<id>`.
-- `session-eval` opens the scoped default list `#/evals?q=is:eval state:current scope:<id>` — or, with
+- `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
   a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
   [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
   remarkable, worktree-rooted reading of an un-merged branch — and the address every session DOOR wears:
@@ -37,7 +37,7 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 - `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted ([[evals-view]]), path
   only (the detail hash carries no list filters); a not-yet-merged session reading's address is
   `session-eval`, not this. **Scenario-less**, `eval(nodeId)` is the node's AGGREGATE entry: the Evals LIST
-  filtered to that node — `#/evals?q=is:eval state:current node:<id>`, [[review-query]]'s canonical token
+  filtered to that node — `#/evals?q=is:eval node:<id>`, [[review-query]]'s canonical token
   text (the default view + the `node` qualifier, minted via `nodeEvalQuery`) — the address every aggregate
   score/count affordance ([[eval-score-badge]]) mints. The list-filter grammar lives in this one projection
   and nowhere else.

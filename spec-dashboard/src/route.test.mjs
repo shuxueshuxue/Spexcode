@@ -32,7 +32,7 @@ test('routeHash round-trips through parseRoute, q leading and the rest sorted', 
 
 test('legacy #/sessions/<id>/eval normalizes to the evals family (replace source, never re-minted)', () => {
   // the LIST door lands on the scoped DEFAULT view — the visible text says exactly that
-  assert.equal(legacyEvalHash('#/sessions/abc/eval'), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
+  assert.equal(legacyEvalHash('#/sessions/abc/eval'), '#/evals?q=is%3Aeval+scope%3Aabc')
   // a DETAIL address carries only the scope token, never list filters
   assert.equal(legacyEvalHash('#/sessions/abc/eval/my-node/my-scenario'),
     '#/evals/my-node/my-scenario?q=scope%3Aabc')
@@ -51,7 +51,7 @@ test('legacy structured review params replay into the one ?q token text', () => 
   assert.equal(legacyReviewHash('#/issues?live=1'), '#/issues?q=is%3Aissue+state%3Aopen+session%3Apresent')
   assert.equal(legacyReviewHash('#/evals?ok=1'), '#/evals?q=is%3Aeval+state%3Areviewed')
   assert.equal(legacyReviewHash('#/evals?session=s-9&verdict=fail'),
-    '#/evals?q=is%3Aeval+state%3Acurrent+verdict%3Afail+scope%3As-9')
+    '#/evals?q=is%3Aeval+verdict%3Afail+scope%3As-9')
   // the old free-text q rides along as ONE quoted phrase
   assert.equal(legacyReviewHash('#/issues?store=github&q=long+title'),
     '#/issues?q=is%3Aissue+state%3Aopen+store%3Agithub+%22long+title%22')
@@ -80,7 +80,7 @@ test('legacy and object session-eval addresses converge on the canonical evals h
   const canonical = '#/evals/shell-layout/tab%20switch?q=scope%3Aabc'
   assert.equal(legacyEvalHash('#/sessions/abc/eval/shell-layout/tab%20switch'), canonical)
   assert.equal(addressHash(sessionEvalAddress('abc', 'shell-layout', 'tab switch')), canonical)
-  assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
+  assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval+scope%3Aabc')
 })
 
 test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {
@@ -89,7 +89,7 @@ test('detailBackHash: each review detail returns to the list on its own data-sou
   assert.equal(detailBackHash('evals'), '#/evals')
   // a SCOPED eval detail returns to its scoped DEFAULT list — byte-identical to the address the
   // session doors mint (one projection), scope token kept, never the terminal console
-  assert.equal(detailBackHash('evals', 'abc'), '#/evals?q=is%3Aeval+state%3Acurrent+scope%3Aabc')
+  assert.equal(detailBackHash('evals', 'abc'), '#/evals?q=is%3Aeval+scope%3Aabc')
   assert.equal(detailBackHash('evals', 'abc'), addressHash(sessionEvalAddress('abc', null, null)))
   assert.equal(detailBackHash('evals', 'abc').includes('sessions'), false)
   // an issue detail returns to the issues list
@@ -105,9 +105,9 @@ test('eval addresses: concrete → the canonical detail, scenario-less → the n
   // the AGGREGATE entry (no scenario) is the Evals LIST filtered to the node — the ONE canonical
   // token text (default view + node qualifier), minted only through evalAddress/nodeEvalQuery.
   assert.equal(addressHash(evalAddress('eval-score-badge')),
-    '#/evals?q=is%3Aeval+state%3Acurrent+node%3Aeval-score-badge')
+    '#/evals?q=is%3Aeval+node%3Aeval-score-badge')
   const r = parseRoute(addressHash(evalAddress('side-nav')))
   assert.equal(r.page, 'evals')
   assert.equal(r.param, null)
-  assert.equal(r.query.q, 'is:eval state:current node:side-nav')
+  assert.equal(r.query.q, 'is:eval node:side-nav')
 })

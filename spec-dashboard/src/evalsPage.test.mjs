@@ -44,7 +44,7 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
   const blind = { node: 'alpha', scenario: 'never measured', reading: false }
   const matches = (text) => evalFilterModel([blind], tokenFilterState(text, 'eval'), { sessions: [], defaultKind: 'all' }).shown.length === 1
 
-  assert.equal(matches('is:eval state:current'), true)
+  assert.equal(matches('is:eval'), true)
   assert.equal(matches('verdict:unscored'), true)
   assert.equal(matches('node:alpha'), true)
   assert.equal(matches('never'), true)

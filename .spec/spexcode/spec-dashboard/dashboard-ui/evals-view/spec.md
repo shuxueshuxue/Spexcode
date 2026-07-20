@@ -2,7 +2,7 @@
 title: evals-view
 status: active
 hue: 200
-desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Current/Reviewed sections + real eval facets over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
+desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Fail/Pass loss axis + secondary human-review/freshness/evidence builders over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
 code:
   - spec-dashboard/src/EvalsPage.jsx#EvalsPage
   - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
@@ -34,8 +34,8 @@ filter (default off) picking the root.
   rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. There is no pagination — the list is
   bounded by declared scenarios and the API has no page semantics, so none is invented.
 - **The list's state is its URL — as ONE token query.** The whole face rides [[review-chrome]]'s visible
-  query text (`is:eval state:current` by default; the [[review-query]] engine) — verdict, freshness,
-  evidence kind, node, filer, source-session presence, worktree scope, and the Current/Reviewed section
+  query text (`is:eval` by default; the [[review-query]] engine) — verdict, freshness,
+  evidence kind, node, filer, source-session presence, worktree scope, and human-review lifecycle
   are all tokens in it — so a filtered list is copyable and Back-restorable: the bare `#/evals` is the
   default view, anything else is exactly `?q=<raw text>`, and on every hashchange the list re-derives its
   WHOLE state from that text. A human's edit, tab, or menu pick PUSHES (GitHub's semantics — Back walks
@@ -46,6 +46,14 @@ filter (default off) picking the root.
   [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
+- **Fail / Pass leads measured loss; review lifecycle does not.** The ListView's top quick-filter group
+  renders Fail then Pass through the shared ReviewState icon/tone/count and toggles `verdict:` by token
+  surgery + PUSH. The pair is intentionally non-exhaustive: with neither active, the default list still
+  shows blind, unscored, and unknown verdict rows; their presence is never falsified to make a binary
+  tab model fit. Counts are stable under every other token. `state:current|reviewed` remains visible in
+  the query and in the secondary Human review builder (Needs review / Reviewed), with the same reload and
+  Back replay, but no longer consumes the page's primary hierarchy. Issues keeps its natural Open/Closed
+  lifecycle tabs; only the chrome/query/state primitives and geometry are shared.
 - **List → detail is a history PUSH; Back restores the list exactly.** Clicking a row (or Enter on the
   j/k cursor) navigates to the detail page as a normal hash push — measured on GitHub: history grows by
   one, and Back returns to the previous list URL with its query intact. The detail page renders standalone:

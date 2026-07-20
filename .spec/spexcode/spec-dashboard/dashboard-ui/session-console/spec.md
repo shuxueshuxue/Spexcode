@@ -160,8 +160,9 @@ the running session's send, the New Session launch Enter, and a completion menu'
 a candidate never fires the line. Only a plain Enter that ends no composition sends. The exception is the **board commands** —
 a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
 only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
-ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity
-colour**, never two codepaths. The two terminal verbs split by what they destroy: **`/stop`** stops this
+feeds both the typed rows and every available toolbar tool; where a command has a visible twin, they share one
+action and one **identity colour**, never two codepaths. The two terminal verbs split by what they destroy:
+**`/stop`** stops this
 session (`act('stop')`, **muted grey** — v0.3.0 respelled it off the old `/exit`, which collided with Claude
 Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux but **keeps the worktree**, so
 the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
@@ -283,8 +284,8 @@ compact one-line layout; only the avatar differs (the map-side window keeps it, 
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
-everywhere they appear (window row, console tab + header, @-mention and search rows,
-the mobile card). Deliberately just **four hues — a traffic
+everywhere they appear (window row, console sidebar row, @-mention and search rows, the mobile card).
+The toolbar deliberately carries none of these identity/status marks. Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour

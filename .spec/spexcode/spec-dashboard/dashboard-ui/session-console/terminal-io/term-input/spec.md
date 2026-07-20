@@ -55,7 +55,7 @@ plane, not a hint toward one.
   preserving the prose around it; a URL or slash inside a word stays inert.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
   board's own commands (`/stop`·`/close`·`/merge`·`/type`·`/eval`) **lead** the list, each in its **identity
-  colour** with a `[board]` tag, visibly apart from CC's blue command rows below — because there you talk
+  colour** with a `[ui]` tag, visibly apart from CC's blue command rows below — because there you talk
   to a live agent (CC commands make sense), but the board commands act HERE on the dashboard.
 
 ## the New Session `/` composes at launch

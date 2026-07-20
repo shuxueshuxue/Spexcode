@@ -1494,9 +1494,9 @@ a.scenario-count:hover { background: var(--panel2); }
 .slash-src.src-user { color: var(--green); opacity: .85; }
 .slash-src.src-project { color: var(--cyan); opacity: .85; }
 .slash-src.src-skill { color: var(--magenta); opacity: .85; }
-/* @@@ board-command row - one of OUR commands (close/merge/nav/proof): runs HERE, not in the agent. Its
-   `/name` and its `[board]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
-   the SAME colour as the matching header button — so the menu and the button name one thing in one colour,
+/* @@@ board-command row - one of OUR commands (type/eval/merge/stop/close): runs HERE, not in the agent. Its
+   `/name` and its `[ui]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
+   the SAME colour as the matching toolbar tool or Eval door — so the menu and toolbar name one thing in one colour,
    visibly apart from CC's blue `/name` rows. */
 .slash-name.ui { color: var(--sc); font-weight: var(--weight-bold); }
 .slash-src.src-ui { color: var(--sc); opacity: .9; }

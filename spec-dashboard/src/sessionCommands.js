@@ -2,14 +2,16 @@
 // `button:false` = no toolbar twin. `typed:false` = toolbar-only (relaunch is not an inbox command).
 // Availability, colour, icon, label, typed twin, and execution all flow through this one registry.
 export const UI_COMMANDS = [
-  { name: 'type',  color: 'yellow', icon: 'keyboard', button: true,  when: (st, lv) => !!st && st !== 'offline' && st !== 'queued' && lv !== 'offline',
+  { name: 'type',  color: 'yellow', icon: 'keyboard', button: true, pressed: true, suggest: true,
+    when: (st, lv) => !!st && st !== 'offline' && st !== 'queued' && lv !== 'offline',
     labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
   // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed
   // `/eval` navigates through the same permanent door rendered in the toolbar (`button: false`, available for
   // every session state; an offline input is disabled, but the registry still states the honest capability).
   { name: 'eval', color: 'cyan',   button: false, when: (st) => !!st,
     labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
-  { name: 'merge', color: 'green', icon: 'git-merge', button: true, when: (st) => st === 'review' || st === 'done',
+  { name: 'merge', color: 'green', icon: 'git-merge', button: true,
+    when: (st, lv) => (st === 'review' || st === 'done') && lv !== 'offline',
     labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
   { name: 'relaunch', color: 'blue', icon: 'rotate-ccw', button: true, typed: false,
     when: (st, lv) => !!st && st !== 'queued' && lv === 'offline',

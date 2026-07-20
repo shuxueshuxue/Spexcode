@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/cli.ts
   - spec-cli/src/layout.ts
+  - spec-cli/src/docs-quickstart.test.ts
 ---
 # guide
 
@@ -24,7 +25,12 @@ the agent from one verb, picked by an optional topic:
   backend **`--port`** avoids listen collisions, and **`spexcode.json`** governs lint's layout. The
   source-checkout path (repo-root `npm link`, `npm run api`, and the Vite/HMR `npm run web`) stays a
   *contributor footnote*, never the installed-user headline: teaching the maintainer's path as the install
-  was exactly the drift the packaging node's arrival made stale.
+  was exactly the drift the packaging node's arrival made stale. The adopt step represents **every
+  supported harness, privileging none**: its `spex init --harness` example lists the full built-in
+  registry (the prose says to drop what you don't use — any one id or comma-separated subset is
+  valid, required with no default). A registry-derived docs assertion (`docs-quickstart.test.ts`)
+  holds this page and both READMEs' Quick start to exactly that set, so the example can neither
+  regress to one privileged harness nor silently drift from the registry.
 - **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
   artifacts — spec.md (frontmatter, body, the rules lint enforces) and eval.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering

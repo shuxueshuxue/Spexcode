@@ -80,13 +80,14 @@ the spec and the evals; the diff gets read once, at merge time.
 Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 
 ```sh
-npm i -g spexcode           # installs the `spex` command
+npm i -g spexcode                              # installs the `spex` command
 cd your-repo
-spex init --harness claude  # seeds .spec/, installs hooks, materializes the agent contract
+spex init --harness claude,codex,opencode,pi   # seeds .spec/, installs hooks, materializes the agent contracts
 ```
 
-That's the whole adoption. `--harness` selects the agent integration to materialize (`codex` is
-another built-in choice). `spex init` is additive: it works on any existing git repo and never
+That's the whole adoption. The example lists all the built-in harnesses — remove the ones you don't
+use: `--harness` is required, has no default, and takes any one id or comma-separated subset.
+`spex init` is additive: it works on any existing git repo and never
 overwrites your files — it creates a root `.spec/project/spec.md` and a starter `spexcode.json`,
 installs the git hooks, and writes the selected harness's managed contract, so any agent working in
 the repo discovers the workflow on its own.

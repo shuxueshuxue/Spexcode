@@ -64,6 +64,7 @@ scenarios:
       guessing). The anchor is an ordinary push: after following it, browser Back returns to the detail,
       and Back again to wherever the visit actually began.
   - name: continue-reviewing-queue
+    test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
     description: >
       Open a trunk eval detail from the middle of the #/evals list at 1440px and read the side rail below

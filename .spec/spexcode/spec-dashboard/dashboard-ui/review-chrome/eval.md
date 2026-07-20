@@ -40,6 +40,7 @@ scenarios:
       controls the one results tabpanel, the panel is labelled by the active tab, and Up/Down neither changes
       section nor suppresses normal scrolling.
   - name: detail-side-rail-sticky
+    test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >
@@ -60,6 +61,7 @@ scenarios:
       markup keeps the existing one-column metadata-before-content flow, scrolls with the document, and
       adds no horizontal overflow.
   - name: detail-metadata-primitive
+    test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >

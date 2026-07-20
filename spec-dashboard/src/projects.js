@@ -56,11 +56,13 @@ export const normalizeProjects = (body) => {
   return list ? list.map(normalizeProject).filter(Boolean) : null
 }
 
-// Path scope wins before any board can paint. While the catalog probe is pending the selection is
+// Path scope wins before any board can paint. While the catalog probe is PENDING the selection is
 // UNRESOLVED (null): projections hold their neutral placeholder and the tab head stays unwritten
 // ([[side-nav]]) — a default mark is never minted as an answer, and a possibly misrouted board is
-// never consulted early. A denied/absent catalog is the direct-project compatibility case: its
-// authorized board may identify it (null until that board lands).
+// never consulted early. A DENIED/ABSENT catalog is different: it is an answer. A direct guest may
+// use its authorized board identity, and a still-locked scope resolves to its ANONYMOUS identity —
+// the URL id + default mark, all a guest is entitled to see — which is a resolved state, not a
+// placeholder.
 export function selectProjectIdentity(projectId, catalog, boardIdentity) {
   if (!projectId) return boardIdentity
   if (!catalog) return null
@@ -68,10 +70,9 @@ export function selectProjectIdentity(projectId, catalog, boardIdentity) {
     const match = catalog.projects?.find((project) => project.id === projectId)
     return match?.identity || { title: projectId, icon: 'spexcode' }
   }
-  if (!boardIdentity) return null
   return {
-    title: boardIdentity.title || projectId,
-    icon: boardIdentity.icon || 'spexcode',
+    title: boardIdentity?.title || projectId,
+    icon: boardIdentity?.icon || 'spexcode',
   }
 }
 

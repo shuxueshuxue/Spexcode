@@ -5,7 +5,7 @@ import {
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
   saveGatewayIcon, saveProjectIcon,
-  selectGatewayIdentity, selectProjectIdentity,
+  selectGatewayIdentity, selectProjectIdentity, tabTitle,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
@@ -83,6 +83,21 @@ test('pathname-selected catalog identity cannot be replaced by the last board th
   assert.deepEqual(selectGatewayIdentity(catalog), { title: 'Fleet', icon: 'gateway' })
   assert.deepEqual(selectProjectIdentity('spex', null, wrongLastBoard), { title: 'spex', icon: 'spexcode' }, 'pending catalog never flashes the board identity')
   assert.deepEqual(selectProjectIdentity('spex', { state: 'denied' }, wrongLastBoard), wrongLastBoard, 'a direct guest may use its authorized board')
+})
+
+test('tabTitle: the tab is exactly the resolved scope title, suffix-free', () => {
+  const catalog = {
+    state: 'ok', gateway: { identity: { title: 'Fleet', icon: 'gateway' } },
+    projects: [{ id: 'atlas', identity: { title: 'Atlas Lab', icon: 'compass' } }],
+  }
+  assert.equal(tabTitle(selectProjectIdentity('atlas', catalog, null)), 'Atlas Lab', 'project scope: exactly the catalog title')
+  assert.equal(tabTitle(selectGatewayIdentity(catalog)), 'Fleet', 'gateway scope: exactly the gateway title')
+  assert.equal(tabTitle(selectGatewayIdentity(null)), 'Projects', 'hub before/without a catalog: the fixed global face')
+  assert.equal(tabTitle(selectProjectIdentity('atlas', null, null)), 'atlas', 'pending catalog on a scoped route: the URL project id')
+  assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: '', icon: '' })), 'atlas', 'gated/denied scope: still the URL project id')
+  assert.equal(tabTitle(selectProjectIdentity('atlas', { state: 'denied' }, { title: 'Atlas Lab', icon: 'compass' })), 'Atlas Lab', 'unlocked direct guest: the authorized board title')
+  assert.equal(tabTitle({ title: '', icon: 'spexcode' }), 'SpexCode', 'root scope before the first board: the pre-resolve product title')
+  assert.equal(tabTitle(null), 'SpexCode')
 })
 
 test('loadProjects: 200 hub envelope → ok with adminGated', async () => {

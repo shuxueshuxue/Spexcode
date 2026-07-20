@@ -2,13 +2,14 @@
 title: spex-uninstall
 status: active
 hue: 20
-desc: `spex uninstall [dir]` = materialize(∅) plus the store — the forgetting law's empty policy removes every generated artifact by its identity stamp, then the global per-project store and any plugin bundle go too; the user's `.spec`/`.plugins` data and prose are NEVER touched.
+desc: `spex uninstall [dir]` = materialize(∅) plus the store — remove all SpexCode-derived wiring and project-local state by ownership identity while preserving the user's tracked `.spec`/`.plugins`/`spexcode.json` intent and prose.
 code:
   - spec-cli/src/uninstall.ts#uninstall
   - spec-cli/src/uninstall.ts#sweepPluginBundles
   - spec-cli/src/uninstall.ts#removeHooks
 related:
   - spec-cli/src/uninstall.test.ts
+  - spec-cli/src/help.ts
 ---
 
 # spex-uninstall
@@ -23,10 +24,9 @@ the shim's own `dispatch.sh` command line, the trust sentinels, the generated ma
 paths, the plugin name stamp, or byte-identity with a canonical hook template), so it can only ever delete what
 SpexCode itself generated and the user has not modified.
 
-**The one inviolable rule — the user's spec ASSET is never touched.** `.spec` and `.plugins` are the user's own
-spec data (the whole point of adopting the tool); uninstall **never** deletes or edits them. Nor does it touch
-the user's own `CLAUDE.md`/`AGENTS.md` prose, a hand-made `settings.json`, a sibling skill the user added, or any
-other user file. Uninstall removes only SpexCode's **generated wiring**, not the spec graph that wiring served.
+**The inviolable rule — tracked intent is never touched.** `.spec` (including `.plugins`) and `spexcode.json`
+are the user's adoption data. Their `CLAUDE.md`/`AGENTS.md` prose, hand-made settings, sibling skills, and other
+user files also survive. Uninstall removes only derived wiring and local state, not the intent they served.
 
 It removes, for the resolved project:
 
@@ -45,8 +45,8 @@ It removes, for the resolved project:
   pre-slot manifest, and the project's session records. This is SpexCode's per-project runtime
   tier ([[runtime]]), not the user's spec asset, so the whole dir is ours to delete.
 - **any spexcode plugin bundle** — a `plugins/spexcode` directory or a `.claude-plugin/plugin.json` whose
-  `name == spexcode`, under the project's plugin-host folders. Identity-gated, so a user's other plugins are
-  never touched; the sweep also cleans a hand-dropped bundle the emit ledger never knew.
+  `name == spexcode`, under configured/standard hosts and hosts recovered from current or legacy ledgers **before
+  store deletion**. Other plugins survive; standard-host scanning also catches hand-dropped bundles.
 
 **Git hooks are preserved by default.** The pre-commit / prepare-commit-msg hooks are per-clone (never committed),
 and a user may have layered their own logic; silently deleting them on uninstall would be the opposite of surgical.
@@ -55,4 +55,5 @@ byte-identical to one of the canonical generated hook templates. This covers eve
 name list drifting out of sync; a modified generated hook and every unrelated user hook survive.
 
 Like `init`, it resolves the target with cwd set to the project so the `.plugins` loaders read the right tree, and
-reports exactly what it removed. It is idempotent: a second run finds nothing left and is a clean no-op.
+reports exactly what it removed. It is idempotent: a second run finds nothing left and is a clean no-op. One
+public lifecycle smoke drives dirty Claude-only and Codex-only repos from a data table with user-owned controls.

@@ -887,6 +887,18 @@ if (cmd === 'serve') {
     // line; GET /api/settings exposes the same resolution (`.layout`).
     const { mainBranch } = await import('./layout.js')
     console.log(mainBranch())
+  } else if (sub === 'spec-governors') {
+    // Stable machine projection for spec-aware hooks: one real code: governor per row, with the live spec
+    // path the block reason can point at. Empty stdout means ungoverned (including related-only).
+    const file = process.argv[4]
+    if (!file) { console.error('usage: spex internal spec-governors <path>'); process.exit(2) }
+    const { specOwners, loadSpecsLite } = await import('./specs.js')
+    const paths = new Map(loadSpecsLite().map((node) => [node.id, node.path]))
+    for (const owner of specOwners(file)) {
+      const path = paths.get(owner.id)
+      if (!path) throw new Error(`governor '${owner.id}' has no live spec path`)
+      console.log(`${owner.id}\t${path}`)
+    }
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
     // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by

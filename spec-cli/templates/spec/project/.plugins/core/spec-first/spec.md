@@ -8,8 +8,8 @@ events:
 order: 20
 block: true
 ---
-A one-shot grounding gate. The first time a session touches code — reads OR mutates any non-spec file — without having opened its spec, it blocks once to demand the right order of work: read the governing node's spec first, since it is the current contract, and read its neighbors too, because a node's intent is only fully legible against the tree around it. Then reconcile deliberately — change the spec if the intent is changing, or make the code honor it — never silently diverge.
+A one-shot, governed-aware READ gate. Native harness shims deliver `PreToolUse` broadly; the shared harness adapter matcher reduces only read-shaped payloads to a file path, and the hook then asks the spec graph whether that path has a real `code:` governor. Tool and payload differences never enter the gate itself.
 
-It blocks at most once per session: a sentinel records the first touch, and every later access passes. Reading is included on purpose, not just editing — a pure analysis session that reasons straight from code without ever opening the contract is exactly the grounding gap this closes. Doing it right earns no nag: an agent whose first code touch IS its spec (reading or editing it) is blessed silently, and the session's own runtime state is ignored without consuming the one-shot.
+Irrelevant tools, unresolvable paths, uncovered files, and related-only files are allowed without changing state. Any number of ungoverned reads therefore leave the session armed. The first later governed read creates the sentinel and blocks once, naming the governing spec and requiring its relevant parent, sibling, and child contracts before retrying; after that contract-read path, later code reads proceed.
 
-This enforces the read-the-contract-first rule of [[core]] at the moment of first contact, before understanding hardens around ungrounded code.
+File governance is independent of dashboard session governance, so this serves self-launched and dashboard-launched agents through the same mechanism. It enforces [[core]] only where a contract actually exists.

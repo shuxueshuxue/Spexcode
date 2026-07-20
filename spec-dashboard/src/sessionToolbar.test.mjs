@@ -28,9 +28,9 @@ test('session toolbar separates one Terminal tab from the canonical Eval anchor'
 })
 
 test('session eval glance reuses the shared model aggregation and review-state visual', () => {
-  assert.match(source, /setSummary\(\{ phase: 'ready', \.\.\.sessionEvalSummary\(nodes\) \}\)/)
-  assert.doesNotMatch(source, /const total = nodes\.reduce/)
-  assert.match(source, /setTimeout\(load, 15_000\)/)
+  assert.match(source, /sessionEvalDisplay\(active !== 'new' \? selSession\?\.evalSummary : null, boardLive\)/)
+  assert.match(source, /projection\.lastKnown\?\.value/)
+  assert.doesNotMatch(source, /\/api\/sessions\/.*\/evals|setTimeout\(load, 15_000\)|useSessionEvalSummary/)
   assert.match(source, /<TabCount kind="eval" state="pass"/)
   assert.match(source, /<TabCount kind="eval" state="fail"/)
   assert.match(source, /<TabCount kind="eval" state="review" cls="st-review secondary"/)
@@ -48,6 +48,8 @@ test('session eval glance reuses the shared model aggregation and review-state v
   assert.match(source, /summary\.measured\}\/\{summary\.total/)
   assert.match(source, /summary\.unknown > 0/)
   assert.match(source, /t\('session\.evalUnknown'/)
+  assert.match(source, /summary\.phase === 'updating'/)
+  assert.match(source, /summary\.phase === 'disconnected'/)
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {

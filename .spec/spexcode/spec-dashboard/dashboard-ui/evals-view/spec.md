@@ -138,7 +138,11 @@ filter (default off) picking the root.
   detail gets a distinct load-failed face; only a successfully loaded model without the addressed result
   gets the not-found face.
 - **One data path.** The project list rides the app's one board poll + SSE as a prop and fetches nothing;
-  the session mode fetches the one session model. A remark or /ok written from the detail refreshes its
+  the session mode fetches the one session model only when a scoped list/detail is actually mounted; the
+  terminal toolbar never primes it. The response carries [[session-eval]]'s summary generation and content
+  revision. A response older than the graph session row already seen is discarded and reloaded; an equal
+  generation must match its content revision, so a slow demand read cannot overwrite a newer graph event.
+  A remark or /ok written from the detail refreshes its
   source (board or session model) — writes, dispatch echo ([[mentions]]), and evidence behavior are
   unchanged. The session detail's worktree history is referentially stable while its scope, node, scenario,
   and viewed result are unchanged: an unrelated board poll/SSE repaint cannot reset the selected A/B pole,

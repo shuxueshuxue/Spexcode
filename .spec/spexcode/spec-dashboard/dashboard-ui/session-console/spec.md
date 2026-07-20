@@ -223,8 +223,12 @@ emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in —
 
 Terminals are **warm and always connected**: every live pane mounts and opens its socket when the board loads —
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
-place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
-the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
+place** (socket + scroll survive), New Session included. Hidden layers remain laid out at the final terminal
+geometry under `visibility:hidden`, so their xterm buffers and stable default renderers stay current; switching
+changes visibility, not socket attachment or renderer identity. No pane loads a visibility-scoped WebGL addon,
+so hidden sessions neither expose an empty replacement renderer nor accumulate capped GPU contexts. [[live-view]]
+owns the matching backend rule: the first unopposed hidden helper may pre-size the pane, while later foreign
+helpers stay size-neutral. List
 navigation lives at the **window level**: plain **↑/↓** walk the list, but a **text input keeps them
 entirely** — inside the New prompt or the `❯` box, ↑/↓ are always the textarea's own caret keys and **never
 switch tabs**, even at the first/last line, so typing in the box never jerks you onto another session (the box

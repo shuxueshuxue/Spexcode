@@ -904,9 +904,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
                   {uiCmds.filter((c) => c.button).map((c) => {
-                    // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
-                    // thinks a select menu is up (the pulse that invites type mode).
-                    const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
+                    // Toggle/suggestion semantics are registry metadata too; the renderer only projects the
+                    // live values into the shared primitive instead of naming a command locally.
+                    const pressed = c.pressed ? typeMode : undefined
+                    const state = pressed ? ' on' : (c.suggest && menuById[active] ? ' suggest' : '')
                     return (
                       <IconButton
                         key={c.name}
@@ -915,7 +916,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         label={t(c.titleKey)}
                         className={`si-tool sc-${c.color} ${c.name}${state}`}
                         data-command={c.name}
-                        aria-pressed={c.name === 'type' ? typeMode : undefined}
+                        aria-pressed={pressed}
                         onClick={c.run}
                       />
                     )

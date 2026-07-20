@@ -6,14 +6,14 @@ scenarios:
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       two live sessions, A and B. Closing is reached ONLY by right-clicking a session row → "Close" →
       confirming the prompt (there is no header close button). First confirm the header carries no close
-      control: with A selected, the tab bar's action row shows only the state-driven buttons (nav, relaunch/
-      merge — proof is a TAB, not a button), never a "close"/kill button. Then two passes. PASS 1 — select A's tab, right-click A's row,
+      control: with A selected, the toolbar shows only the permanent Eval door and state-driven icon tools
+      (type/merge while live, relaunch while offline), never a "close"/kill button. Then two passes. PASS 1 — select A's tab, right-click A's row,
       pick Close, confirm, and watch where the view lands. PASS 2 — select A's tab, right-click A's row,
       pick Close, confirm, then immediately switch to B's tab while the close request is still in flight,
       and watch whether the view stays put. Measure by screenshotting the tab list + active pane before
       and after each close.
     expected: |
-      The header action row never shows a close/kill button — closing is only on the row's right-click
+      The toolbar command group never shows a close/kill tool — closing is only on the row's right-click
       menu, behind a confirm. Pass 1: closing the tab you are viewing lands you on the New Session tab;
       A's row is gone from the list. Pass 2: having switched to B before the close settles, the view STAYS
       on B — the close never yanks you back to New Session. In neither case is the selected tab left

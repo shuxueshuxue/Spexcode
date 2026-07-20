@@ -14,8 +14,10 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    startup commands.)
 
 2. Adopt a repo
-     cd <your-repo> && spex init --harness claude   # seeds .spec/ + git hooks (additive, never overwrites)
-   --harness is required — the explicit choice of which harness(es) materialize delivers into.
+     cd <your-repo> && spex init --harness claude,codex,opencode,pi   # seeds .spec/ + git hooks (additive, never overwrites)
+   --harness is required and has no default — the explicit choice of which harness(es) materialize
+   delivers into. The example lists every built-in; drop the ones you don't use (any one id or
+   comma-separated subset is valid).
    Works on any git repo. Edit .spec/project/spec.md to describe it, then grow child nodes
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 

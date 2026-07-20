@@ -44,9 +44,9 @@ import { stripRefSigil } from './mentions.js'
 // auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (resume)
 // deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //
-// Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
-// SPEXCODE_TMUX overrides the tmux socket for tests; the launch COMMAND comes from the session's pinned
-// launcher ([[launcher-select]]), not an env var.
+// Launch rules: private `tmux -L <label>` socket + the session's pinned named-launcher command. The launcher
+// preserves its harness's normal permission model unless the user explicitly configured an automatic-permission
+// command. SPEXCODE_TMUX overrides the tmux socket for tests; no env var rewrites the launcher.
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'

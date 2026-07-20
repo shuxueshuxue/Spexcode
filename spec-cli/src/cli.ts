@@ -912,7 +912,7 @@ if (cmd === 'serve') {
     // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
     // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
     // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
-    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex --yolo'))
+    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex'))
     const r = await codexStartThread(sock, cwd, bypassHookTrust)
     if (!r.ok) { console.error(r.error); process.exit(1) }
     if (prompt) {

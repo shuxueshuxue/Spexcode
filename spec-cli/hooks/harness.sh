@@ -185,8 +185,9 @@ hp_is_ask() {
 hp_ask_note() { hp_field "$1" question; }
 
 # the CODE file(s) a payload touches, mapped to the trigger the spec hooks key on. $2 = mode:
-#   access  → the file being READ or edited ([[spec-first]] fires on any code touch)
-#   mutate  → the file being EDITED      ([[spec-of-file]] fires only on a mutation)
+#   read    → the file being READ         ([[spec-first]] gates the first GOVERNED read)
+#   mutate  → the file being EDITED       ([[spec-of-file]] fires only on a mutation)
+#   access  → either operation
 # Echoes the path(s), ONE PER LINE — a codex multi-file apply_patch (several `*** Update File:` markers)
 # touches several files in one tool call, so every consuming hook iterates the lines. Echoes nothing when the
 # payload is not a code touch of that mode. The harness divergence:
@@ -199,13 +200,18 @@ hp_code_path() {
   tool=$(hp_tool "$payload")
   case "$SPEXCODE_HARNESS" in
     codex)
-      case "$tool" in apply_patch|Bash) ;; *) return 0 ;; esac
+      case "$mode:$tool" in
+        read:Bash|mutate:apply_patch|mutate:Bash|access:apply_patch|access:Bash) ;;
+        *) return 0 ;;
+      esac
       _hp_codex_cmd_path "$(hp_field "$payload" command)" "$mode"
       ;;
     *)
       case "$mode" in
+        read)   case "$tool" in Read) ;; *) return 0 ;; esac ;;
         mutate) case "$tool" in Edit|Write|NotebookEdit) ;; *) return 0 ;; esac ;;
-        *)      case "$tool" in Read|Edit|Write|NotebookEdit) ;; *) return 0 ;; esac ;;
+        access) case "$tool" in Read|Edit|Write|NotebookEdit) ;; *) return 0 ;; esac ;;
+        *) return 0 ;;
       esac
       local p; p=$(hp_field "$payload" file_path); [ -n "$p" ] || p=$(hp_field "$payload" notebook_path)
       printf '%s' "$p"
@@ -231,12 +237,14 @@ _hp_codex_cmd_path() {
   cmd=$(printf '%s' "$1" | awk '{gsub(/\\n/,"\n"); gsub(/\\t/,"\t")}1')
   case "$cmd" in
     *apply_patch*|*applypatch*|*'*** Add File:'*|*'*** Update File:'*|*'*** Delete File:'*)
+      [ "$mode" = read ] && return 0
       printf '%s\n' "$cmd" | sed -n 's/^\*\*\* \(Add\|Update\|Delete\) File: \(.*\)$/\2/p' | sed 's/[[:space:]]*$//'
       return 0 ;;
   esac
   local is_mutate=0
   case "$cmd" in *' >> '*|*' > '*|*' >>'*|*' >'*|*' tee '*|*'sed -i'*|*' dd '*) is_mutate=1 ;; esac
   [ "$mode" = mutate ] && [ "$is_mutate" = 0 ] && return 0
+  [ "$mode" = read ] && [ "$is_mutate" = 1 ] && return 0
   printf '%s\n' "$cmd" | tr ' \t' '\n\n' | grep -E '^[^-].*[/.][A-Za-z0-9_]+' | grep -vE '^(apply_patch|applypatch)$' | tail -1
 }
 

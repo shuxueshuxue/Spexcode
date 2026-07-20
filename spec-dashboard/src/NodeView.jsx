@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TabCount, TagChips } from './score.jsx'
 import { evidenceList, evalFilterModel, filterMenuGroups, issueFilterModel } from './reviewFilters.js'
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
@@ -602,16 +602,6 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
-
-// one caption state-count chip: the shared [[review-chrome]] ReviewState visual + the tally, one tooltip
-// text on chip and icon alike — the issues and eval captions speak the same primitive.
-function TabCount({ kind, state, cls, n, label }) {
-  return (
-    <span className={`ovc ${cls}`} data-tip={label}>
-      <ReviewState kind={kind} state={state} title={label} size={11} />{n}
-    </span>
-  )
-}
 
 export default function NodeView({ node, pane, setPane, onClose, sessions = [] }) {
   const t = useT()

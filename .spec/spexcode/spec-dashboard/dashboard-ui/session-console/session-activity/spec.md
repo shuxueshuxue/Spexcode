@@ -87,17 +87,15 @@ the row's flow rather than reserving a column down every line, so the wrapped li
 width**. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule; the
 meta line stays the parking spot for any further at-a-glance metadata added later.
 
-**The console repeats no headline over the terminal.** The Enter interface names the session ONCE, in its
-left **sidebar** — the selected row, untruncated ([[session-console]]) — and the slim strip over the
-terminal's top edge carries only the tabs and the lifecycle actions. The strip used to render the shared
-`sessionHeadline` (`si-th-name`), but a bar that reads the sidebar's own line back at it, awkwardly
-anchored between tabs and actions, identified nothing the sidebar didn't already — so it was dropped, and
-"one name, every surface" is honoured by the sidebar row alone: the headline that renarrates the board row
-renarrates the console's row in lock-step, and no console surface ever *disagrees* with it, because none
-repeats it.
+**The console toolbar repeats the shared headline as identity, not as a second naming rule.** The selected
+sidebar row remains the full on-demand reading surface, while the terminal toolbar consumes that SAME
+`sessionHeadline` beside lifecycle/liveness state so the pane stays identified when the narrow list row is
+outside the viewer's scan. Its one-line `si-th-name` takes only otherwise-free width and ellipses before the
+Eval door or commands; it never derives a stable handle or another fallback chain. Row and toolbar therefore
+renarrate in lock-step and cannot disagree.
 
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
-which session this is* — rows, window, the console sidebar, **the search palette, the
+which session this is* — rows, window, the console sidebar and toolbar, **the search palette, the
 lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —
 the same live line the board rows show, never the stable label beside it) all show the identical line, so
 wherever a session is named it reads the same. (Pinning any of them to the stable handle bought nothing —

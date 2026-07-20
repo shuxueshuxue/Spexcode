@@ -133,8 +133,12 @@ is a separate missing-state tally, never part of the scenario fraction. The door
 same complete decomposition; the visible glance is never hidden from assistive technology. Loading, load failure, and zero are
 distinct states — a transport failure is never painted as
 zero loss. This is a glance and a door, never a scenario menu or an explanatory paragraph.
-While this toolbar is visible, the glance refreshes on a bounded cadence as well as session/page edges, so a
-reading filed during a long `working` stretch becomes visible without forcing a tab switch or lifecycle change.
+The glance is the selected graph session row's `evalSummary` projection; it performs no REST read and owns no
+timer. Switching tabs or remounting therefore preserves the cached last-known value. An input event first shows
+`updating` beside that last-known value, never zero; a stable equal-generation projection becomes current; a
+compute failure stays explicit with last-known retained. A graph-stream disconnect similarly marks the value
+last-known until an authoritative reconnect snapshot re-anchors it. `ready` with a real 0/0 is the only empty
+state, distinct from loading, updating, disconnected, and error.
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended

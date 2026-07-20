@@ -203,35 +203,29 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await video.saveAs(join(OUT, 'B-toolbar.webm'))
 }
 
-const evalFixture = {
-  nodes: [{
-    id: 'session-console', hue: 280,
-    scenarios: [
-      { name: 'pass-case', expected: 'pass' },
-      { name: 'fail-case', expected: 'fail' },
-      { name: 'blind-case', expected: 'measured' },
-    ],
-    evals: [
-      { scenario: 'pass-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true },
-      { scenario: 'fail-case', ts: '2026-07-20T00:59:00Z', fresh: true, verdict: { status: 'fail' }, inSession: true },
-    ],
-  }],
-  gates: [],
+const evalValue = {
+  mixed: { measured: 2, total: 3, pass: 1, fail: 1, review: 0, blind: 1, unknown: 0 },
+  zero: { measured: 0, total: 0, pass: 0, fail: 0, review: 0, blind: 0, unknown: 0 },
+  refresh: { measured: 0, total: 1, pass: 0, fail: 0, review: 0, blind: 1, unknown: 0 },
 }
+const evalProjection = (mode, generation = 1, value = evalValue[mode]) => mode === 'error'
+  ? { epoch: 'fixture', generation, phase: 'error' }
+  : { epoch: 'fixture', generation, phase: 'ready', revision: `fixture-${generation}`, value }
 
 async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', evalMode = 'mixed' }) {
   let evalReads = 0
-  let lastEvalReadAt = 0
-  let evalRefreshed = false
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
     localStorage.setItem('spexcode.lang', lang)
     localStorage.setItem('spexcode.theme', theme)
-    // The initial HTTP graph below is the fixture source of truth. Disable the live SSE lane so its
-    // immediate real-board snapshot cannot overwrite the fixture before the toolbar is measured.
+    // The initial HTTP graph below is the fixture source of truth. The in-page EventSource records the
+    // canonical envelope without opening a second transport; focused cases can emit graph-full explicitly.
     window.EventSource = class FixtureEventSource {
-      constructor() { throw new Error('fixture disables board SSE') }
+      constructor() { this.listeners = {}; window.__boardSource = this }
+      addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn) }
+      close() {}
+      emit(name, data) { for (const fn of this.listeners[name] || []) fn({ data: JSON.stringify(data) }) }
     }
   }, { listWidth, lang, theme })
   const page = await context.newPage()
@@ -243,24 +237,12 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.lifecycle = status === 'review' || status === 'done' ? 'awaiting' : 'active'
     session.liveness = liveness
     session.headline = 'An intentionally enormous <section data-test="headline-noise"> shared session headline for validating English and 中文 without moving commands or navigation'
+    session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
-  await page.route(`**/api/sessions/${SESSION}/evals`, (route) => {
-    const now = Date.now()
-    if (lastEvalReadAt && now - lastEvalReadAt > 1_000) evalRefreshed = true
-    lastEvalReadAt = now
-    evalReads++
-    if (evalMode === 'error') return route.fulfill({ status: 503, body: 'fixture unavailable' })
-    const refreshModel = {
-      nodes: [{
-        id: 'session-console', hue: 280,
-        scenarios: [{ name: 'refresh-case', expected: 'measured' }],
-        evals: evalRefreshed ? [{ scenario: 'refresh-case', ts: '2026-07-20T01:00:00Z', fresh: true, verdict: { status: 'pass' }, inSession: true }] : [],
-      }],
-      gates: [],
-    }
-    const model = evalMode === 'zero' ? { nodes: [], gates: [] } : evalMode === 'refresh' ? refreshModel : evalFixture
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(model) })
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path === `/api/sessions/${SESSION}/evals`) evalReads++
   })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
@@ -338,11 +320,16 @@ for (const evalMode of ['zero', 'error']) {
 {
   const { context, page, evalReads } = await fixturePage({ evalMode: 'refresh' })
   const first = await page.locator('.si-eval-door').getAttribute('aria-label')
+  const refreshedGraph = structuredClone(board)
+  refreshedGraph.sessions.find((session) => session.id === SESSION).evalSummary = evalProjection(
+    'refresh', 2, { measured: 1, total: 1, pass: 1, fail: 0, review: 0, blind: 0, unknown: 0 },
+  )
+  await page.evaluate((graph) => window.__boardSource.emit('graph-full', { to: 'fixture-refresh-2', graph }), refreshedGraph)
   await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('1/1'), null, { timeout: 20_000 })
   const refreshed = await page.locator('.si-eval-door').getAttribute('aria-label')
   const row = { first, refreshed, requests: evalReads() }
   result.evalModels.push({ evalMode: 'refresh', ...row })
-  check('stable working session refreshes its eval glance', first.includes('0/1') && refreshed.includes('1/1') && row.requests >= 2, row)
+  check('graph-full refreshes the glance with zero full-model reads', first.includes('0/1') && refreshed.includes('1/1') && row.requests === 0, row)
   await context.close()
 }
 

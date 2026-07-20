@@ -5,6 +5,8 @@ hue: 190
 desc: The graph's push channel — an SSE with two modes (bare change signals, or hash-chained incremental patches) fed by domain-scoped freshness sources, self-healed by an accountable patrol.
 code:
   - spec-cli/src/graphStream.ts
+related:
+  - spec-cli/src/graphStream.test.ts
 ---
 
 # graph-stream
@@ -44,8 +46,13 @@ TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms
 — pure-syscall death detection over launch-registered pids) and a ~1s WARM tier (`warmSignature` — one
 merged tmux call for window/title state plus the rendezvous tri-state), both → 'sessions'. (4) the
 `.git/worktrees` REGISTRY watcher — git's own birth-ledger for every worktree, hand-made or dispatched —
-which attaches a `.spec` subtree watch to each live worktree and detaches on removal; a draft spec edit
-fires 'full' (overlays live on node units). And (0) the exported explicit nudge (`notifyBoardChanged`) for
+which attaches one recursive root watch plus one non-recursive gitdir watch to each live worktree and detaches
+both on removal. Root events cover dirty governed source, renames, draft scenario declarations and reading
+sidecars; the gitdir watch covers `index` changes from stage/reset that do not rewrite the working file. Both
+fire 'full'. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
+are ignored; generated project paths are not guessed away, because an adopter may govern them. A
+pathless/overflow-like event, watcher error, or resubscription is treated as an unknown full
+change, never ignored. And (0) the exported explicit nudge (`notifyBoardChanged`) for
 a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions', and the
 issue/remark write routes pass 'full' **atomically with their store persist** ([[remark-substrate]]
 write-visibility: the writer's own post-write refetch must never race an asynchronous fs event into the
@@ -63,6 +70,14 @@ state is repairs/hour = 0. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktr
 leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and build cost.
 
+The patrol is deliberately **not an eval-summary correctness source** ([[session-eval]]). It neither advances a
+session eval input generation nor starts a periodic fingerprint/build. Session-eval coherence is a state machine
+over canonical events: a relevant refs/worktree/explicit-write event first increments the affected cache
+generation and makes the session unit `updating(lastKnown)`, then the existing graph debounce ships that state;
+the stable latest-generation result later replaces it through this same envelope. A burst increments through its
+events but may publish/build only the newest generation. No summary-specific SSE, WebSocket, endpoint poll, or
+timer exists.
+
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last
 subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[graph-cache]]'s single-flight
@@ -73,9 +88,10 @@ throws: a source that can't start leaves that leaf to the patrol — which now a
 **Reconnect is free, and the ping is a contract.** A backend hot-reload drops the stream; `EventSource`
 auto-reconnects and the fresh `graph-full` re-anchors the patch chain with no client-side repair logic. The
 keep-alive `ping` (which also keeps idle proxies from timing the stream out) is promised every **10s** and
-is the client's heartbeat: [[dashboard-shell]] holds the server to it — silence past 2.5 windows means a
+is only transport liveness, never data freshness. [[dashboard-shell]] holds the server to it — silence past 2.5 windows means a
 DEAD stream to replace (the half-open deaths that fire no error event), so an undetectably dead connection
-degrades to the poll for at most one watchdog window instead of forever. An old backend without this route,
+marks session summaries last-known and reopens the stream; only the reconnect's authoritative `graph-full`
+certifies them current again. An old backend without this route,
 a proxy that strips SSE, or a server that ignores `?mode=delta` still degrade to the plain protocol or the
 poll — never to a frozen view. The full snapshot itself (first paint, resync) stays [[graph-lean]]'s cut
 (issue #26), composing with — not replaced by — the delta path.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import EvalsGroup, { currentEntries, entryKey, sessionEvalSummary } from './EvalsFeed.jsx'
+import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken } from './reviewQuery.js'
@@ -23,24 +23,64 @@ import { apiUrl } from './project.js'
 // null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
 // A seq guard drops a stale response; `reload` is the write path's refresh (a remark/ok lands in the
 // worktree store, which fires no board SSE).
-function useSessionEvals(sessionId) {
+const sessionModelCache = new Map()
+const sessionModelInflight = new Map()
+
+export function sessionModelMatchesProjection(model, projection) {
+  if (!model?.evalRevision || !projection?.epoch) return true
+  const revision = model.evalRevision
+  if (revision.epoch !== projection.epoch) return false
+  if (revision.generation < projection.generation) return false
+  return revision.generation !== projection.generation
+    || !projection.revision
+    || revision.content === projection.revision
+}
+
+function fetchSessionEvals(sessionId) {
+  if (sessionModelInflight.has(sessionId)) return sessionModelInflight.get(sessionId)
+  const request = fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
+    .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .finally(() => sessionModelInflight.delete(sessionId))
+  sessionModelInflight.set(sessionId, request)
+  return request
+}
+
+function useSessionEvals(sessionId, projection) {
   const [model, setModel] = useState(null)
   const [error, setError] = useState(null)
   const seq = useRef(0)
-  const load = useCallback(() => {
+  const projectionRef = useRef(projection)
+  projectionRef.current = projection
+  const load = useCallback((force = false) => {
     if (!sessionId) return Promise.resolve()
     const mine = ++seq.current
     setError(null)
-    return fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
-      .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((m) => { if (mine === seq.current) setModel(m) })
+    const cached = !force ? sessionModelCache.get(sessionId) : null
+    const request = cached && sessionModelMatchesProjection(cached, projectionRef.current)
+      ? Promise.resolve(cached)
+      : fetchSessionEvals(sessionId)
+    return request
+      .then(async (m) => {
+        if (mine !== seq.current) return
+        if (m && !sessionModelMatchesProjection(m, projectionRef.current)) {
+          // The graph has already observed a newer generation. One forced re-read joins any concurrent
+          // demand read; if it is still stale, fail loud instead of looping or painting old rows.
+          const fresh = await fetchSessionEvals(sessionId)
+          if (mine !== seq.current) return
+          if (fresh && !sessionModelMatchesProjection(fresh, projectionRef.current)) throw new Error('stale session eval model')
+          m = fresh
+        }
+        if (m) sessionModelCache.set(sessionId, m)
+        setModel(m)
+      })
       .catch((err) => {
         if (mine !== seq.current) return
-        setModel(false)
+        setModel((current) => current || false)
         setError(err instanceof Error ? err.message : String(err))
       })
   }, [sessionId])
-  useEffect(() => { setModel(null); setError(null); if (sessionId) load() }, [sessionId, load])
+  useEffect(() => { setModel(null); setError(null) }, [sessionId])
+  useEffect(() => { if (sessionId) load() }, [sessionId, projection?.epoch, projection?.generation, projection?.revision]) // eslint-disable-line react-hooks/exhaustive-deps
   return { model, error, reload: load }
 }
 
@@ -81,7 +121,7 @@ export function EvalScopeDoor({ sessionId }) {
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ scope, sessionId, model, error, sessions, queryText, onQueryText, hrefFor, notice }) {
   const t = useT()
-  const unknown = model && model !== false ? sessionEvalSummary(model.nodes).unknown : 0
+  const unknown = model && model !== false ? model.summary?.unknown || 0 : 0
   const empty = sessionId && model === null
     ? t('common.loading')
     : sessionId && error
@@ -192,7 +232,8 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
-  const { model, error, reload: reloadSession } = useSessionEvals(sessionId)
+  const sessionProjection = sessions.find((session) => session.id === sessionId)?.evalSummary || null
+  const { model, error, reload: reloadSession } = useSessionEvals(sessionId, sessionProjection)
   const [notice, setNotice] = useState('')
 
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
@@ -200,7 +241,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
   const onWrite = async (outcomes) => {
     flash(outcomes)
-    await (sessionId ? reloadSession() : reloadBoard?.())
+    await (sessionId ? reloadSession(true) : reloadBoard?.())
   }
 
   const scope = useMemo(

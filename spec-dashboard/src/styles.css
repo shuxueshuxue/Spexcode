@@ -1209,6 +1209,9 @@ a.scenario-count:hover { background: var(--panel2); }
 .rl-page-link[aria-current='page'] { color: var(--ink); background: color-mix(in srgb, var(--blue) 14%, var(--panel2)); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); font-weight: var(--weight-bold); }
 .rl-page-link.disabled { color: var(--muted); cursor: default; opacity: .65; }
 .rl-page-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.pane-view-all { min-height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 4px 10px; color: var(--blue); font-family: var(--mono); font-size: var(--type-meta); text-decoration: none; }
+.pane-view-all:hover { text-decoration: underline; }
+.pane-view-all:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 /* ONE row grammar for BOTH pages: desktop ~64px; the same markup grows and restacks on a phone. */
 .lp-row { display: block; width: 100%; min-width: 0; min-height: 64px; box-sizing: border-box; text-align: left; text-decoration: none; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer; }
 .lp-row:last-child { border-bottom: 0; border-radius: 0 0 6px 6px; }

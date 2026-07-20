@@ -18,7 +18,11 @@ const dashboard = read('Dashboard.jsx')
 const css = read('styles.css')
 const filters = read('reviewFilters.js')
 const reviewPage = read('reviewPage.js')
+const nodeView = read('NodeView.jsx')
+const palette = read('SpecSearch.jsx')
+const data = read('data.js')
 const serverReviews = read('../../spec-cli/src/reviews.ts')
+const serverIndex = read('../../spec-cli/src/index.ts')
 const icons = read('icons.jsx')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
@@ -86,6 +90,24 @@ test('every control is a token BUILDER over the committed text — no private fi
   // the default view is the BARE address; anything else exactly ?q=<raw text>
   assert.match(issues, /queryParam\(nextText, ISSUE_QUERY_DEFAULT\)/)
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
+})
+
+test('bounded secondary consumers disclose the server total and offer a reachable full list', () => {
+  assert.match(nodeView, /useReviewPage\('issues', query, 1/)
+  assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
+  assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
+  assert.match(nodeView, /summary=\{\{ shown: filterItems\.length, total: page\.data\.total \}\}/)
+  assert.equal((nodeView.match(/reviewListAddress\('evals', query\)/g) || []).length, 1)
+  assert.match(nodeView, /reviewListAddress\('issues', query\)/)
+  assert.doesNotMatch(nodeView, /\bnode\.(?:issues|openIssues|evals|scenarios)\b/)
+
+  assert.match(palette, /useReviewPage\('issues', issueQuery, 1/)
+  assert.match(palette, /useReviewPage\('evals', evalQuery, 1/)
+  assert.match(palette, /key: 'issue:see-all', address: reviewListAddress\('issues', issueQuery\)/)
+  assert.match(palette, /key: 'scenario:see-all', address: reviewListAddress\('evals', evalQuery\)/)
+  assert.match(reviewPage, /const inflightPages = new Map\(\)/)
+  assert.match(reviewPage, /if \(inflightPages\.has\(path\)\) return inflightPages\.get\(path\)/)
+  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)
 })
 
 test('the committed text replays as a continuable edit — one trailing space, parked caret, display-only', () => {
@@ -386,14 +408,13 @@ test('the scoped eval list owns the ONE terminal return door; details have no se
 })
 
 test('the continue-reviewing queue: two positional groups of shared-state anchors, absent when alone', () => {
-  // the queue derives from the page's ONE source dataset (scope.entries) via the pure split helper
-  assert.match(page, /queueNeighbors\(scope\.entries, `eval:\$\{node\}·\$\{scenario\}`\)/)
+  // the queue consumes only the detail endpoint's bounded lightweight projection.
+  assert.match(page, /const n = detail\?\.neighbors \|\| \{ prev: \[\], next: \[\] \}/)
+  assert.doesNotMatch(page, /queueNeighbors|scope\.entries/)
   // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token — both minted
   // by the ONE address projection
   assert.match(page, /href: addressHash\(sessionId \? sessionEvalAddress\(sessionId, e\.node, e\.scenario\) : evalAddress\(e\.node, e\.scenario\)\)/)
-  // two POSITIONAL groups against the stable list order, each nearest-to-current first
-  assert.match(page, /prev: entries\.slice\(idx - prevN, idx\)\.reverse\(\)/)
-  assert.match(page, /next: entries\.slice\(idx \+ 1, idx \+ 1 \+ nextN\)/)
+  assert.match(page, /prev: n\.prev\.map\(row\), next: n\.next\.map\(row\)/)
   // the rail renders the two labeled groups; an empty group renders no heading; no neighbor → no section
   assert.match(detail, /\{\(queue\.prev\.length > 0 \|\| queue\.next\.length > 0\) && \(/)
   assert.match(detail, /\[\['prev', t\('detail\.queuePrev'\)\], \['next', t\('detail\.queueNext'\)\]\]\.map\(\(\[dir, label\]\) => queue\[dir\]\.length > 0 && \(/)
@@ -405,6 +426,14 @@ test('the continue-reviewing queue: two positional groups of shared-state anchor
     assert.match(dict, /queuePrev:/)
     assert.match(dict, /queueNext:/)
   }
+})
+
+test('Issue detail is one addressed object and never reconstructs from graph or a list page', () => {
+  assert.match(issues, /const detail = useIssueDetail\(param\)/)
+  assert.match(issues, /const value = await loadIssue\(id\)/)
+  assert.match(data, /apiFetch\(`\/api\/issues\/\$\{encodeURIComponent\(id\)\}`\)/)
+  assert.match(serverIndex, /app\.get\('\/api\/issues\/:id'/)
+  assert.doesNotMatch(issues, /specs\.(?:issues|openIssues)|sessions\.(?:issues|openIssues)|\.find\([^\n]*issue\.id/)
 })
 
 test('the detail side rail is sticky on desktop, plain flow at phone width', () => {

@@ -20,15 +20,14 @@ import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
-import { evalNodes } from '../../spec-eval/src/scenarios.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
-import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
+import { buildExportModel, renderExportHtml } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
-import { evalsReview, issuesReview } from './reviews.js'
+import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -84,23 +83,9 @@ app.get('/api/graph/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 // the search corpus ([[graph-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
-// to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
-// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags, test}), so a measurable
-// node's row here carries its declared scenarios' description/expected (+ test reference and per-scenario code) — one fetch
-// serves both the palette's scenario plane and the focus-panel preview.
-app.get('/api/specs/lite', (c) => {
-  const scByNode = new Map(evalNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
-  return c.json(loadSpecsLite().map((row) => {
-    const sc = scByNode.get(row.id)
-    return sc?.length
-      ? { ...row, scenarios: sc.map((s) => ({
-          name: s.name, description: s.description, expected: s.expected,
-          ...(s.test ? { test: s.test } : {}),
-          ...(s.code?.length ? { code: s.code } : {}),
-        })) }
-      : row
-  }))
-})
+// to rank nodes over their prose — off the board's hot poll. Review rows, including scenarios, come only
+// from their paged endpoints and cannot be reconstructed from this corpus.
+app.get('/api/specs/lite', (c) => c.json(loadSpecsLite()))
 // one node's body + parsed parts ([[graph-lean]]): the board no longer ships either, so the detail view
 // fetches this when a node opens. 404 for an unknown id.
 app.get('/api/specs/:id/content', (c) => {
@@ -215,8 +200,17 @@ app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.quer
 // Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
 // it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
 app.get('/api/evals', etag(), async (c) => {
-  const page = await evalsReview(c.req.query('q'), c.req.query('page'))
-  return page ? c.json(page) : c.json({ error: 'no such session' }, 404)
+  const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
+  return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
+})
+// ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
+// most five lightweight neighbors. It never serializes another scenario's history or the scoped model.
+app.get('/api/evals/detail', etag(), async (c) => {
+  const node = c.req.query('node')?.trim()
+  const scenario = c.req.query('scenario')?.trim()
+  if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)
+  const detail = await evalDetailReview(node, scenario, c.req.query('scope')?.trim() || null)
+  return detail ? c.json(detail) : c.json({ error: 'no such review source' }, 404)
 })
 // the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
 // resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
@@ -409,18 +403,14 @@ app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the ONE session eval read ([[session-eval]]): default = the lean interactive model — worktree-rooted
-// rows only, no diff enrichment, no inlined bytes (evidence streams lazily from /api/evidence), each
-// reading carrying `inSession` so the tab leads with what THIS session measured. `?format=html` = the
-// EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as data-URIs) for
-// CI/share/bare-browser — a heavier REPRESENTATION of the same read, not a second route. 404 unknown id.
+// The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
+// use /api/evals pages; a bare request fails loudly rather than reopening a hidden full JSON path.
 app.get('/api/sessions/:id/evals', async (c) => {
   if (c.req.query('format') === 'html') {
     const m = await buildExportModel(c.req.param('id'))
     return m ? c.html(renderExportHtml(m)) : c.text('no such session', 404)
   }
-  const m = await buildSessionEvals(c.req.param('id'))
-  return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
+  return c.json({ error: 'interactive eval rows use /api/evals pagination; use ?format=html only for export' }, 400)
 })
 // the session's live pane as text (one-shot snapshot) for a backend client (`spex session show --capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.

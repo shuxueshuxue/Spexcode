@@ -27,7 +27,7 @@ test('session toolbar separates one Terminal tab from the canonical Eval anchor'
   assert.ok(tablistEnd > 0 && door > tablistEnd, 'the navigation door must stay outside the tablist')
 })
 
-test('session eval glance reuses the shared model aggregation and review-state visual', () => {
+test('session eval glance reuses the graph summary projection and review-state visual', () => {
   assert.match(source, /sessionEvalDisplay\(active !== 'new' \? selSession\?\.evalSummary : null, boardLive\)/)
   assert.match(source, /projection\.lastKnown\?\.value/)
   assert.doesNotMatch(source, /\/api\/sessions\/.*\/evals|setTimeout\(load, 15_000\)|useSessionEvalSummary/)
@@ -35,7 +35,7 @@ test('session eval glance reuses the shared model aggregation and review-state v
   assert.match(source, /<TabCount kind="eval" state="fail"/)
   assert.match(source, /<TabCount kind="eval" state="review" cls="st-review secondary"/)
   assert.match(source, /summary\.review > 0/)
-  assert.match(feed, /review: entries\.length - pass - fail/)
+  assert.doesNotMatch(feed, /\bn\.evals\b|\bn\.scenarios\b|sessionEvalSummary/)
   assert.match(reviewShell, /review: \{ icon: 'clock', tone: 'review'/)
   assert.match(css, /\.review-state\.review \{ color: var\(--yellow\); \}/)
   assert.match(en, /evalReview: \(\{ n \}\).*stale or unscored and needing review/)

@@ -1,4 +1,3 @@
-import { scenarioStates } from './score.jsx'
 import { sessionHeadline } from './session.js'
 import { FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, readToken, setToken } from './reviewQuery.js'
@@ -20,40 +19,6 @@ const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
 // the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
 // autocomplete offers; anything else stays plain and matches nothing.
 export const EVAL_QUERY_KEYS = ['is', 'state', 'verdict', 'freshness', 'evidence', 'node', 'filer', 'session', 'scope']
-
-// flatten board nodes → list entries via the ONE latest-per-scenario computation (scenarioStates).
-export function currentEntries(nodes) {
-  const out = []
-  for (const n of nodes) {
-    if (!n.evals?.length) continue
-    for (const s of scenarioStates(n.scenarios, n.evals)) {
-      if (!s.reading) continue   // a never-measured scenario is the session scope's blind-spot row, not a project entry
-      out.push({ ...s.reading, expected: s.expected ?? s.reading.expected, state: s.state, node: n.id, hue: n.hue })
-    }
-  }
-  out.sort((a, b) => (a.ts < b.ts ? 1 : -1))
-  return out
-}
-
-// The session toolbar and scoped-list leading strip summarize the SAME already-scoped backend model.
-// Scenario impact is deliberately absent here: sessioneval.ts has selected the rows before this point.
-export function sessionEvalSummary(nodes = []) {
-  const entries = currentEntries(nodes)
-  const total = nodes.reduce((count, node) => count + (Array.isArray(node.scenarios) ? node.scenarios.length : 0), 0)
-  const unknown = nodes.reduce((count, node) => count + (Array.isArray(node.unknownCoverage) ? node.unknownCoverage.length : 0), 0)
-  const pass = entries.filter((entry) => entry.state === 'pass').length
-  const fail = entries.filter((entry) => entry.state === 'fail').length
-  return {
-    measured: entries.length,
-    total,
-    pass,
-    fail,
-    // Measured but neither fresh-pass nor fresh-fail: stale or legacy/unscored, and therefore still review work.
-    review: entries.length - pass - fail,
-    blind: Math.max(0, total - entries.length),
-    unknown,
-  }
-}
 
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
@@ -95,7 +60,7 @@ const rel = (ts) => {
 }
 
 // `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
-// scope from the board prop, the session scope from the worktree-rooted model). `blind`: the session
+// scope from the paged API, the session scope from the worktree-rooted model). `blind`: the session
 // scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
 // reading to open) — they travel through the SAME engine as reading:false items, so they honestly own
 // only their node/unscored/query/section facts. `queryText`/`onQueryText`: the URL's raw token text and

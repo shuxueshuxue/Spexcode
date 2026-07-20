@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
+import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
 import { DetailShell } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery } from './reviewQuery.js'
 import { addressHash, detailBackHash, evalAddress, sessionAddress, sessionEvalAddress } from './address.js'
 import { navigate, routeHash, useRoute } from './route.js'
-import { scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
@@ -20,88 +19,75 @@ import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 // detail carries `?q=scope:<id>` alone, and the legacy `#/sessions/<id>/eval` + structured-param
 // addresses normalize to this family at the route layer).
 
-// the session scope's worktree-rooted lean model (`GET /api/sessions/:id/evals`, [[session-eval]]) —
-// null loading · false genuine 404/none · else the model; transport/5xx failure is a separate loud error.
-// A seq guard drops a stale response; `reload` gives the active write surface immediate full-row read-back
-// while the same write independently invalidates the canonical graph summary projection.
-const sessionModelCache = new Map()
-const sessionModelInflight = new Map()
+// Both source roots use ONE bounded detail request. StrictMode twins join one in-flight request, and a seq
+// fence drops an old address response. The scoped response additionally proves it is not older than the
+// graph session summary already rendered by the shell.
+const detailInflight = new Map()
 
-export function sessionModelMatchesProjection(model, projection) {
-  if (!model?.evalRevision || !projection?.epoch) return true
-  const revision = model.evalRevision
+export function detailMatchesProjection(detail, projection) {
+  if (!detail?.evalRevision || !projection?.epoch) return true
+  const revision = detail.evalRevision
   if (revision.epoch !== projection.epoch) return false
   if (revision.generation < projection.generation) return false
-  return revision.generation !== projection.generation
-    || !projection.revision
-    || revision.content === projection.revision
+  if (revision.generation !== projection.generation) return true
+  if (projection.revision && revision.content !== projection.revision) return false
+  if (projection.value) {
+    if (!detail.summary) return false
+    const keys = ['measured', 'total', 'pass', 'fail', 'review', 'blind', 'unknown']
+    if (keys.some((key) => detail.summary[key] !== projection.value[key])) return false
+  }
+  return true
 }
 
-function fetchSessionEvals(sessionId) {
-  if (sessionModelInflight.has(sessionId)) return sessionModelInflight.get(sessionId)
-  const request = fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/evals`))
+function fetchEvalDetail(node, scenario, sessionId) {
+  const key = `${sessionId || ''}\0${node}\0${scenario}`
+  if (detailInflight.has(key)) return detailInflight.get(key)
+  const query = new URLSearchParams({ node, scenario })
+  if (sessionId) query.set('scope', sessionId)
+  const request = fetch(apiUrl(`/api/evals/detail?${query}`), { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : r.status === 404 ? false : Promise.reject(new Error(`HTTP ${r.status}`))))
-    .finally(() => sessionModelInflight.delete(sessionId))
-  sessionModelInflight.set(sessionId, request)
+    .finally(() => detailInflight.delete(key))
+  detailInflight.set(key, request)
   return request
 }
 
-function useSessionEvals(sessionId, projection, enabled = true) {
-  const [model, setModel] = useState(null)
-  const [error, setError] = useState(null)
+function useEvalDetail(param, sessionId, projection, enabled = true) {
+  const slash = String(param || '').indexOf('/')
+  const node = slash > 0 ? param.slice(0, slash) : param
+  const scenario = slash > 0 ? param.slice(slash + 1) : ''
+  const identity = `${sessionId || ''}\0${node}\0${scenario}`
+  const [result, setResult] = useState({ identity: '', data: null, error: null })
   const seq = useRef(0)
   const projectionRef = useRef(projection)
   projectionRef.current = projection
-  const load = useCallback((force = false) => {
-    if (!sessionId || !enabled) return Promise.resolve()
+  const load = useCallback(() => {
+    if (!enabled || !node || !scenario) return Promise.resolve()
     const mine = ++seq.current
-    setError(null)
-    const cached = !force ? sessionModelCache.get(sessionId) : null
-    const request = cached && sessionModelMatchesProjection(cached, projectionRef.current)
-      ? Promise.resolve(cached)
-      : fetchSessionEvals(sessionId)
-    return request
-      .then(async (m) => {
+    setResult((current) => current.identity === identity
+      ? { ...current, error: null }
+      : { identity, data: null, error: null })
+    return fetchEvalDetail(node, scenario, sessionId)
+      .then(async (value) => {
         if (mine !== seq.current) return
-        if (m && !sessionModelMatchesProjection(m, projectionRef.current)) {
+        if (value && !detailMatchesProjection(value, projectionRef.current)) {
           // The graph has already observed a newer generation. One forced re-read joins any concurrent
           // demand read; if it is still stale, fail loud instead of looping or painting old rows.
-          const fresh = await fetchSessionEvals(sessionId)
+          const fresh = await fetchEvalDetail(node, scenario, sessionId)
           if (mine !== seq.current) return
-          if (fresh && !sessionModelMatchesProjection(fresh, projectionRef.current)) throw new Error('stale session eval model')
-          m = fresh
+          if (fresh && !detailMatchesProjection(fresh, projectionRef.current)) throw new Error('stale session eval detail')
+          value = fresh
         }
-        if (m) sessionModelCache.set(sessionId, m)
-        setModel(m)
+        setResult({ identity, data: value, error: null })
       })
       .catch((err) => {
         if (mine !== seq.current) return
-        setModel((current) => current || false)
-        setError(err instanceof Error ? err.message : String(err))
+        const error = err instanceof Error ? err.message : String(err)
+        setResult((current) => ({ identity, data: current.identity === identity && current.data ? current.data : false, error }))
       })
-  }, [enabled, sessionId])
-  useEffect(() => { setModel(null); setError(null) }, [sessionId])
-  useEffect(() => { if (sessionId && enabled) load() }, [enabled, sessionId, projection?.epoch, projection?.generation, projection?.revision]) // eslint-disable-line react-hooks/exhaustive-deps
-  return { model, error, reload: load }
-}
-
-// flatten the session model → the list's rows, the session-eval attention order: blind spots lead
-// (declared, never measured — outstanding loss), then the session's own ✦-marked readings, then the
-// inherited baseline (other sessions' latest), each newest-first; the ONE latest-per-scenario computation
-// (scenarioStates) throughout.
-function sessionRows(model) {
-  const blind = []
-  const own = []
-  const inherited = []
-  for (const n of model.nodes) {
-    for (const s of scenarioStates(n.scenarios, n.evals)) {
-      if (!s.reading) { blind.push({ scenario: s.name, expected: s.expected, node: n.id, hue: n.hue }); continue }
-      const e = { ...s.reading, expected: s.expected ?? s.reading.expected, state: s.state, node: n.id, hue: n.hue }
-      ;(e.inSession ? own : inherited).push(e)
-    }
-  }
-  const byTs = (a, b) => (a.ts < b.ts ? 1 : -1)
-  return { blind, entries: [...own.sort(byTs), ...inherited.sort(byTs)] }
+  }, [enabled, identity, node, scenario, sessionId])
+  useEffect(() => { if (enabled) load() }, [enabled, node, scenario, sessionId, projection?.epoch, projection?.generation, projection?.revision]) // eslint-disable-line react-hooks/exhaustive-deps
+  const visible = result.identity === identity ? result : { data: null, error: null }
+  return { data: visible.data, error: visible.error, reload: load }
 }
 
 // The scoped LIST's one way back to the session terminal ([[evals-view]]): a real icon-only anchor,
@@ -156,46 +142,18 @@ export function EvalsListPage({ sessionId, pageData, loading, error, sessions, q
   )
 }
 
-// the Continue-reviewing queue ([[evals-view]]): the viewed reading's NEIGHBORS in the source dataset's
-// stable list order, split into two POSITIONAL groups — `prev` holds entries BEFORE the current row,
-// `next` entries AFTER it (list direction, never a time claim), each ordered nearest-to-current outward.
-// `want` is the default total: split balanced with the forward group taking the odd slot, and a
-// boundary's unused budget refills from the other side so the total holds while the dataset allows;
-// current excluded, alone-in-dataset yields none. Pure over the entries the page already holds — no
-// second fetch, no filter fork, no selection state.
-export function queueNeighbors(entries, key, want = 5) {
-  const idx = entries.findIndex((e) => entryKey(e) === key)
-  if (idx < 0) return { prev: [], next: [] }
-  const before = idx
-  const after = entries.length - idx - 1
-  const take = Math.min(want, before + after)
-  const nextN = Math.min(after, Math.max(Math.ceil(take / 2), take - before))
-  const prevN = Math.min(before, take - nextN)
-  return {
-    prev: entries.slice(idx - prevN, idx).reverse(),
-    next: entries.slice(idx + 1, idx + 1 + nextN),
-  }
-}
-
+// Continue Reviewing consumes the bounded detail response's positional neighbors. The server owns the
+// stable source order and boundary refill; this page only mints their real scoped/trunk anchors.
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, scope, sessionId, model, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite, notice }) {
+export function EvalDetailPage({ param, detail, sessionId, loading = false, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite, notice }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
   const scenario = i > 0 ? param.slice(i + 1) : null
-  // The session scope's A/B history is WORKTREE-rooted. Memoizing the slice makes its identity stable
-  // across unrelated board poll/SSE repaints, so EventDetail keeps the A/B cursor, timeline, and draft.
-  const history = useMemo(
-    () => (sessionId && model && model !== false
-      ? (model.nodes.find((n) => n.id === node)?.evals || []).filter((e) => e.scenario === scenario)
-      : undefined),
-    [sessionId, model, node, scenario],
-  )
-  // the queue rows ride the SAME source dataset and the SAME address grammar the list rows use
-  // ([[address-routing]]): a trunk neighbor is a pure detail path, a scoped neighbor keeps the one
-  // scope token — never list filters.
+  // The server projects the selected scenario's complete history and <=5 lightweight neighbors in the
+  // source's stable default order. The browser never needs another scenario's row to build this rail.
   const queue = useMemo(() => {
     const row = (e) => ({
       key: entryKey(e),
@@ -204,21 +162,21 @@ export function EvalDetailPage({ param, scope, sessionId, model, error, specs, s
       state: e.state,
       href: addressHash(sessionId ? sessionEvalAddress(sessionId, e.node, e.scenario) : evalAddress(e.node, e.scenario)),
     })
-    const n = queueNeighbors(scope.entries, `eval:${node}·${scenario}`)
+    const n = detail?.neighbors || { prev: [], next: [] }
     return { prev: n.prev.map(row), next: n.next.map(row) }
-  }, [scope.entries, node, scenario, sessionId])
-  if (sessionId && error) {
+  }, [detail?.neighbors, sessionId])
+  if (error) {
     return <DetailShell failure={t('sessionEval.loadFailed', { reason: error })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
-  if (sessionId && model === null) return <div className="fv-note">{t('common.loading')}</div>
-  const entry = scope.entries.find((e) => entryKey(e) === `eval:${node}·${scenario}`) || null
+  if (loading) return <div className="fv-note">{t('common.loading')}</div>
+  const entry = detail?.selected || null
   if (!entry) {
     return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
   return (
     <div className="page-detail-stack">
       {notice && <div className="fv-notice">{notice}</div>}
-      <EventDetail entry={entry} history={history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
+      <EventDetail entry={entry} history={detail.history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
         queue={queue} />
     </div>
@@ -232,7 +190,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
   const sessionProjection = sessions.find((session) => session.id === sessionId)?.evalSummary || null
-  const { model, error: detailError, reload: reloadSession } = useSessionEvals(sessionId, sessionProjection, !!param)
+  const detail = useEvalDetail(param, sessionId, sessionProjection, !!param)
   const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
   const list = useReviewPage('evals', queryText, page, { enabled: !param, refreshKey: specs })
@@ -243,13 +201,9 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
   const onWrite = async (outcomes) => {
     flash(outcomes)
-    await (sessionId ? reloadSession(true) : reloadBoard?.())
+    await reloadBoard?.()
+    await detail.reload()
   }
-
-  const scope = useMemo(
-    () => (sessionId ? (model && model !== false ? sessionRows(model) : { blind: [], entries: [] }) : { blind: [], entries: currentEntries(specs) }),
-    [sessionId, model, specs],
-  )
   // every scoped address on this page is minted by the ONE [[address-routing]] projection — the row/queue
   // detail hrefs (a DETAIL address carries only the scope, never list filters), the way back to the list
   // (the scoped default view, the same text every session door mints — never a scope-only text, which
@@ -268,7 +222,8 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
   const hrefForPage = (target) => routeHash('evals', null, reviewRouteQuery(queryText, EVAL_QUERY_DEFAULT, target))
 
   return param
-    ? <EvalDetailPage param={param} scope={scope} sessionId={sessionId} model={model} error={detailError} specs={specs}
+    ? <EvalDetailPage param={param} detail={detail.data && detail.data !== false ? detail.data : null} sessionId={sessionId}
+        loading={detail.data === null} error={detail.error} specs={specs}
         sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} notice={notice} />
     : <EvalsListPage sessionId={sessionId} pageData={list.data} loading={list.loading} error={list.error} sessions={sessions}

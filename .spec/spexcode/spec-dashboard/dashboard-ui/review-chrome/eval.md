@@ -1,17 +1,18 @@
 ---
 scenarios:
-  - name: paged-review-yatu
+  - name: paged-review-desktop-yatu
     test: spec-dashboard/test/review-pagination.e2e.mjs
-    tags: [frontend-e2e, desktop, mobile]
+    tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewPage.js]
     description: >
       Against a real backend in Chromium, start the byte/item ledger at first app entry, then open Issues,
       trunk Evals, and scoped Evals. Measure the graph bootstrap and every paged response; compare response
       items with rendered rows. Exercise pagination to page 2 and back to explicit page 1, refresh,
-      Back/Forward, query/section reset, last page, page 41 and 999999, row detail then browser Back, and
-      loading/failure. At 390px measure wrapping, target geometry, scroll ownership, horizontal overflow,
-      keyboard activation, and the accessibility navigation snapshot. Record videos, screenshots, timeline,
-      and a JSON network ledger.
+      Back/Forward, query/section reset, last page, page 41 and 999999, trunk detail by direct/reload/list
+      click, scoped detail by direct/reload, Issue detail, then browser Back, and
+      loading/failure. Record video, screenshots, timeline, and a JSON network ledger. Open the real
+      Sessions Search pill and a node popup with a long Eval
+      timeline; measure their bounded page-1 requests, rendered rows, server totals, and see-all routes.
     expected: >
       The initial graph carries no Issues/Evals item, scenario, or reading arrays from which either main
       list can be reconstructed. Opening a list adds one response whose items and DOM rows are both at most
@@ -20,10 +21,29 @@ scenarios:
       back to first creates page=1, and direct/refresh/Back/Forward preserve that explicit form. Query and
       section changes reset without page. Overflow remains HTTP 200 at the requested address with zero rows
       and real requested-1/requested+1 anchors; an in-range last page disables Next. Detail Back restores
-      q+page+the exact list scroll. Loading and failure are distinct from empty. Pagination remains ordinary
-      flow content below the list in the same PageScroll as sticky scoped gates/header; at 390px it wraps
-      with 32px-or-larger targets, zero horizontal overflow, a named navigation landmark, real page links,
-      and Enter activation.
+      q+page+the exact list scroll. Every Eval detail response contains only the selected row, that scenario's
+      complete history, and at most five lightweight neighbors; other-scenario histories are zero, unchanged
+      direct/reload/list paths share a revision, and the scoped epoch/generation/content fence equals graph.
+      Issue detail is one addressed object. No browser request opens a full node timeline or session model;
+      HTML export is the only full exception. Loading and failure are distinct from empty. Pagination remains ordinary
+      flow content below the list in the same PageScroll as sticky scoped gates/header. The Palette receives
+      at most 25 Issues and 25 Evals, exposes keyboard-reachable
+      see-all commands when either server total is larger, and crashes neither before nor during the requests.
+      NodeView renders exactly its returned timeline rows, says showing 25 of N from the server total, and
+      exposes a true canonical node-filtered View all anchor.
+  - name: paged-review-mobile-yatu
+    test: spec-dashboard/test/review-pagination.e2e.mjs
+    tags: [frontend-e2e, mobile]
+    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewPage.js]
+    description: >
+      Open Evals page 2 in real Chromium at 390x844 after the desktop request contract has passed. Measure
+      pagination wrapping, target geometry, scroll ownership, horizontal overflow, and the accessibility
+      navigation snapshot; focus Next and activate it with Enter. Record one viewport video and timeline.
+    expected: >
+      The response and DOM each contain exactly the current at-most-25 row slice. Pagination remains ordinary
+      flow content after the list in the same PageScroll, wraps within 390px at 68px or less, keeps every page
+      target at least 32x32, and creates zero document horizontal overflow. The named Pagination navigation
+      exposes real Previous Page, numbered Page N, and Next Page links; Enter on focused Next PUSHes page 3.
   - name: one-chrome-two-pages
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]

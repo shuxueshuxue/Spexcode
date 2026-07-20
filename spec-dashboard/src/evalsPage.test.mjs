@@ -12,7 +12,7 @@ const shell = readFileSync(join(here, 'ReviewShell.jsx'), 'utf8')
 const dashboard = readFileSync(join(here, 'Dashboard.jsx'), 'utf8')
 
 test('board-stable history and review identity preserve or reset the right state', () => {
-  assert.match(page, /const history = useMemo\([\s\S]*?\[sessionId, model, node, scenario\],[\s\S]*?\)/)
+  assert.match(page, /<EventDetail entry=\{entry\} history=\{detail\.history\}/)
   assert.match(page, /<EventDetail[^>]*sourceKey=\{sessionId \|\| 'project'\}/)
 
   const identity = detail.match(/const readingIdentity[\s\S]*?const reviewIdentity[^\n]*/)?.[0] || ''
@@ -24,11 +24,37 @@ test('board-stable history and review identity preserve or reset the right state
   assert.match(detail, /<ReplyComposer key=\{reviewIdentity\}/)
 })
 
+test('trunk and scoped list/detail rows use bounded demand endpoints instead of graph or full models', () => {
+  assert.match(page, /useReviewPage\('evals', queryText, page, \{ enabled: !param/)
+  assert.match(page, /useEvalDetail\(param, sessionId, sessionProjection, !!param\)/)
+  assert.match(page, /fetch\(apiUrl\(`\/api\/evals\/detail\?\$\{query\}`\)/)
+  assert.doesNotMatch(page, /\/api\/sessions\/\$\{[^}]+\}\/evals`|specUrl\(node, 'evals'\)/)
+  assert.doesNotMatch(detail, /specUrl\([^)]*, 'evals'\)|\/api\/specs\/.*\/evals/)
+  assert.doesNotMatch(feed, /export function currentEntries/)
+  assert.doesNotMatch(feed, /\bn\.evals\b|\bn\.scenarios\b/)
+  assert.match(page, /const identity = `\$\{sessionId \|\| ''\}\\0\$\{node\}\\0\$\{scenario\}`/)
+  assert.match(page, /const visible = result\.identity === identity \? result : \{ data: null, error: null \}/)
+})
+
 test('session model failures are distinct from genuine not-found states', () => {
   assert.match(page, /r\.status === 404 \? false : Promise\.reject\(new Error\(`HTTP \$\{r\.status\}`\)\)/)
   assert.match(page, /<EvalsGroup[\s\S]*error=\{error \? t\('sessionEval\.loadFailed'/)
   assert.match(page, /<DetailShell failure=\{t\('sessionEval\.loadFailed'/)
   assert.match(shell, /className="ds-page ds-missing ds-failed" role="alert"/)
+})
+
+test('scoped detail fences epoch, generation, content, and summary before painting', () => {
+  const src = page.match(/export function detailMatchesProjection[\s\S]*?\n\}/)[0].replace('export ', '')
+  const matches = new Function(`${src}; return detailMatchesProjection`)()
+  const summary = { measured: 4, total: 5, pass: 3, fail: 1, review: 0, blind: 1, unknown: 0 }
+  const projection = { epoch: 'e', generation: 7, phase: 'ready', revision: 'r', value: summary }
+  const detailValue = { evalRevision: { epoch: 'e', generation: 7, content: 'r' }, summary }
+  assert.equal(matches(detailValue, projection), true)
+  assert.equal(matches({ ...detailValue, summary: { ...summary, blind: 2 } }, projection), false)
+  assert.equal(matches({ ...detailValue, evalRevision: { ...detailValue.evalRevision, content: 'old' } }, projection), false)
+  assert.equal(matches({ ...detailValue, evalRevision: { ...detailValue.evalRevision, generation: 6 } }, projection), false)
+  assert.equal(matches({ ...detailValue, evalRevision: { ...detailValue.evalRevision, generation: 8 } }, projection), true)
+  assert.equal(matches({ ...detailValue, evalRevision: { ...detailValue.evalRevision, epoch: 'old' } }, projection), false)
 })
 
 test('scoped gates are leading content inside the shared ListPage scrollport', () => {
@@ -74,45 +100,17 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
 })
 
 test('session unknown coverage stays outside scenario rows and filter counts', () => {
-  const scopedRows = page.match(/function sessionRows\(model\)[\s\S]*?\n\}/)?.[0] || ''
-  assert.doesNotMatch(scopedRows, /unknownCoverage/)
+  assert.doesNotMatch(page, /function sessionRows\(model\)/)
   assert.match(page, /const unknown = pageData\?\.unknown \|\| 0/)
   assert.match(page, /className="se-gate bad"[\s\S]*sessionEval\.unknownCoverage/)
   const filterSurface = feed.slice(feed.indexOf('export default function EvalsGroup'))
   assert.doesNotMatch(filterSurface, /unknownCoverage/)
 })
 
-test('queueNeighbors splits balanced positional groups with boundary refill', () => {
-  // the pure split, evaluated from the page source (behavioral, not a shape regex): strictly
-  // positional over the entries' stable order, nearest-to-current first in each group, ~5 total
-  // balanced with the forward group taking the odd slot, boundary budget refilling the other side.
-  const src = page.match(/export function queueNeighbors[\s\S]*?\n\}/)[0].replace('export ', '')
-  const entryKey = (e) => `eval:${e.node}·${e.scenario}`
-  const queueNeighbors = new Function('entryKey', `${src}; return queueNeighbors`)(entryKey)
-  const mk = (n) => Array.from({ length: n }, (_, i) => ({ node: 'n', scenario: `s${i}` }))
-  const key = (i) => `eval:n·s${i}`
-  const names = (g) => g.map((e) => e.scenario)
-
-  const mid = queueNeighbors(mk(20), key(10))
-  assert.deepEqual(names(mid.prev), ['s9', 's8'])
-  assert.deepEqual(names(mid.next), ['s11', 's12', 's13'])
-  const first = queueNeighbors(mk(20), key(0))
-  assert.deepEqual(names(first.prev), [])
-  assert.deepEqual(names(first.next), ['s1', 's2', 's3', 's4', 's5'])
-  const last = queueNeighbors(mk(20), key(19))
-  assert.deepEqual(names(last.next), [])
-  assert.deepEqual(names(last.prev), ['s18', 's17', 's16', 's15', 's14'])
-  const nearStart = queueNeighbors(mk(20), key(1))
-  assert.deepEqual(names(nearStart.prev), ['s0'])
-  assert.deepEqual(names(nearStart.next), ['s2', 's3', 's4', 's5'])
-  const nearEnd = queueNeighbors(mk(20), key(18))
-  assert.deepEqual(names(nearEnd.next), ['s19'])
-  assert.deepEqual(names(nearEnd.prev), ['s17', 's16', 's15', 's14'])
-  const tiny = queueNeighbors(mk(3), key(1))
-  assert.deepEqual(names(tiny.prev), ['s0'])
-  assert.deepEqual(names(tiny.next), ['s2'])
-  assert.deepEqual(queueNeighbors(mk(1), key(0)), { prev: [], next: [] })
-  assert.deepEqual(queueNeighbors(mk(5), 'eval:n·absent'), { prev: [], next: [] })
+test('detail queue is a server-bounded projection rather than a client full-dataset computation', () => {
+  assert.doesNotMatch(page, /function queueNeighbors|scope\.entries/)
+  assert.match(page, /const n = detail\?\.neighbors \|\| \{ prev: \[\], next: \[\] \}/)
+  assert.match(page, /prev: n\.prev\.map\(row\), next: n\.next\.map\(row\)/)
 })
 
 test('the A/B strip is bounded: a recent window, the current pip always visible, one overflow menu', () => {

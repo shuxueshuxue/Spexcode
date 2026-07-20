@@ -4,6 +4,7 @@ import { nodeEvalQuery, scopedEvalQuery } from './reviewQuery.js'
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
+export const reviewListAddress = (page, query) => ({ kind: 'review-list', page, query })
 // with a scenario: the canonical full-page eval DETAIL (path only — the detail hash carries no list
 // filters). Without one: the node's AGGREGATE entry — the Evals LIST filtered to that node
 // (`?q=is:eval state:current node:<id>`, [[review-query]]'s canonical token text). Every aggregate
@@ -24,6 +25,7 @@ export function addressHash(address) {
     return routeHash('evals', param, { q: param ? `scope:${address.sessionId}` : scopedEvalQuery(address.sessionId) })
   }
   if (address.kind === 'issue') return routeHash('issues', address.issueId)
+  if (address.kind === 'review-list') return routeHash(address.page, null, address.query ? { q: address.query } : null)
   if (address.kind === 'eval') {
     return address.scenario
       ? routeHash('evals', `${address.nodeId}/${address.scenario}`)

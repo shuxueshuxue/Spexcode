@@ -79,6 +79,6 @@ counts/facets, stable ordering/revision, and the one 25-row slice; the feed rece
 owns no local matcher or full-list prop. `scope:<id>` selects the worktree snapshot through the same
 contract and row grammar — ✦ marking the in-session rows, blind spots as inert unmeasured lines — while
 the session toolbar consumes only its canonical lean graph summary ([[session-eval]]), never the list or
-full demand model. Unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
+a row model. Unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
 empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.

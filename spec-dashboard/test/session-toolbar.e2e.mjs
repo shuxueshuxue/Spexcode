@@ -28,7 +28,8 @@ const check = (name, ok, detail = null) => {
 }
 const waitToolbar = async (page) => {
   await page.locator('.si-tabbar').waitFor({ state: 'visible', timeout: 20000 })
-  await page.locator('.si-eval-measured, .si-eval-wait').first().waitFor({ state: 'visible', timeout: 20000 })
+  await page.locator('.si-eval-door').waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForFunction(() => Boolean(document.querySelector('.si-eval-door')?.getAttribute('aria-label')))
 }
 const toolbarProbe = (page) => page.evaluate(() => {
   const toolbar = document.querySelector('.si-tabbar')
@@ -115,7 +116,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const evalRequests = []
   page.on('request', (request) => {
     const url = new URL(request.url())
-    if (url.pathname === `/api/sessions/${SESSION}/evals` && !url.searchParams.has('format')) {
+    if (url.pathname === '/api/evals' && (url.searchParams.get('q') || '').includes(`scope:${SESSION}`)) {
       evalRequests.push({ at: Date.now(), method: request.method(), url: request.url() })
     }
   })
@@ -143,19 +144,18 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const step = (name) => timeline.push({ atMs: Date.now() - started, kind: 'frame', label: `📷 ${name}` })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
-  await page.locator('.si-eval-measured').waitFor({ state: 'visible', timeout: 20000 })
   step('toolbar loaded')
   const firstLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
   await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"]`).click()
   await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"].on`).waitFor({ state: 'visible' })
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('4/5'))
+  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('3 need review'))
   const otherLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
   await page.locator(`.si-item[data-sid="${SESSION}"]`).click()
   await page.locator(`.si-item[data-sid="${SESSION}"].on`).waitFor({ state: 'visible' })
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('9/10'))
+  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('8 need review'))
   const returnedLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
   check('A→B→A keeps graph summaries warm with zero full-model reads',
-    firstLabel.includes('9/10') && otherLabel.includes('4/5') && returnedLabel.includes('9/10') && evalRequests.length === 0,
+    firstLabel.includes('8 need review') && otherLabel.includes('3 need review') && returnedLabel.includes('8 need review') && evalRequests.length === 0,
     { firstLabel, otherLabel, returnedLabel, requests: evalRequests.length })
   step('A→B→A summaries stayed warm')
   result.wide = await toolbarProbe(page)
@@ -245,7 +245,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   // length stays stable on the second visit. The following Back assertion proves the anchor still pushed a
   // navigable entry rather than replacing the sessions page.
   check('typed /eval and keyboard anchor share one canonical door', typedEval.history === typedHistoryBefore + 1 && historyAfter === historyBefore && typedEval.hash === anchorHash && typedEval.hash === doorHref, { typedEval, anchor: { historyBefore, historyAfter, hash: anchorHash }, doorHref })
-  check('full session model is demand-only and reused after Back', requestsAfterFirstOpen === 1 && evalRequests.length === 1,
+  check('paged session list is demand-only and reused after Back', requestsAfterFirstOpen === 1 && evalRequests.length === 1,
     { beforeOpen: 0, afterFirstOpen: requestsAfterFirstOpen, afterSecondOpen: evalRequests.length })
   await page.goBack()
   await waitToolbar(page)
@@ -300,8 +300,8 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
   page.on('request', (request) => {
-    const path = new URL(request.url()).pathname
-    if (path === `/api/sessions/${SESSION}/evals`) evalReads++
+    const url = new URL(request.url())
+    if (url.pathname === '/api/evals' && (url.searchParams.get('q') || '').includes(`scope:${SESSION}`)) evalReads++
   })
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
@@ -319,7 +319,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   check('390px pane has no toolbar overflow', Math.round(result.narrow.bounds.width) === 390 && result.narrow.overflow.length === 0 && result.narrow.scrollWidth === result.narrow.clientWidth, result.narrow)
   check('long and HTML-like headline stays out of toolbar channels', result.narrow.identityCount === 0 && !result.narrow.text.includes('headline-noise') && !result.narrow.html.includes('headline-noise'), { text: result.narrow.text, identityCount: result.narrow.identityCount })
   check('narrow AX contains no repeated identity or liveness noise', !result.narrow.aria || (!result.narrow.aria.includes('headline-noise') && !result.narrow.aria.includes('working, online')), result.narrow.aria)
-  check('mixed eval model is honest and symbolic', result.narrow.door.label.includes('2/3') && result.narrow.door.label.includes('1 fresh pass') && result.narrow.door.label.includes('1 fresh fail') && result.narrow.door.label.includes('1 unmeasured'), result.narrow.door)
+  check('mixed eval model is categorical without a repeated aggregate', !result.narrow.door.label.includes('2/3') && result.narrow.door.label.includes('1 fresh pass') && result.narrow.door.label.includes('1 fresh fail') && result.narrow.door.label.includes('1 unmeasured'), result.narrow.door)
   await page.screenshot({ path: join(OUT, 'B-pane-390.png'), fullPage: true })
   await context.close()
 }
@@ -372,7 +372,8 @@ for (const evalMode of ['zero', 'error']) {
   const probe = await toolbarProbe(page)
   const row = { evalMode, label: probe.door.label, text: probe.text }
   result.evalModels.push(row)
-  check(evalMode === 'zero' ? 'zero model says 0/0' : 'failed model never says 0/0', evalMode === 'zero' ? row.label.includes('0/0') : !row.label.includes('0/0'), row)
+  check(evalMode === 'zero' ? 'zero model names zero categories without an aggregate' : 'failed model has no aggregate',
+    !row.label.includes('0/0') && (evalMode === 'zero' ? row.label.includes('0 fresh pass') : row.label.includes('no last-known value')), row)
   await context.close()
 }
 
@@ -384,12 +385,12 @@ for (const evalMode of ['zero', 'error']) {
     'refresh', 2, { measured: 1, total: 1, pass: 1, fail: 0, review: 0, blind: 0, unknown: 0 },
   )
   await page.evaluate((graph) => window.__boardSource.emit('graph-full', { to: 'fixture-refresh-2', graph }), refreshedGraph)
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('1/1'), null, { timeout: 20_000 })
+  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('1 fresh pass'), null, { timeout: 20_000 })
   const refreshed = await page.locator('.si-eval-door').getAttribute('aria-label')
   const frames = await page.evaluate(() => window.__toolbarFrames)
   const row = { first, refreshed, requests: evalReads(), frames }
   result.evalModels.push({ evalMode: 'refresh', ...row })
-  check('graph-full refreshes the glance with zero full-model reads', first.includes('0/1') && refreshed.includes('1/1') && row.requests === 0, row)
+  check('graph-full refreshes the category glance with zero full-model reads', first.includes('1 unmeasured') && refreshed.includes('1 fresh pass') && row.requests === 0, row)
   await context.close()
 }
 

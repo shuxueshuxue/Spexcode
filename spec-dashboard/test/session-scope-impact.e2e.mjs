@@ -69,13 +69,13 @@ try {
   await page.goto(`${BASE}/#/sessions/${SESSION}`)
   await page.waitForSelector('.si-eval-stats', { timeout: 20_000 })
   const toolbar = await page.evaluate(() => ({
-    fraction: document.querySelector('.si-eval-measured')?.textContent?.trim() || '',
+    aggregateCount: document.querySelectorAll('.si-eval-measured').length,
     review: document.querySelector('.si-eval-stats .st-review')?.textContent?.trim() || '',
     label: document.querySelector('.si-tab-door')?.getAttribute('aria-label') || '',
     tips: [...document.querySelectorAll('.si-eval-stats [data-tip]')].map((el) => el.getAttribute('data-tip')),
     href: document.querySelector('.si-tab-door')?.getAttribute('href') || '',
   }))
-  check('toolbar uses the scoped measured/declared fraction', toolbar.fraction.includes(`${expected.measured}/${expected.total}`), toolbar.fraction)
+  check('toolbar omits the redundant measured/declared aggregate', toolbar.aggregateCount === 0, String(toolbar.aggregateCount))
   check('toolbar visibly accounts for measured scenarios still needing review', toolbar.review === String(expected.needsReview), `${toolbar.review}/${expected.needsReview}`)
   check('Eval door accessible summary accounts for needs review', toolbar.label.includes(`${expected.needsReview} need review`), toolbar.label)
   check('toolbar preserves blind scenarios', expected.blind === 0 || toolbar.tips.some((tip) => tip?.includes(`${expected.blind}`)), JSON.stringify(toolbar.tips))

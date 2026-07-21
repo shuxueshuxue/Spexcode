@@ -555,14 +555,13 @@ export default {
       ? `graph stream disconnected — last known: ${summary}`
       : 'graph stream disconnected — eval summary has no last-known value',
     evalFailedKnown: ({ summary }) => `eval summary update failed — last known: ${summary}`,
-    evalMeasured: ({ measured, total }) => `${measured} of ${total} declared scenarios measured`,
     evalPass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and passing`,
     evalFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and failing`,
     evalReview: ({ n }) => `${n} measured scenario${n === 1 ? '' : 's'} stale or unscored and needing review`,
     evalBlind: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not measured`,
     evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
-    evalDoorSummary: ({ measured, total, pass, fail, review, blind, unknown }) =>
-      `open this session's Evals page — ${measured}/${total} measured, ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
+    evalDoorSummary: ({ pass, fail, review, blind, unknown }) =>
+      `open this session's Evals page — ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
     typeBtn: 'type',
     typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

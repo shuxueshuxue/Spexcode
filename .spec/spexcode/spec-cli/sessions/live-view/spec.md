@@ -41,53 +41,39 @@ terminal modes or cursor state, clear the browser, and then splice raw pane outp
 frame. tmux already owns the pane grid, history, cursor, modes, and client rendering; the bridge transports
 that client rendering instead of becoming a second terminal emulator.
 
-This boundary also owns resize as one transaction. The browser measures the desired grid without first
-reflowing xterm's old buffer, and the bridge resizes the native client PTY. Once the final native tmux
-transaction is ready, the bridge commits its grid dimensions immediately before those bytes; xterm changes
-grid and applies the transaction under one synchronized-output hold. The pinned terminal engine treats an
-explicit renderer resize as part of that hold: while DEC 2026 is active it defers the renderer mutation, then
-flushes the new grid before rendering the buffered rows when the transaction closes. This small version-locked,
-fail-loud dependency correction keeps atomicity inside the one terminal engine instead of adding an application
-snapshot, second renderer, or private runtime hook. Until commit the existing buffer remains visible. A TUI may
-respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor an extra reconstructed
-screen becomes an intermediate frame.
+This boundary also owns every geometry delivery. A visible claim, a font-size change, and a browser resize all
+reduce to one measured grid request; the browser does not first reflow xterm's old buffer. The helper acknowledges
+only after its PTY has adopted a requested size, and the bridge then refreshes that same native client. Repeated
+geometry requests serialize behind the refresh already running and end with a refresh for the latest acknowledged
+grid, rather than racing independent resize and refresh channels.
 
-Native attach is the same repaint transaction, not a bypass around it. If attaching the visible helper leaves
-tmux geometry unchanged, the first complete native transaction is released directly. If attach changes
-geometry, its intermediate native screen and any delayed application clear remain behind the same semantic or
-bounded barrier used by an active resize. The released repaint is a cumulative native batch from the attach
-channel's byte zero: its terminal-mode setup, full repaint, every later incremental update, and any in-flight
-tail are delivered in order. The bridge never selects only the last transaction, because a busy pane may
-append a cursor or spinner diff behind the full repaint; that diff is not a self-contained screen for an empty
-browser terminal.
-That byte-zero attach batch is released only with its grid commit: the browser opens one outer synchronized
-hold before applying the size and bytes, so an early alt-screen or cursor-mode prefix cannot paint a blank
-intermediate over cached pixels before the batch's full repaint lands.
+One native stream follows three phases after each geometry request. In `initial`, the bridge buffers from the
+current stream position and records its offset when the native client's explicit `refresh-client` command
+completes. The first complete tmux synchronized-output transaction that begins after that offset is the forced
+full-client repaint, not an earlier busy-pane tick. The bridge commits the shared grid and releases the ordered
+prefix through that transaction as the fast complete screen. Native attach uses the same phase, so setup bytes
+before the repaint are retained and a blank browser never receives only a trailing spinner diff.
 
-A pipe-transported tmux control observer accompanies the native client as a **barrier sensor only**. It
-never paints, captures, sizes, or reconstructs a screen; it watches the pane's raw VT stream for the standard
-DEC synchronized-output boundary. Once a pane has demonstrated that capability, resize temporarily withholds
-native-client bytes until the next post-resize begin/end pair completes, discards the intermediate client
-clear/redraws, then requests one final in-band native-client refresh. Bytes remain withheld until that native
-client produces one complete outer begin/end transaction. Refresh command completion does not imply that its
-PTY bytes have drained, so a bounded transport window coalesces already-queued chunks. Once completion is
-known, this mid-stream buffer resumes at its first complete outer begin boundary and releases through its
-current end in original byte order, including the refresh repaint, later complete incremental updates, and any
-in-flight tail. It never feeds an orphan prefix whose beginning was discarded, or discards a later partial
-suffix merely to choose a convenient transaction. This closes the real asynchronous gap:
-an application may clear before opening its synchronized redraw 55ms later, while tmux otherwise renders the
-clear as its own complete update. Completion is the application's explicit end event, not silence or a guessed
-settle duration. A bounded fail-open refresh recovers a broken/missing end marker; it is not the normal path.
+The bridge then enters `quarantine` until one fixed 400 ms boundary measured from the latest geometry request.
+All native bytes in that bounded interval remain ordered but withheld. At the boundary they are sent once with
+another transaction marker, so an application clear and a redraw 55 ms later are parsed before one browser paint.
+If no sound initial transaction arrives, the same boundary is the fail-open: it commits and releases what exists
+rather than freezing forever. After the boundary the bridge enters `stream` and forwards ordinary bytes without
+delay until the next geometry request.
 
-A pane that has not demonstrated synchronized output has no semantic redraw-complete event. For that legacy
-case only, resize coalesces native updates behind the old visible buffer until either 160 ms of output
-quiescence or a 400 ms ceiling, then requests the same complete native refresh transaction. This bounded
-compatibility window prevents a common delayed clear from becoming a browser frame without pretending that
-silence is an application guarantee. Once the pane demonstrates DEC 2026, later resizes use the event path.
+The fixed boundary is not an application detector. Whether an application answers `SIGWINCH`, and when, is
+unobservable and unbounded outside that application; a quiet period cannot distinguish "done" from "redraw begins
+next tick." tmux DEC 2026 pairs delimit that client's render cycles, not an application's logical redraw, and a
+busy spinner can add unrelated cycles. SpexCode therefore does not run a second control-mode client, learn an app
+capability, or infer semantic completion from another byte stream. The native helper stream is the only stream
+examined, buffered, and released.
 
-The browser uses a terminal engine that implements synchronized output. When an application marks a VT
-transaction with DEC mode 2026, rendering is held until that transaction ends; xterm's own write queue may
-batch transport chunks, but it is never a substitute for a terminal protocol boundary.
+The browser terminal implements synchronized output, but mode 2026 is boolean rather than nested. A large xterm
+write is also parsed in time-sliced chunks, so an inner tmux `2026l` can otherwise close an outer geometry hold and
+paint half of one WebSocket frame. Each bridge transaction is consequently serialized in the browser: one outer
+hold covers its grid change and complete parse, and only that frame's inner 2026 markers are consumed until the
+outer hold closes. Ordinary streamed frames are not wrapped or filtered and retain tmux's native synchronized
+semantics. No renderer clone, screen capture, DOM latch, or reconstructed terminal state participates.
 
 Each live session keeps one stable browser terminal and terminal socket across visibility changes. Hidden pane
 layers remain laid out at the terminal panel's real geometry under `visibility:hidden`, so xterm can fit
@@ -126,14 +112,16 @@ that one resize message both creates the helper when needed and owns later geome
 viewer releases the helper when no visible claim remains. A browser viewer is visible only while both its
 dashboard session layer and its document are visible. Backgrounding the browser tab therefore withdraws the
 same claim: the socket and cached xterm remain, but no pane deltas accumulate for replay. Returning exposes the
-cache immediately and the ordinary measured resize recreates the native helper, whose attach batch replaces it
+      cache immediately and the ordinary measured resize recreates the native helper, whose initial repaint replaces it
 with the current tmux screen. There is no resume replay or page-specific repaint protocol. There is no second
 prewarm protocol. Multiple visible
 viewers of one session share the backend's helper at the smallest visible rows and columns, so its one grid fits
-every viewer and no narrower browser clips the right or bottom edge. Hiding or detaching the limiting viewer
-recomputes that same minimum and lets the remaining viewers expand. A viewer joining an existing helper receives
-an explicit native-client refresh through that same raw stream; there is no capture path. A hidden dashboard
-cannot resize or otherwise perturb a session watched by another dashboard.
+every viewer and no narrower browser clips the right or bottom edge. Every joining viewer receives the shared
+      grid commit with the refreshed transaction even when that grid did not change, so local fit dimensions can never
+survive beside a different tmux grid. In a larger host the smaller shared grid is bottom-left aligned: ordinary
+remainder space stays above or to the right, while the terminal's last row still meets the input strip. Hiding
+or detaching the limiting viewer recomputes that same minimum and lets the remaining viewers expand. There is no
+capture path, and a hidden dashboard cannot resize or otherwise perturb a session watched by another dashboard.
 
 ## navigation and recovery
 
@@ -152,8 +140,11 @@ process restart remains the genuine socket break and is recovered by [[reconnect
 
 ## non-responsibilities
 
-The bridge does not parse application-specific screen shapes or maintain a second terminal state for snapshots.
-The bounded unsynchronized compatibility window is explicitly weaker than the DEC 2026 event path; it neither
-claims application completion nor grows into an open-ended settle loop.
+The bridge does not parse application-specific screen shapes, correlate incidental application transactions to
+resize, or maintain a second terminal state for snapshots. Its fixed stabilization boundary is explicitly a
+liveness compromise over a protocol with no redraw-complete event; it never claims semantic application
+completion or grows into an open-ended settle loop. An unsynchronized application that waits beyond 400 ms
+before clearing and redrawing may still expose that later clear as steady-state output. Eliminating an arbitrarily
+late clear requires application-level synchronized output; no bounded external bridge can infer it.
 For a session that has never been viewed, the contract is a short native attach followed by one complete paint,
 not zero attach latency. Lightweight browser prewarm must not hide that cold path from evaluation.

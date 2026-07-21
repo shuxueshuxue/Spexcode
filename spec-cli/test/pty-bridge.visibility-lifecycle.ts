@@ -36,9 +36,17 @@ async function main(): Promise<void> {
   await tmux('new-session', '-d', '-s', SESSION, '-x', '80', '-y', '24')
 
   const chunks: Buffer[] = []
-  const viewer: Viewer = { send: (data) => chunks.push(Buffer.from(data)) }
+  const commits: string[] = []
+  const viewer: Viewer = {
+    send: (data) => chunks.push(Buffer.from(data)),
+    commitSize: (cols, rows) => commits.push(`${cols}x${rows}`),
+  }
   const widerChunks: Buffer[] = []
-  const widerViewer: Viewer = { send: (data) => widerChunks.push(Buffer.from(data)) }
+  const widerEvents: string[] = []
+  const widerViewer: Viewer = {
+    send: (data) => { widerChunks.push(Buffer.from(data)); widerEvents.push(`frame:${data.length}`) },
+    commitSize: (cols, rows) => widerEvents.push(`commit:${cols}x${rows}`),
+  }
   try {
     attachViewer(SESSION, viewer)
     attachViewer(SESSION, widerViewer)
@@ -49,28 +57,32 @@ async function main(): Promise<void> {
     if (hiddenWindow !== '80x24') throw new Error(`hidden subscription changed geometry (${hiddenWindow})`)
 
     resizeBridge(SESSION, viewer, FIRST.cols, FIRST.rows)
-    const firstClients = await waitFor(clients, (value) => value.length === 2 && value.some((line) => !line.includes('control-mode')), 'visible helper')
+    const firstClients = await waitFor(clients, (value) => value.length === 1, 'visible helper')
     await waitFor(async () => chunks.length, (value) => value > 0, 'first native frame')
-    const firstRaw = firstClients.find((line) => !line.includes('control-mode'))
+    const firstRaw = firstClients[0]
     if (!firstRaw || firstRaw.includes('ignore-size') || !firstRaw.endsWith(`|${FIRST.cols}x${FIRST.rows}`)) {
       throw new Error(`visible helper did not own measured geometry (${firstClients.join(', ')})`)
     }
     const firstPid = firstRaw.split('|')[0]
 
     resizeBridge(SESSION, widerViewer, SECOND.cols, SECOND.rows)
-    const sharedClients = await waitFor(clients, (value) => value.length === 2, 'shared visible helper')
-    const sharedRaw = sharedClients.find((line) => !line.includes('control-mode'))
+    const sharedClients = await waitFor(clients, (value) => value.length === 1, 'shared visible helper')
+    await waitFor(async () => widerChunks.length, (value) => value > 0, 'wider viewer shared-grid refresh')
+    const sharedRaw = sharedClients[0]
     if (!sharedRaw?.endsWith(`|${FIRST.cols}x${FIRST.rows}`)) {
       throw new Error(`wider viewer enlarged the shared grid beyond its narrower peer (${sharedClients.join(', ')})`)
+    }
+    if (widerEvents[0] !== `commit:${FIRST.cols}x${FIRST.rows}` || !widerEvents[1]?.startsWith('frame:')) {
+      throw new Error(`joining viewer did not receive shared grid commit immediately before refresh (${widerEvents.join(', ')})`)
     }
 
     hideViewer(SESSION, viewer)
     const expandedClients = await waitFor(
       clients,
-      (value) => !!value.find((line) => !line.includes('control-mode'))?.endsWith(`|${SECOND.cols}x${SECOND.rows}`),
+      (value) => !!value[0]?.endsWith(`|${SECOND.cols}x${SECOND.rows}`),
       'remaining wider viewer expansion',
     )
-    if (!expandedClients.find((line) => !line.includes('control-mode'))?.startsWith(`${firstPid}|`)) {
+    if (!expandedClients[0]?.startsWith(`${firstPid}|`)) {
       throw new Error('size arbitration replaced the helper instead of resizing it')
     }
     hideViewer(SESSION, widerViewer)
@@ -78,14 +90,14 @@ async function main(): Promise<void> {
     chunks.length = 0
 
     resizeBridge(SESSION, viewer, SECOND.cols, SECOND.rows)
-    const secondClients = await waitFor(clients, (value) => value.length === 2 && value.some((line) => !line.includes('control-mode')), 'helper reattach')
+    const secondClients = await waitFor(clients, (value) => value.length === 1, 'helper reattach')
     await waitFor(async () => chunks.length, (value) => value > 0, 'reattached native frame')
-    const secondRaw = secondClients.find((line) => !line.includes('control-mode'))
+    const secondRaw = secondClients[0]
     if (!secondRaw || secondRaw.startsWith(`${firstPid}|`) || !secondRaw.endsWith(`|${SECOND.cols}x${SECOND.rows}`)) {
       throw new Error(`visibility did not create a fresh measured helper (${secondClients.join(', ')})`)
     }
 
-    console.log(`PASS: hidden sockets held 0 clients; shared helper stayed ${FIRST.cols}x${FIRST.rows}, expanded to ${SECOND.cols}x${SECOND.rows}, then reattached as ${secondRaw.split('|')[0]}`)
+    console.log(`PASS: hidden sockets held 0 clients; joining viewer committed ${FIRST.cols}x${FIRST.rows} before refresh; shared helper expanded to ${SECOND.cols}x${SECOND.rows}, then reattached as ${secondRaw.split('|')[0]}`)
   } finally {
     detachViewer(SESSION, viewer)
     detachViewer(SESSION, widerViewer)

@@ -1,5 +1,5 @@
-// A TUI without DEC 2026 still must not expose its delayed clear during resize. The bridge gives this legacy
-// path a bounded coalescing window, then releases one complete native tmux refresh.
+// A TUI without DEC 2026 still must not expose its delayed clear as a browser frame during resize. The native
+// client wraps its own updates; the bounded geometry window coalesces the clear with its final replacement.
 //
 // Run: SPEXCODE_TMUX=unsync-<pid> npx tsx test/pty-bridge.unsynchronized-repaint.ts
 import { execFile } from 'node:child_process'
@@ -15,8 +15,6 @@ const NEXT = { cols: 96, rows: 30 }
 const INTERMEDIATE = Buffer.from('UNSYNC-INTERMEDIATE-CLEAR')
 const FINAL = Buffer.from('UNSYNC-FINAL')
 const TAIL = Buffer.from('UNSYNC-LIVE-TAIL')
-const BSU = Buffer.from('\x1b[?2026h')
-const ESU = Buffer.from('\x1b[?2026l')
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const tmux = (...args: string[]) => pexec('tmux', ['-L', SOCK, ...args])
 
@@ -58,13 +56,11 @@ async function main(): Promise<void> {
     await sleep(1200)
     const output = Buffer.concat(chunks)
     const finalChunk = chunks.find((chunk) => chunk.includes(FINAL))
-    if (output.includes(INTERMEDIATE)) throw new Error('the unsynchronized temporary clear escaped')
     if (!finalChunk) throw new Error('the final unsynchronized screen never arrived')
-    if (finalChunk.indexOf(BSU) < 0 || finalChunk.indexOf(ESU) < finalChunk.indexOf(FINAL)) {
-      throw new Error('the fallback did not release one complete native transaction')
-    }
+    const intermediateChunk = chunks.find((chunk) => chunk.includes(INTERMEDIATE))
+    if (intermediateChunk !== finalChunk) throw new Error('the unsynchronized temporary clear became a separate browser frame')
     if (!output.includes(TAIL)) throw new Error('ordinary output did not resume after fallback')
-    console.log(`PASS: unsynchronized resize coalesced to ${finalChunk.length} atomic bytes, then resumed live output`)
+    console.log(`PASS: unsynchronized clear and final redraw coalesced to one ${finalChunk.length}-byte browser frame, then resumed live output`)
   } finally {
     detachViewer(SESSION, viewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})

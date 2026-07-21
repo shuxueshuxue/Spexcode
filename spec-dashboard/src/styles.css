@@ -959,6 +959,12 @@ a.scenario-count:hover { background: var(--panel2); }
 .set-lang:hover { border-color: var(--blue); color: var(--blue); }
 .set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: var(--weight-semibold); }
 .set-hint { display: block; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
+.set-terminal-font {
+  display: grid; grid-template-columns: 90px minmax(120px, 320px) 48px; align-items: center; gap: 12px;
+  color: var(--ink); font-size: var(--type-control);
+}
+.set-terminal-font input { width: 100%; accent-color: var(--blue); }
+.set-terminal-font output { color: var(--blue); font-family: var(--mono); text-align: right; }
 
 /* ---- shortcuts editor: one row per action, a click-to-rebind keyboard cell ---- */
 .set-keys { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
@@ -1719,7 +1725,7 @@ a.scenario-count:hover { background: var(--panel2); }
    browser-owned terminal scrollbar competing with the pane. The box is shortened above the docked ❯ box. */
 /* the terminal is a read-only VIEW. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
-.st-host { width: 100%; height: 100%; overflow: hidden; }
+.st-host { width: 100%; height: 100%; overflow: hidden; display: flex; align-items: flex-end; }
 /* one-glance copy hint, a small LEGIBLE chip in the bottom-right of the dark pane. Click-through so it
    never blocks the live output, but readable at a glance (no straining): a bordered pill with light text
    on a solid dark backing. It flips to a solid GREEN "copied ✓" badge when the copy chord fires, then
@@ -1746,7 +1752,7 @@ a.scenario-count:hover { background: var(--panel2); }
 /* DARK terminal background (matches SessionTerm's xterm theme) so the dark-designed Claude TUI renders as
    intended — no light gutter/flash around the pane while xterm paints. */
 .st-host .xterm {
-  width: 100% !important; height: 100% !important; background: var(--term-bg) !important;
+  width: auto !important; height: auto !important; flex: none; background: var(--term-bg) !important;
 }
 .st-host .xterm-screen {
   background: var(--term-bg) !important;

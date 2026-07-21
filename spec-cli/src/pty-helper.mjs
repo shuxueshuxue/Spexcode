@@ -35,9 +35,9 @@ const terminal = pty.spawn('tmux', ['-u', '-L', socket, 'attach-session', '-t', 
   env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
 })
 
-process.stderr.write(`READY ${terminal.pid}\n`)
 terminal.onData((data) => process.stdout.write(Buffer.from(data, 'utf8')))
 terminal.onExit(({ exitCode }) => process.exit(exitCode === 0 ? 0 : 1))
+process.stderr.write(`READY ${terminal.pid}\n`)
 
 let input = ''
 process.stdin.setEncoding('utf8')
@@ -51,7 +51,10 @@ process.stdin.on('data', (chunk) => {
     try {
       const message = JSON.parse(line)
       if (message?.t === 'resize' && message.cols > 0 && message.rows > 0) {
-        terminal.resize(Math.floor(message.cols), Math.floor(message.rows))
+        const nextCols = Math.floor(message.cols)
+        const nextRows = Math.floor(message.rows)
+        terminal.resize(nextCols, nextRows)
+        process.stderr.write(`RESIZED ${nextCols} ${nextRows}\n`)
       } else if (message?.t === 'wheel') {
         // tmux's client renderer requests the classic X10 mouse protocol from its outer terminal and then
         // translates it for the pane (including SGR when the application owns mouse input).

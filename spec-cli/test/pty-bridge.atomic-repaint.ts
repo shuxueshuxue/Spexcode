@@ -1,6 +1,6 @@
 // Regression proof for the terminal-wide flash visible on browser resize. The fixture deliberately clears,
-// pauses, and only then emits its final synchronized redraw. The viewer must receive neither that temporary
-// state nor a reconstructed SpexCode frame: it resumes at one complete native tmux refresh transaction.
+// pauses, and only then emits its final synchronized redraw. The native bytes stay intact, but the temporary
+// state and its replacement must share one viewer frame so only the final state can reach a browser paint.
 //
 // Run (from spec-cli/): SPEXCODE_TMUX=atomic-repaint-<pid> npx tsx test/pty-bridge.atomic-repaint.ts
 import { execFile } from 'node:child_process'
@@ -18,8 +18,6 @@ const ED2 = Buffer.from('\x1b[2J')
 const INTERMEDIATE = Buffer.from('INTERMEDIATE-CLEAR')
 const FINAL = Buffer.from('FINAL-SYNCHRONIZED')
 const LIVE_TAIL = Buffer.from('LIVE-TAIL-AFTER-REPAINT')
-const BSU = Buffer.from('\x1b[?2026h')
-const ESU = Buffer.from('\x1b[?2026l')
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const tmux = (...args: string[]) => pexec('tmux', ['-L', SOCK, ...args])
 
@@ -82,7 +80,11 @@ async function main(): Promise<void> {
 
     const all = Buffer.concat(chunks)
     const finalChunks = chunks.filter((chunk) => chunk.indexOf(FINAL) >= 0)
-    const finalIndex = chunks.findIndex((chunk) => chunk.indexOf(FINAL) >= 0)
+    let finalIndex = -1
+    for (let index = chunks.length - 1; index >= 0; index--) {
+      if (chunks[index].indexOf(FINAL) >= 0) { finalIndex = index; break }
+    }
+    const intermediateIndex = chunks.findIndex((chunk) => chunk.indexOf(INTERMEDIATE) >= 0)
     const tailIndex = chunks.findIndex((chunk) => chunk.indexOf(LIVE_TAIL) >= 0)
     const order = chunks.map((chunk) => chunk.indexOf(FINAL) >= 0 ? `atomic:${chunk.length}` : chunk.indexOf(LIVE_TAIL) >= 0 ? `tail:${chunk.length}` : `tmux:${chunk.length}`)
     const clientLines = (await tmux('list-clients', '-t', SESSION, '-F', '#{client_flags}|#{client_width}x#{client_height}')).stdout.trim().split('\n')
@@ -92,19 +94,19 @@ async function main(): Promise<void> {
 
     if (all.includes(RECONSTRUCTED_HEADER)) throw new Error('SpexCode reconstructed frame leaked into native tmux stream')
     if (all.includes(ED2)) throw new Error('pane ED2 escaped tmux as a browser-visible full clear')
-    if (all.includes(INTERMEDIATE)) throw new Error('the temporary clear state escaped the resize barrier')
     if (finalIndex < 0) throw new Error('the final synchronized screen was not refreshed')
-    if (finalChunks.length !== 1) throw new Error(`the final screen was replayed ${finalChunks.length} times`)
+    if (intermediateIndex < 0 || !chunks[intermediateIndex].includes(FINAL)) {
+      throw new Error(`the temporary state was not overwritten inside the final browser frame (${order.join(' -> ')})`)
+    }
+    if (!finalChunks.length) throw new Error('the final screen never reached a transaction-marked frame')
     const commit = `commit:${NEXT.cols}x${NEXT.rows}`
-    if (events.filter((event) => event === commit).length !== 1 || events.indexOf(commit) > events.indexOf('final')) {
+    const finalEvent = events.indexOf('final')
+    if (events[finalEvent - 1] !== commit) {
       throw new Error(`grid commit did not immediately precede the final transaction (${events.join(' -> ')})`)
     }
-    const finalChunk = chunks[finalIndex]
-    const begin = finalChunk.indexOf(BSU), end = finalChunk.indexOf(ESU)
-    if (begin < 0 || end < finalChunk.indexOf(FINAL)) throw new Error('the final screen was not one complete synchronized tmux transaction')
     if (tailIndex < 0) throw new Error('ordinary live output did not continue after resize')
     if (size !== `${NEXT.cols}x${NEXT.rows}`) throw new Error(`tmux converged to ${size}`)
-    console.log('PASS: the delayed clear was discarded and one complete native tmux refresh became visible')
+    console.log('PASS: the delayed clear and final redraw shared one browser frame, followed by ordinary live output')
   } finally {
     detachViewer(SESSION, viewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})

@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: selection-survives-mouse-mode-reassertion
+    tags: [frontend-e2e, desktop]
+    code: spec-dashboard/src/SessionTerm.jsx
+    description: >-
+      Through the running dashboard in a real browser, drag-select Latin and wide-character terminal text,
+      then make the live pane emit the same mouse-report disable/enable burst a TUI periodically reasserts.
+      Record the drag and burst as video, and capture the selected text, selection rectangles, terminal class,
+      and row/span geometry before and after the burst.
+    expected: >-
+      The selection remains visible, unchanged, and copyable through the entire burst; no first or last glyph
+      becomes illegible and the terminal never enters browser mouse-report mode. Plain drag uses xterm's normal
+      local selection path without a private shouldForceSelection override, while wheel navigation still reaches
+      the real tmux client through the explicit live-view control path.
   - name: close-tab-fallback
     tags: [frontend-e2e, desktop]
     description: >

@@ -14,7 +14,8 @@ scenarios:
       For a pane that demonstrated synchronized output, the next post-resize BSU/ESU is the measured barrier
       and the socket resumes with one final native-client refresh. No captured browser frame is blank,
       partially swept top-to-bottom, or an eager xterm reflow of the old buffer at the new grid. The old
-      painted frame remains until grid commit and final bytes become one browser paint.
+      painted frame remains through grid commit; the engine flushes its deferred renderer resize and buffered
+      rows together when synchronized output closes, with no second terminal or snapshot layer.
   - name: unsynchronized-resize-is-bounded
     tags: [backend-api]
     description: >-
@@ -34,15 +35,42 @@ scenarios:
       undersized first layout, renderer replacement, or socket reconnect appears. Native reattach happens
       behind the cached frame and replaces it only with a complete native redraw; hidden layers remain
       visually hidden and non-interactive.
+  - name: background-return-resyncs-current-screen
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      View a live tmux pane that updates a visible sequence number several times per second, move to another
+      browser tab long enough for the dashboard page to be suspended, then return while recording terminal
+      text, WebSocket frames, helper lifecycle, and every browser paint.
+    expected: >-
+      Browser-page visibility participates in the same viewer lifecycle as dashboard-session visibility.
+      While the page is hidden it retains the browser terminal and socket but holds no native helper and
+      receives no continuing pane deltas. Return exposes the cached pixels immediately, then one native attach
+      replaces them with the current complete tmux screen. The user never watches queued historical deltas
+      fast-forward to the present, and no second replay, capture, or page-specific terminal path exists.
   - name: cold-visible-attach-is-atomic
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
-      Route directly to a live session that has never been visible in this dashboard, and record helper
+      Route directly to a busy live session that has never been visible in this dashboard. Its pane already
+      contains a full screen and appends small cursor/spinner updates throughout native attach. Record helper
       creation, WebSocket bytes, and every browser paint from navigation through the first terminal frame.
     expected: >-
       The already-open socket creates one native helper at the measured visible grid. A short wait for native
-      attach is allowed, but the first terminal content is one complete tmux rendition: no synthetic capture,
+      attach is allowed, but its first binary batch cumulatively contains terminal setup, the complete tmux
+      repaint, and any following incremental updates; it never keeps only the last spinner transaction. The
+      first terminal content is one complete rendition: no synthetic capture,
       progressive top-to-bottom sweep, standalone clear, eager wrong-size reflow, or repeated full-screen flash.
+      The rendition contains the pane only: no tmux status row or other client chrome, and an N-row browser
+      grid gives the pane all N rows.
+  - name: multiple-viewers-fit-all
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
+    description: >-
+      Open two simultaneous visible dashboard viewers for one live session at different terminal sizes, inspect
+      each browser screen against its host and the shared native tmux client, then hide the narrower viewer.
+    expected: >-
+      The shared client uses the smallest visible rows and columns, so neither browser clips its right or bottom
+      cells. The wider viewer may have an ordinary remainder gutter. Hiding the limiting viewer resizes the same
+      helper to the remaining viewer's larger grid; hidden viewers cast no size vote and no second helper exists.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-

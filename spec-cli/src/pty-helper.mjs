@@ -14,6 +14,10 @@ if (!id || !(cols > 0 && rows > 0)) {
 // Establish the outer-terminal contract before this process owns a PTY. tmux must preserve hyperlinks and
 // wrap client updates in DEC 2026 for xterm 6; doing the setup before forkpty preserves helper isolation.
 try {
+  // The dashboard renders the pane, not tmux's client chrome. Keeping this as a tmux session option makes
+  // the requested PTY grid the pane grid too; filtering a coloured final row in xterm would corrupt real
+  // pane content. SpexCode owns these sessions, so a later foreground attach sees the same status-free pane.
+  execFileSync('tmux', ['-L', socket, 'set-option', '-t', id, 'status', 'off'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'mouse', 'on'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'history-limit', '50000'])
   const features = execFileSync('tmux', ['-L', socket, 'show-options', '-gsv', 'terminal-features'], { encoding: 'utf8' })

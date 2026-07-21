@@ -6,6 +6,11 @@ import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
 
 const SYNC_BEGIN = '\x1b[?2026h'
+const MOUSE_REPORT_MODES = new Set([9, 1000, 1002, 1003, 1005, 1006, 1015, 1016])
+
+function onlyMouseReportModes(params) {
+  return params.length > 0 && params.every((param) => typeof param === 'number' && MOUSE_REPORT_MODES.has(param))
+}
 
 function terminalTypography() {
   const styles = getComputedStyle(document.documentElement)
@@ -100,9 +105,16 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     term.loadAddon(fit)
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
+    const viewerIsVisible = () => activeRef.current && document.visibilityState !== 'hidden'
 
-    // xterm has no public "always select"; pin the private selectionService.shouldForceSelection so a plain drag selects under mouse-reporting. Guarded.
-    try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
+    // This is a read-only renderer: pointer reports never travel to the application and wheel uses the
+    // bridge's explicit tmux-client control. Keep xterm out of mouse-report mode so a TUI redundantly
+    // reasserting DECSET cannot clear an in-progress local selection. Public parser handlers leave every
+    // visual terminal mode untouched and consume only pure mouse-report mode lists.
+    const mouseModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
+      { prefix: '?', final },
+      (params) => onlyMouseReportModes(params),
+    ))
 
     // neutralise xterm's core focus() so clicking the pane selects without blurring the ❯ box (instance prop shadows the prototype). Guarded.
     try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
@@ -128,20 +140,22 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       const lastSize = lastSizeRef.current
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
-      if (!activeRef.current) {
+      if (!viewerIsVisible()) {
         try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
         return
       }
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
+      if (sock?.isOpen()) {
+        sock.send(JSON.stringify({ t: 'resize', cols, rows }))
+      }
     }
     measureRef.current = measureAndRequest
     hideRef.current = () => {
       if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
     }
 
-    // A resize commit and its following binary frame are one browser transaction. Open an xterm synchronized
-    // hold before changing its grid, then feed the complete native tmux transaction which closes that hold.
-    // xterm's own write buffer batches ordinary chunks; a second animation-frame queue only adds latency.
+    // A resize commit and its following binary frame are one browser transaction. The pinned xterm engine
+    // defers renderer resize while this synchronized hold is open, then paints the new grid and native bytes
+    // together when the transaction closes.
     let committedSize = null
     sock = createResilientSocket({
       url: base,
@@ -150,7 +164,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
         committedSize = null
         term.reset()
         lastSizeRef.current = { cols: 0, rows: 0 }
-        if (activeRef.current) measureAndRequest()
+        if (viewerIsVisible()) measureAndRequest()
         else hideRef.current?.()
       },
       onMessage: (e) => {
@@ -215,13 +229,25 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const ro = new ResizeObserver(measureAndRequest)
     ro.observe(hostRef.current)
     window.addEventListener('resize', measureAndRequest)
+    const onDocumentVisibility = () => {
+      if (!viewerIsVisible()) {
+        hideRef.current?.()
+        return
+      }
+      lastSizeRef.current = { cols: 0, rows: 0 }
+      measureAndRequest()
+      try { term.refresh(0, term.rows - 1) } catch { /* native attach still supplies the current screen */ }
+    }
+    document.addEventListener('visibilitychange', onDocumentVisibility)
 
     return () => {
       cancelAnimationFrame(raf)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
+      document.removeEventListener('visibilitychange', onDocumentVisibility)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
+      for (const handler of mouseModeHandlers) handler.dispose()
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null
@@ -251,7 +277,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   useLayoutEffect(() => {
     const term = termRef.current
     if (!term) return
-    if (active) {
+    if (active && document.visibilityState !== 'hidden') {
       lastSizeRef.current = { cols: 0, rows: 0 }
       measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }

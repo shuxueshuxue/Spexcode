@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { join, dirname, relative, isAbsolute } from 'node:path'
+import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
@@ -958,11 +958,11 @@ const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.
 type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
 type CommandSpec = Pick<SpecLite, 'id' | 'path'>
 
-// @@@ command invocation - turn the raw `/<preset> [[node]]… free text` into the ONE launch payload.
+// @@@ command invocation - turn the raw `/<preset> [[node]]… free text` into the ONE agent prompt.
 // This is deliberately server-side: dashboard, phone, CLI, direct API, and the in-process fallback all call
-// newSession, so no client gets its own command interpreter. The caller keeps the RAW prompt for session
-// identity/history; only the agent payload uses this expansion, preventing a plugin body's own [[links]] from
-// becoming the session node. An explicit create node fills an otherwise-empty target list.
+// the launch/send boundary, so no client gets its own command interpreter. Launch keeps the RAW prompt for
+// session identity/history; only the agent payload uses this expansion, preventing a plugin body's own
+// [[links]] from becoming the session node. An explicit create node fills an otherwise-empty target list.
 export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[], explicitNode?: string | null): string {
   const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
   if (!match) return raw
@@ -982,8 +982,18 @@ export function composeCommandPrompt(raw: string, presets: CommandPreset[], spec
     : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
   const body = preset.body.includes('{{targets}}')
     ? preset.body.replace('{{targets}}', targets)
-    : `${preset.body}\n\n${targets}`
+    : ids.length ? `${preset.body}\n\n${targets}` : preset.body
   return free ? `${body}\n\n${free}` : body
+}
+
+// Load only the one live preset named by the raw invocation. Both newSession and sendText call this seam, so
+// launch and an existing session's inbox resolve identical plugin data with identical target semantics.
+export async function resolveCommandPrompt(raw: string, explicitNode?: string | null, loadedSpecs?: CommandSpec[]): Promise<string> {
+  const commandName = raw.match(/^\/(\S+)/)?.[1]
+  const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
+  if (!preset) return raw
+  const specs = loadedSpecs ?? (mentionedNode(raw) || explicitNode ? await loadSpecs() : [])
+  return composeCommandPrompt(raw, [preset], specs, explicitNode)
 }
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
@@ -1276,18 +1286,15 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const chosen = resolveLauncher(lname)
   const h = harnessById(chosen.harness)
   const pinned = h.baseCmd(chosen.cmd)
-  // Resolve a command preset at the launch owner, before any worktree exists. The RAW prompt remains the
+  // Resolve a command preset at the shared backend prompt boundary, before any worktree exists. The RAW prompt remains the
   // identity + originating-prompt source; only `launchPrompt` is expanded for the agent. This preserves the
   // no-target rule even when the plugin body itself contains `[[links]]`.
   const rawPrompt = prompt
-  const commandName = rawPrompt.match(/^\/(\S+)/)?.[1]
-  const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
-  let launchSpecs: Awaited<ReturnType<typeof loadSpecs>> | null = null
-  if (preset && (mentionedNode(rawPrompt) || node)) launchSpecs = await loadSpecs()
-  let launchPrompt = preset ? composeCommandPrompt(rawPrompt, [preset], launchSpecs ?? [], node) : rawPrompt
   // node identity + label: explicit --node wins, else the RAW prompt's first `[[id]]` topic ref; expanded
   // plugin prose is payload only and can never invent scope.
   const ref = node || mentionedNode(rawPrompt)
+  const launchSpecs = ref ? await loadSpecs() : null
+  let launchPrompt = await resolveCommandPrompt(rawPrompt, node, launchSpecs ?? undefined)
   const title = ref ? null : titleFromPrompt(rawPrompt)
   const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
@@ -1330,7 +1337,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
     // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
     // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only
     // a real node gets a pointer; an unknown id resolves to nothing and we fail quiet (no pointer appended).
-    const spec = (launchSpecs ?? await loadSpecs()).find((n) => n.id === ref)
+    const spec = launchSpecs?.find((n) => n.id === ref)
     if (spec) launchPrompt = `${launchPrompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
   }
   writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
@@ -1719,26 +1726,31 @@ const ANSI: Record<DisplayStatus, string> = {
 }
 
 // @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
-// selector matches a session iff it is the session's full id, an id-PREFIX, its node, or its branch. This is
+// selector matches a session iff it is the session's full id, an id-PREFIX, its node, its branch, or `.` for
+// the caller's own launched session. This is
 // the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/node/branch
 // resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
 // review/merge/send/close act on".
-export function matchesSelector(s: Session, q: string): boolean {
+export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd = process.cwd()): boolean {
   // a selector may be a comma-separated list (the same convention as `--status a,b`): it matches iff ANY part
   // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
   // is what stops a comma-joined selector from silently matching nothing — an id/node/branch never holds a
   // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
   // silence forever. Each part sheds an optional reference sigil (stripRefSigil): `@<sel>` / `[[<sel>]]` name
   // the same session as the bare token, so the dashboard's mention grammar is tolerated in every CLI selector.
+  const sessionPath = s.path ? resolve(s.path) : null
+  const callerPath = resolve(cwd)
+  const self = Boolean(own) && s.id === own
+    || Boolean(sessionPath) && (callerPath === sessionPath || callerPath.startsWith(`${sessionPath}${sep}`))
   return q.split(',').map((p) => stripRefSigil(p.trim())).filter(Boolean)
-    .some((p) => s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
+    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
 }
 
 // no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.
-export function selectSessions(all: Session[], selectors: string[], statuses?: string[]): Session[] {
+export function selectSessions(all: Session[], selectors: string[], statuses?: string[], own = ownSessionId(), cwd = process.cwd()): Session[] {
   let out = all
   const sel = selectors.filter((x) => x && x !== '@all')
-  if (sel.length) out = out.filter((s) => sel.some((q) => matchesSelector(s, q)))
+  if (sel.length) out = out.filter((s) => sel.some((q) => matchesSelector(s, q, own, cwd)))
   if (statuses && statuses.length) out = out.filter((s) => statuses.includes(s.status))
   return out
 }
@@ -1750,11 +1762,11 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
 // precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
 // otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
 export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
-export function resolveSession(selector: string, sessions: Session[]): Resolved {
+export function resolveSession(selector: string, sessions: Session[], own = ownSessionId(), cwd = process.cwd()): Resolved {
   // the exact-id check sheds the optional sigil too, so `@<full-id>` keeps the exact-wins-over-prefix rule
   const exact = sessions.find((s) => s.id === stripRefSigil(selector))
   if (exact) return { ok: exact }
-  const hits = sessions.filter((s) => matchesSelector(s, selector))
+  const hits = sessions.filter((s) => matchesSelector(s, selector, own, cwd))
   if (hits.length === 1) return { ok: hits[0] }
   return hits.length ? { ambiguous: hits } : { none: true }
 }
@@ -1982,12 +1994,13 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
       if (blocked) return { ok: false, error: blocked }
     } catch { /* no pane to consult — let the delivery channel decide */ }
   }
+  const prompt = await resolveCommandPrompt(text)
   // a terminal-free sender's dispatch carries the note-reply insert; a human send WITHOUT the flag whose
   // previous human send carried it is the note→terminal transition and gets the one-shot counter-insert
   // ([[session-timeline]]). Both appended here, beside the delivery, so every input surface shares the one
   // phrase pair and the timeline records the message WITHOUT it (the hint is transport, not conversation).
-  const wrapped = opts.replyVia === 'note' ? withNoteReplyHint(text)
-    : !from && lastHumanSendVia(id) === 'note' ? withTerminalReplyHint(text) : text
+  const wrapped = opts.replyVia === 'note' ? withNoteReplyHint(prompt)
+    : !from && lastHumanSendVia(id) === 'note' ? withTerminalReplyHint(prompt) : prompt
   const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, wrapped)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.

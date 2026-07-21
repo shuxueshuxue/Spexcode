@@ -5,7 +5,7 @@ import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
-import { evalAddress, graphNodeAddress, issueAddress, reviewListAddress, sessionAddress } from './address.js'
+import { evalAddress, graphNodeAddress, issueAddress, sessionAddress } from './address.js'
 import { EVAL_FILTER_KIND } from './reviewFilters.js'
 import { useReviewPage } from './reviewPage.js'
 
@@ -23,6 +23,7 @@ const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/
 // is the ONLY knob a caller turns: matcher, interleave, and keys are identical; only the lead order differs.
 const BASE_PLANES = ['spec', 'session', 'issue', 'scenario']
 const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !== boost)] : BASE_PLANES)
+const SERVER_MATCHED_PLANES = new Set(['issue', 'scenario'])
 
 // fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
 // `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
@@ -92,20 +93,25 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
 // so the palette no longer ranks node prose more crudely than the agent. An empty query is the plain
 // jump-list (plane, then shorter name).
 //
-// Cross-plane: rank EACH plane separately, then INTERLEAVE by plane (a node, a session, an issue, a scenario,
-// repeat). NOT one rankDocs over all four — nodes carry far richer text than sparse sessions/issues, so a
-// single relevance list buries the non-node planes (a node-heavy query like "session" returns only nodes,
-// verified in-browser). Per-plane ranking keeps the shared scorer's quality WITHIN a plane; the interleave
-// keeps every matching plane visible — the palette's whole point. (The floor has only nodes, so it needs none
-// of this; this cross-plane assembly is the one thing the palette adds on top of the shared core.)
+// Cross-plane: rank the LOCAL node/session planes separately, preserve the SERVER-MATCHED Issue/scenario
+// planes, then INTERLEAVE them (a node, a session, an issue, a scenario, repeat). NOT one rankDocs over all
+// four — nodes carry far richer text than sparse sessions/issues, so a single relevance list buries the
+// non-node planes (a node-heavy query like "session" returns only nodes, verified in-browser). This assembly
+// keeps local scorer quality where the palette owns the corpus and keeps every remotely-matched plane visible.
+// (The floor has only nodes, so it needs none of this cross-plane work.)
 function rank(entries, query, planes) {
   const order = Object.fromEntries(planes.map((k, i) => [k, i]))
   const jump = (a, b) => order[a.kind] - order[b.kind] || a.name.length - b.name.length || a.key.localeCompare(b.key)
   if (!query.trim()) return entries.slice().sort(jump).slice(0, 15)
   const ranked = {}
   for (const k of planes) {
-    const docs = entries.filter((e) => e.kind === k).sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
-    ranked[k] = rankDocs(query, docs.map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
+    const docs = entries.filter((e) => e.kind === k)
+    // Review rows already passed the server's shared matcher. Re-running corpus IDF on that match-only page
+    // drops an exact one-row result (N === df gives IDF 0), so preserve its stable server order here.
+    ranked[k] = SERVER_MATCHED_PLANES.has(k)
+      ? docs.slice(0, 15)
+      : rankDocs(query, docs.sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
+        .map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
   }
   const out = []
   for (let i = 0; out.length < 15; i++) {
@@ -142,21 +148,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   const evalItems = evalPage.data?.items || []
   const entries = useMemo(() => buildEntries(specs, sessions, corpus, issueItems, evalItems),
     [specs, sessions, corpus, issuePage.data, evalPage.data])
-  const results = useMemo(() => {
-    const ranked = rank(entries, dq, planes)
-    const more = []
-    if (issuePage.data && issuePage.data.total > issueItems.length) more.push({
-      kind: 'issue', key: 'issue:see-all', address: reviewListAddress('issues', issueQuery),
-      title: t('reviewList.showing', { shown: issueItems.length, total: issuePage.data.total }),
-      sub: t('reviewList.issuesTitle'), name: '', desc: '', body: '', color: 'var(--green)',
-    })
-    if (evalPage.data && evalPage.data.total > evalItems.length) more.push({
-      kind: 'scenario', key: 'scenario:see-all', address: reviewListAddress('evals', evalQuery),
-      title: t('reviewList.showing', { shown: evalItems.length, total: evalPage.data.total }),
-      sub: t('evalsFeed.title'), name: '', desc: '', body: '', color: 'var(--muted)',
-    })
-    return [...ranked, ...more]
-  }, [entries, dq, planes, issuePage.data, evalPage.data, issueItems, evalItems, issueQuery, evalQuery, t])
+  const results = useMemo(() => rank(entries, dq, planes), [entries, dq, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => { setSel(0) }, [q])  // a fresh query always re-aims the highlight at the top result

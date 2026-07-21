@@ -185,7 +185,7 @@ async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: (
 }
 
 async function resolveSelectorOrExit(selector: string): Promise<string> {
-  if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch)'); process.exit(2) }
+  if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch | . for self)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
   const { sessionLabel } = await import('./sessions.js')
   const r = await resolveClientSession(selector)

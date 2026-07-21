@@ -4,8 +4,8 @@ import { apiUrl } from './project.js'
 
 // The dashboard's ONE session-launch CLIENT path, shared by every face that can start a worker — the desktop
 // console's New Session tab (SessionInterface.jsx) and the phone's composer (MobileApp.jsx). Launcher state,
-// preset discovery, and the raw create POST live here. The backend's newSession is the command/grammar owner,
-// shared with CLI/API callers; browser clients never expand plugin bodies.
+// preset discovery, and the raw create POST live here. The backend prompt boundary owns command expansion for
+// launch and send, shared with CLI/API callers; browser clients never expand plugin bodies.
 
 // launch a session: the one POST /api/sessions. A launcher SUBSUMES the harness ([[launcher-select]]):
 // send only the chosen launcher name; the backend derives harness from that profile. No launcher yet
@@ -72,8 +72,8 @@ export function useLaunchers() {
   return { launchers, launcher, pickLauncher }
 }
 
-// the command presets (GET /api/plugins) — the launch box's `/` palette. The route returns only
-// command-surface nodes, so the list IS the launchable set — no client filter.
+// the command presets (GET /api/plugins) — shared by the launch box and live inbox `/` palettes. The route
+// returns only command-surface nodes, so the list IS the invocable set — no client filter.
 export function useCommandPresets() {
   const [presets, setPresets] = useState([])
   useEffect(() => {

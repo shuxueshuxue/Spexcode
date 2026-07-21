@@ -12,7 +12,7 @@ import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import { useResizable } from './useResizable.js'
-import { uiCommandsFor } from './sessionCommands.js'
+import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
@@ -281,8 +281,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fetch(apiUrl(`/api/slash-commands?harness=${harness}`)).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [selSession?.harness])
 
-  // the command presets — the New Session box's `/` palette (tidy/health/…). Picking one composes its body
-  // into the launch prompt (see submit); listing is display-only, like the slash menu. Shared fetch (./launch.js).
+  // command presets feed both prompt boxes' `/` palettes. Picking one inserts its raw invocation; the backend
+  // expands the body at the launch/send boundary. Shared fetch (./launch.js), no client interpreter.
   const commandPresets = useCommandPresets()
 
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
@@ -417,12 +417,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     const sm = value.match(/^\/(\S*)$/)
     if (sm) {
-      // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
-      // stable prefix rank, so the board set keeps its lead within each score band.
+      // Board commands (coloured, run HERE) lead; SpexCode prompt presets follow; harness commands come last.
+      // matchSlash is a stable prefix rank, so source precedence survives inside each score band.
       const ui = typedUiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
-      // a board command OVERRIDES a same-named CC command — one identity, one row, never a duplicate.
-      const owned = new Set(ui.map((c) => c.name))
-      const items = matchSlash([...ui, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
+      const items = matchSlash(inboxCommands(ui, commandPresets, slashCmds), sm[1])
       if (!items.length) return null
       return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
     }
@@ -437,7 +435,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
-      // a board command RUNS on pick (the typed twin of its button); CC commands only insert text.
+      // A board command RUNS on pick (the typed twin of its button); presets and harness commands insert text.
       if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
@@ -474,7 +472,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
 
-  // both `/` palettes — the inbox's CC-command menu (`up`, opens above the box) and the New box's
+  // both `/` palettes — the inbox's board/preset/harness menu (`up`, opens above the box) and the New box's
   // config-preset menu (downward) — render through the ONE shared SlashMenu; only the head label differs.
   const slashMenu = (up, head) => (
     <SlashMenu menu={menu} up={up} head={head} onPick={accept}
@@ -496,7 +494,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // completion's trailing space and a stray newline.
     const cmd = typedUiCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
-    // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
+    // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the backend (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
     const text = expandMentions(raw)
     setMsg('')

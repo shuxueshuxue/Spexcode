@@ -243,17 +243,31 @@ let registryWatcher: FSWatcher | null = null
 type WorktreeWatch = { path: string; root: FSWatcher; index: FSWatcher }
 const worktreeWatchers = new Map<string, WorktreeWatch>()
 const worktreeRetryAttempted = new Set<string>()
+const worktreeRetryCount = new Map<string, number>()
 const worktreeObserver = (name: string): string => `graph:worktree:${name}`
 
 export function scheduleWorktreeResubscribe(
   name: string,
   attempted: Set<string>,
   retry: () => void,
+  delayMs = 0,
 ): boolean {
   if (attempted.has(name)) return false
   attempted.add(name)
-  setImmediate(retry)
+  const timer = setTimeout(() => {
+    attempted.delete(name)
+    retry()
+  }, delayMs)
+  timer.unref?.()
   return true
+}
+
+function scheduleWorktreeRetry(name: string): boolean {
+  if (worktreeRetryAttempted.has(name)) return false
+  const attempt = (worktreeRetryCount.get(name) ?? 0) + 1
+  worktreeRetryCount.set(name, attempt)
+  const delayMs = Math.min(1_000, 25 * (2 ** Math.min(attempt - 1, 5)))
+  return scheduleWorktreeResubscribe(name, worktreeRetryAttempted, reconcileWorktrees, delayMs)
 }
 
 const ignoredWorktreePath = (file: string): boolean =>
@@ -308,7 +322,7 @@ function watcherFailed(name: string, path: string): void {
   // resubscribe; the authorized summary build is the one authoritative rescan, never a periodic sweep.
   dropWorktreeWatcher(name)
   if (holdSessionEvalProjectionObserver(worktreeObserver(name), { path })) fireChanged('full')
-  scheduleWorktreeResubscribe(name, worktreeRetryAttempted, reconcileWorktrees)
+  scheduleWorktreeRetry(name)
 }
 
 function reconcileWorktrees(): void {
@@ -321,7 +335,7 @@ function reconcileWorktrees(): void {
   for (const e of ents) {
     if (!e.isDirectory()) continue
     live.add(e.name)
-    if (worktreeWatchers.has(e.name)) continue
+    if (worktreeWatchers.has(e.name) || worktreeRetryAttempted.has(e.name)) continue
     try {
       // the entry's `gitdir` file points at the worktree's `<tree>/.git` (file or dir); its parent is the tree.
       const wtPath = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim())
@@ -334,6 +348,7 @@ function reconcileWorktrees(): void {
       const row = { path: wtPath, root, index }
       worktreeWatchers.set(e.name, row)
       worktreeRetryAttempted.delete(e.name)
+      worktreeRetryCount.delete(e.name)
       // The replacement is live before its hold is removed. This delta authorizes one double-read rescan,
       // so edits made anywhere in the unwatched interval are inside the new generation's fingerprint.
       if (releaseSessionEvalProjectionObserver(worktreeObserver(e.name))) fireChanged('full')
@@ -343,15 +358,16 @@ function reconcileWorktrees(): void {
       let path: string | null = null
       try { path = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim()) } catch { /* broken row */ }
       if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), path ? { path } : 'all')) fireChanged('full')
-      scheduleWorktreeResubscribe(e.name, worktreeRetryAttempted, reconcileWorktrees)
+      scheduleWorktreeRetry(e.name)
     }
   }
   for (const name of worktreeWatchers.keys()) if (!live.has(name)) {
     dropWorktreeWatcher(name)
     released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
   }
-  for (const name of worktreeRetryAttempted) if (!live.has(name)) {
+  for (const name of worktreeRetryCount.keys()) if (!live.has(name)) {
     worktreeRetryAttempted.delete(name)
+    worktreeRetryCount.delete(name)
     released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
   }
   if (released) fireChanged('full')
@@ -402,7 +418,6 @@ function ensureWorktreeRegistry(retry = true): void {
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
     registryWatcher = watchSessionEvalRegistry(dir, () => {
-      worktreeRetryAttempted.clear()
       reconcileWorktrees()
       fireChanged('full', 'all')
     }, registryWatcherFailed)

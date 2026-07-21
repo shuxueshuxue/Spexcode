@@ -365,7 +365,9 @@ try {
   const sessionsResponse = await fetch(`${base}/api/sessions`)
   const sessionsBody = await sessionsResponse.json()
   const sessions = Array.isArray(sessionsBody) ? sessionsBody : sessionsBody.sessions || []
-  const scoped = sessions.find((session) => String(session.id).startsWith('796190de')) || sessions[0]
+  const graphBody = await (await fetch(`${base}/api/graph`)).json()
+  const scopedId = graphBody.sessions.find((session) => (session.evalSummary?.value?.total || 0) > 0)?.id
+  const scoped = sessions.find((session) => session.id === scopedId)
   if (scoped) {
     const q = `is:eval scope:${scoped.id}`
     const scopedWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === q && url.searchParams.get('page') === '1')
@@ -417,17 +419,22 @@ try {
   assert.equal(paletteIssues.data.items.length, 25)
   assert.equal(paletteEvals.data.items.length, 25)
   assert.ok(paletteIssues.data.total > 25 && paletteEvals.data.total > 25)
-  await page.waitForFunction(() => document.querySelectorAll('.search-item').length >= 17)
-  const evalSeeAllText = `showing ${paletteEvals.data.items.length} of ${paletteEvals.data.total}`
-  const evalSeeAllIndex = (await page.locator('.search-item').allTextContents())
-    .findIndex((text) => text.toLowerCase().includes(evalSeeAllText))
-  assert.ok(evalSeeAllIndex >= 0, 'Palette discloses its bounded Evals plane')
-  for (let index = 0; index < evalSeeAllIndex; index++) await page.keyboard.press('ArrowDown')
-  assert.match((await page.locator('.search-item.on').innerText()).toLowerCase(), new RegExp(evalSeeAllText))
-  const canonicalEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1' && !url.searchParams.has('view'))
+  await page.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
+  const desktopPaletteTexts = await page.locator('.search-item').allTextContents()
+  assert.equal(desktopPaletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false,
+    'pagination metadata never becomes a search result')
+  const desktopEvalTarget = paletteEvals.data.items[0].scenario
+  const desktopFilteredEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === `is:eval ${desktopEvalTarget}`)
+  await page.locator('.search-input').fill(desktopEvalTarget)
+  const desktopFilteredEvals = await measure(await desktopFilteredEvalWaiting, 'palette-evals-query')
+  await page.locator('.search-item:has(.k-scenario)').first().waitFor({ state: 'visible' })
+  const evalResultIndex = await page.locator('.search-item').evaluateAll((rows) => rows.findIndex((row) => row.querySelector('.k-scenario')))
+  assert.ok(evalResultIndex >= 0, 'Palette includes a real Eval result')
+  for (let index = 0; index < evalResultIndex; index++) await page.keyboard.press('ArrowDown')
+  const desktopSelectedEval = await page.locator('.search-item.on .search-title').innerText()
+  assert.ok(desktopFilteredEvals.data.items.some((item) => item.scenario === desktopSelectedEval), 'keyboard selects a returned Eval entity')
   await page.keyboard.press('Enter')
-  await canonicalEvalWaiting
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?q=is%3Aeval')
+  await page.waitForFunction(() => location.hash.startsWith('#/evals'))
 
   await page.evaluate(() => { sessionStorage.setItem('spex.focus', 'session-console'); location.hash = '#/' })
   const focusedGraphWaiting = page.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
@@ -490,17 +497,27 @@ try {
   const paletteEvalData = await (await paletteEvalResponse).json()
   assert.equal(paletteIssueData.items.length, 25)
   assert.equal(paletteEvalData.items.length, 25)
-  await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length >= 17)
+  await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
   const paletteTexts = await palettePage.locator('.search-item').allTextContents()
-  const paletteEvalIndex = paletteTexts.findIndex((text) => text.toLowerCase().includes(`showing 25 of ${paletteEvalData.total}`))
+  assert.equal(paletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false)
+  const paletteEvalTarget = paletteEvalData.items[0].scenario
+  const filteredEvalResponse = palettePage.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname.endsWith('/api/evals') && url.searchParams.get('q') === `is:eval ${paletteEvalTarget}`
+  }, { timeout: 45_000 })
+  await palettePage.locator('.search-input').fill(paletteEvalTarget)
+  const filteredEvalData = await (await filteredEvalResponse).json()
+  await palettePage.locator('.search-item:has(.k-scenario)').first().waitFor({ state: 'visible' })
+  const paletteEvalIndex = await palettePage.locator('.search-item').evaluateAll((rows) => rows.findIndex((row) => row.querySelector('.k-scenario')))
   assert.ok(paletteEvalIndex >= 0)
   for (let index = 0; index < paletteEvalIndex; index++) await palettePage.keyboard.press('ArrowDown')
-  assert.match((await palettePage.locator('.search-item.on').innerText()).toLowerCase(), /showing 25 of/)
-  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; see-all keyboard selected`)
+  const selectedEval = await palettePage.locator('.search-item.on .search-title').innerText()
+  assert.ok(filteredEvalData.items.some((item) => item.scenario === selectedEval))
+  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; real Eval keyboard selected`)
   await palettePage.screenshot({ path: join(out, 'bounded-palette.png'), fullPage: false })
   await palettePage.keyboard.press('Enter')
-  await palettePage.waitForFunction(() => location.hash === '#/evals?q=is%3Aeval')
-  paletteRecording.mark('Enter routed to the canonical Evals query')
+  await palettePage.waitForFunction(() => location.hash.startsWith('#/evals'))
+  paletteRecording.mark('Enter routed to the selected Eval entity')
   await paletteContext.close()
   await finishRecording(paletteRecording, paletteVideo)
 

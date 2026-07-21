@@ -30,3 +30,19 @@ export function uiCommandsFor(status, runners, liveness = 'online') {
     .filter((c) => c.when(status, liveness))
     .map((c) => ({ ...c, run: runners[c.name] }))
 }
+
+// The live inbox has one ordered command vocabulary. Board actions win because they act in the dashboard;
+// SpexCode prompt presets win over same-named harness commands because the backend expands them before the
+// harness sees the text. Deduplication here gives every name one row and one meaning.
+export function inboxCommands(ui = [], presets = [], harness = []) {
+  const seen = new Set()
+  return [
+    ...ui,
+    ...presets.map((preset) => ({ ...preset, source: 'preset' })),
+    ...harness,
+  ].filter((command) => {
+    if (!command?.name || seen.has(command.name)) return false
+    seen.add(command.name)
+    return true
+  })
+}

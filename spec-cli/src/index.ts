@@ -22,7 +22,7 @@ import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
-import { buildExportModel, renderExportHtml } from '../../spec-eval/src/sessioneval.js'
+import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -35,6 +35,11 @@ installProcessGuards()
 
 const app = new Hono()
 app.use('/api/*', cors())
+app.onError((error, c) => {
+  if (error instanceof SessionEvalUnavailableError) return c.json({ error: error.message }, 503)
+  console.error(error)
+  return c.text('Internal Server Error', 500)
+})
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
 app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/settings · /api/sessions · /api/slash-commands'))
@@ -186,7 +191,7 @@ app.get('/api/settings', async (c) => c.json({
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))
-// the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with
+// the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 // `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
@@ -200,12 +205,14 @@ app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.quer
 // Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
 // it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
 app.get('/api/evals', etag(), async (c) => {
+  ensureBoardFileWatchers()
   const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
   return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
 })
 // ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
 // most five lightweight neighbors. It never serializes another scenario's history or the scoped model.
 app.get('/api/evals/detail', etag(), async (c) => {
+  ensureBoardFileWatchers()
   const node = c.req.query('node')?.trim()
   const scenario = c.req.query('scenario')?.trim()
   if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)
@@ -353,7 +360,7 @@ app.post('/api/remarks/:action{resolve|retract}', async (c) => {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }
 })
-// the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
+// the harness slice of the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
 // so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.
 app.get('/api/slash-commands', (c) => {

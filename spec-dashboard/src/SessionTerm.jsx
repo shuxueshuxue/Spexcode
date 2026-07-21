@@ -6,6 +6,11 @@ import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
 
 const SYNC_BEGIN = '\x1b[?2026h'
+const MOUSE_REPORT_MODES = new Set([9, 1000, 1002, 1003, 1005, 1006, 1015, 1016])
+
+function onlyMouseReportModes(params) {
+  return params.length > 0 && params.every((param) => typeof param === 'number' && MOUSE_REPORT_MODES.has(param))
+}
 
 function terminalTypography() {
   const styles = getComputedStyle(document.documentElement)
@@ -101,8 +106,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
 
-    // xterm has no public "always select"; pin the private selectionService.shouldForceSelection so a plain drag selects under mouse-reporting. Guarded.
-    try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
+    // This is a read-only renderer: pointer reports never travel to the application and wheel uses the
+    // bridge's explicit tmux-client control. Keep xterm out of mouse-report mode so a TUI redundantly
+    // reasserting DECSET cannot clear an in-progress local selection. Public parser handlers leave every
+    // visual terminal mode untouched and consume only pure mouse-report mode lists.
+    const mouseModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
+      { prefix: '?', final },
+      (params) => onlyMouseReportModes(params),
+    ))
 
     // neutralise xterm's core focus() so clicking the pane selects without blurring the ❯ box (instance prop shadows the prototype). Guarded.
     try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
@@ -222,6 +233,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       document.removeEventListener('keydown', onCopyKey)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
+      for (const handler of mouseModeHandlers) handler.dispose()
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null

@@ -153,7 +153,12 @@ Read-only governs *keyboard* input, not extraction or navigation: text selects, 
 wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
-or plain HTTP** (past the secure-context-only Clipboard API).
+or plain HTTP** (past the secure-context-only Clipboard API). Selection changes highlight only: its first and
+last cells remain legible, and moving an endpoint never shifts the terminal's glyph grid. Because this
+read-only browser renderer forwards no pointer reports, it never enters the application's mouse-report modes;
+the public terminal parser consumes those mode toggles at the adapter boundary. Pointer drag therefore remains
+one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
+continues through [[live-view]]'s explicit tmux-client control path.
 
 The desktop right pane has **one session shape**: every launched session is an ordinary interactive session,
 so its first tab is Terminal and mounts the warm `SessionTerm` + `❯` input described here. Launchers choose a

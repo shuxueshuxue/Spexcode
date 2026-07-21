@@ -131,8 +131,9 @@ const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
 // flags one of OUR commands (close/merge/type/eval — or the eval detail's /ok): it runs HERE, not in the
-// agent (see sessionCommands.js / reviewCommands.js). `[review]` tags a review-track preset.
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]', review: '[review]' }
+// agent (see sessionCommands.js / reviewCommands.js). `[preset]` is a SpexCode agent-prompt preset;
+// `[review]` tags a review-track preset.
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]', preset: '[preset]', review: '[review]' }
 
 // ONE render for every `/` dropdown — the ❯ inbox's command menu (`up`, above the docked box), the New
 // box's preset palette (downward), and the eval composer's review menu (`up`). Rows: /name · description ·

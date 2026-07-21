@@ -37,6 +37,9 @@ The name lives where the rest of a session's record lives: the session's record 
 store ([[state]]/[[runtime]]), written by the one backend that owns it. So a rename **persists** — it survives a backend restart and is read
 back like any other field, never held only in the browser. A session in **any** state is renamable
 (queued, live, or offline), because the gesture edits the on-disk record, not the live terminal.
+The CLI reaches that same write with `spex session rename <SEL> "<name>"`; inside a launched worker `.` is the
+shared selector for its own session ([[session-selectors]]), so a prompt preset such as [[rename]] can ask the
+agent to name itself without learning an id or creating a dashboard-only action.
 
 The gesture is a **right-click** on a session row **in the session board's left-hand session list**
 ([[session-console]]) — the interactive surface where a human manages sessions: a mutation belongs on

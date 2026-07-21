@@ -11,7 +11,9 @@ A plugin node's **surface** — where it plugs in — is a `surface` **frontmatt
 of six values (comma-separated when several: the node plugs into EVERY surface it lists, one body serving
 each — e.g. a plugin that is both an on-demand skill and a new-session command preset):
 
-- `surface: command` — a **command** preset, offered in the new-session `/` dropdown.
+- `surface: command` — a **command** prompt preset, offered in the `/` dropdown wherever a human composes
+  work for a new or running session. The client inserts its invocation; the backend resolves the same body
+  before launch or dispatch.
 - `surface: system` — a **system** contract: its body is materialized (in name order) into the
   `<!-- spexcode -->` managed block of the repo's `CLAUDE.md`/`AGENTS.md`, where the harness **auto-discovers**
   it as always-on context. NOT a launch-time `--append-system-prompt` — delivery is by discovered file, the
@@ -48,7 +50,7 @@ reaches no surface at all.
 
 In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursively and keeps the nodes whose
 `surface` field lists `s` (membership, not equality): `loadConfig` gathers command ([[spec-cli]]'s `/api/plugins`, the
-[[session-console]] `/` palette), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
+[[session-console]] new-session and live-terminal `/` palettes), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), `loadAgentConfig` gathers
 agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize), and

@@ -11,7 +11,7 @@ nodes work, *not* the plugins themselves. A plugin node is a folder where the fo
 `spec.md` plus optional helper scripts/assets); it defines a tool behavior, and **where it plugs in is a
 `surface` frontmatter field**:
 
-- `surface: command` — exposed as a new-session command.
+- `surface: command` — exposed as an agent prompt preset on new and running sessions.
 - `surface: system` — appended to agent system prompts.
 
 The field-driven routing rule is specified by the [[surface]] child. The **instances** — the DIY dev-flow

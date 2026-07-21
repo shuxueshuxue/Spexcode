@@ -83,13 +83,15 @@ rather than the backend's. The CLI falls back to in-process **only when no backe
 carries the caller's env, no cap).
 
 That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
-`/<preset>` names a live `surface: command` plugin: `newSession` expands its body, fills `{{targets}}` from the
+`/<preset>` names a live `surface: command` plugin: the shared prompt resolver expands its body, fills `{{targets}}` from the
 prompt's `[[node]]` mentions (or the explicit create node when the invocation names none), and appends the
-remaining free text. That expansion is only the agent's launch payload: session node/title derivation and the
+remaining free text. A body without `{{targets}}` receives a target block only when the invocation actually
+names one; a targetless utility stays exactly its small body. That expansion is only the agent's launch payload: session node/title derivation and the
 stored originating prompt use the raw caller text, so a plugin body's own `[[links]]` cannot silently become
-session scope. The dashboard, phone, CLI, direct API caller, and no-backend in-process fallback all enter this
-same path; clients may list and insert preset names but never expand plugin bodies themselves. A slash name
-that is not a live preset passes through verbatim.
+session scope. [[dispatch]] uses the same resolver for a running session's text input, without launch's
+identity bookkeeping. The dashboard, phone, CLI, direct API caller, and no-backend in-process fallback all
+enter this same path; clients may list and insert preset names but never expand plugin bodies themselves. A
+slash name that is not a live preset passes through verbatim.
 
 **The launch is project-bound; the route is not — so the launch guards its project.** A launch builds the
 worktree under the backend's OWN `mainRoot`, but the route to a backend is a bare URL (`SPEXCODE_API_URL`,

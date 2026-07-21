@@ -1,5 +1,5 @@
 // Hidden sockets are the lightweight prewarm boundary: they keep their subscription but own no PTY, pixels,
-// or tmux geometry. Visibility creates one native helper and hiding the last viewer releases it again.
+// or tmux geometry. Visible viewers share the smallest grid that fits all of them; hiding the last releases it.
 //
 // Run: SPEXCODE_TMUX=visibility-<pid> npx tsx test/pty-bridge.visibility-lifecycle.ts
 import { execFile } from 'node:child_process'
@@ -37,8 +37,11 @@ async function main(): Promise<void> {
 
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (data) => chunks.push(Buffer.from(data)) }
+  const widerChunks: Buffer[] = []
+  const widerViewer: Viewer = { send: (data) => widerChunks.push(Buffer.from(data)) }
   try {
     attachViewer(SESSION, viewer)
+    attachViewer(SESSION, widerViewer)
     await sleep(250)
     const hiddenClients = await clients()
     const hiddenWindow = (await tmux('display-message', '-p', '-t', SESSION, '#{window_width}x#{window_height}')).stdout.trim()
@@ -54,7 +57,23 @@ async function main(): Promise<void> {
     }
     const firstPid = firstRaw.split('|')[0]
 
+    resizeBridge(SESSION, widerViewer, SECOND.cols, SECOND.rows)
+    const sharedClients = await waitFor(clients, (value) => value.length === 2, 'shared visible helper')
+    const sharedRaw = sharedClients.find((line) => !line.includes('control-mode'))
+    if (!sharedRaw?.endsWith(`|${FIRST.cols}x${FIRST.rows}`)) {
+      throw new Error(`wider viewer enlarged the shared grid beyond its narrower peer (${sharedClients.join(', ')})`)
+    }
+
     hideViewer(SESSION, viewer)
+    const expandedClients = await waitFor(
+      clients,
+      (value) => !!value.find((line) => !line.includes('control-mode'))?.endsWith(`|${SECOND.cols}x${SECOND.rows}`),
+      'remaining wider viewer expansion',
+    )
+    if (!expandedClients.find((line) => !line.includes('control-mode'))?.startsWith(`${firstPid}|`)) {
+      throw new Error('size arbitration replaced the helper instead of resizing it')
+    }
+    hideViewer(SESSION, widerViewer)
     await waitFor(clients, (value) => value.length === 0, 'helper release')
     chunks.length = 0
 
@@ -66,9 +85,10 @@ async function main(): Promise<void> {
       throw new Error(`visibility did not create a fresh measured helper (${secondClients.join(', ')})`)
     }
 
-    console.log(`PASS: hidden socket held 0 clients at ${hiddenWindow}; visible helper ${firstPid} was released and reattached as ${secondRaw.split('|')[0]}`)
+    console.log(`PASS: hidden sockets held 0 clients; shared helper stayed ${FIRST.cols}x${FIRST.rows}, expanded to ${SECOND.cols}x${SECOND.rows}, then reattached as ${secondRaw.split('|')[0]}`)
   } finally {
     detachViewer(SESSION, viewer)
+    detachViewer(SESSION, widerViewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})
   }
 }

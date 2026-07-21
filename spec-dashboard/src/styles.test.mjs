@@ -50,7 +50,7 @@ test('scoped Evals gates are an opaque sticky strip inside that scroll owner', (
 test('terminal composer docks flush at the bottom and keeps ❯ on the active line', () => {
   assert.match(
     css,
-    /\.si-content\.is-session\s*\{[^}]*--si-dock-h:\s*44px;/s,
+    /\.si-content\s*\{[^}]*--si-dock-h:\s*44px;/s,
   )
   // flush-bottom footer: only a top border (no float/inset/radius/side borders), controls anchored to the
   // bottom (active) line via flex-end, so a grown multi-line box keeps ❯ tracking the caret, not mid-box.

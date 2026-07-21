@@ -8,7 +8,7 @@
 // Run (from spec-cli/): SPEXCODE_TMUX=hist-<pid> npx tsx test/pty-bridge.history.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { attachViewer, detachViewer, forwardWheel, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `hist-${process.pid}`
@@ -28,7 +28,8 @@ async function main() {
 
   let chunks: Buffer[] = []
   const viewer: Viewer = { send: (d) => { chunks.push(Buffer.from(d)) } }
-  if (!attachViewer(SESSION, viewer, { cols: COLS, rows: ROWS })) throw new Error('attachViewer failed')
+  attachViewer(SESSION, viewer)
+  resizeBridge(SESSION, viewer, COLS, ROWS)
   await sleep(600)
   const bottomNums = histNums(Buffer.concat(chunks).toString('utf8'))
   const bottomTop = Math.min(...bottomNums)   // smallest hist number visible at the bottom

@@ -2,212 +2,127 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard's live terminal — one tmux control-mode client per session per backend instance, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), size-vote arbitration so a viewer-less instance can never move a watched window, with viewer subscriptions that outlive the client so a pane never freezes.
+desc: The dashboard keeps browser terminals ready, but a session owns one native tmux stream only while visible; cached pixels make return switches instant and SpexCode never splices a reconstructed screen into live output.
 code:
   - spec-cli/src/pty-bridge.ts
 related:
+  - spec-cli/src/pty-helper.mjs
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/styles.css
+  - spec-dashboard/src/styles.test.mjs
+  - spec-cli/src/index.ts
+  - spec-cli/test/pty-bridge.attach-repaint.ts
   - spec-cli/test/pty-bridge.atomic-repaint.ts
-  - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.fd-leak.ts
-  - spec-cli/test/pty-bridge.stress.ts
-  - spec-cli/test/pty-bridge.osc8.ts
-  - spec-cli/test/pty-bridge.scroll-redraw.ts
-  - spec-cli/test/pty-bridge.reseed-reconnect.ts
+  - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.history.ts
-  - spec-cli/test/vt-emulate.ts
+  - spec-cli/test/pty-bridge.osc8.ts
+  - spec-cli/test/pty-bridge.visibility-lifecycle.ts
+  - spec-cli/test/pty-bridge.reseed-reconnect.ts
+  - spec-cli/test/pty-bridge.scroll-redraw.ts
+  - spec-cli/test/pty-bridge.stress.ts
+  - spec-cli/test/pty-bridge.unsynchronized-repaint.ts
 ---
 
 # live-view
 
-The dashboard's **live terminal** is a browser view of a session's tmux pane over one WebSocket per session:
-server→client is raw pane bytes; the human never *types* into the view (prompts travel out-of-band — see
-[[dispatch]]). The one thing that does travel client→server besides a resize is the **wheel** — navigation,
-not input — so a full-screen TUI can scroll its own history (see scrolling below). A genuine tmux client, not
-an output tap.
+The dashboard terminal is a browser view of a session's tmux pane. Prompts still travel through the
+session dispatch channel; the terminal socket carries pane output, geometry, visibility, and wheel
+navigation only.
 
-## the bridge
+## one compositor
 
-Behind each session is exactly **one** real tmux client *per backend instance*, shared by every viewer of
-that instance — one authoritative pane size, never a size-fight (see the size vote below for how that
-survives a second instance on the same socket). That client is a **control-mode connection**
-(`tmux -C attach-session`): it speaks tmux's line protocol, so the client↔tmux boundary is an **event stream,
-not a poll loop** — bytes are *pushed* as `%output` events and a resize is announced by a `%layout-change`.
+Each session has at most one native tmux client per backend instance, shared by that instance's viewers.
+Its PTY output is the only terminal byte stream sent to xterm. SpexCode does not capture the pane, rebuild
+terminal modes or cursor state, clear the browser, and then splice raw pane output behind that synthetic
+frame. tmux already owns the pane grid, history, cursor, modes, and client rendering; the bridge transports
+that client rendering instead of becoming a second terminal emulator.
 
-**That client is transported over PIPES, never a pty** — a correctness requirement, not a preference.
-Control mode *is* a line protocol, so a terminal buys the bridge nothing, while a pty master fd is **not
-close-on-exec**: each client inherited every earlier client's master, so a killed bridge's pts outlived it
-inside a live sibling and never hit `EIO` — tmux kept writing to a client that would never drain and its
-**server's** event loop blocked forever in one `write(2)`, freezing every bridge on the socket at once
-(every terminal black). Ordinary child stdio **is** close-on-exec, so a piped client inherits nothing and
-the wedge has no mechanism; the bridge needs no native pty dependency at all. Two things follow. It is
-`-C`, not `-CC` — the doubled flag only adds echo suppression, which *requires* a tty and emits the DCS
-wrapper whose stripping once ate an OSC 8 terminator (below). And a pipe has no winsize, so a client states
-its own size with the same `refresh-client -C` used everywhere else: **one** mechanism for size, no
-terminal side-channel.
+This boundary also owns resize as one transaction. The browser measures the desired grid without first
+reflowing xterm's old buffer, and the bridge resizes the native client PTY. Once the final native tmux
+transaction is ready, the bridge commits its grid dimensions immediately before those bytes; xterm changes
+grid and applies the transaction under one synchronized-output hold. Until then the already-painted buffer
+remains visible. A TUI may respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor
+an extra full-screen snapshot becomes an intermediate frame.
 
-**The whole control stream is parsed as bytes — never a string round-trip.** The client's stdout hands the
-bridge **raw Buffers**; it splits lines on the newline **byte**, un-escapes `%output` at the byte level, and broadcasts the
-pane's **raw UTF-8 bytes** verbatim (the `capture-pane` seed is joined and framed at the byte level too). This
-is the whole fix for intermittent `�` corruption: a UTF-8 decode at the transport chops the stream on OS-read
-boundaries, so a wide character (CJK, box-drawing, emoji) straddling two reads becomes a U+FFFD **before the
-bridge ever sees it**, unrecoverable. Byte-splitting is safe because tmux escapes only the C0 controls and
-backslash as octal `\NNN` (all `< 0x80`) and passes high bytes through **raw**, and a newline never falls
-inside a multi-byte character — so each wide char stays whole in one line, and un-escaping (each `\NNN` → its
-one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
+Native attach is the same repaint transaction, not a bypass around it. If attaching the visible helper leaves
+tmux geometry unchanged, the first complete native transaction is released directly. If attach changes
+geometry, its intermediate native screen and any delayed application clear remain behind the same semantic or
+bounded barrier used by an active resize, and the browser receives only the final complete transaction.
 
-Byte-verbatim covers **escapes that end a captured row**. A pane row can end in `\x1b\\` as the ST closing an
-**OSC 8 hyperlink** (which Claude Code emits for URLs and xterm renders underlined); eating it leaves the link
-unterminated, so xterm never closes it and underlines the **rest of the screen** — the "whole terminal goes
-underlined when I scroll" glitch. Nothing can eat it now: `-C` emits no DCS wrapper, so the bridge strips
-nothing and every line — protocol or `capture-pane` body — keeps its terminators. The glitch came from a
-wrapper that only exists to let a control stream share a real terminal; on a dedicated pipe the whole class
-is gone rather than avoided.
+A pipe-transported tmux control observer accompanies the native client as a **barrier sensor only**. It
+never paints, captures, sizes, or reconstructs a screen; it watches the pane's raw VT stream for the standard
+DEC synchronized-output boundary. Once a pane has demonstrated that capability, resize temporarily withholds
+native-client bytes until the next post-resize begin/end pair completes, discards the intermediate client
+clear/redraws, then requests one final in-band native-client refresh. Bytes remain withheld until that native
+client produces one complete outer begin/end transaction. Refresh command completion does not imply that its
+PTY bytes have drained, so a 15 ms transport window coalesces already-queued chunks and releases only the last
+complete transaction, never racing the observer or command reply against a second output stream. This closes the real asynchronous gap:
+an application may clear before opening its synchronized redraw 55ms later, while tmux otherwise renders the
+clear as its own complete update. Completion is the application's explicit end event, not silence or a guessed
+settle duration. A bounded fail-open refresh recovers a broken/missing end marker; it is not the normal path.
 
-**Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
-`%layout-change` — even a same-size no-op emits one — so the bridge sets the size, then **waits to be told**
-it re-wrapped by that event, which is a mathematical certainty of arrival, not a hope. Crucially the wait
-accepts **whatever size the event announces**, never an exact match on the size that was asked: every
-viewer, peek, and warm client is its own control client sharing ONE window under `window-size latest`, so
-the converged size is routinely another client's — an exact-size wait deadlocks the attach seed forever
-(the full-frame flag latches, mode flips get dropped, `%output` stays frozen: a mute black terminal). For
-the same reason a mode flip **always** repaints (the repaint token dedups), and an *unsolicited* geometry
-change — another client resized the shared window with no repaint in flight — re-seeds the viewers rather
-than letting live deltas paint onto stale geometry. No settle-timeout, no geometry poll, no per-repaint
-pull; a repaint whose size already equals the known layout paints at once.
+A pane that has not demonstrated synchronized output has no semantic redraw-complete event. For that legacy
+case only, resize coalesces native updates behind the old visible buffer until either 160 ms of output
+quiescence or a 400 ms ceiling, then requests the same complete native refresh transaction. This bounded
+compatibility window prevents a common delayed clear from becoming a browser frame without pretending that
+silence is an application guarantee. Once the pane demonstrates DEC 2026, later resizes use the event path.
 
-That repaint is the viewer's **one writer** from the resize request until its reconstructed frame lands.
-Resizing sends `SIGWINCH` to the pane, so a TUI commonly emits a top-to-bottom redraw as several `%output`
-events before `capture-pane` answers. Broadcasting those events and then the capture made the browser show
-the redraw as a terminal-wide scroll before replacing it with the coherent frame. The bridge now holds those
-pre-frame events back: the capture already includes every event before its command boundary, then the frame
-lands once and ordinary `%output` resumes as the live tail. No debounce or settle timer is involved, and the
-same ownership covers first-visible, resize, reconnect, mode change, and copy-mode repaint.
+The browser uses a terminal engine that implements synchronized output. When an application marks a VT
+transaction with DEC mode 2026, rendering is held until that transaction ends; xterm's own write queue may
+batch transport chunks, but it is never a substitute for a terminal protocol boundary.
 
-## the size vote — sharing the socket with other instances
+Each live session keeps one stable browser terminal and terminal socket across visibility changes. Hidden pane
+layers remain laid out at the terminal panel's real geometry under `visibility:hidden`, so xterm can fit
+locally without becoming visible or interactive. A pane that has already been viewed retains its last painted
+buffer; switching back exposes those cached pixels on the first browser paint while the native stream resumes
+behind them. Activation never disposes the renderer, exposes an empty replacement canvas, or waits for a new
+WebSocket.
 
-The window-size rules above assume every client on the socket is *this* backend's. They aren't: a second
-backend instance (a worktree's test `spex serve` on the same box) attaches its own bridges to the same tmux
-sessions, and its viewer-less clients would assert their cold default on any repaint — collapsing the
-terminal a human is watching on the main instance, unreclaimably (the watched bridge's counter-assert is a
-same-client-size no-op). So window size is a **vote**, arbitrated by tmux's `ignore-size` client flag:
+## isolated helper
 
-- **Every bridge client starts size-NEUTRAL** (flagged) and **votes only while a viewer has SIZED it** — a
-  visible connect or a resize, never a hidden board-load connect. Last viewer gone → neutral again.
-- The flag means "yield while any unflagged client is attached" — **server-wide**, and **void when all
-  clients are flagged** (then everyone counts again). That fallback is what keeps a lone backend's warm
-  hold working; the server-wide scope is why a warm hold anywhere is *deferred* while anyone votes.
-- The flag rides an **in-stream command**, not an attach-time `-f`, so a pre-3.2 tmux degrades to a
-  harmless `%error` (the old size-fight behaviour) instead of a client that cannot attach.
-- A **suppressed** `refresh-client -C` still receives its one `%layout-change` (measured — announcing the
-  window's real size), so the deterministic wait and the accept-any-announced-size rule hold on both sides
-  of the flag. Two instances with *live sized viewers* on one session still converge latest-wins, as ever.
+The backend process never owns a PTY. When the first viewer of a session becomes visible, it starts one shared
+helper process, and only that helper creates the native tmux client. A helper creates exactly one PTY and starts
+no later subprocess, so
+no sibling tmux client can inherit an earlier PTY master. Losing one helper can therefore detach only its
+own client; it cannot keep a dead sibling terminal alive and eventually block the shared tmux server.
 
-A supervisor keeps a **warm** client for every *detached* live session — so a tab paints fast — and
-**skips** any session a human is already attached to in their own terminal. A warm client is spawned at the
-last-known viewer size (per session, then a global/fixed fallback) and then **left alone**: the supervisor
-never re-sizes it off-screen. Window geometry is owned by **sized viewers alone** — a bare attach asserts
-nothing and neutral clients yield, so between viewers a window simply keeps the last sized viewer's
-geometry; there is no drift for an off-screen hold to correct, and the size-first handshake draws the next
-first frame exact anyway. (The hold this replaces was measured to be a per-tick capture + full-frame
-broadcast to every hidden pane of every unwatched session whenever anyone voted — its suppressed retry was
-never the budgeted no-op.) So an unwatched warm bridge does **no periodic work at all**: no refresh-client,
-no capture, no broadcast — a hidden pane's only idle traffic is the terminal socket's keep-alive ping.
+The helper's stdout is raw terminal output and its stdin is a small resize/navigation control stream.
+Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
+at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
 
-## first-visible, not first-connect
+## one visibility lifecycle
 
-Panes are **warm and always connected**: a viewer's socket opens when the board loads, while its pane is
-still **hidden at 0×0**. So the first frame must be drawn at the size the pane will have **when the human
-looks at it**, not at connect time. Two connect shapes:
+Browser readiness and native rendering have deliberately different lifetimes. Every live session mounts its
+xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
+setup from a tab click. A hidden subscription creates no helper, consumes no pane output, and never votes on
+tmux geometry. The first visible viewer creates the helper at its already-measured grid. The last visible
+viewer releases it even though hidden sockets and xterm buffers remain alive.
 
-- **Visible (re)connect** — the client measures its pane and carries its real size **on the connect URL**;
-  the server sizes the bridge to it and draws that first frame correct. A reconnect re-resolves the size, so
-  it too hands over the live one. This is the only path the connect-query serves.
-- **Hidden connect** — 0×0, no size rides along. The server does **not** paint a guessed prewarm frame:
-  undersized, and landing in a hidden buffer it would only be overpainted the instant the pane became
-  visible — the old two-stage scramble. It **defers** the one first-frame paint — **purely** — to the client's
-  **first resize**, which fires the moment the pane becomes visible at its true size. There is **no timer
-  fallback**: a pane that never resizes is a pane no one ever looks at (the client sends its real size the
-  instant the pane becomes visible), so it needs no frame. This is **fail-loud** — no size, no paint until the
-  resize arrives — and it makes the whole first-paint path **event-driven and zero-timer**, matching the
-  timer-free convergence above: the bridge holds not one time-based heuristic on either path.
+Visibility is the only helper lifecycle switch. A visible claim always carries the viewer's measured grid;
+that one resize message both creates the helper when needed and owns later geometry transactions. Hiding the
+viewer releases the helper when no visible claim remains. There is no second prewarm protocol. Multiple visible
+viewers of one session share the backend's helper and latest visible size. A viewer joining an existing helper
+receives an explicit native-client refresh through that same raw stream; there is no capture path. A hidden
+dashboard cannot resize or otherwise perturb a session watched by another dashboard.
 
-The client mirrors this: the instant a hidden pane becomes visible it **fits and sends its real size at
-once** — since that resize *is* what triggers the deferred first frame. The fit-retry stays the **corrective**
-path for a size measured slightly wrong mid-animation.
+## navigation and recovery
 
-The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host locale — else a
-backend with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent) makes tmux substitute `_` for every
-wide character, though the pane stores it correctly.
+Wheel coordinates become terminal mouse reports written to the real tmux client. tmux itself decides
+whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
+browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
+copy-mode viewport.
 
-## the durable-subscription invariant
+Viewer subscriptions belong to the session id rather than a helper process. If a visible helper exits,
+an alive-gated, rate-limited restore creates a new one beneath the same open sockets; native attach repaints
+the complete screen. A hidden subscription does not trigger restoration. A dead session is reaped, not
+respawned. Backend process restart remains the genuine socket break and is recovered by [[reconnect]].
 
-A viewer subscribes to a **stable session id**, never the bridge instance, so the subscription **outlives
-any number of bridge deaths and respawns**: when the tmux client exits the bridge is replaced underneath and
-surviving viewers are transparently re-bound and repainted **on the same open socket** — invisible to the
-browser, so a live pane can never freeze and **client reconnection is unnecessary for bridge churn**. Re-bind
-is owned by the supervisor's reconcile pass: **alive-gated** (a dead session is reaped rather than respawning
-into a storm) and **rate-limited** (a flaky session can't fork-bomb tmux). The repaint on every (re)attach is
-**fail-loud** — it must fire, since an idle re-bound pane has nothing else to re-arm it. The **only**
-intentional socket close is the human closing the pane (the board flipping a session to `offline`); a backend
-*process* restart is the lone genuine socket drop, recovered by a stateless reopen of the same endpoint ([[reconnect]]).
+## non-responsibilities
 
-## coherence — a control-mode attach replays nothing, so a FULL frame reconstructs state
-
-Control mode never replays a screen on its own — a bare attach and a plain refresh both emit nothing, and
-(unlike a raw attach, where tmux resends the pane's whole terminal state) it never re-emits the alt-screen
-switch or the app's mouse-tracking modes. So every (re)attach **seeds** its one coherent frame from the
-**current tmux view at the converged size**, then lets the live output be the tail. The two stay coherent because tmux
-serializes commands and notifications on one stream: the capture reflects the pane at its command boundary, so
-any live output that follows lands *after* it and is never overwritten — the deterministic seed, not the banned
-splice of a guessed-size snapshot into an already-flowing stream.
-
-A frame is therefore a **complete reconstruction of the pane's terminal state** at the converged size — not
-just its grid — because the live `%output` that follows renders *on top of* it and assumes the terminal is in
-exactly that state. The capture carries only the grid; one builder wraps the rest of the state around it, in
-five named pieces (stream order):
-
-- **modes** — the alt-screen switch + mouse-tracking, reconstructed from the pane's live flags (`alternate_on`,
-  the mouse flags). Only on a **full** frame (fresh (re)attach / re-bind, or the resize right after a viewer
-  resets its xterm) — a plain resize keeps the modes the browser already holds, since control mode never
-  re-emits them. So the browser mirrors the pane on the **alternate screen** for a full-screen TUI and in its
-  **mouse-tracking mode**. That same pane-mode reading drives wheel routing below — reconstruction and
-  navigation are one interpretation of tmux state, not two.
-- **pen** — reset SGR + close any open OSC 8 hyperlink, so no attribute/hyperlink state leaks across the clear
-  from the prior frame (xterm paints an unclosed hyperlink as a whole-screen underline).
-- **clear** — a viewport-only clear (`\x1b[H\x1b[2J`, never the scrollback `\x1b[3J`), so it never re-floods
-  history into a browser-owned scrollback.
-- **grid** — the captured rows, joined at the byte level (a wide char / an OSC 8 ST is never string-mangled).
-- **cursor** — placed where the pane **really** has it (`\x1b[y;xH` from `cursor_x`/`cursor_y`). A capture
-  restores the grid but not the cursor, and a live inline TUI's next `%output` redraws **relative to the
-  cursor** (Ink erases its previous frame by moving up from where it left off — the input line, *above* the
-  trailing hint rows, not the body's end). Leaving the cursor at the body's end makes that redraw erase the
-  wrong rows and **double the bottom UI** — the garble on **any** re-seed the TUI gets no SIGWINCH for
-  (copy-mode exit, a **reconnect**, an unsolicited layout-change; a resize self-corrects, since its SIGWINCH
-  triggers a full redraw). A fresh session on a deploy garbles this way without anyone scrolling.
-
-Each of the three rendering bugs this node has carried was exactly **one missing piece** of that reconstruction
-(a mangled grid byte, a leaked hyperlink, a dropped cursor); building the whole state in one place is the
-architecture that keeps them all fixed and gives any future state a home.
-
-## scrolling — the pane's real history, through tmux
-
-The browser never decides which scroll mechanism owns the pane. It sends the wheel to the bridge, and the
-bridge decides from tmux's live pane flags:
-
-- **Normal-screen pane** (a shell, a log): its history lives in tmux's scrollback. Wheel-up enters tmux
-  copy-mode and scrolls that tmux view; wheel-down continues in copy-mode until the bottom. Each move repaints
-  the browser from tmux's current copy-mode window: the bridge reads tmux's `scroll_position` / pane height
-  and captures that exact history slice, because tmux's plain `capture-pane` still describes the bottom screen
-  rather than the copy-mode viewport. While copy-mode owns the view, live `%output` from the underlying grid is
-  held back from viewers and repaint frames own the screen; exiting copy-mode snaps the browser back to the
-  live bottom view. The freeze flag has one ordered writer — the repaint that read the pane — so racing mode
-  flips cannot leave the live tail frozen by a stale reading. So the dashboard feels like a real tmux client
-  rather than a page scrolling an xterm buffer. The browser xterm keeps no independent terminal scrollback/scrollbar.
-- **Full-screen TUI** (alternate screen, owns the mouse — e.g. Claude Code): it keeps **no** scrollback in
-  xterm to scroll, and scrolls *itself* on mouse input. So when the pane advertises SGR mouse reports, the
-  bridge injects the matching wheel report into the pane (`send-keys`), so the **app scrolls its own real
-  history**.
-
-The socket still carries no keyboard input — the wheel is the one navigation exception — and neither path is
-harness-specific. Claude Code and Codex differ only in the tmux flags their panes expose.
+The bridge does not parse application-specific screen shapes or maintain a second terminal state for snapshots.
+The bounded unsynchronized compatibility window is explicitly weaker than the DEC 2026 event path; it neither
+claims application completion nor grows into an open-ended settle loop.
+For a session that has never been viewed, the contract is a short native attach followed by one complete paint,
+not zero attach latency. Lightweight browser prewarm must not hide that cold path from evaluation.

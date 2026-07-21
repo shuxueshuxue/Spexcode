@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { WebglAddon } from '@xterm/addon-webgl'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
+
+const SYNC_BEGIN = '\x1b[?2026h'
 
 function terminalTypography() {
   const styles = getComputedStyle(document.documentElement)
@@ -56,26 +57,16 @@ function execCopyFallback(text) {
 export default function SessionTerm({ sessionId, active = true, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
-  // the GPU renderer for the VISIBLE pane only — see the active-driven effect below. Held in a ref so it
-  // can be disposed when this terminal goes off-screen and reattached when it comes back.
-  const webglRef = useRef(null)
-  // last cols/rows we synced to tmux; a ref (not effect locals) so BOTH the fit path and the renderer
-  // swap can reset it to force the next fit through the "size changed" gate.
+  // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
+  // hidden measurement can fit immediately because that reflow cannot paint.
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
-  // the latest fitAndSync, exposed so the active-driven renderer effect can re-measure after a swap.
-  const fitRef = useRef(null)
-  // first-visible bookkeeping. connectedWithSizeRef: did this socket connect with a measurable size (the
-  // pane was visible → server painted at once via the connect-query) or hidden (no size → server DEFERRED
-  // its first frame, and a ~250ms safety fallback may have painted a guessed-size frame into the still-hidden
-  // buffer)? firstFrameCleanedRef: have we already cleaned the first visible frame? Together they let the
-  // active-driven effect wipe-and-resend exactly once, only for a hidden-connected pane, the moment it first
-  // becomes visible — so the first frame the user sees is drawn clean at the true size (no undersized→snap).
-  const connectedWithSizeRef = useRef(false)
-  const firstFrameCleanedRef = useRef(false)
-  // set whenever we've just reset xterm (a fresh socket, or the first-visible wipe): its next resize must ask
-  // the server for a FULL frame — the mode prelude (alt-screen / mouse) + history seed — since a plain resize
-  // re-seeds only the visible screen and a reset xterm would otherwise never re-enter the pane's real modes.
-  const needsFullRef = useRef(true)
+  // The latest geometry request, exposed so activation can re-measure without recreating the terminal.
+  const measureRef = useRef(null)
+  // The browser terminal and socket stay warm, while visibility alone owns the native helper lifecycle.
+  // Refs expose prop changes to the long-lived socket effect without recreating either browser resource.
+  const activeRef = useRef(active)
+  const hideRef = useRef(null)
+  activeRef.current = active
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
@@ -85,10 +76,6 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   onMenuRef.current = onMenu
 
   useEffect(() => {
-    // fresh socket for this session id → it hasn't connected or been shown yet (reset even on a prop-swap
-    // reuse of this instance, so a new session doesn't inherit the previous one's first-visible state).
-    connectedWithSizeRef.current = false
-    firstFrameCleanedRef.current = false
     const term = new Terminal({
       ...terminalTypography(),
       cursorBlink: false, disableStdin: true, scrollback: 0,  // tmux owns history; xterm renders only the pane view
@@ -112,6 +99,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(hostRef.current)
+    try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
 
     // xterm has no public "always select"; pin the private selectionService.shouldForceSelection so a plain drag selects under mouse-reporting. Guarded.
     try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
@@ -119,79 +107,71 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     // neutralise xterm's core focus() so clicking the pane selects without blurring the ❯ box (instance prop shadows the prototype). Guarded.
     try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
 
-    // the WebGL addon is loaded/disposed by the active-driven effect below (one context for the visible pane only), not here.
-
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
-    // size-first handshake: carry the pane's real dimensions on the connect URL so the server draws its
-    // first frame at THAT size — no guessed-size full frame to scramble the still-default xterm and need a
-    // corrective second frame. Recomputed on every (re)connect (resilientSocket re-resolves it), so a
-    // reconnect after a resize hands over the live size. Unmeasurable (host not laid out / mid entrance
-    // animation) → no query, and the server falls back to its prewarm size. Same degenerate-measurement
-    // guards as fitAndSync, so the two never disagree on the size.
-    const socketUrl = () => {
-      try {
-        const host = hostRef.current
-        if (host && host.clientWidth >= 40 && host.clientHeight >= 40) {
-          const d = fit.proposeDimensions()
-          if (d && d.cols > 0 && d.rows > 0 && !(d.cols < 20 && host.clientWidth > 200)) {
-            connectedWithSizeRef.current = true   // visible connect → server paints this frame at once; no first-visible cleanup needed
-            return `${base}?cols=${d.cols}&rows=${d.rows}`
-          }
-        }
-      } catch { /* can't measure yet → no query; the server DEFERS its first frame until our first resize (a later fit) */ }
-      connectedWithSizeRef.current = false   // hidden connect → first frame is deferred; clean it on first-visible
-      return base
-    }
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
 
-    // fit xterm to the panel, then tell tmux to match — only when the size actually changed and the
-    // socket is open (a stream of resize events would otherwise spam the backend).
-    const fitAndSync = () => {
+    // Hidden panes fit their browser-only grid while invisible. A visible pane leaves its painted buffer alone
+    // until the backend commits the grid with one final native transaction.
+    const measureAndRequest = () => {
       const host = hostRef.current
       if (!host) return
-      // never fit against an unsettled/animating or hidden layout (near-0 host) — it would lock tmux to a tiny cols; a later re-fit sends the real size.
+      // Never measure an unsettled/animating layout (near-0 host): a later settled pass sends the real size.
       if (host.clientWidth < 40 || host.clientHeight < 40) return
-      try { fit.fit() } catch { return }
-      const { cols, rows } = term
+      let dimensions
+      try { dimensions = fit.proposeDimensions() } catch { return }
+      const cols = dimensions?.cols, rows = dimensions?.rows
       if (!cols || !rows) return
       // a tiny col count while the host is plainly wide is a degenerate mid-animation measurement — skip it;
-      // a re-fit at full size will follow with the right number.
+      // A settled full-size measurement follows with the right number.
       if (cols < 20 && host.clientWidth > 200) return
       const lastSize = lastSizeRef.current
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
-      // a resize right after a reset carries `full` so the server re-seeds the mode prelude + history, not just
-      // the visible screen — otherwise a just-reset xterm never re-enters the pane's alt-screen / mouse modes.
-      const full = needsFullRef.current
-      needsFullRef.current = false
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows, full }))
+      if (!activeRef.current) {
+        try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
+        return
+      }
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
     }
-    fitRef.current = fitAndSync
+    measureRef.current = measureAndRequest
+    hideRef.current = () => {
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
+    }
 
-    // coalesce pane frames landing in the same tick into one term.write per animation frame, in arrival order.
-    let pending = []
-    let flushRaf = 0
-    const flush = () => {
-      flushRaf = 0
-      if (!pending.length) return
-      let total = 0
-      for (const c of pending) total += c.length
-      const merged = new Uint8Array(total)
-      let off = 0
-      for (const c of pending) { merged.set(c, off); off += c.length }
-      pending = []
-      term.write(merged)
-    }
-    // on (re)open: reset xterm and DROP frames queued from a prior socket (they belong to the old screen) before re-sending the fitted size.
+    // A resize commit and its following binary frame are one browser transaction. Open an xterm synchronized
+    // hold before changing its grid, then feed the complete native tmux transaction which closes that hold.
+    // xterm's own write buffer batches ordinary chunks; a second animation-frame queue only adds latency.
+    let committedSize = null
     sock = createResilientSocket({
-      url: socketUrl,
+      url: base,
       onState: setConn,
-      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); needsFullRef.current = true; lastSizeRef.current = { cols: 0, rows: 0 }; fitAndSync() },
+      onOpen: () => {
+        committedSize = null
+        term.reset()
+        lastSizeRef.current = { cols: 0, rows: 0 }
+        if (activeRef.current) measureAndRequest()
+        else hideRef.current?.()
+      },
       onMessage: (e) => {
+        if (typeof e.data === 'string') {
+          try {
+            const message = JSON.parse(e.data)
+            if (message?.t === 'resize-commit' && message.cols > 0 && message.rows > 0) {
+              committedSize = { cols: Math.floor(message.cols), rows: Math.floor(message.rows) }
+            }
+          } catch { /* heartbeat and malformed control text are not terminal output */ }
+          return
+        }
         if (!(e.data instanceof ArrayBuffer)) return
-        pending.push(new Uint8Array(e.data))
-        if (!flushRaf) flushRaf = requestAnimationFrame(flush)
+        const frame = new Uint8Array(e.data)
+        const size = committedSize
+        if (!size) { term.write(frame); return }
+        committedSize = null
+        term.write(SYNC_BEGIN, () => {
+          try { term.resize(size.cols, size.rows) } catch { /* final bytes still restore the visible pane */ }
+          term.write(frame)
+        })
       },
     })
 
@@ -217,7 +197,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const host = hostRef.current
     const onCopyKey = (ev) => {
       if (!(ev.metaKey || ev.ctrlKey) || (ev.key !== 'c' && ev.key !== 'C')) return
-      if (!host || host.offsetParent === null) return        // not the visible terminal — let it pass
+      if (!host || !activeRef.current) return                 // not the visible terminal — let it pass
       const sel = term.getSelection()
       if (!sel) return
       const el = document.activeElement
@@ -231,29 +211,22 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     document.addEventListener('keydown', onCopyKey)
 
-    const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
-    // the .si-term-body entrance animates via transform/opacity (layout size never moves, so ResizeObserver
-    // can't see it) — animationend is the corrective re-fit for a measurement the entrance skipped as
-    // degenerate; steady-state size changes belong to the ResizeObserver + window listener below.
-    const termEl = hostRef.current.closest('.si-term-body')
-    if (termEl) termEl.addEventListener('animationend', fitAndSync)
-    const ro = new ResizeObserver(fitAndSync)
+    const raf = requestAnimationFrame(measureAndRequest)
+    const ro = new ResizeObserver(measureAndRequest)
     ro.observe(hostRef.current)
-    window.addEventListener('resize', fitAndSync)
+    window.addEventListener('resize', measureAndRequest)
 
     return () => {
       cancelAnimationFrame(raf)
-      if (flushRaf) cancelAnimationFrame(flushRaf)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
-      if (termEl) termEl.removeEventListener('animationend', fitAndSync)
       ro.disconnect()
-      window.removeEventListener('resize', fitAndSync)
+      window.removeEventListener('resize', measureAndRequest)
       sock.close()   // intentional close → the resilient socket stops reopening for good
-      term.dispose() // disposes loaded addons too, incl. any live WebGL renderer
+      term.dispose()
       termRef.current = null
-      webglRef.current = null  // term.dispose() killed the addon; drop our handle so a remount starts clean
-      fitRef.current = null
+      measureRef.current = null
+      hideRef.current = null
     }
   }, [sessionId])
 
@@ -273,51 +246,17 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     return () => { sub.dispose(); clearTimeout(timer); onMenuRef.current?.(sessionId, false) }
   }, [sessionId, active])
 
-  // active-driven: runs each time this pane crosses the visibility line. Two independent jobs when it
-  // becomes visible — (A) hold the GPU renderer for the on-screen pane only, (B) send the real size NOW so
-  // the server's deferred first frame lands at the true visible size instead of waiting on the entrance
-  // animationend refit.
-  useEffect(() => {
+  // Keep the stable cached renderer as the first visible paint. The resize message is also the single helper
+  // activation path; there is no separate raw-terminal prewarm or size-ownership transition.
+  useLayoutEffect(() => {
     const term = termRef.current
     if (!term) return
     if (active) {
-      // (A) attach WebGL while visible (contexts are a capped per-page resource the browser force-loses past
-      // the cap). Guarded so a missing/lost GL context never blocks the size send below.
-      if (!webglRef.current) {
-        try {
-          const webgl = new WebglAddon()
-          // a GENUINE runtime loss (GPU reset, or the browser still evicting us): drop to the DOM renderer and
-          // force a clean re-measure + FULL repaint, so we never strand a half-painted grid. Resetting the size
-          // guard is essential — otherwise fitAndSync sees "same cols/rows" and suppresses the corrective fit.
-          webgl.onContextLoss(() => {
-            try { webgl.dispose() } catch { /* */ }
-            webglRef.current = null
-            lastSizeRef.current = { cols: 0, rows: 0 }
-            requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
-          })
-          term.loadAddon(webgl)
-          webglRef.current = webgl
-        } catch {
-          webglRef.current = null  // no GL context available — DOM renderer stays, which renders fine
-        }
-      }
-      // (B) first time a HIDDEN-connected pane is shown: wipe the buffer and force the next fit through the
-      // size-unchanged gate. The pane connected at 0×0 so the server deferred its first frame, and a ~250ms
-      // safety fallback may have painted a guessed-size frame into the still-hidden buffer — clearing
-      // guarantees the first frame the user sees is drawn clean at the real size (no undersized→snap). A pane
-      // that connected visible already holds its correct frame (connect-query) — don't wipe it. Re-showing an
-      // already-shown pane keeps its live buffer (instant) — only refit.
-      if (!firstFrameCleanedRef.current) {
-        firstFrameCleanedRef.current = true
-        if (!connectedWithSizeRef.current) { term.reset(); needsFullRef.current = true; lastSizeRef.current = { cols: 0, rows: 0 } }
-      }
-      // re-measure against the now-laid-out host and force a full repaint (the entrance animation is pure
-      // transform/opacity, so the host is already at its final height here and proposeDimensions reads true).
-      requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
-    } else if (webglRef.current) {
-      // leaving view: RELEASE the context so it can never accumulate across opened sessions.
-      try { webglRef.current.dispose() } catch { /* */ }
-      webglRef.current = null
+      lastSizeRef.current = { cols: 0, rows: 0 }
+      measureRef.current?.()
+      try { term.refresh(0, term.rows - 1) } catch { /* */ }
+    } else {
+      hideRef.current?.()
     }
   }, [sessionId, active])
 

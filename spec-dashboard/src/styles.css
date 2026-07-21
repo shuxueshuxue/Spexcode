@@ -1475,7 +1475,7 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .fv-send:disabled { opacity: 0.45; cursor: default; }
 
-.si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+.si-content { --si-dock-h: 44px; position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
@@ -1613,12 +1613,8 @@ a.scenario-count:hover { background: var(--panel2); }
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
-/* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
-   strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */
-.si-content.is-session .si-term-body { animation: si-expand .22s ease; }
 /* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
-.si-content.is-session { --si-dock-h: 44px; }
 /* @@@ session toolbar — one compact row: current surface | Eval door | registry command tools. Identity/state
    already belongs to the selected sidebar row. The session wrapper is the responsive boundary because the
    list is draggable: viewport media queries cannot know how narrow the terminal pane actually is. */
@@ -1718,12 +1714,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: var(--type-meta); white-space: nowrap; }
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-/* entrance for the session terminal — fade + a small rise, NOT scale(): a scaling transform distorts
-   xterm's getBoundingClientRect-based cell measurement mid-animation, which (with the FitAddon) is one
-   source of the "narrow strip" shrink. translateY leaves the measured box undistorted at every frame, so
-   the final/any fit measures the true full width. SessionTerm also re-fits on animationend to be sure. */
-@keyframes si-expand { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
 /* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host and
    wrapper clip the terminal chrome; history and wheel navigation are sent to the tmux bridge so there is no
    browser-owned terminal scrollbar competing with the pane. The box is shortened above the docked ❯ box. */

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { uiCommandsFor } from './sessionCommands.js'
+import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
@@ -73,6 +73,17 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.match(source, /const pressed = c\.pressed \? typeMode : undefined/)
   assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}/)
   assert.match(icons, /keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)
+})
+
+test('live inbox commands order board, preset, then harness and deduplicate by that precedence', () => {
+  const board = [{ name: 'close', ui: true }]
+  const presets = [{ name: 'rename', desc: 'Rename this session' }, { name: 'close', desc: 'Wrong twin' }]
+  const harness = [{ name: 'rename', description: 'Harness rename' }, { name: 'help', source: 'built-in' }]
+  const commands = inboxCommands(board, presets, harness)
+
+  assert.deepEqual(commands.map((command) => command.name), ['close', 'rename', 'help'])
+  assert.equal(commands[1].source, 'preset')
+  assert.match(source, /inboxCommands\(ui, commandPresets, slashCmds\)/)
 })
 
 test('toolbar is a fixed compact row with no identity track and stable tool geometry', () => {

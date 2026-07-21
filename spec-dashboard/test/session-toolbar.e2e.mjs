@@ -181,6 +181,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const input = page.locator('.si-bottom textarea')
   const readSlashRows = () => page.locator('.mention-menu.up .mention-item').evaluateAll((rows) => rows.map((row) => ({
     name: row.querySelector('.slash-name')?.textContent?.trim(),
+    source: row.querySelector('.slash-src')?.textContent?.trim(),
     ui: row.querySelector('.slash-src')?.textContent?.trim() === '[ui]',
     color: getComputedStyle(row.querySelector('.slash-name')).color,
   })))
@@ -191,6 +192,8 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const stopRows = (await readSlashRows()).filter((row) => row.name === '/stop')
   await input.fill('/exit')
   const exitRows = (await readSlashRows()).filter((row) => row.name === '/exit')
+  await input.fill('/rename')
+  const renameRows = (await readSlashRows()).filter((row) => row.name === '/rename')
   const tokenColors = await page.evaluate(() => {
     const probe = (name) => {
       const element = document.createElement('span')
@@ -206,6 +209,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const toolColors = Object.fromEntries(result.wide.actionDetails.map((tool) => [tool.name, tool.color]))
   const slashParity = JSON.stringify(slashLead.filter((row) => row.ui).slice(0, 5).map((row) => row.name)) === JSON.stringify(['/type', '/eval', '/merge', '/stop', '/close'])
     && stopRows.length === 1 && stopRows[0].ui && exitRows.length === 1 && !exitRows[0].ui
+    && renameRows.length === 1 && renameRows[0].source === '[preset]'
     && toolColors.type === tokenColors.yellow && toolColors.merge === tokenColors.green
     && slashColors['/type'] === toolColors.type && slashColors['/merge'] === toolColors.merge
     && slashColors['/eval'] === result.wide.door.iconColor && slashColors['/eval'] === tokenColors.cyan
@@ -215,7 +219,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.keyboard.press('Enter')
   await page.locator('.si-bottom.type').waitFor({ state: 'visible' })
   const activeProbe = await toolbarProbe(page)
-  check('slash registry parity and typed /type activate one twin', slashParity && await page.locator('.si-tool.type.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { slashLead, stopRows, exitRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
+  check('slash registry parity and typed /type activate one twin', slashParity && await page.locator('.si-tool.type.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { slashLead, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
   await page.locator('.si-tool.type').click()
   await input.waitFor({ state: 'visible' })
   check('click twin exits type mode', await page.locator('.si-tool.type[aria-pressed="false"]').count() === 1)

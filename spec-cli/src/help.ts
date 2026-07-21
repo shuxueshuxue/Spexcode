@@ -14,7 +14,8 @@
 type Entry = { line: string; body: string; see?: string }
 
 const SEL_NOTE = `SEL = session id (or unique id-prefix) | node id | branch — every session read/control verb
-accepts any of the three; on the list verbs (ls/watch), none (or @all) means every session.`
+accepts any of the four; inside a session worktree, . means that worktree's session. On the list verbs (ls/watch),
+none (or @all) means every session.`
 
 const ROUTING_NOTE = `Backend routing: every backend-touching verb accepts --api <url> (--port <n> = localhost sugar) to name
 its backend explicitly — the flag always wins. Bare, it resolves: worker env / the cwd project's live

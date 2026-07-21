@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/styles.test.mjs
+  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs
   - spec-cli/src/index.ts
   - spec-cli/test/pty-bridge.attach-repaint.ts
   - spec-cli/test/pty-bridge.cold-incremental.ts
@@ -43,9 +44,13 @@ that client rendering instead of becoming a second terminal emulator.
 This boundary also owns resize as one transaction. The browser measures the desired grid without first
 reflowing xterm's old buffer, and the bridge resizes the native client PTY. Once the final native tmux
 transaction is ready, the bridge commits its grid dimensions immediately before those bytes; xterm changes
-grid and applies the transaction under one synchronized-output hold. Until then the already-painted buffer
-remains visible. A TUI may respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor
-an extra full-screen snapshot becomes an intermediate frame.
+grid and applies the transaction under one synchronized-output hold. The pinned terminal engine treats an
+explicit renderer resize as part of that hold: while DEC 2026 is active it defers the renderer mutation, then
+flushes the new grid before rendering the buffered rows when the transaction closes. This small version-locked,
+fail-loud dependency correction keeps atomicity inside the one terminal engine instead of adding an application
+snapshot, second renderer, or private runtime hook. Until commit the existing buffer remains visible. A TUI may
+respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor an extra reconstructed
+screen becomes an intermediate frame.
 
 Native attach is the same repaint transaction, not a bypass around it. If attaching the visible helper leaves
 tmux geometry unchanged, the first complete native transaction is released directly. If attach changes
@@ -118,7 +123,12 @@ viewer releases it even though hidden sockets and xterm buffers remain alive.
 
 Visibility is the only helper lifecycle switch. A visible claim always carries the viewer's measured grid;
 that one resize message both creates the helper when needed and owns later geometry transactions. Hiding the
-viewer releases the helper when no visible claim remains. There is no second prewarm protocol. Multiple visible
+viewer releases the helper when no visible claim remains. A browser viewer is visible only while both its
+dashboard session layer and its document are visible. Backgrounding the browser tab therefore withdraws the
+same claim: the socket and cached xterm remain, but no pane deltas accumulate for replay. Returning exposes the
+cache immediately and the ordinary measured resize recreates the native helper, whose attach batch replaces it
+with the current tmux screen. There is no resume replay or page-specific repaint protocol. There is no second
+prewarm protocol. Multiple visible
 viewers of one session share the backend's helper at the smallest visible rows and columns, so its one grid fits
 every viewer and no narrower browser clips the right or bottom edge. Hiding or detaching the limiting viewer
 recomputes that same minimum and lets the remaining viewers expand. A viewer joining an existing helper receives

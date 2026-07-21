@@ -7,6 +7,8 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
 const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
+const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
+const xtermRuntime = readFileSync(join(here, '../node_modules/@xterm/xterm/lib/xterm.mjs'), 'utf8')
 
 test('dashboard typography declarations use the shared scale', () => {
   const contracts = {
@@ -36,6 +38,20 @@ test('read-only terminal keeps selection off application mouse reporting', () =>
   assert.match(terminal, /term\.parser\.registerCsiHandler\([\s\S]*onlyMouseReportModes/)
   assert.match(terminal, /term\.attachCustomWheelEventHandler/)
   assert.doesNotMatch(terminal, /shouldForceSelection/)
+})
+
+test('pinned xterm defers renderer resize inside synchronized output', () => {
+  assert.match(xtermRuntime, /_isPaused\|\|this\._coreService\.decPrivateModes\.synchronizedOutput/)
+  assert.match(xtermRuntime, /synchronizedOutput\)\{this\._syncOutputHandler\.bufferRows\([^)]+\);return\}this\._pausedResizeTask\.flush\(\)/)
+  assert.doesNotMatch(terminal, /st-frame-latch|holdRenderedFrame|_renderService/)
+})
+
+test('browser page visibility reuses the terminal viewer lifecycle', () => {
+  assert.match(terminal, /viewerIsVisible\s*=\s*\(\)\s*=>\s*activeRef\.current\s*&&\s*document\.visibilityState\s*!==\s*'hidden'/)
+  assert.match(terminal, /document\.addEventListener\('visibilitychange', onDocumentVisibility\)/)
+  assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)
+  assert.match(terminal, /lastSizeRef\.current\s*=\s*\{ cols: 0, rows: 0 \}\s*measureAndRequest\(\)/)
+  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && id === active\}/)
 })
 
 test('document pages share one inset page-scroll geometry', () => {

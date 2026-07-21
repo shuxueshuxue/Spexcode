@@ -334,7 +334,8 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   const { context, page } = await fixturePage({ width: 641, listWidth: 480, status: 'review', liveness: 'online' })
   const edge = await toolbarProbe(page)
   result.desktopEdge = edge
-  check('desktop boundary preserves the review toolbar', edge.bounds.width >= 279 && edge.overflow.length === 0 && edge.scrollWidth === edge.clientWidth && JSON.stringify(edge.roles.actions) === JSON.stringify(['type', 'merge']), edge)
+  // The resident type tool anchors right, so transient `merge` renders to its left: DOM order is merge→type.
+  check('desktop boundary preserves the review toolbar', edge.bounds.width >= 279 && edge.overflow.length === 0 && edge.scrollWidth === edge.clientWidth && JSON.stringify(edge.roles.actions) === JSON.stringify(['merge', 'type']), edge)
   await page.screenshot({ path: join(OUT, 'B-desktop-edge-641.png'), fullPage: true })
   await context.close()
 }
@@ -354,8 +355,8 @@ for (const lang of ['en', 'zh']) {
 
 for (const state of [
   { status: 'working', liveness: 'online', actions: ['type'] },
-  { status: 'review', liveness: 'online', actions: ['type', 'merge'] },
-  { status: 'done', liveness: 'online', actions: ['type', 'merge'] },
+  { status: 'review', liveness: 'online', actions: ['merge', 'type'] },
+  { status: 'done', liveness: 'online', actions: ['merge', 'type'] },
   { status: 'asking', liveness: 'offline', actions: ['relaunch'] },
   { status: 'review', liveness: 'offline', actions: ['relaunch'] },
   { status: 'queued', liveness: 'offline', actions: [] },

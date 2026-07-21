@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
+import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
@@ -67,9 +67,12 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
   assert.deepEqual(tools('review', 'online'), [['type', 'keyboard'], ['merge', 'git-merge']])
   assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw']])
+  // The registry keeps `type` first (the inbox `/` menu leads with it); only the toolbar render anchors the
+  // resident tool to the right edge, so the sort must be present between the button filter and the map.
+  assert.equal(UI_COMMANDS.find((c) => c.name === 'type').anchor, 'right')
   assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness\)/)
   assert.match(source, /if \(typeAvailable\) setTypeMode/)
-  assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)\.map/)
+  assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)[\s\S]*?\.sort\(\(a, b\) => \(a\.anchor === 'right' \? 1 : 0\) - \(b\.anchor === 'right' \? 1 : 0\)\)[\s\S]*?\.map/)
   assert.match(source, /const pressed = c\.pressed \? typeMode : undefined/)
   assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}/)
   assert.match(icons, /keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)

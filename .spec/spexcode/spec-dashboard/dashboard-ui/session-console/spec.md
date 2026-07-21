@@ -259,7 +259,10 @@ routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based fo
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
 reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **toolbar's command
 group** renders the same board-command registry, narrowed to the current state: **type** whenever live and
-**merge** at review/done. Every visible action uses one shared compact icon-toolbutton primitive and a familiar
+**merge** at review/done. **Type is the resident tool and always sits at the group's right edge** — it is the
+one command present the whole time a session is live, so its position stays fixed while the transient action
+buttons (merge, and relaunch when offline) render to its **left** and never push it around; only the toolbar
+render carries this anchoring (the typed inbox `/` menu still leads with `/type` in registry order). Every visible action uses one shared compact icon-toolbutton primitive and a familiar
 [[icon-system]] / Lucide mark (keyboard/type, git-merge, rotate/relaunch), with its registry identity colour;
 there is no emoji, visible text label, or toolbar-local icon/action mapping. The registry remains the single row
 that decides availability, colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution.

@@ -894,7 +894,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </a>
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
-                  {uiCmds.filter((c) => c.button).map((c) => {
+                  {uiCmds.filter((c) => c.button)
+                    // Resident right-anchored tools (type) sort to the row's right edge; transient action
+                    // buttons keep their registry order to its left. Stable sort preserves that left order.
+                    .sort((a, b) => (a.anchor === 'right' ? 1 : 0) - (b.anchor === 'right' ? 1 : 0))
+                    .map((c) => {
                     // Toggle/suggestion semantics are registry metadata too; the renderer only projects the
                     // live values into the shared primitive instead of naming a command locally.
                     const pressed = c.pressed ? typeMode : undefined

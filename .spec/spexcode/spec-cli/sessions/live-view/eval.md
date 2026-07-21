@@ -26,24 +26,29 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >-
       View two live sessions through the real dashboard, switch away from each so both retain a browser
-      buffer, then record every browser paint while repeatedly switching between them.
+      buffer, then record every browser paint while repeatedly switching between them — both quickly
+      (inside the bounded linger window) and again after the helper release.
     expected: >-
-      The first visible paint already contains the fitted xterm's cached pixels. No empty renderer,
-      undersized first layout, renderer replacement, or socket reconnect appears. Native reattach happens
-      behind the cached frame and replaces it only with a complete native redraw; hidden layers remain
-      visually hidden and non-interactive.
+      A switch-back inside the linger window is seamless continuation: the buffer kept consuming the native
+      stream while hidden, so the first visible paint is already the current screen and no reattach, repaint
+      transaction, empty renderer, undersized first layout, renderer replacement, or socket reconnect
+      appears — output simply continues in place. Past the window the first visible paint still contains the
+      cached pixels, and native reattach happens behind that frame, replacing it only with a complete native
+      redraw. Hidden layers remain visually hidden and non-interactive.
   - name: background-return-resyncs-current-screen
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
       View a live tmux pane that updates a visible sequence number several times per second, move to another
-      browser tab long enough for the dashboard page to be suspended, then return while recording terminal
-      text, WebSocket frames, helper lifecycle, and every browser paint.
+      browser tab past the bounded linger window (long enough for the dashboard page to be suspended), then
+      return while recording terminal text, WebSocket frames, helper lifecycle, and every browser paint.
     expected: >-
       Browser-page visibility participates in the same viewer lifecycle as dashboard-session visibility.
-      While the page is hidden it retains the browser terminal and socket but holds no native helper and
-      receives no continuing pane deltas. Return exposes the cached pixels immediately, then one native attach
-      replaces them with the current complete tmux screen. The user never watches queued historical deltas
-      fast-forward to the present, and no second replay, capture, or page-specific terminal path exists.
+      Within the linger window the hidden page keeps the helper and its buffer keeps consuming the live
+      stream, so an early return continues output in place. Once the window elapses the helper is released:
+      the page retains the browser terminal and socket but holds no native helper and receives no continuing
+      pane deltas. A later return exposes the cached pixels immediately, then one native attach replaces them
+      with the current complete tmux screen. The user never watches queued historical deltas fast-forward to
+      the present, and no second replay, capture, or page-specific terminal path exists.
   - name: cold-visible-attach-is-atomic
     tags: [frontend-e2e, desktop, backend-api]
     description: >-
@@ -83,13 +88,19 @@ scenarios:
       markers retain their normal behavior. No DOM latch or second renderer covers intermediate states.
   - name: hidden-subscription-holds-no-pty
     tags: [backend-api]
+    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
     description: >-
       Open hidden terminal sockets for several live sessions, resize the hidden browser layers, then make one
-      viewer visible and hide it again while inspecting helper processes, tmux clients, and pane geometry.
+      viewer visible and hide it again, observing across the bounded linger window while inspecting helper
+      processes, tmux clients, and pane geometry.
     expected: >-
       Hidden sockets and xterms remain mounted but create no helper, receive no pane pixels, and do not resize
-      tmux. The first visible viewer creates exactly one native helper at the measured size; hiding the last
-      visible viewer releases it without closing the socket or clearing the browser buffer. No observer exists.
+      tmux. The first visible viewer creates exactly one native helper at the measured size. Hiding the last
+      visible viewer arms one bounded linger: the helper survives the window streaming only to the lingering
+      subscription, a return claim inside it at the unchanged grid resumes the same helper with no repaint,
+      and a window with no visible claim releases the helper without closing the socket or clearing the
+      browser buffer. A subscription that was never visible receives no pixels even during a sibling's
+      linger. No observer exists.
   - name: helper-isolates-pty-masters
     tags: [backend-api]
     description: >-
@@ -109,6 +120,16 @@ scenarios:
       Native attach/refresh supplies each blank xterm with the current complete tmux screen through the same
       raw stream; helper restoration updates both existing subscriptions without a socket reconnect,
       capture splice, doubled bottom UI, or stale cursor-relative redraw.
+  - name: viewport-clips-no-phantom-scrollbar
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the running dashboard, view a live session terminal and inspect the pane viewport's computed
+      overflow, including under a fractional device-pixel ratio where xterm's content height can overshoot
+      the host by a sub-pixel. Screenshot the terminal's right edge.
+    expected: >-
+      The pane viewport clips on both axes: its computed overflow is hidden, so no themed browser scrollbar
+      can float over the terminal's right edge under any DPR or geometry overshoot. Wheel input still travels
+      to the real tmux client — no browser scroll region exists to compete with tmux's own scrolling.
   - name: wheel-uses-real-tmux-client
     tags: [backend-api]
     description: >-

@@ -43,6 +43,8 @@ scenarios:
       The already-open socket creates one native helper at the measured visible grid. A short wait for native
       attach is allowed, but the first terminal content is one complete tmux rendition: no synthetic capture,
       progressive top-to-bottom sweep, standalone clear, eager wrong-size reflow, or repeated full-screen flash.
+      The rendition contains the pane only: no tmux status row or other client chrome, and an N-row browser
+      grid gives the pane all N rows.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-

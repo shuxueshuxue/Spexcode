@@ -92,6 +92,11 @@ The helper's stdout is raw terminal output and its stdin is a small resize/navig
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
 at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
 
+The browser view contains the pane, not tmux's client chrome. Before native attach the helper disables the
+target session's status line, so a browser grid of N rows gives the pane N rows instead of N-1 pane rows plus
+a styled tmux status row. This is a session option at the tmux boundary, not a browser crop or colour filter;
+later human attaches to that SpexCode-owned session see the same status-free pane.
+
 ## one visibility lifecycle
 
 Browser readiness and native rendering have deliberately different lifetimes. Every live session mounts its

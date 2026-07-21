@@ -66,7 +66,11 @@ async function main(): Promise<void> {
     if (payload.includes(Buffer.from('INITIAL'))) throw new Error('attach exposed the pre-resize screen')
     if (begin < 0 || end < begin || !payload.includes(Buffer.from('FINAL'))) throw new Error('attach did not emit one complete final transaction')
     if (commits.join(',') !== `${SIZE.cols}x${SIZE.rows}`) throw new Error(`unexpected size commits: ${commits.join(',')}`)
-    console.log(`PASS: cold attach withheld delayed clear and emitted one ${payload.length}-byte FINAL transaction at ${commits[0]}`)
+    const geometry = (await tmux('display-message', '-p', '-t', SESSION, '#{status}|#{window_width}x#{window_height}')).stdout.trim()
+    if (geometry !== `off|${SIZE.cols}x${SIZE.rows}`) {
+      throw new Error(`native client chrome consumed pane rows (${geometry})`)
+    }
+    console.log(`PASS: cold attach emitted one ${payload.length}-byte FINAL transaction at ${commits[0]}, with status off and a full-height pane`)
   } finally {
     detachViewer(SESSION, viewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})

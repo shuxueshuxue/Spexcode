@@ -79,6 +79,25 @@ scenarios:
       with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
       verdict-note input, no file-reading button (readings are filed by agents via `spex eval add`; the
       human judges through the remark composer). Switching selection resets the working draft.
+  - name: no-instructional-caption
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EventDetail.jsx]
+    description: >
+      Open a VIDEO reading's detail page (#/evals/<node>/<scenario>). Read the DOM of the evidence
+      workspace UNDER the custom review-track player: is there any always-visible instructional caption
+      strip — a usage-hint line ('.an-hint' carrying "click the frame to play/pause…") or a
+      keyboard-shortcut legend ('.an-keys', "space play/pause · ←→ 5s…")? Scan the whole rendered page for
+      that baked hint text. Confirm the player itself is intact: the '.an-player' wrapper, the '.an-seek'
+      scrubber, the step ruler, and playback (press Space).
+    expected: |
+      The evidence workspace renders NO always-visible instructional caption strip under the player: no
+      '.an-keys' legend and no usage-hint '.an-hint' line exist under a video reading (the '.an-hint'
+      class survives only as the no-evidence sentinel elsewhere), and neither the "click the frame to
+      play/pause…" nor the "space play/pause…" text appears anywhere on the page — so a captured frame or
+      screenshot of the stage carries only the reading, never baked-in hint text. The restraint matches the
+      docked composer's own no-hint-line decision. The keyboard-driven surface is unchanged: the custom
+      player, its scrubber + markers + step ruler render and playback still works — the affordances are
+      self-evident, they are simply no longer captioned on screen.
   - name: anchor-carries-frame
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/Thread.jsx]

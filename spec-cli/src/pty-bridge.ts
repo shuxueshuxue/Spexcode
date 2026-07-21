@@ -12,7 +12,7 @@ export type Viewer = {
   commitSize?: (cols: number, rows: number) => void
 }
 
-type Subscription = { visible: boolean }
+type Subscription = { visible: boolean; cols: number; rows: number }
 type Bridge = {
   id: string
   proc: ChildProcessWithoutNullStreams
@@ -30,6 +30,7 @@ type Bridge = {
   barrierSawLayout: boolean
   barrierSawBegin: boolean
   probeSawBegin: boolean
+  batchFromAttach: boolean
   refreshBuf: Buffer
   refreshCommandDone: boolean
   attachTimer?: ReturnType<typeof setTimeout>
@@ -55,6 +56,16 @@ function hasVisibleViewer(id: string): boolean {
     if (subscription.visible) return true
   }
   return false
+}
+
+function visibleSize(id: string): { cols: number; rows: number } | undefined {
+  let cols = Infinity, rows = Infinity
+  for (const subscription of subscribers.get(id)?.values() ?? []) {
+    if (!subscription.visible || subscription.cols <= 0 || subscription.rows <= 0) continue
+    cols = Math.min(cols, subscription.cols)
+    rows = Math.min(rows, subscription.rows)
+  }
+  return Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : undefined
 }
 
 function broadcast(id: string, data: Buffer): void {
@@ -128,7 +139,6 @@ function feedProbe(bridge: Bridge, chunk: Buffer): void {
       if (bridge.barrier === 'attach') {
         bridge.barrierSawLayout = true
         bridge.barrier = bridge.syncCapable ? 'app' : 'settle'
-        bridge.refreshBuf = Buffer.alloc(0)
         if (bridge.attachTimer) clearTimeout(bridge.attachTimer)
         bridge.attachTimer = undefined
         armBarrierTimeout(bridge, bridge.barrier === 'app' ? 1000 : 400)
@@ -156,8 +166,12 @@ function onHelperOutput(bridge: Bridge, chunk: Buffer): void {
     scheduleAttachFinish(bridge)
     return
   }
-  if (bridge.barrier === 'app') return
-  if (bridge.barrier === 'settle') return
+  if (bridge.barrier === 'app' || bridge.barrier === 'settle') {
+    if (bridge.batchFromAttach) {
+      bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
+    }
+    return
+  }
 
   bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
   scheduleAtomicRefreshFinish(bridge)
@@ -210,7 +224,7 @@ function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge 
     id, proc, probe, cols, rows, stderr: '', refreshWhenReady: false,
     probeBuf: Buffer.alloc(0), probeTail: Buffer.alloc(0), syncCapable: synchronizedSessions.has(id),
     barrier: 'attach', barrierSawLayout: false, barrierSawBegin: false, probeSawBegin: false,
-    refreshBuf: Buffer.alloc(0), refreshCommandDone: false,
+    batchFromAttach: true, refreshBuf: Buffer.alloc(0), refreshCommandDone: false,
   }
   bridges.set(id, bridge)
   proc.stdout.on('data', (data: Buffer) => onHelperOutput(bridge, data))
@@ -253,6 +267,7 @@ function beginBarrier(bridge: Bridge): void {
   bridge.barrier = bridge.syncCapable ? 'app' : 'settle'
   bridge.barrierSawLayout = false
   bridge.barrierSawBegin = false
+  bridge.batchFromAttach = false
   if (bridge.barrier === 'app') armBarrierTimeout(bridge)
   else {
     bridge.barrierTimer = setTimeout(() => awaitAtomicRefresh(bridge), 400)
@@ -276,6 +291,7 @@ function clearBarrier(bridge: Bridge): void {
   bridge.barrier = 'none'
   bridge.barrierSawLayout = false
   bridge.barrierSawBegin = false
+  bridge.batchFromAttach = false
   if (bridge.barrierTimer) clearTimeout(bridge.barrierTimer)
   if (bridge.settleTimer) clearTimeout(bridge.settleTimer)
   bridge.barrierTimer = undefined
@@ -288,21 +304,30 @@ function clearBarrier(bridge: Bridge): void {
   bridge.refreshFinishTimer = undefined
 }
 
+function firstCompleteTransactionStart(bridge: Bridge): number | undefined {
+  const begin = bridge.refreshBuf.indexOf(BSU)
+  const end = begin >= 0 ? bridge.refreshBuf.indexOf(ESU, begin + BSU.length) : -1
+  return begin >= 0 && end >= begin ? begin : undefined
+}
+
+function releaseNativeBatch(bridge: Bridge, begin: number): void {
+  // A native client repaint is cumulative. A busy pane can append small complete diffs and the beginning of
+  // another transaction while the barrier drains; selecting one BSU/ESU pair would either discard the full
+  // repaint or tear off that trailing update. Resume the raw stream from the path's sound boundary without
+  // dropping another byte.
+  const batch = bridge.refreshBuf.subarray(begin)
+  commitSize(bridge)
+  clearBarrier(bridge)
+  broadcast(bridge.id, batch)
+}
+
 function scheduleAttachFinish(bridge: Bridge): void {
   if (bridge.barrier !== 'attach' || bridge.attachTimer) return
-  const end = bridge.refreshBuf.lastIndexOf(ESU)
-  const begin = end >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, end) : -1
-  if (begin < 0 || end < begin) return
+  if (firstCompleteTransactionStart(bridge) === undefined) return
   bridge.attachTimer = setTimeout(() => {
     bridge.attachTimer = undefined
     if (bridge.barrier !== 'attach' || bridge.barrierSawLayout) return
-    const finalEnd = bridge.refreshBuf.lastIndexOf(ESU)
-    const finalBegin = finalEnd >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, finalEnd) : -1
-    if (finalBegin < 0 || finalEnd < finalBegin) return
-    const transaction = bridge.refreshBuf.subarray(finalBegin, finalEnd + ESU.length)
-    commitSize(bridge)
-    clearBarrier(bridge)
-    broadcast(bridge.id, transaction)
+    if (firstCompleteTransactionStart(bridge) !== undefined) releaseNativeBatch(bridge, 0)
   }, 30)
   bridge.attachTimer.unref()
 }
@@ -312,7 +337,7 @@ function awaitAtomicRefresh(bridge: Bridge): void {
   if (bridge.settleTimer) clearTimeout(bridge.settleTimer)
   bridge.settleTimer = undefined
   bridge.barrier = 'refresh'
-  bridge.refreshBuf = Buffer.alloc(0)
+  if (!bridge.batchFromAttach) bridge.refreshBuf = Buffer.alloc(0)
   bridge.refreshCommandDone = false
   armBarrierTimeout(bridge)
   void refreshBridge(bridge).then(() => {
@@ -334,13 +359,8 @@ function scheduleAtomicRefreshFinish(bridge: Bridge): void {
 
 function finishAtomicRefresh(bridge: Bridge): void {
   if (bridge.barrier !== 'refresh') return
-  const end = bridge.refreshBuf.lastIndexOf(ESU)
-  const begin = end >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, end) : -1
-  if (begin < 0 || end < begin) return
-  const transaction = bridge.refreshBuf.subarray(begin, end + ESU.length)
-  commitSize(bridge)
-  clearBarrier(bridge)
-  broadcast(bridge.id, transaction)
+  const transactionStart = firstCompleteTransactionStart(bridge)
+  if (transactionStart !== undefined) releaseNativeBatch(bridge, bridge.batchFromAttach ? 0 : transactionStart)
 }
 
 function failOpenBarrier(bridge: Bridge): void {
@@ -379,14 +399,27 @@ function resize(bridge: Bridge, cols: number, rows: number): void {
 }
 
 export function attachViewer(id: string, viewer: Viewer): void {
-  subscriptionMap(id).set(viewer, { visible: false })
+  subscriptionMap(id).set(viewer, { visible: false, cols: 0, rows: 0 })
+}
+
+function syncBridgeToViewers(id: string, refreshSameSize: boolean): void {
+  const size = visibleSize(id)
+  if (!size) { killBridge(id); return }
+  lastSize.set(id, size)
+  const { bridge, created } = ensureBridge(id, size.cols, size.rows)
+  if (!bridge) return
+  if (!created && bridge.cols === size.cols && bridge.rows === size.rows) {
+    if (refreshSameSize) void refreshBridge(bridge)
+  } else {
+    resize(bridge, size.cols, size.rows)
+  }
 }
 
 export function hideViewer(id: string, viewer: Viewer): void {
   const subscription = subscribers.get(id)?.get(viewer)
   if (!subscription) return
   subscription.visible = false
-  if (!hasVisibleViewer(id)) killBridge(id)
+  syncBridgeToViewers(id, false)
 }
 
 export function detachViewer(id: string, viewer: Viewer): void {
@@ -394,7 +427,7 @@ export function detachViewer(id: string, viewer: Viewer): void {
   if (!subscriptions) return
   subscriptions.delete(viewer)
   if (subscriptions.size === 0) subscribers.delete(id)
-  if (!hasVisibleViewer(id)) killBridge(id)
+  syncBridgeToViewers(id, false)
 }
 
 export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {
@@ -403,12 +436,9 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
   const subscription = subscribers.get(id)?.get(viewer)
   if (!subscription) return
   subscription.visible = true
-  const size = { cols, rows }
-  lastSize.set(id, size)
-  const { bridge, created } = ensureBridge(id, cols, rows)
-  if (!bridge) return
-  if (!created && bridge.cols === cols && bridge.rows === rows) void refreshBridge(bridge)
-  else resize(bridge, cols, rows)
+  subscription.cols = cols
+  subscription.rows = rows
+  syncBridgeToViewers(id, true)
 }
 
 export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {

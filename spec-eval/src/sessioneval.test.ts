@@ -22,6 +22,7 @@ import {
   sessionEvalNodeCandidate,
   unknownCoveragePaths,
   type ExportModel,
+  type SessionEvalNode,
 } from './sessioneval.js'
 import type { EvalTimeline, EvalEntry } from './evaltab.js'
 import type { Scenario } from './scenarios.js'
@@ -275,14 +276,14 @@ const deferred = <T>() => {
 }
 
 test('sessionEvalSummary is the declared-bounded full/graph projection', () => {
-  const nodes = [{
+  const nodes: SessionEvalNode[] = [{
     id: 'n', title: 'n', hue: 1, desc: '', hasEvalFile: true, uncoveredFrontend: false,
     unknownCoverage: ['src/unknown.jsx'],
     scenarios: [
-      { name: 'pass', expected: '', impact: ['code'] as const },
-      { name: 'fail', expected: '', impact: ['code'] as const },
-      { name: 'stale', expected: '', impact: ['code'] as const },
-      { name: 'blind', expected: '', impact: ['code'] as const },
+      { name: 'pass', expected: '', impact: ['code'] },
+      { name: 'fail', expected: '', impact: ['code'] },
+      { name: 'stale', expected: '', impact: ['code'] },
+      { name: 'blind', expected: '', impact: ['code'] },
     ],
     evals: [
       { ...reading({ scenario: 'pass', fresh: true, verdict: { status: 'pass' } }), inSession: false },
@@ -397,6 +398,43 @@ test('observer holds fence in-flight work and resubscribe computes the missed wi
   assert.equal(builds, 3, 'the fully restored observer set authorizes one latest-window rescan')
   assert.deepEqual(cache.get('s'), {
     epoch: 'epoch', generation: 5, phase: 'ready', revision: 'r3', value: summary(3),
+  })
+})
+
+test('cold scoped demand waits through composed observer holds, then returns the authoritative empty projection', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: 'empty-r1', summary: summary(0) }
+  }, () => {}, 'epoch')
+  const sessions = [{ id: 'new-session', path: '/wt/new-session' }]
+
+  cache.holdObserver('refs', 'all')
+  cache.holdObserver('worktree', { path: '/wt/new-session' })
+  assert.equal(cache.snapshot(sessions).get('new-session')?.phase, 'updating')
+
+  let settled = false
+  const demand = cache.waitUntilObservable('new-session', '/wt/new-session', 1_000).then(async (observable) => {
+    settled = true
+    assert.equal(observable, true)
+    cache.snapshot(sessions)
+    await cache.idle()
+    return cache.get('new-session')
+  })
+  await Promise.resolve()
+  assert.equal(settled, false)
+  assert.equal(builds, 0, 'a held cold demand must not certify a projection')
+
+  cache.releaseObserver('worktree')
+  await Promise.resolve()
+  assert.equal(settled, false, 'restoring one observer must not mask the remaining hold')
+  assert.equal(builds, 0)
+
+  cache.releaseObserver('refs')
+  const projection = await demand
+  assert.equal(builds, 1, 'recovery authorizes exactly one authoritative build')
+  assert.deepEqual(projection, {
+    epoch: 'epoch', generation: 2, phase: 'ready', revision: 'empty-r1', value: summary(0),
   })
 })
 

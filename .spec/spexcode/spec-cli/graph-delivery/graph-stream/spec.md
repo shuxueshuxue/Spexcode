@@ -54,9 +54,10 @@ are ignored; generated project paths are not guessed away, because an adopter ma
 pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
 projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the
 graph rebuild: the affected summary remains updating with last-known and cannot compute current while the source
-is absent. The one immediate resubscribe attempt installs its replacement first, removes only that source's hold,
-then advances and performs an authoritative rebuild; a persistent failure remains held until a later canonical
-registry/request setup retries it. And (0) the exported explicit nudge (`notifyBoardChanged`) for
+is absent. Worktree resubscription retries with bounded backoff while the hold remains; the successful attempt
+installs its replacement first, removes only that source's hold, then advances and performs an authoritative
+rebuild. A persistent failure remains held and every retry remains only an observer repair — it never certifies
+data or substitutes a periodic fingerprint build. And (0) the exported explicit nudge (`notifyBoardChanged`) for
 a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions', and the
 issue/remark write routes pass 'full' **atomically with their store persist** ([[remark-substrate]]
 write-visibility: the writer's own post-write refetch must never race an asynchronous fs event into the

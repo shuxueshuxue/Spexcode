@@ -767,6 +767,10 @@ export type SessionEvalProjection = {
   lastKnown?: { generation: number; revision: string; value: SessionEvalSummary }
 }
 
+export class SessionEvalUnavailableError extends Error {
+  override name = 'SessionEvalUnavailableError'
+}
+
 // The one count projection over the already-affected rows. This is the backend source both the graph
 // glance and the demand full model carry; consumers never repeat impact selection or score classification.
 export function sessionEvalSummary(nodes: SessionEvalNode[]): SessionEvalSummary {
@@ -981,10 +985,11 @@ export class SessionEvalProjectionCache {
   readonly epoch: string
   private readonly entries = new Map<string, ProjectionEntry>()
   private readonly observerHolds = new Map<string, ProjectionTarget>()
+  private readonly observerWaiters = new Set<() => void>()
   private batch: Promise<void> | null = null
   private notify: () => void
 
-  constructor(private readonly build: SessionEvalSummaryBuilder, notify: () => void = () => {}, epoch = randomUUID()) {
+  constructor(private readonly build: SessionEvalSummaryBuilder, notify: () => void = () => {}, epoch: string = randomUUID()) {
     this.notify = notify
     this.epoch = epoch
   }
@@ -1055,6 +1060,7 @@ export class SessionEvalProjectionCache {
       entry.phase = 'updating'
       entry.scheduled = null
     }
+    for (const check of [...this.observerWaiters]) check()
     return true
   }
 
@@ -1062,6 +1068,25 @@ export class SessionEvalProjectionCache {
     const entry = this.entries.get(id)
     if (entry?.observerHolds.size) return true
     return [...this.observerHolds.values()].some((target) => this.matches({ id, path }, target))
+  }
+
+  waitUntilObservable(id: string, path: string, timeoutMs: number): Promise<boolean> {
+    if (!this.isObserverHeld(id, path)) return Promise.resolve(true)
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const finish = (observable: boolean) => {
+        if (timer) clearTimeout(timer)
+        this.observerWaiters.delete(check)
+        resolve(observable)
+      }
+      const check = () => {
+        if (!this.isObserverHeld(id, path)) finish(true)
+      }
+      this.observerWaiters.add(check)
+      timer = setTimeout(() => finish(false), Math.max(0, timeoutMs))
+      timer.unref?.()
+      check()
+    })
   }
 
   get(id: string): SessionEvalProjection | null {
@@ -1148,22 +1173,22 @@ export class SessionEvalProjectionCache {
   }
 }
 
-async function buildSummaryAttempt(id: string, path: string): Promise<SummaryBuildResult> {
-  const before = await sessionEvalContentRevision(path)
+async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBuildResult> {
+  const payload = await reviewPayload(id)
+  if (!payload) return { kind: 'missing' }
+  const wtPath = worktreePathForBranch(payload.branch)
+  const ctxPath = wtPath ?? repoRoot()
+  const before = await sessionEvalContentRevision(ctxPath)
   const cacheKey = `${id}\0${before}`
   const cached = summaryByContent.get(cacheKey)
   if (cached) {
-    const after = await sessionEvalContentRevision(path)
+    const after = await sessionEvalContentRevision(ctxPath)
     return before === after
       ? { kind: 'stable', revision: after, summary: cached }
       : { kind: 'unstable' }
   }
-  const payload = await reviewPayload(id)
-  if (!payload) return { kind: 'missing' }
-  const wtPath = worktreePathForBranch(payload.branch)
-  if (!wtPath) return { kind: 'missing' }
   const model = await buildSessionEvalModel(id, payload, wtPath, true)
-  const after = await sessionEvalContentRevision(path)
+  const after = await sessionEvalContentRevision(ctxPath)
   if (before !== after) return { kind: 'unstable' }
   const summary = sessionEvalSummary(model.nodes)
   // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
@@ -1174,6 +1199,12 @@ async function buildSummaryAttempt(id: string, path: string): Promise<SummaryBui
 
 const summaryByContent = new Map<string, SessionEvalSummary>()
 const projectionCache = new SessionEvalProjectionCache(buildSummaryAttempt)
+const OBSERVER_RECOVERY_TIMEOUT_MS = 10_000
+
+async function awaitObservableInputs(id: string, path: string): Promise<void> {
+  if (await projectionCache.waitUntilObservable(id, path, OBSERVER_RECOVERY_TIMEOUT_MS)) return
+  throw new SessionEvalUnavailableError('session eval inputs remain temporarily unobservable')
+}
 
 export function setSessionEvalProjectionNotify(notify: () => void): void { projectionCache.setNotify(notify) }
 export function sessionEvalProjections(sessions: { id: string; path: string }[]): Map<string, SessionEvalProjection> {
@@ -1201,18 +1232,17 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
     const payload = await reviewPayload(id)
     if (!payload) return null
     const wtPath = worktreePathForBranch(payload.branch)
-    if (!wtPath) return null
-    if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
+    const ctxPath = wtPath ?? repoRoot()
+    await awaitObservableInputs(id, ctxPath)
     const known = projectionCache.get(id)
     const generation = known?.generation ?? 0
-    const before = await sessionEvalContentRevision(wtPath)
+    const before = await sessionEvalContentRevision(ctxPath)
     const model = await buildSessionEvalModel(id, payload, wtPath, false)
-    const after = await sessionEvalContentRevision(wtPath)
+    const after = await sessionEvalContentRevision(ctxPath)
     const current = projectionCache.get(id)
-    if (before !== after || projectionCache.isObserverHeld(id, wtPath)
+    if (before !== after || projectionCache.isObserverHeld(id, ctxPath)
       || (current && current.generation !== generation)) {
       if (before !== after) projectionCache.invalidate({ id })
-      if (projectionCache.isObserverHeld(id, wtPath)) throw new Error('session eval inputs are temporarily unobservable')
       continue
     }
     const summary = sessionEvalSummary(model.nodes)

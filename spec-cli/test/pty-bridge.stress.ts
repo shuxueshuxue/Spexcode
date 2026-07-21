@@ -1,5 +1,5 @@
-// Stress proof for live-view byte-level decoding: a REAL `tmux -CC` control-mode bridge (the exact code path,
-// via attachViewer) is flooded with enough CJK + box-drawing + emoji lines to force multi-byte UTF-8 characters
+// Stress proof for the live native-client stream: the exact attachViewer path is flooded with enough CJK,
+// box-drawing, and emoji lines to force multi-byte UTF-8 characters
 // to straddle node-pty read boundaries — the condition that used to shatter them into U+FFFD. Assert the bytes
 // the bridge broadcasts, decoded as UTF-8, contain ZERO U+FFFD and the payload survives intact.
 //
@@ -40,7 +40,7 @@ async function main() {
     await sleep(20)
   }
   chunks.length = 0
-  // flood the pane; the program output streams back as %output events through the bridge's byte parser.
+  // Flood the pane; the helper carries the native tmux client's UTF-8 bytes without a second decoder.
   await tmux('send-keys', '-t', SESSION, '-l', `cat ${payload}; ${SENTINEL_CMD}`)
   await tmux('send-keys', '-t', SESSION, 'Enter')
 

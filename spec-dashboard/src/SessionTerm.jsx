@@ -7,10 +7,15 @@ import { apiUrl } from './project.js'
 import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.js'
 
 const SYNC_BEGIN = '\x1b[?2026h'
+const SYNC_END = '\x1b[?2026l'
 const MOUSE_REPORT_MODES = new Set([9, 1000, 1002, 1003, 1005, 1006, 1015, 1016])
 
 function onlyMouseReportModes(params) {
   return params.length > 0 && params.every((param) => typeof param === 'number' && MOUSE_REPORT_MODES.has(param))
+}
+
+function onlySynchronizedOutput(params) {
+  return params.length > 0 && params.every((param) => param === 2026)
 }
 
 function terminalTypography() {
@@ -115,6 +120,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       { prefix: '?', final },
       (params) => onlyMouseReportModes(params),
     ))
+    // A bridge-owned geometry frame already has one outer synchronized hold. tmux's native bytes contain
+    // their own 2026 pairs; treating those as nested would close the outer hold early because DEC mode 2026
+    // is boolean, not a counter. Consume only those inner markers while that exact frame is parsed.
+    let frameOwnsSync = false
+    const frameSyncHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
+      { prefix: '?', final },
+      (params) => frameOwnsSync && onlySynchronizedOutput(params),
+    ))
 
     // neutralise xterm's core focus() so clicking the pane selects without blurring the ❯ box (instance prop shadows the prototype). Guarded.
     try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
@@ -161,15 +174,37 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       fontRaf = requestAnimationFrame(() => measureRef.current?.())
     })
 
-    // A resize commit and its following binary frame are one browser transaction. The pinned xterm engine
-    // defers renderer resize while this synchronized hold is open, then paints the new grid and native bytes
-    // together when the transaction closes.
+    // A resize commit and its following binary frame are one browser transaction. Serialize every frame so
+    // raw output cannot enter between an atomic frame and its closing marker; ordinary frames still retain
+    // tmux's own synchronized-output semantics unchanged.
     let committedSize = null
+    const frameQueue = []
+    let writingFrame = false
+    const drainFrames = () => {
+      if (writingFrame || !frameQueue.length) return
+      writingFrame = true
+      const { frame, size } = frameQueue.shift()
+      const done = () => { writingFrame = false; drainFrames() }
+      if (!size) {
+        term.write(frame, done)
+        return
+      }
+      term.write(SYNC_BEGIN, () => {
+        frameOwnsSync = true
+        try { term.resize(size.cols, size.rows) } catch { /* final bytes still restore the visible pane */ }
+        term.write(frame, () => {
+          frameOwnsSync = false
+          term.write(SYNC_END, done)
+        })
+      })
+    }
+    const enqueueFrame = (frame, size) => { frameQueue.push({ frame, size }); drainFrames() }
     sock = createResilientSocket({
       url: base,
       onState: setConn,
       onOpen: () => {
         committedSize = null
+        frameQueue.length = 0
         term.reset()
         lastSizeRef.current = { cols: 0, rows: 0 }
         if (viewerIsVisible()) measureAndRequest()
@@ -188,12 +223,8 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
         if (!(e.data instanceof ArrayBuffer)) return
         const frame = new Uint8Array(e.data)
         const size = committedSize
-        if (!size) { term.write(frame); return }
         committedSize = null
-        term.write(SYNC_BEGIN, () => {
-          try { term.resize(size.cols, size.rows) } catch { /* final bytes still restore the visible pane */ }
-          term.write(frame)
-        })
+        enqueueFrame(frame, size)
       },
     })
 
@@ -257,6 +288,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
       for (const handler of mouseModeHandlers) handler.dispose()
+      for (const handler of frameSyncHandlers) handler.dispose()
       unsubscribeFont()
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()

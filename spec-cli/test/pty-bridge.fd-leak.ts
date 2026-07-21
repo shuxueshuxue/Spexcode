@@ -1,6 +1,6 @@
 // Linux proof for helper-per-PTY isolation. The backend must own no master, each helper exactly its own, and
-// no tmux client may inherit a sibling's master. Every session also has one pipe-only observer. Killing one
-// helper must not wedge the shared tmux server; its raw-client/observer pair is restored together.
+// no tmux client may inherit a sibling's master. Killing one helper must not wedge the shared tmux server;
+// its one native client is restored without involving sibling sessions.
 //
 // Run: SPEXCODE_TMUX=fdleak-$$ npx tsx test/pty-bridge.fd-leak.ts
 import { execFile } from 'node:child_process'
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
       attachViewer(session, viewer)
       resizeBridge(session, viewer, 80, 24)
     }
-    await waitForClientCount(SESSIONS.length * 2)
+    await waitForClientCount(SESSIONS.length)
 
     const helpers = childPids(process.pid).filter((pid) => cmdline(pid).includes('pty-helper.mjs'))
     const clients = await clientPids()
@@ -94,10 +94,10 @@ async function main(): Promise<void> {
     if (clientMasters.some((entry) => entry.masters.length !== 0)) throw new Error('tmux client inherited a PTY master')
 
     process.kill(helpers[0], 'SIGKILL')
-    await waitForClientCount((SESSIONS.length - 1) * 2)
+    await waitForClientCount(SESSIONS.length - 1)
     const probe = await tmux('display-message', '-p', '-t', SESSIONS[1], 'server-responsive')
     if (probe.stdout.trim() !== 'server-responsive') throw new Error('shared tmux server wedged after helper death')
-    await waitForClientCount(SESSIONS.length * 2, 8000)
+    await waitForClientCount(SESSIONS.length, 8000)
     console.log('PASS: PTY masters are isolated; one helper death neither wedges siblings nor breaks restoration')
   } finally {
     for (const [index, session] of SESSIONS.entries()) detachViewer(session, viewers[index])

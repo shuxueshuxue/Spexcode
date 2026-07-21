@@ -52,6 +52,51 @@ const patches = [
     from: 'this._isPaused?this._pausedResizeTask.set((()=>this._renderer.value?.handleResize(e,t))):this._renderer.value.handleResize(e,t)',
     to: '(this._isPaused||this._coreService.decPrivateModes.synchronizedOutput)?this._pausedResizeTask.set((()=>this._renderer.value?.handleResize(e,t))):this._renderer.value.handleResize(e,t)',
   },
+  {
+    file: 'src/browser/renderer/dom/DomRendererRowFactory.ts',
+    from: `          cellAmount++;
+          continue;`,
+    to: `          charElement.style.width = \`\${parseFloat(charElement.style.width) + width * cellWidth}px\`;
+          cellAmount++;
+          continue;`,
+  },
+  {
+    file: 'src/browser/renderer/dom/DomRendererRowFactory.ts',
+    from: `      if (spacing !== this.defaultSpacing) {
+        charElement.style.letterSpacing = \`\${spacing}px\`;
+      }
+
+      elements.push(charElement);`,
+    to: `      if (spacing !== this.defaultSpacing) {
+        charElement.style.letterSpacing = \`\${spacing}px\`;
+      }
+      charElement.style.display = 'inline-block';
+      charElement.style.width = \`\${width * cellWidth}px\`;
+      charElement.style.overflow = 'hidden';
+      charElement.style.verticalAlign = 'top';
+
+      elements.push(charElement);`,
+  },
+  {
+    file: 'lib/xterm.mjs',
+    from: 'x.isInvisible()?R+=we:R+=ze,A++;continue',
+    to: 'x.isInvisible()?R+=we:R+=ze,f.style.width=`${parseFloat(f.style.width)+T*a}px`,A++;continue',
+  },
+  {
+    file: 'lib/xterm.mjs',
+    from: 'Ke!==this.defaultSpacing&&(f.style.letterSpacing=`${Ke}px`),d.push(f)',
+    to: 'Ke!==this.defaultSpacing&&(f.style.letterSpacing=`${Ke}px`),f.style.display="inline-block",f.style.width=`${T*a}px`,f.style.overflow="hidden",f.style.verticalAlign="top",d.push(f)',
+  },
+  {
+    file: 'lib/xterm.js',
+    from: 'F.isInvisible()?w+=o.WHITESPACE_CELL_CHAR:w+=j,y++;continue',
+    to: 'F.isInvisible()?w+=o.WHITESPACE_CELL_CHAR:w+=j,b.style.width=`${parseFloat(b.style.width)+C*c}px`,y++;continue',
+  },
+  {
+    file: 'lib/xterm.js',
+    from: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),m.push(b)',
+    to: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),b.style.display="inline-block",b.style.width=`${C*c}px`,b.style.overflow="hidden",b.style.verticalAlign="top",m.push(b)',
+  },
 ]
 
 const changed = new Set()
@@ -68,4 +113,4 @@ for (const patch of patches) {
   changed.add(patch.file)
 }
 
-console.log(changed.size ? `patched xterm synchronized resize: ${[...changed].join(', ')}` : 'xterm synchronized resize already patched')
+console.log(changed.size ? `patched xterm terminal invariants: ${[...changed].join(', ')}` : 'xterm terminal invariants already patched')

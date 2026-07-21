@@ -45,6 +45,15 @@ test('pinned xterm defers renderer resize inside synchronized output', () => {
   assert.match(xtermRuntime, /_isPaused\|\|this\._coreService\.decPrivateModes\.synchronizedOutput/)
   assert.match(xtermRuntime, /synchronizedOutput\)\{this\._syncOutputHandler\.bufferRows\([^)]+\);return\}this\._pausedResizeTask\.flush\(\)/)
   assert.doesNotMatch(terminal, /st-frame-latch|holdRenderedFrame|_renderService/)
+  assert.match(terminal, /frameOwnsSync\s*&&\s*onlySynchronizedOutput/)
+  assert.match(terminal, /term\.write\(SYNC_BEGIN[\s\S]*term\.write\(frame[\s\S]*term\.write\(SYNC_END/)
+  assert.match(terminal, /frameQueue[\s\S]*drainFrames/)
+})
+
+test('pinned xterm boxes DOM glyph runs by their terminal cells', () => {
+  assert.match(xtermRuntime, /parseFloat\([^)]*style\.width\)/)
+  assert.match(xtermRuntime, /style\.display="inline-block"/)
+  assert.match(xtermRuntime, /style\.overflow="hidden"/)
 })
 
 test('terminal font preference reuses the ordinary fit and geometry request', () => {
@@ -101,6 +110,11 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
     css,
     /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:/s,
   )
+})
+
+test('a shared terminal grid aligns to the input instead of leaving a bottom void', () => {
+  assert.match(css, /\.st-host\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;/s)
+  assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;[^}]*flex:\s*none;/s)
 })
 
 test('selected nested session keeps its lead separated from the revealed headline', () => {

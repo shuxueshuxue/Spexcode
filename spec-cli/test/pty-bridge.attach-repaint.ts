@@ -62,17 +62,23 @@ async function main(): Promise<void> {
     const payload = Buffer.concat(chunks)
     const begin = payload.lastIndexOf(BSU)
     const end = payload.lastIndexOf(ESU)
-    if (chunks.length !== 1) throw new Error(`attach exposed ${chunks.length} separate viewer frames`)
+    console.log(`attach viewer frames: ${chunks.map((chunk) => `${chunk.length}:${chunk.includes(Buffer.from('INITIAL')) ? 'I' : ''}${chunk.includes(Buffer.from('FINAL')) ? 'F' : ''}`).join(' ')}`)
+    if (chunks.length !== 2) throw new Error(`attach produced ${chunks.length} frames instead of one complete initial paint plus one stabilized redraw`)
     const initial = payload.indexOf(Buffer.from('INITIAL'))
     const final = payload.indexOf(Buffer.from('FINAL'))
     if (initial < 0 || final < initial) throw new Error('attach batch did not preserve native repaint order')
+    if (!chunks[0].includes(Buffer.from('INITIAL')) || chunks[0].includes(Buffer.from('FINAL')) || !chunks[1].includes(Buffer.from('FINAL'))) {
+      throw new Error('attach did not separate its fast complete initial paint from the stabilized app redraw')
+    }
     if (begin < 0 || end < begin || !payload.includes(Buffer.from('FINAL'))) throw new Error('attach did not emit one complete final transaction')
-    if (commits.join(',') !== `${SIZE.cols}x${SIZE.rows}`) throw new Error(`unexpected size commits: ${commits.join(',')}`)
+    if (commits.join(',') !== `${SIZE.cols}x${SIZE.rows},${SIZE.cols}x${SIZE.rows}`) {
+      throw new Error(`initial and stabilized frames were not both transaction-marked: ${commits.join(',')}`)
+    }
     const geometry = (await tmux('display-message', '-p', '-t', SESSION, '#{status}|#{window_width}x#{window_height}')).stdout.trim()
     if (geometry !== `off|${SIZE.cols}x${SIZE.rows}`) {
       throw new Error(`native client chrome consumed pane rows (${geometry})`)
     }
-    console.log(`PASS: cold attach emitted one ${payload.length}-byte cumulative INITIAL→FINAL batch at ${commits[0]}, with status off and a full-height pane`)
+    console.log(`PASS: cold attach emitted a fast complete INITIAL frame then one stabilized FINAL frame (${payload.length} bytes total) at ${commits[0]}`)
   } finally {
     detachViewer(SESSION, viewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})

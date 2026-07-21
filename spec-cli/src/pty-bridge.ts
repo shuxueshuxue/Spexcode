@@ -16,34 +16,26 @@ type Subscription = { visible: boolean; cols: number; rows: number }
 type Bridge = {
   id: string
   proc: ChildProcessWithoutNullStreams
-  probe: ChildProcessWithoutNullStreams
   cols: number
   rows: number
   ptyPid?: number
   stderr: string
-  refreshWhenReady: boolean
   clientTty?: string
-  probeBuf: Buffer
-  probeTail: Buffer
-  syncCapable: boolean
-  barrier: 'none' | 'attach' | 'app' | 'settle' | 'refresh'
-  barrierSawLayout: boolean
-  barrierSawBegin: boolean
-  probeSawBegin: boolean
-  batchFromAttach: boolean
+  delivery: 'stream' | 'initial' | 'quarantine'
   refreshBuf: Buffer
-  refreshCommandDone: boolean
-  attachTimer?: ReturnType<typeof setTimeout>
-  refreshFinishTimer?: ReturnType<typeof setTimeout>
-  barrierTimer?: ReturnType<typeof setTimeout>
-  settleTimer?: ReturnType<typeof setTimeout>
+  refreshPending: boolean
+  refreshRunning: boolean
+  refreshOffset?: number
+  deliveryTimer?: ReturnType<typeof setTimeout>
 }
 
 const subscribers = new Map<string, Map<Viewer, Subscription>>()
 const bridges = new Map<string, Bridge>()
 const lastSize = new Map<string, { cols: number; rows: number }>()
 const restoreTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const synchronizedSessions = new Set<string>()
+const BSU = Buffer.from('\x1b[?2026h')
+const ESU = Buffer.from('\x1b[?2026l')
+const GEOMETRY_STABILIZATION_MS = 400
 
 function subscriptionMap(id: string): Map<Viewer, Subscription> {
   let map = subscribers.get(id)
@@ -89,92 +81,14 @@ async function tmux(args: string[]): Promise<string> {
   } catch { return '' }
 }
 
-const BSU = Buffer.from('\x1b[?2026h')
-const ESU = Buffer.from('\x1b[?2026l')
-const isOct = (value: number) => value >= 0x30 && value <= 0x37
-
-function unescapeControlOutput(data: Buffer): Buffer {
-  const output = Buffer.allocUnsafe(data.length)
-  let written = 0
-  for (let index = 0; index < data.length; index++) {
-    if (data[index] === 0x5c && index + 3 < data.length && isOct(data[index + 1]) && isOct(data[index + 2]) && isOct(data[index + 3])) {
-      output[written++] = ((data[index + 1] - 0x30) << 6) | ((data[index + 2] - 0x30) << 3) | (data[index + 3] - 0x30)
-      index += 3
-    } else {
-      output[written++] = data[index]
-    }
-  }
-  return output.subarray(0, written)
-}
-
-function scanSyncMarkers(bridge: Bridge, data: Buffer): void {
-  const bytes = bridge.probeTail.length ? Buffer.concat([bridge.probeTail, data]) : data
-  for (let index = 0; index < bytes.length; index++) {
-    if (bytes.subarray(index, index + BSU.length).equals(BSU)) {
-      bridge.probeSawBegin = true
-      if ((bridge.barrier === 'app' || bridge.barrier === 'settle') && bridge.barrierSawLayout) bridge.barrierSawBegin = true
-      index += BSU.length - 1
-    } else if (bytes.subarray(index, index + ESU.length).equals(ESU)) {
-      if (bridge.probeSawBegin) {
-        bridge.probeSawBegin = false
-        bridge.syncCapable = true
-        synchronizedSessions.add(bridge.id)
-      }
-      if ((bridge.barrier === 'app' || bridge.barrier === 'settle') && bridge.barrierSawBegin) awaitAtomicRefresh(bridge)
-      index += ESU.length - 1
-    }
-  }
-  bridge.probeTail = bytes.subarray(Math.max(0, bytes.length - (BSU.length - 1)))
-}
-
-function feedProbe(bridge: Bridge, chunk: Buffer): void {
-  bridge.probeBuf = bridge.probeBuf.length ? Buffer.concat([bridge.probeBuf, chunk]) : chunk
-  let newline: number
-  while ((newline = bridge.probeBuf.indexOf(0x0a)) >= 0) {
-    let line = bridge.probeBuf.subarray(0, newline)
-    bridge.probeBuf = bridge.probeBuf.subarray(newline + 1)
-    if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, line.length - 1)
-    const head = line.toString('latin1')
-    if (head.startsWith('%layout-change ')) {
-      if (bridge.barrier === 'attach') {
-        bridge.barrierSawLayout = true
-        bridge.barrier = bridge.syncCapable ? 'app' : 'settle'
-        if (bridge.attachTimer) clearTimeout(bridge.attachTimer)
-        bridge.attachTimer = undefined
-        armBarrierTimeout(bridge, bridge.barrier === 'app' ? 1000 : 400)
-      }
-      if (bridge.barrier === 'app' || bridge.barrier === 'settle') bridge.barrierSawLayout = true
-      continue
-    }
-    if (!head.startsWith('%output ')) continue
-    const split = head.indexOf(' ', 8)
-    if (split > 0) {
-      scanSyncMarkers(bridge, unescapeControlOutput(line.subarray(split + 1)))
-      if (bridge.barrier === 'settle' && bridge.barrierSawLayout) armSettleQuiet(bridge)
-    }
-  }
-}
-
 function onHelperOutput(bridge: Bridge, chunk: Buffer): void {
   if (bridges.get(bridge.id) !== bridge) return
-  if (bridge.barrier === 'none') {
+  if (bridge.delivery === 'stream') {
     broadcast(bridge.id, chunk)
     return
   }
-  if (bridge.barrier === 'attach') {
-    bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
-    scheduleAttachFinish(bridge)
-    return
-  }
-  if (bridge.barrier === 'app' || bridge.barrier === 'settle') {
-    if (bridge.batchFromAttach) {
-      bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
-    }
-    return
-  }
-
   bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
-  scheduleAtomicRefreshFinish(bridge)
+  releaseInitialRefresh(bridge)
 }
 
 function sendControl(bridge: Bridge, message: object): void {
@@ -190,10 +104,18 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
     const ready = line.match(/^READY (\d+)$/)
     if (ready) {
       bridge.ptyPid = Number(ready[1])
-      if (bridge.barrier === 'attach' && !bridge.barrierTimer) armBarrierTimeout(bridge, 400)
-      if (bridge.refreshWhenReady) {
-        bridge.refreshWhenReady = false
-        void refreshBridge(bridge)
+      if (bridge.delivery === 'initial') {
+        armDeliveryBoundary(bridge)
+        queueRefresh(bridge)
+      }
+      continue
+    }
+    const resized = line.match(/^RESIZED (\d+) (\d+)$/)
+    if (resized) {
+      if (bridge.delivery === 'initial'
+          && Number(resized[1]) === bridge.cols
+          && Number(resized[2]) === bridge.rows) {
+        queueRefresh(bridge)
       }
     } else if (line) {
       console.error(`[terminal helper ${bridge.id}] ${line}`)
@@ -205,47 +127,34 @@ function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge 
   const existing = bridges.get(id)
   if (existing) return { bridge: existing, created: false }
   let proc: ChildProcessWithoutNullStreams | undefined
-  let probe: ChildProcessWithoutNullStreams | undefined
   try {
-    probe = spawn('tmux', ['-u', '-C', '-L', TMUX_SOCK, 'attach-session', '-f', 'ignore-size', '-t', id], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
-    })
     proc = spawn(process.execPath, [HELPER, id, String(cols), String(rows)], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
     })
   } catch {
     try { proc?.kill() } catch { /* spawn did not complete */ }
-    try { probe?.kill() } catch { /* spawn did not complete */ }
     return { bridge: null, created: false }
   }
   const bridge: Bridge = {
-    id, proc, probe, cols, rows, stderr: '', refreshWhenReady: false,
-    probeBuf: Buffer.alloc(0), probeTail: Buffer.alloc(0), syncCapable: synchronizedSessions.has(id),
-    barrier: 'attach', barrierSawLayout: false, barrierSawBegin: false, probeSawBegin: false,
-    batchFromAttach: true, refreshBuf: Buffer.alloc(0), refreshCommandDone: false,
+    id, proc, cols, rows, stderr: '', delivery: 'initial',
+    refreshBuf: Buffer.alloc(0), refreshPending: false, refreshRunning: false,
   }
   bridges.set(id, bridge)
   proc.stdout.on('data', (data: Buffer) => onHelperOutput(bridge, data))
   proc.stderr.on('data', (data: Buffer) => onHelperStderr(bridge, data))
-  probe.stdout.on('data', (data: Buffer) => feedProbe(bridge, data))
-  probe.stderr.resume()
   let reaped = false
   const gone = () => {
     if (reaped) return
     reaped = true
     if (bridges.get(id) !== bridge) return
     bridges.delete(id)
-    clearBarrier(bridge)
+    clearDelivery(bridge)
     try { bridge.proc.kill() } catch { /* already gone */ }
-    try { bridge.probe.kill() } catch { /* already gone */ }
     scheduleRestore(id)
   }
   proc.on('exit', gone)
   proc.on('error', gone)
-  probe.on('exit', gone)
-  probe.on('error', gone)
   return { bridge, created: true }
 }
 
@@ -253,128 +162,88 @@ function killBridge(id: string): void {
   const bridge = bridges.get(id)
   if (!bridge) return
   bridges.delete(id)
-  clearBarrier(bridge)
+  clearDelivery(bridge)
   try { bridge.proc.stdin.end() } catch { /* already gone */ }
-  try { bridge.probe.stdin.end() } catch { /* already gone */ }
   const kill = setTimeout(() => { try { bridge.proc.kill() } catch { /* already gone */ } }, 250)
   kill.unref()
-  const killProbe = setTimeout(() => { try { bridge.probe.kill() } catch { /* already gone */ } }, 250)
-  killProbe.unref()
 }
 
-function beginBarrier(bridge: Bridge): void {
-  if (bridge.barrier !== 'none') return
-  bridge.barrier = bridge.syncCapable ? 'app' : 'settle'
-  bridge.barrierSawLayout = false
-  bridge.barrierSawBegin = false
-  bridge.batchFromAttach = false
-  if (bridge.barrier === 'app') armBarrierTimeout(bridge)
-  else {
-    bridge.barrierTimer = setTimeout(() => awaitAtomicRefresh(bridge), 400)
-    bridge.barrierTimer.unref()
-  }
+function beginDelivery(bridge: Bridge): void {
+  if (bridge.delivery === 'stream') bridge.refreshBuf = Buffer.alloc(0)
+  bridge.delivery = 'initial'
+  bridge.refreshOffset = undefined
+  armDeliveryBoundary(bridge)
 }
 
-function armSettleQuiet(bridge: Bridge): void {
-  if (bridge.settleTimer) clearTimeout(bridge.settleTimer)
-  bridge.settleTimer = setTimeout(() => awaitAtomicRefresh(bridge), 160)
-  bridge.settleTimer.unref()
+function armDeliveryBoundary(bridge: Bridge): void {
+  if (bridge.deliveryTimer) clearTimeout(bridge.deliveryTimer)
+  bridge.deliveryTimer = setTimeout(() => finishDelivery(bridge), GEOMETRY_STABILIZATION_MS)
+  bridge.deliveryTimer.unref()
 }
 
-function armBarrierTimeout(bridge: Bridge, timeoutMs = 1000): void {
-  if (bridge.barrierTimer) clearTimeout(bridge.barrierTimer)
-  bridge.barrierTimer = setTimeout(() => failOpenBarrier(bridge), timeoutMs)
-  bridge.barrierTimer.unref()
-}
-
-function clearBarrier(bridge: Bridge): void {
-  bridge.barrier = 'none'
-  bridge.barrierSawLayout = false
-  bridge.barrierSawBegin = false
-  bridge.batchFromAttach = false
-  if (bridge.barrierTimer) clearTimeout(bridge.barrierTimer)
-  if (bridge.settleTimer) clearTimeout(bridge.settleTimer)
-  bridge.barrierTimer = undefined
-  bridge.settleTimer = undefined
+function clearDelivery(bridge: Bridge): void {
+  bridge.delivery = 'stream'
+  if (bridge.deliveryTimer) clearTimeout(bridge.deliveryTimer)
+  bridge.deliveryTimer = undefined
   bridge.refreshBuf = Buffer.alloc(0)
-  bridge.refreshCommandDone = false
-  if (bridge.attachTimer) clearTimeout(bridge.attachTimer)
-  bridge.attachTimer = undefined
-  if (bridge.refreshFinishTimer) clearTimeout(bridge.refreshFinishTimer)
-  bridge.refreshFinishTimer = undefined
+  bridge.refreshPending = false
+  bridge.refreshOffset = undefined
 }
 
-function firstCompleteTransactionStart(bridge: Bridge): number | undefined {
-  const begin = bridge.refreshBuf.indexOf(BSU)
-  const end = begin >= 0 ? bridge.refreshBuf.indexOf(ESU, begin + BSU.length) : -1
-  return begin >= 0 && end >= begin ? begin : undefined
+function completeTransactionEnd(buffer: Buffer, offset: number): number | undefined {
+  const begin = buffer.indexOf(BSU, offset)
+  const end = begin >= 0 ? buffer.indexOf(ESU, begin + BSU.length) : -1
+  return end >= 0 ? end + ESU.length : undefined
 }
 
-function releaseNativeBatch(bridge: Bridge, begin: number): void {
-  // A native client repaint is cumulative. A busy pane can append small complete diffs and the beginning of
-  // another transaction while the barrier drains; selecting one BSU/ESU pair would either discard the full
-  // repaint or tear off that trailing update. Resume the raw stream from the path's sound boundary without
-  // dropping another byte.
-  const batch = bridge.refreshBuf.subarray(begin)
+function releaseInitialRefresh(bridge: Bridge): void {
+  if (bridge.delivery !== 'initial' || bridge.refreshOffset === undefined) return
+  const end = completeTransactionEnd(bridge.refreshBuf, bridge.refreshOffset)
+  if (end === undefined) return
+  const batch = bridge.refreshBuf.subarray(0, end)
+  bridge.refreshBuf = bridge.refreshBuf.subarray(end)
+  bridge.delivery = 'quarantine'
   commitSize(bridge)
-  clearBarrier(bridge)
+  if (batch.length) broadcast(bridge.id, batch)
+}
+
+function finishDelivery(bridge: Bridge): void {
+  if (bridge.delivery === 'stream') return
+  const failOpen = bridge.delivery === 'initial'
+  const batch = bridge.refreshBuf
+  clearDelivery(bridge)
+  if (!failOpen && !batch.length) return
+  // A commit marks the following binary message as one browser render transaction even when the grid itself
+  // is unchanged. Send an empty frame only on fail-open, so the browser never leaves that transaction armed.
+  commitSize(bridge)
   broadcast(bridge.id, batch)
 }
 
-function scheduleAttachFinish(bridge: Bridge): void {
-  if (bridge.barrier !== 'attach' || bridge.attachTimer) return
-  if (firstCompleteTransactionStart(bridge) === undefined) return
-  bridge.attachTimer = setTimeout(() => {
-    bridge.attachTimer = undefined
-    if (bridge.barrier !== 'attach' || bridge.barrierSawLayout) return
-    if (firstCompleteTransactionStart(bridge) !== undefined) releaseNativeBatch(bridge, 0)
-  }, 30)
-  bridge.attachTimer.unref()
-}
-
-function awaitAtomicRefresh(bridge: Bridge): void {
-  if (bridge.barrier !== 'app' && bridge.barrier !== 'settle') return
-  if (bridge.settleTimer) clearTimeout(bridge.settleTimer)
-  bridge.settleTimer = undefined
-  bridge.barrier = 'refresh'
-  if (!bridge.batchFromAttach) bridge.refreshBuf = Buffer.alloc(0)
-  bridge.refreshCommandDone = false
-  armBarrierTimeout(bridge)
-  void refreshBridge(bridge).then(() => {
-    if (bridge.barrier !== 'refresh') return
-    bridge.refreshCommandDone = true
-    scheduleAtomicRefreshFinish(bridge)
-  })
-}
-
-function scheduleAtomicRefreshFinish(bridge: Bridge): void {
-  if (bridge.barrier !== 'refresh' || !bridge.refreshCommandDone) return
-  if (bridge.refreshFinishTimer) clearTimeout(bridge.refreshFinishTimer)
-  bridge.refreshFinishTimer = setTimeout(() => {
-    bridge.refreshFinishTimer = undefined
-    finishAtomicRefresh(bridge)
-  }, 15)
-  bridge.refreshFinishTimer.unref()
-}
-
-function finishAtomicRefresh(bridge: Bridge): void {
-  if (bridge.barrier !== 'refresh') return
-  const transactionStart = firstCompleteTransactionStart(bridge)
-  if (transactionStart !== undefined) releaseNativeBatch(bridge, bridge.batchFromAttach ? 0 : transactionStart)
-}
-
-function failOpenBarrier(bridge: Bridge): void {
-  if (bridge.barrier === 'none') return
-  commitSize(bridge)
-  clearBarrier(bridge)
-  void refreshBridge(bridge)
-}
-
-async function refreshBridge(bridge: Bridge): Promise<void> {
-  if (bridges.get(bridge.id) !== bridge) return
-  if (!bridge.ptyPid) { bridge.refreshWhenReady = true; return }
+async function refreshBridge(bridge: Bridge): Promise<boolean> {
+  if (bridges.get(bridge.id) !== bridge || !bridge.ptyPid) return false
   const tty = await clientTty(bridge)
-  if (tty) await tmux(['refresh-client', '-t', tty])
+  if (!tty) return false
+  await tmux(['refresh-client', '-t', tty])
+  return true
+}
+
+function queueRefresh(bridge: Bridge): void {
+  if (bridge.delivery !== 'initial') return
+  bridge.refreshPending = true
+  if (bridge.refreshRunning) return
+  bridge.refreshPending = false
+  bridge.refreshRunning = true
+  void refreshBridge(bridge).then((refreshed) => {
+    bridge.refreshRunning = false
+    if (bridges.get(bridge.id) !== bridge || bridge.delivery !== 'initial') return
+    if (bridge.refreshPending) {
+      queueRefresh(bridge)
+      return
+    }
+    if (!refreshed) return
+    bridge.refreshOffset = bridge.refreshBuf.length
+    releaseInitialRefresh(bridge)
+  })
 }
 
 async function clientTty(bridge: Bridge): Promise<string | undefined> {
@@ -392,7 +261,7 @@ async function clientTty(bridge: Bridge): Promise<string | undefined> {
 
 function resize(bridge: Bridge, cols: number, rows: number): void {
   if (bridge.cols === cols && bridge.rows === rows) return
-  beginBarrier(bridge)
+  beginDelivery(bridge)
   bridge.cols = cols
   bridge.rows = rows
   sendControl(bridge, { t: 'resize', cols, rows })
@@ -409,7 +278,10 @@ function syncBridgeToViewers(id: string, refreshSameSize: boolean): void {
   const { bridge, created } = ensureBridge(id, size.cols, size.rows)
   if (!bridge) return
   if (!created && bridge.cols === size.cols && bridge.rows === size.rows) {
-    if (refreshSameSize) void refreshBridge(bridge)
+    if (refreshSameSize) {
+      beginDelivery(bridge)
+      queueRefresh(bridge)
+    }
   } else {
     resize(bridge, size.cols, size.rows)
   }

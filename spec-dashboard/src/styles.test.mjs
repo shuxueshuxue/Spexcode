@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
 const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
+const terminalFont = readFileSync(join(here, 'terminalFont.js'), 'utf8')
 const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
 const xtermRuntime = readFileSync(join(here, '../node_modules/@xterm/xterm/lib/xterm.mjs'), 'utf8')
 
@@ -29,7 +30,7 @@ test('dashboard typography declarations use the shared scale', () => {
     )
   }
 
-  assert.match(terminal, /getPropertyValue\('--type-terminal'\)/)
+  assert.match(terminalFont, /getPropertyValue\('--type-terminal'\)/)
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
@@ -44,6 +45,15 @@ test('pinned xterm defers renderer resize inside synchronized output', () => {
   assert.match(xtermRuntime, /_isPaused\|\|this\._coreService\.decPrivateModes\.synchronizedOutput/)
   assert.match(xtermRuntime, /synchronizedOutput\)\{this\._syncOutputHandler\.bufferRows\([^)]+\);return\}this\._pausedResizeTask\.flush\(\)/)
   assert.doesNotMatch(terminal, /st-frame-latch|holdRenderedFrame|_renderService/)
+})
+
+test('terminal font preference reuses the ordinary fit and geometry request', () => {
+  assert.match(terminalFont, /localStorage\.getItem/)
+  assert.match(terminalFont, /localStorage\.setItem/)
+  assert.match(terminalFont, /subscribeTerminalFontSize/)
+  assert.match(terminal, /subscribeTerminalFontSize/)
+  assert.match(terminal, /term\.options\.fontSize\s*=\s*fontSize/)
+  assert.match(terminal, /lastSizeRef\.current\s*=\s*\{ cols: 0, rows: 0 \}[\s\S]*measureRef\.current\?\.\(\)/)
 })
 
 test('browser page visibility reuses the terminal viewer lifecycle', () => {

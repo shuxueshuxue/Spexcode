@@ -3,7 +3,7 @@ title: settings
 status: active
 session: 8533a220-bbd6-4529-babe-7800cda2d9f2
 hue: 160
-desc: Internationalized copy + the settings page (#/settings) that picks the language.
+desc: The routed Settings page owns browser preferences for language, theme, terminal type, and shortcuts.
 code:
   - spec-dashboard/src/Settings.jsx#Settings
   - spec-dashboard/src/Settings.jsx#Shortcuts
@@ -43,6 +43,12 @@ explicit pick persists and flips the whole app live; absent a valid saved choice
 Minimal — there is no system `prefers-color-scheme` detection and no light/dark pair. Only the picker
 lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
 
+Its terminal section controls only the embedded terminal's font size relative to the surrounding UI. The
+numeric choice is local to this browser, persists across reloads, and updates every mounted terminal live.
+It does not scale dashboard chrome or introduce another terminal path. Terminals hidden behind the routed
+Settings page refit locally without claiming tmux geometry; returning to Sessions sends that fit through
+[[live-view]] exactly like a browser resize.
+
 ## expanded spec
 
 ### the contract
@@ -65,11 +71,16 @@ lives here; the palette-swap mechanism it drives belongs to [[dashboard-shell]].
   `localStorage` and overrides detection permanently until cleared.
 - **Live switching.** Picking a language re-renders every `t()` immediately — the choice flows through
   React context, no reload.
+- **Terminal font size.** One shared browser preference validates, persists, and publishes the selected size.
+  Settings renders its numeric control; every mounted terminal consumes the same value. A live change updates
+  hidden xterm typography locally, and the next visible claim enters the existing fit-to-tmux geometry
+  transaction, with no reload, re-created socket, renderer swap, or font-size-specific attach logic.
 - **The settings page** is a routed page (`#/settings`, [[side-nav]]) — reached from the rail's bottom
   entry or the `,` hotkey, rendered as a centered readable column inside the shell's shared page pane
   through [[page-scroll]] (the pane supplies the viewport, the shared primitive supplies overflow and
   scrollbar geometry, and this component supplies only its centered content), and the single home for
-  future settings. Today it owns the language picker, the shortcuts editor, and the theme-preset picker.
+  future settings. Today it owns the language picker, the terminal font-size control, the shortcuts editor,
+  and the theme-preset picker.
   The direct route mounts that same page inside the phone shell above its tab bar, without inventing a
   mobile Settings clone or a fifth primary tab. `,` again routes home to the graph; Esc routes nothing
   ([[side-nav]] — it only closes in-page overlays).

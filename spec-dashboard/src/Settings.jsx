@@ -4,6 +4,13 @@ import { ACT, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
 import { PageScroll } from './PageScroll.jsx'
+import {
+  getTerminalFontSize,
+  setTerminalFontSize,
+  TERMINAL_FONT_MIN,
+  TERMINAL_FONT_MAX,
+  TERMINAL_FONT_STEP,
+} from './terminalFont.js'
 
 // @@@ Settings - the settings PAGE (`,`, or the sidebar's bottom entry — #/settings, [[side-nav]]): a
 // routed page like every other top-level surface, not a popup. It accretes sections (see the `settings`
@@ -62,7 +69,9 @@ function Shortcuts({ t }) {
 export default function Settings() {
   const { t, lang, setLang } = useI18n()
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
+  const [terminalFontSize, setTerminalFontSizeState] = useState(getTerminalFontSize)
   const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
+  const pickTerminalFontSize = (value) => setTerminalFontSizeState(setTerminalFontSize(value))
   return (
     <PageScroll className="page-settings-scroll">
       <div className="settings-body">
@@ -96,6 +105,21 @@ export default function Settings() {
             </button>
           ))}
         </div>
+      </section>
+      <section className="legend-sec">
+        <div className="legend-h">{t('settings.secTerminal')}</div>
+        <label className="set-terminal-font">
+          <span>{t('settings.terminalFontSize')}</span>
+          <input
+            type="range"
+            min={TERMINAL_FONT_MIN}
+            max={TERMINAL_FONT_MAX}
+            step={TERMINAL_FONT_STEP}
+            value={terminalFontSize}
+            onChange={(event) => pickTerminalFontSize(event.target.value)}
+          />
+          <output>{terminalFontSize}px</output>
+        </label>
       </section>
       <Shortcuts t={t} />
       </div>

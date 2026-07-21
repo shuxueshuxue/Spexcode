@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 import { apiUrl } from './project.js'
+import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.js'
 
 const SYNC_BEGIN = '\x1b[?2026h'
 const MOUSE_REPORT_MODES = new Set([9, 1000, 1002, 1003, 1005, 1006, 1015, 1016])
@@ -14,12 +15,11 @@ function onlyMouseReportModes(params) {
 
 function terminalTypography() {
   const styles = getComputedStyle(document.documentElement)
-  const fontSize = Number.parseFloat(styles.getPropertyValue('--type-terminal'))
   const fontFamily = styles.getPropertyValue('--mono').trim()
-  if (!Number.isFinite(fontSize) || !fontFamily) {
+  if (!fontFamily) {
     throw new Error('Terminal typography tokens are missing or invalid')
   }
-  return { fontSize, fontFamily }
+  return { fontSize: getTerminalFontSize(), fontFamily }
 }
 
 // heuristic: a select-caret line (`❯ <option>`) plus a hint line mentioning Esc + Enter/arrows distinguishes
@@ -153,6 +153,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
     }
 
+    let fontRaf = 0
+    const unsubscribeFont = subscribeTerminalFontSize((fontSize) => {
+      term.options.fontSize = fontSize
+      lastSizeRef.current = { cols: 0, rows: 0 }
+      cancelAnimationFrame(fontRaf)
+      fontRaf = requestAnimationFrame(() => measureRef.current?.())
+    })
+
     // A resize commit and its following binary frame are one browser transaction. The pinned xterm engine
     // defers renderer resize while this synchronized hold is open, then paints the new grid and native bytes
     // together when the transaction closes.
@@ -242,12 +250,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      cancelAnimationFrame(fontRaf)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
       document.removeEventListener('visibilitychange', onDocumentVisibility)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
       for (const handler of mouseModeHandlers) handler.dispose()
+      unsubscribeFont()
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null

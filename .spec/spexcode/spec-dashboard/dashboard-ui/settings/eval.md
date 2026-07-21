@@ -29,6 +29,15 @@ scenarios:
       under [data-theme=things]; the choice persists across reload (localStorage spexcode.theme) and
       clicking Minimal restores the default graphite palette. The app stays mounted throughout — no
       crash, no flash of the wrong theme.
+  - name: terminal-font-size-is-live
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the running dashboard, open Settings and change the terminal font-size control while a live
+      terminal has already been viewed. Return to Sessions, compare terminal and chrome type, then reload.
+    expected: >-
+      The terminal alone adopts the selected pixel size without remounting, dashboard UI text is unchanged,
+      and the explicit choice survives reload. The terminal's detailed geometry/transport proof belongs to
+      [[terminal-font-size]]; this scenario proves the real Settings surface drives it.
 ---
 
 # settings — yatsu

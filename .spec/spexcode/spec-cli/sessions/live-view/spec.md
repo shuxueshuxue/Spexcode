@@ -2,22 +2,23 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard terminal follows one warm native tmux client stream per live session; isolated helpers preserve instant tab switches, geometry has one warm owner, and SpexCode never splices a reconstructed screen into live output.
+desc: The dashboard keeps browser terminals ready, but a session owns one native tmux stream only while visible; cached pixels make return switches instant and SpexCode never splices a reconstructed screen into live output.
 code:
   - spec-cli/src/pty-bridge.ts
 related:
-  - spec-cli/src/pty-helper.ts
+  - spec-cli/src/pty-helper.mjs
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/styles.test.mjs
   - spec-cli/src/index.ts
+  - spec-cli/test/pty-bridge.attach-repaint.ts
   - spec-cli/test/pty-bridge.atomic-repaint.ts
   - spec-cli/test/pty-bridge.fd-leak.ts
   - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.history.ts
   - spec-cli/test/pty-bridge.osc8.ts
-  - spec-cli/test/pty-bridge.prewarm.ts
+  - spec-cli/test/pty-bridge.visibility-lifecycle.ts
   - spec-cli/test/pty-bridge.reseed-reconnect.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
   - spec-cli/test/pty-bridge.stress.ts
@@ -45,6 +46,11 @@ grid and applies the transaction under one synchronized-output hold. Until then 
 remains visible. A TUI may respond to `SIGWINCH` immediately or later, but neither an eager browser reflow nor
 an extra full-screen snapshot becomes an intermediate frame.
 
+Native attach is the same repaint transaction, not a bypass around it. If attaching the visible helper leaves
+tmux geometry unchanged, the first complete native transaction is released directly. If attach changes
+geometry, its intermediate native screen and any delayed application clear remain behind the same semantic or
+bounded barrier used by an active resize, and the browser receives only the final complete transaction.
+
 A pipe-transported tmux control observer accompanies the native client as a **barrier sensor only**. It
 never paints, captures, sizes, or reconstructs a screen; it watches the pane's raw VT stream for the standard
 DEC synchronized-output boundary. Once a pane has demonstrated that capability, resize temporarily withholds
@@ -67,17 +73,16 @@ The browser uses a terminal engine that implements synchronized output. When an 
 transaction with DEC mode 2026, rendering is held until that transaction ends; xterm's own write queue may
 batch transport chunks, but it is never a substitute for a terminal protocol boundary.
 
-Each warm xterm keeps one stable renderer across visibility changes. Tab activation refreshes that existing
-renderer before the browser's first visible paint; it does not dispose one renderer, expose an empty canvas,
-and asynchronously install another. Hidden pane layers remain laid out at the terminal panel's real geometry
-under `visibility:hidden`, so their buffers render warm without becoming visible or interactive. A hidden
-helper that owns its session's geometry also follows panel resizes and completes the native resize transaction
-before a later click; activation changes visibility rather than creating the renderer's first measurable box
-or catching its grid up on demand.
+Each live session keeps one stable browser terminal and terminal socket across visibility changes. Hidden pane
+layers remain laid out at the terminal panel's real geometry under `visibility:hidden`, so xterm can fit
+locally without becoming visible or interactive. A pane that has already been viewed retains its last painted
+buffer; switching back exposes those cached pixels on the first browser paint while the native stream resumes
+behind them. Activation never disposes the renderer, exposes an empty replacement canvas, or waits for a new
+WebSocket.
 
 ## isolated helper
 
-The backend process never owns a PTY. When the first warm socket subscribes to a session, it starts one shared
+The backend process never owns a PTY. When the first viewer of a session becomes visible, it starts one shared
 helper process, and only that helper creates the native tmux client. A helper creates exactly one PTY and starts
 no later subprocess, so
 no sibling tmux client can inherit an earlier PTY master. Losing one helper can therefore detach only its
@@ -87,27 +92,20 @@ The helper's stdout is raw terminal output and its stdin is a small resize/navig
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
 at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
 
-## warm terminals and size ownership
+## one visibility lifecycle
 
-The dashboard keeps every live session pane mounted, so the bridge keeps one helper warm for every live
-session socket too. Pane output and owner-approved geometry changes continue to update its hidden xterm
-buffer. Switching tabs therefore uses the existing native client and existing browser terminal immediately;
-it never pays a detach/attach or first-visible resize cycle.
-The native helper cost is deliberately paid per live dashboard session to preserve this interaction
-contract, then released when the session socket unmounts.
+Browser readiness and native rendering have deliberately different lifetimes. Every live session mounts its
+xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
+setup from a tab click. A hidden subscription creates no helper, consumes no pane output, and never votes on
+tmux geometry. The first visible viewer creates the helper at its already-measured grid. The last visible
+viewer releases it even though hidden sockets and xterm buffers remain alive.
 
-Warm geometry has one owner. If no existing tmux client owns a session's size, the first hidden helper votes
-at its measured panel geometry and prepares the pane before any click; activation then changes visibility
-without a pane replay. If a size-owning client already exists, a later hidden helper attaches with
-`ignore-size` and cannot disturb it. A visible viewer always votes. A helper that was elected while hidden
-retains ownership across local tab switches, while an initially visible or foreign-neutral helper becomes
-neutral when its viewer hides. Thus one dashboard gets a genuinely final prewarmed grid and a second dashboard
-can prewarm the same session without collapsing the window watched by the first one.
-
-Multiple viewers of one session share the same helper and latest visible size. A later viewer joins the
-same in-band tmux stream; an explicit tmux client refresh supplies its blank xterm without introducing a
-capture path. If all clients are warm and neutral, tmux may retain their last geometry until one becomes
-visible and votes.
+Visibility is the only helper lifecycle switch. A visible claim always carries the viewer's measured grid;
+that one resize message both creates the helper when needed and owns later geometry transactions. Hiding the
+viewer releases the helper when no visible claim remains. There is no second prewarm protocol. Multiple visible
+viewers of one session share the backend's helper and latest visible size. A viewer joining an existing helper
+receives an explicit native-client refresh through that same raw stream; there is no capture path. A hidden
+dashboard cannot resize or otherwise perturb a session watched by another dashboard.
 
 ## navigation and recovery
 
@@ -116,13 +114,15 @@ whether they scroll copy-mode history or pass through to a mouse-owning full-scr
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
 copy-mode viewport.
 
-Viewer subscriptions belong to the session id rather than a helper process. If a warm helper exits,
+Viewer subscriptions belong to the session id rather than a helper process. If a visible helper exits,
 an alive-gated, rate-limited restore creates a new one beneath the same open sockets; native attach repaints
-the complete screen. A dead session is reaped, not respawned. Backend process restart remains the genuine
-socket break and is recovered by [[reconnect]].
+the complete screen. A hidden subscription does not trigger restoration. A dead session is reaped, not
+respawned. Backend process restart remains the genuine socket break and is recovered by [[reconnect]].
 
 ## non-responsibilities
 
 The bridge does not parse application-specific screen shapes or maintain a second terminal state for snapshots.
 The bounded unsynchronized compatibility window is explicitly weaker than the DEC 2026 event path; it neither
 claims application completion nor grows into an open-ended settle loop.
+For a session that has never been viewed, the contract is a short native attach followed by one complete paint,
+not zero attach latency. Lightweight browser prewarm must not hide that cold path from evaluation.

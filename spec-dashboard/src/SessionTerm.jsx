@@ -57,15 +57,15 @@ function execCopyFallback(text) {
 export default function SessionTerm({ sessionId, active = true, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
-  // Last grid requested from tmux. Measuring a new grid deliberately does not resize xterm yet: the bridge
-  // commits dimensions with the final native transaction so the old buffer never visibly reflows alone.
+  // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
+  // hidden measurement can fit immediately because that reflow cannot paint.
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
   // The latest geometry request, exposed so activation can re-measure without recreating the terminal.
   const measureRef = useRef(null)
-  // Visibility is a size-ownership signal: every live pane stays warm, the first unopposed hidden helper may
-  // pre-size it, and an active pane always votes. Refs expose changes to the long-lived socket effect.
+  // The browser terminal and socket stay warm, while visibility alone owns the native helper lifecycle.
+  // Refs expose prop changes to the long-lived socket effect without recreating either browser resource.
   const activeRef = useRef(active)
-  const visibilityRef = useRef(null)
+  const hideRef = useRef(null)
   activeRef.current = active
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
@@ -109,24 +109,10 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
-    // Every warm layer is measurable and carries its real size. `visible=0` lets the bridge elect it as the
-    // hidden owner only when no tmux client already owns geometry.
-    const socketUrl = () => {
-      try {
-        const host = hostRef.current
-        if (host && host.clientWidth >= 40 && host.clientHeight >= 40) {
-          const d = fit.proposeDimensions()
-          if (d && d.cols > 0 && d.rows > 0 && !(d.cols < 20 && host.clientWidth > 200)) {
-            return `${base}?cols=${d.cols}&rows=${d.rows}&visible=${activeRef.current ? 1 : 0}`
-          }
-        }
-      } catch { /* the first settled measurement supplies the real size */ }
-      return base
-    }
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
 
-    // Measure the panel and ask tmux for that grid without eagerly resizing xterm's old buffer. A visible
-    // viewer owns the resize; an elected hidden owner prewarms the same transaction before a later click.
+    // Hidden panes fit their browser-only grid while invisible. A visible pane leaves its painted buffer alone
+    // until the backend commits the grid with one final native transaction.
     const measureAndRequest = () => {
       const host = hostRef.current
       if (!host) return
@@ -142,11 +128,15 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       const lastSize = lastSizeRef.current
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: activeRef.current ? 'resize' : 'prewarm', cols, rows }))
+      if (!activeRef.current) {
+        try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
+        return
+      }
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
     }
     measureRef.current = measureAndRequest
-    visibilityRef.current = (visible) => {
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible }))
+    hideRef.current = () => {
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
     }
 
     // A resize commit and its following binary frame are one browser transaction. Open an xterm synchronized
@@ -154,14 +144,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     // xterm's own write buffer batches ordinary chunks; a second animation-frame queue only adds latency.
     let committedSize = null
     sock = createResilientSocket({
-      url: socketUrl,
+      url: base,
       onState: setConn,
       onOpen: () => {
         committedSize = null
         term.reset()
         lastSizeRef.current = { cols: 0, rows: 0 }
         if (activeRef.current) measureAndRequest()
-        else visibilityRef.current?.(false)
+        else hideRef.current?.()
       },
       onMessage: (e) => {
         if (typeof e.data === 'string') {
@@ -236,7 +226,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       term.dispose()
       termRef.current = null
       measureRef.current = null
-      visibilityRef.current = null
+      hideRef.current = null
     }
   }, [sessionId])
 
@@ -256,20 +246,17 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     return () => { sub.dispose(); clearTimeout(timer); onMenuRef.current?.(sessionId, false) }
   }, [sessionId, active])
 
-  // Fit the stable warm renderer before the browser can paint a newly-visible layer. Swapping renderers here
-  // exposed an empty canvas for one frame, then an undersized canvas, even though the terminal buffer was hot.
+  // Keep the stable cached renderer as the first visible paint. The resize message is also the single helper
+  // activation path; there is no separate raw-terminal prewarm or size-ownership transition.
   useLayoutEffect(() => {
     const term = termRef.current
     if (!term) return
     if (active) {
-      // Force activation through the size gate even when this pane previously used the same geometry: that
-      // message makes its already-warm helper the size voter without resetting or reattaching the terminal.
-      visibilityRef.current?.(true)
       lastSizeRef.current = { cols: 0, rows: 0 }
       measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }
     } else {
-      visibilityRef.current?.(false)
+      hideRef.current?.()
     }
   }, [sessionId, active])
 

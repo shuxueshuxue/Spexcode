@@ -6,7 +6,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readdirSync, readlinkSync, readFileSync } from 'node:fs'
-import { attachViewer, detachViewer, superviseBridges, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, superviseBridges, type Viewer } from '../src/pty-bridge.js'
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `fdleak-${process.pid}`
@@ -70,11 +70,12 @@ async function main(): Promise<void> {
     for (const session of SESSIONS) {
       const viewer: Viewer = { send: () => {} }
       viewers.push(viewer)
-      if (!attachViewer(session, viewer, { cols: 80, rows: 24 })) throw new Error(`attach failed: ${session}`)
+      attachViewer(session, viewer)
+      resizeBridge(session, viewer, 80, 24)
     }
     await waitForClientCount(SESSIONS.length * 2)
 
-    const helpers = childPids(process.pid).filter((pid) => cmdline(pid).includes('pty-helper.ts'))
+    const helpers = childPids(process.pid).filter((pid) => cmdline(pid).includes('pty-helper.mjs'))
     const clients = await clientPids()
     const backendMasters = fds(process.pid).filter((entry) => entry.target.includes('ptmx'))
     const helperMasters = helpers.map((pid) => ({ pid, masters: fds(pid).filter((entry) => entry.target.includes('ptmx')) }))

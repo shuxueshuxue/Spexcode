@@ -66,7 +66,8 @@ async function main(): Promise<void> {
     commitSize: (cols, rows) => events.push(`commit:${cols}x${rows}`),
   }
   try {
-    if (!attachViewer(SESSION, viewer, FIRST)) throw new Error('attachViewer failed')
+    attachViewer(SESSION, viewer)
+    resizeBridge(SESSION, viewer, FIRST.cols, FIRST.rows)
     await sleep(350)
     await tmux('send-keys', '-t', SESSION, '-l', `node ${progFile}`)
     await tmux('send-keys', '-t', SESSION, 'Enter')

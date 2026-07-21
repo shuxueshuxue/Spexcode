@@ -27,13 +27,22 @@ scenarios:
   - name: warm-tab-switch-paints-immediately
     tags: [frontend-e2e, desktop]
     description: >-
-      Let hidden live-session terminals prewarm through the real dashboard, then record every browser paint
-      while switching into one session and repeatedly switching between two sessions.
+      View two live sessions through the real dashboard, switch away from each so both retain a browser
+      buffer, then record every browser paint while repeatedly switching between them.
     expected: >-
-      The first visible terminal paint already contains the warm xterm buffer at the fitted panel size. No
-      empty renderer, undersized first layout, first-visible resize, renderer replacement, socket reconnect,
-      or tmux reattach appears in the switch timeline. Hidden owner terminals follow panel resizes and settle
-      before activation while all hidden layers remain visually hidden and non-interactive.
+      The first visible paint already contains the fitted xterm's cached pixels. No empty renderer,
+      undersized first layout, renderer replacement, or socket reconnect appears. Native reattach happens
+      behind the cached frame and replaces it only with a complete native redraw; hidden layers remain
+      visually hidden and non-interactive.
+  - name: cold-visible-attach-is-atomic
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Route directly to a live session that has never been visible in this dashboard, and record helper
+      creation, WebSocket bytes, and every browser paint from navigation through the first terminal frame.
+    expected: >-
+      The already-open socket creates one native helper at the measured visible grid. A short wait for native
+      attach is allowed, but the first terminal content is one complete tmux rendition: no synthetic capture,
+      progressive top-to-bottom sweep, standalone clear, eager wrong-size reflow, or repeated full-screen flash.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-
@@ -44,17 +53,15 @@ scenarios:
       No intermediate clear or partial grid is painted while the transaction is open; one complete final
       grid appears when it closes. A missing end marker fails open on the terminal engine's bounded safety
       timeout rather than freezing the renderer forever.
-  - name: hidden-helper-stays-warm-and-size-neutral
+  - name: hidden-subscription-holds-no-pty
     tags: [backend-api]
     description: >-
-      Open hidden terminal sockets for several live sessions, let their panes produce output, then make one
-      session visible and switch repeatedly between sessions while inspecting helper identity, tmux client
-      flags, pane geometry, and time to first already-buffered pixels.
+      Open hidden terminal sockets for several live sessions, resize the hidden browser layers, then make one
+      viewer visible and hide it again while inspecting helper processes, tmux clients, and pane geometry.
     expected: >-
-      Every live socket keeps the same helper and native tmux client across tab switches, and hidden xterm
-      buffers continue receiving output. Switching shows terminal content immediately with no reattach or
-      pane replay. With no prior size owner, the first hidden helper pre-sizes the pane at final panel geometry;
-      a later hidden helper detects that owner, carries ignore-size, and cannot change its watched geometry.
+      Hidden sockets and xterms remain mounted but create no helper, receive no pane pixels, and do not resize
+      tmux. The first visible viewer creates exactly one raw helper plus its pipe observer at the measured size;
+      hiding the last visible viewer releases both without closing the socket or clearing the browser buffer.
   - name: helper-isolates-pty-masters
     tags: [backend-api]
     description: >-
@@ -97,4 +104,4 @@ scenarios:
 The loss signal is visual first. The resize scenario is accepted only from the real dashboard with video,
 per-frame images or hashes, and a WebSocket/geometry timeline; network ordering without pixels is not proof
 of a non-flashing terminal. Backend probes support the architectural invariants: one compositor, isolated
-PTY ownership, warm geometry ownership, real tmux navigation, durable subscriptions, and UTF-8 integrity.
+PTY ownership, visibility-scoped lifetime, real tmux navigation, durable subscriptions, and UTF-8 integrity.

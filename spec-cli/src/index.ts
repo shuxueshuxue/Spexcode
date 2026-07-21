@@ -24,7 +24,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, prewarmBridge, resizeBridge, setViewerVisible, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
@@ -456,10 +456,10 @@ app.post('/api/sessions/:id/merge', async (c) => {
 })
 
 // one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary); the
-// view takes no keyboard input, so client→server is only a text control frame — resize/prewarm, visibility,
+// view takes no keyboard input, so client→server is only a text control frame — resize, visibility,
 // or wheel. Server→client text commits a completed resize immediately before its binary tmux transaction;
-// visibility changes size ownership without detaching. tmux itself resolves wheel input between copy-mode
-// and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
+// hiding releases the native helper without closing the warm socket. tmux itself resolves wheel input between
+// copy-mode and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
 // resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
@@ -470,11 +470,6 @@ app.post('/api/sessions/:id/merge', async (c) => {
 const TERM_PING_MS = 10000
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
-  // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
-  // first frame is drawn at the true size. Absent/garbage → undefined, and the bridge falls back to prewarm.
-  const qc = Number(c.req.query('cols')), qr = Number(c.req.query('rows'))
-  const initialSize = qc > 0 && qr > 0 ? { cols: qc, rows: qr } : undefined
-  const initialVisible = c.req.query('visible') !== '0'
   let viewer: Viewer | null = null
   let ping: ReturnType<typeof setInterval> | undefined
   return {
@@ -483,20 +478,19 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
         send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } },
         commitSize: (cols, rows) => { try { ws.send(JSON.stringify({ t: 'resize-commit', cols, rows })) } catch { /* viewer gone */ } },
       }
-      if (!attachViewer(id, viewer, initialSize, initialVisible)) { try { ws.close() } catch { /* already closed */ } return }
+      attachViewer(id, viewer)
       ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
     },
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
-      // No keyboard input: client→server text only measures/prewarms, changes visibility, or forwards wheel
+      // No keyboard input: client→server text only measures, changes visibility, or forwards wheel
       // navigation. Binary is ignored; pane navigation stays in the tmux bridge instead of browser scroll state.
       if (typeof data === 'string') {
         try {
           const m = JSON.parse(data)
           if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
-          else if (m?.t === 'prewarm') prewarmBridge(id, viewer, Number(m.cols), Number(m.rows))
-          else if (m?.t === 'visible') setViewerVisible(id, viewer, !!m.visible)
+          else if (m?.t === 'visible' && m.visible === false) hideViewer(id, viewer)
           else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
         } catch { /* ignore */ }
       }
@@ -570,7 +564,7 @@ const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' })
 installConnectionReaper(server as unknown as HttpServer)
 injectWebSocket(server)
-superviseBridges()   // restore warm helpers after failure; their viewer subscriptions survive helper replacement
+superviseBridges()   // restore visible helpers after failure; their viewer subscriptions survive replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)

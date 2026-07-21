@@ -1,12 +1,10 @@
 import * as pty from 'node-pty'
 import { execFileSync } from 'node:child_process'
 
-const [id, colsArg, rowsArg, voteArg] = process.argv.slice(2)
+const [id, colsArg, rowsArg] = process.argv.slice(2)
 const cols = Number(colsArg)
 const rows = Number(rowsArg)
 const socket = process.env.SPEXCODE_TMUX || 'spexcode'
-const autoVote = voteArg === 'auto'
-let voteMode = autoVote ? 'neutral' : voteArg
 
 if (!id || !(cols > 0 && rows > 0)) {
   process.stderr.write('ERROR invalid helper arguments\n')
@@ -24,32 +22,24 @@ try {
   if (missing.length) {
     execFileSync('tmux', ['-L', socket, 'set-option', '-as', 'terminal-features', `,xterm*:${missing.join(':')}`])
   }
-  if (autoVote) {
-    const clients = execFileSync('tmux', ['-L', socket, 'list-clients', '-t', id, '-F', '#{client_flags}'], { encoding: 'utf8' })
-    const hasSizeOwner = clients.split('\n').some((flags) => flags && !flags.includes('ignore-size'))
-    voteMode = hasSizeOwner ? 'neutral' : 'owner'
-  }
 } catch { /* attach below fails loudly if the tmux server/session is unavailable */ }
 
-const attach = ['-u', '-L', socket, 'attach-session']
-if (voteMode === 'neutral') attach.push('-f', 'ignore-size')
-attach.push('-t', id)
-const terminal = pty.spawn('tmux', attach, {
+const terminal = pty.spawn('tmux', ['-u', '-L', socket, 'attach-session', '-t', id], {
   name: 'xterm-256color',
   cols,
   rows,
-  env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
+  env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
 })
 
-process.stderr.write(`READY ${terminal.pid} ${voteMode}\n`)
+process.stderr.write(`READY ${terminal.pid}\n`)
 terminal.onData((data) => process.stdout.write(Buffer.from(data, 'utf8')))
 terminal.onExit(({ exitCode }) => process.exit(exitCode === 0 ? 0 : 1))
 
 let input = ''
 process.stdin.setEncoding('utf8')
-process.stdin.on('data', (chunk: string) => {
+process.stdin.on('data', (chunk) => {
   input += chunk
-  let newline: number
+  let newline
   while ((newline = input.indexOf('\n')) >= 0) {
     const line = input.slice(0, newline)
     input = input.slice(newline + 1)
@@ -72,7 +62,7 @@ process.stdin.on('data', (chunk: string) => {
 })
 
 let closing = false
-function close(): void {
+function close() {
   if (closing) return
   closing = true
   try { terminal.kill() } catch { /* already gone */ }

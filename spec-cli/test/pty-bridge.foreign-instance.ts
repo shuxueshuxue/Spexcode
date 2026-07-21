@@ -1,5 +1,5 @@
-// A hidden viewer in a second backend instance stays warm, but its native helper and pipe observer are both
-// ignore-size, so they cannot collapse the geometry watched through the first backend.
+// A hidden viewer in a second backend instance owns no helper at all, so it cannot collapse the geometry
+// watched through the visible backend.
 //
 // Run: SPEXCODE_TMUX=foreign-$$ npx tsx test/pty-bridge.foreign-instance.ts
 import { execFile, spawn } from 'node:child_process'
@@ -15,7 +15,7 @@ const windowSize = async () => (await tmux('display-message', '-p', '-t', SESSIO
 
 if (process.argv[2] === 'foreign') {
   const hidden: Viewer = { send: () => {} }
-  if (!attachViewer(SESSION, hidden)) throw new Error('foreign attachViewer failed')
+  attachViewer(SESSION, hidden)
   process.stdout.write('READY\n')
   setInterval(() => {}, 60_000)
 } else {
@@ -27,7 +27,8 @@ async function main(): Promise<void> {
   await tmux('new-session', '-d', '-s', SESSION, '-x', '200', '-y', '50')
 
   const viewer: Viewer = { send: () => {} }
-  if (!attachViewer(SESSION, viewer, { cols: 221, rows: 63 })) throw new Error('attachViewer failed')
+  attachViewer(SESSION, viewer)
+  resizeBridge(SESSION, viewer, 221, 63)
   await sleep(800)
 
   const foreign = spawn(process.execPath, ['--import', 'tsx', process.argv[1], 'foreign'], {
@@ -58,10 +59,10 @@ async function main(): Promise<void> {
     const visibleSize = clientLines.some((line) => line.endsWith('|219x63'))
     console.log(`watched window after foreign hidden viewer: ${final}`)
     console.log(`tmux clients: ${clientCount} (${clients.trim()})`)
-    if (!visibleSize || clientCount !== 4 || neutralCount !== 3) {
-      throw new Error(`hidden foreign helper was not size-neutral (window=${final}, clients=${clientCount}, neutral=${neutralCount})`)
+    if (!visibleSize || clientCount !== 2 || neutralCount !== 1) {
+      throw new Error(`hidden foreign subscription created a client (window=${final}, clients=${clientCount}, neutral=${neutralCount})`)
     }
-    console.log('PASS: foreign helper stayed warm but ignore-size neutral; the visible client kept 219x63')
+    console.log('PASS: foreign hidden subscription held no PTY; only the visible raw client and observer existed')
   } finally {
     foreign.kill()
     detachViewer(SESSION, viewer)

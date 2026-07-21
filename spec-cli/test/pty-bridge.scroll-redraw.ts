@@ -11,7 +11,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { writeFileSync } from 'node:fs'
-import { attachViewer, detachViewer, forwardWheel, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `redraw-${process.pid}`
@@ -111,7 +111,8 @@ async function main() {
 
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (d) => { chunks.push(Buffer.from(d)) } }
-  if (!attachViewer(SESSION, viewer, { cols: COLS, rows: ROWS })) throw new Error('attachViewer failed')
+  attachViewer(SESSION, viewer)
+  resizeBridge(SESSION, viewer, COLS, ROWS)
   await sleep(500)
   await tmux('send-keys', '-t', SESSION, '-l', `node ${progFile}`); await tmux('send-keys', '-t', SESSION, 'Enter')
   await sleep(1500)   // let the box redraw a few times live

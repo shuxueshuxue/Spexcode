@@ -5,7 +5,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { attachViewer, detachViewer, superviseBridges, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, superviseBridges, type Viewer } from '../src/pty-bridge.js'
 import { emulate } from './vt-emulate.js'
 
 const pexec = promisify(execFile)
@@ -22,7 +22,7 @@ function helperPid(): number | undefined {
     const pid = Number(raw)
     if (!pid) continue
     try {
-      if (readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('pty-helper.ts')) return pid
+      if (readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('pty-helper.mjs')) return pid
     } catch { /* child raced away */ }
   }
   return undefined
@@ -53,7 +53,8 @@ async function main() {
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (d) => { chunks.push(Buffer.from(d)) } }
   superviseBridges(250)
-  if (!attachViewer(SESSION, viewer, { cols: COLS, rows: ROWS })) throw new Error('attachViewer failed')
+  attachViewer(SESSION, viewer)
+  resizeBridge(SESSION, viewer, COLS, ROWS)
   await sleep(500)
   await tmux('send-keys', '-t', SESSION, '-l', `node ${progFile}`); await tmux('send-keys', '-t', SESSION, 'Enter')
   await sleep(1500)   // several live redraws

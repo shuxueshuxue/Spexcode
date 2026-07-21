@@ -5,9 +5,7 @@ import { alive } from './sessions.js'
 
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-const HELPER = fileURLToPath(new URL('./pty-helper.ts', import.meta.url))
-const TSX_IMPORT = import.meta.resolve('tsx')
-const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
+const HELPER = fileURLToPath(new URL('./pty-helper.mjs', import.meta.url))
 
 export type Viewer = {
   send: (data: Buffer) => void
@@ -24,20 +22,17 @@ type Bridge = {
   ptyPid?: number
   stderr: string
   refreshWhenReady: boolean
-  voting: boolean
-  warmOwner: boolean
-  warmOwnerViewer?: Viewer
-  pendingWarmSize?: { viewer: Viewer; cols: number; rows: number }
   clientTty?: string
   probeBuf: Buffer
   probeTail: Buffer
   syncCapable: boolean
-  barrier: 'none' | 'app' | 'settle' | 'refresh'
+  barrier: 'none' | 'attach' | 'app' | 'settle' | 'refresh'
   barrierSawLayout: boolean
   barrierSawBegin: boolean
   probeSawBegin: boolean
   refreshBuf: Buffer
   refreshCommandDone: boolean
+  attachTimer?: ReturnType<typeof setTimeout>
   refreshFinishTimer?: ReturnType<typeof setTimeout>
   barrierTimer?: ReturnType<typeof setTimeout>
   settleTimer?: ReturnType<typeof setTimeout>
@@ -46,7 +41,6 @@ type Bridge = {
 const subscribers = new Map<string, Map<Viewer, Subscription>>()
 const bridges = new Map<string, Bridge>()
 const lastSize = new Map<string, { cols: number; rows: number }>()
-let lastSizeAny: { cols: number; rows: number } | undefined
 const restoreTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const synchronizedSessions = new Set<string>()
 
@@ -64,13 +58,15 @@ function hasVisibleViewer(id: string): boolean {
 }
 
 function broadcast(id: string, data: Buffer): void {
-  for (const viewer of subscribers.get(id)?.keys() ?? []) {
+  for (const [viewer, subscription] of subscribers.get(id) ?? []) {
+    if (!subscription.visible) continue
     try { viewer.send(data) } catch { /* socket close owns subscription removal */ }
   }
 }
 
 function commitSize(bridge: Bridge): void {
-  for (const viewer of subscribers.get(bridge.id)?.keys() ?? []) {
+  for (const [viewer, subscription] of subscribers.get(bridge.id) ?? []) {
+    if (!subscription.visible) continue
     try { viewer.commitSize?.(bridge.cols, bridge.rows) } catch { /* socket close owns subscription removal */ }
   }
 }
@@ -129,25 +125,39 @@ function feedProbe(bridge: Bridge, chunk: Buffer): void {
     if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, line.length - 1)
     const head = line.toString('latin1')
     if (head.startsWith('%layout-change ')) {
+      if (bridge.barrier === 'attach') {
+        bridge.barrierSawLayout = true
+        bridge.barrier = bridge.syncCapable ? 'app' : 'settle'
+        bridge.refreshBuf = Buffer.alloc(0)
+        if (bridge.attachTimer) clearTimeout(bridge.attachTimer)
+        bridge.attachTimer = undefined
+        armBarrierTimeout(bridge, bridge.barrier === 'app' ? 1000 : 400)
+      }
       if (bridge.barrier === 'app' || bridge.barrier === 'settle') bridge.barrierSawLayout = true
       continue
     }
     if (!head.startsWith('%output ')) continue
     const split = head.indexOf(' ', 8)
-    if (split > 0) scanSyncMarkers(bridge, unescapeControlOutput(line.subarray(split + 1)))
+    if (split > 0) {
+      scanSyncMarkers(bridge, unescapeControlOutput(line.subarray(split + 1)))
+      if (bridge.barrier === 'settle' && bridge.barrierSawLayout) armSettleQuiet(bridge)
+    }
   }
 }
 
 function onHelperOutput(bridge: Bridge, chunk: Buffer): void {
+  if (bridges.get(bridge.id) !== bridge) return
   if (bridge.barrier === 'none') {
     broadcast(bridge.id, chunk)
     return
   }
-  if (bridge.barrier === 'app') return
-  if (bridge.barrier === 'settle') {
-    armSettleQuiet(bridge)
+  if (bridge.barrier === 'attach') {
+    bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
+    scheduleAttachFinish(bridge)
     return
   }
+  if (bridge.barrier === 'app') return
+  if (bridge.barrier === 'settle') return
 
   bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
   scheduleAtomicRefreshFinish(bridge)
@@ -163,19 +173,10 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
   while ((newline = bridge.stderr.indexOf('\n')) >= 0) {
     const line = bridge.stderr.slice(0, newline)
     bridge.stderr = bridge.stderr.slice(newline + 1)
-    const ready = line.match(/^READY (\d+) (vote|owner|neutral)$/)
+    const ready = line.match(/^READY (\d+)$/)
     if (ready) {
       bridge.ptyPid = Number(ready[1])
-      bridge.warmOwner = ready[2] === 'owner'
-      bridge.voting = ready[2] !== 'neutral'
-      updateVote(bridge)
-      const pendingWarmSize = bridge.pendingWarmSize
-      bridge.pendingWarmSize = undefined
-      if (bridge.warmOwner && pendingWarmSize && pendingWarmSize.viewer === bridge.warmOwnerViewer) {
-        const size = { cols: pendingWarmSize.cols, rows: pendingWarmSize.rows }
-        lastSize.set(bridge.id, size); lastSizeAny = size
-        resize(bridge, size.cols, size.rows)
-      }
+      if (bridge.barrier === 'attach' && !bridge.barrierTimer) armBarrierTimeout(bridge, 400)
       if (bridge.refreshWhenReady) {
         bridge.refreshWhenReady = false
         void refreshBridge(bridge)
@@ -186,7 +187,7 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
   }
 }
 
-function ensureBridge(id: string, cols: number, rows: number, voting: boolean): { bridge: Bridge | null; created: boolean } {
+function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge | null; created: boolean } {
   const existing = bridges.get(id)
   if (existing) return { bridge: existing, created: false }
   let proc: ChildProcessWithoutNullStreams | undefined
@@ -196,7 +197,7 @@ function ensureBridge(id: string, cols: number, rows: number, voting: boolean): 
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
     })
-    proc = spawn(process.execPath, ['--import', TSX_IMPORT, HELPER, id, String(cols), String(rows), voting ? 'vote' : 'auto'], {
+    proc = spawn(process.execPath, [HELPER, id, String(cols), String(rows)], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
     })
@@ -206,9 +207,9 @@ function ensureBridge(id: string, cols: number, rows: number, voting: boolean): 
     return { bridge: null, created: false }
   }
   const bridge: Bridge = {
-    id, proc, probe, cols, rows, stderr: '', refreshWhenReady: false, voting, warmOwner: false,
+    id, proc, probe, cols, rows, stderr: '', refreshWhenReady: false,
     probeBuf: Buffer.alloc(0), probeTail: Buffer.alloc(0), syncCapable: synchronizedSessions.has(id),
-    barrier: 'none', barrierSawLayout: false, barrierSawBegin: false, probeSawBegin: false,
+    barrier: 'attach', barrierSawLayout: false, barrierSawBegin: false, probeSawBegin: false,
     refreshBuf: Buffer.alloc(0), refreshCommandDone: false,
   }
   bridges.set(id, bridge)
@@ -265,9 +266,9 @@ function armSettleQuiet(bridge: Bridge): void {
   bridge.settleTimer.unref()
 }
 
-function armBarrierTimeout(bridge: Bridge): void {
+function armBarrierTimeout(bridge: Bridge, timeoutMs = 1000): void {
   if (bridge.barrierTimer) clearTimeout(bridge.barrierTimer)
-  bridge.barrierTimer = setTimeout(() => failOpenBarrier(bridge), 1000)
+  bridge.barrierTimer = setTimeout(() => failOpenBarrier(bridge), timeoutMs)
   bridge.barrierTimer.unref()
 }
 
@@ -281,8 +282,29 @@ function clearBarrier(bridge: Bridge): void {
   bridge.settleTimer = undefined
   bridge.refreshBuf = Buffer.alloc(0)
   bridge.refreshCommandDone = false
+  if (bridge.attachTimer) clearTimeout(bridge.attachTimer)
+  bridge.attachTimer = undefined
   if (bridge.refreshFinishTimer) clearTimeout(bridge.refreshFinishTimer)
   bridge.refreshFinishTimer = undefined
+}
+
+function scheduleAttachFinish(bridge: Bridge): void {
+  if (bridge.barrier !== 'attach' || bridge.attachTimer) return
+  const end = bridge.refreshBuf.lastIndexOf(ESU)
+  const begin = end >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, end) : -1
+  if (begin < 0 || end < begin) return
+  bridge.attachTimer = setTimeout(() => {
+    bridge.attachTimer = undefined
+    if (bridge.barrier !== 'attach' || bridge.barrierSawLayout) return
+    const finalEnd = bridge.refreshBuf.lastIndexOf(ESU)
+    const finalBegin = finalEnd >= 0 ? bridge.refreshBuf.lastIndexOf(BSU, finalEnd) : -1
+    if (finalBegin < 0 || finalEnd < finalBegin) return
+    const transaction = bridge.refreshBuf.subarray(finalBegin, finalEnd + ESU.length)
+    commitSize(bridge)
+    clearBarrier(bridge)
+    broadcast(bridge.id, transaction)
+  }, 30)
+  bridge.attachTimer.unref()
 }
 
 function awaitAtomicRefresh(bridge: Bridge): void {
@@ -348,24 +370,6 @@ async function clientTty(bridge: Bridge): Promise<string | undefined> {
   return undefined
 }
 
-async function syncVote(bridge: Bridge): Promise<void> {
-  const wanted = bridge.voting
-  const tty = await clientTty(bridge)
-  if (!tty || bridges.get(bridge.id) !== bridge || bridge.voting !== wanted) return
-  // -S applies the client flag with a status-only refresh; tab activation must not resend the pane grid.
-  await tmux(['refresh-client', '-S', '-t', tty, '-f', wanted ? '!ignore-size' : 'ignore-size'])
-}
-
-function setVote(bridge: Bridge, voting: boolean): void {
-  if (bridge.voting === voting) return
-  bridge.voting = voting
-  void syncVote(bridge)
-}
-
-function updateVote(bridge: Bridge): void {
-  setVote(bridge, hasVisibleViewer(bridge.id) || bridge.warmOwner)
-}
-
 function resize(bridge: Bridge, cols: number, rows: number): void {
   if (bridge.cols === cols && bridge.rows === rows) return
   beginBarrier(bridge)
@@ -374,65 +378,23 @@ function resize(bridge: Bridge, cols: number, rows: number): void {
   sendControl(bridge, { t: 'resize', cols, rows })
 }
 
-export function attachViewer(id: string, viewer: Viewer, initialSize?: { cols: number; rows: number }, initialVisible = !!initialSize): boolean {
-  const subscriptions = subscriptionMap(id)
-  subscriptions.set(viewer, { visible: initialVisible })
-  const proposed = initialSize && { cols: Math.floor(initialSize.cols), rows: Math.floor(initialSize.rows) }
-  const fitted = proposed && proposed.cols > 0 && proposed.rows > 0 ? proposed : undefined
-  const size = fitted ?? lastSize.get(id) ?? lastSizeAny ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS }
-  if (fitted) { lastSize.set(id, fitted); lastSizeAny = fitted }
-  const { bridge, created } = ensureBridge(id, size.cols, size.rows, initialVisible)
-  if (!bridge) { subscriptions.delete(viewer); return false }
-  if (created && !initialVisible) bridge.warmOwnerViewer = viewer
-  if (fitted) {
-    if (initialVisible || !hasVisibleViewer(id)) resize(bridge, fitted.cols, fitted.rows)
-    updateVote(bridge)
-  }
-  if (!created && fitted) void refreshBridge(bridge)
-  return true
+export function attachViewer(id: string, viewer: Viewer): void {
+  subscriptionMap(id).set(viewer, { visible: false })
 }
 
-export function setViewerVisible(id: string, viewer: Viewer, visible: boolean): void {
+export function hideViewer(id: string, viewer: Viewer): void {
   const subscription = subscribers.get(id)?.get(viewer)
   if (!subscription) return
-  subscription.visible = visible
-  const bridge = bridges.get(id)
-  if (bridge) updateVote(bridge)
+  subscription.visible = false
+  if (!hasVisibleViewer(id)) killBridge(id)
 }
 
 export function detachViewer(id: string, viewer: Viewer): void {
   const subscriptions = subscribers.get(id)
   if (!subscriptions) return
   subscriptions.delete(viewer)
-  if (subscriptions.size === 0) {
-    subscribers.delete(id)
-    killBridge(id)
-  } else {
-    const bridge = bridges.get(id)
-    if (bridge) {
-      if (bridge.warmOwnerViewer === viewer) {
-        bridge.warmOwnerViewer = [...subscriptions].find(([, subscription]) => !subscription.visible)?.[0]
-      }
-      if (bridge.pendingWarmSize?.viewer === viewer) bridge.pendingWarmSize = undefined
-      updateVote(bridge)
-    }
-  }
-}
-
-export function prewarmBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {
-  const cols = Math.floor(colsValue), rows = Math.floor(rowsValue)
-  if (!(cols > 0 && rows > 0)) return
-  const subscription = subscribers.get(id)?.get(viewer)
-  const bridge = bridges.get(id)
-  if (!subscription || subscription.visible || !bridge || bridge.warmOwnerViewer !== viewer) return
-  if (!bridge.ptyPid) {
-    bridge.pendingWarmSize = { viewer, cols, rows }
-    return
-  }
-  if (!bridge.warmOwner) return
-  const size = { cols, rows }
-  lastSize.set(id, size); lastSizeAny = size
-  resize(bridge, cols, rows)
+  if (subscriptions.size === 0) subscribers.delete(id)
+  if (!hasVisibleViewer(id)) killBridge(id)
 }
 
 export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {
@@ -442,9 +404,11 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
   if (!subscription) return
   subscription.visible = true
   const size = { cols, rows }
-  lastSize.set(id, size); lastSizeAny = size
-  const { bridge } = ensureBridge(id, cols, rows, true)
-  if (bridge) { updateVote(bridge); resize(bridge, cols, rows) }
+  lastSize.set(id, size)
+  const { bridge, created } = ensureBridge(id, cols, rows)
+  if (!bridge) return
+  if (!created && bridge.cols === cols && bridge.rows === rows) void refreshBridge(bridge)
+  else resize(bridge, cols, rows)
 }
 
 export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {
@@ -455,13 +419,14 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 
 async function restoreBridge(id: string): Promise<void> {
   restoreTimers.delete(id)
-  if (bridges.has(id) || !subscribers.has(id) || !(await alive(id))) return
-  const size = lastSize.get(id) ?? lastSizeAny ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS }
-  ensureBridge(id, size.cols, size.rows, hasVisibleViewer(id))
+  if (bridges.has(id) || !hasVisibleViewer(id) || !(await alive(id))) return
+  const size = lastSize.get(id)
+  if (!size) return
+  ensureBridge(id, size.cols, size.rows)
 }
 
 function scheduleRestore(id: string): void {
-  if (!subscribers.has(id) || restoreTimers.has(id)) return
+  if (!hasVisibleViewer(id) || restoreTimers.has(id)) return
   const timer = setTimeout(() => void restoreBridge(id), 750)
   timer.unref()
   restoreTimers.set(id, timer)
@@ -473,7 +438,7 @@ export function superviseBridges(intervalMs = 4000): void {
   supervising = true
   const tick = () => {
     for (const id of subscribers.keys()) {
-      if (!bridges.has(id)) scheduleRestore(id)
+      if (hasVisibleViewer(id) && !bridges.has(id)) scheduleRestore(id)
     }
     const timer = setTimeout(tick, intervalMs)
     timer.unref()

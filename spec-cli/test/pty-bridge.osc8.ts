@@ -4,7 +4,7 @@
 // Run: SPEXCODE_TMUX=osc8-<pid> npx tsx test/pty-bridge.osc8.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { attachViewer, detachViewer, forwardWheel, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `osc8-${process.pid}`
@@ -21,7 +21,8 @@ async function main(): Promise<void> {
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (data) => chunks.push(Buffer.from(data)) }
   try {
-    if (!attachViewer(SESSION, viewer, { cols: 80, rows: 10 })) throw new Error('attachViewer failed')
+    attachViewer(SESSION, viewer)
+    resizeBridge(SESSION, viewer, 80, 10)
     await sleep(500)
     chunks.length = 0
     await tmux('send-keys', '-t', SESSION, '-l', LINK_CMD); await tmux('send-keys', '-t', SESSION, 'Enter')

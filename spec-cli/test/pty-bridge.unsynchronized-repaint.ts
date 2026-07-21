@@ -47,7 +47,8 @@ async function main(): Promise<void> {
   const chunks: Buffer[] = []
   const viewer: Viewer = { send: (data) => chunks.push(Buffer.from(data)) }
   try {
-    if (!attachViewer(SESSION, viewer, FIRST)) throw new Error('attach failed')
+    attachViewer(SESSION, viewer)
+    resizeBridge(SESSION, viewer, FIRST.cols, FIRST.rows)
     await sleep(350)
     await tmux('send-keys', '-t', SESSION, '-l', `node ${program}`); await tmux('send-keys', '-t', SESSION, 'Enter')
     await sleep(500)

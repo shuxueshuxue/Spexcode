@@ -1,7 +1,7 @@
 ---
 concern: tmux server 全局卡死:node-pty master fd 泄漏进兄弟 -CC client,死 client 的 tty 写阻塞冻结整个 server → 所有 dashboard terminal 黑屏
 by: unknown
-status: open
+status: landed
 created: 2026-07-17T12:25:03.799Z
 ---
 

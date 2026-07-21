@@ -12,7 +12,7 @@ export type Viewer = {
   commitSize?: (cols: number, rows: number) => void
 }
 
-type Subscription = { visible: boolean; cols: number; rows: number }
+type Subscription = { visible: boolean; lingering: boolean; cols: number; rows: number }
 type Bridge = {
   id: string
   proc: ChildProcessWithoutNullStreams
@@ -33,9 +33,13 @@ const subscribers = new Map<string, Map<Viewer, Subscription>>()
 const bridges = new Map<string, Bridge>()
 const lastSize = new Map<string, { cols: number; rows: number }>()
 const restoreTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const lingerTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const BSU = Buffer.from('\x1b[?2026h')
 const ESU = Buffer.from('\x1b[?2026l')
 const GEOMETRY_STABILIZATION_MS = 400
+// The bounded linger window: how long the helper outlives its last visible viewer. The env override is a
+// test seam (the release path would otherwise take 30s to observe), not a supported configuration surface.
+const LINGER_MS = Number(process.env.SPEXCODE_TERM_LINGER_MS) > 0 ? Number(process.env.SPEXCODE_TERM_LINGER_MS) : 30_000
 
 function subscriptionMap(id: string): Map<Viewer, Subscription> {
   let map = subscribers.get(id)
@@ -62,9 +66,20 @@ function visibleSize(id: string): { cols: number; rows: number } | undefined {
 
 function broadcast(id: string, data: Buffer): void {
   for (const [viewer, subscription] of subscribers.get(id) ?? []) {
-    if (!subscription.visible) continue
+    // A lingering subscription keeps consuming the stream: its hidden xterm buffer stays the current
+    // screen, so a return inside the linger window resumes output in place instead of repainting.
+    if (!subscription.visible && !subscription.lingering) continue
     try { viewer.send(data) } catch { /* socket close owns subscription removal */ }
   }
+}
+
+function clearLinger(id: string): void {
+  for (const subscription of subscribers.get(id)?.values() ?? []) subscription.lingering = false
+}
+
+function cancelLingerTimer(id: string): void {
+  const timer = lingerTimers.get(id)
+  if (timer) { clearTimeout(timer); lingerTimers.delete(id) }
 }
 
 function commitSize(bridge: Bridge): void {
@@ -159,6 +174,8 @@ function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge 
 }
 
 function killBridge(id: string): void {
+  cancelLingerTimer(id)
+  clearLinger(id)
   const bridge = bridges.get(id)
   if (!bridge) return
   bridges.delete(id)
@@ -261,6 +278,9 @@ async function clientTty(bridge: Bridge): Promise<string | undefined> {
 
 function resize(bridge: Bridge, cols: number, rows: number): void {
   if (bridge.cols === cols && bridge.rows === rows) return
+  // A lingered buffer is only trusted at the unchanged grid: a grid change drops every lingering
+  // subscription back to an ordinary hidden cache (a later return takes the repaint path).
+  clearLinger(bridge.id)
   beginDelivery(bridge)
   bridge.cols = cols
   bridge.rows = rows
@@ -268,12 +288,32 @@ function resize(bridge: Bridge, cols: number, rows: number): void {
 }
 
 export function attachViewer(id: string, viewer: Viewer): void {
-  subscriptionMap(id).set(viewer, { visible: false, cols: 0, rows: 0 })
+  subscriptionMap(id).set(viewer, { visible: false, lingering: false, cols: 0, rows: 0 })
+}
+
+// The last visible viewer arms one bounded linger instead of an instant release: the helper stays alive and
+// keeps streaming into the lingering buffers, so a quick switch-back continues output in place. The window
+// elapsing with no visible claim releases the helper exactly as an immediate release would have.
+function releaseOrLinger(id: string): void {
+  const bridge = bridges.get(id)
+  let lingering = false
+  for (const subscription of subscribers.get(id)?.values() ?? []) {
+    if (subscription.lingering) { lingering = true; break }
+  }
+  if (!bridge || !lingering) { killBridge(id); return }
+  if (lingerTimers.has(id)) return
+  const timer = setTimeout(() => {
+    lingerTimers.delete(id)
+    if (!hasVisibleViewer(id)) killBridge(id)
+  }, LINGER_MS)
+  timer.unref()
+  lingerTimers.set(id, timer)
 }
 
 function syncBridgeToViewers(id: string, refreshSameSize: boolean): void {
   const size = visibleSize(id)
-  if (!size) { killBridge(id); return }
+  if (!size) { releaseOrLinger(id); return }
+  cancelLingerTimer(id)
   lastSize.set(id, size)
   const { bridge, created } = ensureBridge(id, size.cols, size.rows)
   if (!bridge) return
@@ -290,6 +330,9 @@ function syncBridgeToViewers(id: string, refreshSameSize: boolean): void {
 export function hideViewer(id: string, viewer: Viewer): void {
   const subscription = subscribers.get(id)?.get(viewer)
   if (!subscription) return
+  // Only a viewer that was actually watching the live grid can linger: its buffer is the stream's
+  // current state. A never-visible hidden subscription still receives nothing.
+  if (subscription.visible && bridges.has(id)) subscription.lingering = true
   subscription.visible = false
   syncBridgeToViewers(id, false)
 }
@@ -307,10 +350,16 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
   if (!(cols > 0 && rows > 0)) return
   const subscription = subscribers.get(id)?.get(viewer)
   if (!subscription) return
+  // A lingering viewer returning to the unchanged grid resumes the stream it never stopped receiving;
+  // a repaint would only replace a current buffer with itself. Every other claim takes the ordinary
+  // refreshed-commit path so local fit dimensions can never survive beside a different tmux grid.
+  const bridge = bridges.get(id)
+  const seamless = subscription.lingering && !!bridge && bridge.cols === cols && bridge.rows === rows
   subscription.visible = true
+  subscription.lingering = false
   subscription.cols = cols
   subscription.rows = rows
-  syncBridgeToViewers(id, true)
+  syncBridgeToViewers(id, !seamless)
 }
 
 export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {

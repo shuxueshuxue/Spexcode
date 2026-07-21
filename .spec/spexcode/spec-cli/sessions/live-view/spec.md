@@ -2,7 +2,7 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard keeps browser terminals ready, but a session owns one native tmux stream only while visible; cached pixels make return switches instant and SpexCode never splices a reconstructed screen into live output.
+desc: The dashboard keeps browser terminals ready, but a session owns one native tmux stream only while watched — visibility with one bounded linger; a quick switch-back continues output in place and SpexCode never splices a reconstructed screen into live output.
 code:
   - spec-cli/src/pty-bridge.ts
 related:
@@ -103,18 +103,27 @@ later human attaches to that SpexCode-owned session see the same status-free pan
 
 Browser readiness and native rendering have deliberately different lifetimes. Every live session mounts its
 xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
-setup from a tab click. A hidden subscription creates no helper, consumes no pane output, and never votes on
-tmux geometry. The first visible viewer creates the helper at its already-measured grid. The last visible
-viewer releases it even though hidden sockets and xterm buffers remain alive.
+setup from a tab click. A hidden subscription creates no helper and never votes on tmux geometry; only a
+lingering one — hidden moments ago from the live grid — still consumes pane output, and only for the window's
+duration. The first visible viewer creates the helper at its already-measured grid. The last visible viewer
+arms one bounded linger window instead of an instant release: the helper stays alive and its stream keeps
+flowing into the hidden but still-mounted xterm buffers that were watching it, so those buffers remain the
+current screen rather than a stale cache. A window that elapses with no visible claim releases the helper
+even though hidden sockets and xterm buffers remain alive.
 
-Visibility is the only helper lifecycle switch. A visible claim always carries the viewer's measured grid;
-that one resize message both creates the helper when needed and owns later geometry transactions. Hiding the
-viewer releases the helper when no visible claim remains. A browser viewer is visible only while both its
-dashboard session layer and its document are visible. Backgrounding the browser tab therefore withdraws the
-same claim: the socket and cached xterm remain, but no pane deltas accumulate for replay. Returning exposes the
-      cache immediately and the ordinary measured resize recreates the native helper, whose initial repaint replaces it
-with the current tmux screen. There is no resume replay or page-specific repaint protocol. There is no second
-prewarm protocol. Multiple visible
+Visibility is the only helper lifecycle switch, and the linger window is its one bounded hysteresis. A
+visible claim always carries the viewer's measured grid; that one resize message both creates the helper when
+needed and owns later geometry transactions. A claim inside the linger window at the unchanged grid simply
+resumes: no repaint replaces a buffer the stream never left, so output continues in place. A lingered buffer
+is trusted only at that unchanged grid — any grid change drops every lingering subscription back to an
+ordinary hidden cache, and a hidden pane whose stream still flows keeps its grid, because reflow belongs to
+the visible transaction. A browser viewer is visible only while both its dashboard session layer and its
+document are visible. Backgrounding the browser tab therefore withdraws the same claim and earns the same
+linger. Past the window the socket and cached xterm remain, but no pane deltas accumulate for replay: returning
+exposes the cache immediately and the ordinary measured resize recreates the native helper, whose initial
+repaint replaces it with the current tmux screen. Lingered bytes are written into the mounted terminal as they
+arrive, never queued for fast-forward — there is no resume replay or page-specific repaint protocol. There is
+no second prewarm protocol. Multiple visible
 viewers of one session share the backend's helper at the smallest visible rows and columns, so its one grid fits
 every viewer and no narrower browser clips the right or bottom edge. Every joining viewer receives the shared
       grid commit with the refreshed transaction even when that grid did not change, so local fit dimensions can never

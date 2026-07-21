@@ -55,7 +55,8 @@ scenarios:
     expected: >
       The toolbar reads only the session unit carried by graph-full/graph-delta: a cache miss is loading,
       a changed generation is updating with the prior counts intact, disconnect is explicitly last-known,
-      and only ready may claim current or show a genuine 0/0. A→B→A never resets or fetches. Burst writes
+      and only ready may claim current; its mutually exclusive category counts render without a redundant
+      measured/total aggregate. A→B→A never resets or fetches. Burst writes
       publish only the latest generation, an old build cannot overwrite it, and idle time creates zero
       summary requests or computes. Direct dirty source, rename, index-only, sidecar, remark and main moves
       all enter the canonical watcher/invalidation chain. Reconnect graph-full authoritatively re-anchors.

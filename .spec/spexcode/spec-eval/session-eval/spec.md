@@ -59,14 +59,17 @@ stays visible whether its latest reading is fresh, stale, legacy, or
 missing: stale and missing are review work, not reasons to hide it. A declared affected scenario with no
 effective reading is the precise **blind/unmeasured** case (the contract is known, the measurement is absent).
 A changed frontend node with no eval.md is **unknown coverage** (there is no declared contract to count as a
-scenario) and remains called out separately; it never inflates the measured/declared scenario fraction or the
-list's scenario filter counts. The session toolbar decomposes that fraction visibly: fresh pass, fresh fail,
-measured-but-stale/unscored work needing review, and blind declarations are mutually exclusive and add back to
-the affected total; unknown remains outside it.
+scenario) and remains called out separately; it never inflates the scenario accounting or the list's scenario
+filter counts. The session toolbar renders that accounting once, as its mutually exclusive categories: fresh
+pass, fresh fail, measured-but-stale/unscored work needing review, and blind declarations add back to the
+affected total; unknown remains outside it. It does not repeat a measured/declared fraction beside that complete
+decomposition.
 
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
-affected selector in this engine and reduces the already-scoped model to the seven counts the toolbar needs:
-measured, affected total, fresh pass, fresh fail, measured-but-needing-review, blind, and unknown. Each paged
+affected selector in this engine and reduces the already-scoped model to seven useful counts: measured,
+affected total, fresh pass, fresh fail, measured-but-needing-review, blind, and unknown. The toolbar renders the
+four mutually exclusive scenario categories plus unknown, while measured and total remain projection facts for
+coherence, paging, exports, and other consumers rather than a second visible aggregate. Each paged
 list and bounded detail response carries that exact projection too, so a consumer never re-implements the fold. Each stable build
 also carries one content revision over every input that can move the result: the session HEAD, the base branch
 HEAD and merge-base, the staged and unstaged diff (renames and untracked content included), scenario declarations

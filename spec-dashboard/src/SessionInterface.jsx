@@ -933,7 +933,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     visibility: id === active ? 'visible' : 'hidden',
                     pointerEvents: id === active ? 'auto' : 'none',
                   }}>
-                    <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
+                    <SessionTerm sessionId={id} active={open && id === active} onMenu={reportMenu} />
                   </div>
                 ))}
                 {showRelaunch && (

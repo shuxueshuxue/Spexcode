@@ -14,7 +14,8 @@ scenarios:
       For a pane that demonstrated synchronized output, the next post-resize BSU/ESU is the measured barrier
       and the socket resumes with one final native-client refresh. No captured browser frame is blank,
       partially swept top-to-bottom, or an eager xterm reflow of the old buffer at the new grid. The old
-      painted frame remains until grid commit and final bytes become one browser paint.
+      painted frame remains through grid commit; the engine flushes its deferred renderer resize and buffered
+      rows together when synchronized output closes, with no second terminal or snapshot layer.
   - name: unsynchronized-resize-is-bounded
     tags: [backend-api]
     description: >-
@@ -34,6 +35,18 @@ scenarios:
       undersized first layout, renderer replacement, or socket reconnect appears. Native reattach happens
       behind the cached frame and replaces it only with a complete native redraw; hidden layers remain
       visually hidden and non-interactive.
+  - name: background-return-resyncs-current-screen
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      View a live tmux pane that updates a visible sequence number several times per second, move to another
+      browser tab long enough for the dashboard page to be suspended, then return while recording terminal
+      text, WebSocket frames, helper lifecycle, and every browser paint.
+    expected: >-
+      Browser-page visibility participates in the same viewer lifecycle as dashboard-session visibility.
+      While the page is hidden it retains the browser terminal and socket but holds no native helper and
+      receives no continuing pane deltas. Return exposes the cached pixels immediately, then one native attach
+      replaces them with the current complete tmux screen. The user never watches queued historical deltas
+      fast-forward to the present, and no second replay, capture, or page-specific terminal path exists.
   - name: cold-visible-attach-is-atomic
     tags: [frontend-e2e, desktop, backend-api]
     description: >-

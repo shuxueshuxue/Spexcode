@@ -41,9 +41,10 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page never unmounts it — the terminals keep their sockets and scroll warm; page visibility
-itself belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and
-never toggles its own display. The console **follows
+Leaving the page never unmounts it — the terminals keep their sockets and scroll warm, while the selected
+terminal withdraws its [[live-view]] visibility claim until the shared pane opens again. Page display itself
+belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
+toggles its own display. The console **follows
 the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
@@ -236,8 +237,9 @@ place** (socket + last painted buffer survive), New Session included. Hidden lay
 terminal geometry under `visibility:hidden`, keeping their xterm and stable default renderer ready; switching
 changes visibility, not socket attachment or renderer identity. No pane loads a visibility-scoped WebGL addon,
 so hidden sessions neither expose an empty replacement renderer nor accumulate capped GPU contexts. [[live-view]]
-owns the matching backend rule: a hidden socket owns no raw PTY or tmux geometry, while a visited hidden xterm
-keeps its cached pixels for an immediate return paint. List
+owns the matching backend rule: an unselected session, a closed Sessions route, or a background browser tab
+owns no raw PTY or tmux geometry, while a visited hidden xterm keeps its cached pixels for an immediate return
+paint. List
 navigation lives at the **window level**: plain **↑/↓** walk the list, but a **text input keeps them
 entirely** — inside the New prompt or the `❯` box, ↑/↓ are always the textarea's own caret keys and **never
 switch tabs**, even at the first/last line, so typing in the box never jerks you onto another session (the box

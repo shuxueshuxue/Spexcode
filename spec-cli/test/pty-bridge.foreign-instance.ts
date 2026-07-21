@@ -59,10 +59,10 @@ async function main(): Promise<void> {
     const visibleSize = clientLines.some((line) => line.endsWith('|219x63'))
     console.log(`watched window after foreign hidden viewer: ${final}`)
     console.log(`tmux clients: ${clientCount} (${clients.trim()})`)
-    if (!visibleSize || clientCount !== 2 || neutralCount !== 1) {
+    if (!visibleSize || clientCount !== 1 || neutralCount !== 0) {
       throw new Error(`hidden foreign subscription created a client (window=${final}, clients=${clientCount}, neutral=${neutralCount})`)
     }
-    console.log('PASS: foreign hidden subscription held no PTY; only the visible raw client and observer existed')
+    console.log('PASS: foreign hidden subscription held no PTY; only the visible native client existed')
   } finally {
     foreign.kill()
     detachViewer(SESSION, viewer)

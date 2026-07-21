@@ -13,6 +13,7 @@ related:
   - spec-dashboard/src/styles.test.mjs
   - spec-cli/src/index.ts
   - spec-cli/test/pty-bridge.attach-repaint.ts
+  - spec-cli/test/pty-bridge.cold-incremental.ts
   - spec-cli/test/pty-bridge.atomic-repaint.ts
   - spec-cli/test/pty-bridge.fd-leak.ts
   - spec-cli/test/pty-bridge.foreign-instance.ts
@@ -49,7 +50,14 @@ an extra full-screen snapshot becomes an intermediate frame.
 Native attach is the same repaint transaction, not a bypass around it. If attaching the visible helper leaves
 tmux geometry unchanged, the first complete native transaction is released directly. If attach changes
 geometry, its intermediate native screen and any delayed application clear remain behind the same semantic or
-bounded barrier used by an active resize, and the browser receives only the final complete transaction.
+bounded barrier used by an active resize. The released repaint is a cumulative native batch from the attach
+channel's byte zero: its terminal-mode setup, full repaint, every later incremental update, and any in-flight
+tail are delivered in order. The bridge never selects only the last transaction, because a busy pane may
+append a cursor or spinner diff behind the full repaint; that diff is not a self-contained screen for an empty
+browser terminal.
+That byte-zero attach batch is released only with its grid commit: the browser opens one outer synchronized
+hold before applying the size and bytes, so an early alt-screen or cursor-mode prefix cannot paint a blank
+intermediate over cached pixels before the batch's full repaint lands.
 
 A pipe-transported tmux control observer accompanies the native client as a **barrier sensor only**. It
 never paints, captures, sizes, or reconstructs a screen; it watches the pane's raw VT stream for the standard
@@ -57,8 +65,11 @@ DEC synchronized-output boundary. Once a pane has demonstrated that capability, 
 native-client bytes until the next post-resize begin/end pair completes, discards the intermediate client
 clear/redraws, then requests one final in-band native-client refresh. Bytes remain withheld until that native
 client produces one complete outer begin/end transaction. Refresh command completion does not imply that its
-PTY bytes have drained, so a 15 ms transport window coalesces already-queued chunks and releases only the last
-complete transaction, never racing the observer or command reply against a second output stream. This closes the real asynchronous gap:
+PTY bytes have drained, so a bounded transport window coalesces already-queued chunks. Once completion is
+known, this mid-stream buffer resumes at its first complete outer begin boundary and releases through its
+current end in original byte order, including the refresh repaint, later complete incremental updates, and any
+in-flight tail. It never feeds an orphan prefix whose beginning was discarded, or discards a later partial
+suffix merely to choose a convenient transaction. This closes the real asynchronous gap:
 an application may clear before opening its synchronized redraw 55ms later, while tmux otherwise renders the
 clear as its own complete update. Completion is the application's explicit end event, not silence or a guessed
 settle duration. A bounded fail-open refresh recovers a broken/missing end marker; it is not the normal path.
@@ -108,9 +119,11 @@ viewer releases it even though hidden sockets and xterm buffers remain alive.
 Visibility is the only helper lifecycle switch. A visible claim always carries the viewer's measured grid;
 that one resize message both creates the helper when needed and owns later geometry transactions. Hiding the
 viewer releases the helper when no visible claim remains. There is no second prewarm protocol. Multiple visible
-viewers of one session share the backend's helper and latest visible size. A viewer joining an existing helper
-receives an explicit native-client refresh through that same raw stream; there is no capture path. A hidden
-dashboard cannot resize or otherwise perturb a session watched by another dashboard.
+viewers of one session share the backend's helper at the smallest visible rows and columns, so its one grid fits
+every viewer and no narrower browser clips the right or bottom edge. Hiding or detaching the limiting viewer
+recomputes that same minimum and lets the remaining viewers expand. A viewer joining an existing helper receives
+an explicit native-client refresh through that same raw stream; there is no capture path. A hidden dashboard
+cannot resize or otherwise perturb a session watched by another dashboard.
 
 ## navigation and recovery
 
@@ -121,8 +134,11 @@ copy-mode viewport.
 
 Viewer subscriptions belong to the session id rather than a helper process. If a visible helper exits,
 an alive-gated, rate-limited restore creates a new one beneath the same open sockets; native attach repaints
-the complete screen. A hidden subscription does not trigger restoration. A dead session is reaped, not
-respawned. Backend process restart remains the genuine socket break and is recovered by [[reconnect]].
+the complete screen. A small fixed-point scan closes the two recovery transitions that have no reliable edge:
+a synchronous helper spawn failure, and a one-shot restore declined while the session is transiently offline.
+It checks only whether a visible subscription lacks a helper; it never polls output or refreshes an intact
+pane. A hidden subscription does not trigger restoration. A dead session is reaped, not respawned. Backend
+process restart remains the genuine socket break and is recovered by [[reconnect]].
 
 ## non-responsibilities
 

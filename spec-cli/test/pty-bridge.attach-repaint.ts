@@ -63,14 +63,16 @@ async function main(): Promise<void> {
     const begin = payload.lastIndexOf(BSU)
     const end = payload.lastIndexOf(ESU)
     if (chunks.length !== 1) throw new Error(`attach exposed ${chunks.length} separate viewer frames`)
-    if (payload.includes(Buffer.from('INITIAL'))) throw new Error('attach exposed the pre-resize screen')
+    const initial = payload.indexOf(Buffer.from('INITIAL'))
+    const final = payload.indexOf(Buffer.from('FINAL'))
+    if (initial < 0 || final < initial) throw new Error('attach batch did not preserve native repaint order')
     if (begin < 0 || end < begin || !payload.includes(Buffer.from('FINAL'))) throw new Error('attach did not emit one complete final transaction')
     if (commits.join(',') !== `${SIZE.cols}x${SIZE.rows}`) throw new Error(`unexpected size commits: ${commits.join(',')}`)
     const geometry = (await tmux('display-message', '-p', '-t', SESSION, '#{status}|#{window_width}x#{window_height}')).stdout.trim()
     if (geometry !== `off|${SIZE.cols}x${SIZE.rows}`) {
       throw new Error(`native client chrome consumed pane rows (${geometry})`)
     }
-    console.log(`PASS: cold attach emitted one ${payload.length}-byte FINAL transaction at ${commits[0]}, with status off and a full-height pane`)
+    console.log(`PASS: cold attach emitted one ${payload.length}-byte cumulative INITIAL→FINAL batch at ${commits[0]}, with status off and a full-height pane`)
   } finally {
     detachViewer(SESSION, viewer)
     await tmux('kill-session', '-t', SESSION).catch(() => {})

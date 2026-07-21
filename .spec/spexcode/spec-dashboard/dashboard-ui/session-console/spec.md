@@ -123,29 +123,29 @@ copy-link/middle-click work for free), and it sits outside the tablist, so click
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
 see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
-already bounded by [[session-eval]] to scenarios this worktree affected or measured: measured scenarios over
-in-scope declared scenarios is always explicit (including `0/0`); reliable current pass/fail
-counts use [[review-chrome]]'s `ReviewState` vocabulary, measured stale or legacy/unscored scenarios carry a
-visible clock tally as work still needing review, and declared-but-unmeasured scenarios remain a visible
-blind-spot count. These mutually exclusive tallies explain the whole scenario fraction at a glance:
-`fresh pass + fresh fail + needs review + blind = affected declarations`. Node-level unknown frontend coverage
-is a separate missing-state tally, never part of the scenario fraction. The door's accessible name speaks this
-same complete decomposition; the visible glance is never hidden from assistive technology. Loading, load failure, and zero are
+already bounded by [[session-eval]] to scenarios this worktree affected or measured. Its four mutually exclusive
+scenario tallies are the complete visible accounting: reliable current pass/fail counts use [[review-chrome]]'s
+`ReviewState` vocabulary, measured stale or legacy/unscored scenarios carry a visible clock tally as work still
+needing review, and declared-but-unmeasured scenarios remain a visible blind-spot count. The door does NOT repeat
+a measured/declared aggregate beside those categories: `fresh pass + fresh fail + needs review + blind = affected
+declarations` already says the whole thing without a second number. Node-level unknown frontend coverage is a
+separate missing-state tally, never part of the scenario accounting. The door's accessible name speaks this same
+complete decomposition; the visible glance is never hidden from assistive technology. Loading, load failure, and zero are
 distinct states — a transport failure is never painted as
 zero loss. This is a glance and a door, never a scenario menu or an explanatory paragraph.
 The glance is the selected graph session row's `evalSummary` projection; it performs no REST read and owns no
 timer. Switching tabs or remounting therefore preserves the cached last-known value. An input event first shows
 `updating` beside that last-known value, never zero; a stable equal-generation projection becomes current; a
 compute failure stays explicit with last-known retained. A graph-stream disconnect similarly marks the value
-last-known until an authoritative reconnect snapshot re-anchors it. `ready` with a real 0/0 is the only empty
-state, distinct from loading, updating, disconnected, and error.
+last-known until an authoritative reconnect snapshot re-anchors it. `ready` with every category at zero is the
+only empty state, distinct from loading, updating, disconnected, and error.
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
 focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
 narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping Terminal, the
-measured/declared Eval count, and every currently available icon tool inside the pane. The bar never grows or
+Eval door, and every currently available icon tool inside the pane. The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
 all app themes, English/Chinese, lifecycle and liveness combinations, and type mode; a persisted wide session list
 yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.

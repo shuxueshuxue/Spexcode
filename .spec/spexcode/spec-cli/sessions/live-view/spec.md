@@ -128,7 +128,9 @@ capture path, and a hidden dashboard cannot resize or otherwise perturb a sessio
 Wheel coordinates become terminal mouse reports written to the real tmux client. tmux itself decides
 whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
-copy-mode viewport.
+copy-mode viewport. The pane viewport therefore clips rather than scrolls: with no xterm scrollback its
+overflow is hidden on both axes, so a fractional device-pixel or geometry overshoot cannot surface a
+phantom themed browser scrollbar competing with tmux's own scroll.
 
 Viewer subscriptions belong to the session id rather than a helper process. If a visible helper exits,
 an alive-gated, rate-limited restore creates a new one beneath the same open sockets; native attach repaints

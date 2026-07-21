@@ -3,7 +3,7 @@ title: distill
 surface: skill, command
 status: active
 hue: 210
-desc: Use when the user wants to inherit a finished, dead, or abandoned session — "distill session X / 继承那个 session 的经验 / 接手它的工作 / harvest or salvage a session". Given a SpexCode session id, harness thread id, or transcript path, read it without resuming, extract decisions, traps, and next actions, salvage unmerged work, then retire only resources proven safe to remove.
+desc: Use when the user wants to inherit a finished, dead, or abandoned session — "distill session X / 继承那个 session 的经验 / 接手它的工作 / harvest or salvage a session". Given a SpexCode session id, harness thread id, or transcript path, read it without resuming, extract decisions, traps, and next actions, salvage unmerged work, retire only resources proven safe to remove, then rename the inheriting session to mark the handoff.
 ---
 
 # distill
@@ -53,3 +53,10 @@ with the source session named. Keep authorship and `Session:` trailers where pos
 Only after verifying the salvage is present (or the branch truly merged), retire a SpexCode session with
 `spex session close <id>`, or remove a bare worktree and then its branch. If proof is incomplete, keep the
 resources and report why.
+
+## Rename yourself
+
+Last step: mark the inheritance on the board. If you run as a SpexCode session (inside a session
+worktree), `spex session rename . "<name>"` — `.` selects this worktree's own session. Name what this
+session now carries — the inherited goal going forward, not the old session's id and no `distill:`
+prefix. Outside a SpexCode session there is nothing to rename; skip this step.

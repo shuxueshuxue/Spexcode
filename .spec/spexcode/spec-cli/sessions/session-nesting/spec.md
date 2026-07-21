@@ -40,7 +40,11 @@ depth, the whole forest reassembled each render.
 tabs and the map-side `SessionWindow` glance) render that forest: a parent row leads with a **fold pod** — a
 small pill showing the SUBTREE COUNT (how much fleet hides here), filled while collapsed and outline once
 expanded, a far more legible affordance than the old sliver of a triangle — and expanding reveals the child
-rows beneath, each **indented by a file-tree connector rail**: a thin vertical spine with a branch tick at
+rows beneath. The pod is a **pointer-only toggle**: clicking it folds/unfolds WITHOUT selecting or opening the
+row, and WITHOUT stealing focus — the console's docked input box keeps focus through the click, because the pod
+suppresses the pointerdown's default focus shift (it is neither a focus target itself nor a path for focus to
+land on its focusable row-button ancestor). Each child row is **indented by a file-tree connector rail**: a
+thin vertical spine with a branch tick at
 each child (an elbow at the last), and a pass-through spine down each ancestor column with rows below — so
 belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to any depth. The list is collapsed
 by default, so a fleet reads as one row until

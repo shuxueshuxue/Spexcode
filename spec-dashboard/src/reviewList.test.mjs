@@ -92,7 +92,7 @@ test('every control is a token BUILDER over the committed text — no private fi
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
 })
 
-test('bounded secondary consumers disclose the server total and offer a reachable full list', () => {
+test('bounded secondary consumers expose one real-entity page; embedded panes alone link to full lists', () => {
   assert.match(nodeView, /useReviewPage\('issues', query, 1/)
   assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
   assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
@@ -103,8 +103,9 @@ test('bounded secondary consumers disclose the server total and offer a reachabl
 
   assert.match(palette, /useReviewPage\('issues', issueQuery, 1/)
   assert.match(palette, /useReviewPage\('evals', evalQuery, 1/)
-  assert.match(palette, /key: 'issue:see-all', address: reviewListAddress\('issues', issueQuery\)/)
-  assert.match(palette, /key: 'scenario:see-all', address: reviewListAddress\('evals', evalQuery\)/)
+  assert.doesNotMatch(palette, /(?:see-all|reviewListAddress|reviewList\.showing)/)
+  assert.match(palette, /const SERVER_MATCHED_PLANES = new Set\(\['issue', 'scenario'\]\)/)
+  assert.match(palette, /SERVER_MATCHED_PLANES\.has\(k\)[\s\S]*\? docs\.slice\(0, 15\)[\s\S]*: rankDocs\(query/)
   assert.match(reviewPage, /const inflightPages = new Map\(\)/)
   assert.match(reviewPage, /if \(inflightPages\.has\(path\)\) return inflightPages\.get\(path\)/)
   assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)

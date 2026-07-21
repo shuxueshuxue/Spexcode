@@ -50,8 +50,10 @@ served root before writing and REFUSES loudly on a provable same-host mismatch, 
 the explicit-routing remedy. An explicit `--api`/`--port` skips the guard (the flag IS the proof of intent);
 no local repo, an unreachable backend, or a genuinely remote root fall through to allow. Reads stay unguarded.
 
-**Every command speaks the same selector grammar.** A caller names a session by full id, id-prefix, node, or
-branch — and not just the list verbs: the **control** verbs accept it too. The backend matches `/…/:id`
+**Every command speaks the same selector grammar.** A caller names a session by full id, id-prefix, node,
+branch, or `.` for the session owning the caller's current worktree (with the launched own-session id as the
+other exact anchor) — and not just the list verbs: the **control** verbs
+accept it too. The backend matches `/…/:id`
 EXACTLY, so `resolveClientSession` resolves a selector against the live board (the [[session-selectors]]
 matcher over `clientListSessions`) and the verb then calls with the resolved FULL id. A non-match is loud and
 precise — `none` → no such session, `ambiguous` → the candidate ids — never a silent miss against the backend.

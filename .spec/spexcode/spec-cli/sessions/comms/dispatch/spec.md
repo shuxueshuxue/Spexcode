@@ -43,6 +43,12 @@ dequeued, daemon silent), so a send into that pane state is **refused loudly** w
 `reply-rejected`/`shutting-down`, or exhausted kick-retries all return a **loud `DispatchResult {ok,error}`**
 that propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
+Before a text prompt reaches that socket, the backend applies the SAME `surface: command` resolver [[launch]]
+uses. A recognized leading `/<preset>` expands to the live plugin body, target placeholders, and remaining
+free text; an unknown slash name passes through unchanged. Dashboard and CLI callers send the raw invocation
+and never carry plugin bodies or a second interpreter. Raw-key input bypasses this resolver because keys are
+terminal control, not an agent prompt.
+
 **Merge is a dispatch, not a script.** `mergeSession` carries no `git merge` logic: it reopens the
 session (clears the proposal → active, `--resume`s via `reopen` if tmux died — which waits for the
 rendezvous socket, closing the just-relaunched-no-socket race), then dispatches a **merge prompt**

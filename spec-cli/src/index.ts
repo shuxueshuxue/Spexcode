@@ -191,7 +191,7 @@ app.get('/api/settings', async (c) => c.json({
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))
-// the `surface: command` plugin-root nodes (built/active only) for the new-session `/` dropdown — each with
+// the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 // `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
@@ -360,7 +360,7 @@ app.post('/api/remarks/:action{resolve|retract}', async (c) => {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }
 })
-// the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
+// the harness slice of the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
 // so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.
 app.get('/api/slash-commands', (c) => {

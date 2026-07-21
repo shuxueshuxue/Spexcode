@@ -52,6 +52,16 @@ test('resolveSession: no match is none', () => {
   assert.deepEqual(resolveSession('nope', board), { none: true })
 })
 
+test('the dot selector names only the caller own session in ONE and MANY shapes', () => {
+  assert.ok(matchesSelector(b, '.', b.id))
+  assert.ok(!matchesSelector(a, '.', b.id))
+  assert.deepEqual(resolveSession('.', board, b.id), { ok: b })
+  assert.deepEqual(selectSessions(board, ['.'], undefined, b.id), [b])
+  assert.deepEqual(resolveSession('.', board, null, b.path), { ok: b }, 'cwd membership survives a contaminated harness id')
+  assert.deepEqual(selectSessions(board, ['.'], undefined, null, `${b.path}/nested`), [b])
+  assert.deepEqual(resolveSession('.', board, null, '/outside'), { none: true })
+})
+
 // ---- matchesSelector: the one shared predicate ----
 
 test('matchesSelector: matches id, id-prefix, node, branch — and only those', () => {

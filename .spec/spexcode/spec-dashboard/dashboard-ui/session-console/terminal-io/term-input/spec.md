@@ -34,7 +34,7 @@ realised wherever a live terminal sits beside spec navigation.
 
 ## completion menus answer different questions
 
-A trigger token under the caret opens a dropdown. For **authoring** rows — `[[` nodes, config presets,
+A trigger token under the caret opens a dropdown. For **authoring** rows — `[[` nodes, command presets,
 Claude Code's own commands — a row **only ever edits token text** and **never runs anything**; they are
 authoring aids, not a second control plane. The **one exception** is a **board command** (below): its row
 is the typed twin of a toolbar tool, so accepting it **runs the action** — it *is* the board's control
@@ -53,10 +53,13 @@ plane, not a hint toward one.
   at the draft's beginning or after whitespace, opens even when prose already exists before it. Accepting
   a preset removes that local trigger and makes `/<preset>` the draft's leading launch token while
   preserving the prose around it; a URL or slash inside a word stays inert.
-- **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
-  board's own commands (`/stop`·`/close`·`/merge`·`/type`·`/eval`) **lead** the list, each in its **identity
-  colour** with a `[ui]` tag, visibly apart from CC's blue command rows below — because there you talk
-  to a live agent (CC commands make sense), but the board commands act HERE on the dashboard.
+- **`/` on a running session's `❯` inbox — board commands, command presets, then the harness's own `/`
+  menu.** The board's own commands (`/stop`·`/close`·`/merge`·`/type`·`/eval`) **lead** the list, each in its
+  **identity colour** with a `[ui]` tag because they act HERE on the dashboard. The live `surface: command`
+  presets follow as `[preset]` authoring rows; accepting one inserts its raw `/<name>` token, and plain Enter
+  sends that invocation through [[dispatch]]'s shared backend resolver. Harness commands follow below. A
+  name present in more than one source appears once at the highest-precedence source, so a SpexCode preset
+  such as [[rename]] cannot fall through to a harness command with different semantics.
 
 ## the New Session `/` composes at launch
 
@@ -67,6 +70,13 @@ growing a second command interpreter. The grammar `/<preset> [[node]]… <free t
 the preset's body with its targets placeholder filled by the `[[…]]`-resolved nodes, then the free text
 appended. No node ref leaves a "current/focused node" note for the body to handle. A leading `/` naming no
 known preset, and any plain or node-only prompt, launch verbatim — the existing paths are untouched.
+
+## the running Session `/` composes at dispatch
+
+The running inbox sends the same raw `/<preset> …` grammar through its ordinary text-input route. It does not
+expand a plugin body in the browser and does not create a board command: [[dispatch]] applies the shared
+resolver before the prompt reaches the agent. This is the same preset data and parsing rule as launch, with
+no terminal-only write path; an unknown slash name remains ordinary harness input.
 
 ## the running session's `[[node]]` resolves at send
 
@@ -83,6 +93,6 @@ ref is the only thing rewritten.
 This node is the cross-cutting *contract*, so it governs no files directly; the realisations live where
 other nodes own them — the docked terminal, input, and `/`·`@` menus in `SessionInterface.jsx`
 ([[session-console]]); the capture-phase arrow routing in `App.jsx` ([[keyboard-nav]]); and the
-CC-command union plus config presets in [[spec-cli]]. A change to any of those is that surface's
+harness-command union plus command presets in [[spec-cli]]. A change to any of those is that surface's
 drift, not a phantom warning here. (The in-popup original of this contract, `TermPane.jsx` under a
 `session-peek` node, was a dormant mock and has been removed — the principle lives on in the console.)

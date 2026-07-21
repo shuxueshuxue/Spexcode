@@ -109,10 +109,12 @@ scenarios:
       appears nowhere in the UI. (2) In the Terminal `❯` inbox type
       `/` and read the completion menu: the board's own
       commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
-      painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
+      painted its identity colour; SpexCode prompt presets follow with a `[preset]` tag, then the harness's
+      own command rows. Now narrow the query —
       type `/stop`, the board's muted-grey stop verb (v0.3.0 respelled it from `/exit`): confirm the menu shows
       `/stop` exactly ONCE (the board's coloured row). Then type `/exit`, a name Claude Code ships that the board
-      no longer owns: confirm it shows only as CC's own blue built-in row. Each row's description reads as a
+      no longer owns: confirm it shows only as CC's own blue built-in row. Type `/rename` and confirm it shows
+      exactly once as the SpexCode `[preset]` row even if the harness offers a same-named command. Each row's description reads as a
       sentence (first letter capitalised, e.g. "Stop — kill the agent…", not "stop — …").
       (3) Type `/eval` and Enter: the dashboard navigates to the canonical scoped list
       `#/evals?q=is:eval scope:<id>` — the same address the toolbar's Eval door opens — and no
@@ -131,11 +133,11 @@ scenarios:
       SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) for the navigation door; the two button-less terminal verbs split
       by destructiveness — stop muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
-      session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
-      blue (rgb(38,139,210)); one element, one colour in both places. The board's `/stop` appears exactly ONCE as
+      session to) and close red (var --red = rgb(220,50,47), the worktree removal). SpexCode prompt presets
+      follow with `[preset]`, then the harness's commands; one element, one meaning. The board's `/stop` appears exactly ONCE as
       its coloured row; `/exit` — the pre-v0.3.0 spelling the board no longer owns after the `/exit`→`/stop`
-      respelling — now shows only as CC's own blue built-in row (the override still filters a same-named CC twin,
-      but no board command currently collides with a CC name) —
+      respelling — now shows only as the harness's own built-in row. `/rename` shows exactly once as a
+      SpexCode `[preset]` row and overrides a same-named harness command —
       and every row's description reads as a capitalised sentence. Typing `/eval` navigates to the same
       session-scoped Evals list the bar's door opens; typing `/type` toggles type mode
       exactly as the type tool does, and the tool reflects that same state through `aria-pressed`. A board command is never

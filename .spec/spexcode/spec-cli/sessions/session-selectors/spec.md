@@ -2,7 +2,7 @@
 title: session-selectors
 status: active
 hue: 280
-desc: One selector grammar (id·id-prefix·node·branch) and one matcher, so every session command names the same sessions.
+desc: One selector grammar (id·id-prefix·node·branch·self) and one matcher, so every session command names the same sessions.
 code:
   - spec-cli/src/selectors.test.ts
 related:
@@ -13,7 +13,8 @@ related:
 
 ## raw source
 
-A user names a session several ways — its full id, a short id-prefix, its node, or its branch — and every
+A user names a session several ways — its full id, a short id-prefix, its node, its branch, or `.` for the
+session making the call — and every
 session command should understand the SAME names. The bug this node removes: the list verbs (`ls` / `watch` /
 `wait` / the graph) matched on all four, but the control verbs (`review` / `merge` / `send` / `close` /
 `reopen` / `capture` / `prompt`) took a RAW id straight to the backend's exact-match endpoint, so a
@@ -38,6 +39,13 @@ grammar a user learns in the dashboard's input boxes works verbatim as a CLI sel
 ≡ `spex review graph`). The single-target exact-id check strips too, so `@<full-id>` keeps the
 exact-wins-over-prefix rule. Because the strip lives in the ONE matcher, every selector-taking verb
 tolerates the sigil at once, and tolerance never widens what matches.
+
+**`.` names the caller's own governed session.** The one predicate uses two facts the subsystem already owns:
+the launched worker's exact own-session id, and the durable session record whose worktree `path` contains the
+caller's cwd. Either exact match identifies the same row, so a harness with a shared resident process cannot
+break self-reference by contaminating its session env, and the MANY list/watch shape cannot disagree with the
+ONE control-verb shape. A human shell inside that session worktree gets the same natural meaning. Outside any
+known session worktree, with no matching own id, `.` fails loudly instead of selecting an arbitrary board row.
 
 **Two shapes over the one predicate.** `selectSessions` is the MANY shape — the list / stream / graph filter
 ([[session-edges]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.

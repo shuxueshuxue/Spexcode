@@ -19,6 +19,7 @@ related:
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
+  - spec-dashboard/test/session-command-preset.e2e.mjs
 ---
 
 # session-console
@@ -178,10 +179,13 @@ Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux
 the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
 **`/close`** removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's
 right-click Close's twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` opens the
-**session-scoped Evals page** (cyan — the same door as the bar's Eval entry). In the inbox `/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's
-blue command rows; accepting one **runs** it (the one row that acts, not inserts — see [[term-input]]). A
-board command still **overrides** a same-named CC command so a name shows **once** — though after the
-`/exit`→`/stop` respelling no board name currently twins a CC one: one command, one identity. Row
+**session-scoped Evals page** (cyan — the same door as the bar's Eval entry). In the inbox `/` menu they
+**lead** the list, coloured, tagged `[ui]`; accepting one **runs** it (the one row that acts, not inserts —
+see [[term-input]]). The live `surface: command` prompt presets follow, tagged `[preset]`, then the harness's
+own command rows. Accepting either kind of authoring row inserts its raw slash token; Enter uses the ordinary
+prompt channel, where the backend expands a recognized preset through [[dispatch]] before delivery. Sources
+deduplicate by that order, so a board command or SpexCode preset overrides a same-named harness command and
+one name shows **once**: one command, one identity. Row
 descriptions render as sentences (first letter capitalised). Typed `/stop` and `/close` carry **no
 confirm** — typing the exact command is itself the deliberate act, where the row-menu's Close guards an
 easy-to-mis-aim right-click. The box **holds
@@ -197,8 +201,9 @@ round-trip through type mode** — the box unmounts while type mode replaces it,
 the per-session draft (which persists), so on return it re-fits instead of collapsing to one line. Taking the
 Eval door routes away without unmounting the warm console, preserving the same draft and pane geometry. It
 carries the same **completion** menus
-the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `[[` opens the spec-node
-dropdown — one menu shared with New, not a second copy. A `[[node]]` here **resolves at send**, expanding to
+the New prompt does ([[term-input]]): the inbox `/` lists board commands, command presets, and harness
+commands, while `[[` opens the spec-node dropdown — one menu shared with New, not a second copy. A `[[node]]`
+here **resolves at send**, expanding to
 a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **type mode** — the human-takeover channel, named for
 what the user reaches for ("I want to type into the terminal myself") — entered by the `/type` board command, the header
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —

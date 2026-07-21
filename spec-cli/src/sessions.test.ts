@@ -5,12 +5,12 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-test('command presets compose once at the launch owner while unknown slash text passes through', () => {
+test('command presets compose once at the backend prompt boundary while unknown slash text passes through', () => {
   const presets = [
     { name: 'tidy', body: 'Tidy these targets:\n\n{{targets}}\n\nSee [[links]] for context.' },
     { name: 'report', body: 'Report clearly.' },
@@ -26,6 +26,11 @@ test('command presets compose once at the launch owner while unknown slash text 
     'Report clearly.\n\n- [[alpha]] — project/alpha',
     'an explicit create node supplies targets when the raw invocation has no mention',
   )
+  assert.equal(
+    composeCommandPrompt('/report', presets, specs),
+    'Report clearly.',
+    'a targetless preset without a target placeholder stays a small prompt',
+  )
   assert.match(
     composeCommandPrompt('/tidy', presets, specs),
     /No target was mentioned/,
@@ -33,6 +38,14 @@ test('command presets compose once at the launch owner while unknown slash text 
   )
   assert.equal(composeCommandPrompt('/missing [[alpha]]', presets, specs), '/missing [[alpha]]')
   assert.equal(composeCommandPrompt('plain prompt', presets, specs), 'plain prompt')
+})
+
+test('the live rename command resolves to the self-rename prompt through the shared resolver', async () => {
+  const prompt = await resolveCommandPrompt('/rename')
+  assert.match(prompt, /Review the work this session is currently doing/)
+  assert.match(prompt, /spex session rename \. "<name>"/)
+  assert.doesNotMatch(prompt, /No target was mentioned/)
+  assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
 })
 
 test('session-create API rejects stale fields generically and accepts an ordinary launcher create', async () => {

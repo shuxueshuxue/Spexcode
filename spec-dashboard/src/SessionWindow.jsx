@@ -22,9 +22,11 @@ export function opSummary(ops) {
 // pass-through `│` or a blank) that draw the child's belonging to its spawner, then — for a parent — the fold
 // POD. The pod shows the SUBTREE COUNT (how much fleet hides here) on the subtree-rollup COLOUR (STATUS_COLOR
 // hues, the same purely-informational hint the old triangle tinted): FILLED while collapsed (content hidden
-// behind it), OUTLINE once expanded. Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation).
-// A leaf child needs no pod — its branch rail is the affordance. Rendered only when nesting is in play (parent
-// or depth>0), so a flat list with no children looks exactly as before.
+// behind it), OUTLINE once expanded. Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation)
+// and WITHOUT stealing focus: mousedown is preventDefault'd so the pointerdown never shifts focus onto the pod
+// or its focusable row-button ancestor — the console's docked input box keeps focus (it is not a tab target
+// either: no tabIndex). A leaf child needs no pod — its branch rail is the affordance. Rendered only when
+// nesting is in play (parent or depth>0), so a flat list with no children looks exactly as before.
 export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, onToggle }) {
   return (
     <span className="sess-lead">
@@ -34,11 +36,11 @@ export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, on
       })}
       {expandable && (
         <span
-          className={`sess-fold pod${expanded ? ' open' : ''}`} role="button" tabIndex={-1}
+          className={`sess-fold pod${expanded ? ' open' : ''}`} role="button"
           style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
           data-tip={`${kin} nested session${kin === 1 ? '' : 's'} — click to ${expanded ? 'collapse' : 'expand'}`}
           onClick={(e) => { e.stopPropagation(); onToggle?.() }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
         >{kin}</span>
       )}
     </span>

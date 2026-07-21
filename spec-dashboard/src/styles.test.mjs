@@ -31,6 +31,13 @@ test('dashboard typography declarations use the shared scale', () => {
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
+test('read-only terminal keeps selection off application mouse reporting', () => {
+  assert.match(terminal, /MOUSE_REPORT_MODES\s*=\s*new Set\(\[9, 1000, 1002, 1003, 1005, 1006, 1015, 1016\]\)/)
+  assert.match(terminal, /term\.parser\.registerCsiHandler\([\s\S]*onlyMouseReportModes/)
+  assert.match(terminal, /term\.attachCustomWheelEventHandler/)
+  assert.doesNotMatch(terminal, /shouldForceSelection/)
+})
+
 test('document pages share one inset page-scroll geometry', () => {
   assert.match(css, /\.page-pane\s*\{[^}]*overflow:\s*hidden;/s)
   assert.match(css, /\.page-scroll\s*\{[^}]*margin:\s*10px 14px 10px 0;[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s)

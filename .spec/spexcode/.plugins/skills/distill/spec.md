@@ -58,5 +58,5 @@ resources and report why.
 
 Last step: mark the inheritance on the board. If you run as a SpexCode session (inside a session
 worktree), `spex session rename . "<name>"` — `.` selects this worktree's own session. Name what this
-session now carries — the inherited goal going forward (e.g. `distill: <old goal>`), not the old
-session's id. Outside a SpexCode session there is nothing to rename; skip this step.
+session now carries — the inherited goal going forward, not the old session's id and no `distill:`
+prefix. Outside a SpexCode session there is nothing to rename; skip this step.

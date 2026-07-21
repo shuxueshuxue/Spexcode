@@ -2,7 +2,10 @@
 // `button:false` = no toolbar twin. `typed:false` = toolbar-only (relaunch is not an inbox command).
 // Availability, colour, icon, label, typed twin, and execution all flow through this one registry.
 export const UI_COMMANDS = [
-  { name: 'type',  color: 'yellow', icon: 'keyboard', button: true, pressed: true, suggest: true,
+  // `anchor: 'right'` = the resident takeover tool pins to the toolbar's right edge; transient action
+  // buttons (merge/relaunch) render to its left, so its position never shifts as they come and go. This
+  // is a toolbar-render concern only — the typed inbox order still leads with `type` (registry order).
+  { name: 'type',  color: 'yellow', icon: 'keyboard', button: true, pressed: true, suggest: true, anchor: 'right',
     when: (st, lv) => !!st && st !== 'offline' && st !== 'queued' && lv !== 'offline',
     labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
   // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed

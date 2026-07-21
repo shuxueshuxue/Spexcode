@@ -115,10 +115,11 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
       REVIEW state (so type + merge apply). (1) Read the bar: on the LEFT the Terminal tab and the Eval
-      navigation door; on the RIGHT the action row shows two uniform compact ICON toolbuttons — type and merge —
-      using the shared icon system's familiar keyboard and git-merge marks, with no visible text, emoji, or
-      component-local SVG/mapping. Read each localized tooltip and aria-label, and confirm each keeps its registry
-      identity colour. The word "proof"
+      navigation door; on the RIGHT the action row shows two uniform compact ICON toolbuttons — merge then type,
+      left to right — using the shared icon system's familiar keyboard and git-merge marks, with no visible text,
+      emoji, or component-local SVG/mapping. The resident **type** tool sits at the far RIGHT edge and the
+      transient **merge** button renders to its left. Read each localized tooltip and aria-label, and confirm each
+      keeps its registry identity colour. The word "proof"
       appears nowhere in the UI. (2) In the Terminal `❯` inbox type
       `/` and read the completion menu: the board's own
       commands (`/type`, `/eval`, `/merge`, `/stop`, `/close`) lead the list, each `/name` and its `[ui]` tag
@@ -140,6 +141,8 @@ scenarios:
       keyboard mark in yellow (var --yellow = rgb(181,137,0)), merge the git-merge mark in green (var --green =
       rgb(133,153,0)), and an offline session uses the same primitive with a familiar relaunch mark. There is
       no visible action text, emoji, parallel action/icon map, or prompt/headline text in any tooltip/aria-label.
+      The resident type tool is anchored to the RIGHT edge of the action row (merge, the transient review-only
+      button, renders to its left), so type's position never shifts as state-driven buttons come and go.
       Eval is an always-available navigation door, not a console-local tab or review-gated action, and no UI
       surface says "proof".
       In the `/` menu the five board commands lead, each name + `[ui]` tag in its identity colour — the

@@ -76,7 +76,10 @@ are **markers** on it, the playhead lights the remark it is inside, and clicking
 remark in the thread) **seeks**. The surface is keyboard-driven — play/pause, coarse and frame-fine
 scrubbing, ↑/↓ between remarks, `a` = annotate the current frame — and the bar carries the ONE shared
 `FullscreenButton` (native chrome is suppressed here; every plain `<video controls>` home keeps its native
-door). A structured `data` entry folds behind its header when the reading also carries media
+door). The workspace renders **no always-visible instructional caption strip** — no usage-hint line and
+no keyboard-shortcut legend under the player (the same restraint the docked composer keeps): the
+affordances are self-evident and the evidence stays uncluttered, so nothing but the reading is ever baked
+into a captured frame or screenshot of the stage. A structured `data` entry folds behind its header when the reading also carries media
 ([[evidence-kind-taxonomy]]); a blob-less reading shows its verdict note as the body, never an empty box.
 With a [[step-timeline]] sidecar, a **step ruler** renders naming each step at its axis position
 (time→m:ss, frame→#123, line→L42, index→3/N) — on a video the scrubber also bands the boundaries and a

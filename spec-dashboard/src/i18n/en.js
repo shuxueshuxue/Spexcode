@@ -229,8 +229,6 @@ export default {
 
   annotator: {
     title: 'annotator',
-    hint: 'click the frame to play/pause · drag to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',
-    keys: 'space play/pause · ←→ 5s (⇧ 1s) · , . frame · ↑↓ jump comment · a annotate frame',
     play: 'play',
     pause: 'pause',
     fullscreen: 'fullscreen',

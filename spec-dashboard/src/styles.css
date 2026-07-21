@@ -2170,8 +2170,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .an-mk.active::after { background: var(--green); }
 .an-mk.on::after { transform: scaleX(2); background: var(--orange); box-shadow: 0 0 0 1px var(--paper), 0 0 8px color-mix(in srgb, var(--orange) 60%, transparent); }
 .an-seek-hov { position: absolute; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-family: var(--mono); font-size: var(--type-meta); padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
-/* a compact shortcut legend under the player. */
-.an-keys { font-family: var(--mono); font-size: var(--type-caption); color: var(--muted); padding: 4px 0 0; letter-spacing: var(--tracking-normal); }
 .an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
 .an-step { font: inherit; font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }

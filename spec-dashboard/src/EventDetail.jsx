@@ -646,8 +646,6 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
           {events.length > 0 && (
             <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
           )}
-          <div className="an-hint">{t('annotator.hint')}</div>
-          <div className="an-keys">{t('annotator.keys')}</div>
           {flash && <div className="an-flash">{flash}</div>}
         </>
       )}

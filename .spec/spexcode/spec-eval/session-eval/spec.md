@@ -96,12 +96,15 @@ keyed observer hold on the affected projection: it stays `updating(lastKnown)` a
 certify it current while that input axis is unobservable. Holds compose, so restoring one source cannot mask a
 second failed source. A successful resubscription removes only its own hold, advances the generation again, and
 then performs one authoritative double-read rebuild with the replacement watcher already attached; an edit in
-the unwatched interval is therefore inside that rescan. A persistent attach failure remains explicitly
-non-current instead of falling through to a cache build. No TTL, periodic fingerprint scan, or patrol makes a
-summary current. The patrol may still repair unrelated graph state, but never advances an eval generation or
-certifies this projection. The guarantee is necessarily over events the OS watcher delivers: an operating system
-that silently drops an event without an error exposes no fact a purely event-driven process can detect, and the
-UI must not claim otherwise.
+the unwatched interval is therefore inside that rescan. A cold demand route initializes these same canonical
+observers even when no graph request preceded it. If it arrives during an observer hold, it waits boundedly for
+that recovery transition and only then performs its double-read build; a transient attach failure therefore stays
+loading and reaches a current response after authoritative resubscription instead of escaping as a generic 500.
+A persistent attach failure remains explicitly unavailable/non-current instead of falling through to a cache
+build. No TTL, periodic fingerprint scan, or patrol makes a summary current. The patrol may still repair unrelated
+graph state, but never advances an eval generation or certifies this projection. The guarantee is necessarily over
+events the OS watcher delivers: an operating system that silently drops an event without an error exposes no fact
+a purely event-driven process can detect, and the UI must not claim otherwise.
 
 Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
 (base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined

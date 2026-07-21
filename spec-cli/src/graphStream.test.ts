@@ -138,3 +138,24 @@ test('worktree registry watcher treats a pathless event as observer failure and 
     rmSync(registry, { recursive: true, force: true })
   }
 })
+
+test('worktree resubscription remains scheduled after a transient attach failure', async () => {
+  const scheduled = new Set<string>()
+  let attempts = 0
+  let recovered = false
+  const retry = () => {
+    attempts++
+    if (attempts === 1) {
+      // The first replacement attach observed ENOSPC. Its owner catches that failure and schedules again.
+      assert.equal(scheduleWorktreeResubscribe('fixture', scheduled, retry), true)
+      return
+    }
+    recovered = true
+  }
+
+  assert.equal(scheduleWorktreeResubscribe('fixture', scheduled, retry), true)
+  assert.equal(scheduleWorktreeResubscribe('fixture', scheduled, retry), false, 'only one retry may be pending')
+  await waitFor(() => recovered, 'transient watcher failure never reached a later resubscription')
+  assert.equal(attempts, 2)
+  assert.equal(scheduled.size, 0)
+})

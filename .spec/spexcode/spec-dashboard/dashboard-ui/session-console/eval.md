@@ -373,9 +373,10 @@ scenarios:
       keep it distinct from the dark terminal in all eight themes.
 
       The Eval anchor's href is exactly the canonical scoped query minted by addressHash(sessionEvalAddress(id)).
-      Its compact symbols report measured/declared scenarios (including honest 0/0 or 0/N), current pass/fail
-      only through ReviewState, and a visible blind-spot count when declared scenarios have no reading;
-      loading/failure never masquerades as zero. Pointer, Enter, and copy-link semantics are native. The
+      Its compact symbols report the mutually exclusive scenario categories once: current pass/fail only
+      through ReviewState, measured-but-needing-review through the clock state, and a visible blind-spot count
+      when declared scenarios have no reading. It does not repeat a measured/declared aggregate beside that
+      complete decomposition; loading/failure never masquerades as zero. Pointer, Enter, and copy-link semantics are native. The
       terminal stays mounted behind the route and Back returns with its socket, scroll, draft, and geometry
       intact. Type/merge remain registry-backed typed/click twins rendered through one localized icon-toolbutton
       primitive, relaunch replaces them only for offline

@@ -64,9 +64,6 @@ function SessionEvalStats({ summary }) {
   }
   return (
     <span className={`si-eval-stats ${summary.phase}`} aria-hidden="true">
-      <span className="si-eval-measured" data-tip={t('session.evalMeasured', summary)}>
-        <Icon name="list-checks" size={12} /><span>{summary.measured}/{summary.total}</span>
-      </span>
       {summary.pass > 0 && (
         <TabCount kind="eval" state="pass" cls="st-pass secondary" n={summary.pass} label={t('session.evalPass', { n: summary.pass })} />
       )}

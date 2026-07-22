@@ -2,7 +2,7 @@
 scenarios:
   - name: native-terminal-default-input
     tags: [frontend-e2e, desktop, backend-api]
-    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
+    test: spec-dashboard/test/terminal-input.e2e.mjs
     description: >-
       Open a live session in a real browser and immediately type prose, arrows, Escape, and committed Chinese
       IME text into the agent TUI. Inspect focus, terminal WebSocket messages, and the rendered TUI response.

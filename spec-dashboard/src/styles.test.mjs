@@ -42,6 +42,15 @@ test('wheel deltas accumulate proportionally — no min-1-tick amplification', (
   assert.doesNotMatch(terminal, /Math\.max\(1, Math\.round\(Math\.abs\(ev\.deltaY\)/)
 })
 
+test('a returning scroll gesture finishes with a bottoming burst', () => {
+  // content growth during an excursion leaves a symmetric return short of the live bottom: the TUI's
+  // scrolled view impersonates the live tail and the watched seconds freeze. The net-tick ledger
+  // detects the return-to-zero and restores the natural human overshoot.
+  assert.match(terminal, /wheelNet \+= up \? ticks : -ticks/)
+  assert.match(terminal, /wasAbove && wheelNet <= 0/)
+  assert.match(terminal, /up: false, col, row, ticks: 5/)
+})
+
 test('read-only terminal keeps selection off application mouse reporting', () => {
   assert.match(terminal, /MOUSE_REPORT_MODES\s*=\s*new Set\(\[9, 1000, 1002, 1003, 1005, 1006, 1015, 1016\]\)/)
   assert.match(terminal, /term\.parser\.registerCsiHandler\([\s\S]*onlyMouseReportModes/)

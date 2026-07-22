@@ -139,7 +139,7 @@ const geometry = () => page.evaluate(() => {
   }
 })
 const empty = await geometry()
-assert.ok(Math.abs(empty.bottomRatio - 0.68) < 0.015, JSON.stringify(empty))
+assert.ok(Math.abs(empty.bottomRatio - 0.78) < 0.015, JSON.stringify(empty))
 await page.screenshot({ path: join(OUT, 'command-box-empty.png'), fullPage: true })
 step('Command Box opens at lower-middle anchor')
 

@@ -1,23 +1,16 @@
 ---
 scenarios:
-  - name: menu-sniff-event-driven
-    tags: [frontend-e2e, desktop]
+  - name: native-input-event-driven
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
     description: >-
-      Through the running dashboard in a real browser, open the session console on a LIVE session whose
-      pane is a real agent TUI. Instrument the page's timer clocks BEFORE the app loads (wrap
-      setInterval/setTimeout, counting registrations and fires by delay) so the sniff's schedule is
-      readable from outside. Two probes. (1) Idle census: with the pane visible and nothing producing
-      output, count sniff activity over several seconds. (2) Menu round-trip: drive the pane's REAL select
-      menu (e.g. tmux send-keys `/model` + Enter into the agent's own TUI — a `❯` option row plus an
-      Esc/Enter hint line), time the type button's `.suggest` pulse appearing, then Esc the menu away and
-      time the pulse clearing. Record the run as video.
+      Through the running dashboard open a live agent TUI, type ordinary and IME-composed text, and drive a
+      real select menu. Instrument timers and terminal WebSocket frames before app load, then leave the pane
+      idle for several seconds.
     expected: >-
-      The sniff is event-driven, not polled: NO recurring sniff interval is registered (the old 700ms
-      clock is gone from the page's interval census), and a still pane is scanned ZERO times — a scan runs
-      only when pane output actually lands (xterm's onWriteParsed), one trailing scan per short burst. The
-      real menu still pulses the type button (within a beat of the menu's bytes landing) and the pulse
-      clears when the menu closes. Baseline bug-shape: a 700ms setInterval full-buffer scan ticking
-      ~1.4×/s forever on a perfectly still terminal.
+      xterm's native onData events produce ordered `{t:'input'}` socket messages and the agent TUI responds
+      without a mode. A still pane registers no input polling or screen-content sniff. No raw-key HTTP request,
+      700ms scan, type button, or menu-shape inference exists.
   - name: entrance-fit-event-driven
     tags: [frontend-e2e, desktop]
     description: >-
@@ -39,6 +32,6 @@ scenarios:
 
 The cluster's own loss is the pane's **timing discipline** — the [[terminal-io]] contract that the live
 terminal sustains itself event-driven, never polled. Both scenarios read the schedule from outside (timer
-census + WS frames) while exercising the REAL surfaces: an actual agent TUI's select menu for the sniff,
+census + WS frames) while exercising the REAL surfaces: native input into an actual agent TUI,
 the actual entrance animation for the fit. Zero loss is a still, untouched pane costing zero scans and
-zero rehearsal timers — with the pulse and the fit behaving exactly as before.
+zero rehearsal timers, while input and fit remain live.

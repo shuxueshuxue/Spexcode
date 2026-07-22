@@ -78,8 +78,8 @@ surface where the system itself dispatches.
 Both faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
 `kind:"text"` is the prompt dispatch above; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
 own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
-keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so type mode drives the
+keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so CLI remote control drives the
 terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the
 API deliberately does not surface; an unknown `kind` is a loud 400, never a guessed channel. The raw face is
-the **last resort** everywhere it is taught (`spex session send <SEL> --keys`, the dashboard's type mode):
+the **last resort** everywhere it is taught (`spex session send <SEL> --keys`):
 unstable by nature and able to confirm dangerous dialogs, so callers try a plain text send first.

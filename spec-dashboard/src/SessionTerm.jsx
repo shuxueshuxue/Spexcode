@@ -27,19 +27,6 @@ function terminalTypography() {
   return { fontSize: getTerminalFontSize(), fontFamily }
 }
 
-// heuristic: a select-caret line (`❯ <option>`) plus a hint line mentioning Esc + Enter/arrows distinguishes
-// an interactive menu (e.g. `/model`'s list) from the bare `❯` prompt, which carries no such hint line.
-function looksLikeMenu(term) {
-  const buf = term.buffer.active
-  let caret = false, hint = false
-  for (let y = buf.baseY; y < buf.baseY + term.rows; y++) {
-    const line = buf.getLine(y)?.translateToString(true) || ''
-    if (/^\s{0,6}❯\s+\S/.test(line)) caret = true
-    if (/esc/i.test(line) && /(enter|↵|↑|↓|select|confirm)/i.test(line)) hint = true
-  }
-  return caret && hint
-}
-
 // navigator.clipboard is undefined over plain HTTP (non-secure context) — fall back to execCommand; resolve true only on a real copy.
 function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -48,7 +35,7 @@ function copyToClipboard(text) {
   return Promise.resolve(execCopyFallback(text))
 }
 
-// save/restore activeElement so the off-screen textarea's focus+select never blurs the ❯ box; runs sync inside keydown so the gesture is live.
+// Save/restore activeElement so the off-screen textarea used by the clipboard fallback does not steal focus.
 function execCopyFallback(text) {
   const active = document.activeElement
   const ta = document.createElement('textarea')
@@ -64,7 +51,7 @@ function execCopyFallback(text) {
   return ok
 }
 
-export default function SessionTerm({ sessionId, active = true, onMenu }) {
+export default function SessionTerm({ sessionId, active = true, focused = active }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
   // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
@@ -75,20 +62,18 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   // The browser terminal and socket stay warm, while visibility alone owns the native helper lifecycle.
   // Refs expose prop changes to the long-lived socket effect without recreating either browser resource.
   const activeRef = useRef(active)
+  const focusedRef = useRef(focused)
   const hideRef = useRef(null)
   activeRef.current = active
+  focusedRef.current = focused
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
   const [conn, setConn] = useState('connecting')
-  // keep the latest onMenu without re-running the terminal effect (it'd tear down the WebSocket every render).
-  const onMenuRef = useRef(onMenu)
-  onMenuRef.current = onMenu
-
   useEffect(() => {
     const term = new Terminal({
       ...terminalTypography(),
-      cursorBlink: false, disableStdin: true, scrollback: 0,  // tmux owns history; xterm renders only the pane view
+      cursorBlink: true, disableStdin: false, scrollback: 0,  // tmux owns history; xterm owns native keyboard + IME input
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
@@ -111,9 +96,16 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
     const viewerIsVisible = () => activeRef.current && document.visibilityState !== 'hidden'
+    const initialFocusFrame = requestAnimationFrame(() => {
+      const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+      if (focusedRef.current && viewerIsVisible()) {
+        helper?.setAttribute('data-focus-sink', '')
+        term.focus()
+      }
+    })
 
-    // This is a read-only renderer: pointer reports never travel to the application and wheel uses the
-    // bridge's explicit tmux-client control. Keep xterm out of mouse-report mode so a TUI redundantly
+    // Pointer reports never travel to the application and wheel uses the bridge's explicit tmux-client
+    // control. Keep xterm out of mouse-report mode so a TUI redundantly
     // reasserting DECSET cannot clear an in-progress local selection. Public parser handlers leave every
     // visual terminal mode untouched and consume only pure mouse-report mode lists.
     const mouseModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
@@ -128,9 +120,6 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       { prefix: '?', final },
       (params) => frameOwnsSync && onlySynchronizedOutput(params),
     ))
-
-    // neutralise xterm's core focus() so clicking the pane selects without blurring the ❯ box (instance prop shadows the prototype). Guarded.
-    try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
@@ -237,6 +226,10 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
         enqueueFrame(frame, size)
       },
     })
+    const inputSub = term.onData((data) => {
+      if (!focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
+      sock.send(JSON.stringify({ t: 'input', data }))
+    })
 
     // All wheel navigation belongs to the tmux bridge, not to xterm's browser scrollback. The backend decides
     // from the pane's real tmux state whether to inject mouse reports into a mouse-owning TUI or to scroll
@@ -287,6 +280,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const ro = new ResizeObserver(measureAndRequest)
     ro.observe(hostRef.current)
     window.addEventListener('resize', measureAndRequest)
+    let visibilityFocusFrame = 0
     const onDocumentVisibility = () => {
       if (!viewerIsVisible()) {
         hideRef.current?.()
@@ -295,12 +289,18 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       lastSizeRef.current = { cols: 0, rows: 0 }
       measureAndRequest()
       try { term.refresh(0, term.rows - 1) } catch { /* native attach still supplies the current screen */ }
+      cancelAnimationFrame(visibilityFocusFrame)
+      if (focusedRef.current) visibilityFocusFrame = requestAnimationFrame(() => {
+        if (focusedRef.current && viewerIsVisible()) term.focus()
+      })
     }
     document.addEventListener('visibilitychange', onDocumentVisibility)
 
     return () => {
       cancelAnimationFrame(raf)
       cancelAnimationFrame(fontRaf)
+      cancelAnimationFrame(initialFocusFrame)
+      cancelAnimationFrame(visibilityFocusFrame)
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
       document.removeEventListener('visibilitychange', onDocumentVisibility)
@@ -308,6 +308,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       window.removeEventListener('resize', measureAndRequest)
       for (const handler of mouseModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
+      inputSub.dispose()
       unsubscribeFont()
       sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
@@ -317,35 +318,32 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
   }, [sessionId])
 
-  // menu-sniff, gated on `active`: event-driven, not polled — xterm's onWriteParsed (output actually landed
-  // in the buffer) schedules one trailing scan per 150ms burst, so a busy pane scans a few times a second,
-  // an idle pane scans ZERO times. Only the VISIBLE pane's nav button can pulse, so hidden warm panes skip
-  // the subscription's scan entirely (every live session stays mounted — N sessions would otherwise all
-  // scan forever). One scan runs on becoming visible, since a menu may already be on screen from before the
-  // pane was shown. Going hidden/unmounting clears the hint so a stale pulse can't stick.
-  useEffect(() => {
-    const term = termRef.current
-    if (!term || !active) return
-    let timer = 0
-    const scan = () => { timer = 0; try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }
-    scan()
-    const sub = term.onWriteParsed(() => { if (!timer) timer = setTimeout(scan, 150) })
-    return () => { sub.dispose(); clearTimeout(timer); onMenuRef.current?.(sessionId, false) }
-  }, [sessionId, active])
-
   // Keep the stable cached renderer as the first visible paint. The resize message is also the single helper
   // activation path; there is no separate raw-terminal prewarm or size-ownership transition.
   useLayoutEffect(() => {
     const term = termRef.current
     if (!term) return
+    let focusFrame = 0
+    const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+    if (focused) helper?.setAttribute('data-focus-sink', '')
+    else helper?.removeAttribute('data-focus-sink')
     if (active && document.visibilityState !== 'hidden') {
       lastSizeRef.current = { cols: 0, rows: 0 }
       measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }
+      if (focused) focusFrame = requestAnimationFrame(() => {
+        if (focusedRef.current && activeRef.current && document.visibilityState !== 'hidden') termRef.current?.focus()
+      })
+      else term.blur()
     } else {
+      term.blur()
       hideRef.current?.()
     }
-  }, [sessionId, active])
+    return () => {
+      cancelAnimationFrame(focusFrame)
+      helper?.removeAttribute('data-focus-sink')
+    }
+  }, [sessionId, active, focused])
 
   return (
     <div className="st-wrap">

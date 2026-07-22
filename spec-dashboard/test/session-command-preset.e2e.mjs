@@ -48,7 +48,8 @@ page.on('request', (request) => {
 const pluginResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/plugins' && response.ok())
 await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
 await pluginResponse
-const input = page.locator('.si-bottom textarea')
+await page.keyboard.press('Alt+i')
+const input = page.locator('.si-command-input')
 await input.waitFor({ state: 'visible', timeout: 30_000 })
 step('open live session')
 
@@ -62,7 +63,7 @@ await rows.first().click()
 assert.equal(await input.inputValue(), '/rename ')
 
 await input.press('Enter')
-await page.waitForFunction(() => document.querySelector('.si-bottom textarea')?.value === '')
+await page.locator('.si-command-box').waitFor({ state: 'hidden' })
 assert.deepEqual(inputs.at(-1), { kind: 'text', text: '/rename ' })
 step('submit raw invocation')
 

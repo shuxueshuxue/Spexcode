@@ -93,7 +93,7 @@ const evalProjection = (mode, generation = 1, value = evalValue[mode]) => mode =
 
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 
-// Real session journey: native focus order, typed/click twin, native Eval navigation, warm return.
+// Real session journey: native focus order, Command Box registry, Eval navigation, warm return.
 {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: OUT, size: { width: 1440, height: 900 } } })
   await context.addInitScript(() => {
@@ -178,7 +178,9 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   result.wide.keyboardOrder = [firstTab, secondTab]
   check('focus order reaches Eval then a command', firstTab.tag === 'A' && String(firstTab.className).includes('si-eval-door') && secondTab.tag === 'BUTTON' && String(secondTab.className).includes('si-tool'), result.wide.keyboardOrder)
 
-  const input = page.locator('.si-bottom textarea')
+  await page.locator('.si-tool.command').click()
+  const input = page.locator('.si-command-input')
+  await input.waitFor({ state: 'visible' })
   const readSlashRows = () => page.locator('.mention-menu.up .mention-item').evaluateAll((rows) => rows.map((row) => ({
     name: row.querySelector('.slash-name')?.textContent?.trim(),
     source: row.querySelector('.slash-src')?.textContent?.trim(),
@@ -203,32 +205,29 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
       element.remove()
       return color
     }
-    return Object.fromEntries(['yellow', 'green', 'cyan', 'muted', 'red'].map((name) => [name, probe(name)]))
+    return Object.fromEntries(['blue', 'green', 'cyan', 'muted', 'red'].map((name) => [name, probe(name)]))
   })
   const slashColors = Object.fromEntries(slashLead.filter((row) => row.ui).map((row) => [row.name, row.color]))
   const toolColors = Object.fromEntries(result.wide.actionDetails.map((tool) => [tool.name, tool.color]))
-  const slashParity = JSON.stringify(slashLead.filter((row) => row.ui).slice(0, 5).map((row) => row.name)) === JSON.stringify(['/type', '/eval', '/merge', '/stop', '/close'])
+  const slashParity = JSON.stringify(slashLead.filter((row) => row.ui).slice(0, 4).map((row) => row.name)) === JSON.stringify(['/eval', '/merge', '/stop', '/close'])
     && stopRows.length === 1 && stopRows[0].ui && exitRows.length === 1 && !exitRows[0].ui
     && renameRows.length === 1 && renameRows[0].source === '[preset]'
-    && toolColors.type === tokenColors.yellow && toolColors.merge === tokenColors.green
-    && slashColors['/type'] === toolColors.type && slashColors['/merge'] === toolColors.merge
+    && toolColors.command === tokenColors.blue && toolColors.merge === tokenColors.green
+    && slashColors['/merge'] === toolColors.merge
     && slashColors['/eval'] === result.wide.door.iconColor && slashColors['/eval'] === tokenColors.cyan
     && slashColors['/stop'] === tokenColors.muted && slashColors['/close'] === tokenColors.red
-  await input.fill('/type')
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Enter')
-  await page.locator('.si-bottom.type').waitFor({ state: 'visible' })
   const activeProbe = await toolbarProbe(page)
-  check('slash registry parity and typed /type activate one twin', slashParity && await page.locator('.si-tool.type.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { slashLead, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
-  await page.locator('.si-tool.type').click()
-  await input.waitFor({ state: 'visible' })
-  check('click twin exits type mode', await page.locator('.si-tool.type[aria-pressed="false"]').count() === 1)
-  step('typed and clicked type')
+  check('slash registry parity and resident Command Box share one registry', slashParity && await page.locator('.si-tool.command.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { slashLead, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
+  await page.locator('.si-tool.command').click()
+  await input.waitFor({ state: 'hidden' })
+  check('click twin closes Command Box', await page.locator('.si-tool.command[aria-pressed="false"]').count() === 1)
+  step('opened and closed Command Box')
 
   const warm = `warm-${Date.now()}`
   await page.locator('.si-term-body').evaluate((element, value) => { element.dataset.warmProbe = value }, warm)
   const doorHref = await page.locator('.si-eval-door').getAttribute('href')
   const typedHistoryBefore = await page.evaluate(() => history.length)
+  await page.locator('.si-tool.command').click()
   await input.fill('/eval')
   await page.keyboard.press('Escape')
   await page.keyboard.press('Enter')
@@ -334,8 +333,8 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   const { context, page } = await fixturePage({ width: 641, listWidth: 480, status: 'review', liveness: 'online' })
   const edge = await toolbarProbe(page)
   result.desktopEdge = edge
-  // The resident type tool anchors right, so transient `merge` renders to its left: DOM order is merge→type.
-  check('desktop boundary preserves the review toolbar', edge.bounds.width >= 279 && edge.overflow.length === 0 && edge.scrollWidth === edge.clientWidth && JSON.stringify(edge.roles.actions) === JSON.stringify(['merge', 'type']), edge)
+  // The resident Command Box tool anchors right, so transient `merge` renders to its left.
+  check('desktop boundary preserves the review toolbar', edge.bounds.width >= 279 && edge.overflow.length === 0 && edge.scrollWidth === edge.clientWidth && JSON.stringify(edge.roles.actions) === JSON.stringify(['merge', 'command']), edge)
   await page.screenshot({ path: join(OUT, 'B-desktop-edge-641.png'), fullPage: true })
   await context.close()
 }
@@ -354,9 +353,9 @@ for (const lang of ['en', 'zh']) {
 }
 
 for (const state of [
-  { status: 'working', liveness: 'online', actions: ['type'] },
-  { status: 'review', liveness: 'online', actions: ['merge', 'type'] },
-  { status: 'done', liveness: 'online', actions: ['merge', 'type'] },
+  { status: 'working', liveness: 'online', actions: ['command'] },
+  { status: 'review', liveness: 'online', actions: ['merge', 'command'] },
+  { status: 'done', liveness: 'online', actions: ['merge', 'command'] },
   { status: 'asking', liveness: 'offline', actions: ['relaunch'] },
   { status: 'review', liveness: 'offline', actions: ['relaunch'] },
   { status: 'queued', liveness: 'offline', actions: [] },
@@ -364,11 +363,12 @@ for (const state of [
   const { context, page } = await fixturePage(state)
   const probe = await toolbarProbe(page)
   if (state.liveness === 'offline' || state.status === 'queued') await page.keyboard.press('Alt+i')
-  const shortcutType = await page.locator('.si-bottom.type').count() > 0
-  const row = { ...state, actual: probe.roles.actions, tools: probe.actionDetails, overflow: probe.overflow, shortcutType }
+  else await page.keyboard.press('Alt+i')
+  const shortcutCommand = await page.locator('.si-command-box').count() > 0
+  const row = { ...state, actual: probe.roles.actions, tools: probe.actionDetails, overflow: probe.overflow, shortcutCommand }
   result.states.push(row)
   const toolShape = row.tools.every((tool) => !tool.text && tool.icon && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24)
-  check(`${state.status}/${state.liveness} commands`, JSON.stringify(row.actual) === JSON.stringify(state.actions) && row.overflow.length === 0 && toolShape && (!shortcutType || state.liveness === 'online'), row)
+  check(`${state.status}/${state.liveness} commands`, JSON.stringify(row.actual) === JSON.stringify(state.actions) && row.overflow.length === 0 && toolShape && shortcutCommand === (state.liveness === 'online'), row)
   await context.close()
 }
 

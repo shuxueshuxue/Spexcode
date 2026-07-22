@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react'
 import { loadIssue, postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
+import { ComposerTextarea, composingKey } from './Composer.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
@@ -359,10 +360,10 @@ function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
       <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
         disabled={busy} onChange={(e) => setConcern(e.target.value)} />
       <div className="fv-tawrap">
-        <textarea ref={taRef} className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
+        <ComposerTextarea ref={taRef} className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
           disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
           onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
-          onKeyDown={(e) => { if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
+          onKeyDown={(e) => { if (composingKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
         {ac.menuEl}
       </div>
       <div className="fv-actions">

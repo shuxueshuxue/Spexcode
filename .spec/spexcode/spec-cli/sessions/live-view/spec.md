@@ -134,7 +134,10 @@ capture path, and a hidden dashboard cannot resize or otherwise perturb a sessio
 
 ## navigation and recovery
 
-Wheel coordinates become terminal mouse reports written to the real tmux client. tmux itself decides
+Wheel coordinates become terminal mouse reports written to the real tmux client. Browser wheel deltas
+accumulate into whole tmux ticks — one per fixed pixel quantum, remainder carried, a direction flip
+dropping it — so a trackpad's micro-delta momentum gesture travels proportionally instead of inflating
+every event to a full tick and overshooting its return leg. tmux itself decides
 whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
 copy-mode viewport. The pane viewport therefore clips rather than scrolls: with no xterm scrollback its

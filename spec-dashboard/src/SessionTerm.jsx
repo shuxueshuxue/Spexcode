@@ -241,15 +241,24 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     // All wheel navigation belongs to the tmux bridge, not to xterm's browser scrollback. The backend decides
     // from the pane's real tmux state whether to inject mouse reports into a mouse-owning TUI or to scroll
     // tmux copy-mode for a normal pane. xterm remains the renderer for the tmux view.
+    // Deltas accumulate into whole tmux ticks (one per 40px, remainder carried, a direction flip dropping it):
+    // a trackpad momentum gesture of many micro-deltas travels proportionally, instead of every event
+    // inflating to a full tick and making the up/down travel wildly asymmetric.
+    let wheelAcc = 0
     term.attachCustomWheelEventHandler((ev) => {
       const host = hostRef.current
       if (host && term.cols && term.rows) {
-        const rect = host.getBoundingClientRect()
-        const clamp = (v, max) => Math.min(max, Math.max(1, v))
-        const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
-        const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-        const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
-        if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
+        if (ev.deltaY && Math.sign(ev.deltaY) !== Math.sign(wheelAcc)) wheelAcc = 0
+        wheelAcc += ev.deltaY
+        const ticks = Math.min(5, Math.floor(Math.abs(wheelAcc) / 40))
+        if (ticks >= 1) {
+          wheelAcc -= Math.sign(wheelAcc) * ticks * 40
+          const rect = host.getBoundingClientRect()
+          const clamp = (v, max) => Math.min(max, Math.max(1, v))
+          const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
+          const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
+          if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
+        }
       }
       ev.preventDefault()
       return false

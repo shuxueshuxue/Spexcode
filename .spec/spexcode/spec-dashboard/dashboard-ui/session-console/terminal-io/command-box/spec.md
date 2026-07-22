@@ -26,7 +26,7 @@ discarding the draft, and focus returns to the TUI. Drafts are keyed by session 
 away, and switching sessions. Vim behavior is deliberately outside the current contract.
 
 The box floats in the terminal's **lower middle**, horizontally centered. Its bottom edge is fixed at about
-68% of the terminal pane's height: low enough to feel near the working prompt, with enough room below to keep
+78% of the terminal pane's height: low enough to feel near the working prompt, with enough room below to keep
 the surrounding TUI visible. It does not reserve layout or resize xterm. Its width is bounded for scanning and
 shrinks with the pane. The shared [[composer]] footer stays on that fixed bottom edge while textarea content
 grows upward to a bounded cap; the box never walks toward the screen bottom or top as lines are added. Menus

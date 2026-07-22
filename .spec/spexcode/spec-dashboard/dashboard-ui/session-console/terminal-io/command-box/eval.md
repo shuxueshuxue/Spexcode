@@ -8,7 +8,7 @@ scenarios:
       In a real live session press Cmd+I or Alt+I, author a multi-line draft using mentions, slash rows, and
       an attachment, close and reopen it, then send once while recording the interaction and geometry.
     expected: >-
-      A surface named Command Box opens focused in the lower middle with its bottom edge near 68% of the pane.
+      A surface named Command Box opens focused in the lower middle with its bottom edge near 78% of the pane.
       Its footer stays fixed while content grows upward without resizing xterm. The per-session draft survives
       close/reopen. Completion rows preserve their control-versus-authoring behavior; a successful atomic send
       clears and closes, while a failed send remains open with its draft and visible error. Closing returns TUI

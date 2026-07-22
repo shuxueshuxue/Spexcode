@@ -1697,11 +1697,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-op { color: var(--blue); font-weight: var(--weight-bold); }
 
 /* Command Box ([[command-box]]): the layer occupies the terminal only as a click-away boundary. The box's
-   bottom is fixed at 68% from the pane top (`bottom:32%`), so the shared footer never walks as lines grow. */
+   bottom is fixed at 78% from the pane top (`bottom:22%`), so the shared footer never walks as lines grow. */
 .si-command-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 .si-command-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: rgba(0, 0, 0, .06); pointer-events: auto; cursor: default; }
 .si-command-box {
-  position: absolute; left: 50%; bottom: 32%; z-index: 1; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 22%; z-index: 1; transform: translateX(-50%);
   width: min(680px, calc(100% - 32px)); max-height: min(38cqh, 340px); box-sizing: border-box;
   padding: 8px 10px 7px; border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
   background: color-mix(in srgb, var(--panel) 96%, transparent); box-shadow: 0 8px 24px rgba(0, 0, 0, .34);

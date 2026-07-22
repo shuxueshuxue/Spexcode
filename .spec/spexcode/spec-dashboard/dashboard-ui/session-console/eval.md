@@ -9,7 +9,8 @@ scenarios:
     expected: >-
       The xterm is focused and interactive without entering a mode. Its native ordered data reaches the same
       visible tmux client exactly once, including committed IME text. There is no docked second input, type-mode
-      indicator, raw-key HTTP batch, screen sniff, or hand-written DOM-key translation.
+      indicator, raw-key HTTP batch, screen sniff, or general DOM-key vocabulary; the sole Shift+Enter bridge
+      emits the modified `ESC CR` sequence rather than collapsing into ordinary Enter.
   - name: command-box-opens-and-grows-upward
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs
@@ -18,7 +19,7 @@ scenarios:
       several lines, then close and reopen it. Repeat in a narrow desktop pane and press Alt+Cmd+I.
     expected: >-
       The named Command Box opens focused and horizontally centered in the lower middle, with its bottom edge
-      near 64% of the terminal pane. Its width shrinks safely; its footer stays fixed while content grows upward
+      near 68% of the terminal pane. Its width shrinks safely; its footer stays fixed while content grows upward
       to a cap; xterm geometry never changes. Close/reopen preserves the session draft and returns focus to the
       TUI. Alt+Cmd+I is not consumed by the app.
   - name: command-box-send-failure-and-success

@@ -163,8 +163,10 @@ carry only their status and activity vocabulary — no mode mark or other launch
 
 Input has **two explicit channels**. [[terminal-input]] is the default: xterm owns ordinary keys, paste, and
 browser IME composition and sends its ordered data through the visible terminal WebSocket into the same native
-tmux client that renders the agent's TUI. There is no dashboard type mode, raw-key translation, menu sniff, or
-per-keystroke HTTP batching.
+tmux client that renders the agent's TUI. Re-selecting the active session or Terminal tab restores xterm focus
+without first ending its composition. There is no dashboard type mode, general raw-key vocabulary, menu sniff,
+or per-keystroke HTTP batching; the adapter's one modified-key bridge encodes Shift+Enter as `ESC CR`, matching
+Codex and Claude inside true tmux.
 
 [[command-box]] is the authored control channel, opened by its resident toolbar icon or the reserved single-
 modifier `Cmd+I` / `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses

@@ -8,7 +8,11 @@
 // Run (from spec-cli/): SPEXCODE_TMUX=hist-<pid> npx tsx test/pty-bridge.history.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardInput, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+
+// what a native mouse-report-mode xterm emits for one wheel notch — the browser no longer synthesizes
+// wheel controls, so the test speaks the same SGR bytes through the ordinary input path.
+const wheelReport = (up: boolean, col: number, row: number) => `\x1b[<${up ? 64 : 65};${col};${row}M`
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `hist-${process.pid}`
@@ -41,7 +45,7 @@ async function main() {
 
   // (1) wheel up → copy-mode + older history
   chunks = []
-  for (let i = 0; i < 6; i++) { forwardWheel(SESSION, viewer, true, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 6; i++) { forwardInput(SESSION, viewer, wheelReport(true, 40, 5)); await sleep(200) }
   await sleep(400)
   const posUp = await scrollPos()
   const upText = Buffer.concat(chunks).toString('utf8')
@@ -56,7 +60,7 @@ async function main() {
 
   // (3) wheel down to the bottom → exit copy-mode, then the held output releases
   chunks = []
-  for (let i = 0; i < 12; i++) { forwardWheel(SESSION, viewer, false, 40, 5, 1); await sleep(180) }
+  for (let i = 0; i < 12; i++) { forwardInput(SESSION, viewer, wheelReport(false, 40, 5)); await sleep(180) }
   await sleep(600)
   const posDown = await scrollPos()
   const releasedText = Buffer.concat(chunks).toString('utf8')

@@ -58,17 +58,6 @@ process.stdin.on('data', (chunk) => {
         const nextRows = Math.floor(message.rows)
         terminal.resize(nextCols, nextRows)
         process.stderr.write(`RESIZED ${nextCols} ${nextRows}\n`)
-      } else if (message?.t === 'wheel') {
-        // SGR-encoded wheel reports (what a real terminal sends tmux), never classic X10: X10's
-        // byte arithmetic (col+32) crosses 0x7f past column 95, and a bare high-bit byte desyncs the
-        // client's UTF-8 input parser — wheel events get eaten and payload bytes leak into the pane
-        // as literal keystrokes. SGR is pure ASCII decimal with no coordinate ceiling; tmux translates
-        // it for the pane (including SGR when the application owns mouse input).
-        const col = Math.max(1, Math.floor(message.col) || 1)
-        const row = Math.max(1, Math.floor(message.row) || 1)
-        const ticks = Math.max(1, Math.min(10, Math.floor(message.ticks) || 1))
-        const button = message.up ? 64 : 65
-        terminal.write(`\x1b[<${button};${col};${row}M`.repeat(ticks))
       } else if (message?.t === 'input' && typeof message.data === 'string' && Buffer.byteLength(message.data, 'utf8') <= 64 * 1024) {
         terminal.write(message.data)
       }

@@ -24,7 +24,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardWheel, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
@@ -463,7 +463,8 @@ app.post('/api/sessions/:id/merge', async (c) => {
 })
 
 // one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);
-// client→server text controls resize, visibility, wheel, and xterm-native input. Server→client text commits a completed resize immediately before its binary tmux transaction;
+// client→server text controls resize, visibility, and xterm-native input (which carries the mouse/wheel
+// SGR reports xterm produces natively in mouse-report mode). Server→client text commits a completed resize immediately before its binary tmux transaction;
 // hiding starts that viewer's bounded helper release without closing the warm socket. tmux itself resolves wheel input between
 // copy-mode and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
@@ -531,7 +532,6 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
           const m = JSON.parse(data)
           if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
           else if (m?.t === 'visible' && m.visible === false) hideViewer(id, viewer)
-          else if (m?.t === 'wheel') forwardWheel(id, viewer, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
           else if (m?.t === 'input' && typeof m.data === 'string') forwardInput(id, viewer, m.data)
         } catch { /* ignore */ }
       }

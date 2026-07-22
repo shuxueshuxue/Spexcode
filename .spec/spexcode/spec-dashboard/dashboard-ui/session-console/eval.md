@@ -84,12 +84,14 @@ scenarios:
   - name: terminal-selection-survives-mouse-mode
     tags: [frontend-e2e, desktop]
     description: >-
-      In a real mouse-reporting TUI drag-select terminal text while the application reasserts DEC mouse modes,
-      copy with Cmd/Ctrl+C, and wheel through both normal history and the full-screen application.
+      In a real mouse-reporting TUI, force a local selection with the universal modifier convention
+      (Shift-drag; Option-drag on macOS) while the application owns the mouse, copy it with Cmd/Ctrl+C,
+      then drag without the modifier and wheel through both normal history and the full-screen application.
     expected: >-
-      Drag remains one uninterrupted local selection and copy works on secure and plain HTTP contexts. Selection
-      does not move the glyph grid. Wheel uses tmux's real path with no browser scrollbar, while keyboard input
-      remains live through xterm.
+      Modifier-drag produces one uninterrupted local selection and copy works on secure and plain HTTP
+      contexts; selection does not move the glyph grid. An unmodified drag and the wheel travel to the
+      application as native SGR mouse reports — no browser scrollbar, no bridge wheel vocabulary — while
+      keyboard input remains live through xterm.
   - name: terminal-toolbar-and-eval-door
     tags: [frontend-e2e, desktop]
     description: >-

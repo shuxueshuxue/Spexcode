@@ -21,17 +21,14 @@ export function createResilientSocket({
   let closedByUs = false
   let reopenTimer = 0
   let stableTimer = 0
-  // The dead-man's switch (heartbeat.js) — the ONLY detector for a half-open link (peer gone, no close
-  // event will ever fire, readyState stuck OPEN). Re-armed by open + EVERY inbound message (frames and
-  // pings alike). On a breach it presumes the socket dead: supersede it first (its late events must be
-  // ignored), best-effort close the zombie, and hand recovery to the same backoff/reopen path a genuine
-  // close takes.
+  // One dead-man owns silence from construction through CONNECTING, OPEN, and CLOSING. A breach supersedes
+  // the stalled socket before its best-effort close, then uses the ordinary backoff/reopen path.
   const deadman = createDeadman(() => {
-    if (closedByUs || !ws || ws.readyState !== OPEN) return
-    const zombie = ws
+    if (closedByUs || !ws) return
+    const stalled = ws
     ws = null
     clearStable()
-    try { zombie.close() } catch { /* already dying */ }
+    try { stalled.close() } catch { /* already dying */ }
     scheduleReopen()
   }, { setTimeoutImpl, clearTimeoutImpl })
 
@@ -46,6 +43,7 @@ export function createResilientSocket({
     let sock
     try { sock = new WebSocketImpl(resolveUrl()) } catch { scheduleReopen(); return }
     ws = sock
+    deadman.arm()
     try { sock.binaryType = binaryType } catch { /* some impls fix binaryType at construction */ }
     sock.onopen = () => {
       if (sock !== ws) return // a superseded socket fired late — ignore it.

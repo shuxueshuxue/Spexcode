@@ -22,11 +22,6 @@ test('command presets compose once at the backend prompt boundary while unknown 
     'Tidy these targets:\n\n- [[alpha]] — project/alpha\n\nSee [[links]] for context.\n\nkeep the edge cases',
   )
   assert.equal(
-    composeCommandPrompt('/report', presets, specs, 'alpha'),
-    'Report clearly.\n\n- [[alpha]] — project/alpha',
-    'an explicit create node supplies targets when the raw invocation has no mention',
-  )
-  assert.equal(
     composeCommandPrompt('/report', presets, specs),
     'Report clearly.',
     'a targetless preset without a target placeholder stays a small prompt',
@@ -49,10 +44,10 @@ test('the live rename command resolves to the self-rename prompt through the sha
 })
 
 test('session-create API rejects stale fields generically and accepts an ordinary launcher create', async () => {
-  let called: [string | null, string, string | null, string | undefined] | null = null
+  let called: [string, string | null, string | undefined] | null = null
   const created = { id: 'created-1' } as Session
-  const create = async (node: string | null, prompt: string, parent: string | null, launcher?: string) => {
-    called = [node, prompt, parent, launcher]
+  const create = async (prompt: string, parent: string | null, launcher?: string) => {
+    called = [prompt, parent, launcher]
     return created
   }
 
@@ -60,9 +55,13 @@ test('session-create API rejects stale fields generically and accepts an ordinar
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
   assert.equal(called, null, 'unknown fields are refused before creation')
 
-  const ordinary = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', parent: null, launcher: 'claude' }, create)
+  const removedNode = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', launcher: 'claude' }, create)
+  assert.deepEqual(removedNode, { status: 400, error: 'unknown session-create field: node' })
+  assert.equal(called, null, 'the removed node field is refused before creation')
+
+  const ordinary = await sessionCreateRequest({ prompt: '[[launcher-select]] probe', parent: null, launcher: 'claude' }, create)
   assert.deepEqual(ordinary, { status: 201, session: created })
-  assert.deepEqual(called, ['launcher-select', 'probe', null, 'claude'])
+  assert.deepEqual(called, ['[[launcher-select]] probe', null, 'claude'])
 })
 
 // @@@ birth registration — EXECUTE a generated launch.sh whose agent command is a stub, and prove the wrapper

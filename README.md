@@ -132,11 +132,11 @@ This part needs tmux and a logged-in [Claude Code](https://www.anthropic.com/cla
 on the machine.
 
 ```sh
-spex session new "make the settings page remember the last tab" --node settings
+spex session new "[[settings]] make the settings page remember the last tab"
 ```
 
-launches a worker session in its own worktree on branch `node/settings-…`. The `--node` flag (or a
-`[[settings]]` mention in the prompt, same effect) sets the branch name and board attribution; the
+launches a worker session in its own worktree on branch `node/settings-…`. The prompt's first
+`[[settings]]` mention sets the branch name and board attribution; the
 worker still finds and reads the governing spec itself before touching code. It makes the change,
 rewrites the spec body to match, commits
 both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge

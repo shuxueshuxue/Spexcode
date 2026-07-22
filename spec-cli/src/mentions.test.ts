@@ -54,6 +54,7 @@ test('newWorkerPrompt: an open (or unknown) thread carries no status note', () =
   for (const status of ['open', undefined, null]) {
     const p = newWorkerPrompt('t-1', 'mentions', 'me', 'take a look @new', status)
     assert.ok(!p.includes('already resolved'), `status=${status} must not warn`)
+    assert.deepEqual(parseMentions(p).nodes, ['mentions'], 'the inherited node is visible as the first prompt mention')
   }
 })
 

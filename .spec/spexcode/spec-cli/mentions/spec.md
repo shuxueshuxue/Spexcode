@@ -73,6 +73,10 @@ grammar is uniform, the logic is tiny.
   `@new:` filters that launcher list directly. Resolution carries the qualifier to [[launch]]'s existing
   launcher argument; a missing qualifier retains the default behavior, while an unknown name fails loud in
   the dispatch outcome. There is no composer-only launcher field and no second spawn API.
+- **A spawned worker's scope stays in its prompt.** When `@new` inherits a thread or surface node, the
+  generated worker prompt carries that node as its leading `[[node]]` topic mention before the authored text.
+  The ordinary [[launch]] first-mention rule then derives the session node; mention dispatch has no private
+  node argument into `newSession`.
 - **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
   reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
   so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex eval add

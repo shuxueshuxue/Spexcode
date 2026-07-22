@@ -26,13 +26,14 @@ nothing ever noticed — the frozen-terminal-until-manual-refresh bug, exactly w
 prevent.
 
 So a dead link must be **detectable from traffic alone**, which makes liveness a bidirectional **heartbeat
-contract**, same shape as the board stream's ([[dashboard-shell]]): the **server** sends a small keep-alive
-ping over every terminal socket on a fixed cadence (10s — traffic that also keeps an idle link warm through
-NAT timeouts), and the browser immediately answers pong. Each side holds the other to that promise: the client
-force-drops an OPEN socket with no inbound bytes for **2.5× the cadence**, while the server forcibly removes a
-viewer that produces no pong inside that same window. Server expiry owns cleanup directly rather than waiting
-for a transport `close` event that a half-open link may never deliver, so [[live-view]] cannot retain a ghost
-tmux client or size claim. The
+contract**, same shape as the board stream's ([[dashboard-shell]]). On one fixed cadence (10s), the server sends
+both a WebSocket **protocol ping** and a small text ping. The browser network stack answers the protocol pong
+without application JavaScript; the text ping reaches JavaScript and re-arms its inbound dead-man switch. Each
+side therefore holds the other to the promise it can actually observe: the client force-drops an OPEN socket
+with no inbound bytes for **2.5× the cadence**, while the server forcibly removes a viewer that produces no
+protocol pong inside that same window. Server expiry owns cleanup directly rather than waiting for a transport
+`close` event that a half-open link may never deliver, so [[live-view]] cannot retain a ghost tmux client or
+size claim. The
 cadence is the contract's **one primitive number**, and on the client it lives in ONE place: the shared
 heartbeat module (`heartbeat.js`) that the board SSE stream reads too — a single constant for the whole
 client, held equal to the server's ping cadences by test, the dead window **derived** from it, never a
@@ -42,6 +43,14 @@ message — so on a healthy link nothing ever wakes, and the switch fires exactl
 deadline. No separate
 recovery path: detection is the only new act; a presumed-dead drop reopens, backs off, and announces itself
 exactly like a genuine drop.
+
+Heartbeat deployment is **rolling-compatible**. A backend reload may meet a page still running the previous
+hashed frontend bundle, so server-side liveness can never require a newly-added JavaScript reply: doing that
+turns every old open tab into a deterministic 25-second reconnect loop until the human refreshes. Protocol
+pong is the stable browser capability across bundles. The current client still answers each text ping with a
+text pong, and the server still accepts it, so the opposite rolling order (new frontend against the immediately
+previous backend) remains live too. This overlap is transport-version compatibility, not a second product
+heartbeat or a requirement for atomic frontend/backend deployment.
 
 The socket **reopens itself**:
 on an unexpected close it retries with **capped, escalating backoff**, indefinitely, while surfacing a

@@ -142,6 +142,25 @@ scenarios:
       commit records no block change, and the pre-rename reading reads FRESH — never falsely staled by
       the migration. With a single live-name pathspec the chain truncates at the rename and the reading
       false-stales (the failure the regression test pins).
+  - name: changed-scan-scenario-scope
+    tags: [cli]
+    test:
+      path: spec-eval/src/scan.test.ts
+      name: changed scan scopes node files and scenario drift independently
+    code: [spec-eval/src/cli.ts]
+    related: [spec-eval/src/scan.test.ts]
+    description: >-
+      Through the real `spex eval lint --changed` selection path, exercise three branch diffs: touch an
+      eval.md inside a child spec node beneath a parent with old stale readings; touch a scenario-level
+      `code:` anchor that is absent from its node's `code:` list; and replay the first-parent file set of
+      merge be043d94, whose quiet-refresh branch changed reviewPage.js plus the review-chrome/page-state
+      child node. Capture the finding lines, not only the summary count.
+    expected: >-
+      A child node's file never selects its parent. A stale scenario whose own effective code axis intersects
+      the diff is reported even when the node-level code axis misses it. For be043d94's quiet-refresh diff,
+      review-chrome reports exactly paged-review-desktop-yatu and paged-review-mobile-yatu — the two scenarios
+      anchored to reviewPage.js — and none of its other seven pre-existing stale scenarios. The node-level
+      malformed/missing/coverage classes remain selected by own node files plus node code.
 ---
 # eval.md — eval-core
 

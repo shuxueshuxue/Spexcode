@@ -24,7 +24,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardWheel, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
@@ -462,9 +462,8 @@ app.post('/api/sessions/:id/merge', async (c) => {
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary); the
-// view takes no keyboard input, so client→server is only a text control frame — resize, visibility,
-// or wheel. Server→client text commits a completed resize immediately before its binary tmux transaction;
+// one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary);
+// client→server text controls resize, visibility, wheel, and xterm-native input. Server→client text commits a completed resize immediately before its binary tmux transaction;
 // hiding releases the native helper without closing the warm socket. tmux itself resolves wheel input between
 // copy-mode and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
@@ -491,14 +490,15 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
-      // No keyboard input: client→server text only measures, changes visibility, or forwards wheel
-      // navigation. Binary is ignored; pane navigation stays in the tmux bridge instead of browser scroll state.
+      // Binary input is ignored; JSON keeps terminal input distinct from binary pane output while preserving
+      // xterm's ordered string exactly. The bridge accepts input only from this viewer's visible claim.
       if (typeof data === 'string') {
         try {
           const m = JSON.parse(data)
           if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
           else if (m?.t === 'visible' && m.visible === false) hideViewer(id, viewer)
           else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
+          else if (m?.t === 'input' && typeof m.data === 'string') forwardInput(id, viewer, m.data)
         } catch { /* ignore */ }
       }
     },
@@ -506,10 +506,10 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
-// kind:"text" (the docked ❯ line, `spex session send`, the server-side merge dispatch) injects a whole prompt
+// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) injects a whole prompt
 // through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
 // accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
-// kind:"keys" is the LAST-RESORT raw face (`send --keys`, the dashboard's type mode): an ORDERED BATCH of
+// kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
 // nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
 // ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
 // loud 400, never a guessed channel.

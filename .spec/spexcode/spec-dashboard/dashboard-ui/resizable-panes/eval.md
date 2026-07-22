@@ -2,13 +2,14 @@
 scenarios:
   - name: drag-persists-width
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/command-box.e2e.mjs
     description: >
-      Open the session board page in a real browser. Measure the session list's width, then mouse-drag
-      its divider ~120px rightward and measure again; reload the page and measure a third time.
+      Open the session console in a real browser with no stored width. Measure the session list, drag its
+      divider ~120px rightward, reload, then double-click the divider and measure again.
     expected: >
-      The list visibly widens with the drag (second reading ≈ first + drag distance, within the clamp),
-      and the widened width survives the reload (third reading ≈ second). Zero loss = the divider drags,
-      clamps, and persists.
+      The initial width is 204px. Dragging visibly widens it within the 180–480px clamp and the widened width
+      survives reload. Double-click returns it to 204px and clears the persisted override, matching the
+      familiar editor-sash reset convention.
     code: [spec-dashboard/src/useResizable.js]
 ---
 # resizable-panes — measurement

@@ -37,5 +37,10 @@ export function useResizable(key, initial, { min, max, dir = 1 } = {}) {
     document.body.classList.add('is-resizing')
   }, [key, width, min, max, dir])
 
-  return [width, onDragStart]
+  const reset = useCallback(() => {
+    setWidth(initial)
+    try { localStorage.removeItem(key) } catch {}
+  }, [initial, key])
+
+  return [width, onDragStart, reset]
 }

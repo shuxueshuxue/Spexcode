@@ -2,6 +2,7 @@
 scenarios:
   - name: pick-splices-backend-tmp-path
     tags: [frontend-e2e, backend-api]
+    test: spec-dashboard/test/command-box.e2e.mjs
     description: >
       Through the running dashboard in a real browser, open the New Session prompt (`.si-input`) and type a
       few words so there is a caret position mid-text. Attach a file through one of the real gestures — PASTE
@@ -12,7 +13,7 @@ scenarios:
       the textarea's value and confirm an ABSOLUTE path was spliced in at the caret, space-padded so it never
       glues to a neighbouring word. Then corroborate the whole handoff on the backend: the file actually
       landed under the upload sink and the spliced string is exactly its path. (The same gesture set works on
-      a live session's `❯` inbox; the offline `❯` box takes none of it.)
+      a live session's Command Box; an offline session exposes no Command Box.)
     expected: |
       The picked file is uploaded to the backend (`POST /api/uploads` → `201 {path}`) and lands in one
       `spexcode-uploads/` sink under the backend's tmpdir, under a collision-proof, path-safe basename (the
@@ -41,8 +42,8 @@ scenarios:
 # file-attach — eval
 
 Measure through the **real dashboard surface**, YATU-style, plus the backend it hands off to. file-attach's
-whole contract is *"send the file over, hand me the path"*: a file attached to either prompt box (New Session
-or a live `❯` inbox) is carried to the machine the session runs on — the backend — and the prompt is left
+whole contract is *"send the file over, hand me the path"*: a file attached to either authored composer
+(New Session or a live Command Box) is carried to the machine the session runs on — the backend — and the draft is left
 holding its **absolute path**, an ordinary local file the agent can just read. So the loss has two ends and
 both are scored: the **path splice** in the browser (an absolute `spexcode-uploads/` path padded into the
 textarea at the caret, the busy ring while in flight) and the **backend landing** (the file present under the

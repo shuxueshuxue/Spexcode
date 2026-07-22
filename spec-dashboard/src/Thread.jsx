@@ -3,7 +3,7 @@ import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete, matchSlash, SlashMenu } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
-import { fitTextarea } from './textarea.js'
+import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
 import { SideValue } from './ReviewShell.jsx'
@@ -231,17 +231,6 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   }
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
 
-  // auto-grow like the ❯ box, but floored at a USABLE idle height: refit on every draft change. The floor
-  // (CSS min-height) is the idle writing surface — two lines, already usable with no click-to-expand;
-  // autogrow lives above it, capped by CSS max-height so it never eats the pane. Both bounds are read from
-  // the textarea's own CSS, so the composer's geometry stays one source of truth.
-  useEffect(() => {
-    const ta = taRef.current
-    if (!ta) return
-    const cs = getComputedStyle(ta)
-    fitTextarea(ta, parseFloat(cs.maxHeight) || Infinity, parseFloat(cs.minHeight) || 0)
-  }, [body])
-
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
   // edit. A NULL draft CLEARS — the host nulls it when the working state resets (a selection change, an A/B
   // flip), and preserving the old text past that reset is exactly the cross-eval draft leak; a freshly
@@ -302,23 +291,24 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       else setErr(res?.error || 'reply failed')
     } finally { setBusy(false) }
   }
-  return (
-    <div className="fv-compose">
-      {frames.length > 0 && (
+  const preview = frames.length > 0 ? (
         <div className="fv-frames">
           {frames.map((h) => <BlobMedia hash={h} alt="frame" key={h} />)}
         </div>
-      )}
+      ) : null
+  const editor = (
       <div className="fv-tawrap">
-        <textarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
+        <ComposerTextarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
           disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target); syncSlash(e.target) }}
           onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onBlur={() => { ac.close(); setSlash(null) }}
-          onKeyDown={(e) => { if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
+          onKeyDown={(e) => { if (composingKey(e)) return; if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
         {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('annotator.menuReview')}
           onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
       </div>
-      {/* the buttons swallow mousedown so a click never blurs the textarea; the row itself is persistent. */}
+  )
+  const footer = (
+      /* the buttons swallow mousedown so a click never blurs the textarea; the row itself is persistent. */
       <div className="fv-actions">
         <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')}
           onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
@@ -334,6 +324,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
             disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send} />
         </div>
       </div>
-    </div>
+  )
+  return (
+    <ComposerSurface className="fv-compose" preview={preview} editor={editor} footer={footer} />
   )
 }

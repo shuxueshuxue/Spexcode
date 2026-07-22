@@ -9,6 +9,7 @@ code:
   - spec-dashboard/src/IssuesPage.jsx#IssueDetailPage
   - spec-dashboard/src/IssuesPage.jsx#NewThreadForm
 related:
+  - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/reviewFilters.js
@@ -102,7 +103,7 @@ verbs the CLI uses.
   the SAME reply thread a local issue gets — store never changes the thread's shape.
 - **A human writes from here — to the issue's OWN store.** The composer is the ONE shared thread-composer
   ([[event-detail]] docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
-  writing surface floored at two lines that auto-grows (`textarea.js`), the action row always visible —
+  writing surface floored at two lines that auto-grows through [[composer]], the action row always visible —
   the `@`/`[[` trigger buttons opening the shared [[mentions]] autocomplete, the host lifecycle actions,
   and an icon-only Send at the row's end; a failed send surfaces its error in that row. **Close issue**
   and **Promote** live in that action row (GitHub's grammar — lifecycle acts on the conversation), each
@@ -114,8 +115,10 @@ verbs the CLI uses.
   echoes briefly as a page notice — a summons is never silent.
 - **New opens local-first from the LIST page** — a centered pop-out (concern + optional body + one
   compact store picker naming each store's canonical label once); a `[[node]]` in the prose IS the node
-  link (no separate ids field); a forge pick creates the real forge issue with the `Spec:` marker. The
-  modal's autocomplete overlays above the pop-out; Esc/backdrop close only that layer.
+  link (no separate ids field); a forge pick creates the real forge issue with the `Spec:` marker. Its
+  optional body reuses [[composer]]'s same auto-growing textarea and IME Enter boundary while retaining the
+  New form's own action row. The modal's autocomplete overlays above the pop-out; Esc/backdrop close only
+  that layer.
 - **Issue cards enter this page, never the forge.** Every compact card in the node Issues tab is the SAME
   `IssueCard` whose canonical href is `#/issues/<issue-id>`; a forge permalink is
   detail-side metadata only. Long content clamps inside the card.

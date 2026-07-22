@@ -12,7 +12,7 @@ import type { Viewer } from '../src/pty-bridge.js'
 // The linger window must be short enough to observe release; set before the module reads it.
 process.env.SPEXCODE_TERM_LINGER_MS ||= '700'
 const LINGER = Number(process.env.SPEXCODE_TERM_LINGER_MS)
-const { attachViewer, detachViewer, hideViewer, resizeBridge } = await import('../src/pty-bridge.js')
+const { attachViewer, detachViewer, forwardInput, hideViewer, resizeBridge } = await import('../src/pty-bridge.js')
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `visibility-${process.pid}`
@@ -27,6 +27,10 @@ async function clients(): Promise<string[]> {
     const { stdout } = await tmux('list-clients', '-t', SESSION, '-F', '#{client_pid}|#{client_flags}|#{client_width}x#{client_height}')
     return stdout.trim().split('\n').filter(Boolean)
   } catch { return [] }
+}
+
+async function pane(): Promise<string> {
+  try { return (await tmux('capture-pane', '-p', '-t', SESSION)).stdout } catch { return '' }
 }
 
 async function waitFor<T>(read: () => Promise<T>, accept: (value: T) => boolean, label: string, timeout = 5000): Promise<T> {
@@ -73,6 +77,14 @@ async function main(): Promise<void> {
     }
     const firstPid = firstRaw.split('|')[0]
 
+    if (forwardInput(SESSION, widerViewer, 'hidden-must-not-land')) {
+      throw new Error('hidden viewer was allowed to inject terminal input')
+    }
+    if (!forwardInput(SESSION, viewer, 'printf native-input-789\r')) {
+      throw new Error('visible viewer terminal input was refused')
+    }
+    await waitFor(pane, (value) => value.includes('native-input-789'), 'native viewer input')
+
     resizeBridge(SESSION, widerViewer, SECOND.cols, SECOND.rows)
     const sharedClients = await waitFor(clients, (value) => value.length === 1, 'shared visible helper')
     await waitFor(async () => widerChunks.length, (value) => value > 0, 'wider viewer shared-grid refresh')
@@ -87,6 +99,9 @@ async function main(): Promise<void> {
     // Hiding the limiting viewer expands the shared grid. The grid change also drops the hidden viewer's
     // linger: its buffer is no longer the stream's shape, so it must fall back to an ordinary hidden cache.
     hideViewer(SESSION, viewer)
+    if (forwardInput(SESSION, viewer, 'hidden-after-resize')) {
+      throw new Error('hidden viewer injected after withdrawing visibility')
+    }
     const expandedClients = await waitFor(
       clients,
       (value) => !!value[0]?.endsWith(`|${SECOND.cols}x${SECOND.rows}`),
@@ -143,7 +158,7 @@ async function main(): Promise<void> {
       throw new Error(`visibility did not create a fresh measured helper (${secondClients.join(', ')})`)
     }
 
-    console.log(`PASS: hidden sockets held 0 clients; joining viewer committed ${FIRST.cols}x${FIRST.rows} before refresh; shared helper expanded to ${SECOND.cols}x${SECOND.rows}; last hide lingered pid ${firstPid} (streaming to the lingering sub only), seamless return resumed it with no repaint, the ${LINGER}ms window released it, then reattached as ${secondRaw.split('|')[0]}`)
+    console.log(`PASS: hidden sockets held 0 clients and could not inject; visible xterm input reached the pane; joining viewer committed ${FIRST.cols}x${FIRST.rows} before refresh; shared helper expanded to ${SECOND.cols}x${SECOND.rows}; last hide lingered pid ${firstPid} (streaming to the lingering sub only), seamless return resumed it with no repaint, the ${LINGER}ms window released it, then reattached as ${secondRaw.split('|')[0]}`)
   } finally {
     detachViewer(SESSION, viewer)
     detachViewer(SESSION, widerViewer)

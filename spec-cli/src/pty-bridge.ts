@@ -368,6 +368,16 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
   sendControl(bridge, { t: 'wheel', up, col, row, ticks })
 }
 
+const MAX_INPUT_BYTES = 64 * 1024
+
+export function forwardInput(id: string, viewer: Viewer, data: string): boolean {
+  const subscription = subscribers.get(id)?.get(viewer)
+  const bridge = bridges.get(id)
+  if (!subscription?.visible || !bridge || !data || Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) return false
+  sendControl(bridge, { t: 'input', data })
+  return true
+}
+
 async function restoreBridge(id: string): Promise<void> {
   restoreTimers.delete(id)
   if (bridges.has(id) || !hasVisibleViewer(id) || !(await alive(id))) return

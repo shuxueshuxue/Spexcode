@@ -63,6 +63,8 @@ process.stdin.on('data', (chunk) => {
         const ticks = Math.max(1, Math.min(10, Math.floor(message.ticks) || 1))
         const button = message.up ? 64 : 65
         terminal.write(`\x1b[M${String.fromCharCode(button + 32, col + 32, row + 32)}`.repeat(ticks))
+      } else if (message?.t === 'input' && typeof message.data === 'string' && Buffer.byteLength(message.data, 'utf8') <= 64 * 1024) {
+        terminal.write(message.data)
       }
     } catch { /* malformed controls cannot become terminal input */ }
   }

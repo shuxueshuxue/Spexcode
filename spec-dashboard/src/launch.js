@@ -72,7 +72,7 @@ export function useLaunchers() {
   return { launchers, launcher, pickLauncher }
 }
 
-// the command presets (GET /api/plugins) — shared by the launch box and live inbox `/` palettes. The route
+// the command presets (GET /api/plugins) — shared by the launch box and Command Box `/` palettes. The route
 // returns only command-surface nodes, so the list IS the invocable set — no client filter.
 export function useCommandPresets() {
   const [presets, setPresets] = useState([])

@@ -1,16 +1,13 @@
 ---
 scenarios:
-  - name: esc-from-search-returns-to-input
+  - name: esc-from-search-returns-to-current-input
     tags: [frontend-e2e, desktop]
     description: >
-      On the session board with the session interface open and the docked ❯/New-prompt box focused, open the
-      search palette (Ctrl/⌘+/), type a query, then press Esc. Read document.activeElement after the palette
-      closes. The reproduction of the reported bug — measure through the real browser (Playwright), not a
-      helper.
+      On the session board repeat from New's textarea, a live focused xterm, and an open Command Box. Open the
+      search palette, type a query, press Esc, and read document.activeElement after it closes.
     expected: >
-      After Esc, document.activeElement is the docked input (TEXTAREA.si-input, carrying data-focus-sink) —
-      NOT <body>. Focus is returned to where it was, never orphaned. (On main before this node, the same
-      steps leave activeElement on BODY.)
+      After Esc, focus returns to the exact surviving ticket; if it vanished, it lands on that surface's sole
+      visible data-focus-sink (New, Command Box, or active xterm), never body or a hidden session.
     related:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/SpecSearch.jsx
@@ -18,7 +15,5 @@ scenarios:
 ---
 # focus-return — measuring the loss
 
-YATU through the real dashboard: drive a browser to the session board, focus the docked input, open and Esc
-the search palette, and read `document.activeElement`. Zero loss = focus lands back on the docked input
-(`data-focus-sink`), never `<body>`. The A/B against an unfixed build (focus drops to `<body>`) is the proof
-the boundary closes the gap.
+YATU through the real dashboard: exercise each session input surface, open and close search, and read
+`document.activeElement`. Zero loss is return to the current visible input, never `<body>` or a hidden xterm.

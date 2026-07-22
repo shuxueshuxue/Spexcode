@@ -174,7 +174,13 @@ The surface mirrors the code-drift report:
   summary — a file governed by > `maxOwners` scenarios (`eval-owners`, split it). A `drift`/`missing` line
   carries the scenario's **tags**, so a reader (and [[eval-proactive]]'s Stop nudge) sees the gap's SURFACE —
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
-  `--changed` scopes the per-node classes to the nodes the branch touched ([[eval-proactive]]); plain lint covers the repo.
+  `--changed` keeps its selection axis aligned with the finding it is about ([[eval-proactive]]). The
+  per-node classes (malformed, missing, coverage) select a node when the branch touched one of that node's
+  OWN files — its spec directory excluding every descendant node directory — or the node's `code:` axis.
+  Drift selects per SCENARIO instead: a stale scenario is reported only when the branch touched its node's
+  own files or that scenario's effective code axis (`scenario.code`, else the inherited node `code:`).
+  Thus a child node cannot make its parent disgorge unrelated old gaps, while an explicit scenario code
+  override cannot fall outside changed-scan selection. Plain lint still covers the repo.
 - **scenario ls [<node>|.] [--unmeasured] [--json]** — the DECLARED half of the scoreboard: the measurement
   contracts (name · tags · normalized test reference · latest verdict), no readings. Bare lists every measurable node's scenarios;
   `--unmeasured` keeps only those with no effective reading — never measured, or every filing retracted —

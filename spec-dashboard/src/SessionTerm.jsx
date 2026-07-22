@@ -251,7 +251,14 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     // Deltas accumulate into whole tmux ticks (one per 40px, remainder carried, a direction flip dropping it):
     // a trackpad momentum gesture of many micro-deltas travels proportionally, instead of every event
     // inflating to a full tick and making the up/down travel wildly asymmetric.
+    // A net-tick ledger finishes the return leg: pane content that grows during a scroll excursion leaves an
+    // exactly-symmetric return short of the live bottom, so a mouse-owning TUI (or copy-mode) stays scrolled
+    // and its frozen view impersonates the live tail — the seconds a human watches stop dead. When the
+    // ledger crosses back to zero the gesture's meaning is "back to live": a bottoming burst restores the
+    // natural human overshoot. At the bottom the burst is a no-op on every pane type, and a reader parked
+    // deep in history (ledger still positive) is never disturbed.
     let wheelAcc = 0
+    let wheelNet = 0
     term.attachCustomWheelEventHandler((ev) => {
       const host = hostRef.current
       if (host && term.cols && term.rows) {
@@ -264,7 +271,16 @@ export default function SessionTerm({ sessionId, active = true, focused = active
           const clamp = (v, max) => Math.min(max, Math.max(1, v))
           const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
           const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-          if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
+          if (sock?.isOpen()) {
+            const up = ev.deltaY < 0
+            sock.send(JSON.stringify({ t: 'wheel', up, col, row, ticks }))
+            const wasAbove = wheelNet > 0
+            wheelNet += up ? ticks : -ticks
+            if (!up && wasAbove && wheelNet <= 0) {
+              for (let burst = 0; burst < 4; burst++) sock.send(JSON.stringify({ t: 'wheel', up: false, col, row, ticks: 5 }))
+            }
+            if (wheelNet < 0) wheelNet = 0   // downs at the live bottom accrue no debt
+          }
         }
       }
       ev.preventDefault()

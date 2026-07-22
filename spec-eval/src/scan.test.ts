@@ -45,11 +45,22 @@ test('isUiPath: pure backend / non-UI code is not a frontend surface', () => {
 })
 
 test('nodeChanged: matches a touched node dir (spec.md / eval.md / sidecar all live there)', () => {
-  const changed = new Set(['.spec/spexcode/spec-eval/eval-core/spec.md'])
-  assert.equal(nodeChanged('.spec/spexcode/spec-eval/eval-core', [], changed), true)
-  assert.equal(nodeChanged('.spec/spexcode/spec-eval/eval-history', [], changed), false)
+  const evalCore = '.spec/spexcode/spec-eval/eval-core'
+  const changed = new Set([`${evalCore}/spec.md`])
+  const nodeDirs = [evalCore, '.spec/spexcode/spec-eval/eval-history']
+  assert.equal(nodeChanged(evalCore, [], changed, nodeDirs), true)
+  assert.equal(nodeChanged('.spec/spexcode/spec-eval/eval-history', [], changed, nodeDirs), false)
   // a node whose dir name is a PREFIX of the changed one must not false-match
-  assert.equal(nodeChanged('.spec/spexcode/spec-eval/eval', [], changed), false)
+  assert.equal(nodeChanged('.spec/spexcode/spec-eval/eval', [], changed, nodeDirs), false)
+})
+
+test('nodeChanged: a descendant node file belongs to the child, not its parent', () => {
+  const parent = '.spec/spexcode/spec-dashboard/dashboard-ui/review-chrome'
+  const child = `${parent}/page-state`
+  const changed = new Set([`${child}/eval.md`])
+  const nodeDirs = [parent, child]
+  assert.equal(nodeChanged(parent, [], changed, nodeDirs), false)
+  assert.equal(nodeChanged(child, [], changed, nodeDirs), true)
 })
 
 test('nodeChanged: matches a governed code path — exact, directory prefix, or a * glob', () => {
@@ -69,4 +80,40 @@ test('nodeChanged: matches a governed code path — exact, directory prefix, or 
 test('nodeChanged: no overlap → not changed (the scope filter that stops cross-node nagging)', () => {
   const changed = new Set(['spec-eval/src/cli.ts'])
   assert.equal(nodeChanged('.spec/spexcode/spec-cli/sessions', ['spec-cli/src/sessions.ts'], changed), false)
+})
+
+test('changed scan scopes node files and scenario drift independently', () => {
+  const dir = '.spec/spexcode/spec-dashboard/dashboard-ui/review-chrome'
+  const child = `${dir}/page-state`
+  // Quiet-refresh's code/spec delta behind merge be043d94, before the two review-chrome remeasurements.
+  const changed = new Set([
+    `${child}/eval.md`,
+    `${child}/evals.ndjson`,
+    `${child}/spec.md`,
+    'spec-dashboard/src/reviewPage.js',
+  ])
+  const nodeDirs = [dir, child]
+  const nodeCode = [
+    'spec-dashboard/src/ReviewShell.jsx#ListPage',
+    'spec-dashboard/src/ReviewShell.jsx#DetailShell',
+  ]
+  const scenarios = [
+    ['paged-review-desktop-yatu', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/reviewPage.js']],
+    ['paged-review-mobile-yatu', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/reviewPage.js']],
+    ['one-chrome-two-pages', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/styles.css']],
+    ['detail-side-rail-sticky', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/styles.css']],
+    ['detail-metadata-primitive', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/styles.css']],
+    ['list-key-routing', ['spec-dashboard/src/ReviewShell.jsx']],
+    ['continuable-query', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/reviewQuery.js']],
+    ['token-query', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/reviewQuery.js']],
+    ['detail-header-alignment', ['spec-dashboard/src/styles.css']],
+  ] as const
+
+  assert.equal(nodeChanged(dir, nodeCode, changed, nodeDirs), false, 'child files do not select the parent node classes')
+  assert.equal(nodeChanged(dir, scenarios[0][1], new Set(['spec-dashboard/src/reviewPage.js']), nodeDirs), true,
+    'scenario code selects drift even when node code misses')
+  assert.deepEqual(
+    scenarios.filter(([, code]) => nodeChanged(dir, code, changed, nodeDirs)).map(([name]) => name),
+    ['paged-review-desktop-yatu', 'paged-review-mobile-yatu'],
+  )
 })

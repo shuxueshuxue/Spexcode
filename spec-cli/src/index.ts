@@ -470,9 +470,10 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
 // resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
 // A healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
-// silent past its derived window dead. The browser answers each text ping with pong; the server owns the mirror
-// deadline and detaches the viewer itself when a half-open link never reports close. Terminal pixels remain
-// binary frames, so heartbeat controls never enter xterm.
+// silent past its derived window dead. The same tick also sends a WebSocket protocol ping; browsers answer its
+// pong below JavaScript, so a backend reload stays compatible with a tab running the previous frontend bundle.
+// The server owns that mirror deadline and detaches the viewer itself when a half-open link never reports close.
+// Terminal pixels remain binary frames, so heartbeat controls never enter xterm.
 const TERM_PING_MS = 10000
 const TERM_DEAD_MS = 2.5 * TERM_PING_MS
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
@@ -499,6 +500,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
       }
       attachViewer(id, viewer)
       armPongDeadline = () => {
+        if (cleaned) return
         disarmPongDeadline()
         pongDeadline = setTimeout(() => {
           cleanup()
@@ -506,8 +508,14 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
         }, TERM_DEAD_MS)
         pongDeadline.unref()
       }
+      // `raw` is @hono/node-ws's real ws.WebSocket. Protocol pong is intentionally the server-side liveness
+      // signal: unlike an application text reply, every browser generation answers it automatically.
+      ws.raw.on('pong', armPongDeadline)
       armPongDeadline()
-      ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
+      ping = setInterval(() => {
+        try { ws.raw.ping() } catch { /* viewer gone; onClose reaps */ }
+        try { ws.send('ping') } catch { /* client dead-man still needs observable inbound traffic */ }
+      }, TERM_PING_MS)
     },
     onMessage(evt) {
       if (!viewer) return

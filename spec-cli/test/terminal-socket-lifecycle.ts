@@ -1,8 +1,10 @@
-// Product-level half-open proof. Run against a live worktree backend; this client deliberately ignores the
-// application heartbeat ping, so the server must remove its real tmux client without receiving a peer close.
+// Product-level rolling-compatibility + half-open proof. Run against a live worktree backend. A browser-shaped
+// old client ignores the application text ping but automatically answers protocol ping, so it must survive a
+// backend upgrade. A true ghost disables protocol auto-pong and must still lose its real tmux client.
 //
 // Run: BASE=http://127.0.0.1:8787 npx tsx test/terminal-socket-lifecycle.ts
 import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { promisify } from 'node:util'
 
 const pexec = promisify(execFile)
@@ -10,6 +12,7 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8787'
 const SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const SESSION = `socket-lifecycle-${process.pid}-${Date.now()}`
 const DEAD_MS = 25_000
+const WsClient: any = createRequire(import.meta.url)('ws')
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const tmux = (...args: string[]) => pexec('tmux', ['-L', SOCK, ...args])
 
@@ -35,27 +38,47 @@ async function main(): Promise<void> {
   if (!health.ok) throw new Error(`backend health ${health.status}`)
   await tmux('new-session', '-d', '-s', SESSION, '-x', '80', '-y', '24')
   const socketUrl = `${BASE.replace(/^http/, 'ws')}/api/sessions/${SESSION}/socket`
-  const ws = new WebSocket(socketUrl)
+  const legacy = new WebSocket(socketUrl)
   try {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('terminal WebSocket did not open')), 5000)
-      ws.onopen = () => { clearTimeout(timeout); resolve() }
-      ws.onerror = () => { clearTimeout(timeout); reject(new Error('terminal WebSocket errored before open')) }
+      legacy.onopen = () => { clearTimeout(timeout); resolve() }
+      legacy.onerror = () => { clearTimeout(timeout); reject(new Error('terminal WebSocket errored before open')) }
     })
-    // Intentionally install no message handler: server `ping` text is received but never answered `pong`.
-    ws.send(JSON.stringify({ t: 'resize', cols: 117, rows: 37 }))
+    // Previous frontend bundle: no message handler, so text `ping` is never answered with text `pong`.
+    // The browser implementation still auto-pongs RFC 6455 protocol ping below JavaScript.
+    legacy.send(JSON.stringify({ t: 'resize', cols: 117, rows: 37 }))
     const attached = await waitFor(clients, (value) => value.length === 1, 'visible native client', 5000)
-    const attachedPid = attached[0]?.split('|')[0]
+    await sleep(DEAD_MS + 1500)
+    const survived = await clients()
+    if (survived.length !== 1 || legacy.readyState !== WebSocket.OPEN) {
+      throw new Error(`previous-bundle client did not survive rolling backend upgrade (${legacy.readyState}, ${survived.join(',')})`)
+    }
+    legacy.close()
+    await waitFor(clients, (value) => value.length === 0, 'legacy client detach', 5000)
+
+    const ghost = new WsClient(socketUrl, { autoPong: false })
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('ghost terminal WebSocket did not open')), 5000)
+      ghost.once('open', () => { clearTimeout(timeout); resolve() })
+      ghost.once('error', (error: Error) => { clearTimeout(timeout); reject(error) })
+    })
+    // A genuine half-open peer cannot answer protocol ping. It can send the initial visible claim, then becomes
+    // totally silent without a FIN/RST or close event reaching the backend.
+    ghost.send(JSON.stringify({ t: 'resize', cols: 119, rows: 39 }))
+    const ghostAttached = await waitFor(clients, (value) => value.length === 1, 'ghost native client', 5000)
+    const attachedPid = ghostAttached[0]?.split('|')[0]
     const started = Date.now()
     await waitFor(clients, (value) => value.length === 0, 'server heartbeat reap', DEAD_MS + 8000)
     const elapsed = Date.now() - started
     if (elapsed < DEAD_MS - 1000) throw new Error(`client reaped before the heartbeat deadline (${elapsed}ms)`)
-    if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
-      throw new Error(`server detached tmux but left WebSocket open (${ws.readyState})`)
+    if (ghost.readyState !== WsClient.CLOSING && ghost.readyState !== WsClient.CLOSED) {
+      throw new Error(`server detached tmux but left WebSocket open (${ghost.readyState})`)
     }
-    console.log(`PASS: no-pong WebSocket owned native client ${attachedPid}, then server reaped it after ${elapsed}ms with no peer close`)
+    ghost.terminate()
+    console.log(`PASS: previous-bundle client survived ${DEAD_MS + 1500}ms without text pong; no-protocol-pong client ${attachedPid} was reaped after ${elapsed}ms`)
   } finally {
-    try { ws.close() } catch { /* already reaped */ }
+    try { legacy.close() } catch { /* already closed */ }
     await tmux('kill-session', '-t', SESSION).catch(() => {})
   }
 }

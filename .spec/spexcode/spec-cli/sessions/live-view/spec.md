@@ -134,7 +134,10 @@ capture path, and a hidden dashboard cannot resize or otherwise perturb a sessio
 
 ## navigation and recovery
 
-Wheel coordinates become terminal mouse reports written to the real tmux client. Browser wheel deltas
+Wheel coordinates become SGR-encoded terminal mouse reports written to the real tmux client — the same
+pure-ASCII form a real terminal sends, never classic X10, whose col+32 byte arithmetic crosses 0x7f past
+column 95 and desyncs the client's UTF-8 input parser: wheel events get eaten position-dependently and
+payload bytes leak into the pane as literal keystrokes. Browser wheel deltas
 accumulate into whole tmux ticks — one per fixed pixel quantum, remainder carried, a direction flip
 dropping it — so a trackpad's micro-delta momentum gesture travels proportionally instead of inflating
 every event to a full tick and overshooting its return leg. A net-tick ledger finishes the return: pane

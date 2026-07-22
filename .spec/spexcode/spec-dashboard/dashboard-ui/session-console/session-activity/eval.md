@@ -90,6 +90,23 @@ scenarios:
     code:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
+  - name: selected-reveal-wrap-geometry
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the running dashboard in a real browser, open the session console and select TWO long-headline
+      rows in turn: (1) a NESTING PARENT row (its fold pod showing a subtree count) and (2) a plain row with
+      no nesting gutter. For each selected row measure the boxes of `.sess-lead` (the pod gutter),
+      `.sess-meta` (the floated status marker), and `.sess-id` (the wrapped headline): where the headline's
+      first line starts relative to the pod, and how far right the wrapped block extends relative to the
+      floated marker. Screenshot both selected rows.
+    expected: >-
+      The revealed headline STARTS ON THE FIRST LINE, beside the fold pod — never a pod-only first line with
+      the text beginning on line two. The status marker floats at the first line's top-right and shortens
+      ONLY that first line; every later wrapped line runs the full row width — the text block is never
+      narrowed into a column left of the marker for its whole height. The three-line cap and the pod's
+      natural gap before the headline's first word both hold.
+    code:
+      - spec-dashboard/src/styles.css
   - name: selected-headline-three-line-cap
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs

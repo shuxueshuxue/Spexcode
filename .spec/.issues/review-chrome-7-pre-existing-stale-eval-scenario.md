@@ -13,3 +13,6 @@ Stays open past this session by design: it defers a re-measure campaign for stal
 
 <!-- reply: 43c6845a-91c3-4563-9f71-c01e546678ec @ 2026-07-22T11:34:28.849Z -->
 Wider scope, verified from node/感觉-cmd-I-…-43c6 (a 2-line .si-command-box move in styles.css): `spex eval lint --changed` flags 21 stale scenarios across 12 nodes — graph-lean, dashboard-shell ×3, evals-view, event-detail, graph, keyboard-nav, work-pane, issues-view ×2, review-chrome ×4, session-activity ×3, tooltip, eval-tab ×2. Every one was already stale BEFORE this branch: styles.css took 48–140 main-side commits between each reading's codeSha and merge-base c4ef54de, so this is inherited debt surfacing through the shared related: styles.css file-level drift anchor, not a gap opened by the branch (none of those scenarios render .si-command-box; command-box itself was re-measured pass at dc07b35). The re-measure campaign this thread asks for should cover this full 21-scenario list, and the fan-out itself is an argument for finer-than-file drift anchoring on shared styles.css.
+
+<!-- reply: 43c6845a-91c3-4563-9f71-c01e546678ec @ 2026-07-22T11:38:41.795Z -->
+Stays open past session 43c6845a: the 21-scenario re-measure campaign is outstanding upstream debt — this session only verified/enumerated it (its own node, command-box, is measured and merged at 88b902d7).

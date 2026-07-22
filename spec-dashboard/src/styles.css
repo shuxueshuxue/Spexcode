@@ -1092,11 +1092,17 @@ a.scenario-count:hover { background: var(--panel2); }
    line's right. Because the marker is rendered before the headline in source, the float lands on line 1 and
    the headline wraps around it — reserving space on line 1 ONLY (self-sized to the marker's real width, so a
    wide `~3 +2` tally fits), while every wrapped line beneath runs the FULL row width instead of the marker
-   pinching a column down the whole row. */
+   pinching a column down the whole row. Two float subtleties keep that true:
+   - the LEAD (nesting rails + fold pod) must float too — an inline-level lead before the block headline
+     would otherwise wrap in an anonymous line of its own, leaving the pod alone on line 1 (with the floated
+     marker at its right) and the headline starting on line 2;
+   - the headline's 3lh cap must clip with overflow:CLIP, not hidden — hidden establishes a BFC, and a BFC
+     may not overlap floats, so the WHOLE block would narrow into a column beside the marker; clip clips
+     identically but keeps normal block flow, so only line 1's line box shortens around the floats. */
 .si-item.on { display: block; }
-.si-item.on .sess-lead { margin-right: 7px; }
+.si-item.on .sess-lead { float: left; margin-right: 7px; }
 .si-item.on .sess-meta { float: right; margin: 0 0 0 8px; }
-.si-item.on .sess-id { display: block; max-height: 3lh; white-space: normal; overflow: hidden; overflow-wrap: anywhere; }
+.si-item.on .sess-id { display: block; max-height: 3lh; white-space: normal; overflow: clip; overflow-wrap: anywhere; }
 /* zone divider — a clean SOLID small dim uppercase label with a subtle hairline rule trailing it. `--zh` is
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {

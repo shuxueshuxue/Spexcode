@@ -2,7 +2,7 @@
 scenarios:
   - name: native-tui-input-and-ime
     tags: [frontend-e2e, desktop, backend-api]
-    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
+    test: spec-dashboard/test/terminal-input.e2e.mjs
     code: spec-dashboard/src/SessionTerm.jsx
     related: [spec-cli/src/pty-bridge.ts, spec-cli/src/pty-helper.mjs, spec-cli/src/index.ts]
     description: >-

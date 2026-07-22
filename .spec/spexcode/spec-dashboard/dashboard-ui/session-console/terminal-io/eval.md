@@ -2,7 +2,7 @@
 scenarios:
   - name: native-input-event-driven
     tags: [frontend-e2e, desktop, backend-api]
-    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
+    test: spec-dashboard/test/terminal-input.e2e.mjs
     description: >-
       Through the running dashboard open a live agent TUI, type ordinary and IME-composed text, and drive a
       real select menu. Instrument timers and terminal WebSocket frames before app load, then leave the pane

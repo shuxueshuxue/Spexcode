@@ -10,6 +10,7 @@ related:
   - spec-cli/src/pty-helper.mjs
   - spec-cli/src/index.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/test/terminal-input.e2e.mjs
 ---
 
 # terminal-input

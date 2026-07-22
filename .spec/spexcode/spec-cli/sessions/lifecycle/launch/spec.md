@@ -24,7 +24,7 @@ launching has a **single owner**: the running backend process, never whichever s
 
 `newSession` mints the governed SpexCode session `<uuid>` and derives its node from exactly one place: the
 raw caller prompt's **first `[[<id>]]` mention**. That mention is the truth for the session record, the
-`node/<id>-<shortid>` branch/worktree slug, board attribution, and the spec pointer
+`node/<slug(id)>-<shortid>` branch/worktree name, board attribution, and the spec pointer
 when the id names an existing node. CJK ids, leading-dot ids such as `.plugins`, and ids that do not exist yet
 all remain valid binding text; with no mention the session is node-agnostic and its branch is named from the
 prompt. There is no separate CLI flag, API field, or function parameter that can grant scope outside the task

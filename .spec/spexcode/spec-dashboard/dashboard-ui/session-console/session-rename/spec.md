@@ -69,7 +69,7 @@ seconds of real work (a `git worktree remove` plus killing the agent + tmux), an
 watching a frozen, disabled dialog wait it out — the same fire-and-forget the New Session launch already uses
 ([[session-console]]). The board reload when the removal lands drops the closed row off every surface;
 cancelling does nothing. The menu carries only the
-decisive **close**, never the soft `/exit` stop — stopping-to-resume is a typed command on a live session.
+decisive **close**, never the soft `/stop` — stopping-to-resume is a Command Box verb on a live session.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
@@ -79,7 +79,7 @@ capture-phase `contextmenu` listener, and that suppression and this gesture **co
 right-click that kills the browser's menu on a row ALSO opens the rename pop-over (the row's own handler
 still fires), so blocking the OS menu never costs the human theirs. Right-clicking the
 list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
-and the docked input keeps focus, never a stolen-focus gap.
+and the current TUI or Command Box keeps focus, never a stolen-focus gap.
 
 The pop-over is the one home for row-level session actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.

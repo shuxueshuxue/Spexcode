@@ -5,8 +5,6 @@ hue: 280
 desc: The Enter surface — two-pane session interface with a live tmux terminal.
 code:
   - spec-dashboard/src/SessionInterface.jsx#SessionInterface
-  - spec-dashboard/src/SessionInterface.jsx#composingKey
-  - spec-dashboard/src/SessionInterface.jsx#typeKeyToken
 related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionWindow.jsx
@@ -20,6 +18,7 @@ related:
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
+  - spec-dashboard/test/command-box.e2e.mjs
 ---
 
 # session-console
@@ -46,10 +45,11 @@ Leaving the page never unmounts it — the terminals keep their sockets and scro
 terminal withdraws its [[live-view]] visibility claim until the shared pane opens again. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
-the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
+the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
-dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]]) and a right area that
+dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
+with a dense 204px default) and a right area that
 **morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
 the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
@@ -92,8 +92,8 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
-**real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
+An existing session shows its **live interactive tmux terminal** (SessionTerm) — the agent's own TUI is the
+default input surface — but only when its **liveness** ([[state]]) is live
 (`online`/`starting`). The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
@@ -101,18 +101,10 @@ label**: a session whose process is gone reads `offline` whatever its authored l
 conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
 frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
-no nested levels — the dark terminal edge-to-edge above a **fixed input strip reserved at the pane's bottom**.
-At rest the single-line `❯` box occupies that strip **exactly** — the `❯` and its line sit **vertically
-centred** in the strip (equal space above and below), never sunk toward its bottom edge — and the terminal
-**ends above it** (the resting input reserves real layout height, so the terminal does not stretch under
-it) — the terminal's own bottom status line is therefore never hidden. Only when the box grows multi-line
-does it **overlay** the terminal, expanding
-**upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
-reserves space — growth overlays). The input's panel fill stays inside its visible top boundary in both the
-resting and grown states; it never paints through that separator into the terminal. Growth is
-**content-driven**: only real draft content grows the box —
-an EMPTY box always rests at its single line, its placeholder clipping rather than wrapping the "resting"
-strip taller than the space the terminal reserved. Above the pane, one genuinely single-line **session toolbar**
+no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
+pane's bottom edge. `Cmd/Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
+xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
+genuinely single-line **session toolbar**
 contains only three things: the current surface, evaluation, and available commands. Its surface group contains
 **Terminal as the sole real tab** (`role=tab` in the only `tablist`) and keeps that selected surface visually
 attached to the live pane. Session identity, lifecycle, and liveness do **not** repeat here: the selected row in the
@@ -149,81 +141,48 @@ focus rings rather than clipping them, targeting a compact ~32px instead of the 
 narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping Terminal, the
 Eval door, and every currently available icon tool inside the pane. The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
-all app themes, English/Chinese, lifecycle and liveness combinations, and type mode; a persisted wide session list
+all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
 yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.
-Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
-wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
+The TUI owns keyboard input through xterm's native IME-aware path ([[terminal-input]]), while text still
+selects and the wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
 forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
 scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
 or plain HTTP** (past the secure-context-only Clipboard API). Selection changes highlight only: its first and
-last cells remain legible, and moving an endpoint never shifts the terminal's glyph grid. Because this
-read-only browser renderer forwards no pointer reports, it never enters the application's mouse-report modes;
+last cells remain legible, and moving an endpoint never shifts the terminal's glyph grid. The browser renderer
+forwards keyboard data but no pointer reports, so it never enters the application's mouse-report modes;
 the public terminal parser consumes those mode toggles at the adapter boundary. Pointer drag therefore remains
 one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
 continues through [[live-view]]'s explicit tmux-client control path.
 
 The desktop right pane has **one session shape**: every launched session is an ordinary interactive session,
-so its first tab is Terminal and mounts the warm `SessionTerm` + `❯` input described here. Launchers choose a
+so its first tab is Terminal and mounts the warm, input-enabled `SessionTerm` described here. Launchers choose a
 harness and command/auth profile; they do not change the desktop session shape, hide the terminal behind a
 capability placeholder, or replace it with a timeline chat. The phone's terminal-free conversation is a
 property of that viewport's surface ([[mobile-ui]]), not durable session identity. Session rows therefore
 carry only their status and activity vocabulary — no mode mark or other launch-axis badge.
 
-Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
-socket** (never typed into the pane), so it lands even in copy-mode. An **Enter that commits an IME
-composition** (pinyin/かな/한글 — the browser flags it `isComposing` / legacy keyCode 229) belongs to the
-input: it picks the candidate and composes the word, and is **never** read as dispatch — the same guard covers
-the running session's send, the New Session launch Enter, and a completion menu's Enter/Tab accept, so choosing
-a candidate never fires the line. Only a plain Enter that ends no composition sends. The exception is the **board commands** —
-a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
-only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
-feeds both the typed rows and every available toolbar tool; where a command has a visible twin, they share one
-action and one **identity colour**, never two codepaths. The two terminal verbs split by what they destroy:
-**`/stop`** stops this
-session (`act('stop')`, **muted grey** — v0.3.0 respelled it off the old `/exit`, which collided with Claude
-Code's own `/exit` and now passes through as CC's) — it kills the agent + tmux but **keeps the worktree**, so
-the session goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]);
-**`/close`** removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's
-right-click Close's twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` opens the
-**session-scoped Evals page** (cyan — the same door as the bar's Eval entry). In the inbox `/` menu they
-**lead** the list, coloured, tagged `[ui]`; accepting one **runs** it (the one row that acts, not inserts —
-see [[term-input]]). The live `surface: command` prompt presets follow, tagged `[preset]`, then the harness's
-own command rows. Accepting either kind of authoring row inserts its raw slash token; Enter uses the ordinary
-prompt channel, where the backend expands a recognized preset through [[dispatch]] before delivery. Sources
-deduplicate by that order, so a board command or SpexCode preset overrides a same-named harness command and
-one name shows **once**: one command, one identity. Row
-descriptions render as sentences (first letter capitalised). Typed `/stop` and `/close` carry **no
-confirm** — typing the exact command is itself the deliberate act, where the row-menu's Close guards an
-easy-to-mis-aim right-click. The box **holds
-focus persistently** — clicking
-chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
-right-click. Focus retention blankets the **inert** chrome only: it blocks the blur by cancelling the
-mousedown's default over dead space, but **never over a native form control** (`<select>`, an `<option>`)
-that owns its own mousedown — a native `<select>` *opens* on that default action, so cancelling it would
-leave the control dead to the pointer. (No such control currently renders in the panel — the launcher
-picker ([[launcher-select]]) is a button pop-out, whose clicks fire fine under the blanket — but the
-carve-out stays as the rule any future native control relies on.) It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
-round-trip through type mode** — the box unmounts while type mode replaces it, but its height is derived from
-the per-session draft (which persists), so on return it re-fits instead of collapsing to one line. Taking the
-Eval door routes away without unmounting the warm console, preserving the same draft and pane geometry. It
-carries the same **completion** menus
-the New prompt does ([[term-input]]): the inbox `/` lists board commands, command presets, and harness
-commands, while `[[` opens the spec-node dropdown — one menu shared with New, not a second copy. A `[[node]]`
-here **resolves at send**, expanding to
-a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **type mode** — the human-takeover channel, named for
-what the user reaches for ("I want to type into the terminal myself") — entered by the `/type` board command, the header
-button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
-forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
-`⌥/⌘+I`** keys toggle type mode and are **never forwarded to tmux nor overridable by the app**; entry is
-otherwise **manual**, and leaving the tab or going offline exits. **`Esc` is not an exit** — it always
-forwards to the pane like any other key, because Esc belongs to the agent's own menus and dialogs; a human
-cancelling something *in* the terminal must never be bounced out of the mode mid-gesture (the old
-double-Esc-within-600ms escape hatch is gone for exactly that reason). The reserved chord is a **single**
-modifier + I — `⌥+I` *or* `⌘+I`, never both: **`⌥⌘I` held together is the browser's own devtools accelerator**,
-so the app lets that three-key combo pass straight through to open the console rather than swallowing it as a
-type-mode toggle. A best-effort pane sniff — a
-select-caret line beside an `Esc`/Enter hint line — only ever **suggests** type mode by pulsing the type
-button, a non-authoritative nudge that never seizes keys.
+Input has **two explicit channels**. [[terminal-input]] is the default: xterm owns ordinary keys, paste, and
+browser IME composition and sends its ordered data through the visible terminal WebSocket into the same native
+tmux client that renders the agent's TUI. There is no dashboard type mode, raw-key translation, menu sniff, or
+per-keystroke HTTP batching.
+
+[[command-box]] is the authored control channel, opened by its resident toolbar icon or the reserved single-
+modifier `Cmd+I` / `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses
+[[composer]]'s fixed footer with upward auto-growth. The draft belongs to the session and survives closing,
+tab switches, and routing to Evals. Escape or an outside click closes it and returns focus to xterm; an
+`Alt+Cmd+I` chord stays with the browser. An **Enter that commits an IME composition** belongs to the input and
+never sends; plain Enter sends, while Shift+Enter adds a line.
+
+Command Box dispatches through the **control socket** (never typed into the pane), so one prompt lands
+atomically even in tmux copy-mode. Success clears the draft and closes; failure keeps both visible. A `/` line
+may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
+operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
+availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
+worktree; `/close` removes the worktree; `/merge` merges; `/eval` opens the canonical session-scoped Evals page.
+There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
+tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
+that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and
+`@new` reuse [[mentions]]. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename or close
 ([[session-rename]]), select for bulk close ([[session-multi-select]]), and **attach** for a live row
@@ -232,7 +191,7 @@ coexisting with the context-menu suppression. Lock on graph locks the board to t
 `#/graph`; it has no pending-ops precondition, so an ops-less session still lands on the graph with the lock
 banner explaining the empty grip. The shared `sessionName` puts a rename first in the label precedence.
 The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
-drag-to-reorder gesture. Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
+drag-to-reorder gesture. Both authored composers accept an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
 emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in — see [[file-attach]].
 
@@ -244,35 +203,30 @@ changes visibility, not socket attachment or renderer identity. No pane loads a 
 so hidden sessions neither expose an empty replacement renderer nor accumulate capped GPU contexts. [[live-view]]
 owns the matching backend rule: an unselected session, a closed Sessions route, or a background browser tab
 owns no raw PTY or tmux geometry, while a visited hidden xterm keeps its cached pixels for an immediate return
-paint. List
-navigation lives at the **window level**: plain **↑/↓** walk the list, but a **text input keeps them
-entirely** — inside the New prompt or the `❯` box, ↑/↓ are always the textarea's own caret keys and **never
-switch tabs**, even at the first/last line, so typing in the box never jerks you onto another session (the box
-stays stable; the old visual-edge fall-through to the list is gone). Plain ↑/↓ still walk the list only when
-focus is **outside** any text input. To switch tabs while typing, use the modifier combos:
+paint. List navigation lives at the **window level** only when focus is outside xterm and every text input.
+Plain **↑/↓** therefore walk the list from inert console chrome, while the live TUI and the New/Command Box
+textareas keep their own arrows entirely. To switch sessions while typing or driving the TUI, use the modifier combos:
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
-matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
-while type mode forwards raw keys. **⌥+N** reaching the New Session composer is no longer this console's own
+matter which input has focus (the guaranteed up/down switch a work console gives you). **⌥+N** reaching the New Session composer is no longer this console's own
 chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
-key handling deliberately **falls through unhandled** — type mode included — so the window-level handler
+key handling deliberately **falls through unhandled** so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
 reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **toolbar's command
-group** renders the same board-command registry, narrowed to the current state: **type** whenever live and
-**merge** at review/done. **Type is the resident tool and always sits at the group's right edge** — it is the
-one command present the whole time a session is live, so its position stays fixed while the transient action
+group** renders the same board-command registry, narrowed to the current state: **Command Box** whenever live
+and **merge** at review/done. Command Box is the resident tool and always sits at the group's right edge — it
+is the one command present the whole time a session is live, so its position stays fixed while transient action
 buttons (merge, and relaunch when offline) render to its **left** and never push it around; only the toolbar
-render carries this anchoring (the typed inbox `/` menu still leads with `/type` in registry order). Every visible action uses one shared compact icon-toolbutton primitive and a familiar
-[[icon-system]] / Lucide mark (keyboard/type, git-merge, rotate/relaunch), with its registry identity colour;
+render carries this anchoring. Every visible action uses one shared compact icon-toolbutton primitive and a familiar
+[[icon-system]] / Lucide mark (command, git-merge, rotate/relaunch), with its registry identity colour;
 there is no emoji, visible text label, or toolbar-local icon/action mapping. The registry remains the single row
 that decides availability, colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution.
-Type exposes `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) swaps the
+Command Box exposes `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) swaps the
 registry commands for the same primitive's relaunch action, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
 permanent **Eval door**, always available for any selected session (see [[session-eval]]): the toolbar entry
-or the typed `/eval`, each navigating to the session-scoped Evals page. There is
-no hidden keyboard escape from this availability: the reserved type-mode chord remains consumed but inert for
-offline/queued sessions, using the same registry judgment as the button and `/type` twin. There is
+or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
+consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
@@ -299,8 +253,10 @@ no-overlay session still locks un-greyed; a second click releases; **double-clic
 single click switches tab, while double-click has no separate meaning and therefore only leaves that tab
 selected. Locking from the console is the row's explicit **right-click → lock on graph** action above, not a
 hidden double-click gesture. The console renders the row in its **compact, avatar-less** variant
-(`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list, the status a
-single colour glyph not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
+(`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with
+a 204px default width (15% below the former 240px) and caption-size row text; the selected headline may expand
+in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
+status is a single colour glyph, not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
 session to the avatars on the nodes it edits) belongs to the map-side SessionWindow, which keeps it. The
 list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
 over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), a dim

@@ -49,7 +49,7 @@ grammar is uniform, the logic is tiny.
   offers the node, the insert looks right, and the session silently launches node-agnostic.
 - **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol, and no
   reserved verbs. Every legacy `@<node>` usage was **migrated to `[[node]]`**: the composer autocomplete + the
-  board fresh-session key ([[session-console]] / [[term-input]]) and the server's node-derivation (`MENTION`).
+  board authored-composer key ([[session-console]] / [[command-box]]) and the server's node-derivation (`MENTION`).
   The old `@new`/`@delete` **server directives were deleted, not migrated** — creating or deleting a node is
   now prompt-driven agent work (the board chords prefill a plain instruction; the server never mutates the
   spec tree, see [[dispatch]]). So `@` names an actor, `[[]]` names a topic, and nothing else wears a sigil.

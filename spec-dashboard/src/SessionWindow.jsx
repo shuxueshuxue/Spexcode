@@ -24,8 +24,8 @@ export function opSummary(ops) {
 // hues, the same purely-informational hint the old triangle tinted): FILLED while collapsed (content hidden
 // behind it), OUTLINE once expanded. Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation)
 // and WITHOUT stealing focus: mousedown is preventDefault'd so the pointerdown never shifts focus onto the pod
-// or its focusable row-button ancestor — the console's docked input box keeps focus (it is not a tab target
-// either: no tabIndex). A leaf child needs no pod — its branch rail is the affordance. Rendered only when
+// or its focusable row-button ancestor — whichever surface currently owns input (TUI, Command Box, or New)
+// keeps focus. A leaf child needs no pod — its branch rail is the affordance. Rendered only when
 // nesting is in play (parent or depth>0), so a flat list with no children looks exactly as before.
 export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, onToggle }) {
   return (

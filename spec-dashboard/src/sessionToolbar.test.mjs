@@ -53,32 +53,31 @@ test('session eval glance reuses the graph summary projection and review-state v
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
-  const runners = Object.fromEntries(['type', 'eval', 'merge', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
+  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
   const names = (status, liveness) => uiCommandsFor(status, runners, liveness).map((command) => command.name)
   const typed = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.typed !== false).map((command) => command.name)
   const tools = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.button).map(({ name, icon }) => [name, icon])
 
-  assert.deepEqual(names('working', 'online'), ['type', 'eval', 'stop', 'close'])
-  assert.deepEqual(names('review', 'online'), ['type', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('done', 'online'), ['type', 'eval', 'merge', 'stop', 'close'])
+  assert.deepEqual(names('working', 'online'), ['command', 'eval', 'stop', 'close'])
+  assert.deepEqual(names('review', 'online'), ['command', 'eval', 'merge', 'stop', 'close'])
+  assert.deepEqual(names('done', 'online'), ['command', 'eval', 'merge', 'stop', 'close'])
   assert.deepEqual(names('queued', 'offline'), ['eval', 'close'])
   assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'close'])
   assert.deepEqual(names('review', 'offline'), ['eval', 'relaunch', 'close'])
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
-  assert.deepEqual(tools('review', 'online'), [['type', 'keyboard'], ['merge', 'git-merge']])
+  assert.deepEqual(tools('review', 'online'), [['command', 'command'], ['merge', 'git-merge']])
   assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw']])
-  // The registry keeps `type` first (the inbox `/` menu leads with it); only the toolbar render anchors the
-  // resident tool to the right edge, so the sort must be present between the button filter and the map.
-  assert.equal(UI_COMMANDS.find((c) => c.name === 'type').anchor, 'right')
+  assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
+  assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
   assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness\)/)
-  assert.match(source, /if \(typeAvailable\) setTypeMode/)
+  assert.match(source, /if \(commandAvailable\) setCommandOpen/)
   assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)[\s\S]*?\.sort\(\(a, b\) => \(a\.anchor === 'right' \? 1 : 0\) - \(b\.anchor === 'right' \? 1 : 0\)\)[\s\S]*?\.map/)
-  assert.match(source, /const pressed = c\.pressed \? typeMode : undefined/)
+  assert.match(source, /const pressed = c\.pressed \? commandOpen : undefined/)
   assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}/)
-  assert.match(icons, /keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)
+  assert.match(icons, /command:\s*\{[\s\S]*keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)
 })
 
-test('live inbox commands order board, preset, then harness and deduplicate by that precedence', () => {
+test('Command Box orders board, preset, then harness commands and deduplicates by precedence', () => {
   const board = [{ name: 'close', ui: true }]
   const presets = [{ name: 'rename', desc: 'Rename this session' }, { name: 'close', desc: 'Wrong twin' }]
   const harness = [{ name: 'rename', description: 'Harness rename' }, { name: 'help', source: 'built-in' }]

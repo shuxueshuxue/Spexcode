@@ -90,27 +90,24 @@ scenarios:
     code:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
-  - name: headline-reveals-on-demand
+  - name: selected-headline-three-line-cap
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/command-box.e2e.mjs
     description: >-
       Through the running dashboard in a real browser, open the session console (Enter) and look at the left
       session list, which is deliberately NARROW so it doesn't steal width from the terminal beside it — so
       long headlines ellipse at rest. Confirm every row is a dense single line. Now HOVER a truncated row and
       confirm it does NOT expand (only its background tints) — hover must leave the list geometry stable. Then
-      CLICK a row whose headline is truncated to select it, and confirm it un-truncates. Read its marker (the
-      status glyph + op tally) and the wrapped headline. Include a parent row with a subtree-count fold pod,
-      and compare the pod-to-headline spacing before and after selecting it. Record the list from rest through
-      hover and selection, with timeline steps for those states, showing the selected expanded row beside its
-      still-single-line neighbours.
+      CLICK a row whose headline needs more room. Measure the selected headline's computed line height, client
+      height, and scroll height; also read its hover title. Record the list from rest through hover and
+      selection, showing the selected row beside its still-single-line neighbours.
     expected: >-
       At rest each row is one line with an ellipsis (a dense index). Hovering does NOT expand a row — reveal is
       tied to SELECTION, so the list stays a stable click surface and rows never shift under the cursor. The
-      row you SELECT un-truncates: its headline wraps to the FULL text in place while every other row stays
-      single-line, so any title is completely readable without widening the list. On the wrapped row the small
-      markers (status glyph + op tally) sit pinned to the headline's FIRST line (top-right), not down a column,
-      so the wrapped lines below them run the full row width. A selected parent keeps the same natural gap
-      between its subtree-count fold pod and the headline as it had at rest; the count and first title word
-      never touch when selection switches the row into block flow.
+      selected row expands to AT MOST THREE 18px lines while every other row stays single-line. A still-longer
+      title is visibly clipped at 54px and remains completely available from the row's hover title; it never
+      grows to six or more lines and shoves the surrounding index away. The status glyph and op tally remain
+      on the first line.
     code:
       - spec-dashboard/src/styles.css
 ---
@@ -120,8 +117,8 @@ Product surface, measured by **looking** (YATU): the agent screenshots the rende
 confirms each live row is the compact one-line face whose headline is the worker's pane-title self-summary
 (the launch-prompt placeholder showing only before the agent is up), with the status folded to an inline
 colour-coded glyph and the op tally beside it — filing it as a reading with image evidence and a verdict.
-The on-demand headline reveal is measured as a browser interaction video with a timeline because its resting,
-hovered, and selected states are the behavior under test.
+The bounded selected-headline reveal is measured as a browser interaction video with a timeline because its
+resting, hovered, and selected states are the behavior under test.
 The scenario scopes its freshness `code:` to the capture (`sessions.ts`) and the render
 (`SessionWindow.jsx`) — not the shared stylesheet — so an unrelated CSS edit elsewhere doesn't stale this
 reading.

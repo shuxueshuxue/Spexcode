@@ -81,7 +81,7 @@ board, an agent manager must be able to do by typing — the backend endpoint al
 the CLI's job is only the thin verb over it. `rename` is the right-click rename ([[session-rename]]) as a
 verb: it sets the display-name override (an explicit `""` clears it back to the derived label; a *missing*
 argument is a usage error, never a silent clear), and an unknown session exits non-zero off the endpoint's
-404. `send --keys` is type mode as a flag — the raw `tmux send-keys` channel (never the prompt socket), which
+404. `send --keys` is the last-resort raw `tmux send-keys` channel (never the prompt socket), which
 is how a manager un-wedges a worker stuck in an interactive TUI dialog the prompt channel cannot drive (a
 select menu wanting one Enter or arrow), and the **last resort** every surface teaching it marks it as: try a
 plain `send` text first. It takes whitespace-separated key tokens in the frontend's own

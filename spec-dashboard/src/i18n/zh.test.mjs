@@ -12,13 +12,12 @@ test('eval detail copy names filed measurements as results in both locales', () 
   assert.match(zh.annotator.cmd.okDesc, /^签核这条结果 .*当前最新结果/)
 })
 
-test('terminal raw-key mode is labeled as terminal interaction in Chinese', () => {
-  assert.equal(zh.session.typeBtn, '终端交互')
-  assert.match(zh.session.typeTitle, /^终端交互模式/)
-  assert.equal(zh.session.typeInd, '⌨ 终端交互模式')
-  assert.match(zh.session.typeHelp, /发送到终端/)
-  assert.equal(zh.session.typeExit, '点击退出终端交互模式')
-  assert.match(zh.session.cmd.typeDesc, /^终端交互模式/)
+test('the authored control surface is consistently named Command Box in Chinese', () => {
+  assert.equal(zh.session.commandBtn, 'Command Box')
+  assert.equal(zh.session.commandBox, 'Command Box')
+  assert.match(zh.session.commandTitle, /完整指令.*Alt\/Cmd\+I/)
+  assert.match(zh.session.commandPlaceholder, /完整指令/)
+  assert.match(zh.session.commandSend, /Command Box/)
 })
 
 test('locked session hint describes changed-node browsing without extra modifier labels in Chinese', () => {

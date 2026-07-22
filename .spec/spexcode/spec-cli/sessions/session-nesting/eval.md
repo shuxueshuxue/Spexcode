@@ -16,21 +16,17 @@ scenarios:
       After clicking the pod it turns OUTLINE (count unchanged) and the child row appears indented directly
       beneath PARENT (recursively — a child that itself spawned would carry its own pod). After PARENT is closed and the board reloads, the child AUTO-PROMOTES to a
       top-level row (its dangling parent pointer is dropped at read time) — no orphan is lost, no migration ran.
-  - name: pod-click-keeps-input-focus
+  - name: pod-click-keeps-current-surface-focus
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, with a PARENT session that has a child (so PARENT's row
-      shows a fold pod), open the session console (Enter). Click into the console's docked input box (the `❯`
-      textarea carrying `data-focus-sink`) and type a few characters so a draft is in flight, then read
-      `document.activeElement`. Now click PARENT's fold pod once and read `document.activeElement` again. Record
-      the interaction as video and the two activeElement readings as the transcript.
+      shows a fold pod), open the session console. First focus the live xterm, read `document.activeElement`,
+      and click PARENT's fold pod. Then open Command Box, type a draft, read its focused textarea, and click the
+      pod again. Record the interaction and activeElement readings.
     expected: |
-      Clicking the fold pod toggles the fold (filled↔outline, the child row appears/hides) but does NOT move
-      focus: `document.activeElement` is the docked input textarea (`data-focus-sink`) BOTH before and after the
-      click, and the in-flight draft is undisturbed. The pod is a pointer-only toggle — the click must never
-      land focus on the pod itself nor on its focusable session-row-button ancestor. A reading is a FAIL if
-      activeElement after the click is anything other than the docked input (e.g. `span.sess-fold.pod` or
-      `button.si-item`).
+      Clicking the fold pod toggles the fold but never moves focus: xterm's helper textarea remains active in
+      the first pass and Command Box's textarea remains active with its draft undisturbed in the second. The pod
+      never becomes the active element and focus never lands on its session-row-button ancestor.
   - name: triangle-colour-is-an-informational-rollup
     tags: [frontend-e2e, desktop]
     description: >

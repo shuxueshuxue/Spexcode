@@ -552,8 +552,12 @@ export default {
     evalUnknown: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
     evalDoorSummary: ({ pass, fail, review, blind, unknown }) =>
       `打开此会话的 Evals 页 — 新鲜通过 ${pass}，新鲜失败 ${fail}，待人工复核 ${review}，未评测 ${blind}，覆盖未知 ${unknown}`,
-    typeBtn: '终端交互',
-    typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
+    commandBox: 'Command Box',
+    commandBtn: 'Command Box',
+    commandTitle: '打开 Command Box，发送完整指令或执行面板命令（Alt/Cmd+I）',
+    commandClose: '关闭 Command Box',
+    commandPlaceholder: '发送完整指令或执行面板命令',
+    commandSend: '从 Command Box 发送',
     relaunch: '重新启动',
     relaunchTitle: '重新启动并恢复此会话',
     merge: '合并',
@@ -563,18 +567,12 @@ export default {
     offlineMsg: '⏻ 离线——此工作树没有活动进程。',
     offlineSubBefore: '工作树及其会话 ',
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
-    typeInd: '⌨ 终端交互模式',
-    typeHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送到终端 · ⌥/⌘+I 或点击退出',
-    typeExit: '点击退出终端交互模式',
-    msgOffline: '重新启动以向此会话发送消息',
-    msgPlaceholder: '向此会话发送消息 · ⏎ 发送',
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',
     attachError: '⚠ 上传失败',
-    // 面板命令 —— ❯ 输入框在本地执行（不发送给智能体）的 `/` 命令，每条都是某个顶栏按钮的“打字版”。
+    // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
-      typeDesc: '终端交互模式 —— 把原始按键直接发送到智能体的终端',
       evalDesc: '切换到此会话的评测页 —— 评测证据、改动、合并门禁',
       mergeTitle: '将此会话合并到 main',
       mergeDesc: '将此会话合并到 main',

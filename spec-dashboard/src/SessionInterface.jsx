@@ -13,7 +13,7 @@ import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import { useResizable } from './useResizable.js'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
-import { fitTextarea } from './textarea.js'
+import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
@@ -90,44 +90,11 @@ function SessionEvalStats({ summary }) {
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
-// DOM KeyboardEvent.key → the base key name the keys-kind input feeds tmux send-keys (non-printables only; modifier
-// combos are encoded by typeKeyToken). Escape is intentionally absent — handled separately.
-const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
-
-// @@@ composing — an Enter (or Tab) that COMMITS an IME composition (pinyin, かな, 한글…) belongs to the
-// input: it picks a candidate and composes the word, and must NEVER be read as dispatch/accept. The browser
-// flags such a key event with `isComposing` / legacy keyCode 229. Works for both a native window event
-// (isComposing/keyCode direct) and a React synthetic (nativeEvent.isComposing).
-const composingKey = (e) => e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229
-
-// Encode a keydown into a tmux token (⌃→`C-`, ⌥/⌘→`M-`, Shift→`S-` on named keys). The base of a
-// modified letter/digit comes from e.code, not e.key: a held modifier makes e.key unreliable (⌥B prints
-// '∫' on a mac), but the physical KeyB/Digit3 code is stable. null = nothing sendable → key swallowed.
-function typeKeyToken(e) {
-  const named = RAWKEY[e.key]
-  const mod = e.ctrlKey || e.altKey || e.metaKey
-  let base = null
-  if (named) base = named
-  else if (mod) {
-    // a modified LETTER carries Shift as its CASE (`M-B`), never an `S-` prefix — tmux can't parse `S-`
-    // on a printable, and case is how Meta-shift is actually spelled.
-    if (/^Key[A-Z]$/.test(e.code)) base = e.shiftKey ? e.code.slice(3) : e.code.slice(3).toLowerCase()
-    else if (/^Digit[0-9]$/.test(e.code)) base = e.code.slice(5)
-    else if (e.key.length === 1) base = e.key
-  } else if (e.key.length === 1) base = e.key
-  if (base == null) return null
-  let pfx = ''
-  if (e.ctrlKey) pfx += 'C-'
-  if (e.altKey || e.metaKey) pfx += 'M-'
-  if (e.shiftKey && named) pfx += 'S-'   // `S-` only for NAMED keys (e.g. S-Tab, S-Up); the backend maps it
-  return pfx + base
-}
-
 // the `[[`/`@` mention machinery — trigger scanners, ranking, MENTION_RE, the MentionMenu dropdown — is the
 // SHARED module ./mentions.jsx ([[mentions]]): one autocomplete for the console and the issue composers.
 
-// the textarea auto-grow (reset + clamp at a per-surface max-height) is the SHARED ./textarea.js
-// fitTextarea — one routine for the New-tab prompt, the ❯ inbox, and the thread composers.
+// The Command Box, New prompt, and review/issue composers share ComposerTextarea's measurement and IME
+// boundary. Their domain grammars remain local to the home that sends them.
 
 // the `/` matcher + dropdown render (matchSlash, SlashMenu) are the SHARED module ./mentions.jsx too —
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
@@ -212,16 +179,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
-  // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
-  // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
+  // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
   // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
   const { launchers, launcher, pickLauncher } = useLaunchers()
-  const [sendErr, setSendErr] = useState(false)   // last text dispatch failed — surfaced under the ❯ box
+  const [sendErr, setSendErr] = useState(false)
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
-  const [typeMode, setTypeMode] = useState(false)
-  const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the type button's `.suggest` pulse
+  const [commandOpen, setCommandOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -229,9 +194,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
-  const termRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
-  const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
+  const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
+  const listRef = useRef(null)
 
   // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]) AND
   // nested — a session folds under its spawner ([[session-nesting]]). `forest` is that display structure (zone
@@ -259,17 +224,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (open && !validIds.has(sel)) setSel('new')
   }, [open, validIds, sel, setSel])
-  // the session list is a user-resizable pane ([[resizable-panes]]): drag the divider, width persists.
-  const [listW, listDrag] = useResizable('spex.siListWidth', 240, { min: 180, max: 480 })
+  // the session list is a user-resizable pane ([[resizable-panes]]): drag persists; double-click resets.
+  const [listW, listDrag, resetListW] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
-  const typeAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness).some((command) => command.name === 'type')
+  const commandAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
   const showRelaunch = noLivePane && selSession?.status !== 'queued'
-  // the active session tab's bottom-input draft (per-session, see `drafts`).
+  // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
 
@@ -285,41 +250,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // expands the body at the launch/send boundary. Shared fetch (./launch.js), no client interpreter.
   const commandPresets = useCommandPresets()
 
-  // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
-  // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null) }, [active])
-  useEffect(() => { if (!typeAvailable) setTypeMode(false) }, [typeAvailable])
+  // Command Box is transient, but its draft is not. Switching tabs or losing liveness closes the surface.
+  useEffect(() => { setCommandOpen(false); setSendErr(false); setMenu(null) }, [active])
+  useEffect(() => { if (!commandAvailable) setCommandOpen(false) }, [commandAvailable])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
-  // leaving type mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
-  // switch or going offline exits type mode too, but the tab-focus effect owns focus there.
-  const wasTypeRef = useRef(false)
-  useEffect(() => {
-    if (wasTypeRef.current && !typeMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
-    wasTypeRef.current = typeMode
-  }, [typeMode])
-  // forward raw keys to the active session's pane IN TAP ORDER ([[nav-mode-key-ordering]]). Naive per-key
-  // fire-and-forget POSTs raced (browser + server + send-keys all parallel), scrambling fast typing. So per
-  // session keep ONE request in flight and COALESCE: the first key flushes at once (typing stays跟手), keys
-  // struck during that round-trip queue and go out together as one ordered batch when it returns — strict
-  // order, and typing stays snappy: no per-key latency stack-up on a remote link.
-  const rawKeyQ = useRef(new Map())
-  const flushRawKeys = (id) => {
-    const q = rawKeyQ.current.get(id)
-    if (!q || q.busy || q.keys.length === 0) return
-    const keys = q.keys; q.keys = []; q.busy = true
-    fetch(apiUrl(`/api/sessions/${id}/input`), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'keys', keys }),
-    }).catch(() => {}).finally(() => { q.busy = false; flushRawKeys(id) })
-  }
-  const sendRawKey = (key) => {
-    const id = active
-    let q = rawKeyQ.current.get(id)
-    if (!q) { q = { keys: [], busy: false }; rawKeyQ.current.set(id, q) }
-    q.keys.push(key)
-    flushRawKeys(id)
-  }
-  // each SessionTerm reports whether its pane currently looks like a select menu (best-effort hint).
-  const reportMenu = (id, likely) => setMenuById((m) => (m[id] === likely ? m : { ...m, [id]: likely }))
 
   // track exactly the set of live sessions (liveness, not lifecycle, gates membership) so every live pane
   // stays mounted — see the warm-terminals contract in [[session-console]].
@@ -345,37 +279,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
   }, [seed])
 
-  // on landing on a tab, focus that tab's input (New prompt or a live session's ❯ box). No setPrompt here —
-  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them. Launch never blurs the box
-  // (it stays enabled and fires in the background), so there's no disable→re-enable round-trip to chase here.
+  // Focus follows the active product surface. SessionTerm owns native TUI focus; this effect owns only
+  // authored textareas. Drafts remain untouched.
   useEffect(() => {
     if (!open) return
     const id = setTimeout(() => {
       if (active === 'new') taRef.current?.focus()
-      else if (selSession && selSession.liveness !== 'offline') msgRef.current?.focus()
+      else if (commandOpen) msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
-  }, [open, active, selSession?.liveness])
+  }, [open, active, commandOpen])
 
-  // auto-grow the new-session box; re-runs on `open` so a reopened multi-line draft restores its height.
-  // Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
+  // Keyboard-driven selection in a long list must remain visible.
   useEffect(() => {
-    const ta = taRef.current
-    if (!ta || active !== 'new' || !open) return
-    fitTextarea(ta, parseFloat(getComputedStyle(ta).maxHeight) || Infinity)
-  }, [prompt, active, open])
-
-  // the ❯ box auto-grows UPWARD (anchored to the wrap's bottom). Its cap is dynamic — half the terminal
-  // height — so we set max-height in JS, then hand the same value to fitTextarea. The box UNMOUNTS while
-  // type mode replaces it and remounts at rows=1, so that flip must re-fit it too — the
-  // draft survives the round-trip and the grown height must survive with it.
-  useEffect(() => {
-    const ta = msgRef.current
-    if (!ta || active === 'new' || !open) return
-    const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
-    ta.style.maxHeight = `${maxH}px`
-    fitTextarea(ta, maxH)
-  }, [msg, active, open, typeMode])
+    if (!open || active === 'new') return
+    const frame = requestAnimationFrame(() => {
+      const row = [...(listRef.current?.querySelectorAll('[data-sid]') || [])].find((el) => el.dataset.sid === active)
+      row?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [open, active])
 
   // New-session command invocation is backend-owned: this surface and the phone send the raw
   // `/<preset> [[node]]… <free text>` through the ordinary create request, and newSession expands it for
@@ -404,7 +327,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)
   // — the shared scanners from ./mentions.jsx — work on BOTH; the New prompt adds the config-preset (`/`)
-  // palette, a session's ❯ inbox adds the slash menu.
+  // palette, a session's Command Box adds the slash menu.
   const buildMenu = (value, caret) => {
     const mm = nodeMentionAt(value, caret, specs, focusId)
     if (mm) return mm
@@ -430,13 +353,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const syncMenu = (el) => setMenu(el ? buildMenu(el.value, el.selectionStart) : null)
   const navMenu = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   // replace the menu's span under the caret with the picked item's token, then drop the caret after it.
-  // Each kind writes its OWN surface: slash → the active session's ❯ draft (msgRef), insert-only and never
+  // Each kind writes its OWN surface: slash → the active session's Command Box draft (msgRef), insert-only and never
   // executed; mention → the New Session prompt (taRef). `[[<id>]] ` / `/<name> ` both leave a trailing space.
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
       // A board command RUNS on pick (the typed twin of its button); presets and harness commands insert text.
-      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
+      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); setCommandOpen(false); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -446,7 +369,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return
     }
     // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
-    // active: the New prompt (resolved at launch) or a running session's ❯ inbox (resolved at send). An
+    // active: the New prompt (resolved at launch) or a running session's Command Box (resolved at send). An
     // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
     if (menu.kind === 'config') {
       // A preset governs the whole launch, so a token picked anywhere in an existing draft becomes its
@@ -472,7 +395,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
 
-  // both `/` palettes — the inbox's board/preset/harness menu (`up`, opens above the box) and the New box's
+  // both `/` palettes — Command Box's board/preset/harness menu (`up`) and the New box's
   // config-preset menu (downward) — render through the ONE shared SlashMenu; only the head label differs.
   const slashMenu = (up, head) => (
     <SlashMenu menu={menu} up={up} head={head} onPick={accept}
@@ -480,11 +403,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   )
 
   // the node-mention/`@`-actor dropdown, on either surface — downward under the centered New box, or `up`
-  // above the docked ❯ inbox. The rows are the shared MentionMenu ([[mentions]]); only the open direction
+  // above Command Box. The rows are the shared MentionMenu ([[mentions]]); only the open direction
   // and the pick/hover wiring into THIS surface's menu state are ours.
   const mentionMenuEl = (up) => (
     <MentionMenu menu={menu} up={up} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
   )
+
+  const insertCommandTrigger = (trigger) => {
+    const el = msgRef.current
+    if (!el) return
+    const start = el.selectionStart ?? msg.length
+    const end = el.selectionEnd ?? start
+    const next = msg.slice(0, start) + trigger + msg.slice(end)
+    const caret = start + trigger.length
+    setMsg(next)
+    requestAnimationFrame(() => {
+      const textarea = msgRef.current
+      if (!textarea) return
+      textarea.focus()
+      textarea.setSelectionRange(caret, caret)
+      syncMenu(textarea)
+    })
+  }
 
   const sendMsg = async () => {
     const raw = msg
@@ -493,9 +433,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
     const cmd = typedUiCmds.find((c) => raw.trim() === `/${c.name}`)
-    if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
+    if (cmd) { setMsg(''); setMenu(null); setCommandOpen(false); cmd.run(); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the backend (the running-session twin
-    // of the New Session launch composition — see [[term-input]]).
+    // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
     setMsg('')
     setSendErr(false)
@@ -505,6 +445,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         body: JSON.stringify({ kind: 'text', text }),
       })
       if (!res.ok) throw new Error(`input ${res.status}`)
+      setCommandOpen(false)
     } catch {
       setMsg(raw)       // don't lose the message — put the ORIGINAL line back so the human can retry
       setSendErr(true)
@@ -596,9 +537,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const onBulkClosed = () => { exitSelect(); reload?.() }
 
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
-  // tool and typed twin call; `uiCmds` narrows the registry to current session state. See [[term-input]].
+  // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
   const runners = {
-    type: () => setTypeMode((v) => !v),
+    command: () => setCommandOpen((value) => !value),
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
     // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
@@ -623,31 +564,31 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           : evalKnownTitle
             ? t('session.evalFailedKnown', { summary: evalKnownTitle })
             : t('session.evalUnavailable')
-  // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
+  // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
+  // terminal keys fall through to xterm.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, typeAvailable, setTypeMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, typeAvailable, setTypeMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
-      // reserved ⌥/⌘+I toggles type mode: handled before everything else, never forwarded to tmux. Matched by
+      // Reserved Alt/Cmd+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
-      // let it through so the console opens rather than toggling type mode.
+      // leave it alone.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
       if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
-        if (typeAvailable) setTypeMode((v) => !v)
+        if (commandAvailable) setCommandOpen((value) => !value)
         return
       }
-      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
-      // reserved over the console too, type mode included (the same standing as ⌥/⌘+I above): fall through
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥5 (pages) — is
+      // reserved over the console too: fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
-      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) return
-      // ⌘/⌥/⌃+↑/↓ walk the session list — kept ABOVE the type-mode passthrough so they fire even while
-      // raw-key mode forwards to a pane, and the modifier frees ↑/↓ from any caret/typing conflict.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
+      // ⌘/⌥/⌃+↑/↓ always walk the session list; the modifier frees ↑/↓ from caret/TUI navigation.
       if (e.metaKey || e.altKey || e.ctrlKey) {
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault(); e.stopPropagation()
@@ -656,32 +597,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           setSel(order[ni]); return
         }
       }
-      // type mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by typeKeyToken), nothing else fires.
-      if (typeMode && active !== 'new') {
-        e.preventDefault(); e.stopPropagation()
-        // Escape always forwards — it belongs to the agent's own menus; exiting type mode is the
-        // toggle chord / button / /type only, never a keystroke the pane also wants.
-        if (e.key === 'Escape') { sendRawKey('Escape'); return }
-        const token = typeKeyToken(e)
-        if (token) sendRawKey(token)
-        return
-      }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
-      // (`[[`-mention) OR a session's ❯ inbox (slash). The capture-phase listener claims Enter before the
-      // inbox textarea's own onKeyDown, so picking a command never also dispatches the line.
+      // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
       if (menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
         if (e.key === 'ArrowUp')   { e.preventDefault(); e.stopPropagation(); navMenu(-1); return }
         if ((e.key === 'Enter' || e.key === 'Tab') && !composingKey(e)) { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
-      // (no bottom Esc rung: Esc never leaves a page — [[side-nav]]. Menus/type-mode claimed theirs above;
-      // leaving the console is navigation: the rail, ⌥1/⌥3/⌥4, or history.)
+      if (commandOpen && e.key === 'Escape') {
+        e.preventDefault(); e.stopPropagation(); setCommandOpen(false); return
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
         // the first/last line, so typing in the box never jerks you onto another session. Tab switching while
         // typing is the modifier combos' job (handled above). Plain ↑/↓ walk the list only outside any input.
-        if (e.target?.tagName === 'TEXTAREA') return
+        if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT' || e.target?.isContentEditable) return
         e.preventDefault(); e.stopPropagation()
         const i = order.indexOf(active)
         const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
@@ -693,47 +624,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return () => window.removeEventListener('keydown', onKey, true)
   }, [setSel])
 
-  const isTextField = (t) => t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)
-
-  // focus the docked input — whichever box is currently mounted (the New-tab prompt when it's up, else the
-  // session ❯ box; both null in type mode / offline, where there's no input to land in).
-  const refocusInput = () => {
-    const el = taRef.current || msgRef.current
-    if (el) requestAnimationFrame(() => el.focus())
-  }
-
-  // keep the docked input focused: preventDefault on a left-click mousedown over non-text chrome blocks the
-  // blur but not the click (buttons still fire onClick). Left clicks ONLY — preventDefault on a right-button
-  // mousedown suppresses the contextmenu in some browsers (Safari/Firefox), killing the rename pop-over;
-  // right-click focus retention is handled by the contextmenu blocker below. The terminal owns its selection.
-  const keepFocus = (e) => {
-    e.stopPropagation()
-    if (e.button !== 0) return
-    const t = e.target
-    if (isTextField(t)) return
-    // a native <select> opens its dropdown ON the default mousedown action — preventDefault would suppress
-    // it from ever opening, so leave native form controls alone. Focus retention only needs to blanket the
-    // inert chrome, not any interactive control that owns its own mousedown. (No select currently renders
-    // in the panel — the launcher picker is now a button pop-out, which fires onClick regardless — but the
-    // carve-out stays: it is the rule any future native control relies on.)
-    if (t.closest && t.closest('select')) return
-    // the terminal owns its own text selection — preventing default on it would break the drag-select.
-    if (t.closest && t.closest('.si-term-body')) return
-    e.preventDefault()
-  }
-
-  // suppress the OS context menu via a native window listener in the CAPTURE phase (a React onContextMenu is
-  // unreliable for repeated right-clicks), then refocus the docked input (the right-press may have blurred
-  // it). preventDefault here does not stop propagation, so a row's own onContextMenu still opens the rename.
   useEffect(() => {
     if (!open) return
-    const onMenu = (e) => {
-      if (!panelRef.current?.contains(e.target)) return
-      e.preventDefault()
-      refocusInput()
+    const suppressNativeMenu = (event) => {
+      if (panelRef.current?.contains(event.target)) event.preventDefault()
     }
-    window.addEventListener('contextmenu', onMenu, true)
-    return () => window.removeEventListener('contextmenu', onMenu, true)
+    window.addEventListener('contextmenu', suppressNativeMenu, true)
+    return () => window.removeEventListener('contextmenu', suppressNativeMenu, true)
   }, [open])
 
   return (
@@ -742,7 +639,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
+      <div className="si-panel" ref={panelRef}>
         {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
             surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
         <input
@@ -752,7 +649,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" style={{ flex: `0 0 ${listW}px` }}>
+        <aside className="si-list" ref={listRef} style={{ flex: `0 0 ${listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
               a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
@@ -802,7 +699,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </aside>
 
         {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. */}
-        <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />
+        <div className="pane-resizer si-resizer" onMouseDown={listDrag} onDoubleClick={resetListW}
+          role="separator" aria-orientation="vertical" aria-valuenow={Math.round(listW)} />
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
@@ -817,7 +715,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 onDragLeave={() => setDragTarget(null)}
                 onDrop={(e) => onDropFiles(e, 'new')}
               >
-                <textarea
+                <ComposerTextarea
                   ref={taRef}
                   className="si-input"
                   data-focus-sink
@@ -895,14 +793,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
                   {uiCmds.filter((c) => c.button)
-                    // Resident right-anchored tools (type) sort to the row's right edge; transient action
+                    // Resident right-anchored tools (Command Box) sort to the row's right edge; transient action
                     // buttons keep their registry order to its left. Stable sort preserves that left order.
                     .sort((a, b) => (a.anchor === 'right' ? 1 : 0) - (b.anchor === 'right' ? 1 : 0))
                     .map((c) => {
-                    // Toggle/suggestion semantics are registry metadata too; the renderer only projects the
-                    // live values into the shared primitive instead of naming a command locally.
-                    const pressed = c.pressed ? typeMode : undefined
-                    const state = pressed ? ' on' : (c.suggest && menuById[active] ? ' suggest' : '')
+                    const pressed = c.pressed ? commandOpen : undefined
+                    const state = pressed ? ' on' : ''
                     return (
                       <IconButton
                         key={c.name}
@@ -925,7 +821,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 id={`si-terminal-panel-${active}`}
                 role="tabpanel"
                 aria-labelledby="si-terminal-tab"
-                ref={termRef}
                 style={{ position: 'relative' }}
               >
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
@@ -935,7 +830,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     visibility: id === active ? 'visible' : 'hidden',
                     pointerEvents: id === active ? 'auto' : 'none',
                   }}>
-                    <SessionTerm sessionId={id} active={open && id === active} onMenu={reportMenu} />
+                    <SessionTerm sessionId={id} active={open && id === active}
+                      focused={open && id === active && !commandOpen && !showRelaunch} />
                   </div>
                 ))}
                 {showRelaunch && (
@@ -946,51 +842,59 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
                   </div>
                 )}
-              </div>
-              {/* the docked ❯ input — type mode replaces it with the raw-key indicator. */}
-              {typeMode ? (
-                // type mode replaces the prompt box: keys go straight to the pane (handled at the window level).
-                <div className="si-bottom type" onClick={() => setTypeMode(false)} data-tip={t('session.typeExit')}>
-                  <span className="si-type-ind">{t('session.typeInd')}</span>
-                  <span className="si-type-help">{t('session.typeHelp')}</span>
+                {commandOpen && !noLivePane && (
+                  <div className="si-command-layer" role="dialog" aria-label={t('session.commandBox')}>
+                    <button type="button" className="si-command-dismiss" tabIndex={-1}
+                      aria-label={t('session.commandClose')} onMouseDown={() => setCommandOpen(false)} />
+                    <ComposerSurface
+                      className={`si-command-box${sendErr ? ' err' : ''}${dragTarget === 'command' ? ' dragover' : ''}`}
+                      onDragOver={(e) => onDragOverFiles(e, 'command')}
+                      onDragLeave={() => setDragTarget(null)}
+                      onDrop={(e) => onDropFiles(e, 'command')}
+                      editor={(
+                        <div className="fv-tawrap">
+                          <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
+                            data-focus-sink
+                            onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}
+                            onSelect={(e) => syncMenu(e.target)}
+                            onPaste={(e) => onPasteFiles(e, 'command')}
+                            onBlur={() => setMenu(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
+                                e.preventDefault(); e.stopPropagation(); sendMsg()
+                              }
+                            }}
+                            placeholder={t('session.commandPlaceholder')} spellCheck={false} />
+                          {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
+                          {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
+                        </div>
+                      )}
+                      footer={(
+                        <div className="si-command-tools">
+                          <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
+                          <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')}
+                            aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => insertCommandTrigger('@')}>@</button>
+                          <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')}
+                            aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => insertCommandTrigger('[[')}>[[</button>
+                          <button type="button" className="fv-trigger-btn" data-tip={t('session.menuCommands')}
+                            aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => insertCommandTrigger('/')}>/</button>
+                          <IconButton icon={uploading && attachAt === 'command' ? 'loader' : 'paperclip'} size={14}
+                            iconClassName={uploading && attachAt === 'command' ? 'si-attach-busy' : undefined}
+                            className="si-command-tool" label={t('session.attachTitle')}
+                            disabled={uploading} onMouseDown={(e) => e.preventDefault()} onClick={() => pickFiles('command')} />
+                          {uploadErr && attachAt === 'command' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
+                          {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
+                          <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
+                            disabled={!msg.trim()} onMouseDown={(e) => e.preventDefault()} onClick={sendMsg} />
+                        </div>
+                      )}
+                    />
+                  </div>
+                )}
                 </div>
-              ) : (
-                <div
-                  className={`${sendErr ? 'si-bottom err' : 'si-bottom'}${dragTarget === 'msg' ? ' dragover' : ''}`}
-                  onDragOver={(e) => { if (!noLivePane) onDragOverFiles(e, 'msg') }}
-                  onDragLeave={() => setDragTarget(null)}
-                  onDrop={(e) => { if (!noLivePane) onDropFiles(e, 'msg') }}
-                >
-                  <span className="si-prompt">❯</span>
-                  <textarea
-                    ref={msgRef}
-                    className="si-input"
-                    data-focus-sink
-                    rows={1}
-                    value={msg}
-                    onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}
-                    onSelect={(e) => syncMenu(e.target)}
-                    onPaste={(e) => { if (!noLivePane) onPasteFiles(e, 'msg') }}
-                    onBlur={() => setMenu(null)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
-                    placeholder={noLivePane ? t('session.msgOffline') : t('session.msgPlaceholder')}
-                    spellCheck={false}
-                    disabled={noLivePane}
-                  />
-                  <button
-                    type="button"
-                    className="si-attach"
-                    data-tip={t('session.attachTitle')}
-                    onClick={() => pickFiles('msg')}
-                    disabled={uploading || noLivePane}
-                  >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>
-                  {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
-                  {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
-                  {/* slash-command + `[[`-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
-                  {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
-                  {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
-                </div>
-              )}
           </div>
         </section>
       </div>

@@ -2,12 +2,11 @@
 // `button:false` = no toolbar twin. `typed:false` = toolbar-only (relaunch is not an inbox command).
 // Availability, colour, icon, label, typed twin, and execution all flow through this one registry.
 export const UI_COMMANDS = [
-  // `anchor: 'right'` = the resident takeover tool pins to the toolbar's right edge; transient action
-  // buttons (merge/relaunch) render to its left, so its position never shifts as they come and go. This
-  // is a toolbar-render concern only — the typed inbox order still leads with `type` (registry order).
-  { name: 'type',  color: 'yellow', icon: 'keyboard', button: true, pressed: true, suggest: true, anchor: 'right',
+  // The resident Command Box opener pins to the toolbar's right edge. It is toolbar-only: direct xterm
+  // input is the default, so there is no typed `/type` command or takeover mode.
+  { name: 'command', color: 'blue', icon: 'command', button: true, typed: false, pressed: true, anchor: 'right',
     when: (st, lv) => !!st && st !== 'offline' && st !== 'queued' && lv !== 'offline',
-    labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
+    labelKey: 'session.commandBtn', titleKey: 'session.commandTitle' },
   // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed
   // `/eval` navigates through the same permanent door rendered in the toolbar (`button: false`, available for
   // every session state; an offline input is disabled, but the registry still states the honest capability).
@@ -34,7 +33,7 @@ export function uiCommandsFor(status, runners, liveness = 'online') {
     .map((c) => ({ ...c, run: runners[c.name] }))
 }
 
-// The live inbox has one ordered command vocabulary. Board actions win because they act in the dashboard;
+// Command Box has one ordered command vocabulary. Board actions win because they act in the dashboard;
 // SpexCode prompt presets win over same-named harness commands because the backend expands them before the
 // harness sees the text. Deduplication here gives every name one row and one meaning.
 export function inboxCommands(ui = [], presets = [], harness = []) {

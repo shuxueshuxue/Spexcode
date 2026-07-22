@@ -92,7 +92,7 @@ human review as the distinct Needs review / Reviewed facet, so moving the canoni
 axis does not fork field semantics inside the popup.
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
-(`Enter`; see [[session-console]] and [[term-input]]), keyed to a session rather than pinned to a node. The
+(`Enter`; see [[session-console]] and [[command-box]]), keyed to a session rather than pinned to a node. The
 panel sizes to **itself**, never to xterm's measured width (each pane scrolls its own content, no stray
 horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
 [[node-graph]]; this node owns only the

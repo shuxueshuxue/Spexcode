@@ -2,7 +2,7 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard keeps browser terminals ready, but a session owns one native tmux stream only while watched — visibility with one bounded linger; a quick switch-back continues output in place and SpexCode never splices a reconstructed screen into live output.
+desc: The dashboard keeps interactive browser terminals ready, but a session owns one native tmux stream only while watched — rendering and xterm input share it, with bounded visibility lifecycle and no reconstructed screen.
 code:
   - spec-cli/src/pty-bridge.ts
 related:
@@ -29,9 +29,9 @@ related:
 
 # live-view
 
-The dashboard terminal is a browser view of a session's tmux pane. Prompts still travel through the
-session dispatch channel; the terminal socket carries pane output, geometry, visibility, and wheel
-navigation only.
+The dashboard terminal is an interactive browser face of a session's tmux pane. xterm's native input travels
+through the terminal socket beside pane output, geometry, visibility, and wheel navigation. Atomic authored
+prompts and board commands remain [[command-box]]'s separate session dispatch channel.
 
 ## one compositor
 
@@ -90,9 +90,15 @@ no later subprocess, so
 no sibling tmux client can inherit an earlier PTY master. Losing one helper can therefore detach only its
 own client; it cannot keep a dead sibling terminal alive and eventually block the shared tmux server.
 
-The helper's stdout is raw terminal output and its stdin is a small resize/navigation control stream.
+The helper's stdout is raw terminal output and its stdin is a small resize/navigation/input control stream.
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
 at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
+
+The visible viewer may send bounded `{t:'input', data}` messages on its existing socket. The bridge preserves
+their order and hands each xterm-produced byte string to the helper, which writes it to the native client's PTY.
+This is the same client whose stdout paints xterm, so terminal modes, paste protocol, control keys, and IME
+commits are decided by xterm and the TUI rather than re-encoded by the dashboard. Hidden, lingering, detached,
+or disconnected viewers cannot inject and never queue input for later replay.
 
 The browser view contains the pane, not tmux's client chrome. Before native attach the helper disables the
 target session's status line, so a browser grid of N rows gives the pane N rows instead of N-1 pane rows plus

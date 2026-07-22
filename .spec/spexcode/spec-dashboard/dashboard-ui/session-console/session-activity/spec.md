@@ -74,18 +74,17 @@ variant — status word + op tally on a second line — lived on as the mobile l
 desktop lists folded it into the glyph; it is retired, deleted with its `compact` prop rather than kept as
 a dead second implementation.)
 
-The compact single line is a **resting** state, not a hard clip. Widening the whole sidebar to fit long
-headlines is the wrong lever — it buys a few more characters for every row at the cost of the terminal
-beside it, and still ellipses the long ones. So the width stays **narrow** (the list is a dense index,
-not the place a title lives) and full length is bought **on demand, on the row you SELECT**: clicking a
-session un-truncates its headline — it wraps to the full text in place — so any title is completely readable
-without widening the list. Reveal is tied to **selection, not hover**: a hover-expand would grow the row
-under the cursor and shove the rows below it down, turning every click into a moving target; only the row you
-have already committed to opens, so the list stays a **stable click surface**. When the headline wraps, the
-small **markers** (the status glyph, the op tally) stay pinned to its **first line's top-right** — they leave
-the row's flow rather than reserving a column down every line, so the wrapped lines beneath run the **full
-width**. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule; the
-meta line stays the parking spot for any further at-a-glance metadata added later.
+The compact single line is a **resting** state, not a reason to widen the whole sidebar. The console list's
+default width is 204px (15% narrower than its former 240px default) and its row type steps down to the 10px
+caption token: the list is a dense index, and the saved user-resized width still wins. Resting rows share one
+explicit 18px line box with 5px vertical padding, yielding a consistent 28px content height whether or not a
+row has a nesting rail. A selected row reveals more context in
+place, but the expansion is **capped at three lines**. Three lines make the current task recognizable without
+letting one generated headline turn the remaining sessions into a moving target; the row's tooltip and
+accessible name retain the complete text. Reveal is tied to selection, never hover. The small **markers**
+(status glyph, op tally) stay pinned to the selected headline's first-line top-right while later lines use the
+available width. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule;
+the meta line stays the parking spot for any further at-a-glance metadata added later.
 When the selected row belongs to the nesting forest, its leading connector/fold pod keeps the same natural
 gap before the headline after the row changes from flex to block flow; revealing a title never glues the
 subtree count to its first word.
@@ -113,6 +112,10 @@ toolbar deliberately carries neither `sessionHeadline` nor lifecycle/liveness te
 spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or HTML-derived text into
 tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the shared row face
 as the one place the console identifies the selected session.
+
+Keyboard selection always remains visible: after a session change the sidebar scrolls the selected row to the
+nearest edge, matching the app's other keyboard-driven lists. The resize divider keeps its 180–480px clamp and
+terminal-lane guard; double-clicking it clears the saved override and restores the 204px product default.
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop

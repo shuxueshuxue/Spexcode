@@ -1,4 +1,4 @@
-// the ONE textarea auto-grow routine, shared by every docked input bar — the console's New-tab prompt and
+// the ONE textarea auto-grow routine, shared by every authored composer — the console's New prompt,
 // ❯ inbox ([[session-console]]) and the thread composer ([[issues-view]]'s ReplyComposer): reset to `auto`
 // (so it can shrink), then height = scrollHeight clamped BETWEEN `minH` and `maxH`. `minH` is the usable
 // IDLE FLOOR — the box lands at a real writing height with no click-to-expand, autogrow lives ABOVE it

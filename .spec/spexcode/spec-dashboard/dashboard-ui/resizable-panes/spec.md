@@ -24,6 +24,10 @@ min/max so no pane can crush its neighbor or vanish; release **persists** the wi
 drag is live, text selection is suspended and the resize cursor holds app-wide, so a fast drag never
 smears a selection across the page.
 
+The divider also follows the familiar editor-panel reset gesture: a double-click clears that pane's stored
+override and restores its current product default. Reset is returned by the same hook, so consumers do not
+reach into localStorage or duplicate default-width knowledge.
+
 The current pane on the mechanism is the session board's list ([[session-console]]). A future pane joins by
 mounting the same hook + divider, not by writing its own drag handling; the graph remains a full-width canvas
 and therefore mounts no divider.

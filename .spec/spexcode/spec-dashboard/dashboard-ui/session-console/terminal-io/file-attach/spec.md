@@ -19,17 +19,18 @@ agent can't see. This node closes that gap: **a file attached to the prompt is c
 session runs on, and the prompt is left holding its path.** An attachment becomes an ordinary local path the
 agent can just read — no bytes smuggled through the prompt, no out-of-band copy step the human has to narrate.
 
-## attach three ways, both input surfaces
+## attach three ways, both authored surfaces
 
-The same gesture set works on **both** prompt boxes — the New Session prompt and a running session's `❯`
-inbox:
+The same gesture set works on **both** authored composers — the New Session prompt and a running session's
+[[command-box]]:
 
 - **Paste** a file (a screenshot, a copied file). A paste that carries files attaches them; a plain text
   paste is untouched and types as before.
 - **Drop** a file onto the box. The surface rings to signal it's droppable while a file hovers.
 - **Pick** a file from the small attach affordance beside the box.
 
-The offline `❯` box takes none of these — there is no live machine to carry a file to until it relaunches.
+An offline session has no Command Box and takes none of these — there is no live machine to carry a file to
+until it relaunches.
 
 ## the path is the whole handoff
 
@@ -52,8 +53,8 @@ sanitised basename first.
 
 ## where it lives
 
-The gestures, the path-splicing, and the attach affordance are the prompt boxes in `SessionInterface.jsx`
-([[session-console]], [[term-input]]); their styling rides `styles.css`. The upload endpoint and the
+The gestures, the path-splicing, and the attach affordance are the authored composers in `SessionInterface.jsx`
+([[session-console]], [[command-box]]); their styling rides `styles.css`. The upload endpoint and the
 `/tmp` sink are the backend's ([[api-endpoint]], [[sessions]]) — a thin route over a small upload module,
 the same shape [[session-rename]] uses to span the UI and the server for one feature. This node's slices of
 those shared files are just the attach-control styling in `styles.css` and the `/api/uploads` route in

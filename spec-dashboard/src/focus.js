@@ -11,8 +11,8 @@
 //    "return ticket". An overlay marks its root `data-focus-overlay`, so focus landing inside it is never
 //    recorded as the ticket.
 //  - returnFocus(), called when the last overlay closes, restores the ticket if it is still focusable,
-//    else focuses the element marked `data-focus-sink` (the always-focused input — the session board's
-//    docked box). Never <body>.
+//    else focuses the element marked `data-focus-sink` (the current surface's authored textarea or xterm
+//    helper textarea). Never <body>.
 
 let ticket = null
 

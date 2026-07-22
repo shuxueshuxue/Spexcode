@@ -560,8 +560,12 @@ export default {
     evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
     evalDoorSummary: ({ pass, fail, review, blind, unknown }) =>
       `open this session's Evals page — ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
-    typeBtn: 'type',
-    typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
+    commandBox: 'Command Box',
+    commandBtn: 'Command Box',
+    commandTitle: 'open Command Box for an atomic prompt or board command (Alt/Cmd+I)',
+    commandClose: 'close Command Box',
+    commandPlaceholder: 'Send an atomic prompt or run a board command',
+    commandSend: 'send from Command Box',
     relaunch: 'relaunch',
     relaunchTitle: 'relaunch and resume this session',
     merge: 'merge',
@@ -571,18 +575,12 @@ export default {
     offlineMsg: '⏻ offline — no live process for this worktree.',
     offlineSubBefore: 'the worktree and its session ',
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
-    typeInd: '⌨ type mode',
-    typeHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I or click to exit',
-    typeExit: 'click to exit type mode',
-    msgOffline: 'relaunch to message this session',
-    msgPlaceholder: 'message this session · ⏎ to send',
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',
     attachError: '⚠ upload failed',
-    // board commands — the `/` commands the ❯ inbox runs HERE (not in the agent), each the typed twin of a
+    // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
-      typeDesc: "type mode — type raw keystrokes straight into the agent's terminal",
       evalDesc: "open this session's Evals page — eval evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',

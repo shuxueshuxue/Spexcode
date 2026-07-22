@@ -61,7 +61,7 @@ each. There is no discovery phase.
 - **DISPATCH** — `spex session new "<task>"` launches one worker. A session is bound to no node by default;
   the worker finds and reads its governing spec itself. The prompt's first `[[<id>]]` binds the session to
   that node: the branch is named
-  `node/<id>-<shortid>`, the board attributes the session to it, and if the node exists one line
+  `node/<slug(id)>-<shortid>`, the board attributes the session to the exact id, and if the node exists one line
   with its `spec.md` path is appended to the launch prompt. The first `[[…]]` binds even when the
   id is a passing mention or doesn't exist; a nonexistent id still becomes the branch name. Which
   nodes a session is actually linked to is read from its edit overlay and its commits' `Session:`

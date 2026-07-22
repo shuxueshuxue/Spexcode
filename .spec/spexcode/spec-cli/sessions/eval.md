@@ -12,7 +12,8 @@ scenarios:
     expected: >-
       `node` is not an accepted create field. The first `[[<id>]]` in the prompt is the ONLY binding input:
       the record and board bind `node` to that exact id (any script, optional leading dot, existence not
-      required) and the branch is `node/<id>-<shortid>`. An existing id gets one live-worktree spec pointer;
+      required) and the branch is `node/<slug(id)>-<shortid>` (`.plugins` binds exactly but slugs to
+      `plugins`). An existing id gets one live-worktree spec pointer;
       a nonexistent id gets none. A prompt with no mention launches node-agnostic — `node` empty, branch
       derived from the prompt's own words — and is the only way a launch may end up unbound.
 ---

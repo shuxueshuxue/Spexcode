@@ -8,11 +8,6 @@ import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.j
 
 const SYNC_BEGIN = '\x1b[?2026h'
 const SYNC_END = '\x1b[?2026l'
-const MOUSE_REPORT_MODES = new Set([9, 1000, 1002, 1003, 1005, 1006, 1015, 1016])
-
-function onlyMouseReportModes(params) {
-  return params.length > 0 && params.every((param) => typeof param === 'number' && MOUSE_REPORT_MODES.has(param))
-}
 
 function onlySynchronizedOutput(params) {
   return params.length > 0 && params.every((param) => param === 2026)
@@ -114,14 +109,12 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       }
     })
 
-    // Pointer reports never travel to the application and wheel uses the bridge's explicit tmux-client
-    // control. Keep xterm out of mouse-report mode so a TUI redundantly
-    // reasserting DECSET cannot clear an in-progress local selection. Public parser handlers leave every
-    // visual terminal mode untouched and consume only pure mouse-report mode lists.
-    const mouseModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
-      { prefix: '?', final },
-      (params) => onlyMouseReportModes(params),
-    ))
+    // Mouse ownership is native: tmux (mouse on) and the pane TUI enable mouse-report mode on this
+    // client, xterm honors it and performs the classic wheel/click→SGR conversion itself — the same
+    // battle-tested path every real terminal (iTerm, VS Code) uses, cell-height quanta with a signed
+    // fractional carry that survives direction flips. No bridge-owned wheel synthesis exists. Local
+    // selection follows the universal convention: Shift-drag (Option-drag on macOS) forces a browser
+    // selection while the application owns the mouse.
     // A bridge-owned geometry frame already has one outer synchronized hold. tmux's native bytes contain
     // their own 2026 pairs; treating those as nested would close the outer hold early because DEC mode 2026
     // is boolean, not a counter. Consume only those inner markers while that exact frame is parsed.
@@ -245,51 +238,12 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       sock.send(JSON.stringify({ t: 'input', data }))
     })
 
-    // All wheel navigation belongs to the tmux bridge, not to xterm's browser scrollback. The backend decides
-    // from the pane's real tmux state whether to inject mouse reports into a mouse-owning TUI or to scroll
-    // tmux copy-mode for a normal pane. xterm remains the renderer for the tmux view.
-    // Deltas accumulate into whole tmux ticks (one per 40px, remainder carried, a direction flip dropping it):
-    // a trackpad momentum gesture of many micro-deltas travels proportionally, instead of every event
-    // inflating to a full tick and making the up/down travel wildly asymmetric.
-    // A net-tick ledger finishes the return leg: pane content that grows during a scroll excursion leaves an
-    // exactly-symmetric return short of the live bottom, so a mouse-owning TUI (or copy-mode) stays scrolled
-    // and its frozen view impersonates the live tail — the seconds a human watches stop dead. When the
-    // ledger crosses back to zero the gesture's meaning is "back to live": a bottoming burst restores the
-    // natural human overshoot. The quantizer itself is lossy across a direction flip (each flip discards a
-    // sub-40px remainder, ≤2 flips per round trip), so a pixel-symmetric return can arrive 1-2 ticks short
-    // of zero with no growth involved; a return that lands inside that quantum-loss margin still means
-    // "back to live" and fires the same burst. At the bottom the burst is a no-op on every pane type, and a
-    // reader parked deep in history (ledger clearly positive) is never disturbed.
-    let wheelAcc = 0
-    let wheelNet = 0
-    term.attachCustomWheelEventHandler((ev) => {
-      const host = hostRef.current
-      if (host && term.cols && term.rows) {
-        if (ev.deltaY && Math.sign(ev.deltaY) !== Math.sign(wheelAcc)) wheelAcc = 0
-        wheelAcc += ev.deltaY
-        const ticks = Math.min(5, Math.floor(Math.abs(wheelAcc) / 40))
-        if (ticks >= 1) {
-          wheelAcc -= Math.sign(wheelAcc) * ticks * 40
-          const rect = host.getBoundingClientRect()
-          const clamp = (v, max) => Math.min(max, Math.max(1, v))
-          const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
-          const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-          if (sock?.isOpen()) {
-            const up = ev.deltaY < 0
-            sock.send(JSON.stringify({ t: 'wheel', up, col, row, ticks }))
-            const wasAbove = wheelNet > 0
-            wheelNet += up ? ticks : -ticks
-            if (!up && wasAbove && wheelNet <= 2) {   // ≤2: the quantum-loss margin counts as bottomed
-              for (let burst = 0; burst < 4; burst++) sock.send(JSON.stringify({ t: 'wheel', up: false, col, row, ticks: 5 }))
-              wheelNet = 0
-            }
-            if (wheelNet < 0) wheelNet = 0   // downs at the live bottom accrue no debt
-          }
-        }
-      }
-      ev.preventDefault()
-      return false
-    })
+    // Wheel navigation is xterm-native: with this client in mouse-report mode (tmux `mouse on` enables
+    // it on attach), xterm converts wheel events to SGR mouse reports itself — cell-height quanta with a
+    // signed fractional carry that survives direction flips — and they travel through the ordinary
+    // onData→input path to the real tmux client. tmux then decides: copy-mode history for a plain pane,
+    // pass-through for a mouse-owning TUI — exactly as it would for iTerm. No custom wheel handler,
+    // quantizer, tick ledger, or synthetic bottoming exists in the browser.
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
     let copiedTimer
@@ -342,7 +296,6 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
-      for (const handler of mouseModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
       inputSub.dispose()
       unsubscribeFont()

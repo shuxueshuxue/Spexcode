@@ -142,10 +142,19 @@ ghost tmux client or geometry vote behind indefinitely.
 
 ## navigation and recovery
 
-Wheel coordinates become terminal mouse reports written to the real tmux client. Browser wheel deltas
+Wheel coordinates become SGR-encoded terminal mouse reports written to the real tmux client — the same
+pure-ASCII form a real terminal sends, never classic X10, whose col+32 byte arithmetic crosses 0x7f past
+column 95 and desyncs the client's UTF-8 input parser: wheel events get eaten position-dependently and
+payload bytes leak into the pane as literal keystrokes. Browser wheel deltas
 accumulate into whole tmux ticks — one per fixed pixel quantum, remainder carried, a direction flip
 dropping it — so a trackpad's micro-delta momentum gesture travels proportionally instead of inflating
-every event to a full tick and overshooting its return leg. tmux itself decides
+every event to a full tick and overshooting its return leg. A net-tick ledger finishes the return: pane
+content that grows during a scroll excursion leaves an exactly-symmetric return short of the live bottom,
+where a mouse-owning application's scrolled view impersonates the live tail while its in-place updates
+freeze. When the ledger crosses back to zero the browser sends a bottoming burst — the natural human
+overshoot restored — which is a no-op at the bottom on every pane type and never fires for a reader
+parked deep in history. The browser still holds no scroll state of its own and never inspects pane
+mode. tmux itself decides
 whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
 copy-mode viewport. The pane viewport therefore clips rather than scrolls: with no xterm scrollback its

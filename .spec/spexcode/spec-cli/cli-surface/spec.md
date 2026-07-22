@@ -56,6 +56,10 @@ degrades advisory, the stop-gate's commit check reads "not ready" with the signp
 until `npm run hooks` refreshes it — visible degradation over silent wrong
 behavior.
 
+The retired `spex session new --node <id>` flag follows the same tombstone rule: it exits non-zero and tells
+the caller to put a `[[<id>]]` mention in the prompt because the first mention binds. It never launches a
+session. This is a removal signpost, not a second node-binding input.
+
 **The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `refresh-footprint`,
 `check-staged`, `session-state`/`session-fail`/`session-idle`/`commit-gate`, `nudge`,
 `codex-launch`/`codex-turn`, and `spec-governors` (the hook-stable `id<TAB>spec-path` projection of a

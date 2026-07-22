@@ -176,10 +176,10 @@ edit the spec instead — same commit as the code.`,
   session: {
     line: 'session <verb>        the worktree state machine: new · ls · watch · wait · review · merge · send · …',
     body: `Manager verbs (dispatch, monitor, land):
-  spex session new "<prompt>" [--prompt-file <path>|-] [--node <id>] [--launcher <name>]
+  spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]
       Launch a worker in its own node worktree. Give it ONLY its task — the dev-flow contract
-      reaches it through the materialized system prompt. --node (or the prompt's first [[id]],
-      same effect) binds the session to that node. --prompt-file <path>|- carries a long prompt
+      reaches it through the materialized system prompt. The prompt's first [[id]] mention binds
+      the session to that node. --prompt-file <path>|- carries a long prompt
       without shell quoting (exclusive with the inline prompt). Then MONITOR it (wait/watch below).
   spex session ls [SEL…] [--status a,b] [--json]        one-shot table of living sessions
   spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]

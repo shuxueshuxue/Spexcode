@@ -87,7 +87,9 @@ function mentionPrompt(threadId: string, node: string | null, author: string, te
 // A non-open thread is settled work: a fresh worker spawned onto it must not re-implement what already
 // landed, so the prompt leads with the status and a verify-on-main-first instruction.
 export function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string, status?: string | null): string {
-  const on = node ? ` on node ${node}` : ''
+  // Keep inherited scope inside the text the worker receives: newSession derives its node only from the
+  // raw prompt's first [[id]] mention, so issue dispatch gets no private node-binding argument.
+  const on = node ? ` on node [[${node}]]` : ''
   const settled = status && status !== 'open'
     ? `NOTE: this thread is already resolved (status: ${status}) — the work it describes has likely LANDED. ` +
       `Verify the current state on main FIRST; if main already satisfies the thread, reply with that finding ` +
@@ -118,7 +120,7 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions), r.launcher)
+        const s = await newSession(newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions), r.launcher)
         out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue

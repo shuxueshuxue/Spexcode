@@ -72,10 +72,15 @@ function changedSinceBase(root: string): Set<string> {
   return out
 }
 
-// a node is "changed" if the branch touched its node dir (spec.md / eval.md / sidecar all live there) or
-// any governed code path — matched as an exact file, a directory prefix, or a `*` glob.
-export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<string>): boolean {
-  for (const c of changed) if (c === dirRel || c.startsWith(dirRel + '/')) return true
+// A node owns the files under its spec dir except those under a descendant node. Its other selection axis
+// is the supplied code list — node code for per-node findings, effective scenario code for drift.
+export function nodeChanged(dirRel: string, codeFiles: readonly string[], changed: Set<string>, nodeDirs: Iterable<string> = []): boolean {
+  const descendants = [...nodeDirs].filter((d) => d !== dirRel && d.startsWith(dirRel + '/'))
+  for (const c of changed) {
+    const inNodeDir = c === dirRel || c.startsWith(dirRel + '/')
+    const inDescendant = descendants.some((d) => c === d || c.startsWith(d + '/'))
+    if (inNodeDir && !inDescendant) return true
+  }
   return codeFiles.some((cf) => {
     if (changed.has(cf)) return true
     const dir = cf.replace(/\/+$/, '') + '/'
@@ -107,42 +112,51 @@ async function scan(args: string[] = []): Promise<number> {
   // lint's drift now fans to every owner; nobody's loss signal is suppressed. An over-owned file is lint's
   // `owners` concern (split it), not a reason to go silent here.
   const yByDir = new Map(evalNodes(root).map((n) => [relative(root, n.dir), n]))
+  const nodeDirs = specs.map((s) => dirname(s.path))
   let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0, danglingTracks = 0
   for (const s of specs) {
     const dirRel = dirname(s.path)
-    if (changed && !nodeChanged(dirRel, s.code, changed)) continue
+    const nodeSelected = !changed || nodeChanged(dirRel, s.code, changed, nodeDirs)
     const y = yByDir.get(dirRel)
     const findings: string[] = []
     if (y) {
       // schema first: a malformed eval.md is the loudest gap — report each violation, then still scan its
       // (leniently-parsed) scenarios for stale/missing so a typo doesn't mask a real freshness gap.
-      for (const e of validateScenarios(readFileSync(join(y.dir, EVAL_FILE), 'utf8'), cfg.scenarioTags, root)) {
-        malformed++
-        findings.push(`  • eval-schema: '${s.id}' ${e} — fix ${y.evalPath}`)
+      if (nodeSelected) {
+        for (const e of validateScenarios(readFileSync(join(y.dir, EVAL_FILE), 'utf8'), cfg.scenarioTags, root)) {
+          malformed++
+          findings.push(`  • eval-schema: '${s.id}' ${e} — fix ${y.evalPath}`)
+        }
       }
       const latest = latestPerScenario(readReadings(y.sidecarPath))
       for (const sc of y.scenarios) {
         // a scenario's own `code` narrows its freshness CODE axis to a subset; a path that does not exist
         // would make that axis silently immortal (changedSince finds no commits for it), so flag it LOUD as a
         // malformed declaration — the same loud-fail spirit as a bad node `code:`.
-        for (const [field, paths] of [['code', sc.code], ['related', sc.related]] as const) {
-          const ghosts = (paths ?? []).filter((p) => !existsSync(join(root, p)))
-          if (ghosts.length) {
-            malformed++
-            findings.push(`  • eval-schema: '${s.id}' scenario '${sc.name}' \`${field}\` path(s) not found: ${ghosts.join(', ')} — fix ${y.evalPath}`)
+        if (nodeSelected) {
+          for (const [field, paths] of [['code', sc.code], ['related', sc.related]] as const) {
+            const ghosts = (paths ?? []).filter((p) => !existsSync(join(root, p)))
+            if (ghosts.length) {
+              malformed++
+              findings.push(`  • eval-schema: '${s.id}' scenario '${sc.name}' \`${field}\` path(s) not found: ${ghosts.join(', ')} — fix ${y.evalPath}`)
+            }
           }
         }
         const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
+        const driftSelected = !changed || nodeChanged(dirRel, codeFiles, changed, nodeDirs)
         // carry the scenario's tags on the finding line — its SURFACE (e.g. frontend-e2e = browser-measured)
         // is what routes a drift/missing gap to the right measuring hand, so the proactive nudge and a human
         // reading `spex eval lint` both see whether this stale score needs a real e2e/browser pass to refresh.
         const tagStr = sc.tags?.length ? ` [${sc.tags.join(',')}]` : ''
         const r = latest.get(sc.name)
         if (!r) {
-          missingScores++
-          findings.push(`  • eval-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no eval yet — measure with \`spex eval add ${s.id}\``)
+          if (nodeSelected) {
+            missingScores++
+            findings.push(`  • eval-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no eval yet — measure with \`spex eval add ${s.id}\``)
+          }
           continue
         }
+        if (!driftSelected) continue
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
         const axes = staleAxes(r, codeFiles, y.evalPath, idx, scidx, remSignals, probe, sc)
         if (axes.length) {
@@ -164,12 +178,12 @@ async function scan(args: string[] = []): Promise<number> {
       // (`spex remark resolve`/`spex remark retract`), and they age nothing (there is no reading to stale).
       const declared = new Set(y.scenarios.map((sc) => sc.name))
       const orphans = [...remarkTracks.values()].filter((tr) => tr.node === s.id && tr.remarks.length && !declared.has(tr.scenario) && !latest.has(tr.scenario))
-      if (orphans.length) {
+      if (nodeSelected && orphans.length) {
         danglingTracks += orphans.length
         const names = orphans.map((o) => `'${o.scenario}' (${o.threadId}, ${o.remarks.length} remark${o.remarks.length > 1 ? 's' : ''})`).join(', ')
         findings.push(`  • eval-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex remark resolve <ref>\` / \`spex remark retract <ref>\` or restore the scenario name`)
       }
-    } else if (s.code.some((p) => sourceFiles.has(p))) {
+    } else if (nodeSelected && s.code.some((p) => sourceFiles.has(p))) {
       uncovered++
       findings.push(`  • eval-coverage: '${s.id}' governs source code but has no eval.md — give it a scenario (description + expected) so its loss can be measured`)
     }

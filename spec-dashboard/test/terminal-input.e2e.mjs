@@ -16,7 +16,7 @@ const capturePath = join(scratchDir, 'input.txt')
 mkdirSync(OUT, { recursive: true })
 
 const tmux = (...args) => spawnSync('tmux', ['-L', TMUX_SOCKET, ...args], { encoding: 'utf8' })
-const created = tmux('new-session', '-d', '-s', scratch, `tee ${capturePath}`)
+const created = tmux('new-session', '-d', '-s', scratch, `printf 'IME_READY\\n'; exec tee ${capturePath}`)
 if (created.status !== 0) throw new Error(created.stderr || `could not create tmux session ${scratch}`)
 
 let browser
@@ -71,41 +71,78 @@ try {
   await page.goto(`${BASE}/#/sessions/${scratch}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-tool.command').waitFor({ state: 'visible', timeout: 30_000 })
   await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
+  await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('IME_READY'))
+  frames.length = 0
   step('native xterm focused without a mode')
 
-  const phrase = '中文输入法测试'
   const cdp = await context.newCDPSession(page)
-  await cdp.send('Input.imeSetComposition', {
-    text: 'zhongwenshurufa',
-    selectionStart: 15,
-    selectionEnd: 15,
-    replacementStart: 0,
-    replacementEnd: 0,
+  const helperState = () => page.evaluate(() => {
+    const helper = document.querySelector('.si-term-layer[style*="visibility: visible"] .xterm-helper-textarea')
+    return { active: document.activeElement === helper, value: helper?.value || '' }
   })
-  step('IME composition remains local')
-  await cdp.send('Input.insertText', { text: phrase })
-  await page.keyboard.press('Enter')
-  step('IME commits Chinese text through xterm')
+  const beginComposition = async (text) => {
+    await cdp.send('Input.imeSetComposition', {
+      text,
+      selectionStart: text.length,
+      selectionEnd: text.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    })
+    assert.deepEqual(await helperState(), { active: true, value: text })
+  }
+  const commitComposition = async (text) => {
+    await cdp.send('Input.insertText', { text })
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(60)
+    assert.deepEqual(await helperState(), { active: true, value: '' })
+  }
 
-  await page.waitForFunction((expected) => document.querySelector('.xterm-rows')?.textContent?.includes(expected), phrase)
+  const phrases = ['苹果', '香蕉', '葡萄', '，。！？「」【】']
+  await beginComposition('pingguo')
+  await commitComposition(phrases[0])
+  step('first IME candidate commits')
+
+  await beginComposition('xiangjiao')
+  await page.locator('.si-item.on').click()
+  assert.deepEqual(await helperState(), { active: true, value: 'xiangjiao' })
+  await commitComposition(phrases[1])
+  step('selected-row activation preserves current composition')
+
+  await beginComposition('putao')
+  await page.locator('#si-terminal-tab').click()
+  assert.deepEqual(await helperState(), { active: true, value: 'putao' })
+  await commitComposition(phrases[2])
+  step('Terminal-tab activation preserves current composition')
+
+  await beginComposition('biaodian')
+  await commitComposition(phrases[3])
+  step('full-width Chinese punctuation stays byte-exact')
+
   for (let attempt = 0; attempt < 40; attempt++) {
-    if (existsSync(capturePath) && readFileSync(capturePath, 'utf8').includes(phrase)) break
+    if (existsSync(capturePath) && readFileSync(capturePath, 'utf8').includes(phrases[3])) break
     await page.waitForTimeout(50)
   }
+  await page.waitForFunction((expected) => document.querySelector('.xterm-rows')?.textContent?.includes(expected), phrases[3])
+  await page.screenshot({ path: join(OUT, 'terminal-input.png'), fullPage: true })
+  step('real tmux pane contains every current UTF-8 commit')
+
+  await page.keyboard.press('Shift+Enter')
+  await page.waitForTimeout(80)
+  step('Shift+Enter emits modified Enter without submitting as plain CR')
+
   const captured = readFileSync(capturePath, 'utf8')
   const sent = frames.join('')
-  assert.ok(captured.includes(phrase), JSON.stringify({ captured }))
-  assert.ok(sent.includes(phrase), JSON.stringify({ frames }))
-  assert.ok(!sent.includes('zhongwenshurufa'), JSON.stringify({ frames }))
-  await page.screenshot({ path: join(OUT, 'terminal-input.png'), fullPage: true })
-  step('real tmux pane contains the committed UTF-8 text')
-
+  assert.equal(captured, `${phrases.join('\n')}\n\x1b\n`, JSON.stringify({ captured }))
+  for (const phrase of phrases) assert.equal(frames.filter((frame) => frame === phrase).length, 1, JSON.stringify({ phrase, frames }))
+  assert.equal(frames.filter((frame) => frame === '\r').length, phrases.length, JSON.stringify({ frames }))
+  assert.equal(frames.filter((frame) => frame === '\x1b\r').length, 1, JSON.stringify({ frames }))
+  assert.ok(!['pingguo', 'xiangjiao', 'putao', 'biaodian'].some((raw) => sent.includes(raw)), JSON.stringify({ frames }))
   const video = page.video()
   await context.close()
   context = null
   await video.saveAs(join(OUT, 'terminal-input.webm'))
   writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
-  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ scratch, phrase, frames, captured }, null, 2))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ scratch, phrases, frames, captured }, null, 2))
   console.log(JSON.stringify({ ok: true, video: join(OUT, 'terminal-input.webm'), result: join(OUT, 'result.json') }))
 } finally {
   await context?.close().catch(() => {})

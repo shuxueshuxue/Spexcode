@@ -23,24 +23,26 @@ NAT / tunnel / reverse-proxy (the public gateway path) can be torn down in the m
 ever reaching the browser** — a half-open connection whose `readyState` still says OPEN. The pane then
 looks alive but is deaf: frames stop arriving, a resize sent on it vanishes, and (before this contract)
 nothing ever noticed — the frozen-terminal-until-manual-refresh bug, exactly what reconnection exists to
-prevent.
+prevent. The same silence can strand a new socket in CONNECTING or a server-initiated close handshake in
+CLOSING; a browser's eventual handshake timeout is not this module's liveness guarantee.
 
 So a dead link must be **detectable from traffic alone**, which makes liveness a bidirectional **heartbeat
 contract**, same shape as the board stream's ([[dashboard-shell]]). On one fixed cadence (10s), the server sends
 both a WebSocket **protocol ping** and a small text ping. The browser network stack answers the protocol pong
 without application JavaScript; the text ping reaches JavaScript and re-arms its inbound dead-man switch. Each
-side therefore holds the other to the promise it can actually observe: the client force-drops an OPEN socket
-with no inbound bytes for **2.5× the cadence**, while the server forcibly removes a viewer that produces no
-protocol pong inside that same window. Server expiry owns cleanup directly rather than waiting for a transport
-`close` event that a half-open link may never deliver, so [[live-view]] cannot retain a ghost tmux client or
-size claim. The
+side therefore holds the other to the promise it can actually observe: the client gives every current socket it
+did not intentionally close — CONNECTING, OPEN, and CLOSING — one **2.5× cadence** silence deadline, while the
+server forcibly removes a viewer that produces no protocol pong inside that same window. Neither client
+handshake borrows an eventual platform timeout. Server expiry owns cleanup directly rather than waiting for a
+transport `close` event that a half-open link may never deliver, so [[live-view]] cannot retain a ghost tmux
+client or size claim. The
 cadence is the contract's **one primitive number**, and on the client it lives in ONE place: the shared
 heartbeat module (`heartbeat.js`) that the board SSE stream reads too — a single constant for the whole
 client, held equal to the server's ping cadences by test, the dead window **derived** from it, never a
 free-standing magic number or a per-channel copy. Detection itself is likewise the shared module's
-**dead-man's switch** — event-driven, not a polling loop: one one-shot timer re-armed by every inbound
-message — so on a healthy link nothing ever wakes, and the switch fires exactly once, at the silence
-deadline. No separate
+**dead-man's switch** — event-driven, not a polling loop: one one-shot timer armed when a socket is constructed
+and re-armed when it opens and by every inbound message — so on a healthy link nothing ever wakes, and the
+switch fires exactly once at the current phase's silence deadline. No separate
 recovery path: detection is the only new act; a presumed-dead drop reopens, backs off, and announces itself
 exactly like a genuine drop.
 
@@ -69,5 +71,5 @@ why it does not reintroduce the snapshot-splice scramble [[live-view]] warns aga
 The reconnect lives in a small, **framework-agnostic** helper that the terminal wires its open / message /
 state callbacks into; its WebSocket implementation and timers are **injectable**, so the reconnect
 state machine — backoff schedule, stable-vs-flapping reset, intentional-close suppression, the dead-man
-switch's presumed-dead drop, state transitions — is verifiable headlessly, with no browser and no real
-network.
+switch's presumed-dead drop in every socket phase, state transitions — is verifiable headlessly, with no
+browser and no real network.

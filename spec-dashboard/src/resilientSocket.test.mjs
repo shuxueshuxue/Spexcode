@@ -3,11 +3,9 @@ import assert from 'node:assert/strict'
 import { createResilientSocket } from './resilientSocket.js'
 import { SERVER_PING_MS, DEAD_MS } from './heartbeat.js'
 
-// The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl and
-// timers are injectable, so the dead-man's switch — the detector for a HALF-OPEN link, where the peer is
-// gone but no close event ever reaches the browser — is verifiable headlessly on a virtual clock. These
-// tests pin the heartbeat contract: any inbound message re-arms the switch; DEAD_MS of total silence on
-// an OPEN socket lets it fire once — presumed dead, force-dropped, reopened through the normal backoff.
+// The reconnect state machine is framework-agnostic by contract ([[reconnect]]): WebSocket impl and timers
+// are injectable, so the one dead-man can be verified across CONNECTING, OPEN, and CLOSING. Construction,
+// open, and every inbound message move its deadline; expiry supersedes through the ordinary backoff path.
 
 // virtual clock + timer wheel: setTimeout driven by advance(), no real time.
 function makeClock() {
@@ -30,13 +28,16 @@ function makeClock() {
   return { now: () => now, setT, clear, advance }
 }
 
-// fake WebSocket: opens after 5 virtual ms; never closes on its own unless told to.
-function makeWS(clock, sockets) {
+// fake WebSocket: opens after 5 virtual ms unless held in CONNECTING; CLOSING never completes on its own.
+function makeWS(clock, sockets, phase = 'OPEN') {
   return class FakeWS {
     constructor(url) {
       this.url = url; this.readyState = 0; this.sent = []
       sockets.push(this)
-      clock.setT(() => { if (this.readyState === 0) { this.readyState = 1; this.onopen?.() } }, 5)
+      if (phase !== 'CONNECTING') {
+        clock.setT(() => { if (this.readyState === 0) { this.readyState = 1; this.onopen?.() } }, 5)
+      }
+      if (phase === 'CLOSING') clock.setT(() => { if (this.readyState === 1) this.readyState = 2 }, 6)
     }
     send(d) { this.sent.push(d) }
     close() { this.readyState = 3; clock.setT(() => this.onclose?.(), 1) }
@@ -44,14 +45,14 @@ function makeWS(clock, sockets) {
   }
 }
 
-function harness() {
+function harness({ phase = 'OPEN' } = {}) {
   const clock = makeClock()
   const sockets = []
   const states = []
   const messages = []
   const sock = createResilientSocket({
     url: 'ws://x/api/sessions/abc/socket',
-    WebSocketImpl: makeWS(clock, sockets),
+    WebSocketImpl: makeWS(clock, sockets, phase),
     setTimeoutImpl: clock.setT, clearTimeoutImpl: clock.clear,
     onState: (s) => states.push(s),
     onMessage: (e) => messages.push(e.data),
@@ -80,6 +81,15 @@ test('an OPEN socket silent past the dead window is presumed dead and reopened',
   assert.ok(states.lastIndexOf('open') > states.indexOf('reconnecting'), 'the replacement link comes back up')
 })
 
+for (const phase of ['CONNECTING', 'CLOSING']) {
+  test(`a ${phase} socket silent past the dead window is presumed dead and reopened`, () => {
+    const { clock, sockets, states } = harness({ phase })
+    clock.advance(DEAD_MS + 1000)
+    assert.equal(sockets.length, 2, 'one replacement is constructed through the ordinary backoff path')
+    assert.ok(states.includes('reconnecting'), 'the handshake breach is loud')
+  })
+}
+
 test('inbound traffic within the window — frames or pings — keeps the link alive', () => {
   const { clock, sockets } = harness()
   clock.advance(10)
@@ -97,13 +107,15 @@ test('late events from the force-dropped zombie are ignored', () => {
   assert.equal(messages.length, before, 'superseded-socket guard holds for watchdog drops too')
 })
 
-test('an intentional close() disarms the dead-man switch for good', () => {
-  const { clock, sockets, sock } = harness()
-  clock.advance(10)
-  sock.close()
-  clock.advance(5 * DEAD_MS)           // silence forever after an intentional close
-  assert.equal(sockets.length, 1, 'no resurrection after close()')
-})
+for (const phase of ['CONNECTING', 'OPEN', 'CLOSING']) {
+  test(`an intentional close() in ${phase} disarms the dead-man switch for good`, () => {
+    const { clock, sockets, sock } = harness({ phase })
+    clock.advance(phase === 'CONNECTING' ? 1 : 10)
+    sock.close()
+    clock.advance(5 * DEAD_MS)
+    assert.equal(sockets.length, 1, 'no resurrection after close()')
+  })
+}
 
 test('a dead-man drop reopens with backoff, not a hammer', () => {
   const { clock, sockets } = harness()

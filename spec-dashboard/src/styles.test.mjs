@@ -34,6 +34,14 @@ test('dashboard typography declarations use the shared scale', () => {
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
+test('wheel deltas accumulate proportionally — no min-1-tick amplification', () => {
+  // a trackpad momentum gesture emits dozens of micro-deltas; forcing ≥1 tick per event multiplies
+  // travel and makes the return leg asymmetric. Deltas accumulate to whole ticks with carry.
+  assert.match(terminal, /wheelAcc \+= ev\.deltaY/)
+  assert.match(terminal, /Math\.floor\(Math\.abs\(wheelAcc\) \/ 40\)/)
+  assert.doesNotMatch(terminal, /Math\.max\(1, Math\.round\(Math\.abs\(ev\.deltaY\)/)
+})
+
 test('read-only terminal keeps selection off application mouse reporting', () => {
   assert.match(terminal, /MOUSE_REPORT_MODES\s*=\s*new Set\(\[9, 1000, 1002, 1003, 1005, 1006, 1015, 1016\]\)/)
   assert.match(terminal, /term\.parser\.registerCsiHandler\([\s\S]*onlyMouseReportModes/)

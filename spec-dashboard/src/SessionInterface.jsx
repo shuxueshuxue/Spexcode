@@ -187,6 +187,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [sendErr, setSendErr] = useState(false)
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [commandOpen, setCommandOpen] = useState(false)
+  const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -237,6 +238,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
+  // Selecting a terminal is an action even when its id does not change. The request counter lets an already-
+  // selected row/tab restore native focus without coupling this shell to xterm's hidden textarea.
+  const activateTerminal = (id) => {
+    if (id === 'new') return
+    setCommandOpen(false)
+    setMenu(null)
+    setSel(id)
+    setTerminalFocusRequest((request) => request + 1)
+  }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
   // session gets codex's menu and a claude session gets claude's. The same data each harness's `/` menu uses.
@@ -687,7 +697,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 data-sid={s.id}
                 className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
-                onClick={() => (selecting ? togglePick(s.id) : setSel(s.id))}
+                onMouseDown={(e) => { if (!selecting && e.button === 0) e.preventDefault() }}
+                onClick={() => (selecting ? togglePick(s.id) : activateTerminal(s.id))}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
               >
@@ -773,6 +784,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       aria-selected="true"
                       aria-controls={`si-terminal-panel-${active}`}
                       className="si-tab on"
+                      onMouseDown={(e) => { if (e.button === 0) e.preventDefault() }}
+                      onClick={() => activateTerminal(active)}
                     >
                       <Icon name="terminal" size={13} /><span className="si-tab-label">{t('session.tabTerminal')}</span>
                     </button>
@@ -831,7 +844,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     pointerEvents: id === active ? 'auto' : 'none',
                   }}>
                     <SessionTerm sessionId={id} active={open && id === active}
-                      focused={open && id === active && !commandOpen && !showRelaunch} />
+                      focused={open && id === active && !commandOpen && !showRelaunch}
+                      focusRequest={id === active ? terminalFocusRequest : 0} />
                   </div>
                 ))}
                 {showRelaunch && (

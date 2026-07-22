@@ -56,7 +56,16 @@ export function createResilientSocket({
       stableTimer = setTimeoutImpl(() => { attempt = 0; stableTimer = 0 }, stableMs)
       onOpen(api)
     }
-    sock.onmessage = (e) => { if (sock === ws) { deadman.arm(); onMessage(e) } }
+    sock.onmessage = (e) => {
+      if (sock !== ws) return
+      deadman.arm()
+      // The terminal server also holds the browser to the heartbeat. Reply at the transport boundary so a
+      // renderer cannot accidentally leave its tmux client alive on a half-open socket.
+      if (e.data === 'ping') {
+        try { sock.send('pong') } catch { /* dead-man/onclose converges through the ordinary drop path */ }
+      }
+      onMessage(e)
+    }
     sock.onclose = () => { if (sock === ws) handleDrop() }
     sock.onerror = () => { /* a close event always follows; let onclose drive the reopen */ }
   }

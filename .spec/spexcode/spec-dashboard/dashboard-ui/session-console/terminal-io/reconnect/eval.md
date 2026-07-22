@@ -27,15 +27,17 @@ scenarios:
       reverse-proxy leaves behind when it tears an idle connection down without notifying the browser
       (the terminal-frozen-until-manual-refresh bug). Advance the virtual clock well past the dead window
       (2.5× the server's 10s ping cadence = 25s) and watch: whether a new socket is constructed, what
-      `onState` reports, and (control case) that a link kept alive by periodic inbound pings within the
-      window is NEVER dropped by the watchdog.
+      `onState` reports, whether each inbound terminal ping emits pong, and (control case) that a link kept
+      alive by periodic inbound pings within the window is NEVER dropped by the watchdog.
     expected: >-
       An OPEN socket silent past the 25s dead window is PRESUMED DEAD: the helper force-drops it and
       constructs a replacement through the normal backoff/reopen machinery, with `onState` surfacing
       'reconnecting' — recovery is loud and automatic, no manual page refresh. Late events from the zombie
       socket are ignored (superseded-socket guard). Inbound traffic of ANY kind — a real frame or the
       server's keep-alive ping — resets the silence measurement, so a healthy-but-quiet link inside the
-      window is never falsely dropped, and an intentional close() still suppresses every reopen. The old
+      window is never falsely dropped. Every terminal ping receives one transport-level pong so the server's
+      mirror deadline can distinguish that healthy viewer from a ghost, and an intentional close() still
+      suppresses every reopen. The old
       behaviour (60s of total silence produced zero reconnect attempts, sockets-created stayed 1) is gone.
     code: spec-dashboard/src/resilientSocket.js
     related: spec-dashboard/src/resilientSocket.test.mjs, spec-cli/src/index.ts

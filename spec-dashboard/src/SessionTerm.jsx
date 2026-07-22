@@ -51,7 +51,7 @@ function execCopyFallback(text) {
   return ok
 }
 
-export default function SessionTerm({ sessionId, active = true, focused = active }) {
+export default function SessionTerm({ sessionId, active = true, focused = active, focusRequest = 0 }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
   // Last locally fitted or backend-requested grid. Visible measurement waits for the native transaction;
@@ -95,12 +95,22 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     term.loadAddon(fit)
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
+    // Browsers do not expose Shift+Enter as a distinct terminal byte by default. Encode the one modified
+    // Enter sequence accepted by Codex and Claude in a true tmux client, while leaving IME confirmation alone.
+    term.attachCustomKeyEventHandler((event) => {
+      const shiftEnter = event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey
+      if (!shiftEnter || event.isComposing || event.keyCode === 229) return true
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.type === 'keydown') term.input('\x1b\r', true)
+      return false
+    })
     const viewerIsVisible = () => activeRef.current && document.visibilityState !== 'hidden'
     const initialFocusFrame = requestAnimationFrame(() => {
       const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
       if (focusedRef.current && viewerIsVisible()) {
         helper?.setAttribute('data-focus-sink', '')
-        term.focus()
+        if (document.activeElement !== helper) term.focus()
       }
     })
 
@@ -226,6 +236,10 @@ export default function SessionTerm({ sessionId, active = true, focused = active
         enqueueFrame(frame, size)
       },
     })
+    // Page destruction does not wait for React teardown. Close proactively so the WebSocket and its exact
+    // native tmux client share the browser tab's lifetime even before the server heartbeat backstop fires.
+    const onPageHide = () => sock?.close()
+    window.addEventListener('pagehide', onPageHide)
     const inputSub = term.onData((data) => {
       if (!focusedRef.current || !viewerIsVisible() || !sock?.isOpen()) return
       sock.send(JSON.stringify({ t: 'input', data }))
@@ -291,7 +305,8 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       try { term.refresh(0, term.rows - 1) } catch { /* native attach still supplies the current screen */ }
       cancelAnimationFrame(visibilityFocusFrame)
       if (focusedRef.current) visibilityFocusFrame = requestAnimationFrame(() => {
-        if (focusedRef.current && viewerIsVisible()) term.focus()
+        const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+        if (focusedRef.current && viewerIsVisible() && document.activeElement !== helper) term.focus()
       })
     }
     document.addEventListener('visibilitychange', onDocumentVisibility)
@@ -304,6 +319,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       clearTimeout(copiedTimer)
       document.removeEventListener('keydown', onCopyKey)
       document.removeEventListener('visibilitychange', onDocumentVisibility)
+      window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
       for (const handler of mouseModeHandlers) handler.dispose()
@@ -332,7 +348,8 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       measureRef.current?.()
       try { term.refresh(0, term.rows - 1) } catch { /* */ }
       if (focused) focusFrame = requestAnimationFrame(() => {
-        if (focusedRef.current && activeRef.current && document.visibilityState !== 'hidden') termRef.current?.focus()
+        const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+        if (focusedRef.current && activeRef.current && document.visibilityState !== 'hidden' && document.activeElement !== helper) termRef.current?.focus()
       })
       else term.blur()
     } else {
@@ -344,6 +361,17 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       helper?.removeAttribute('data-focus-sink')
     }
   }, [sessionId, active, focused])
+
+  // An already-active row or Terminal tab can be activated repeatedly without changing `active`/`focused`.
+  // Keep that intent separate from geometry so refocusing never causes a redundant resize/repaint transaction.
+  useLayoutEffect(() => {
+    if (!focusRequest || !active || !focused || document.visibilityState === 'hidden') return
+    const focusFrame = requestAnimationFrame(() => {
+      const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+      if (activeRef.current && focusedRef.current && document.activeElement !== helper) termRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(focusFrame)
+  }, [sessionId, active, focused, focusRequest])
 
   return (
     <div className="st-wrap">

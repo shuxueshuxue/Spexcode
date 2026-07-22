@@ -12,9 +12,19 @@ export type Viewer = {
   commitSize?: (cols: number, rows: number) => void
 }
 
-type Subscription = { visible: boolean; lingering: boolean; cols: number; rows: number }
+type Subscription = {
+  visible: boolean
+  lingering: boolean
+  cols: number
+  rows: number
+  bridge?: Bridge
+  lingerTimer?: ReturnType<typeof setTimeout>
+  restoreTimer?: ReturnType<typeof setTimeout>
+}
+
 type Bridge = {
   id: string
+  viewer: Viewer
   proc: ChildProcessWithoutNullStreams
   cols: number
   rows: number
@@ -30,15 +40,11 @@ type Bridge = {
 }
 
 const subscribers = new Map<string, Map<Viewer, Subscription>>()
-const bridges = new Map<string, Bridge>()
-const lastSize = new Map<string, { cols: number; rows: number }>()
-const restoreTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const lingerTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const BSU = Buffer.from('\x1b[?2026h')
 const ESU = Buffer.from('\x1b[?2026l')
 const GEOMETRY_STABILIZATION_MS = 400
-// The bounded linger window: how long the helper outlives its last visible viewer. The env override is a
-// test seam (the release path would otherwise take 30s to observe), not a supported configuration surface.
+// A hidden but still-alive browser keeps its own client briefly so a quick return is continuous. A dead
+// socket bypasses this window and detaches immediately.
 const LINGER_MS = Number(process.env.SPEXCODE_TERM_LINGER_MS) > 0 ? Number(process.env.SPEXCODE_TERM_LINGER_MS) : 30_000
 
 function subscriptionMap(id: string): Map<Viewer, Subscription> {
@@ -47,46 +53,24 @@ function subscriptionMap(id: string): Map<Viewer, Subscription> {
   return map
 }
 
-function hasVisibleViewer(id: string): boolean {
-  for (const subscription of subscribers.get(id)?.values() ?? []) {
-    if (subscription.visible) return true
-  }
-  return false
+function currentSubscription(id: string, viewer: Viewer): Subscription | undefined {
+  return subscribers.get(id)?.get(viewer)
 }
 
-function visibleSize(id: string): { cols: number; rows: number } | undefined {
-  let cols = Infinity, rows = Infinity
-  for (const subscription of subscribers.get(id)?.values() ?? []) {
-    if (!subscription.visible || subscription.cols <= 0 || subscription.rows <= 0) continue
-    cols = Math.min(cols, subscription.cols)
-    rows = Math.min(rows, subscription.rows)
-  }
-  return Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : undefined
+function isCurrent(bridge: Bridge): boolean {
+  return currentSubscription(bridge.id, bridge.viewer)?.bridge === bridge
 }
 
-function broadcast(id: string, data: Buffer): void {
-  for (const [viewer, subscription] of subscribers.get(id) ?? []) {
-    // A lingering subscription keeps consuming the stream: its hidden xterm buffer stays the current
-    // screen, so a return inside the linger window resumes output in place instead of repainting.
-    if (!subscription.visible && !subscription.lingering) continue
-    try { viewer.send(data) } catch { /* socket close owns subscription removal */ }
-  }
-}
-
-function clearLinger(id: string): void {
-  for (const subscription of subscribers.get(id)?.values() ?? []) subscription.lingering = false
-}
-
-function cancelLingerTimer(id: string): void {
-  const timer = lingerTimers.get(id)
-  if (timer) { clearTimeout(timer); lingerTimers.delete(id) }
+function deliver(bridge: Bridge, data: Buffer): void {
+  const subscription = currentSubscription(bridge.id, bridge.viewer)
+  if (!subscription || (!subscription.visible && !subscription.lingering)) return
+  try { bridge.viewer.send(data) } catch { /* socket close or heartbeat expiry owns removal */ }
 }
 
 function commitSize(bridge: Bridge): void {
-  for (const [viewer, subscription] of subscribers.get(bridge.id) ?? []) {
-    if (!subscription.visible) continue
-    try { viewer.commitSize?.(bridge.cols, bridge.rows) } catch { /* socket close owns subscription removal */ }
-  }
+  const subscription = currentSubscription(bridge.id, bridge.viewer)
+  if (!subscription?.visible) return
+  try { bridge.viewer.commitSize?.(bridge.cols, bridge.rows) } catch { /* socket close owns removal */ }
 }
 
 async function tmux(args: string[]): Promise<string> {
@@ -97,9 +81,9 @@ async function tmux(args: string[]): Promise<string> {
 }
 
 function onHelperOutput(bridge: Bridge, chunk: Buffer): void {
-  if (bridges.get(bridge.id) !== bridge) return
+  if (!isCurrent(bridge)) return
   if (bridge.delivery === 'stream') {
-    broadcast(bridge.id, chunk)
+    deliver(bridge, chunk)
     return
   }
   bridge.refreshBuf = bridge.refreshBuf.length ? Buffer.concat([bridge.refreshBuf, chunk]) : chunk
@@ -133,14 +117,13 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
         queueRefresh(bridge)
       }
     } else if (line) {
-      console.error(`[terminal helper ${bridge.id}] ${line}`)
+      console.error(`[terminal helper ${bridge.id}/${bridge.ptyPid ?? 'starting'}] ${line}`)
     }
   }
 }
 
-function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge | null; created: boolean } {
-  const existing = bridges.get(id)
-  if (existing) return { bridge: existing, created: false }
+function ensureBridge(id: string, viewer: Viewer, subscription: Subscription, cols: number, rows: number): { bridge: Bridge | null; created: boolean } {
+  if (subscription.bridge) return { bridge: subscription.bridge, created: false }
   let proc: ChildProcessWithoutNullStreams | undefined
   try {
     proc = spawn(process.execPath, [HELPER, id, String(cols), String(rows)], {
@@ -152,33 +135,45 @@ function ensureBridge(id: string, cols: number, rows: number): { bridge: Bridge 
     return { bridge: null, created: false }
   }
   const bridge: Bridge = {
-    id, proc, cols, rows, stderr: '', delivery: 'initial',
+    id, viewer, proc, cols, rows, stderr: '', delivery: 'initial',
     refreshBuf: Buffer.alloc(0), refreshPending: false, refreshRunning: false,
   }
-  bridges.set(id, bridge)
+  subscription.bridge = bridge
   proc.stdout.on('data', (data: Buffer) => onHelperOutput(bridge, data))
   proc.stderr.on('data', (data: Buffer) => onHelperStderr(bridge, data))
   let reaped = false
   const gone = () => {
     if (reaped) return
     reaped = true
-    if (bridges.get(id) !== bridge) return
-    bridges.delete(id)
+    const current = currentSubscription(id, viewer)
+    if (current?.bridge !== bridge) return
+    current.bridge = undefined
     clearDelivery(bridge)
     try { bridge.proc.kill() } catch { /* already gone */ }
-    scheduleRestore(id)
+    scheduleRestore(id, viewer, current)
   }
   proc.on('exit', gone)
   proc.on('error', gone)
   return { bridge, created: true }
 }
 
-function killBridge(id: string): void {
-  cancelLingerTimer(id)
-  clearLinger(id)
-  const bridge = bridges.get(id)
+function cancelLinger(subscription: Subscription): void {
+  if (subscription.lingerTimer) clearTimeout(subscription.lingerTimer)
+  subscription.lingerTimer = undefined
+  subscription.lingering = false
+}
+
+function cancelRestore(subscription: Subscription): void {
+  if (subscription.restoreTimer) clearTimeout(subscription.restoreTimer)
+  subscription.restoreTimer = undefined
+}
+
+function killBridge(subscription: Subscription): void {
+  cancelLinger(subscription)
+  cancelRestore(subscription)
+  const bridge = subscription.bridge
   if (!bridge) return
-  bridges.delete(id)
+  subscription.bridge = undefined
   clearDelivery(bridge)
   try { bridge.proc.stdin.end() } catch { /* already gone */ }
   const kill = setTimeout(() => { try { bridge.proc.kill() } catch { /* already gone */ } }, 250)
@@ -221,23 +216,22 @@ function releaseInitialRefresh(bridge: Bridge): void {
   bridge.refreshBuf = bridge.refreshBuf.subarray(end)
   bridge.delivery = 'quarantine'
   commitSize(bridge)
-  if (batch.length) broadcast(bridge.id, batch)
+  if (batch.length) deliver(bridge, batch)
 }
 
 function finishDelivery(bridge: Bridge): void {
-  if (bridge.delivery === 'stream') return
+  if (bridge.delivery === 'stream' || !isCurrent(bridge)) return
   const failOpen = bridge.delivery === 'initial'
   const batch = bridge.refreshBuf
   clearDelivery(bridge)
   if (!failOpen && !batch.length) return
-  // A commit marks the following binary message as one browser render transaction even when the grid itself
-  // is unchanged. Send an empty frame only on fail-open, so the browser never leaves that transaction armed.
+  // The control commit and following binary frame are one browser render transaction, including fail-open.
   commitSize(bridge)
-  broadcast(bridge.id, batch)
+  deliver(bridge, batch)
 }
 
 async function refreshBridge(bridge: Bridge): Promise<boolean> {
-  if (bridges.get(bridge.id) !== bridge || !bridge.ptyPid) return false
+  if (!isCurrent(bridge) || !bridge.ptyPid) return false
   const tty = await clientTty(bridge)
   if (!tty) return false
   await tmux(['refresh-client', '-t', tty])
@@ -252,7 +246,7 @@ function queueRefresh(bridge: Bridge): void {
   bridge.refreshRunning = true
   void refreshBridge(bridge).then((refreshed) => {
     bridge.refreshRunning = false
-    if (bridges.get(bridge.id) !== bridge || bridge.delivery !== 'initial') return
+    if (!isCurrent(bridge) || bridge.delivery !== 'initial') return
     if (bridge.refreshPending) {
       queueRefresh(bridge)
       return
@@ -278,9 +272,6 @@ async function clientTty(bridge: Bridge): Promise<string | undefined> {
 
 function resize(bridge: Bridge, cols: number, rows: number): void {
   if (bridge.cols === cols && bridge.rows === rows) return
-  // A lingered buffer is only trusted at the unchanged grid: a grid change drops every lingering
-  // subscription back to an ordinary hidden cache (a later return takes the repaint path).
-  clearLinger(bridge.id)
   beginDelivery(bridge)
   bridge.cols = cols
   bridge.rows = rows
@@ -288,109 +279,83 @@ function resize(bridge: Bridge, cols: number, rows: number): void {
 }
 
 export function attachViewer(id: string, viewer: Viewer): void {
-  subscriptionMap(id).set(viewer, { visible: false, lingering: false, cols: 0, rows: 0 })
-}
-
-// The last visible viewer arms one bounded linger instead of an instant release: the helper stays alive and
-// keeps streaming into the lingering buffers, so a quick switch-back continues output in place. The window
-// elapsing with no visible claim releases the helper exactly as an immediate release would have.
-function releaseOrLinger(id: string): void {
-  const bridge = bridges.get(id)
-  let lingering = false
-  for (const subscription of subscribers.get(id)?.values() ?? []) {
-    if (subscription.lingering) { lingering = true; break }
-  }
-  if (!bridge || !lingering) { killBridge(id); return }
-  if (lingerTimers.has(id)) return
-  const timer = setTimeout(() => {
-    lingerTimers.delete(id)
-    if (!hasVisibleViewer(id)) killBridge(id)
-  }, LINGER_MS)
-  timer.unref()
-  lingerTimers.set(id, timer)
-}
-
-function syncBridgeToViewers(id: string, refreshSameSize: boolean): void {
-  const size = visibleSize(id)
-  if (!size) { releaseOrLinger(id); return }
-  cancelLingerTimer(id)
-  lastSize.set(id, size)
-  const { bridge, created } = ensureBridge(id, size.cols, size.rows)
-  if (!bridge) return
-  if (!created && bridge.cols === size.cols && bridge.rows === size.rows) {
-    if (refreshSameSize) {
-      beginDelivery(bridge)
-      queueRefresh(bridge)
-    }
-  } else {
-    resize(bridge, size.cols, size.rows)
-  }
+  const map = subscriptionMap(id)
+  const previous = map.get(viewer)
+  if (previous) killBridge(previous)
+  map.set(viewer, { visible: false, lingering: false, cols: 0, rows: 0 })
 }
 
 export function hideViewer(id: string, viewer: Viewer): void {
-  const subscription = subscribers.get(id)?.get(viewer)
+  const subscription = currentSubscription(id, viewer)
   if (!subscription) return
-  // Only a viewer that was actually watching the live grid can linger: its buffer is the stream's
-  // current state. A never-visible hidden subscription still receives nothing.
-  if (subscription.visible && bridges.has(id)) subscription.lingering = true
   subscription.visible = false
-  syncBridgeToViewers(id, false)
+  if (!subscription.bridge) return
+  subscription.lingering = true
+  if (subscription.lingerTimer) return
+  subscription.lingerTimer = setTimeout(() => {
+    subscription.lingerTimer = undefined
+    if (!subscription.visible && currentSubscription(id, viewer) === subscription) killBridge(subscription)
+  }, LINGER_MS)
+  subscription.lingerTimer.unref()
 }
 
 export function detachViewer(id: string, viewer: Viewer): void {
-  const subscriptions = subscribers.get(id)
-  if (!subscriptions) return
-  subscriptions.delete(viewer)
-  if (subscriptions.size === 0) subscribers.delete(id)
-  syncBridgeToViewers(id, false)
+  const map = subscribers.get(id)
+  const subscription = map?.get(viewer)
+  if (!map || !subscription) return
+  // A closed/dead socket is not a hidden live tab: remove its native client now, never after linger.
+  killBridge(subscription)
+  map.delete(viewer)
+  if (map.size === 0) subscribers.delete(id)
 }
 
 export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rowsValue: number): void {
   const cols = Math.floor(colsValue), rows = Math.floor(rowsValue)
   if (!(cols > 0 && rows > 0)) return
-  const subscription = subscribers.get(id)?.get(viewer)
+  const subscription = currentSubscription(id, viewer)
   if (!subscription) return
-  // A lingering viewer returning to the unchanged grid resumes the stream it never stopped receiving;
-  // a repaint would only replace a current buffer with itself. Every other claim takes the ordinary
-  // refreshed-commit path so local fit dimensions can never survive beside a different tmux grid.
-  const bridge = bridges.get(id)
-  const seamless = subscription.lingering && !!bridge && bridge.cols === cols && bridge.rows === rows
+  const seamless = subscription.lingering && !!subscription.bridge
+    && subscription.bridge.cols === cols && subscription.bridge.rows === rows
+  cancelLinger(subscription)
   subscription.visible = true
-  subscription.lingering = false
   subscription.cols = cols
   subscription.rows = rows
-  syncBridgeToViewers(id, !seamless)
+  const { bridge, created } = ensureBridge(id, viewer, subscription, cols, rows)
+  if (!bridge || created || seamless) return
+  if (bridge.cols === cols && bridge.rows === rows) {
+    beginDelivery(bridge)
+    queueRefresh(bridge)
+  } else {
+    resize(bridge, cols, rows)
+  }
 }
 
-export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {
-  const bridge = bridges.get(id)
-  if (!bridge) return
-  sendControl(bridge, { t: 'wheel', up, col, row, ticks })
+export function forwardWheel(id: string, viewer: Viewer, up: boolean, col: number, row: number, ticks: number): void {
+  const subscription = currentSubscription(id, viewer)
+  if (!subscription?.visible || !subscription.bridge) return
+  sendControl(subscription.bridge, { t: 'wheel', up, col, row, ticks })
 }
 
 const MAX_INPUT_BYTES = 64 * 1024
 
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {
-  const subscription = subscribers.get(id)?.get(viewer)
-  const bridge = bridges.get(id)
-  if (!subscription?.visible || !bridge || !data || Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) return false
-  sendControl(bridge, { t: 'input', data })
+  const subscription = currentSubscription(id, viewer)
+  if (!subscription?.visible || !subscription.bridge || !data || Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) return false
+  sendControl(subscription.bridge, { t: 'input', data })
   return true
 }
 
-async function restoreBridge(id: string): Promise<void> {
-  restoreTimers.delete(id)
-  if (bridges.has(id) || !hasVisibleViewer(id) || !(await alive(id))) return
-  const size = lastSize.get(id)
-  if (!size) return
-  ensureBridge(id, size.cols, size.rows)
+async function restoreBridge(id: string, viewer: Viewer, subscription: Subscription): Promise<void> {
+  subscription.restoreTimer = undefined
+  if (currentSubscription(id, viewer) !== subscription || subscription.bridge || !subscription.visible || !(await alive(id))) return
+  if (!(subscription.cols > 0 && subscription.rows > 0)) return
+  ensureBridge(id, viewer, subscription, subscription.cols, subscription.rows)
 }
 
-function scheduleRestore(id: string): void {
-  if (!hasVisibleViewer(id) || restoreTimers.has(id)) return
-  const timer = setTimeout(() => void restoreBridge(id), 750)
-  timer.unref()
-  restoreTimers.set(id, timer)
+function scheduleRestore(id: string, viewer: Viewer, subscription: Subscription): void {
+  if (currentSubscription(id, viewer) !== subscription || !subscription.visible || subscription.bridge || subscription.restoreTimer) return
+  subscription.restoreTimer = setTimeout(() => void restoreBridge(id, viewer, subscription), 750)
+  subscription.restoreTimer.unref()
 }
 
 let supervising = false
@@ -398,8 +363,8 @@ export function superviseBridges(intervalMs = 4000): void {
   if (supervising) return
   supervising = true
   const tick = () => {
-    for (const id of subscribers.keys()) {
-      if (hasVisibleViewer(id) && !bridges.has(id)) scheduleRestore(id)
+    for (const [id, viewers] of subscribers) {
+      for (const [viewer, subscription] of viewers) scheduleRestore(id, viewer, subscription)
     }
     const timer = setTimeout(tick, intervalMs)
     timer.unref()

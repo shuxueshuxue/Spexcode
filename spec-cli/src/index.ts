@@ -462,22 +462,35 @@ app.post('/api/sessions/:id/merge', async (c) => {
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// one WS over a shared native tmux client (pty-bridge): server→client = tmux's rendered PTY bytes (binary);
+// one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);
 // client→server text controls resize, visibility, wheel, and xterm-native input. Server→client text commits a completed resize immediately before its binary tmux transaction;
-// hiding releases the native helper without closing the warm socket. tmux itself resolves wheel input between
+// hiding starts that viewer's bounded helper release without closing the warm socket. tmux itself resolves wheel input between
 // copy-mode and a mouse-owning TUI. The bridge never splices capture-pane state into this stream.
 // keep-alive ping cadence for the terminal socket — the server half of [[reconnect]]'s heartbeat contract,
 // and the contract's ONE primitive number: the client mirrors it (SERVER_PING_MS in the dashboard's
 // resilientSocket.js, pinned by its test) and DERIVES its silence deadline (2.5×) from it.
 // A healthy link is guaranteed inbound traffic every PING window, so the client may presume an OPEN socket
-// silent past its derived window dead (the half-open link a NAT/tunnel kills without a close event), and the
-// traffic itself keeps an idle socket warm through those middleboxes. Text frame; the terminal renders only
-// binary frames, so it needs no client-side filtering beyond what already exists.
+// silent past its derived window dead. The browser answers each text ping with pong; the server owns the mirror
+// deadline and detaches the viewer itself when a half-open link never reports close. Terminal pixels remain
+// binary frames, so heartbeat controls never enter xterm.
 const TERM_PING_MS = 10000
+const TERM_DEAD_MS = 2.5 * TERM_PING_MS
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   let viewer: Viewer | null = null
   let ping: ReturnType<typeof setInterval> | undefined
+  let pongDeadline: ReturnType<typeof setTimeout> | undefined
+  let cleaned = false
+  const disarmPongDeadline = () => { if (pongDeadline) clearTimeout(pongDeadline); pongDeadline = undefined }
+  let armPongDeadline = () => {}
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    if (ping) clearInterval(ping)
+    disarmPongDeadline()
+    if (viewer) detachViewer(id, viewer)
+    viewer = null
+  }
   return {
     onOpen(_evt, ws) {
       viewer = {
@@ -485,6 +498,15 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
         commitSize: (cols, rows) => { try { ws.send(JSON.stringify({ t: 'resize-commit', cols, rows })) } catch { /* viewer gone */ } },
       }
       attachViewer(id, viewer)
+      armPongDeadline = () => {
+        disarmPongDeadline()
+        pongDeadline = setTimeout(() => {
+          cleanup()
+          try { ws.close() } catch { /* cleanup already detached the dead viewer */ }
+        }, TERM_DEAD_MS)
+        pongDeadline.unref()
+      }
+      armPongDeadline()
       ping = setInterval(() => { try { ws.send('ping') } catch { /* viewer gone; onClose reaps */ } }, TERM_PING_MS)
     },
     onMessage(evt) {
@@ -493,16 +515,20 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
       // Binary input is ignored; JSON keeps terminal input distinct from binary pane output while preserving
       // xterm's ordered string exactly. The bridge accepts input only from this viewer's visible claim.
       if (typeof data === 'string') {
+        if (data === 'pong') {
+          armPongDeadline()
+          return
+        }
         try {
           const m = JSON.parse(data)
           if (m?.t === 'resize') resizeBridge(id, viewer, Number(m.cols), Number(m.rows))
           else if (m?.t === 'visible' && m.visible === false) hideViewer(id, viewer)
-          else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
+          else if (m?.t === 'wheel') forwardWheel(id, viewer, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
           else if (m?.t === 'input' && typeof m.data === 'string') forwardInput(id, viewer, m.data)
         } catch { /* ignore */ }
       }
     },
-    onClose() { if (ping) clearInterval(ping); if (viewer) detachViewer(id, viewer) },
+    onClose() { cleanup() },
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.

@@ -1,6 +1,6 @@
 export {} // make this a module so top-level await is allowed
 // static import is fine here: mentions.ts is dependency-free at module level, and stripRefSigil is needed
-// by several verbs (spec owner, session new, graph) — a CLI reference arg tolerates an optional @/[[ ]]
+// by several verbs (spec owner, graph, issue/eval node args) — a CLI reference arg tolerates an optional @/[[ ]]
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
 
@@ -624,11 +624,15 @@ if (cmd === 'serve') {
   } else if (SESSION_SIGNPOSTS[sub]) {
     signpost(`spex session ${sub}`, SESSION_SIGNPOSTS[sub])
   } else if (sub === 'new') {
-    // spex session new "<prompt>" [--node X]  (prompt = first positional or --prompt, or --prompt-file
+    // spex session new "<prompt>"  (prompt = first positional or --prompt, or --prompt-file
     // <path>|- so a long multi-paragraph prompt never fights shell quoting — [[prompt-file]]).
     // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
     // it falls back to an in-process launch only when no backend answers.
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'node', 'launcher', 'api', 'port'])
+    if (has('node')) {
+      console.error('spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds')
+      process.exit(2)
+    }
+    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'api', 'port'])
     const { createSession } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
     const inline = flag('prompt') ?? positionals(4)[0]
@@ -641,8 +645,7 @@ if (cmd === 'serve') {
       catch (e) { console.error(`spex session new: --prompt-file ${promptFile}: ${e instanceof Error ? e.message : e}`); process.exit(2) }
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
-    const nodeArg = flag('node')
-    const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined)
+    const created = await createSession(prompt, flag('launcher') ?? undefined)
     console.log(JSON.stringify(created, null, 2))
     await launchMonitorReminder(created.id)
   } else if (sub === 'ls') {

@@ -59,8 +59,8 @@ this loop, then **dispatch immediately**: decompose the goal into worker-sized t
 each. There is no discovery phase.
 
 - **DISPATCH** — `spex session new "<task>"` launches one worker. A session is bound to no node by default;
-  the worker finds and reads its governing spec itself. The prompt's first `[[<id>]]` (or
-  `--node <id>`, same effect) binds the session to that node: the branch is named
+  the worker finds and reads its governing spec itself. The prompt's first `[[<id>]]` binds the session to
+  that node: the branch is named
   `node/<id>-<shortid>`, the board attributes the session to it, and if the node exists one line
   with its `spec.md` path is appended to the launch prompt. The first `[[…]]` binds even when the
   id is a passing mention or doesn't exist; a nonexistent id still becomes the branch name. Which

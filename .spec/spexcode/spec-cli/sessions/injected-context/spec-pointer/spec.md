@@ -18,16 +18,16 @@ A **path is enough**: hand the agent one line pointing at the spec, and it reads
 
 ## expanded spec
 
-When [[launch]]'s `newSession` resolves a node ref — explicit `--node`, else the prompt's first `@mention` —
-to a node that **already exists** in the committed spec tree, it appends **one line** to the launch prompt:
+When [[launch]]'s `newSession` resolves the raw prompt's first `[[id]]` topic mention to a node that
+**already exists** in the committed spec tree, it appends **one line** to the launch prompt:
 an **absolute path** to that node's `spec.md` **inside the new session's own worktree**. The ref is resolved
 against the loaded spec index to that node's worktree-relative spec path (the index entry's own `path`, which
 already carries the `.spec/` prefix); since the worktree is freshly branched off main, that relative path is
 identical there, so the absolute pointer is just the worktree dir joined with it.
 
-The `@mention` grammar must name **every** node, so it admits an **optional leading dot**: a node id is its
+The `[[mention]]` grammar must name **every** node, so it admits an **optional leading dot**: a node id is its
 directory basename, so a dot-prefixed config root keeps the dot (`.plugins`), and without the leading dot
-`@.plugins` would capture nothing and silently lose both the pointer and the session's node attribution.
+`[[.plugins]]` would capture nothing and silently lose both the pointer and the session's node attribution.
 
 Only the **pointer** is appended — never the spec **body**. The agent opens the live file, so it always sees
 the current contract, and the launch prompt stays small (well under the shell-arg truncation limit [[launch]]

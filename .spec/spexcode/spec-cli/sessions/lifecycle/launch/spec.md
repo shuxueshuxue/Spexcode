@@ -22,12 +22,20 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` mints the governed SpexCode session `<uuid>`, adds the `node/<slug>` worktree (off the base branch), then writes
+`newSession` mints the governed SpexCode session `<uuid>` and derives its node from exactly one place: the
+raw caller prompt's **first `[[<id>]]` mention**. That mention is the truth for the session record, the
+`node/<id>-<shortid>` branch/worktree slug, board attribution, and the spec pointer
+when the id names an existing node. CJK ids, leading-dot ids such as `.plugins`, and ids that do not exist yet
+all remain valid binding text; with no mention the session is node-agnostic and its branch is named from the
+prompt. There is no separate CLI flag, API field, or function parameter that can grant scope outside the task
+text the worker sees.
+
+The launch adds the `node/<slug>` worktree (off the base branch), then writes
 the session's `governed:true` record `session.json` (+ best-effort the `prompt` artifact, and at launch the
 `launch.sh` script) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
 pristine — `materialize`s the spec-discipline contract into the worktree's own `CLAUDE.md`/`AGENTS.md`
 ([[harness-delivery]]), and **queues the worktree for launch** on a private
-`tmux -L` socket (`spex new "<prompt>" [--node X] [--launcher <name>]`). The selected [[launcher-select]]
+`tmux -L` socket (`spex new "<prompt>" [--launcher <name>]`). The selected [[launcher-select]]
 profile derives one of the four interactive [[harness-adapter]] entries and owns the actual agent command.
 There is one launch lifecycle and no execution-mode router: create, drain, reopen, liveness, and delivery all
 call that resolved adapter directly. Claude launches with
@@ -84,7 +92,7 @@ carries the caller's env, no cap).
 
 That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
 `/<preset>` names a live `surface: command` plugin: the shared prompt resolver expands its body, fills `{{targets}}` from the
-prompt's `[[node]]` mentions (or the explicit create node when the invocation names none), and appends the
+prompt's `[[node]]` mentions, and appends the
 remaining free text. A body without `{{targets}}` receives a target block only when the invocation actually
 names one; a targetless utility stays exactly its small body. That expansion is only the agent's launch payload: session node/title derivation and the
 stored originating prompt use the raw caller text, so a plugin body's own `[[links]]` cannot silently become

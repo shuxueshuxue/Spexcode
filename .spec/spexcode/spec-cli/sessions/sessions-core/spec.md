@@ -27,8 +27,11 @@ auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surfa
 the prompt that [[launch]] or [[dispatch]] delivers, and the poll loop the watch/wait subscriptions
 share. A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
-second product dimension. The branch/worktree slug and the prompt-derived
-title are the session's OWN identity: derivation strips actor mentions (`@session`, [[mentions]]) and
+second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic
+mention ([[mentions]]) — no caller-supplied node argument exists at the CLI, HTTP, or function boundary.
+That one visible mention drives the record attribution and the node part of the branch/worktree slug; without
+one the session stays node-agnostic and falls through to its prompt-derived title. The branch/worktree slug
+and that title are the session's OWN identity: derivation strips actor mentions (`@session`, [[mentions]]) and
 UUID-shaped tokens first — a prompt that mentions another session must never name this one after it, or a
 worker sent to clean that session can match its own worktree — and the slug keeps unicode letters/numbers,
 so a CJK prompt survives as the readable name its author typed (git refs take unicode; transliteration

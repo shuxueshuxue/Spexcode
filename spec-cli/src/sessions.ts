@@ -942,10 +942,10 @@ export const isBackendUnreachable = (e: unknown): boolean =>
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
-// @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
-// "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
-// actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
-// the FIRST `[[<id>]]` topic reference ([[mentions]]: `[[node]]` is a topic, `@` is now an actor/session).
+// @@@ node + title from the prompt - the spec node a session works on is the FIRST `[[<id>]]` topic
+// reference in the raw prompt ([[mentions]]: `[[node]]` is a topic, `@` is an actor/session). The node the
+// user actually left in the prompt is the truth: there is no focused-node/API/function argument that can
+// grant a binding outside the task text. Changing or deleting the mention changes or removes the binding.
 // When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
 // The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
 // (`.plugins`) keeps the dot — without `\.?` here `[[.plugins]]` captures nothing and never resolves to a node.
@@ -953,7 +953,7 @@ export const slugify = (s: string | null) =>
 // id, so `[[中文节点]]` must bind the session exactly like an ASCII id — ASCII-only here silently launched
 // node-agnostic.
 const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
-const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
+export const nodeFromPrompt = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 
 type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
 type CommandSpec = Pick<SpecLite, 'id' | 'path'>
@@ -962,8 +962,8 @@ type CommandSpec = Pick<SpecLite, 'id' | 'path'>
 // This is deliberately server-side: dashboard, phone, CLI, direct API, and the in-process fallback all call
 // the launch/send boundary, so no client gets its own command interpreter. Launch keeps the RAW prompt for
 // session identity/history; only the agent payload uses this expansion, preventing a plugin body's own
-// [[links]] from becoming the session node. An explicit create node fills an otherwise-empty target list.
-export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[], explicitNode?: string | null): string {
+// [[links]] from becoming the session node. With no mention, a preset remains targetless.
+export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[]): string {
   const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
   if (!match) return raw
   const preset = presets.find((p) => p.name === match[1])
@@ -972,7 +972,6 @@ export function composeCommandPrompt(raw: string, presets: CommandPreset[], spec
   const ids: string[] = []
   const allMentions = new RegExp(MENTION.source, 'gu')
   const free = match[2].replace(allMentions, (_, id: string) => { ids.push(id); return '' }).trim()
-  if (!ids.length && explicitNode) ids.push(explicitNode)
   const targets = ids.length
     ? ids.map((id) => {
         const spec = specs.find((s) => s.id === id)
@@ -988,12 +987,12 @@ export function composeCommandPrompt(raw: string, presets: CommandPreset[], spec
 
 // Load only the one live preset named by the raw invocation. Both newSession and sendText call this seam, so
 // launch and an existing session's inbox resolve identical plugin data with identical target semantics.
-export async function resolveCommandPrompt(raw: string, explicitNode?: string | null, loadedSpecs?: CommandSpec[]): Promise<string> {
+export async function resolveCommandPrompt(raw: string, loadedSpecs?: CommandSpec[]): Promise<string> {
   const commandName = raw.match(/^\/(\S+)/)?.[1]
   const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
   if (!preset) return raw
-  const specs = loadedSpecs ?? (mentionedNode(raw) || explicitNode ? await loadSpecs() : [])
-  return composeCommandPrompt(raw, [preset], specs, explicitNode)
+  const specs = loadedSpecs ?? (nodeFromPrompt(raw) ? await loadSpecs() : [])
+  return composeCommandPrompt(raw, [preset], specs)
 }
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
@@ -1209,7 +1208,7 @@ export async function assertProjectMatch(verb: string): Promise<void> {
   }
 }
 
-type SessionCreateFn = (node: string | null, prompt: string, parent: string | null, launcher?: string) => Promise<Session>
+type SessionCreateFn = (prompt: string, parent: string | null, launcher?: string) => Promise<Session>
 export type SessionCreateRequestResult =
   | { status: 201; session: Session }
   | { status: 400; error: string }
@@ -1219,15 +1218,14 @@ export type SessionCreateRequestResult =
 export async function sessionCreateRequest(body: unknown, create: SessionCreateFn = newSession): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['node', 'prompt', 'parent', 'launcher'].includes(key)).sort()
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
-  const node = typeof input.node === 'string' ? input.node : null
   try {
-    return { status: 201, session: await create(node, prompt, parent, launcher) }
+    return { status: 201, session: await create(prompt, parent, launcher) }
   } catch (e) {
     return { status: 400, error: String((e as Error).message || e) }
   }
@@ -1241,7 +1239,7 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
-export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
+export async function createSession(prompt: string, launcher?: string): Promise<Session> {
   await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
@@ -1253,11 +1251,11 @@ export async function createSession(node: string | null, prompt: string, launche
     res = await fetch(`${await apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt, parent, launcher }),
+      body: JSON.stringify({ prompt, parent, launcher }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt, parent, launcher)
+    return newSession(prompt, parent, launcher)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -1277,7 +1275,7 @@ export async function createSession(node: string | null, prompt: string, launche
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
 // only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
 // programmatic surface, every other surface is prompt only).
-export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string): Promise<Session> {
+export async function newSession(prompt: string, parent: string | null = null, launcher?: string): Promise<Session> {
   const id = randomUUID()
   // a launcher ([[launcher-select]]) fixes BOTH the launch command (persisted below) AND the harness — so
   // picking one is the ONLY launch choice. Explicit --launcher wins, else the configured defaultLauncher.
@@ -1290,11 +1288,11 @@ export async function newSession(node: string | null, prompt: string, parent: st
   // identity + originating-prompt source; only `launchPrompt` is expanded for the agent. This preserves the
   // no-target rule even when the plugin body itself contains `[[links]]`.
   const rawPrompt = prompt
-  // node identity + label: explicit --node wins, else the RAW prompt's first `[[id]]` topic ref; expanded
+  // node identity + label: the RAW prompt's first `[[id]]` topic ref is the only binding channel; expanded
   // plugin prose is payload only and can never invent scope.
-  const ref = node || mentionedNode(rawPrompt)
+  const ref = nodeFromPrompt(rawPrompt)
   const launchSpecs = ref ? await loadSpecs() : null
-  let launchPrompt = await resolveCommandPrompt(rawPrompt, node, launchSpecs ?? undefined)
+  let launchPrompt = await resolveCommandPrompt(rawPrompt, launchSpecs ?? undefined)
   const title = ref ? null : titleFromPrompt(rawPrompt)
   const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
@@ -1332,7 +1330,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
   // own memory load too.
   bootstrapMaterialize(rec)
   if (ref) {
-    // @@@ spec pointer - the ref (explicit --node, else the prompt's first [[id]] ref) named an EXISTING node.
+    // @@@ spec pointer - the prompt's first [[id]] ref named an EXISTING node.
     // Append ONE line pointing the agent at that node's spec.md as an ABSOLUTE path INSIDE its own worktree, so
     // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
     // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only

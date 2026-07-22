@@ -18,6 +18,16 @@ test('session new rejects stale mode flags through the generic unknown-flag path
   }
 })
 
+test('session new retires the out-of-band --node binding before launch', () => {
+  const r = spawnSync('tsx', [cli, 'session', 'new', 'probe', '--node', 'launch'], {
+    cwd: pkgRoot,
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 2)
+  assert.equal(r.stdout, '')
+  assert.equal(r.stderr, 'spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds\n')
+})
+
 test('session new ordinary launcher create posts the closed API shape and succeeds', async () => {
   let posted: unknown = null
   const server = createServer((req, res) => {
@@ -37,7 +47,7 @@ test('session new ordinary launcher create posts the closed API shape and succee
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   env.SPEXCODE_API_URL = ''
 
-  const child = spawn('tsx', [cli, 'session', 'new', 'ordinary task', '--launcher', 'claude', '--api', `http://127.0.0.1:${address.port}`], {
+  const child = spawn('tsx', [cli, 'session', 'new', '[[launch]] ordinary task', '--launcher', 'claude', '--api', `http://127.0.0.1:${address.port}`], {
     cwd: pkgRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -50,6 +60,6 @@ test('session new ordinary launcher create posts the closed API shape and succee
   await once(server, 'close')
 
   assert.equal(code, 0, stderr)
-  assert.deepEqual(posted, { node: null, prompt: 'ordinary task', parent: null, launcher: 'claude' })
+  assert.deepEqual(posted, { prompt: '[[launch]] ordinary task', parent: null, launcher: 'claude' })
   assert.equal(JSON.parse(stdout).id, 'created-1')
 })

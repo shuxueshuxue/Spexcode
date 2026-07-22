@@ -23,7 +23,19 @@ priority only for non-critical processes whose UID, full executable identity, an
 argv token are allowlisted. Pause is a later, explicit opt-in escalation. Recovery sends
 resume where needed and restores every recorded original priority; shutdown, daemon
 restart, and uninstall also attempt restoration. PID start time and exact identity guard
-recovery against reuse.
+recovery against reuse. The status becomes `paused` only after at least one exact
+candidate is successfully stopped and its reversible state is persisted; an escalation
+that pauses nothing remains `mitigating`.
+
+The action, actual pause, and stable-recovery transitions each broadcast one fixed,
+process-agnostic status line through macOS `wall` to interactive TTYs that are already
+logged in. The guard never includes a PID, executable path, or argv token in terminal
+messages, never polls or repeats a transition message, and treats missing `who`/`wall`,
+TTY enumeration failure, no logged-in TTY, or broadcast failure as a logged notification
+failure rather than a daemon-loop failure. Native `wall` is ephemeral: a real macOS SSH
+probe proved delivery to an existing SSH TTY and no replay on a later login. The guard
+therefore makes no claim for sessions established after a transition and does not alter
+`sshd_config`, `/etc/motd`, or shell startup files to manufacture one.
 
 Defaults are conservative: 15-second samples; CPU busy at least 90% together with load
 per CPU at least 1.25, or macOS memory pressure at warning or worse; 60 seconds sustained

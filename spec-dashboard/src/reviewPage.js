@@ -45,7 +45,9 @@ export function useReviewPage(domain, query, page, { enabled = true, refreshKey 
     if (view) params.set('view', view)
     try {
       const body = await fetchReviewPage(`/api/${domain}?${params}`)
-      if (mine === seq.current) setData(body)
+      // equal revision = the same source snapshot and slice ([[paged-review]]) — keep the current
+      // object so a board-driven refresh of unchanged content repaints nothing.
+      if (mine === seq.current) setData((prev) => prev && body && prev.revision === body.revision ? prev : body)
       return body
     } catch (reason) {
       if (mine === seq.current) setError(reason instanceof Error ? reason.message : String(reason))
@@ -55,13 +57,20 @@ export function useReviewPage(domain, query, page, { enabled = true, refreshKey 
     }
   }, [domain, enabled, page, query, view])
 
+  // Only a NEW request identity may wipe to the loading state; a refreshKey tick (a board frame) or a
+  // re-enable of the same request refreshes quietly behind the painted rows — the reported "twitch" was
+  // every SSE board delta re-running this effect and setData(null)-ing the visible list.
+  const shownKey = useRef(null)
   useEffect(() => {
     if (!enabled) { setLoading(false); return undefined }
-    setData(null)
-    load()
+    const requestKey = `${domain}\0${query}\0${page}\0${view || ''}`
+    const fresh = requestKey !== shownKey.current
+    shownKey.current = requestKey
+    if (fresh) setData(null)
+    load({ quiet: !fresh })
     const timer = pollMs > 0 ? setInterval(() => load({ quiet: true }), pollMs) : null
     return () => { if (timer) clearInterval(timer) }
-  }, [enabled, load, pollMs, refreshKey])
+  }, [domain, query, page, view, enabled, load, pollMs, refreshKey])
 
   return { data, error, loading, reload: load }
 }

@@ -15,9 +15,12 @@ related:
 # page-state
 
 The browser's review client fetches exactly one server page for the route's committed q+page, drops stale
-responses, exposes loading/failure distinctly, and refreshes the same request after writes or the bounded
-cold interval. It owns no item matcher and no private filter/page state: the hash route is replayed on every
-Back/Forward/direct open, while [[paged-review]] returns the source snapshot and current slice.
+responses, exposes loading/failure distinctly, and refreshes the same request after writes, board frames,
+or the bounded cold interval. The loading state belongs to a NEW request identity (domain/q/page/view)
+only: a same-request refresh — a board delta, the cold poll, a write's reload, a re-enable on return from
+a detail — runs quietly behind the painted rows, and an answer whose revision matches the shown one
+repaints nothing. It owns no item matcher and no private filter/page state: the hash route is replayed on
+every Back/Forward/direct open, while [[paged-review]] returns the source snapshot and current slice.
 Concurrent consumers or React's development remount join one in-flight request for the identical endpoint;
 they do not double-pay the same page bytes. A later navigation may request that page again because it is a
 new user action, not a hidden app-resident row cache.

@@ -28,7 +28,10 @@ scenarios:
       (the terminal-frozen-until-manual-refresh bug). Advance the virtual clock well past the dead window
       (2.5× the server's 10s ping cadence = 25s) and watch: whether a new socket is constructed, what
       `onState` reports, whether each inbound terminal ping emits pong, and (control case) that a link kept
-      alive by periodic inbound pings within the window is NEVER dropped by the watchdog.
+      alive by periodic inbound pings within the window is NEVER dropped by the watchdog. Against a live
+      backend, also hold open one previous-bundle-shaped browser client that does not answer the text ping
+      but does automatically answer WebSocket protocol ping, beside a true ghost with protocol auto-pong
+      disabled.
     expected: >-
       An OPEN socket silent past the 25s dead window is PRESUMED DEAD: the helper force-drops it and
       constructs a replacement through the normal backoff/reopen machinery, with `onState` surfacing
@@ -36,8 +39,9 @@ scenarios:
       socket are ignored (superseded-socket guard). Inbound traffic of ANY kind — a real frame or the
       server's keep-alive ping — resets the silence measurement, so a healthy-but-quiet link inside the
       window is never falsely dropped. Every terminal ping receives one transport-level pong so the server's
-      mirror deadline can distinguish that healthy viewer from a ghost, and an intentional close() still
-      suppresses every reopen. The old
+      immediately previous generation remains compatible. Server-side, the old client stays attached beyond
+      the dead window on its browser-native protocol pong, while the true ghost is detached and closed at the
+      deadline. An intentional close() still suppresses every reopen. The old
       behaviour (60s of total silence produced zero reconnect attempts, sockets-created stayed 1) is gone.
     code: spec-dashboard/src/resilientSocket.js
     related: spec-dashboard/src/resilientSocket.test.mjs, spec-cli/src/index.ts

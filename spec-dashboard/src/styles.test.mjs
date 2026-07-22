@@ -112,6 +112,13 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
   )
 })
 
+test('terminal viewport clips — tmux owns all scrolling', () => {
+  // scrollback:0 means the pane viewport can never hold real history; an `auto` overflow lets a fractional
+  // DPR/geometry overshoot render a phantom themed browser scrollbar over the terminal's right edge.
+  assert.match(css, /\.st-host \.xterm-viewport\s*\{[^}]*overflow:\s*hidden !important;/s)
+  assert.doesNotMatch(css, /\.st-host \.xterm-viewport\s*\{[^}]*overflow-y:\s*auto/s)
+})
+
 test('a shared terminal grid aligns to the input instead of leaving a bottom void', () => {
   assert.match(css, /\.st-host\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;/s)
   assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;[^}]*flex:\s*none;/s)

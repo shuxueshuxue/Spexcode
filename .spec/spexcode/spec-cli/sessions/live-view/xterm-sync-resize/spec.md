@@ -22,7 +22,10 @@ buffer at the new grid before the synchronized native repaint.
 Installation applies one version-locked correction inside that engine: a renderer resize joins the existing
 deferred resize task while synchronized output is active, and the task flushes before buffered rows render
 when the hold closes. The installer is exact and idempotent; an unexpected package version or source shape
-fails installation instead of silently running without the invariant. The resize path uses only xterm's public
+fails installation instead of silently running without the invariant. Because a dependency reinstall can
+recreate the engine without running install scripts, every build and dev entry re-runs the same idempotent
+installer first — a production bundle or dev server cannot silently serve an unpatched engine; it is patched
+or it fails loudly. The resize path uses only xterm's public
 terminal API and carries no snapshot layer, replacement renderer, or private resize hook.
 
 [[live-view]] owns the product transaction and its browser evidence. This node owns only the dependency

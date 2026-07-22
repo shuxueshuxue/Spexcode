@@ -135,6 +135,9 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${location.host}${apiUrl(`/api/sessions/${sessionId}/socket`)}`
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
+    // True once native bytes arrive while this pane is hidden — the backend's bounded linger is still
+    // streaming into this buffer, so its grid belongs to that stream, not to a local reflow.
+    let hiddenStreamFlowing = false
 
     // Hidden panes fit their browser-only grid while invisible. A visible pane leaves its painted buffer alone
     // until the backend commits the grid with one final native transaction.
@@ -154,7 +157,11 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
       if (!viewerIsVisible()) {
-        try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
+        // A lingering stream still writes into this hidden buffer at the shared grid; reflowing it locally
+        // would corrupt those frames. The buffer keeps its grid — the visible claim reconciles divergence.
+        if (!hiddenStreamFlowing) {
+          try { term.resize(cols, rows) } catch { /* a later layout pass retries */ }
+        }
         return
       }
       if (sock?.isOpen()) {
@@ -163,6 +170,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     measureRef.current = measureAndRequest
     hideRef.current = () => {
+      hiddenStreamFlowing = false
       if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'visible', visible: false }))
     }
 
@@ -204,6 +212,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       onState: setConn,
       onOpen: () => {
         committedSize = null
+        hiddenStreamFlowing = false
         frameQueue.length = 0
         term.reset()
         lastSizeRef.current = { cols: 0, rows: 0 }
@@ -221,6 +230,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
           return
         }
         if (!(e.data instanceof ArrayBuffer)) return
+        if (!viewerIsVisible()) hiddenStreamFlowing = true
         const frame = new Uint8Array(e.data)
         const size = committedSize
         committedSize = null

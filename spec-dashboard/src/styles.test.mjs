@@ -144,16 +144,20 @@ test('a native client grid stays bottom-aligned through fractional fit remainder
 })
 
 test('selected nested session keeps its lead separated from the revealed headline', () => {
+  // the lead must FLOAT: an inline-level lead before the block headline would claim a line of its
+  // own, stranding the fold pod alone on line 1 with the headline starting on line 2.
   assert.match(
     css,
-    /\.si-item\.on\s+\.sess-lead\s*\{[^}]*margin-right:\s*7px;/s,
+    /\.si-item\.on\s+\.sess-lead\s*\{[^}]*float:\s*left;[^}]*margin-right:\s*7px;/s,
   )
 })
 
 test('session sidebar defaults denser and caps selected headlines at three lines', () => {
   assert.match(css, /\.si-list\s*\{[^}]*flex:\s*0 0 204px;/s)
   assert.match(css, /\.si-item\s*\{[^}]*font-size:\s*var\(--type-caption\);[^}]*line-height:\s*var\(--line-session-row\);/s)
-  assert.match(css, /\.si-item\.on \.sess-id\s*\{[^}]*max-height:\s*3lh;[^}]*overflow:\s*hidden;/s)
+  // the 3lh cap clips with overflow:CLIP, never hidden — hidden makes the headline a BFC that may not
+  // overlap the floated status marker, narrowing the WHOLE block into a column beside it.
+  assert.match(css, /\.si-item\.on \.sess-id\s*\{[^}]*max-height:\s*3lh;[^}]*overflow:\s*clip;/s)
   assert.match(sessionInterface, /useResizable\('spex\.siListWidth', 204, \{ min: 180, max: 480 \}\)/)
   assert.match(sessionInterface, /scrollIntoView\(\{ block: 'nearest' \}\)/)
   assert.match(sessionInterface, /onDoubleClick=\{resetListW\}/)

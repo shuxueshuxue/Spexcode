@@ -41,7 +41,7 @@ async function main() {
 
   // (1) wheel up → copy-mode + older history
   chunks = []
-  for (let i = 0; i < 6; i++) { forwardWheel(SESSION, true, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 6; i++) { forwardWheel(SESSION, viewer, true, 40, 5, 1); await sleep(200) }
   await sleep(400)
   const posUp = await scrollPos()
   const upText = Buffer.concat(chunks).toString('utf8')
@@ -56,7 +56,7 @@ async function main() {
 
   // (3) wheel down to the bottom → exit copy-mode, then the held output releases
   chunks = []
-  for (let i = 0; i < 12; i++) { forwardWheel(SESSION, false, 40, 5, 1); await sleep(180) }
+  for (let i = 0; i < 12; i++) { forwardWheel(SESSION, viewer, false, 40, 5, 1); await sleep(180) }
   await sleep(600)
   const posDown = await scrollPos()
   const releasedText = Buffer.concat(chunks).toString('utf8')

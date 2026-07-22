@@ -37,7 +37,7 @@ async function main(): Promise<void> {
     chunks.length = 0
 
     for (let index = 0; index < 40; index++) {
-      forwardWheel(SESSION, true, 40, 5, 1)
+      forwardWheel(SESSION, viewer, true, 40, 5, 1)
       await sleep(80)
     }
     await sleep(500)
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
       if (output.subarray(index, index + 6).equals(Buffer.from('\x1b]8;;\r')) ||
           output.subarray(index, index + 6).equals(Buffer.from('\x1b]8;;\n'))) truncatedClose++
     }
-    console.log(`broadcast bytes: ${output.length}; history text: ${sawText}; closes: ${properClose}; truncated: ${truncatedClose}`)
+    console.log(`viewer bytes: ${output.length}; history text: ${sawText}; closes: ${properClose}; truncated: ${truncatedClose}`)
     if (!sawText) throw new Error('never scrolled onto the hyperlink row')
     if (truncatedClose > 0) throw new Error(`${truncatedClose} OSC 8 close(s) lost their ST terminator`)
     if (properClose === 0) throw new Error('no properly terminated OSC 8 close was rendered')

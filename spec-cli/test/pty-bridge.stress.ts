@@ -1,7 +1,7 @@
 // Stress proof for the live native-client stream: the exact attachViewer path is flooded with enough CJK,
 // box-drawing, and emoji lines to force multi-byte UTF-8 characters
 // to straddle node-pty read boundaries — the condition that used to shatter them into U+FFFD. Assert the bytes
-// the bridge broadcasts, decoded as UTF-8, contain ZERO U+FFFD and the payload survives intact.
+// that viewer receives, decoded as UTF-8, contain ZERO U+FFFD and the payload survives intact.
 //
 // Run (from spec-cli/): SPEXCODE_TMUX=stress-<pid> npx tsx test/pty-bridge.stress.ts
 import { execFile } from 'node:child_process'
@@ -26,7 +26,6 @@ async function main() {
   const payload = '/tmp/spex-stress-payload.txt'
   writeFileSync(payload, (LINE + '\n').repeat(REPEATS))   // one ~150KB file → one fast cat, still many pty reads
   await tmux('kill-session', '-t', SESSION).catch(() => {})
-  // A 50-row outer client leaves 49 rows for the tmux window once its status line is present.
   await tmux('new-session', '-d', '-s', SESSION, '-x', '200', '-y', '49')
 
   const chunks: Buffer[] = []
@@ -44,7 +43,7 @@ async function main() {
   await tmux('send-keys', '-t', SESSION, '-l', `cat ${payload}; ${SENTINEL_CMD}`)
   await tmux('send-keys', '-t', SESSION, 'Enter')
 
-  // wait until the sentinel shows up in the broadcast stream (or time out)
+  // wait until the sentinel shows up in this viewer's native stream (or time out)
   const deadline = Date.now() + 20000
   for (;;) {
     if (Buffer.concat(chunks).toString('utf8').includes(SENTINEL)) break
@@ -61,7 +60,7 @@ async function main() {
   const fffd = (text.match(/�/g) || []).length
   const hits = text.split(LINE).length - 1
 
-  console.log(`broadcast bytes : ${all.length}`)
+  console.log(`viewer bytes    : ${all.length}`)
   console.log(`payload copies  : ${hits} (flooded ${REPEATS})`)
   console.log(`U+FFFD count    : ${fffd}`)
 

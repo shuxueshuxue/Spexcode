@@ -129,7 +129,7 @@ test('terminal viewport clips — tmux owns all scrolling', () => {
   assert.doesNotMatch(css, /\.st-host \.xterm-viewport\s*\{[^}]*overflow-y:\s*auto/s)
 })
 
-test('a shared terminal grid stays bottom-aligned without leaving a void', () => {
+test('a native client grid stays bottom-aligned through fractional fit remainder', () => {
   assert.match(css, /\.st-host\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;/s)
   assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;[^}]*flex:\s*none;/s)
 })

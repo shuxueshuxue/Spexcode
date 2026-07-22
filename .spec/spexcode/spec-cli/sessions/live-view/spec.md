@@ -151,9 +151,13 @@ dropping it — so a trackpad's micro-delta momentum gesture travels proportiona
 every event to a full tick and overshooting its return leg. A net-tick ledger finishes the return: pane
 content that grows during a scroll excursion leaves an exactly-symmetric return short of the live bottom,
 where a mouse-owning application's scrolled view impersonates the live tail while its in-place updates
-freeze. When the ledger crosses back to zero the browser sends a bottoming burst — the natural human
-overshoot restored — which is a no-op at the bottom on every pane type and never fires for a reader
-parked deep in history. The browser still holds no scroll state of its own and never inspects pane
+freeze. The quantizer is itself lossy across direction flips — each flip discards a sub-quantum
+remainder, so a pixel-symmetric return can land one or two ticks above zero with no growth involved,
+parking the application on its count-less scrolled indicator with a dead status line. A return that
+reaches zero or stops inside that quantum-loss margin (two ticks, the bound of one round trip's flip
+discards) therefore means "back to live": the browser sends a bottoming burst — the natural human
+overshoot restored — and settles the ledger. The burst is a no-op at the bottom on every pane type and
+never fires for a reader parked deep in history. The browser still holds no scroll state of its own and never inspects pane
 mode. tmux itself decides
 whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a

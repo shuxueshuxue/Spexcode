@@ -49,9 +49,11 @@ test('wheel deltas accumulate proportionally — no min-1-tick amplification', (
 test('a returning scroll gesture finishes with a bottoming burst', () => {
   // content growth during an excursion leaves a symmetric return short of the live bottom: the TUI's
   // scrolled view impersonates the live tail and the watched seconds freeze. The net-tick ledger
-  // detects the return-to-zero and restores the natural human overshoot.
+  // detects the return-to-zero — with a two-tick quantum-loss margin, since direction flips discard
+  // sub-40px remainders and a pixel-symmetric return can undercount by 1-2 ticks with no growth at
+  // all — and restores the natural human overshoot, settling the ledger.
   assert.match(terminal, /wheelNet \+= up \? ticks : -ticks/)
-  assert.match(terminal, /wasAbove && wheelNet <= 0/)
+  assert.match(terminal, /wasAbove && wheelNet <= 2/)
   assert.match(terminal, /up: false, col, row, ticks: 5/)
 })
 

@@ -255,8 +255,11 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     // exactly-symmetric return short of the live bottom, so a mouse-owning TUI (or copy-mode) stays scrolled
     // and its frozen view impersonates the live tail — the seconds a human watches stop dead. When the
     // ledger crosses back to zero the gesture's meaning is "back to live": a bottoming burst restores the
-    // natural human overshoot. At the bottom the burst is a no-op on every pane type, and a reader parked
-    // deep in history (ledger still positive) is never disturbed.
+    // natural human overshoot. The quantizer itself is lossy across a direction flip (each flip discards a
+    // sub-40px remainder, ≤2 flips per round trip), so a pixel-symmetric return can arrive 1-2 ticks short
+    // of zero with no growth involved; a return that lands inside that quantum-loss margin still means
+    // "back to live" and fires the same burst. At the bottom the burst is a no-op on every pane type, and a
+    // reader parked deep in history (ledger clearly positive) is never disturbed.
     let wheelAcc = 0
     let wheelNet = 0
     term.attachCustomWheelEventHandler((ev) => {
@@ -276,8 +279,9 @@ export default function SessionTerm({ sessionId, active = true, focused = active
             sock.send(JSON.stringify({ t: 'wheel', up, col, row, ticks }))
             const wasAbove = wheelNet > 0
             wheelNet += up ? ticks : -ticks
-            if (!up && wasAbove && wheelNet <= 0) {
+            if (!up && wasAbove && wheelNet <= 2) {   // ≤2: the quantum-loss margin counts as bottomed
               for (let burst = 0; burst < 4; burst++) sock.send(JSON.stringify({ t: 'wheel', up: false, col, row, ticks: 5 }))
+              wheelNet = 0
             }
             if (wheelNet < 0) wheelNet = 0   // downs at the live bottom accrue no debt
           }

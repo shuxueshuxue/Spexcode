@@ -18,6 +18,9 @@ try {
   // the requested PTY grid the pane grid too; filtering a coloured final row in xterm would corrupt real
   // pane content. SpexCode owns these sessions, so a later foreground attach sees the same status-free pane.
   execFileSync('tmux', ['-L', socket, 'set-option', '-t', id, 'status', 'off'])
+  // Let tmux's native multi-client policy choose the application grid. A small browser gets tmux's
+  // viewport into the largest attached client; it never forces a real large display down to its size.
+  execFileSync('tmux', ['-L', socket, 'set-window-option', '-t', id, 'window-size', 'largest'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'mouse', 'on'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'history-limit', '50000'])
   const features = execFileSync('tmux', ['-L', socket, 'show-options', '-gsv', 'terminal-features'], { encoding: 'utf8' })

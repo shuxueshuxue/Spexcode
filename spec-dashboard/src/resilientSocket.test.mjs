@@ -85,6 +85,7 @@ test('inbound traffic within the window — frames or pings — keeps the link a
   clock.advance(10)
   for (let i = 0; i < 20; i++) { sockets[0].emit('ping'); clock.advance(SERVER_PING_MS) }  // server cadence
   assert.equal(sockets.length, 1, 'a healthy-but-quiet link is never falsely dropped')
+  assert.deepEqual(sockets[0].sent, Array(20).fill('pong'), 'every server ping receives the transport pong')
 })
 
 test('late events from the force-dropped zombie are ignored', () => {

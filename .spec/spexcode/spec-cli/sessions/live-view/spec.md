@@ -2,7 +2,7 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard keeps interactive browser terminals ready, but a session owns one native tmux stream only while watched — rendering and xterm input share it, with bounded visibility lifecycle and no reconstructed screen.
+desc: Every visible browser viewer is one real tmux client whose PTY, size, input, output, and lifetime stay bound to that viewer; tmux arbitrates concurrent screens natively.
 code:
   - spec-cli/src/pty-bridge.ts
 related:
@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/styles.test.mjs
+  - spec-dashboard/test/terminal-multi-viewer.e2e.mjs
   - spec-dashboard/scripts/patch-xterm-sync-resize.mjs
   - spec-cli/src/index.ts
   - spec-cli/test/pty-bridge.attach-repaint.ts
@@ -21,6 +22,7 @@ related:
   - spec-cli/test/pty-bridge.history.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.visibility-lifecycle.ts
+  - spec-cli/test/terminal-socket-lifecycle.ts
   - spec-cli/test/pty-bridge.reseed-reconnect.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
   - spec-cli/test/pty-bridge.stress.ts
@@ -33,10 +35,11 @@ The dashboard terminal is an interactive browser face of a session's tmux pane. 
 through the terminal socket beside pane output, geometry, visibility, and wheel navigation. Atomic authored
 prompts and board commands remain [[command-box]]'s separate session dispatch channel.
 
-## one compositor
+## one native compositor per viewer
 
-Each session has at most one native tmux client per backend instance, shared by that instance's viewers.
-Its PTY output is the only terminal byte stream sent to xterm. SpexCode does not capture the pane, rebuild
+Each visible browser viewer has exactly one native tmux client. Its PTY output is the only terminal byte stream
+sent to that viewer's xterm, and that xterm's input returns through the same PTY. Browser viewers never share a
+synthetic broadcast stream or collapse their independent client sizes into a bridge-owned grid. SpexCode does not capture the pane, rebuild
 terminal modes or cursor state, clear the browser, and then splice raw pane output behind that synthetic
 frame. tmux already owns the pane grid, history, cursor, modes, and client rendering; the bridge transports
 that client rendering instead of becoming a second terminal emulator.
@@ -47,10 +50,10 @@ only after its PTY has adopted a requested size, and the bridge then refreshes t
 geometry requests serialize behind the refresh already running and end with a refresh for the latest acknowledged
 grid, rather than racing independent resize and refresh channels.
 
-One native stream follows three phases after each geometry request. In `initial`, the bridge buffers from the
+Each native stream follows three phases after its geometry request. In `initial`, the bridge buffers from the
 current stream position and records its offset when the native client's explicit `refresh-client` command
 completes. The first complete tmux synchronized-output transaction that begins after that offset is the forced
-full-client repaint, not an earlier busy-pane tick. The bridge commits the shared grid and releases the ordered
+full-client repaint, not an earlier busy-pane tick. The bridge commits that viewer's grid and releases the ordered
 prefix through that transaction as the fast complete screen. Native attach uses the same phase, so setup bytes
 before the repaint are retained and a blank browser never receives only a trailing spinner diff.
 
@@ -84,11 +87,11 @@ WebSocket.
 
 ## isolated helper
 
-The backend process never owns a PTY. When the first viewer of a session becomes visible, it starts one shared
-helper process, and only that helper creates the native tmux client. A helper creates exactly one PTY and starts
-no later subprocess, so
+The backend process never owns a PTY. When a viewer becomes visible, its subscription starts one helper process,
+and only that helper creates that viewer's native tmux client. A helper creates exactly one PTY and starts no
+later subprocess, so
 no sibling tmux client can inherit an earlier PTY master. Losing one helper can therefore detach only its
-own client; it cannot keep a dead sibling terminal alive and eventually block the shared tmux server.
+own viewer; it cannot keep a dead sibling terminal alive or leave another browser's attach state behind.
 
 The helper's stdout is raw terminal output and its stdin is a small resize/navigation/input control stream.
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
@@ -105,38 +108,37 @@ target session's status line, so a browser grid of N rows gives the pane N rows 
 a styled tmux status row. This is a session option at the tmux boundary, not a browser crop or colour filter;
 later human attaches to that SpexCode-owned session see the same status-free pane.
 
-## one visibility lifecycle
+## one viewer lifecycle
 
 Browser readiness and native rendering have deliberately different lifetimes. Every live session mounts its
 xterm and opens its socket when the dashboard loads; this is the lightweight prewarm that removes connection
-setup from a tab click. A hidden subscription creates no helper and never votes on tmux geometry; only a
-lingering one — hidden moments ago from the live grid — still consumes pane output, and only for the window's
-duration. The first visible viewer creates the helper at its already-measured grid. The last visible viewer
-arms one bounded linger window instead of an instant release: the helper stays alive and its stream keeps
-flowing into the hidden but still-mounted xterm buffers that were watching it, so those buffers remain the
-current screen rather than a stale cache. A window that elapses with no visible claim releases the helper
-even though hidden sockets and xterm buffers remain alive.
+setup from a tab click. A hidden subscription creates no helper and owns no tmux client. Becoming visible
+creates that subscription's helper at its already-measured grid. Hiding arms one bounded linger window instead
+of an instant release: that viewer's helper stays alive and its stream keeps flowing into its hidden but still-
+mounted xterm, so a quick return continues in place. Expiry releases only that viewer's helper even though its
+socket and xterm remain alive.
 
-Visibility is the only helper lifecycle switch, and the linger window is its one bounded hysteresis. A
-visible claim always carries the viewer's measured grid; that one resize message both creates the helper when
-needed and owns later geometry transactions. A claim inside the linger window at the unchanged grid simply
-resumes: no repaint replaces a buffer the stream never left, so output continues in place. A lingered buffer
-is trusted only at that unchanged grid — any grid change drops every lingering subscription back to an
-ordinary hidden cache, and a hidden pane whose stream still flows keeps its grid, because reflow belongs to
-the visible transaction. A browser viewer is visible only while both its dashboard session layer and its
-document are visible. Backgrounding the browser tab therefore withdraws the same claim and earns the same
-linger. Past the window the socket and cached xterm remain, but no pane deltas accumulate for replay: returning
-exposes the cache immediately and the ordinary measured resize recreates the native helper, whose initial
-repaint replaces it with the current tmux screen. Lingered bytes are written into the mounted terminal as they
-arrive, never queued for fast-forward — there is no resume replay or page-specific repaint protocol. There is
-no second prewarm protocol. Multiple visible
-viewers of one session share the backend's helper at the smallest visible rows and columns, so its one grid fits
-every viewer and no narrower browser clips the right or bottom edge. Every joining viewer receives the shared
-      grid commit with the refreshed transaction even when that grid did not change, so local fit dimensions can never
-survive beside a different tmux grid. In a larger host the smaller shared grid is bottom-left aligned: ordinary
-remainder space stays above or to the right, while the terminal's last row still meets the input strip. Hiding
-or detaching the limiting viewer recomputes that same minimum and lets the remaining viewers expand. There is no
-capture path, and a hidden dashboard cannot resize or otherwise perturb a session watched by another dashboard.
+Visibility is the helper lifecycle switch, and the linger window is its one bounded hysteresis. A visible
+claim always carries that viewer's measured grid; the same resize message creates or resizes its native client.
+A claim inside the linger window at the unchanged grid simply resumes, while a changed grid takes the ordinary
+native repaint path. A browser viewer is visible only while both its dashboard session layer and its document
+are visible. Backgrounding the browser tab therefore withdraws the claim. Past the window the socket and cached
+xterm remain but its tmux client does not; returning exposes the cache immediately, then native attach replaces
+it with the current screen. Lingered bytes are written as they arrive, never queued for fast-forward.
+
+Concurrent visible viewers use tmux's classic multi-client model. The session window uses `window-size largest`:
+the largest attached client owns the application's one possible PTY geometry, so a real large display is never
+shrunk by a smaller peer. Each client still renders at its own outer-terminal grid; a smaller viewer receives
+tmux's native viewport into the larger window rather than forcing every viewer to the smallest dimensions.
+`Ctrl+b z` remains tmux's pane-layout zoom and is not repurposed as a size-arbitration command. When the largest
+client hides, disconnects, or dies, tmux removes that client and naturally recomputes from those that remain.
+SpexCode does not implement a parallel min/max/latest vote or broadcast one client's bytes to another.
+
+The terminal WebSocket and its native client have the same owner. An ordinary close removes the subscription
+and helper immediately, with no linger for a dead viewer. Silent half-open links are bounded by a bidirectional
+heartbeat: every server ping requires a browser pong, and a server-side deadline forcibly removes the viewer and
+kills its helper even if the transport never produces `close`. A stale browser can therefore never leave a
+ghost tmux client or geometry vote behind indefinitely.
 
 ## navigation and recovery
 
@@ -150,13 +152,13 @@ copy-mode viewport. The pane viewport therefore clips rather than scrolls: with 
 overflow is hidden on both axes, so a fractional device-pixel or geometry overshoot cannot surface a
 phantom themed browser scrollbar competing with tmux's own scroll.
 
-Viewer subscriptions belong to the session id rather than a helper process. If a visible helper exits,
-an alive-gated, rate-limited restore creates a new one beneath the same open sockets; native attach repaints
-the complete screen. A small fixed-point scan closes the two recovery transitions that have no reliable edge:
-a synchronous helper spawn failure, and a one-shot restore declined while the session is transiently offline.
-It checks only whether a visible subscription lacks a helper; it never polls output or refreshes an intact
-pane. A hidden subscription does not trigger restoration. A dead session is reaped, not respawned. Backend
-process restart remains the genuine socket break and is recovered by [[reconnect]].
+Viewer subscriptions belong to the session id and WebSocket rather than a replaceable helper process. If one
+visible helper exits, an alive-gated, rate-limited restore creates a new helper for that same viewer; native
+attach repaints the complete screen without disturbing sibling clients. A small fixed-point scan closes the two
+recovery transitions that have no reliable edge: synchronous spawn failure and a restore declined while the
+session is transiently offline. It checks only whether a visible subscription lacks its own helper; it never
+polls output or refreshes an intact client. A hidden subscription does not restore. A dead session is reaped,
+not respawned. Backend process restart remains the genuine socket break and is recovered by [[reconnect]].
 
 ## non-responsibilities
 

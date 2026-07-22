@@ -66,16 +66,15 @@ scenarios:
       grid gives the pane all N rows.
   - name: multiple-viewers-fit-all
     tags: [frontend-e2e, desktop, backend-api]
-    test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
+    test: spec-dashboard/test/terminal-multi-viewer.e2e.mjs
     description: >-
       Open two simultaneous visible dashboard viewers for one live session at different terminal sizes, inspect
-      each browser screen against its host and the shared native tmux client, then hide the narrower viewer.
+      each browser screen and native tmux client, then close each viewer independently.
     expected: >-
-      The shared client uses the smallest visible rows and columns, and every viewer receives that grid commit
-      even when the helper size is unchanged. Neither browser clips its right or bottom cells. In a wider or
-      taller host the shared grid is bottom-left aligned, leaving any ordinary remainder above or to the right
-      while its last row meets the input strip. Hiding the limiting viewer resizes the same helper to the
-      remaining viewer's larger grid; hidden viewers cast no size vote and no second helper exists.
+      Each visible WebSocket owns one real client at its measured grid. With `window-size largest`, the large
+      client determines the session's application grid while the small client uses tmux's native viewport; the
+      large browser is never letterboxed to the small grid. Closing either socket immediately removes only its
+      client, and tmux recomputes naturally from the remaining client without a bridge-owned size vote.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-
@@ -90,36 +89,43 @@ scenarios:
     tags: [backend-api]
     test: spec-cli/test/pty-bridge.visibility-lifecycle.ts
     description: >-
-      Open hidden terminal sockets for several live sessions, resize the hidden browser layers, then make one
-      viewer visible and hide it again, observing across the bounded linger window while inspecting helper
+      Open hidden terminal sockets for several live sessions, resize hidden browser layers, then make two viewers
+      of one session visible and hide them independently across the bounded linger window while inspecting helper
       processes, tmux clients, and pane geometry.
     expected: >-
-      Hidden sockets and xterms remain mounted but create no helper, receive no pane pixels, and do not resize
-      tmux. The first visible viewer creates exactly one native helper at the measured size. Hiding the last
-      visible viewer arms one bounded linger: the helper survives the window streaming only to the lingering
-      subscription, a return claim inside it at the unchanged grid resumes the same helper with no repaint,
-      and a window with no visible claim releases the helper without closing the socket or clearing the
-      browser buffer. A subscription that was never visible receives no pixels even during a sibling's
-      linger. No observer exists.
+      Hidden sockets and xterms create no helper, receive no pane pixels, and do not resize tmux. Each visible
+      viewer creates exactly one native helper at its own measured size. Hiding one viewer lingers only its own
+      client and buffer; an unchanged return resumes it without repaint, while expiry releases it without
+      touching a visible sibling. A never-visible subscription receives no pixels. Closing a socket bypasses
+      linger and removes its client immediately; a missing heartbeat pong does the same within the deadline.
   - name: helper-isolates-pty-masters
     tags: [backend-api]
     description: >-
-      Create four visible bridges on one scratch tmux socket through the real bridge API, inspect each
-      helper and tmux client fd table, kill one helper, and continue producing output on the other sessions.
+      Create four visible viewers on one scratch tmux socket through the real bridge API, inspect each
+      helper and tmux client fd table, kill one helper, and continue producing output on the other viewers.
     expected: >-
       The backend owns no PTY master, every helper owns only its own master, and tmux clients inherit no
-      sibling master. Killing one helper detaches only its session's native client; the other panes and the
+      sibling master. Killing one helper detaches only its viewer's native client; sibling viewers and the
       shared tmux server remain responsive.
   - name: attach-and-rebind-replay-current-screen
     tags: [backend-api]
     description: >-
-      Produce normal-screen history and a live alternate-screen display before any viewer exists. Attach a
-      visible viewer, add a second viewer at the same size, then kill and restore the shared helper while
-      both sockets stay open.
+      Produce normal-screen history and a live alternate-screen display before any viewer exists. Attach two
+      visible viewers at the same size, then kill and restore one viewer's helper while both sockets stay open.
     expected: >-
-      Native attach/refresh supplies each blank xterm with the current complete tmux screen through the same
-      raw stream; helper restoration updates both existing subscriptions without a socket reconnect,
-      capture splice, doubled bottom UI, or stale cursor-relative redraw.
+      Native attach/refresh supplies each blank xterm with the current complete tmux screen through its own raw
+      client stream. Restoring one helper repaints only its viewer without a socket reconnect or disturbing its
+      sibling; neither stream uses a capture splice, doubled bottom UI, or stale cursor-relative redraw.
+  - name: dead-websocket-reaps-native-client
+    tags: [backend-api]
+    test: spec-cli/test/terminal-socket-lifecycle.ts
+    description: >-
+      Connect a real terminal WebSocket to a scratch tmux session, claim a visible grid, then emulate a half-open
+      browser that receives server pings but never answers pong and never produces a transport close event.
+    expected: >-
+      The visible socket initially owns exactly one native client. The server heartbeat deadline removes the
+      subscription and helper without waiting for `close`; the tmux client count returns to zero within the
+      derived dead window plus scheduling slack, so its old geometry cannot constrain a later viewer.
   - name: viewport-clips-no-phantom-scrollbar
     tags: [frontend-e2e, desktop]
     description: >-

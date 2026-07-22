@@ -1,6 +1,7 @@
 // The client-side heartbeat contract ([[dashboard-shell]] / [[reconnect]]) — ONE module for both live
 // channels. The server guarantees inbound traffic on every healthy link: a keep-alive ping every
-// SERVER_PING_MS over the terminal WebSocket (TERM_PING_MS in spec-cli/src/index.ts) AND over the board
+// SERVER_PING_MS over the terminal WebSocket (TERM_PING_MS in spec-cli/src/index.ts; terminal clients also
+// answer pong so the server can reap a ghost viewer) AND over the board
 // SSE stream (graphStream.ts) — one cadence, one primitive, held equal to the server by test. A link
 // silent past DEAD_MS (2.5× — absorbs one dropped ping plus jitter) is presumed DEAD, not merely quiet:
 // the half-open tunnel / sleep-resume / NAT-reaped link that delivers no close and no error, only silence.

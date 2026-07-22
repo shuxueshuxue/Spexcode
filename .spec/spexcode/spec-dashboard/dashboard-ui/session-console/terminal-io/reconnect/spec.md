@@ -25,13 +25,14 @@ looks alive but is deaf: frames stop arriving, a resize sent on it vanishes, and
 nothing ever noticed — the frozen-terminal-until-manual-refresh bug, exactly what reconnection exists to
 prevent.
 
-So a dead link must be **detectable from traffic alone**, which makes liveness a two-sided **heartbeat
+So a dead link must be **detectable from traffic alone**, which makes liveness a bidirectional **heartbeat
 contract**, same shape as the board stream's ([[dashboard-shell]]): the **server** sends a small keep-alive
 ping over every terminal socket on a fixed cadence (10s — traffic that also keeps an idle link warm through
-NAT timeouts), so the client is **guaranteed** inbound bytes on a healthy link; the **client** holds the
-socket to that promise — *any* inbound message proves liveness, and an OPEN socket silent past **2.5× the
-cadence** (25s: absorbs one dropped ping plus jitter, still fast enough to feel like recovery, not a reload)
-is **presumed dead**, force-dropped, and handed to the same reopen machinery as a real close event. The
+NAT timeouts), and the browser immediately answers pong. Each side holds the other to that promise: the client
+force-drops an OPEN socket with no inbound bytes for **2.5× the cadence**, while the server forcibly removes a
+viewer that produces no pong inside that same window. Server expiry owns cleanup directly rather than waiting
+for a transport `close` event that a half-open link may never deliver, so [[live-view]] cannot retain a ghost
+tmux client or size claim. The
 cadence is the contract's **one primitive number**, and on the client it lives in ONE place: the shared
 heartbeat module (`heartbeat.js`) that the board SSE stream reads too — a single constant for the whole
 client, held equal to the server's ping cadences by test, the dead window **derived** from it, never a

@@ -5,7 +5,7 @@
 // but not the CURSOR, so if the re-seed leaves the cursor at the body's end, the TUI's next relative redraw
 // erases the wrong rows and the bottom UI DOUBLES. Fix: the frame ends by placing the cursor where the pane
 // really has it. This drives the REAL bridge (attachViewer + forwardWheel) against an Ink-style redrawer and
-// replays the broadcast through a small emulator to count how many times the frame's single marker survives.
+// replays the viewer stream through a small emulator to count how many times the frame's single marker survives.
 //
 // Run (from spec-cli/): SPEXCODE_TMUX=redraw-<pid> npx tsx test/pty-bridge.scroll-redraw.ts
 import { execFile } from 'node:child_process'
@@ -118,10 +118,10 @@ async function main() {
   await sleep(1500)   // let the box redraw a few times live
 
   // scroll UP (enter copy-mode, freeze) while the box keeps advancing underneath
-  for (let i = 0; i < 5; i++) { forwardWheel(SESSION, true, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 5; i++) { forwardWheel(SESSION, viewer, true, 40, 5, 1); await sleep(200) }
   await sleep(800)
   // scroll DOWN past the bottom → copy-mode exits → re-seed → live redraws resume
-  for (let i = 0; i < 8; i++) { forwardWheel(SESSION, false, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 8; i++) { forwardWheel(SESSION, viewer, false, 40, 5, 1); await sleep(200) }
   await sleep(1500)   // let several relative redraws land on the re-seeded screen
 
   detachViewer(SESSION, viewer)

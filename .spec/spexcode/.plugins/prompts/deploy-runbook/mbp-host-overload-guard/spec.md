@@ -48,3 +48,11 @@ UU Remote services survive high reported load. They are terminated by an operato
 system-initiated shutdown, not observed to crash independently. Installation therefore
 requires administrator authorization: a per-user agent cannot honestly prioritize
 root-owned connection services.
+
+An in-place LaunchDaemon upgrade stages the reviewed bytes before unloading the existing
+job, then tolerates launchd's measured asynchronous teardown window with at most six
+bootstrap attempts spaced five seconds apart. Every failed attempt records its number,
+exit code, and launchctl output. Only exit code 5 is retryable; any other error and a
+sixth code-5 failure are returned to the operator unchanged. Repeated installation must
+converge on the same single running LaunchDaemon, with a stable run count and identical
+staged and installed hashes.

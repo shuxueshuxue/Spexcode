@@ -130,6 +130,18 @@ scenarios:
       The pane viewport clips on both axes: its computed overflow is hidden, so no themed browser scrollbar
       can float over the terminal's right edge under any DPR or geometry overshoot. Wheel input still travels
       to the real tmux client — no browser scroll region exists to compete with tmux's own scrolling.
+  - name: scroll-return-resumes-live-tail
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the real dashboard, view a mouse-owning TUI pane whose status line ticks with live output.
+      Wheel up into its scrollback while the pane keeps producing content, then wheel back down by exactly
+      the same travel. Record the pane's scrolled-state indicator, the rendered terminal, and the
+      byte stream across the return, repeating enough rounds to cover the content-growth race.
+    expected: >-
+      The return gesture lands the view on the live tail: within about a second the scrolled-state
+      indicator is gone and the ticking status line resumes on screen. No round leaves a frozen
+      scrolled view impersonating the live bottom for seconds, and a reader who stays parked deep in
+      history is never yanked to the bottom by the mechanism that guarantees the return.
   - name: wheel-uses-real-tmux-client
     tags: [backend-api]
     description: >-

@@ -7,6 +7,8 @@ code:
   - spec-cli/src/pty-bridge.ts
 related:
   - spec-cli/src/pty-helper.mjs
+  - spec-cli/src/pty-native-helper.mjs
+  - spec-cli/src/pty-native-helper.test.ts
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css

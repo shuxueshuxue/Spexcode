@@ -1,7 +1,7 @@
 ---
 concern: OpenCode interactive launch can declare success without emitting the requested final answer
 by: a3271939-68d9-478e-a364-52c83154178a
-status: open
+status: landed
 nodes: opencode-harness, harness-adapter
 evidence: 0a33d9d2b8caf34f974c800dd0687c749cd2b6ec4f34742817723fc44c3bb507
 created: 2026-07-23T11:55:11.390Z

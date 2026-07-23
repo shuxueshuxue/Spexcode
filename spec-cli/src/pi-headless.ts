@@ -171,6 +171,7 @@ export class PiHeadlessController {
     childProcess.once('close', (code) => {
       if (this.child === turn) this.child = null
       resolveExit(code)
+      if (code !== 0 && !this.closing) void import('./harness.js').then(({ reportHeadlessTurnExit }) => reportHeadlessTurnExit(this.id, 'pi-headless', code, this.cwd))
     })
     await withTimeout(new Promise<void>((resolve, reject) => {
       childProcess.once('spawn', () => resolve())

@@ -64,7 +64,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 `)
   const id = 'headless-fixture'
   const cmd = `${process.execPath} '${fake}' '${invocations}'`
-  const controller = new ClaudeHeadlessController(id, runtime, cmd, root)
+  const controller = new ClaudeHeadlessController(id, runtime, cmd, process.cwd())
   t.after(() => controller.close())
   await controller.start('INITIAL')
   const messages = join(runtime, 'sessions', id, 'messages.ndjson')

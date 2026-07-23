@@ -39,6 +39,11 @@ Delivery directly reuses Codex's existing app-server JSON-RPC transport. It read
 starts the next turn without spawning a process or waking a pane. Socket, thread, and RPC failures fail loudly
 through the public session API; there is no PTY typing or wake fallback.
 
+When the one-shot first-turn process exits non-zero, the adapter reports that exit through the shared
+[[harness-adapter]] turn-outcome seam before returning its failure. An active undeclared record becomes `error`
+with the Codex exit code; a zero exit and any declaration already written are left untouched. The shared
+app-server remains the liveness address only when it can accept another delivery.
+
 The session record is the liveness address: while it exists, the adapter reports `online` regardless of the
 empty pane or process probes. `headless: true` keeps it out of the dashboard launcher picker by default and
 `messageStream: false` leaves the note conversation as the console trunk. Resume is deliberately degraded to

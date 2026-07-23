@@ -22,9 +22,10 @@ import type { Lifecycle, Proposal } from './sessions.js'
 // is recorded — liveness (offline/starting/unknown) is a present-tense derivation ([[state]]), re-derived
 // per probe and never history, so it stays off the durable log; a surface shows the CURRENT liveness from
 // the board row. The timeline lives and dies with the session record (close sweeps the store dir), like
-// comms.ndjson. `sent` events are appended by sendText on a CONFIRMED delivery (all prompt deliveries flow
-// through it: dashboard/phone input, `spex session send`, the merge dispatch); `from` is the sending
-// session's id, null = a human surface.
+// comms.ndjson. `sent` events are appended by sendText on a CONFIRMED post-launch delivery (dashboard/phone
+// input, `spex session send`, merge and issue dispatch); the initial launch prompt passes through the same
+// composition seam but has no adapter confirmation to record here. `from` is the sending session's id,
+// null = a human surface.
 
 export type TimelineEvent =
   | { ts: string; kind: 'status'; status: Lifecycle; proposal: Proposal | null; note: string | null; display?: string }
@@ -134,7 +135,8 @@ export function lastHumanSendVia(id: string): 'note' | null {
 
 // record a CONFIRMED prompt delivery (called by sendText after the harness accepted it). `text` is the
 // caller's message BEFORE any mechanism insert (the note-reply hint is transport, not conversation);
-// `replyVia` marks that the hint rode along so a surface can badge it.
+// `replyVia` is the effective channel chosen by the shared prompt seam, whether explicit or derived from the
+// target adapter, so the durable history records where the reply was actually readable.
 export function recordSent(id: string, text: string, from: string | null, replyVia?: 'note'): void {
   try { if (!readAliasedRawRecord(id)?.governed) return } catch { return }
   append(id, { ts: new Date().toISOString(), kind: 'sent', text, from, ...(replyVia ? { replyVia } : {}) })

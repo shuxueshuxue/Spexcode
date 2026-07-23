@@ -40,6 +40,20 @@ scenarios:
       arrives BARE: the counter-insert fires exactly once at the transition, never on ordinary
       terminal conversation. The timeline's three sent events record the caller's texts WITHOUT any
       insert (hints are transport, not conversation).
+  - name: headless-default-note-reply
+    tags: [backend-api, cli]
+    description: >
+      Against a real backend, create a REAL pi-headless or opencode-headless session whose initial prompt
+      asks a question with one exact answer token, without supplying replyVia. After that turn settles,
+      GET the session timeline and public session record. Then send a second exact-answer question through
+      `spex session send` (again with no replyVia) and read the same public surfaces. Run this exact scenario
+      before and after the repair.
+    expected: |
+      Both the launch prompt and the CLI send are treated as note-reply messages because the TARGET
+      session's harness is headless: each exact answer reaches the durable timeline as a full declaration
+      note, even though neither caller supplied replyVia. The decision belongs to one server-side prompt
+      composition seam shared by launch, input, CLI send, and merge dispatch; explicit replyVia remains an
+      input override. Timeline sent text, where present, excludes the transport insert.
 ---
 
 # session-timeline — yatsu

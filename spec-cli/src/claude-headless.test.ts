@@ -15,7 +15,7 @@ const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
 }
 
 test('claude-headless is a fifth adapter with Claude materialization and a replaced runtime half', () => {
-  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless'])
+  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless'])
   const proj = '/tmp/project'
   assert.equal(claudeHeadlessHarness.shimFile(proj), claudeHarness.shimFile(proj))
   assert.deepEqual(claudeHeadlessHarness.contractFiles(proj), claudeHarness.contractFiles(proj))

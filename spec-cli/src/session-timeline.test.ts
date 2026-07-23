@@ -4,9 +4,9 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { lastHumanSendVia } from './session-timeline.js'
-import { sessionStoreDir } from './layout.js'
-import { composeSessionPrompt, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { lastHumanSendVia, readTimeline } from './session-timeline.js'
+import { sessionRecordPath, sessionStoreDir } from './layout.js'
+import { composeSessionPrompt, markState, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -48,6 +48,51 @@ function seedTimeline(events: object[]): string {
 const ID = 'timeline-via-test'
 const sent = (from: string | null, replyVia?: 'note') =>
   ({ ts: '2026-07-16T00:00:00.000Z', kind: 'sent', text: 'msg', from, ...(replyVia ? { replyVia } : {}) })
+
+function seedSessionRecord(home: string): void {
+  withHome(home, () => {
+    mkdirSync(sessionStoreDir(ID), { recursive: true })
+    writeFileSync(sessionRecordPath(ID), JSON.stringify({
+      session_id: ID,
+      governed: true,
+      worktree_path: process.cwd(),
+      branch: 'node/timeline-via-test',
+      node: 'session-timeline',
+      title: 'timeline test',
+      name: '',
+      parent: '',
+      status: 'active',
+      proposal: '',
+      merges: 0,
+      note: '',
+      sortkey: '',
+      createdAt: 1,
+      harness: 'opencode',
+      harness_session_id: '',
+      launcher: 'opencode',
+      launch_cmd: 'opencode',
+      launch_owner: '',
+    }, null, 2) + '\n')
+  })
+}
+
+test('a declaration note remains in the timeline after a later status replaces the current record', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  withHome(home, () => {
+    assert.equal(markState('awaiting', { proposal: 'nothing', note: 'CELL_note=17', sessionId: ID }), true)
+    assert.equal(markState('active', { sessionId: ID }), true)
+
+    const timeline = readTimeline(ID)
+    assert.ok(timeline)
+    assert.deepEqual(timeline.events.map((event) => event.kind === 'status'
+      ? [event.status, event.proposal, event.note]
+      : [event.kind]), [
+      ['awaiting', 'nothing', 'CELL_note=17'],
+      ['active', null, null],
+    ])
+  })
+})
 
 test('lastHumanSendVia: no timeline at all → null (a fresh session never gets the counter-insert)', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))

@@ -174,8 +174,9 @@ session concern; spec-awareness is universal.
   act on, so the agent picks the TRUE one. **`parked` is policed hardest** — claim it only when a real
   background task will wake you; with nothing running to resume you the stop is `asking`, never a false
   `parked` the board misreads as self-resuming while you actually need the human.
-- **`StopFailure` → `error`**; **`Notification(idle_prompt)` → `idle`**. All Stop-gate git goes through
-  the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.
+- **`StopFailure` → `error`**; **headless turn non-zero exit → `error`**, but only as an `active` compare-and-set
+  so a declaration written before child teardown wins; **`Notification(idle_prompt)` → `idle`**. All Stop-gate
+  git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.
 
 `asking` resumes only on a human prompt (unlike self-resuming `parked`); `idle` is its inferred opposite,
 a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-edges]]). The lifecycle

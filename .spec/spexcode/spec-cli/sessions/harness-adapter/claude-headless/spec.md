@@ -59,3 +59,9 @@ of controller, tmux, or child-process probes. This is a statement about the dura
 claim that a turn process is resident. A broken/missing controller is surfaced by the next deliver or interrupt
 as a loud transport failure; it is never converted into a speculative `offline`. Closing the session remains the
 terminal operation that removes the record, worktree, tmux home, control socket, and message stream.
+
+The controller reports every non-zero turn-child exit through the shared [[harness-adapter]] turn-outcome seam. If
+the record is still `active`, that exit projects lifecycle `error` with the Claude headless exit code; a zero exit
+is inert and a declaration that landed before child teardown wins the compare-and-set. The record may remain
+`online` because this controller can still accept another delivery; `error` is the visible fact that the previous
+turn died.

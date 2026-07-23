@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness, codexHeadlessHarness } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
-import { sessionRecordPath, sessionArtifactPath } from './layout.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
+import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -172,6 +172,46 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
     assert.match(stored, /"note": "materialize failed at creation — worker ungoverned \(no hooks\/contract\): materialize exploded"/)
   } finally {
     console.error = prevError
+    if (prevHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prevHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('headless turn failure is an active-only error projection', () => {
+  const prevHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `headless-turn-state-${process.pid}`
+  const raw = {
+    session_id: id, governed: true, worktree_path: '/tmp/headless-turn-state', branch: 'node/headless-turn-state',
+    node: 'harness-adapter', title: null, name: null, parent: null, status: 'active', proposal: null,
+    merges: 0, note: null, sortkey: null, createdAt: 1, harness: 'opencode-headless',
+    harness_session_id: null, launcher: 'turn-dead', launch_cmd: '/bin/false', launch_owner: null,
+  }
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), JSON.stringify(raw, null, 2) + '\n')
+    assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '1'), true)
+    let stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'error')
+    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+
+    stored.status = 'awaiting'
+    stored.proposal = 'nothing'
+    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '7'), false, 'a declaration wins over a late child close')
+    stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'awaiting')
+    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+
+    stored.status = 'active'
+    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '0'), false, 'zero exit never manufactures an error')
+    stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'active')
+    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+  } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })

@@ -42,7 +42,7 @@ process.stdout.write('pi fixture\\n')
 `)
   const id = `pi-headless-${process.pid}`
   const cmd = `${process.execPath} ${fake}`
-  const controller = new PiHeadlessController(id, runtime, cmd, root)
+  const controller = new PiHeadlessController(id, runtime, cmd, process.cwd())
   t.after(() => controller.close())
   await controller.start('INITIAL')
   await waitFor(() => existsSync(invocations))

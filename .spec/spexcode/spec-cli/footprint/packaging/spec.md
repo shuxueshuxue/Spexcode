@@ -8,10 +8,13 @@ code:
 related:
   - spec-cli/src/cli.ts
   - package.json
+  - package-lock.json
   - spec-cli/package.json
+  - spec-cli/package-lock.json
   - spec-cli/bin/spex.mjs
   - spec-cli/src/tsx-bin.ts
   - spec-cli/src/launcher-tsx.test.ts
+  - spec-cli/src/node-pty-package.test.ts
 ---
 # packaging
 
@@ -43,6 +46,13 @@ cross-platform ([[platform-support]]): it never spawns the `.bin/tsx` shim (an e
 `spex init` on native Windows. The repo-root
 `README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
 private — the one public name belongs to the tool a user installs.
+
+The installed terminal follows the same artifact rule. `node-pty` is pinned to an upstream release whose
+Darwin prebuilds publish `spawn-helper` as an executable; SpexCode does not repair dependency permissions at
+runtime or ask the user to mutate `node_modules`. This remains an npm-package boundary independent of global
+versus project-local placement and independent of the host that receives the package. A narrow dependency
+artifact test verifies both shipped Darwin helpers retain an execute bit. A package that exposes `spex` but
+leaves the terminal's native helper unspawnable is not a complete installation.
 
 The natural way to run the installed tool is **two commands on two ports, deliberately kept apart** —
 starting the backend never drags the UI along:

@@ -91,6 +91,7 @@ test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harn
     const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SAFE_LAUNCHERS[name as keyof typeof SAFE_LAUNCHERS]]))
 
     assert.deepEqual(cfg.harnesses, selected, 'the choice is persisted as the harnesses field')
+    assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
     assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands stay ordinary')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
     assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo|--auto/, 'clean init never grants automatic permissions')

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -221,11 +221,17 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
   }))
   // Name-sorted, exactly the config's real launchers — no ghost duplicates or derived execution variants.
   assert.deepEqual(launcherList(root), [
-    { name: 'claude', harness: 'claude', cmd: 'claude' },
-    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
-    { name: 'codex', harness: 'codex', cmd: 'codex' },
-    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions' },
+    { name: 'claude', harness: 'claude', cmd: 'claude', headless: false },
+    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions', headless: false },
+    { name: 'codex', harness: 'codex', cmd: 'codex', headless: false },
+    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions', headless: false },
   ])
+  assert.deepEqual(dashboardLauncherList(root), launcherList(root), 'the four interactive harnesses stay dashboard-visible')
+  assert.deepEqual(
+    [claudeHarness, codexHarness, opencodeHarness, piHarness].map((h) => h.headless),
+    [false, false, false, false],
+    'every existing adapter declares the capability explicitly',
+  )
   assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
   assert.equal(resolveLauncher('codex', root).harness, 'codex')
   assert.throws(() => resolveLauncher('nope', root), /unknown launcher 'nope'/)

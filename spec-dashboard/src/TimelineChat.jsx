@@ -54,8 +54,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     const text = draft.trim()
     if (!text || sending) return
     setSending(true); setSendErr(null)
-    // replyVia:'note' is this surface's FIXED property, not a per-message choice: a terminal-free sender
-    // can only ever read declaration notes, so every dispatch asks for its reply there — silently.
+    // Redundant for a headless target, whose adapter now owns the note-reply default. Keep the explicit input
+    // for compatibility; the server's shared prompt seam remains the sole policy and phrase owner.
     const r = await sendSessionText(s.id, text, { replyVia: 'note' })
     setSending(false)
     if (r.ok) { setDraft(''); load() }

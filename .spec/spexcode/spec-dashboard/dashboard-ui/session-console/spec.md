@@ -168,6 +168,13 @@ without first ending its composition. There is no dashboard type mode, general r
 or per-keystroke HTTP batching; the adapter's one modified-key bridge encodes Shift+Enter as `ESC CR`, matching
 Codex and Claude inside true tmux.
 
+Around both channels, **console chrome is pointer-inert for focus** (the panel-wide blanket;
+[[terminal-input]] and [[focus-return]] carry the contract): pressing rows, zone headers, fold pods, the
+resizer, pills, toolbar buttons, or the launcher pop acts without taking focus, so the current sink — TUI,
+Command Box, or the New composer — keeps typing focus through any pointer work on the console, and a pop
+that does take focus returns it on exit. Only the composers' own textareas, the rename input, and the xterm
+screen take pointer focus.
+
 [[command-box]] is the authored control channel, opened by its resident toolbar icon or the reserved single-
 modifier `Cmd+I` / `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses
 [[composer]]'s fixed footer with upward auto-growth. The draft belongs to the session and survives closing,

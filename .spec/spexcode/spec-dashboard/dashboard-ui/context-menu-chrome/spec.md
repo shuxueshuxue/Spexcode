@@ -34,4 +34,6 @@ icons, never used as decoration.
 The surface uses only [[dashboard-shell]] theme tokens for its background, border, shadow, hover/selected wash,
 text, and icon colour, so every preset retains its own palette. It has a modest radius, no oversized type, no
 emoji, and no component-local SVG. Keyboard focus is visibly equivalent to hover; menu items keep native button
-activation and accessible menu roles while [[esc-layers]] continues to own dismissal order.
+activation and accessible menu roles while [[esc-layers]] continues to own dismissal order. The menu is
+**inert chrome for pointer focus** ([[focus-return]]): pressing or picking an item acts but never moves focus,
+so whichever input surface owned typing before the right-click still owns it after the pick.

@@ -17,6 +17,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
+import { inertChromePress } from './focus.js'
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -649,7 +650,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      <div className="si-panel" ref={panelRef}>
+      {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
+          console chrome is inert for focus — only the composers, the rename input, and the xterm screen
+          take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
+          any chrome interaction. Capture phase so no child's stopPropagation can leak a press. */}
+      <div className="si-panel" ref={panelRef} onMouseDownCapture={inertChromePress}>
         {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
             surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
         <input
@@ -697,7 +702,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 data-sid={s.id}
                 className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
-                onMouseDown={(e) => { if (!selecting && e.button === 0) e.preventDefault() }}
                 onClick={() => (selecting ? togglePick(s.id) : activateTerminal(s.id))}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
@@ -784,7 +788,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       aria-selected="true"
                       aria-controls={`si-terminal-panel-${active}`}
                       className="si-tab on"
-                      onMouseDown={(e) => { if (e.button === 0) e.preventDefault() }}
                       onClick={() => activateTerminal(active)}
                     >
                       <Icon name="terminal" size={13} /><span className="si-tab-label">{t('session.tabTerminal')}</span>
@@ -887,22 +890,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="si-command-tools">
                           <span className="si-command-title"><Icon name="command" size={12} />{t('session.commandBox')}</span>
                           <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')}
-                            aria-label={t('thread.mentionActor')} onMouseDown={(e) => e.preventDefault()}
+                            aria-label={t('thread.mentionActor')}
                             onClick={() => insertCommandTrigger('@')}>@</button>
                           <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')}
-                            aria-label={t('thread.mentionNode')} onMouseDown={(e) => e.preventDefault()}
+                            aria-label={t('thread.mentionNode')}
                             onClick={() => insertCommandTrigger('[[')}>[[</button>
                           <button type="button" className="fv-trigger-btn" data-tip={t('session.menuCommands')}
-                            aria-label={t('session.menuCommands')} onMouseDown={(e) => e.preventDefault()}
+                            aria-label={t('session.menuCommands')}
                             onClick={() => insertCommandTrigger('/')}>/</button>
                           <IconButton icon={uploading && attachAt === 'command' ? 'loader' : 'paperclip'} size={14}
                             iconClassName={uploading && attachAt === 'command' ? 'si-attach-busy' : undefined}
                             className="si-command-tool" label={t('session.attachTitle')}
-                            disabled={uploading} onMouseDown={(e) => e.preventDefault()} onClick={() => pickFiles('command')} />
+                            disabled={uploading} onClick={() => pickFiles('command')} />
                           {uploadErr && attachAt === 'command' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                           {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
                           <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
-                            disabled={!msg.trim()} onMouseDown={(e) => e.preventDefault()} onClick={sendMsg} />
+                            disabled={!msg.trim()} onClick={sendMsg} />
                         </div>
                       )}
                     />

@@ -17,6 +17,20 @@ scenarios:
       Shift+Enter emits one `ESC CR` modified-Enter sequence while ordinary Enter stays `CR`. Hidden or
       disconnected viewers inject and replay nothing. All input uses xterm's one live terminal socket, with no
       dashboard raw-key HTTP batching or private focus override.
+  - name: chrome-clicks-keep-tui-focus
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/terminal-chrome-focus.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/focus.js, spec-dashboard/src/ContextMenu.jsx, spec-dashboard/src/Modal.jsx, spec-dashboard/src/SessionTerm.jsx]
+    description: >-
+      With a live session's TUI focused, click and operate the console's chrome — zone headers, sidebar empty
+      space, the list resizer (drag and reset), the Terminal tab, the active row — then type into the terminal.
+      Open and exit each pop above the console (search palette, Command Box, the row context menu and its
+      rename modal), and repeat the chrome clicks from the New composer.
+    expected: >-
+      No chrome press moves focus: the TUI helper (or the composer that owns the surface) keeps typing focus
+      through every chrome interaction, and the typed proof text reaches the real tmux pane afterwards. Every
+      pop that takes focus returns it to the same surface on exit — never a chrome button, never body.
 ---
 
 Measure through a real browser and real tmux-backed session; a mocked key handler is not this contract.

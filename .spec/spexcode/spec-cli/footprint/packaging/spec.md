@@ -47,6 +47,10 @@ cross-platform ([[platform-support]]): it never spawns the `.bin/tsx` shim (an e
 `README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
 private — the one public name belongs to the tool a user installs.
 
+Release identity advances in lockstep across the public root manifest and the private `spec-cli` manifest,
+with each lockfile's root package metadata matching its manifest. Only the root package is publishable; the
+private manifest carries the same version so source-tree and installed CLI diagnostics name one release.
+
 The installed terminal follows the same artifact rule. `node-pty` is pinned to an upstream release whose
 Darwin prebuilds publish `spawn-helper` as an executable; SpexCode does not repair dependency permissions at
 runtime or ask the user to mutate `node_modules`. This remains an npm-package boundary independent of global

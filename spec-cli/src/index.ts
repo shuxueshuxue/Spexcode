@@ -17,7 +17,7 @@ import { boardStream, ensureBoardFileWatchers, notifyBoardChanged } from './grap
 import { gitA, gitTry, repoRoot } from './git.js'
 import { listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
-import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
+import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
@@ -175,11 +175,11 @@ app.post('/api/evidence', async (c) => {
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
-// `.layout.main`) and the named launcher profiles ([[launcher-select]]) the New-Session picker
-// offers — `{ name, harness, cmd }`: the cmd is read-only display data for the picker (the dashboard sits
+// `.layout.main`) and the dashboard-visible launcher profiles ([[launcher-visibility]]) the New-Session picker
+// offers — `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
 // behind the gateway auth; the browser can read but never edit config) — plus the configured `default` NAME
-// so the picker pre-selects the SAME
-// launcher a bare `spex session new` uses (the CLI/config default), instead of the alphabetically-first one,
+// so the picker pre-selects the SAME launcher a bare `spex session new` uses when that row is visible, else
+// its first visible row rather than a hidden headless default,
 // Missing defaultLauncher is returned as an actionable config error, not hidden by falling through to the
 // built-in `claude` launcher.
 // `tmuxSocket` is the `-L <name>` label our private tmux server runs under (a backend fact, env-overridable),
@@ -187,7 +187,7 @@ app.post('/api/evidence', async (c) => {
 // beside the blessed `spex session attach` command — the frontend never hardcodes the socket.
 app.get('/api/settings', async (c) => c.json({
   layout: await resolveLayout(),
-  launchers: launcherList(),
+  launchers: dashboardLauncherList(),
   tmuxSocket: TMUX_SOCK,
   ...launcherDefault(),
 }))

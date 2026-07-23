@@ -207,6 +207,31 @@ export async function loadSessionTimeline(id) {
   return res.json()
 }
 
+// A headless session's native harness events ([[message-stream]]). REST returns the complete file plus the
+// byte cursor after its last complete line; the companion EventSource follows from exactly that boundary.
+export async function loadSessionMessages(id) {
+  const res = await apiFetch(sessionUrl(id, 'messages'), { cache: 'no-store' })
+  if (!res.ok) throw new Error(`messages HTTP ${res.status}`)
+  return res.json()
+}
+
+export function subscribeSessionMessages(id, cursor, { onMessage, onStatus, onError } = {}) {
+  let source
+  try { source = new EventSource(`${sessionUrl(id, 'messages', 'stream')}?cursor=${cursor}`) }
+  catch (error) { onError?.(error); return () => {} }
+  source.addEventListener('ready', () => onStatus?.(true))
+  source.addEventListener('message', (event) => {
+    try { onMessage?.(JSON.parse(event.data)) }
+    catch (error) { onError?.(error) }
+  })
+  source.addEventListener('stream-error', (event) => {
+    try { onError?.(new Error(JSON.parse(event.data)?.error || 'message stream failed')) }
+    catch { onError?.(new Error('message stream failed')) }
+  })
+  source.addEventListener('error', () => onStatus?.(false))
+  return () => source.close()
+}
+
 // the session record detail (full originating prompt on top of the board row) behind /api/sessions/:id.
 export async function loadSessionDetail(id) {
   const res = await apiFetch(sessionUrl(id))

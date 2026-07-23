@@ -17,6 +17,7 @@ import { boardStream, ensureBoardFileWatchers, notifyBoardChanged } from './grap
 import { gitA, gitTry, repoRoot } from './git.js'
 import { listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
+import { readSessionMessages, sessionMessageStream } from './message-stream.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
@@ -436,6 +437,13 @@ app.get('/api/sessions/:id/timeline', (c) => {
   const r = readTimeline(c.req.param('id'), Number.isFinite(limit) && limit > 0 ? limit : undefined)
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
+// A headless harness has no pane: its console is the adapter-appended native event log. REST establishes the
+// complete ordered snapshot + byte cursor; SSE follows appends from that cursor (or Last-Event-ID on reconnect).
+app.get('/api/sessions/:id/messages', (c) => {
+  const r = readSessionMessages(c.req.param('id'))
+  return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
+app.get('/api/sessions/:id/messages/stream', (c) => sessionMessageStream(c))
 // the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.

@@ -375,6 +375,7 @@ function withKnownIssues(adapter, detail, observed) {
 
 async function observeCell(ctx, { token, expected, timelineStart, livenessStart, wallMs, inTurn }) {
   const startedAt = Date.now()
+  const expectsTimeline = ctx.adapter.headless || token.route === 'dashboard-note'
   const end = Date.now() + wallMs
   let pane = ''
   let events = []
@@ -400,7 +401,7 @@ async function observeCell(ctx, { token, expected, timelineStart, livenessStart,
       response = pane.includes(expected)
     }
     if (response && declaration && livenessHonest(ctx.liveness, livenessStart)) break
-    if (!inTurn && declaration && !response) {
+    if (!inTurn && !expectsTimeline && declaration && !response) {
       settledWithoutAnswerAt ||= Date.now()
       if (Date.now() - settledWithoutAnswerAt >= 6000) break
     } else settledWithoutAnswerAt = 0

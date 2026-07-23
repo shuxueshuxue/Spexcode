@@ -38,10 +38,22 @@ Each governed session still owns one tmux window, but the window houses a small 
 controller owns the stream-json child and a short per-session control socket. A fresh launch starts
 `claude -p --session-id <id> --input-format stream-json --output-format stream-json --verbose`; after a completed
 turn the child exits and the controller remains. Delivery while a turn is active writes a native `type:user`
-event to that live child's stdin, so Claude injects it at the next tool boundary. Delivery while idle spawns
-`claude -p --resume <id> --input-format stream-json --output-format stream-json --verbose` and writes the prompt
-as its first native input event. Spawn, connect, stream-write, and early-child failures are returned loudly; no
-PTY prompt typing fallback exists.
+event to that live child's stdin, so Claude injects it at the next tool boundary. Both the durable record and the
+child must still be active for that steer: once an authored declaration has settled the record, a delivery is an
+idle wake even if the old child is still emitting its final answer before `result`. The controller waits for that
+result and bounded teardown, then spawns `claude -p --resume <id> --input-format stream-json --output-format
+stream-json --verbose` and writes the prompt as its first native input event. This prevents the completed child's
+mere process/socket occupancy from swallowing an idle prompt. Spawn, connect, stream-write, completion-wait, and
+early-child failures are returned loudly; no PTY prompt typing fallback exists.
+
+A native `result` event is the deterministic turn boundary. The controller closes that child's stdin, gives it
+a bounded normal-exit window, then directly kills the turn's own process group if Claude or a launcher wrapper
+keeps the process alive. It does not send a graceful termination signal after a result because Claude records
+that signal as a user interrupt in the durable conversation, poisoning the next resume. The next delivery never
+treats such a completed-but-not-yet-reaped child as an active channel:
+it waits for this bounded teardown and then cold-resumes. Forced teardown after a result is successful turn
+cleanup, not a non-zero turn outcome; only a child that exits non-zero before any result reaches the shared error
+compare-and-set.
 
 Hard interrupt is the native stream-json `control_request` with request subtype `interrupt`. The controller waits
 for the matching `control_response` before confirming it, and the interrupted child remains able to accept later

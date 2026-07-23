@@ -14,6 +14,10 @@ const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
   }
 }
 
+const processAlive = (pid: number) => {
+  try { process.kill(pid, 0); return true } catch { return false }
+}
+
 test('claude-headless is a fifth adapter with Claude materialization and a replaced runtime half', () => {
   assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless'])
   const proj = '/tmp/project'
@@ -45,9 +49,12 @@ test('controller cold-resumes idle turns, steers the active child, confirms inte
 import { appendFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 const log = process.argv[2]
-appendFileSync(log, JSON.stringify(process.argv.slice(3)) + '\\n')
+appendFileSync(log, JSON.stringify({ pid: process.pid, args: process.argv.slice(3) }) + '\\n')
 const emit = (event) => process.stdout.write(JSON.stringify(event) + '\\n')
 const textOf = (event) => event?.message?.content?.find?.((part) => part?.type === 'text')?.text || ''
+let finishing = false
+setInterval(() => {}, 60_000)
+process.on('SIGTERM', () => appendFileSync(log, JSON.stringify({ signal: 'SIGTERM' }) + '\\n'))
 createInterface({ input: process.stdin }).on('line', (line) => {
   const event = JSON.parse(line)
   if (event.type === 'control_request') {
@@ -56,8 +63,17 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     return
   }
   const text = textOf(event)
+  if (finishing) return
   emit({ type: 'system', subtype: 'init', session_id: 'fixture' })
   if (text === 'HOLD' || text === 'INTERRUPT') return
+  if (text === 'FINISHING') {
+    finishing = true
+    setTimeout(() => {
+      emit({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, session_id: 'fixture' })
+      emit({ type: 'result', subtype: 'success', is_error: false, result: text, session_id: 'fixture' })
+    }, 250)
+    return
+  }
   emit({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, session_id: 'fixture' })
   emit({ type: 'result', subtype: 'success', is_error: false, result: text, session_id: 'fixture' })
 })
@@ -65,29 +81,43 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   const id = 'headless-fixture'
   const cmd = `${process.execPath} '${fake}' '${invocations}'`
   const controller = new ClaudeHeadlessController(id, runtime, cmd, process.cwd())
+  const wakeRecord = { session: id, status: 'asking' }
+  const activeRecord = { session: id, status: 'active' }
   t.after(() => controller.close())
   await controller.start('INITIAL')
   const messages = join(runtime, 'sessions', id, 'messages.ndjson')
   await waitFor(() => existsSync(messages) && readFileSync(messages, 'utf8').includes('INITIAL'))
 
-  const idle = await deliverViaClaudeHeadless({ session: id }, 'HOLD')
+  const idle = await deliverViaClaudeHeadless(wakeRecord, 'HOLD')
   assert.deepEqual(idle, { ok: true })
+  const firstTurnRecords = readFileSync(invocations, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { pid?: number; signal?: string })
+  const firstInvocation = firstTurnRecords.find((record) => record.pid) as { pid: number }
+  assert.equal(processAlive(firstInvocation.pid), false, 'a result-complete turn is reaped before idle wake returns')
+  assert.equal(firstTurnRecords.some((record) => record.signal === 'SIGTERM'), false, 'completed teardown adds no user-interrupt signal to the conversation')
   const beforeSteer = readFileSync(invocations, 'utf8').trim().split('\n').length
-  const steer = await deliverViaClaudeHeadless({ session: id }, 'STEER')
+  const steer = await deliverViaClaudeHeadless(activeRecord, 'STEER')
   assert.deepEqual(steer, { ok: true })
   await waitFor(() => readFileSync(messages, 'utf8').includes('STEER'))
   assert.equal(readFileSync(invocations, 'utf8').trim().split('\n').length, beforeSteer, 'mid-turn delivery reused the live child')
 
-  const active = await deliverViaClaudeHeadless({ session: id }, 'INTERRUPT')
+  const finishing = await deliverViaClaudeHeadless(wakeRecord, 'FINISHING')
+  assert.deepEqual(finishing, { ok: true })
+  const afterDeclaration = await deliverViaClaudeHeadless(wakeRecord, 'AFTER_FINISHING')
+  assert.deepEqual(afterDeclaration, { ok: true })
+  await waitFor(() => readFileSync(messages, 'utf8').includes('AFTER_FINISHING'))
+
+  const active = await deliverViaClaudeHeadless(wakeRecord, 'INTERRUPT')
   assert.deepEqual(active, { ok: true })
   const interrupted = await interruptClaudeHeadless({ session: id })
   assert.deepEqual(interrupted, { ok: true })
   await waitFor(() => readFileSync(messages, 'utf8').includes('control_response'))
-  const after = await deliverViaClaudeHeadless({ session: id }, 'AFTER')
+  const after = await deliverViaClaudeHeadless(wakeRecord, 'AFTER')
   assert.deepEqual(after, { ok: true })
   await waitFor(() => readFileSync(messages, 'utf8').includes('AFTER'))
 
-  const args = readFileSync(invocations, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as string[])
+  const args = readFileSync(invocations, 'utf8').trim().split('\n')
+    .map((line) => JSON.parse(line) as { args?: string[] })
+    .flatMap((record) => record.args ? [record.args] : [])
   assert.ok(args[0].includes('--session-id') && args[0].includes(id), 'fresh turn pins the governed session id')
   assert.ok(args.slice(1).every((argv) => argv.includes('--resume') && argv.includes(id)), 'every idle wake cold-resumes the same conversation')
   assert.ok(args.every((argv) => argv.includes('-p') && argv.includes('stream-json') && argv.includes('--verbose')))

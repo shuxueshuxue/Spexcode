@@ -7,11 +7,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 
-type ControlRequest = { type: 'deliver'; text: string } | { type: 'interrupt' }
+type ControlRequest = { type: 'deliver'; text: string; mode: 'steer' | 'wake' } | { type: 'interrupt' }
+type ClaudeHeadlessDeliveryRecord = HarnessDeliveryRecord & { status?: string }
 type ChildTurn = {
   process: ChildProcessWithoutNullStreams
   active: boolean
+  completed: boolean
   exited: Promise<number | null>
+  teardown: Promise<void> | null
+  result: Promise<void>
+  sawResult: () => void
   firstEvent: Promise<void>
   sawFirstEvent: () => void
   interruptAcks: Map<string, () => void>
@@ -19,9 +24,13 @@ type ChildTurn = {
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
-const CONTROL_TIMEOUT_MS = 30_000
+const CONTROL_TIMEOUT_MS = 60_000
 const START_TIMEOUT_MS = 30_000
 const INTERRUPT_TIMEOUT_MS = 10_000
+const RESULT_WAIT_MS = 20_000
+const RESULT_EXIT_GRACE_MS = 500
+const TERM_EXIT_GRACE_MS = 500
+const KILL_EXIT_GRACE_MS = 2_000
 
 const shQuote = (s: string) => `'${s.replace(/'/g, `'\''`)}'`
 const userEvent = (text: string) => JSON.stringify({
@@ -76,8 +85,8 @@ function controlRequest(id: string, request: ControlRequest): Promise<DispatchRe
   })
 }
 
-export const deliverViaClaudeHeadless = (rec: HarnessDeliveryRecord, text: string) =>
-  controlRequest(rec.session, { type: 'deliver', text })
+export const deliverViaClaudeHeadless = (rec: ClaudeHeadlessDeliveryRecord, text: string) =>
+  controlRequest(rec.session, { type: 'deliver', text, mode: rec.status === 'active' ? 'steer' : 'wake' })
 
 export const interruptClaudeHeadless = (rec: HarnessDeliveryRecord) =>
   controlRequest(rec.session, { type: 'interrupt' })
@@ -121,12 +130,15 @@ export class ClaudeHeadlessController {
     if (this.closing) return
     this.closing = true
     const child = this.child
-    if (child && child.process.exitCode === null) child.process.kill('SIGTERM')
-    await new Promise<void>((resolve) => {
-      if (!this.server) return resolve()
-      this.server.close(() => resolve())
-    })
-    try { rmSync(this.socketPath, { force: true }) } catch { /* best-effort cleanup after close */ }
+    try {
+      if (child) await this.ensureTurnExit(child)
+    } finally {
+      await new Promise<void>((resolve) => {
+        if (!this.server) return resolve()
+        this.server.close(() => resolve())
+      })
+      try { rmSync(this.socketPath, { force: true }) } catch { /* best-effort cleanup after close */ }
+    }
   }
 
   private accept(socket: Socket): void {
@@ -157,11 +169,17 @@ export class ClaudeHeadlessController {
     if (request.type === 'deliver') {
       if (!request.text) return { ok: false, error: 'empty prompt - nothing to deliver' }
       const current = this.child
-      if (current?.active && current.process.stdin.writable) {
+      if (request.mode === 'steer' && current?.active && current.process.stdin.writable) {
         await this.writeLine(current, userEvent(request.text))
         return { ok: true }
       }
-      if (current) await withTimeout(current.exited, 5_000, 'previous claude-headless turn did not exit after its result')
+      if (current?.active) {
+        await Promise.race([
+          withTimeout(current.result, RESULT_WAIT_MS, 'previous claude-headless turn did not reach its result before idle wake'),
+          current.exited.then((code) => { throw new Error(`previous claude-headless turn exited before its result (code ${code ?? 'signal'})`) }),
+        ])
+      }
+      if (current) await this.ensureTurnExit(current)
       await this.spawnTurn(request.text, true)
       return { ok: true }
     }
@@ -192,12 +210,30 @@ export class ClaudeHeadlessController {
     const mode = resume ? ['--resume', this.id] : ['--session-id', this.id]
     const args = ['-p', ...mode, '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
     const command = `exec ${this.claudeCmd} ${args.map(shQuote).join(' ')}`
-    const childProcess = spawn('/bin/sh', ['-lc', command], { cwd: this.cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] })
+    const childProcess = spawn('/bin/sh', ['-lc', command], {
+      cwd: this.cwd,
+      env: process.env,
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
     let sawFirstEvent!: () => void
     const firstEvent = new Promise<void>((resolve) => { sawFirstEvent = resolve })
     let resolveExit!: (code: number | null) => void
     const exited = new Promise<number | null>((resolve) => { resolveExit = resolve })
-    const turn: ChildTurn = { process: childProcess, active: true, exited, firstEvent, sawFirstEvent, interruptAcks: new Map() }
+    let sawResult!: () => void
+    const result = new Promise<void>((resolve) => { sawResult = resolve })
+    const turn: ChildTurn = {
+      process: childProcess,
+      active: true,
+      completed: false,
+      exited,
+      teardown: null,
+      result,
+      sawResult,
+      firstEvent,
+      sawFirstEvent,
+      interruptAcks: new Map(),
+    }
     this.child = turn
     let stdoutBuffer = ''
     childProcess.stdout.setEncoding('utf8')
@@ -224,7 +260,9 @@ export class ClaudeHeadlessController {
       if (stdoutBuffer) console.error('[spex claude-headless] dropped a partial non-line stdout event')
       if (this.child === turn) this.child = null
       resolveExit(code)
-      if (code !== 0 && !this.closing) void import('./harness.js').then(({ reportHeadlessTurnExit }) => reportHeadlessTurnExit(this.id, 'claude-headless', code, this.cwd))
+      if (!turn.completed && code !== 0 && !this.closing) {
+        void import('./harness.js').then(({ reportHeadlessTurnExit }) => reportHeadlessTurnExit(this.id, 'claude-headless', code, this.cwd))
+      }
     })
     await this.writeLine(turn, userEvent(text))
     await Promise.race([
@@ -239,9 +277,59 @@ export class ClaudeHeadlessController {
     if (event?.type === 'control_response' && typeof event?.response?.request_id === 'string') {
       turn.interruptAcks.get(event.response.request_id)?.()
     }
-    if (event?.type === 'result') {
+    if (event?.type === 'result' && !turn.completed) {
+      turn.completed = true
       turn.active = false
-      turn.process.stdin.end()
+      turn.sawResult()
+      void this.ensureTurnExit(turn).catch((error) => {
+        console.error(`[spex claude-headless] completed turn teardown failed: ${(error as Error).message}`)
+      })
+    }
+  }
+
+  private ensureTurnExit(turn: ChildTurn): Promise<void> {
+    turn.teardown ??= this.terminateTurn(turn)
+    return turn.teardown
+  }
+
+  private async terminateTurn(turn: ChildTurn): Promise<void> {
+    if (turn.completed) {
+      if (turn.process.stdin.writable) turn.process.stdin.end()
+      if (await this.waitForTurnExit(turn, RESULT_EXIT_GRACE_MS)) return
+      this.signalTurn(turn, 'SIGKILL')
+      await withTimeout(
+        turn.exited,
+        KILL_EXIT_GRACE_MS,
+        `claude-headless completed turn process group ${turn.process.pid ?? 'unknown'} did not exit after SIGKILL`,
+      )
+      return
+    }
+    this.signalTurn(turn, 'SIGTERM')
+    if (await this.waitForTurnExit(turn, TERM_EXIT_GRACE_MS)) return
+    this.signalTurn(turn, 'SIGKILL')
+    await withTimeout(
+      turn.exited,
+      KILL_EXIT_GRACE_MS,
+      `claude-headless turn process group ${turn.process.pid ?? 'unknown'} did not exit after SIGKILL`,
+    )
+  }
+
+  private async waitForTurnExit(turn: ChildTurn, timeoutMs: number): Promise<boolean> {
+    try {
+      await withTimeout(turn.exited, timeoutMs, 'turn exit grace elapsed')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private signalTurn(turn: ChildTurn, signal: NodeJS.Signals): void {
+    const pid = turn.process.pid
+    try {
+      if (pid) process.kill(-pid, signal)
+      else turn.process.kill(signal)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
     }
   }
 

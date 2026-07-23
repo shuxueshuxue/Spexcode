@@ -52,11 +52,15 @@ with each lockfile's root package metadata matching its manifest. Only the root 
 private manifest carries the same version so source-tree and installed CLI diagnostics name one release.
 
 The installed terminal follows the same artifact rule. `node-pty` is pinned to an upstream release whose
-Darwin prebuilds publish `spawn-helper` as an executable; SpexCode does not repair dependency permissions at
-runtime or ask the user to mutate `node_modules`. This remains an npm-package boundary independent of global
-versus project-local placement and independent of the host that receives the package. A narrow dependency
-artifact test verifies both shipped Darwin helpers retain an execute bit. A package that exposes `spex` but
-leaves the terminal's native helper unspawnable is not a complete installation.
+Darwin prebuilds publish `spawn-helper` as an executable, and a narrow dependency-artifact test verifies both
+shipped Darwin helpers retain an execute bit. That prevention is deliberately not the only line of defence:
+the live-terminal helper checks the exact native addon's sibling `spawn-helper` before first spawn and restores
+missing execute bits idempotently. Thus an older installed dependency or a permission-losing package copy
+self-repairs without asking the user to find and mutate `node_modules`; an unrepairable helper fails visibly
+through [[live-view]]. This remains independent of global versus project-local placement and of host
+architecture because the runtime follows `node-pty`'s loaded addon rather than constructing a prebuild path.
+A package that exposes `spex` but leaves the terminal's native helper unspawnable is still not a complete
+installation, so the supply-chain test stays valuable rather than being replaced by the runtime guard.
 
 The natural way to run the installed tool is **two commands on two ports, deliberately kept apart** —
 starting the backend never drags the UI along:

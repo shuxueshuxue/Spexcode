@@ -30,7 +30,8 @@ desktop TUI. A headless session has no pane at any liveness, so both a phone and
 render the persisted **[[session-timeline]]**: declaration notes are the agent's replies, and status
 transitions plus delivered prompts are the conversation. The chat body is one shared
 **`TimelineChat`** component (timeline poll + board-push refresh + send-then-refresh,
-`replyVia:"note"` fixed); `MobileSessionDetail` is only the phone wrapper around it (identity card,
+with its legacy explicit `replyVia:"note"` input retained but redundant for a headless target);
+`MobileSessionDetail` is only the phone wrapper around it (identity card,
 back control, and eval entry). Viewport width changes chrome and layout, never the conversation model.
 
 **The review and Settings pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
@@ -47,9 +48,9 @@ uses, through the shared `data.js` helpers: the pushed/polled lean board for bot
 Issues/Evals list endpoints only while their route is open, the
 `/api/specs/:id/*` panes (content/history/issues/evals — the SAME React pane components, no second
 markdown or diff renderer), `/api/sessions/:id` + `/timeline` for the conversation, and the ONE
-`/api/sessions/:id/input` route for sending. The shared terminal-free bit rides that same route as
-a flag (`replyVia:"note"`); it describes the session's reply channel, not the viewport, and its
-transport phrase lives server-side ([[session-timeline]]).
+`/api/sessions/:id/input` route for sending. Reply readability is derived server-side from the target
+session's headless harness capability ([[session-timeline]]), never from viewport or phone chrome; an
+explicit `replyVia` remains only an override input to that shared decision.
 
 The two planes, made native to touch:
 
@@ -64,10 +65,9 @@ The two planes, made native to touch:
   colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
   (you / the sending session) — and a docked composer whose input and send action share one stable
   vertical box (matching top and bottom edges). The composer stops at the tab bar; `.m-tabbar` alone
-  owns the viewport-bottom safe-area inset. Every dispatch from this surface carries
-  `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
-  the reply channel is the surface's fixed property, never a per-message option and never a visible
-  control. The note itself is produced when the agent executes the external `spex session <verb>
+  owns the viewport-bottom safe-area inset. Its retained silent `replyVia:"note"` is redundant for a
+  headless target and remains no visible control; the session capability, not this surface, owns the
+  default. The note itself is produced when the agent executes the external `spex session <verb>
   --note` CLI; turn-boundary hooks only remind the agent and carry no note data. The
   timeline's pending state reads the GENERIC loading word — never another surface's loading phrase
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The

@@ -310,6 +310,15 @@ surface:
   claude-headless unlinks its controller socket even when tmux killed the controller before its signal handler
   ran, and Codex leaves its shared project app-server intact.
 
+Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
+outcome of the last ephemeral turn. Every headless adapter reports a turn process that exits non-zero through
+one shared adapter-side outcome mechanism. That mechanism changes the lifecycle from `active` to `error` and
+records the harness plus exit code, so a turn that died before declaring can never remain visibly
+`working`/`online` forever. The write is compare-and-set: a zero exit changes nothing, and a declaration that
+landed before process teardown is authoritative and is never overwritten. `online` may remain true when the
+adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal `error`
+lifecycle is the honest signal that the previous turn failed.
+
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
 `slash-commands.ts`. They now live in `harness.ts` (eight adapters gathered in `HARNESSES`),

@@ -55,9 +55,10 @@ the agent from one verb, picked by an optional topic:
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
   secrets). Deterministic lint policy and the doctor's altitude/breadth health budgets remain separate
-  owners. Its launcher table mirrors [[launcher-select]]: clean init's per-harness profiles use ordinary
-  commands that preserve the harness permission model, while automatic-permission commands are explicit
-  authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
+  owners. Its launcher table mirrors [[launcher-select]]: interactive clean-init profiles use ordinary
+  commands that preserve the harness permission model, while the independent [[opencode-headless]] profile
+  is the one explicit `opencode --auto` seed required by its terminal-free runtime. Other automatic-permission
+  commands remain authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
   and the important meaning of "active": it counts compute slots, not total session rows, so human-waiting
   sessions do not block launches.
   It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual

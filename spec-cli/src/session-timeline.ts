@@ -8,20 +8,19 @@ import type { Lifecycle, Proposal } from './sessions.js'
 // [[mobile-ui]]) renders instead of a live pane: without the terminal, the declaration notes ARE the agent's
 // replies, and the timeline is the whole conversation.
 //
-// WHY an observer, not writer instrumentation: the lifecycle has a writer the TS layer never sees — the
-// mark-active hook value-replaces status/proposal/note in session.json with pure-shell sed ([[state]]).
-// Instrumenting every writer would always miss that one, so the recorder OBSERVES the store instead: one
-// fs.watch on the sessions root (debounced) plus a slow reconcile tick (the fs.watch is best-effort, same
-// stance as [[graph-stream]]'s source 1), and on each tick it diffs every governed record's
-// (status, proposal, note) against the last seen and appends what moved. One mechanism covers every writer
-// by construction. Granularity is the debounce window — a flap faster than ~100ms can collapse, exactly like
-// the board itself.
+// A declaration note is conversation content, so TS lifecycle writes append moved state at the same write
+// boundary instead of asking a later sample of mutable session.json to reconstruct it. The observer remains
+// because the lifecycle also has a writer the TS layer never sees: the mark-active hook value-replaces
+// status/proposal/note with pure-shell sed ([[state]]). One fs.watch on the sessions root (debounced) plus a
+// slow reconcile tick repairs those external writes. Direct append + observation may duplicate one move;
+// readTimeline folds adjacent duplicates without making history mutable.
 //
-// The recorder runs ONLY in the serve process (superviseTimeline is called from index.ts) so exactly one
-// process appends; timestamps are observation times, honest to within the debounce. Only the AUTHORED axis
-// is recorded — liveness (offline/starting/unknown) is a present-tense derivation ([[state]]), re-derived
-// per probe and never history, so it stays off the durable log; a surface shows the CURRENT liveness from
-// the board row. The timeline lives and dies with the session record (close sweeps the store dir), like
+// The observer runs ONLY in the serve process (superviseTimeline is called from index.ts); lifecycle writers
+// and confirmed senders append from whichever process owns that write. Direct events use the write time;
+// observed shell events use an observation time honest to within the debounce. Only the AUTHORED axis is
+// recorded — liveness (offline/starting/unknown) is a present-tense derivation ([[state]]), re-derived per
+// probe and never history, so it stays off the durable log; a surface shows the CURRENT liveness from the
+// board row. The timeline lives and dies with the session record (close sweeps the store dir), like
 // comms.ndjson. `sent` events are appended by sendText on a CONFIRMED post-launch delivery (dashboard/phone
 // input, `spex session send`, merge and issue dispatch); the initial launch prompt passes through the same
 // composition seam but has no adapter confirmation to record here. `from` is the sending session's id,
@@ -38,6 +37,13 @@ function append(id: string, ev: TimelineEvent): void {
     mkdirSync(sessionStoreDir(id), { recursive: true })
     appendFileSync(timelinePath(id), JSON.stringify(ev) + '\n')
   } catch { /* best-effort: a failed history append must never break the state machine or a delivery */ }
+}
+
+// Record a lifecycle value that has already landed in session.json. TypeScript state writers call this
+// synchronously before returning, so a later write cannot erase an intermediate declaration note from the
+// conversation. The serve observer calls the same sink for shell-authored state.
+export function recordStatus(id: string, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
+  append(id, { ts: new Date().toISOString(), kind: 'status', status, proposal, note })
 }
 
 function readEvents(id: string): TimelineEvent[] {
@@ -90,7 +96,7 @@ function scan(): void {
         if (last && fpOf(last.status, last.proposal ?? null, last.note ?? null) === fp) { lastSeen.set(id, fp); continue }
       }
       lastSeen.set(id, fp)
-      append(id, { ts: new Date().toISOString(), kind: 'status', status, proposal, note })
+      recordStatus(id, status, proposal, note)
     } catch { /* one bad record must not stall the sweep */ }
   }
   const live = new Set(ids)
@@ -144,9 +150,9 @@ export function recordSent(id: string, text: string, from: string | null, replyV
 
 // the read surface behind GET /api/sessions/:id/timeline: the last `limit` events, oldest first, each
 // status event carrying its composed display word. null = no such session (the route 404s).
-// Adjacent status lines with identical (status, proposal, note) fold into their first: TWO serve processes
-// observing one store (a throwaway worktree/eval serve beside the live one) each keep their own lastSeen,
-// so a single record move can append twice — cross-process write locking isn't worth buying, so the log
+// Adjacent status lines with identical (status, proposal, note) fold into their first: a direct writer and
+// observer, or TWO serve processes observing one store (a throwaway worktree/eval serve beside the live
+// one), can append a single record move twice. Cross-process write locking isn't worth buying, so the log
 // stays best-effort append-only and the read is where duplicates die, same stance as the board.
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
   let raw: ReturnType<typeof readAliasedRawRecord>

@@ -10,7 +10,7 @@ import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs
 import { defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
-import { recordSent, lastHumanSendVia } from './session-timeline.js'
+import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -294,6 +294,8 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
 // pure-shell hot-path hook (mark-active) relies on: it value-replaces `"status"`/`"proposal"`/`"note"` with a
 // single sed and never needs jq on the user's box. So do NOT switch to conditional keys or a compact dump.
 function writeRecord(rec: SessRec): void {
+  let previous: SessRec | null = null
+  try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
   const obj = {
     session_id: rec.session,
     governed: rec.governed,
@@ -320,6 +322,13 @@ function writeRecord(rec: SessRec): void {
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
+  // session.json is only the CURRENT projection. Persist each moved lifecycle value before this writer
+  // returns, so a later write cannot erase a declaration note between observer samples. New-record genesis
+  // stays with superviseTimeline; metadata-only writes do not manufacture status events.
+  if (rec.governed && previous && (previous.status !== rec.status
+    || previous.proposal !== rec.proposal || previous.note !== rec.note)) {
+    recordStatus(rec.session, rec.status, rec.proposal, rec.note)
+  }
 }
 
 // @@@ fail-loud enumeration - the worktree set is the board's EXISTENCE truth, so a failed enumeration must

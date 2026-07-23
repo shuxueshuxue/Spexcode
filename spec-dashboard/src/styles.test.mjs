@@ -38,33 +38,26 @@ test('dashboard typography declarations use the shared scale', () => {
   assert.doesNotMatch(terminal, /fontSize:\s*\d/)
 })
 
-test('wheel deltas accumulate proportionally — no min-1-tick amplification', () => {
-  // a trackpad momentum gesture emits dozens of micro-deltas; forcing ≥1 tick per event multiplies
-  // travel and makes the return leg asymmetric. Deltas accumulate to whole ticks with carry.
-  assert.match(terminal, /wheelAcc \+= ev\.deltaY/)
-  assert.match(terminal, /Math\.floor\(Math\.abs\(wheelAcc\) \/ 40\)/)
-  assert.doesNotMatch(terminal, /Math\.max\(1, Math\.round\(Math\.abs\(ev\.deltaY\)/)
+test('wheel is xterm-native — no browser quantizer, ledger, or synthetic bottoming', () => {
+  // the browser reimplementing wheel→SGR conversion was a bug factory (X10 corruption, min-tick
+  // amplification, growth race, flip loss, top clamp). xterm's own mouse-report mode conversion —
+  // the same path iTerm and VS Code ship — owns the wheel; the browser holds no wheel state at all.
+  assert.doesNotMatch(terminal, /attachCustomWheelEventHandler/)
+  assert.doesNotMatch(terminal, /wheelAcc|wheelNet/)
+  assert.doesNotMatch(terminal, /t: 'wheel'/)
 })
 
-test('a returning scroll gesture finishes with a bottoming burst', () => {
-  // content growth during an excursion leaves a symmetric return short of the live bottom: the TUI's
-  // scrolled view impersonates the live tail and the watched seconds freeze. The net-tick ledger
-  // detects the return-to-zero and restores the natural human overshoot.
-  assert.match(terminal, /wheelNet \+= up \? ticks : -ticks/)
-  assert.match(terminal, /wasAbove && wheelNet <= 0/)
-  assert.match(terminal, /up: false, col, row, ticks: 5/)
-})
-
-test('interactive terminal keeps selection off application mouse reporting', () => {
-  assert.match(terminal, /MOUSE_REPORT_MODES\s*=\s*new Set\(\[9, 1000, 1002, 1003, 1005, 1006, 1015, 1016\]\)/)
-  assert.match(terminal, /term\.parser\.registerCsiHandler\([\s\S]*onlyMouseReportModes/)
-  assert.match(terminal, /term\.attachCustomWheelEventHandler/)
+test('mouse-report DECSETs reach xterm; selection uses the modifier convention', () => {
+  // tmux (mouse on) and the pane TUI enable mouse-report mode on this client and xterm honors it
+  // natively — no parser handler eats the mode list. Local selection follows every real terminal:
+  // Shift-drag (Option-drag on macOS via macOptionClickForcesSelection) forces browser selection.
+  assert.doesNotMatch(terminal, /MOUSE_REPORT_MODES|onlyMouseReportModes/)
+  assert.match(terminal, /macOptionClickForcesSelection:\s*true/)
   assert.match(terminal, /disableStdin:\s*false/)
   assert.match(terminal, /term\.onData\(\(data\)/)
   assert.match(terminal, /sock\.send\(JSON\.stringify\(\{ t: 'input', data \}\)\)/)
   assert.match(terminal, /const initialFocusFrame = requestAnimationFrame\([\s\S]*term\.focus\(\)/)
   assert.doesNotMatch(terminal, /_core\.focus/)
-  assert.doesNotMatch(terminal, /shouldForceSelection/)
 })
 
 test('pinned xterm defers renderer resize inside synchronized output', () => {

@@ -4,7 +4,11 @@
 // Run: SPEXCODE_TMUX=osc8-<pid> npx tsx test/pty-bridge.osc8.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardInput, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+
+// what a native mouse-report-mode xterm emits for one wheel notch — the browser no longer synthesizes
+// wheel controls, so the test speaks the same SGR bytes through the ordinary input path.
+const wheelReport = (up: boolean, col: number, row: number) => `\x1b[<${up ? 64 : 65};${col};${row}M`
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `osc8-${process.pid}`
@@ -37,7 +41,7 @@ async function main(): Promise<void> {
     chunks.length = 0
 
     for (let index = 0; index < 40; index++) {
-      forwardWheel(SESSION, viewer, true, 40, 5, 1)
+      forwardInput(SESSION, viewer, wheelReport(true, 40, 5))
       await sleep(80)
     }
     await sleep(500)

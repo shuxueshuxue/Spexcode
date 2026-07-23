@@ -142,7 +142,8 @@ scenarios:
       Through the real dashboard, view a mouse-owning TUI pane whose status line ticks with live output.
       Wheel up into its scrollback while the pane keeps producing content, then wheel back down by exactly
       the same travel. Record the pane's scrolled-state indicator, the rendered terminal, and the
-      byte stream across the return, repeating enough rounds to cover the content-growth race.
+      byte stream across the return, repeating enough rounds to cover clean notches, momentum-style
+      micro-delta gestures with sub-quantum tails, and returns during active content growth.
     expected: >-
       The return gesture lands the view on the live tail: within about a second the scrolled-state
       indicator is gone and the ticking status line resumes on screen. No round leaves a frozen

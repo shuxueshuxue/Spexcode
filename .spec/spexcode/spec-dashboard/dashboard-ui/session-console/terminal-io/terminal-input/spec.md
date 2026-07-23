@@ -11,6 +11,7 @@ related:
   - spec-cli/src/index.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/test/terminal-input.e2e.mjs
+  - spec-dashboard/test/terminal-chrome-focus.e2e.mjs
 ---
 
 # terminal-input
@@ -19,6 +20,12 @@ A live session opens focused in its **real TUI**. Selecting a session, reselecti
 the Terminal tab, or returning from [[command-box]] explicitly activates that TUI and restores its focus.
 Pointer activation must not blur xterm's hidden textarea before the activation lands: an in-progress browser
 IME composition remains attached to the same input element instead of being ended by dashboard chrome.
+Beyond activation, **console chrome is pointer-inert for focus**: clicking and operating the sidebar list,
+zone headers, fold pods, the list resizer, the toolbar, or any other non-input chrome never takes focus
+from the TUI — the console's panel-wide blanket cancels the press's focus move while the click still acts
+(the same blanket protects whichever composer currently owns the surface). A transient pop above the
+console that legitimately takes focus — the search palette, a modal — returns it to the TUI on exit
+([[focus-return]] owns that boundary), so leaving any pop lands you typing again, never on dead chrome.
 
 xterm owns ordinary keyboard input and its hidden textarea owns browser IME composition; SpexCode does not
 translate DOM keydowns into a second vocabulary. Consecutive composition commits are independent: a new
@@ -43,6 +50,10 @@ override exists.
 
 The pointer is the browser's and never the application's. Plain drag always makes a local xterm
 selection (the patched selection predicate diverts every button event from mouse reporting), ⌘/Ctrl+C
-copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. Motion
+copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. While a
+terminal selection exists the copy chord is consumed **before** xterm's own key handling (it must never
+fall through as `\x03`/SIGINT into the application), and it stands down only for a **real composer
+field's** own selection — the helper textarea's mirrored selection *is* the terminal's, never a
+stand-down reason. Without a selection the chord stays the terminal's ordinary interrupt. Motion
 tracking is filtered at the adapter so hovering emits nothing; only wheel reports leave the browser,
 routed by tmux's native bindings ([[live-view]] owns that contract).

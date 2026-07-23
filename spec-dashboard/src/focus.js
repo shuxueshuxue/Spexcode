@@ -31,11 +31,34 @@ if (typeof window !== 'undefined') {
 // Return focus after a transient overlay closes: the prior holder if it survives, else the sink. Deferred
 // a frame so it runs after the overlay has unmounted and any sibling focus effect has had its say — the
 // `focusin` tracker keeps the ticket current, so this converges on the latest stable focus rather than
-// fighting it.
+// fighting it. If a successor overlay already holds focus by then, it owns it — no yanking.
 export function returnFocus() {
   requestAnimationFrame(() => {
+    if (inOverlay(document.activeElement)) return
     if (focusableNow(ticket)) { ticket.focus(); return }
     const sink = document.querySelector('[data-focus-sink]')
     if (focusableNow(sink)) sink.focus()
   })
+}
+
+// The acquisition-side twin of returnFocus: INERT CHROME NEVER TAKES FOCUS, so there is nothing to give
+// back. Attached as a capture-phase mousedown handler on a surface whose focus rests on its sink (the
+// session console's panel, a context menu): a press on anything that is not itself an input surface is
+// stopped from moving focus — the click still lands and acts, the press just stops stealing. Editable
+// fields and the xterm screen keep their native press-to-focus; a press in a scroller's scrollbar gutter
+// keeps its default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
+const FOCUS_OWNERS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
+
+const inScrollbarGutter = (el, e) => {
+  const rect = el.getBoundingClientRect()
+  return e.clientX - rect.left - el.clientLeft >= el.clientWidth
+    || e.clientY - rect.top - el.clientTop >= el.clientHeight
+}
+
+export function inertChromePress(e) {
+  const el = e.target
+  if (!(el instanceof Element)) return
+  if (el.closest(FOCUS_OWNERS)) return
+  if (inScrollbarGutter(el, e)) return
+  e.preventDefault()
 }

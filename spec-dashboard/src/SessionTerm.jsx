@@ -256,7 +256,10 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     // wheel handler, quantizer, tick ledger, or synthetic bottoming exists in the browser. Claude's
     // residual status-line stall after wheeling is its documented upstream TUI defect (see live-view).
 
-    // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
+    // ⌘/Ctrl+C copies the xterm selection: CAPTURE-phase on `document`, because the pane's helper
+    // textarea holds focus after a drag — xterm's own target-phase keydown would otherwise win and
+    // emit \x03 (SIGINT) into the app. Gated to the visible pane, only while a terminal selection
+    // exists, and standing down when a focused field has its own selection (its native copy wins).
     let copiedTimer
     const host = hostRef.current
     const onCopyKey = (ev) => {
@@ -265,7 +268,10 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       const sel = term.getSelection()
       if (!sel) return
       const el = document.activeElement
-      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.selectionStart !== el.selectionEnd) return
+      // the helper textarea mirrors the terminal selection (xterm selects it there for native copy),
+      // so its "own selection" IS the terminal's — only a real composer field stands this chord down.
+      if (el && !el.classList.contains('xterm-helper-textarea')
+        && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.selectionStart !== el.selectionEnd) return
       ev.preventDefault(); ev.stopPropagation()
       copyToClipboard(sel).then((ok) => {
         if (!ok) return   // copy genuinely failed — don't flash a false "copied ✓"; selection stays for manual copy
@@ -273,7 +279,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
         clearTimeout(copiedTimer); copiedTimer = setTimeout(() => setCopied(false), 1200)
       })
     }
-    document.addEventListener('keydown', onCopyKey)
+    document.addEventListener('keydown', onCopyKey, true)
 
     const raf = requestAnimationFrame(measureAndRequest)
     const ro = new ResizeObserver(measureAndRequest)
@@ -302,7 +308,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       cancelAnimationFrame(initialFocusFrame)
       cancelAnimationFrame(visibilityFocusFrame)
       clearTimeout(copiedTimer)
-      document.removeEventListener('keydown', onCopyKey)
+      document.removeEventListener('keydown', onCopyKey, true)
       document.removeEventListener('visibilitychange', onDocumentVisibility)
       window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()

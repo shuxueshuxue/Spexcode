@@ -97,6 +97,34 @@ const patches = [
     from: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),m.push(b)',
     to: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),b.style.display="inline-block",b.style.width=`${C*c}px`,b.style.overflow="hidden",b.style.verticalAlign="top",m.push(b)',
   },
+  // Pointer belongs to the browser, wheel belongs to tmux. Plain drag always makes a LOCAL selection
+  // even while the pane application owns mouse-report mode: button events never become reports (the
+  // dashboard's copy gesture stays modifier-free), while wheel reports still flow to tmux, whose
+  // rebinds route them to copy-mode history — the agent TUI receives no mouse events at all (mouse
+  // input is what stalls claude's repaint loop for ~10s, the frozen-timer bug's true root).
+  {
+    file: 'src/browser/services/SelectionService.ts',
+    from: `  public shouldForceSelection(event: MouseEvent): boolean {
+    if (Browser.isMac) {
+      return event.altKey && this._optionsService.rawOptions.macOptionClickForcesSelection;
+    }
+
+    return event.shiftKey;
+  }`,
+    to: `  public shouldForceSelection(event: MouseEvent): boolean {
+    return true; // spexcode: pointer is always the browser's — buttons never become mouse reports
+  }`,
+  },
+  {
+    file: 'lib/xterm.mjs',
+    from: 'shouldForceSelection(e){return Zt?e.altKey&&this._optionsService.rawOptions.macOptionClickForcesSelection:e.shiftKey}',
+    to: 'shouldForceSelection(e){return!0}',
+  },
+  {
+    file: 'lib/xterm.js',
+    from: 'shouldForceSelection(e){return c.isMac?e.altKey&&this._optionsService.rawOptions.macOptionClickForcesSelection:e.shiftKey}',
+    to: 'shouldForceSelection(e){return!0}',
+  },
 ]
 
 const changed = new Set()

@@ -13,7 +13,8 @@ scenarios:
     expected: >-
       A versioned record claims the actual served git toplevel and resolved identity; a linked worktree gets
       its own slot and cannot replace main. Instance/root mismatches, dead/recycled URLs, mis-slotted and old
-      records never proxy. Live identity changes and restarted generations refresh the catalog. Two project
+      records never proxy, and a cataloged or record-claimed root whose directory no longer exists is absent
+      from the reconciled list. Live identity changes and restarted generations refresh the catalog. Two project
       projections plus the gateway projection remain distinct. Gateway icon writes are admin-only and touch
       only `SPEXCODE_HOME/config.json`; project writes are admin-only, revision-checked, atomic, preserve
       other JSON fields, work offline, accept featured ids and well-formed Iconify names, and return canonical

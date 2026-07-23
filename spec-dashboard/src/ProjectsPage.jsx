@@ -4,7 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import {
   CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
   setAdminPassword, clearAdminPassword, browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig,
-  initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon,
+  initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon, paginateProjects,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -481,6 +481,7 @@ export default function ProjectsPage() {
   const [adding, setAdding] = useState(false)
   const [adminBusy, setAdminBusy] = useState(false)
   const [adminErr, setAdminErr] = useState(null)
+  const [projectPage, setProjectPage] = useState(1)
   const seq = useRef(0)
 
   const refresh = useCallback(async () => {
@@ -516,6 +517,9 @@ export default function ProjectsPage() {
     else setDrawer(null)
     refresh()
   }
+
+  const page = paginateProjects(state.kind === 'ok' ? state.projects : [], projectPage)
+  useEffect(() => { if (page.page !== projectPage) setProjectPage(page.page) }, [page.page, projectPage])
 
   const body = (() => {
     if (state.kind === 'loading') return <div className="loading">{t('hud.loading')}</div>
@@ -555,10 +559,19 @@ export default function ProjectsPage() {
         )}
         {state.projects.length ? (
           <ul className="proj-list">
-            {state.projects.map((p) => <ProjectRow key={p.id} p={p} health={health[p.id]} onRefresh={refresh} t={t} />)}
+            {page.items.map((p) => <ProjectRow key={p.id} p={p} health={health[p.id]} onRefresh={refresh} t={t} />)}
           </ul>
         ) : (
           <div className="proj-empty"><p>{t('projects.empty')}</p></div>
+        )}
+        {page.pageCount > 1 && (
+          <nav className="proj-pagination" aria-label={t('projects.pagination')}>
+            <IconButton icon="arrow-left" label={t('projects.previousPage')} className="proj-act icon" size={14}
+              disabled={page.page === 1} onClick={() => setProjectPage((n) => n - 1)} />
+            <span className="proj-page-label">{t('projects.pageOf', { page: page.page, pages: page.pageCount })}</span>
+            <IconButton icon="chevron-right" label={t('projects.nextPage')} className="proj-act icon" size={14}
+              disabled={page.page === page.pageCount} onClick={() => setProjectPage((n) => n + 1)} />
+          </nav>
         )}
         <div className="proj-page-details" aria-label={t('projects.gatewaySettings')}>
           <GatewayIdentityEditor gateway={state.gateway} onRefresh={refresh} t={t} />

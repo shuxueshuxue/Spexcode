@@ -75,7 +75,8 @@ screen, and the same button is the retry. The header owns
 the ADMIN password (`PUT`/`DELETE /projects/admin-password`): `adminGated:false` renders the bootstrap
 hint — management is implicit-loopback-only until a password exists, and the set response rotates the
 setter's cookie so they stay signed in. Freshness is a plain poll — registration, a just-started
-backend, and health flips land on their own. The page mounts only as the global hub face at `/projects`
+backend, and health flips land on their own. The complete reconciled list is shown ten rows at a time with
+plain previous/next pagination; a shrinking list clamps back to its last valid page. The page mounts only as the global hub face at `/projects`
 (the shell shows it when there is no board but `/projects` answers — [[dashboard-shell]] owns that boot
 pick). A `/p/<id>/` shell contains only project-owned views and never mounts the page or advertises its
 management controls in the rail. The old direct `/p/<id>/#/projects` address remains a compatibility door:

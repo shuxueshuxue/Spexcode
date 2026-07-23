@@ -52,6 +52,10 @@ export default {
   projects: {
     title: '项目',
     count: '{n} 个项目',
+    pagination: '项目分页',
+    previousPage: '上一页项目',
+    nextPage: '下一页项目',
+    pageOf: '第 {page} / {pages} 页',
     current: '当前',
     empty: '还没有项目 — 按仓库根路径添加一个，或在仓库里运行 `spex serve`，它的 backend 会自己注册到这里。',
     absent: '此部署只服务单个项目 — 这里没有多项目目录。',

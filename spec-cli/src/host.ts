@@ -223,6 +223,7 @@ export async function reconcileProjects(): Promise<ProjectEntry[]> {
 
   const byId = new Map<string, ProjectEntry>()
   const push = (root: string) => {
+    if (!existsSync(root)) return
     const projectId = encodeProject(root)
     if (byId.has(projectId)) return   // encodeProject is lossy; first root wins a (pathological) collision
     const active = live.get(root) ?? null

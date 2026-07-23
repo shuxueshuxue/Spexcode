@@ -53,6 +53,10 @@ export default {
   projects: {
     title: 'Projects',
     count: '{n} project(s)',
+    pagination: 'project pages',
+    previousPage: 'previous project page',
+    nextPage: 'next project page',
+    pageOf: 'page {page} of {pages}',
     current: 'current',
     empty: 'No projects yet — add a repository by its root path, or run `spex serve` in a repo and its backend registers itself here.',
     absent: 'This deployment serves a single project — the multi-project catalog is not available here.',

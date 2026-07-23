@@ -57,6 +57,14 @@ export const normalizeProjects = (body) => {
   return list ? list.map(normalizeProject).filter(Boolean) : null
 }
 
+export const PROJECT_PAGE_SIZE = 10
+export function paginateProjects(projects, page, pageSize = PROJECT_PAGE_SIZE) {
+  const source = Array.isArray(projects) ? projects : []
+  const pageCount = Math.max(1, Math.ceil(source.length / pageSize))
+  const current = Math.min(Math.max(1, Number.isInteger(page) ? page : 1), pageCount)
+  return { items: source.slice((current - 1) * pageSize, current * pageSize), page: current, pageCount }
+}
+
 // Path scope wins before any board can paint. While the catalog probe is PENDING the selection is
 // UNRESOLVED (null): projections hold their neutral placeholder and the tab head stays unwritten
 // ([[side-nav]]) — a default mark is never minted as an answer, and a possibly misrouted board is

@@ -11,6 +11,7 @@ import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
+import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
 
@@ -26,7 +27,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'opencode-headless'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'opencode-headless' | 'pi-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -1274,6 +1275,27 @@ export const piHarness: Harness = {
   resumeArg: (rec) => `--session ${rec.session}`,
 }
 
+// pi-headless is an independent harness: its materialization surface is literally pi's, while a resident
+// controller owns non-interactive text-mode turns. Active turns steer through pi's rendezvous extension;
+// idle delivery cold-wakes the exact saved session with `--session` (never `--session-id`, which would create a
+// new conversation). The controller deliberately reports record-backed liveness, matching Claude headless.
+export const piHeadlessHarness: Harness = {
+  ...piHarness,
+  id: 'pi-headless',
+  headless: true,
+  messageStream: false,
+  paneTitleIsSelfSummary: false,
+  launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
+  liveness: () => 'online',
+  deliver: deliverViaPiHeadless,
+  cleanupRuntime: (rec) => {
+    try { rmSync(piHeadlessSock(rec.session), { force: true }) } catch { /* already gone */ }
+    try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ }
+  },
+  deliveryBlockedBy: undefined,
+  resumeArg: (rec) => `--session ${rec.session}`,
+}
+
 export const opencodeHarness: Harness = {
   id: 'opencode',
   headless: false,
@@ -1345,7 +1367,7 @@ export const opencodeHeadlessHarness: Harness = {
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

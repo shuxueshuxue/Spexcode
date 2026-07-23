@@ -362,6 +362,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
   claude-headless-run <id> <runtime> <cmd> -- <tail…>  resident stream-json controller (launch script)
+  pi-headless-run <id> <runtime> <cmd> -- <tail…>      resident pi text-mode controller (launch script)
 
 If you reached for one of these by hand, the porcelain you want is probably elsewhere: the trunk
 name also lives at GET /api/settings (.layout); sessions are driven with spex session new / session send;

@@ -47,18 +47,27 @@ into their first: two serve processes observing one store (a throwaway worktree/
 one) each keep their own last-seen and can append a single record move twice — the log stays best-effort
 append-only and duplicates die at read time, the same read-aggregation stance as the board.
 
-Write surface for the terminal-free sender: the one input route accepts `replyVia:"note"`, and the server
-appends `withNoteReplyHint` to the delivered prompt. That insert is transport guidance only: the agent writes
-the actual declaration by executing the external `spex session <verb> --note <text>` CLI, and the lifecycle hooks
-only delimit or remind the agent at turn boundaries; hooks never carry the note data. The phrases live
-server-side, beside withSenderHint, so every surface (desktop later, too) opts in with the same flag.
+**Reply-channel readability belongs to the target session, not the sending surface.** One server-side prompt
+composition seam receives the raw prompt, the target session, and an optional explicit `replyVia`; it alone
+decides the effective reply channel and the actual delivered text. An explicit value wins. With no value, a
+target whose resolved harness adapter declares `headless:true` defaults to `replyVia:"note"`, while a
+pane-backed target keeps the ordinary terminal reply. The launch prompt, the one input route (and therefore
+`spex session send`), and merge dispatch all pass through this seam. No caller appends a reply insert itself.
 
-**The reply-channel signal is symmetric — an opt-in with no opt-out makes notes sticky.** The note insert
-declares itself per-message, and the note→terminal transition gets an explicit counter-insert: a human
-send with NO note flag whose *previous human* send carried one (`lastHumanSendVia`, derived from the
-durable sent log — no new state, restart-safe; agent-to-agent sends neither set nor clear it, they say
-nothing about where the human reads) is delivered wrapped in `withTerminalReplyHint` — "the sender reads
-your terminal again; reply in normal output, not in `--note`". Fired exactly once: the transition send
-itself is recorded flag-free, so the next terminal send sees a non-note last channel and ships bare.
+For an effective note reply, that seam appends `withNoteReplyHint`. The insert is transport guidance only:
+the agent writes the actual declaration by executing the external `spex session <verb> --note <text>` CLI,
+and lifecycle hooks only delimit or remind the agent at turn boundaries; hooks never carry the note data.
+The phrase has one owner here beside the other delivery inserts. The timeline records the raw conversational
+text without inserts and `replyVia:"note"` whenever note is the effective channel (absence means terminal),
+so restart-safe channel history describes where a reply was actually readable rather than which caller
+happened to set a flag.
+
+**The reply-channel signal is symmetric — changing readability must not leave notes sticky.** The note insert
+declares itself per-message, and an effective note→terminal transition gets an explicit counter-insert: a
+human send whose effective channel is terminal and whose *previous human* send used note
+(`lastHumanSendVia`, derived from the durable sent log — no new state, restart-safe; agent-to-agent sends
+neither set nor clear it, they say nothing about where the human reads) is delivered wrapped in
+`withTerminalReplyHint` — "the sender reads your terminal again; reply in normal output, not in `--note`".
+Fired exactly once: the transition send itself is recorded without the note marker, so the next terminal send ships bare.
 Without the counter-signal an agent that note-replied a few times keeps note-replying from context inertia
 long after the human left the phone — the failure that made entering the phone surface feel irreversible.

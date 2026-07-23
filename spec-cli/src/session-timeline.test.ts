@@ -6,10 +6,11 @@ import { join } from 'node:path'
 
 import { lastHumanSendVia } from './session-timeline.js'
 import { sessionStoreDir } from './layout.js'
-import { withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { composeSessionPrompt, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
-// note-sends carry an opt-in insert, and the first terminal send after them carries the counter-insert.
+// explicit note-sends and every headless target carry the note insert, and the first terminal send after
+// them carries the counter-insert.
 // These pin the transition detector (lastHumanSendVia over the durable sent log) and the two phrases'
 // load-bearing claims — without the counter-signal, an agent that note-replied keeps note-replying from
 // context inertia after the human is back at a terminal (the sticky-note failure).
@@ -18,6 +19,15 @@ function withHome<T>(home: string, fn: () => T): T {
   const prev = process.env.SPEXCODE_HOME
   process.env.SPEXCODE_HOME = home
   try { return fn() } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prev
+  }
+}
+
+async function withHomeAsync<T>(home: string, fn: () => Promise<T>): Promise<T> {
+  const prev = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try { return await fn() } finally {
     if (prev === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prev
   }
@@ -63,6 +73,34 @@ test('lastHumanSendVia: agent-to-agent sends neither set nor clear the human cha
 test('lastHumanSendVia: status events are ignored — only sent events carry a channel', () => {
   const home = seedTimeline([sent(null, 'note'), { ts: '2026-07-16T00:00:01.000Z', kind: 'status', status: 'active', proposal: null, note: null }])
   withHome(home, () => assert.equal(lastHumanSendVia(ID), 'note'))
+})
+
+test('composeSessionPrompt owns headless defaults, explicit overrides, and final launch ordering', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  await withHomeAsync(home, async () => {
+    const headless = await composeSessionPrompt('answer this', { session: ID, harness: 'pi-headless' }, {
+      suffix: '\n\nThe spec node is at /tmp/spec.md.',
+    })
+    assert.equal(headless.replyVia, 'note')
+    assert.ok(headless.text.startsWith('answer this\n\nThe spec node is at /tmp/spec.md.'), headless.text)
+    assert.ok(headless.text.indexOf('/tmp/spec.md') < headless.text.indexOf('terminal-free client'), headless.text)
+
+    const interactive = await composeSessionPrompt('answer normally', { session: ID, harness: 'claude' })
+    assert.deepEqual(interactive, { text: 'answer normally' })
+
+    const explicit = await composeSessionPrompt('put this in note', { session: ID, harness: 'claude' }, { replyVia: 'note' })
+    assert.equal(explicit.replyVia, 'note')
+    assert.ok(explicit.text.includes('terminal-free client'), explicit.text)
+  })
+})
+
+test('composeSessionPrompt owns the one-shot note-to-terminal counter-insert', async () => {
+  const home = seedTimeline([sent(null, 'note')])
+  await withHomeAsync(home, async () => {
+    const composed = await composeSessionPrompt('back at desk', { session: ID, harness: 'claude' })
+    assert.equal(composed.replyVia, undefined)
+    assert.ok(composed.text.includes('terminal-attached client'), composed.text)
+  })
 })
 
 test('withNoteReplyHint: keeps the message, asks for the reply in --note, and declares itself PER-MESSAGE', () => {

@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: opencode-headless-materialized-system-context-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real opencode-headless session through SpexCode with a temporary primary agent whose resolved
+      permissions deny `read`, `glob`, `grep`, `bash`, `webfetch`, and `skill`. Ask for the exact uppercase
+      titles of disciplines 2 and 4 without naming either title; capture text-mode output and native export.
+    expected: >-
+      The model answers `COMMIT BEFORE YOU DECLARE|KEEP THE LOSS SIGNAL HONEST` from OpenCode run's startup
+      AGENTS.md context. The native export contains no tool call, and the generated SpexCode plugin loads in
+      headless mode; artifact presence or a later file read is not accepted as proof.
+  - name: opencode-headless-materialized-skill-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real opencode-headless session through SpexCode with a temporary primary agent that denies
+      every file, search, shell, and web tool while allowing only OpenCode's native `skill` tool. Ask it to
+      load `taste`, return the exact title of principle 14, and capture text-mode output plus native export.
+    expected: >-
+      OpenCode run discovers `.opencode/skills/taste/SKILL.md`, records a successful native `skill` tool call
+      for `taste`, and the model answers `Capabilities enter the ecosystem through the pillars we already
+      stand on`; no general file or shell tool is available to imitate skill loading, and the plugin loads.
   - name: opencode-headless-record-liveness
     description: Launch a real governed opencode-headless session, wait for its first turn to exit, and inspect the public session state while the turn process and rendezvous listener are absent.
     expected: The intact session record remains online and its terminal-free conversation stays available while the native conversation sleeps.

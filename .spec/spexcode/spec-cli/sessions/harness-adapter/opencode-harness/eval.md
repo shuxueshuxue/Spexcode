@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: opencode-materialized-system-context-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real interactive OpenCode session through SpexCode with a temporary primary agent whose
+      resolved permissions deny `read`, `glob`, `grep`, `bash`, `webfetch`, and `skill`. Ask for the exact
+      uppercase titles of disciplines 2 and 4 without naming either title; capture pane and native export.
+    expected: >-
+      The model answers `COMMIT BEFORE YOU DECLARE|KEEP THE LOSS SIGNAL HONEST` from OpenCode's startup
+      AGENTS.md context. The native export contains no tool call, and the generated SpexCode plugin loads;
+      artifact presence or a later file read is not accepted as proof.
+  - name: opencode-materialized-skill-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real interactive OpenCode session through SpexCode with a temporary primary agent that denies
+      every file, search, shell, and web tool while allowing only OpenCode's native `skill` tool. Ask it to
+      load `taste`, return the exact title of principle 14, and capture pane plus native session export.
+    expected: >-
+      OpenCode discovers `.opencode/skills/taste/SKILL.md`, records a successful native `skill` tool call for
+      `taste`, and the model answers `Capabilities enter the ecosystem through the pillars we already stand
+      on`; no general file or shell tool is available to imitate skill loading, and the plugin remains loaded.
   - name: plugin-bridge-mechanical
     tags: [cli]
     code: spec-cli/src/opencode.ts

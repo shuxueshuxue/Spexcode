@@ -16,19 +16,19 @@ scenarios:
     code: spec-cli/src/message-stream.ts
     related:
       - spec-cli/src/index.ts
-  - name: headless-console-renders-native-events
-    tags: [frontend-e2e, desktop]
+  - name: full-process-door-follows-adapter-capability
+    tags: [frontend-e2e, desktop, mobile]
     description: >-
-      In a real desktop browser, open the Sessions page on a fixture session whose graph row identifies the
-      claude-headless harness and whose global messages.ndjson contains a user turn, assistant text, and a tool
-      use. Let the page settle, then inspect the visible console, toolbar, and DOM; append another assistant event
-      before the run ends and confirm it appears without reloading the page.
+      In real browsers at desktop and phone widths, open a `claude-headless` session whose graph row advertises
+      `messageStream:true` and whose global messages.ndjson contains a user turn, assistant text, and a tool use.
+      Confirm the main console is TimelineChat, then open its full-process door and append another assistant event
+      before the run ends. Repeat with a pane-backed or other headless adapter whose capability is false.
     expected: >-
-      The right pane is a Messages console with ordered user and assistant bubbles plus a compact tool-call row;
-      it contains no xterm canvas, terminal placeholder, or tmux socket. The toolbar remains the ordinary compact
-      session toolbar with Eval and available commands. The appended assistant event appears from SSE, and the
-      settled layout has no overlap or clipped message text at desktop width. Pane-backed session consoles are
-      unchanged.
+      On both viewport classes the headless main console is the shared TimelineChat, with no xterm canvas,
+      terminal placeholder, or tmux socket. Only the adapter capability enables the full-process door; it appears
+      for `claude-headless` and is absent for the false-capability fixtures, with no harness-id branch in the DOM.
+      Opening the door renders ordered native user/assistant bubbles plus a compact tool-call row, and the
+      appended assistant event appears from SSE without a reload. Pane-backed session consoles remain unchanged.
     code: spec-dashboard/src/SessionMessages.jsx
     test: spec-dashboard/test/message-stream.e2e.mjs
     related:
@@ -39,5 +39,6 @@ scenarios:
 ---
 
 Measure the API through a running SpexCode backend and the visual state through the real Sessions route in a
-browser. The browser fixture may supply `claude-headless` in the graph until that parallel adapter branch lands;
-the message bytes still come from the real global session artifact and the real REST/SSE routes.
+browser. Use a real `claude-headless` launcher for the positive capability reading and a real adapter without
+`messageStream` for the negative reading; native bytes still come from the global session artifact and the real
+REST/SSE routes.

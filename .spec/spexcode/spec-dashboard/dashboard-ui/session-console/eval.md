@@ -96,12 +96,14 @@ scenarios:
   - name: terminal-toolbar-and-eval-door
     tags: [frontend-e2e, desktop]
     description: >-
-      Switch between a live pane-backed session and a headless message-stream session, then route through the
+      Switch between a live pane-backed session and a real `claude-headless` session, then route through the
       permanent Eval door at wide and narrow desktop widths across themes, locales, long headlines, Command Box
-      visibility, and eval loading/error/zero states.
+      visibility, and eval loading/error/zero states. Let the headless session settle with timeline events and
+      inspect the right pane and toolbar.
     expected: >-
-      Exactly one console tab is present: Terminal for the pane-backed session and Messages for the headless
-      session. Eval is a real canonical anchor outside the tablist and no inline eval pane mounts. The compact
+      The pane-backed session keeps its warm Terminal pane. The headless session has no terminal or tmux socket:
+      its main console is the shared TimelineChat (timeline + declaration notes + fixed `replyVia:"note"`
+      composer). Eval is a real canonical anchor outside the tablist and no inline eval pane mounts. The compact
       toolbar stays one line, visually separate from either console, with honest eval summary states and all
       available icon tools visible. The warm terminal survives navigation and browser Back.
   - name: create-stays-on-new-and-close-falls-back

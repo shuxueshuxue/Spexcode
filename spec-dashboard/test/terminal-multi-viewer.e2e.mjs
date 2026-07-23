@@ -96,7 +96,7 @@ try {
   assert.equal(windowSize(), largeSize)
   await small.page.screenshot({ path: `${OUT}/small-viewer.png`, fullPage: true })
   await large.page.screenshot({ path: `${OUT}/large-viewer.png`, fullPage: true })
-  step(`tmux largest policy selects ${largeSize} over ${smallSize}`)
+  step(`tmux latest policy sizes to the most recently active client (${largeSize})`)
 
   await large.context.close()
   largeContext = null

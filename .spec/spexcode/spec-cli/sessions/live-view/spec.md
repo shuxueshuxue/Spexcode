@@ -163,7 +163,9 @@ reaches is an empty [0/0]. The browser keeps no independent scrollback and the b
 inspect pane mode or reconstruct a copy-mode viewport. The pane viewport therefore clips rather than
 scrolls: with no xterm scrollback its overflow is hidden on both axes, so a fractional device-pixel
 or geometry overshoot cannot surface a phantom themed browser scrollbar competing with tmux's own
-scroll.
+scroll. The grid sits in normal flow with no alignment artifice, so the fractional fit remainder
+rests naturally below the last row — the breathing strip a plain terminal shows — instead of being
+relocated above the first row by a bottom-pinning layout.
 
 Viewer subscriptions belong to the session id and WebSocket rather than a replaceable helper process. If one
 visible helper exits, an alive-gated, rate-limited restore creates a new helper for that same viewer; native

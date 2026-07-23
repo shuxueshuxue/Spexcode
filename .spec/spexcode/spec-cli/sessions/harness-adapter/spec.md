@@ -19,7 +19,7 @@ related:
 
 ## raw source
 
-SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Codex, OpenCode, and pi
+SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, OpenCode, and pi
 ([[pi-harness]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
@@ -45,7 +45,10 @@ is defined ONCE, as data, in [[live-matrix]], and `spex eval matrix <launcher>` 
 session of any registered launcher through all eight behaviors — syncing the rows into that harness node's
 eval.md scenarios and filing a per-row reading with its evidence transcript, so a new harness is covered by
 its launcher + node alone, zero new runner code. A harness whose evidence is only artifacts has not been
-measured.
+measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
+semantic difference is measured by a replacement scenario rather than forced into a false common shape.
+[[claude-headless]] replaces the matrix's stop/resume and kill/offline rows with its own idle-resume and
+record-liveness rows, and adds native message-stream and hard-interrupt readings.
 
 ## expanded spec
 
@@ -165,7 +168,7 @@ surface:
   this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
   id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
   pi each declare `false`; an actually non-interactive adapter declares `true` on its own row.
-- **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
+- **runtime: liveness + delivery + interrupt + cleanup** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window
   presence, a per-pane probe (the pane's root pid + one whole-box process table from a single `ps`), AND
@@ -261,14 +264,21 @@ surface:
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
-  JSON-RPC turn delivery live in the Codex adapter. Launch also registers the interactive agent process in
+  JSON-RPC turn delivery live in the Codex adapter. [[claude-headless]] composes the materialize half from
+  `claudeHarness` but replaces this whole runtime half: its intact record is always online, active delivery
+  writes a native stream-json user event into the resident turn child, idle delivery spawns a
+  `claude -p --resume` turn, and hard interrupt writes Claude's native `control_request/interrupt`. Every
+  complete native stdout event is appended unwrapped to the session store's `messages.ndjson`. Launch also registers the interactive agent process in
   `agent.pid`; adapters may use that per-session signal alongside their native transport proof. OpenCode
   prefers its rendezvous listener and falls back to the registered pid, so a plugin-load failure still reads
   honestly. Claude/pi use their live listener, while Codex uses the visible pane's descendant process tree.
+  `cleanupRuntime(rec)` is the inverse owned by the same transport: rendezvous adapters unlink their socket,
+  claude-headless unlinks its controller socket even when tmux killed the controller before its signal handler
+  ran, and Codex leaves its shared project app-server intact.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-`slash-commands.ts`. They now live in `harness.ts` (four interactive adapters gathered in `HARNESSES`),
+`slash-commands.ts`. They now live in `harness.ts` (five adapters gathered in `HARNESSES`),
 which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
 `if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.

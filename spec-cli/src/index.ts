@@ -15,7 +15,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { readSessionMessages, sessionMessageStream } from './message-stream.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
@@ -575,6 +575,10 @@ app.post('/api/sessions/:id/input', async (c) => {
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
 app.post('/api/sessions/:id/stop', async (c) => c.json({ ok: await stopSession(c.req.param('id')) }))
+app.post('/api/sessions/:id/interrupt', async (c) => {
+  const result = await interruptSession(c.req.param('id'))
+  return c.json(result, result.ok ? 200 : 502)
+})
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but

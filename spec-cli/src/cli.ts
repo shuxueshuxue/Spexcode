@@ -786,6 +786,11 @@ if (cmd === 'serve') {
       // can be resumed (`session resume`). Distinct from `close`, which removes the worktree.
       const full = await resolveSelectorOrExit(id)
       console.log(await c.clientStop(full) ? `stopped ${full} (worktree kept — resumable)` : `no such session ${full}`)
+    } else if (sub === 'interrupt') {
+      const full = await resolveSelectorOrExit(id)
+      const r = await c.clientInterrupt(full)
+      console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
+      process.exit(r.ok ? 0 : 1)
     } else if (sub === 'close') {
       const full = await resolveSelectorOrExit(id)
       console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
@@ -868,7 +873,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       await attachSession(await resolveSelectorOrExit(id))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | show | watch | wait | review | merge | send | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | show | watch | wait | review | merge | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }
@@ -938,6 +943,15 @@ if (cmd === 'serve') {
     if (!ocid) { console.error('usage: spex internal opencode-capture <opencode-session-id>'); process.exit(2) }
     const sid = process.env.SPEXCODE_SESSION_ID
     console.log(sid && markHarnessSessionId(sid, ocid) ? `captured ${ocid}` : 'noop (no governed session record)')
+  } else if (sub === 'claude-headless-run') {
+    const id = process.argv[4], runtimeDir = process.argv[5], claudeCmd = process.argv[6]
+    const divider = process.argv[7]
+    if (!id || !runtimeDir || !claudeCmd || divider !== '--') {
+      console.error('usage: spex internal claude-headless-run <session-id> <runtime-dir> <claude-cmd> -- [--session-id <id> <prompt> | --resume <id>]')
+      process.exit(2)
+    }
+    const { runClaudeHeadlessController } = await import('./claude-headless.js')
+    await runClaudeHeadlessController(id, runtimeDir, claudeCmd, process.argv.slice(8))
   } else if (sub === 'commit-surgery') {
     // the pre-commit footprint anchor ([[commit-surgery]]): unconditional materialize + staged-index repair
     // (strip our sentinel block from staged blobs, unstage HEAD-untracked generated artifacts). Called only

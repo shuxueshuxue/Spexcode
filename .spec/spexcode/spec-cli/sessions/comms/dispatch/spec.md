@@ -2,7 +2,7 @@
 title: dispatch
 status: active
 hue: 280
-desc: Deliver a prompt to a live agent over its rendezvous socket — socket-only, fail-loud — plus the merge intent.
+desc: Deliver a prompt through the resolved harness adapter's control channel — fail-loud, never PTY prompt typing — plus hard interrupt and the merge intent.
 related:
   - spec-cli/src/sessions.ts
 ---
@@ -20,14 +20,15 @@ not restated in every prompt, so the prompt and the flow never duplicate.
 
 ## expanded spec
 
-Prompt control goes through a **per-session rendezvous socket only**, never PTY keystrokes. The socket
-path is **derived from the session id** (set up at [[launch]]), so only our own sockets are addressed —
-control never reaches a Claude Code session outside the product. Writing one `{"type":"reply","text":…}`
-line injects the text and submits it deterministically, so multi-line prompts and Enters can't be
-corrupted the way `tmux send-keys` could.
+Prompt control goes through the resolved [[harness-adapter]] only, never PTY prompt typing. Every adapter's
+address is derived from the governed session id or its owned native id, so control reaches only sessions this
+product launched. Interactive Claude/pi/opencode use the rendezvous protocol, Codex uses its app-server, and
+[[claude-headless]] uses a controller that writes Claude-native stream-json stdin. Multi-line prompts and Enters
+therefore cannot be corrupted the way `tmux send-keys` could.
 
-`sendText` is **socket-only with no send-keys fallback** and confirms the prompt was **parsed by the daemon**,
-not merely written. Mere write-success lies, because claude's rendezvous daemon keeps **ONE connection** and
+`sendText` has **no send-keys fallback** and asks the resolved adapter to confirm at the strongest layer its
+native channel exposes. Interactive Claude confirms the prompt was **parsed by the daemon**, not merely written.
+Mere write-success lies there, because claude's rendezvous daemon keeps **ONE connection** and
 destroys the previous socket on every new connect — discarding any received-but-unparsed line with it — and
 our own liveness probes ARE such connects, so a probe landing in the write→parse window silently killed a
 "successfully sent" prompt (the field incident: dashboard messages recorded `sent` with no trace in the
@@ -43,7 +44,12 @@ dequeued, daemon silent), so a send into that pane state is **refused loudly** w
 `reply-rejected`/`shutting-down`, or exhausted kick-retries all return a **loud `DispatchResult {ok,error}`**
 that propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
-Before a text prompt reaches that socket, the backend applies the SAME `surface: command` resolver [[launch]]
+Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` calls the adapter's
+interrupt capability through the backend; [[claude-headless]] sends native `control_request/interrupt` and
+confirms the matching `control_response`. An adapter without that capability refuses loudly. Interrupt never
+falls back to a signal or raw key that could target the wrong process.
+
+Before a text prompt reaches that channel, the backend applies the SAME `surface: command` resolver [[launch]]
 uses. A recognized leading `/<preset>` expands to the live plugin body, target placeholders, and remaining
 free text; an unknown slash name passes through unchanged. Dashboard and CLI callers send the raw invocation
 and never carry plugin bodies or a second interpreter. Raw-key input bypasses this resolver because keys are

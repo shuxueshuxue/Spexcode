@@ -8,6 +8,7 @@
   "sessions": {
     "launchers": {
       "claude": { "harness": "claude", "cmd": "claude" },
+      "claude-headless": { "harness": "claude-headless", "cmd": "claude" },
       "codex": { "harness": "codex", "cmd": "codex" },
       "opencode": { "harness": "opencode", "cmd": "opencode" },
       "pi": { "harness": "pi", "cmd": "pi" }

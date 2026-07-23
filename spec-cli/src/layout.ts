@@ -242,24 +242,27 @@ export function listSessionIds(): string[] {
   return ents.filter((d) => d.isDirectory()).map((d) => d.name)
 }
 
-// memo the overlay (3 git diffs/worktree) keyed on fork-point merge-base + HEAD + spec sig — keying on the
-// merge-base NOT main's HEAD means unrelated merges that don't move the fork point stay cache hits.
+// memo the overlay (4 git diffs/worktree, all .spec-scoped) keyed on fork-point merge-base + HEAD + spec
+// sig + MAIN'S TIP ([[worktree-linker]]): the main-tip component is what lets a merge landing identical
+// content dissolve a worktree's now-moot ops — the recompute it triggers is cheap because every diff is
+// .spec-scoped.
 const deltaCache = new Map<string, { key: string; ops: NodeOp[] }>()
 const safeHead = (p: string): string => { try { return headSha(p) } catch { return '' } }
 const safeMergeBase = async (wtPath: string, mainRef: string): Promise<string> => {
   try { return (await gitA(['-C', wtPath, 'merge-base', mainRef, 'HEAD'])).trim() } catch { return '' }
 }
 let layoutHeadWarned = false
-async function cachedDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
+async function cachedDelta(wtPath: string, mainRef: string, mainSha: string): Promise<NodeOp[]> {
   const wtHead = safeHead(wtPath)
   const base = await safeMergeBase(wtPath, mainRef)
-  // fail loud, never stale: if the merge-base or HEAD can't be read the key is untrustworthy — bypass the
-  // cache and recompute (warn once) rather than risk serving a delta keyed on an empty sha across a real change.
-  if (!base || !wtHead) {
-    if (!layoutHeadWarned) { layoutHeadWarned = true; console.warn('spec-cli: layout overlay cache bypassed (unreadable merge-base/HEAD), recomputing every read') }
+  // fail loud, never stale: if the merge-base, HEAD, or main tip can't be read the key is untrustworthy —
+  // bypass the cache and recompute (warn once) rather than risk serving a delta keyed on an empty sha
+  // across a real change.
+  if (!base || !wtHead || !mainSha) {
+    if (!layoutHeadWarned) { layoutHeadWarned = true; console.warn('spec-cli: layout overlay cache bypassed (unreadable merge-base/HEAD/main tip), recomputing every read') }
     return worktreeSpecDelta(wtPath, mainRef)
   }
-  const key = `${base}\0${wtHead}\0${worktreeSpecSig(wtPath)}`
+  const key = `${base}\0${wtHead}\0${mainSha}\0${worktreeSpecSig(wtPath)}`
   const hit = deltaCache.get(wtPath)
   if (hit && hit.key === key) return hit.ops
   const ops = await worktreeSpecDelta(wtPath, mainRef, base)
@@ -285,11 +288,16 @@ export async function resolveLayout(): Promise<Layout> {
   // each: a worktree whose dir was genuinely removed mid-read (a worker self-merged + retired it) is OMITTED;
   // one that still exists but hit a transient detail failure is kept as a DEGRADED row from the last cached delta.
   const records = listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r && r.governed)
+  // main's tip, resolved ONCE per board read — a component of every worktree's overlay cache key
+  // ([[worktree-linker]]: landed content must dissolve the ops it made moot).
+  const mainSha = await (async () => {
+    try { return (await gitA(['-C', main, 'rev-parse', '--verify', `${mainRef}^{commit}`])).trim() } catch { return '' }
+  })()
   const rows = await Promise.all(records.map((r) => {
     const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
     const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ops: [] }
     return guardWorktree<Worktree>(r.worktree_path,
-      async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef) }),
+      async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef, mainSha) }),
       (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
   }))
   const sessionWorktrees = rows.filter((w): w is Worktree => w !== null)

@@ -484,21 +484,29 @@ export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolea
   })
 }
 
-// this worktree's spec ops vs main: one working-tree diff off the fork point (folds committed+staged+unstaged),
-// a `status --porcelain` pass to add untracked spec.md, a third diff vs HEAD to mark what's committed.
+// this worktree's spec ops vs main ([[worktree-linker]]): an op must BOTH differ from main's current tip
+// (the proposal — the vs-main working diff supplies the op set and each op's TYPE, so merge terms are
+// spoken: content equal to main is no op, an existing node reads `edited` never `added`) AND have been
+// touched by this branch since its fork point (attribution — main's own post-fork movement is not this
+// worktree's op). A `status --porcelain` pass adds untracked spec.md, a third diff vs HEAD marks committed.
 export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
   // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
   // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
   // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
   const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
-  // the three queries are independent — run them in parallel.
-  const [workOut, commOut, statusOut] = await Promise.all([
+  // the four queries are independent — run them in parallel.
+  const [mainOut, workOut, commOut, statusOut] = await Promise.all([
+    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
     run(['diff', '--name-status', '-M', base, '--', '.spec']),
     run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
     run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
   ])
-  const work = parseNameStatus(workOut)
+  const proposals = parseNameStatus(mainOut)
+  // the branch's own footprint since its fork point — both sides of every row, so a rename matches
+  // whichever side the vs-main diff names.
+  const touched = new Set<string>()
+  for (const r of parseNameStatus(workOut)) { touched.add(r.to); if (r.from) touched.add(r.from) }
   const committed = new Set(parseNameStatus(commOut).map((r) => r.to))
   // --untracked-files=all: list every untracked spec.md individually (the default collapses a wholly
   // new node's directory to `.spec/.../node/`, which we'd never recognise as a spec.md add).
@@ -514,9 +522,10 @@ export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHin
 
   const codeFor: Record<string, NodeOp['op']> = { A: 'added', M: 'edited', D: 'deleted', R: 'moved', C: 'added', T: 'edited' }
   const ops: NodeOp[] = [], seen = new Set<string>()
-  for (const r of work) {
+  for (const r of proposals) {
     const path = r.code === 'D' ? r.from : r.to
     if (!isSpecMd(path)) continue
+    if (!touched.has(r.to) && !touched.has(r.from)) continue   // main moved it, not this branch → no op
     seen.add(path)
     const op = codeFor[r.code] ?? 'edited'
     ops.push({

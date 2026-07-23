@@ -281,6 +281,16 @@ header leading each — and within a zone the **newest** session sits on top. Th
 **liveness, not the authored lifecycle**: a session whose process died while it was `asking`/`review`/`error`
 keeps that pre-death lifecycle, yet it cannot act until relaunched, so it sorts to **offline** rather than
 wrongly sitting under *needs you*; a merely booting session (`starting`/`queued`) stays under *running*. The
+**offline zone rests folded behind its own header** — the ONE disclosure for session history. Retired and
+dormant sessions accumulate (an adopter's CR record sessions are deliberately kept alive for their external
+deep links), and a list that renders every one of them drowns the two zones a human acts on; but they are
+records, so they are never deleted and never more than one click away. The zone header carries the hidden
+COUNT and an expanded/collapsed affordance (`aria-expanded` speaks it); clicking toggles — pointer-inert for
+focus like every zone header. Folding is **presentation only** (per-surface state, collapsed again on a
+fresh mount; no session record is touched), it applies to **no other zone** — *needs you* and *running* rows
+can never be hidden by any fold — and the **selected session stays revealed**: a row chosen by URL,
+search, an originator chip, or the graph's node menu renders even while its zone is folded, so a deep link
+into history always lands on its visible row. ↑/↓ walk only the visible rows, as with every fold. The
 selected row is marked by the **highlight wash alone**, no caret. Both list surfaces share this grouping +
 compact one-line layout; only the avatar differs (the map-side window keeps it, the console list drops it).
 

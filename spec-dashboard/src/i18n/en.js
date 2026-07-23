@@ -36,6 +36,8 @@ export default {
     need: 'needs you',
     run: 'running',
     offline: 'offline',
+    showHistory: ({ n }) => `show ${n} dormant session${n === 1 ? '' : 's'} (history is kept, never deleted)`,
+    hideHistory: ({ n }) => `fold the ${n} dormant session${n === 1 ? '' : 's'} away`,
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page

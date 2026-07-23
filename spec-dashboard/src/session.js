@@ -140,7 +140,15 @@ export function subtreeRollup(id, childrenOf) {
 // target. `guides` is the file-tree rail vector, one bool per connector column (length === depth): the LAST
 // entry marks whether THIS row has a following sibling (branch tee vs end elbow), each earlier entry whether
 // the ancestor in that column continues (draw a pass-through vertical line vs blank).
-export function sessionForest(sessions, isExpanded) {
+//
+// @@@ offline-history fold ([[session-console]]) — the OFFLINE zone rests folded behind its header, the one
+// disclosure for retained session history: `zoneFolded(zone)` names the folded zones (per-surface state; the
+// product folds only 'offline', collapsed by default), and a folded zone emits its header — enriched with the
+// hidden `count` and `folded: true` so the surface renders it as the disclosure — but none of its rows,
+// EXCEPT any row `keepVisible(s)` claims (the current selection / graph lock): a session reached by URL,
+// search, or a menu stays a visible row even while its zone is folded. Presentation only — no record is
+// touched — and never applicable to the needs-you / running zones, whose rows this fold cannot hide.
+export function sessionForest(sessions, isExpanded, { zoneFolded = () => false, keepVisible = () => false } = {}) {
   const { roots, childrenOf } = nestSessions(sessions)
   const items = []
   const emit = (s, depth, seen, guides) => {
@@ -154,13 +162,41 @@ export function sessionForest(sessions, isExpanded) {
       vis.forEach((c, i) => { seen.add(c.id); emit(c, depth + 1, seen, [...guides, i < vis.length - 1]) })
     }
   }
+  // a folded subtree still counts everything it hides (the root and every descendant), so the disclosure's
+  // number is the whole history, not just its top-level rows.
+  const subtreeSize = (s, seen) => {
+    let n = 1
+    for (const c of childrenOf.get(s.id) || []) { if (seen.has(c.id)) continue; seen.add(c.id); n += subtreeSize(c, seen) }
+    return n
+  }
   const seen = new Set()
   let prevZone = null
+  let zoneItem = null
   for (const r of zoneSort(roots)) {
     if (seen.has(r.id)) continue
-    seen.add(r.id)
     const z = sessionZone(r)
-    if (z !== prevZone) { items.push({ type: 'zone', zone: z }); prevZone = z }
+    if (z !== prevZone) {
+      zoneItem = { type: 'zone', zone: z, count: 0, folded: !!zoneFolded(z) }
+      items.push(zoneItem)
+      prevZone = z
+    }
+    // the zone's count is its WHOLE population (every root and descendant), folded or not — the
+    // disclosure chip must not read 0 the moment the zone is open.
+    zoneItem.count += subtreeSize(r, new Set([...seen, r.id]))
+    if (zoneItem.folded) {
+      // still emit any row (at any depth) the surface pinned visible — flat, since its nesting context
+      // is folded away with the rest.
+      const pinned = []
+      const collect = (s, walked) => {
+        if (keepVisible(s) && !seen.has(s.id)) pinned.push(s)
+        for (const c of childrenOf.get(s.id) || []) { if (walked.has(c.id)) continue; walked.add(c.id); collect(c, walked) }
+      }
+      collect(r, new Set([r.id]))
+      for (const s of pinned) { seen.add(s.id); items.push({ type: 'row', s, depth: 0, expandable: false, expanded: false, rollup: null, kin: 0, guides: [] }) }
+      seen.add(r.id)
+      continue
+    }
+    seen.add(r.id)
     emit(r, 0, seen, [])
   }
   return items

@@ -52,13 +52,15 @@ Two principles keep that derivation cheap on a long-running server:
 
 The same discipline governs the runtime reads the dashboard makes alongside the spec data. The board
 **overlay** — each managed worktree's pending spec-delta versus `main`, owned by [[portable-layout]] —
-is a pure function of the worktree's **fork point** (its merge-base with `main`), its HEAD, and its
-working-tree `.spec`, memoized on exactly those. Keying on the fork point, not main's raw HEAD, is what
-keeps the overlay both honest and cheap: a worktree merely behind a freshly-advanced `main` shares its
-old fork point, so it stays a cache hit and never shows a phantom for content `main` moved, not it (the
-anchoring itself lives in [[worktree-linker]]). The key costs one `git merge-base` per managed worktree;
-HEAD and the `.spec` signature are filesystem reads, so a warm board re-runs no per-worktree diff yet
-still reflects a fresh commit or edit immediately. Session liveness is owned by [[sessions]].
+is a pure function of the worktree's **fork point** (its merge-base with `main`), its HEAD, its
+working-tree `.spec`, and **main's tip**, memoized on exactly those. An op must BOTH differ from main's
+current content AND be the branch's own post-fork work, so neither staleness class paints a phantom: a
+worktree merely behind a freshly-advanced `main` shows nothing for content `main` moved (not it), and a
+foreign-base or already-landed tree whose content equals main shows nothing at all (the anchoring itself
+lives in [[worktree-linker]]). The key costs one `git merge-base` per managed worktree plus one main-tip
+resolve per board read; HEAD and the `.spec` signature are filesystem reads, so a warm board re-runs no
+per-worktree diff yet still reflects a fresh commit, edit, or landed merge immediately. Session liveness
+is owned by [[sessions]].
 
 Status is a four-state derived value computed from version and drift, with frontmatter kept only as a
 fallback when git is unreadable: the loader derives the git-only part (pending / drift / merged), and

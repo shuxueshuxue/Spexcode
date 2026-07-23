@@ -35,6 +35,8 @@ export default {
     need: '待你处理',
     run: '自运行',
     offline: '离线',
+    showHistory: ({ n }) => `展开 ${n} 个休眠会话（历史仅收纳，绝不删除）`,
+    hideHistory: ({ n }) => `收起这 ${n} 个休眠会话`,
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签

@@ -13,6 +13,7 @@ related:
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
   - spec-cli/src/session-stamp.test.ts
+  - spec-eval/scenarios/harness-delivery-campaign.mjs
 ---
 
 # harness-adapter
@@ -51,6 +52,18 @@ semantic difference is measured by a replacement scenario rather than forced int
 record-liveness rows, and adds native message-stream and hard-interrupt readings. [[pi-headless]] replaces
 the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
 rendezvous-steer/cold-resume readings; it intentionally has no message stream.
+
+Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered interactive
+and headless adapter: harness form x prompt origin (launch's first prompt, the terminal-free input route with
+`replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
+runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
+the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default
+land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
+truthful, and the authored declaration lands. The launch prompt has no second in-turn invocation, so
+`launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
+Every cell files its own transcript-backed reading on the most specific adapter node available; the aggregate
+table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
+preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
 
 ## expanded spec
 

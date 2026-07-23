@@ -18,6 +18,12 @@ try {
   // the requested PTY grid the pane grid too; filtering a coloured final row in xterm would corrupt real
   // pane content. SpexCode owns these sessions, so a later foreground attach sees the same status-free pane.
   execFileSync('tmux', ['-L', socket, 'set-option', '-t', id, 'status', 'off'])
+  // Idempotent per-session migration of the primary-screen contract: launch() sets this for new
+  // sessions, but a session created before this release still has its window on the alternate
+  // screen (copy-mode over it reads [0/0] — alt screens have no history). Setting the window
+  // option here converts it the next time its harness restarts; until then scrolling is honestly
+  // empty rather than frozen.
+  execFileSync('tmux', ['-L', socket, 'set-option', '-w', '-t', id, 'alternate-screen', 'off'])
   // Let tmux's native multi-client policy choose the application grid. A small browser gets tmux's
   // viewport into the largest attached client; it never forces a real large display down to its size.
   execFileSync('tmux', ['-L', socket, 'set-window-option', '-t', id, 'window-size', 'largest'])

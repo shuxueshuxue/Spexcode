@@ -82,7 +82,7 @@ Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 ```sh
 npm i -g spexcode                              # installs the `spex` command
 cd your-repo
-spex init --harness claude,codex,opencode,pi,claude-headless   # seeds .spec/, installs hooks, materializes the agent contracts
+spex init --harness claude,codex,opencode,pi,claude-headless,pi-headless   # seeds .spec/, installs hooks, materializes the agent contracts
 ```
 
 That's the whole adoption. The example lists all the built-in harnesses — remove the ones you don't

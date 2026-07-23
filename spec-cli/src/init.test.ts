@@ -22,6 +22,7 @@ const SAFE_LAUNCHERS = {
   codex: { harness: 'codex', cmd: 'codex' },
   opencode: { harness: 'opencode', cmd: 'opencode' },
   pi: { harness: 'pi', cmd: 'pi' },
+  'pi-headless': { harness: 'pi-headless', cmd: 'pi' },
 } as const
 
 function gitAvailable(): boolean {
@@ -83,7 +84,7 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
 })
 
 test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harness config', { skip: !gitAvailable() && 'git not available' }, () => {
-  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless']]
+  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['pi-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'pi-headless']]
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
     const out = spex('init', '.', '--harness', selected.join(','))

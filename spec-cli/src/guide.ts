@@ -14,7 +14,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    startup commands.)
 
 2. Adopt a repo
-     cd <your-repo> && spex init --harness claude,codex,opencode,pi,claude-headless   # seeds .spec/ + git hooks (additive, never overwrites)
+     cd <your-repo> && spex init --harness claude,codex,opencode,pi,claude-headless,pi-headless   # seeds .spec/ + git hooks (additive, never overwrites)
    --harness is required and has no default — the explicit choice of which harness(es) materialize
    delivers into. The example lists every built-in; drop the ones you don't use (any one id or
    comma-separated subset is valid).
@@ -335,13 +335,14 @@ harness the adopter SELECTED (--harness), from the template pool
   "codex"    → { "harness": "codex",    "cmd": "codex" }
   "opencode" → { "harness": "opencode", "cmd": "opencode" }
   "pi"       → { "harness": "pi",       "cmd": "pi" }
+  "pi-headless" → { "harness": "pi-headless", "cmd": "pi" }
 These plain commands preserve each harness's normal permission model. Automatic-permission commands such as
 \`claude --dangerously-skip-permissions\`, \`codex --yolo\`, or \`opencode --auto\` are NEVER clean-init
 defaults: define and select one explicitly only when that access is intended. To run workers under an auth
 wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
 override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir or
 permission variants. Shape:
-  "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi" | "claude-headless",
+  "launchers": { "<name>": { "harness": "claude" | "codex" | "opencode" | "pi" | "claude-headless" | "pi-headless",
                              "cmd": "<launch command>" } }
 \`harness\` defaults to "claude"; \`cmd\` is required and embedded whole. A portable plain command may live
 in committed spexcode.json (as the init seeds do). A host-specific command — an absolute wrapper path,
@@ -450,7 +451,7 @@ Example — tune opt-in health diagnosis without changing the lint gate:
   preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids
-              ("claude"|"codex"|"opencode"|"pi"|"claude-headless") or a
+              ("claude"|"codex"|"opencode"|"pi"|"claude-headless"|"pi-headless") or a
               { "plugin": "<folder>" } bundle. REQUIRED — there is no default set: \`spex init --harness\`
               stamps the explicit choice, and a missing field fails materialize loud. PERSISTENT and
               git-transactional: the edit takes effect at the next git-native materialize anchor (the commit

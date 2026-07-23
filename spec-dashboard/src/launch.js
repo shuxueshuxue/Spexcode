@@ -54,8 +54,8 @@ const initialLauncher = (list, configuredDefault, remembered = rememberedLaunche
 
 // the configured launcher profiles ([[launcher-select]]) + the current pick. The pick is remembered
 // per-browser under the ONE key every surface shares, so phone and desktop agree on it. Initial selection
-// honors the config default so the dashboard agrees with the CLI (`spex new` with no --launcher uses
-// `defaultLauncher`): remembered pick (if still valid) → configured `default` → first.
+// honors a VISIBLE config default; a default hidden by [[launcher-visibility]] cannot become an invisible
+// dashboard pick: remembered pick (if still visible) → visible configured `default` → first visible row.
 export function useLaunchers() {
   const cached = launcherListFrom(launcherSettings)
   const [launchers, setLaunchers] = useState(cached)

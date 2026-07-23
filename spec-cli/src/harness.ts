@@ -41,6 +41,9 @@ export type PaneProbe = { panePid?: number; procs?: ProcTable; pidAlive?: boolea
 
 export interface Harness {
   readonly id: HarnessId
+  // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
+  // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
+  readonly headless: boolean
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
   // Codex's canonical hook event set (its `HookEventName` enum, codex 0.142.3) has no failed-stop and no
   // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
@@ -1079,6 +1082,7 @@ export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
 
 export const claudeHarness: Harness = {
   id: 'claude',
+  headless: false,
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
@@ -1115,6 +1119,7 @@ export const claudeHarness: Harness = {
 
 export const codexHarness: Harness = {
   id: 'codex',
+  headless: false,
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
@@ -1196,6 +1201,7 @@ export const codexHarness: Harness = {
 // one-run defence. See pi-harness.ts for the extension source + trust mechanics.
 export const piHarness: Harness = {
   id: 'pi',
+  headless: false,
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
@@ -1227,6 +1233,7 @@ export const piHarness: Harness = {
 
 export const opencodeHarness: Harness = {
   id: 'opencode',
+  headless: false,
   events: OPENCODE_EVENTS,
   // LITERALLY true: the generated plugin ([[opencode-harness]], opencode.ts) BINDS the per-session rendezvous
   // socket the launch env hands it and speaks the reply/repaint mini-protocol, so claude's deliver (atomic
@@ -1286,18 +1293,29 @@ export function harnessById(id: string): Harness {
 // human-chosen name. `claude` and `codex` are NOT special built-ins — `spex init` SEEDS them as ordinary named
 // launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
-// auth) and validates the harness id. There is NO env-derived built-in fallback: the dropdown lists exactly
-// the config's real launchers.
-export type Launcher = { name: string; harness: string; cmd: string }
+// auth) and validates the harness id. There is NO env-derived built-in fallback: this registry lists exactly
+// the config's real launchers; dashboardLauncherList applies only the dashboard visibility projection.
+export type Launcher = { name: string; harness: string; cmd: string; headless: boolean }
 export type LauncherDefault = { default: string | null; error: string | null }
 
-// the configured named launchers from spexcode.json, as a stable name-sorted list (for the dashboard dropdown
-// + the CLI). Picking a launcher is the ONLY launch choice; the old separate harness pick is gone.
+// the complete configured named launchers from spexcode.json, as a stable name-sorted list (for CLI/session
+// resolution and downstream projections). Picking a launcher is the ONLY launch choice; the old separate
+// harness pick is gone.
 export function launcherList(root = mainCheckout()): Launcher[] {
   const m = readConfig(root).sessions?.launchers || {}
   return Object.keys(m)
-    .map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
+    .map((name) => {
+      const harness = harnessById(m[name].harness || defaultHarness.id)
+      return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless }
+    })
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// The dashboard's visibility projection. It never removes a launcher from the complete config/CLI path;
+// it only narrows GET /api/settings for the New Session picker ([[launcher-visibility]]).
+export function dashboardLauncherList(root = mainCheckout()): Launcher[] {
+  const showHeadless = readConfig(root).dashboard?.showHeadlessLaunchers === true
+  return launcherList(root).filter((launcher) => showHeadless || !launcher.headless)
 }
 
 export const MISSING_DEFAULT_LAUNCHER_ERROR =
@@ -1326,7 +1344,6 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
-  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
-  harnessById(resolved.harness)   // validate the harness id fail-loud
-  return resolved
+  const harness = harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
+  return { name, harness: harness.id, cmd: l.cmd, headless: harness.headless }
 }

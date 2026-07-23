@@ -259,14 +259,14 @@ settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. 
 PORTABILITY, and picking the right one is the whole discipline:
 
   spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
-                        identity, lint policy, doctor health budgets, launcher NAMES. "Git is the database": tracked so the
+                        identity and launcher visibility, lint policy, doctor health budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
                         paths. Layered OVER spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon, lint policy, doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+icon or launcher-visibility policy, lint policy, doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
@@ -296,8 +296,13 @@ Example — a repo whose trunk is \`staging\`, not \`main\`:
   dashboard.apiUrl  the per-project backend the dashboard proxies to (read frontend-side). For a SHARED
                     install prefer the API_URL env var; apiUrl here is the default only when the dashboard
                     lives inside the project.
+  dashboard.showHeadlessLaunchers
+                    include launchers whose harness declares itself headless in the dashboard New Session
+                    picker. Default: false. This changes dashboard visibility only; explicit CLI
+                    --launcher selection can still use every configured launcher.
 Example:
-  { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
+  { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch",
+                   "showHeadlessLaunchers": false } }
 
 ── HOST GATEWAY ($SPEXCODE_HOME/config.json — per-user host identity, never a project file) ──
   gateway.icon      the global /projects icon, using the same preset ids above. Default: "gateway".

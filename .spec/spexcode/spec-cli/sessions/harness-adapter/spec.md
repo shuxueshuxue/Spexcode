@@ -13,6 +13,7 @@ related:
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
   - spec-cli/src/session-stamp.test.ts
+  - spec-eval/scenarios/harness-delivery-campaign.mjs
 ---
 
 # harness-adapter
@@ -53,6 +54,26 @@ the matrix's process-resident stop/resume and kill/offline rows with its no-TUI 
 readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
 the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
 rendezvous-steer/cold-resume readings; it intentionally has no message stream.
+
+Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered interactive
+and headless adapter (currently four of each, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
+`replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
+runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
+the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default
+land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
+truthful, and the authored declaration lands. A pane reading includes its real tmux scrollback: stop-gate
+guidance may scroll a valid answer above the current viewport, which is still user-readable pane output, not
+a missing response. Declaration landing is proven by the live board's observed `active -> settled` transition;
+it does not require a matching history row because the debounced timeline observer can legitimately fold a fast
+turn that returns to the same status between samples. That board proof never substitutes for a required timeline
+ANSWER: a note-routed cell still waits for the marker in `/timeline`. The launch prompt has no second in-turn invocation, so
+`launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
+BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
+reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner
+still invokes later cells through the real adapter instead of converting one failure into skipped coverage.
+Every cell files its own transcript-backed reading on the most specific adapter node available; the aggregate
+table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
+preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
 
 ## expanded spec
 

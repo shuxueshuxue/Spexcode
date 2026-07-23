@@ -1,7 +1,7 @@
 ---
 concern: A valid note declaration can disappear from the session timeline after a later status
 by: a3271939-68d9-478e-a364-52c83154178a
-status: open
+status: landed
 nodes: session-timeline, opencode-harness, harness-adapter
 evidence: d2c1597c9923e331e719fba5704ba25b62a608be361566c0a6fcfa743af35ae2
 created: 2026-07-23T11:55:30.360Z

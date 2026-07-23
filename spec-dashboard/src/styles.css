@@ -1693,13 +1693,13 @@ a.scenario-count:hover { background: var(--panel2); }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */
 .si-term-body { container-type: size; flex: 1; min-height: 0; overflow: clip; padding: 6px 10px 4px; background: var(--term-bg); }
-.si-term-body.is-messages { padding: 0; background: var(--paper); }
+.si-term-body.is-conversation { padding: 0; background: var(--paper); }
 .si-line { font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
 .si-op { color: var(--blue); font-weight: var(--weight-bold); }
 
-/* [[message-stream]] — a headless harness's console is the native event conversation, not a terminal-shaped
-   placeholder. Bubbles carry turns; tool calls remain compact rows in the same ordered stream. */
+/* [[message-stream]] — the optional full-process drill-down over a capable adapter's native events.
+   Bubbles carry turns; tool calls remain compact rows in the same ordered stream. */
 .ms-console { height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); }
 .ms-scroll {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
@@ -2029,6 +2029,31 @@ a.scenario-count:hover { background: var(--panel2); }
    their m-* classes. */
 .tl-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .si-term-layer .tl-chat { height: 100%; background: var(--paper); }
+.tl-chat-tools {
+  flex: none; display: flex; justify-content: flex-end; padding: 6px 10px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.tl-process-door, .tl-process-back {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 28px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink2);
+  font-family: var(--mono); font-size: var(--type-control); cursor: pointer;
+}
+.tl-process-door:hover, .tl-process-back:hover { color: var(--blue); border-color: var(--blue); }
+.tl-process-door:focus-visible, .tl-process-back:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tl-process-door svg, .tl-process-back svg { flex: none; }
+.tl-process {
+  height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--paper); color: var(--ink);
+}
+.tl-process-head {
+  flex: none; min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 5px 10px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.tl-process-title {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-control);
+}
+.tl-process .ms-console { flex: 1; min-height: 0; height: auto; }
 .m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
 .m-day { text-align: center; margin: 10px 0 6px; font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
 .m-ev { margin: 8px 0; }
@@ -2048,7 +2073,7 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .m-ev-prompt summary { font-family: var(--mono); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
 
-/* the docked composer — textarea + send, with the note-reply chip above (the terminal-free default ON). */
+/* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
 .m-offline, .m-senderr { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
 .m-senderr { color: var(--red); }

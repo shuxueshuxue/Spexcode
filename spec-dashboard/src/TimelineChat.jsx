@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
+import SessionMessages from './SessionMessages.jsx'
+import { isMessageStreamSession } from './messageStream.js'
+import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
@@ -20,13 +23,15 @@ const sameEvents = (a, b) => a != null && a.length === b.length
 // prompt, timestamped, oldest first, with the composer docked below. Freshness: an 8s poll while shown,
 // plus an immediate refetch whenever the board push moves this session's status/note (the board stream is
 // already live in the host app), plus one after every send.
-export default function TimelineChat({ s, sessions }) {
+export default function TimelineChat({ s, sessions = [], active = true }) {
   const t = useT()
+  const hasFullProcess = isMessageStreamSession(s)
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
+  const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
@@ -34,6 +39,7 @@ export default function TimelineChat({ s, sessions }) {
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
   useEffect(() => { setEvents(null); setDetail(null); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
+  useEffect(() => { setFullProcess(false) }, [s.id, hasFullProcess])
   useEffect(() => {
     const iv = setInterval(load, 8000)
     return () => clearInterval(iv)
@@ -95,8 +101,31 @@ export default function TimelineChat({ s, sessions }) {
   }
 
   const offline = s.liveness === 'offline' || s.status === 'offline'
+  if (fullProcess && hasFullProcess) {
+    return (
+      <div className="tl-process">
+        <header className="tl-process-head">
+          <button type="button" className="tl-process-back" onClick={() => setFullProcess(false)}>
+            <Icon name="arrow-left" size={14} />
+            <span>{t('session.backToConversation')}</span>
+          </button>
+          <span className="tl-process-title">{t('session.fullProcess')}</span>
+        </header>
+        <SessionMessages sessionId={s.id} active={active} />
+      </div>
+    )
+  }
   return (
     <div className="tl-chat">
+      {hasFullProcess && (
+        <div className="tl-chat-tools">
+          <button type="button" className="tl-process-door" onClick={() => setFullProcess(true)}>
+            <Icon name="list-checks" size={14} />
+            <span>{t('session.fullProcess')}</span>
+            <Icon name="chevron-right" size={13} />
+          </button>
+        </div>
+      )}
       <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">

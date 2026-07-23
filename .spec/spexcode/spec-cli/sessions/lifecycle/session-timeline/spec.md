@@ -48,9 +48,10 @@ one) each keep their own last-seen and can append a single record move twice —
 append-only and duplicates die at read time, the same read-aggregation stance as the board.
 
 Write surface for the terminal-free sender: the one input route accepts `replyVia:"note"`, and the server
-appends `withNoteReplyHint` to the delivery — the insert that tells the agent its reader can only see
-declaration notes, so the complete reply belongs in `--note`. The phrases live server-side, beside
-withSenderHint, so every surface (desktop later, too) opts in with the same flag.
+appends `withNoteReplyHint` to the delivered prompt. That insert is transport guidance only: the agent writes
+the actual declaration by executing the external `spex session <verb> --note <text>` CLI, and the lifecycle hooks
+only delimit or remind the agent at turn boundaries; hooks never carry the note data. The phrases live
+server-side, beside withSenderHint, so every surface (desktop later, too) opts in with the same flag.
 
 **The reply-channel signal is symmetric — an opt-in with no opt-out makes notes sticky.** The note insert
 declares itself per-message, and the note→terminal transition gets an explicit counter-insert: a human

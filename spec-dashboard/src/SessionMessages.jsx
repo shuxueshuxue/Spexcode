@@ -5,8 +5,6 @@ import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { rowsFromMessages } from './messageStream.js'
 
-export { isMessageStreamSession } from './messageStream.js'
-
 export default function SessionMessages({ sessionId, active }) {
   const t = useT()
   const [messages, setMessages] = useState(null)

@@ -16,6 +16,7 @@
     "maxActive": 8,
     "launchers": {
       "claude": { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" },
+      "claude-headless": { "harness": "claude-headless", "cmd": "claude --dangerously-skip-permissions" },
       "codex": { "harness": "codex", "cmd": "codex --yolo" },
       "pi": { "harness": "pi", "cmd": "pi" }
     },

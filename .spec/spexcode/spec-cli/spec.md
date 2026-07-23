@@ -140,7 +140,7 @@ node shows its body not nothing), `/api/settings` (the resolved
 `/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
-`/api/sessions` list + spawn; per-session `resume`/`review`/`close`, plus reads `review` (the merge
+`/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatch to the session's own
 agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. The ❯ box
 (`keys`) dispatches a whole prompt over the rendezvous control socket, fail-loud (an unconfirmed prompt is

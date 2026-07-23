@@ -58,11 +58,14 @@ independent facts, computed independently:
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `status` value above.
-- **liveness** — *whether the agent process is up and addressable*, **derived by the runtime for every
+- **liveness** — *whether the adapter considers the durable session addressable*, **derived by the runtime for every
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
   still booting — see [[launch]]), `unknown` (the liveness PROBE ITSELF failed — see below), else `online`.
-  Detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn
+  Most interactive adapters derive that answer from process/transport probes. [[claude-headless]] deliberately
+  derives it from the intact session record instead: turn children are ephemeral, so no resident process is an
+  idle state rather than death; controller faults fail loudly at delivery. For the process-probed adapters,
+  detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn
   death detector: launch registers the agent's real pid (`agent.pid`, stamped pre-`exec` so it IS the agent's
   own pid), and one `kill(pid,0)` syscall reads it — an ESRCH death is **latched per (pid, mtime)** (the
   pid-reuse guard; only a relaunch's fresh write resets it), so a thrashed loop can't hang it. The **warm 1s

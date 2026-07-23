@@ -43,6 +43,7 @@ a file in that dir:
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
 | `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |
 | `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
+| `messages.ndjson` | [[claude-headless]] turn children, one unwrapped native Claude stream-json event per line |
 
 `layout.ts` owns the seam — the one place that knows where the store sits: `spexcodeHome()` (the `SPEXCODE_HOME`
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:

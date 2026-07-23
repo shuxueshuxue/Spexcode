@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from './icons.jsx'
+import { inertChromePress } from './focus.js'
 
 const VIEWPORT_GAP = 8
 
@@ -17,6 +18,8 @@ export function ContextMenu({ x, y, anchorKey, label, children }) {
     })
   }, [x, y, anchorKey])
 
+  // a menu is inert chrome ([[focus-return]]): picking an item acts but never moves focus, so
+  // whichever input surface owned typing before the right-click still owns it after the pick.
   return (
     <div
       ref={ref}
@@ -25,6 +28,7 @@ export function ContextMenu({ x, y, anchorKey, label, children }) {
       aria-label={label}
       style={position}
       onClick={(e) => e.stopPropagation()}
+      onMouseDownCapture={inertChromePress}
     >
       {children}
     </div>

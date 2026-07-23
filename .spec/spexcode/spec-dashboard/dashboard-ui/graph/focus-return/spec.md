@@ -30,7 +30,15 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
 - **Return on close.** When the **last** transient overlay closes, focus goes back to the ticket if it is still
   on-screen and focusable, **else to the declared sink**. The session page exposes exactly one current sink:
   New's textarea, Command Box's textarea while open, or the active xterm helper textarea. Hidden xterms remove
-  the marker. Never `<body>`. The return is deferred one frame and reads the ticket live.
+  the marker. Never `<body>`. The return is deferred one frame and reads the ticket live; if a successor
+  overlay already holds focus by then, it owns it — the return never yanks. The shared modal chrome returns
+  on its own unmount, so every closing path — Esc, backdrop, cancel, submit — honors the contract without
+  each caller wiring it.
+- **Inert chrome.** The acquisition-side twin: a pointer-down on chrome that is not itself an input surface
+  (not an editable field, not the xterm screen, not a scrollbar gutter) is **prevented from moving focus at
+  all** — the click still lands and acts. A surface or menu attaches this one capture-phase guard, and then
+  most pops need no return because focus never left: the ticket stays pinned to the real input region
+  instead of getting polluted by the button that opened the pop.
 
 The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it. The **session interface is a surface, not a transient overlay** — it owns its own focus discipline and hosts the sink, so it stays outside this boundary; the boundary governs only the modals that float over it.
 

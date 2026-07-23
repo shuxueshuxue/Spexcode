@@ -565,13 +565,13 @@ const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it 
 // for the grace window; only past it (still not online) is it genuinely 'offline'.
 export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   if (!rec.session) return 'offline'
-  if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
   // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
   // codex proves its launch-registered pid (with the legacy descendant-tree fallback). The 'starting' grace
   // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
   // 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
   if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
+  if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
   // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
   // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
   // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
@@ -1341,9 +1341,12 @@ export async function newSession(prompt: string, parent: string | null = null, l
   writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
   const after = readRecord(id) ?? rec   // 'active' if the drain launched it, else still 'queued'
-  // queued → no process yet (offline liveness); just-launched → its socket is still booting (starting).
+  // Every adapter answers from its own truth. Asking with no process facts distinguishes a record-backed
+  // adapter (online immediately) from process-backed queued/booting adapters (offline/starting) without an
+  // extra whole-box tmux snapshot on the creation hot path.
+  const recordOnline = h.liveness(after, false, runtimeRoot()) === 'online'
   const queued = after.status === 'queued'
-  return toSession(after, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
+  return toSession(after, queued ? 'queued' : 'working', recordOnline ? 'online' : queued ? 'offline' : 'starting')
 }
 
 // @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what writes
@@ -1645,14 +1648,13 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
 
 // @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
 // two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
-// window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
-// tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
-// would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if claude/OS already
-// removed it). Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// window reading `starting` instead of `offline`), and ask the resolved adapter to sweep its ephemeral runtime
+// transport. Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
 async function stopAgentProcess(id: string): Promise<void> {
+  const rec = readRecord(id)
   await tmuxOk(['kill-session', '-t', id])
   launchedAt.delete(id)
-  try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
+  harnessById(rec?.harness || defaultHarness.id).cleanupRuntime(rec ?? { session: id })
 }
 
 // @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
@@ -2006,6 +2008,16 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.
   if (r.ok) recordSent(id, text, from ?? null, opts.replyVia)
   return r
+}
+
+// Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a
+// confirmed native primitive refuses loudly; there is no signal/PTY fallback that could target the wrong turn.
+export async function interruptSession(id: string): Promise<DispatchResult> {
+  const rec = readRecord(id)
+  if (!rec) return { ok: false, error: `no session record for ${id} - nothing to interrupt` }
+  const h = harnessById(rec.harness || defaultHarness.id)
+  if (!h.interrupt) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
+  return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
 }
 
 // @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous

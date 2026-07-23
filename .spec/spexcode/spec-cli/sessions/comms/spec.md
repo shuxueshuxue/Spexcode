@@ -2,15 +2,15 @@
 title: comms
 status: active
 hue: 280
-desc: The inter-agent mesh — how one live session reaches another, over a single rendezvous-socket delivery path, and the two relationships (watching, talking) the session graph draws between them.
+desc: The inter-agent mesh — how one session reaches another through its resolved harness adapter, and the two relationships (watching, talking) the session graph draws between them.
 ---
 
 # comms
 
 ## raw source
 
-Once sessions are up, they **talk to and watch each other**. There is exactly **one** delivery mechanism —
-the per-session rendezvous socket — and everything else layers on top of it without inventing a second
+Once sessions are up, they **talk to and watch each other**. There is exactly **one** delivery mechanism at
+product altitude — the resolved harness adapter's control channel — and everything else layers on top without inventing a second
 transport: a one-way send becomes a two-way conversation by *stamping* the message, a fire-and-forget send
 becomes a *recorded* relationship by logging it, and the graph that claims to show the agent network must
 show **both** kinds of tie — who **watches** whom and who **talks** to whom — or it is hiding most of it.
@@ -20,7 +20,7 @@ show **both** kinds of tie — who **watches** whom and who **talks** to whom �
 The mesh divides into the delivery path and the relationships drawn over it:
 
 - **[[dispatch]]** — the one delivery: a prompt (message, continue, merge intent) handed to a
-  live agent over its rendezvous socket — socket-only, fail-loud, never PTY keystrokes. Merge is itself a
+  session over its adapter-owned channel — fail-loud, never PTY prompt typing. Merge is itself a
   dispatched prompt, not a server-run git script.
 - **[[agent-reply-channel]]** — making a send bidirectional: stamp the sender + a runnable reply hint into
   the delivered text so the recipient can reply back over the same send. A pure prompt insert, no transport

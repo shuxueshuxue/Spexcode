@@ -132,6 +132,14 @@ export async function clientStop(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// POST /api/sessions/:id/interrupt - native hard interrupt of the current turn. Unsupported harnesses and
+// unreachable control planes return the backend's loud DispatchResult; no signal/raw-key fallback exists.
+export async function clientInterrupt(id: string): Promise<DispatchResult> {
+  await guarded('session interrupt')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/interrupt`, post({}))
+  return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
+}
+
 // POST /api/sessions/:id/close — the human-only worktree removal. {ok:false} = no such session.
 export async function clientClose(id: string): Promise<boolean> {
   await guarded('session close')

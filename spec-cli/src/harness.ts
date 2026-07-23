@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
+import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
 
@@ -24,7 +25,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -144,6 +145,13 @@ export interface Harness {
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // Hard-interrupt the current turn through the harness's native control plane. Optional because a harness
+  // without a confirmed native interrupt must refuse rather than emulate one with a signal or PTY key.
+  interrupt?(rec: HarnessDeliveryRecord): Promise<DispatchResult>
+  // Remove this harness's ephemeral runtime transport after stop/close. This is the runtime inverse of
+  // launch: rendezvous owners unlink rvSock, claude-headless unlinks its control socket, Codex owns no
+  // per-session socket. Product teardown calls only this adapter method.
+  cleanupRuntime(rec: HarnessLivenessRecord): void
   // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
   // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
   // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
@@ -1101,6 +1109,7 @@ export const claudeHarness: Harness = {
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
   // the TUI's sessions panel ("← for agents"): a reply injected here is parsed + enqueued to the PANEL context
   // and never drained (verified live: `queue-operation: enqueue` with no dequeue, no turn, daemon silent), so
   // the parse-confirmed delivery above would still report a false success into it. Matched on the panel's own
@@ -1111,6 +1120,23 @@ export const claudeHarness: Harness = {
       ? 'the claude TUI is focused on its sessions panel ("← for agents"), which silently swallows injected prompts — press Enter in the session terminal to return to the composer, then resend'
       : null,
   resumeArg: (rec) => `--resume ${rec.session}`,
+}
+
+// Claude headless is a separate harness, not a claude mode. Its materialize half is exactly Claude's and is
+// reused by object composition; the whole runtime half is replaced by the stream-json controller.
+export const claudeHeadlessHarness: Harness = {
+  ...claudeHarness,
+  id: 'claude-headless',
+  ownsRendezvous: false,
+  paneTitleIsSelfSummary: false,
+  launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
+  // Liveness is the intact record's property. A missing controller/child fails loudly at control time rather
+  // than turning an idle (no child) session into a speculative offline row.
+  liveness: () => 'online',
+  deliver: deliverViaClaudeHeadless,
+  interrupt: interruptClaudeHeadless,
+  cleanupRuntime: (rec) => { try { rmSync(claudeHeadlessSock(rec.session), { force: true }) } catch { /* already gone */ } },
+  deliveryBlockedBy: undefined,
 }
 
 export const codexHarness: Harness = {
@@ -1177,6 +1203,7 @@ export const codexHarness: Harness = {
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
+  cleanupRuntime: () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
@@ -1220,6 +1247,7 @@ export const piHarness: Harness = {
   // socket the generated extension binds. socketLive is already probed for every windowed session.
   liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
   // reopen the SAME conversation: `--session <id>` resumes the exact session we pinned at launch and FAILS
   // LOUD when its file is gone (unlike `--session-id`, which would silently mint a fresh empty session).
   resumeArg: (rec) => `--session ${rec.session}`,
@@ -1261,6 +1289,7 @@ export const opencodeHarness: Harness = {
   liveness: (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
     (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
+  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
   // owned opencode session id → `--resume <id>` marker (the launch script re-attaches `--session <id>`, the
   // SAME conversation); never captured → `--continue` marker (opencode's own "last session in this directory",
   // which in a dedicated worktree is this worker's). The discriminator is sound for the same reason codex's
@@ -1269,7 +1298,7 @@ export const opencodeHarness: Harness = {
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

@@ -22,7 +22,7 @@ backend is the single broker, and which machine you point at is just a URL.
 
 ## expanded spec
 
-The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `rename`, `rawkey`, `review`, `merge`,
+The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `interrupt`, `rename`, `rawkey`, `review`, `merge`,
 `reopen`, `exit`, `close`, `prompt` — call the backend over HTTP, at the endpoint the routing ladder below
 resolves. (`session attach` is the ONE deliberate exception — a foreground terminal can't be brokered over
 HTTP, so it stays local and guards that premise loudly against the *resolved* backend; see
@@ -44,7 +44,7 @@ first, so a dead record is ignored, never followed); (3) each side falls back to
 default. A malformed `--api`/`--port` fails loud as usage, never a silent default.
 
 **Writes are project-bound; reads point anywhere.** A URL carries no project identity, so a misresolved
-endpoint turns a state write into a wrong-repo mutation. Every MUTATING verb — `new`, `merge`, `send`,
+endpoint turns a state write into a wrong-repo mutation. Every MUTATING verb — `new`, `merge`, `send`, `interrupt`,
 `close`, `rename`, `rawkey`, `reopen`, `exit` — therefore compares the caller's repo root to the backend's
 served root before writing and REFUSES loudly on a provable same-host mismatch, naming both identities and
 the explicit-routing remedy. An explicit `--api`/`--port` skips the guard (the flag IS the proof of intent);

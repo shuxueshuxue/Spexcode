@@ -27,12 +27,19 @@ reading). `spex eval matrix <launcher>` resolves the launcher to its harness, ta
 undeclared-stop · pretooluse-block · ask-note · deliver-steer · resume · liveness · commit-gate ·
 close-residue.
 
-The rows are also the single source of the matrix's contract TEXT: before running, the suite syncs each
+The rows are also the single source of the matrix's contract TEXT for adapters that share their process-resident
+semantics: before running, the suite syncs each
 row's description/expected into the target node's eval.md — a scenario matching a row (canonical key,
 harness-prefixed key, or historical alias) keeps its NAME so reading history is never orphaned while its
 contract converges on the shared wording; a row with no scenario is appended under the canonical key;
 hand-written harness-specific scenarios pass through byte-for-byte. One definition, N materializations —
 the same shape materialize gives the plugin surfaces.
+
+A harness whose declared runtime semantics intentionally remove a matrix premise does not fake the row.
+[[claude-headless]] is record-backed and has ephemeral turn children, so `stop -> offline -> resume` and
+`SIGKILL -> offline` are categorically the wrong measurements; its own idle-resume and record-liveness scenarios
+replace those two rows while the remaining shared behaviors and its message-stream/interrupt additions stay live
+behavior readings.
 
 Verdicts stay honest three ways: a row that could not be provoked (the worker declared on its own; no
 mid-turn window opened) files NOTHING and reports skip — never a fabricated loss signal; a measured row

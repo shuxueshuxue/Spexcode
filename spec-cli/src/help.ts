@@ -202,6 +202,7 @@ edit the spec instead — same commit as the code.`,
 
 Control another session (all take SEL):
   spex session send <SEL> "<msg>"        deliver a message (fail-loud: a dead dispatch exits non-zero)
+  spex session interrupt <SEL>           hard-interrupt the current turn through native harness control
   spex session send <SEL> --keys "<keys>"
       LAST RESORT: raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw
       key surface is UNSTABLE and can confirm dangerous dialogs — don't reach for it unless a plain
@@ -225,7 +226,7 @@ Human escape hatch:
                                          show --capture / send. LOCAL-only (fails loud on a remote backend).
 
 ${SEL_NOTE}
-Manager verbs that WRITE (send/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
+Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
 another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.
 ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
@@ -360,6 +361,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
+  claude-headless-run <id> <runtime> <cmd> -- <tail…>  resident stream-json controller (launch script)
 
 If you reached for one of these by hand, the porcelain you want is probably elsewhere: the trunk
 name also lives at GET /api/settings (.layout); sessions are driven with spex session new / session send;

@@ -18,6 +18,7 @@ const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(join(SRC, '..', 'templates', 'spexcode.json'), 'utf8')).lint.governedRoots)
 const SAFE_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
+  'claude-headless': { harness: 'claude-headless', cmd: 'claude' },
   codex: { harness: 'codex', cmd: 'codex' },
   opencode: { harness: 'opencode', cmd: 'opencode' },
   pi: { harness: 'pi', cmd: 'pi' },
@@ -82,7 +83,7 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
 })
 
 test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harness config', { skip: !gitAvailable() && 'git not available' }, () => {
-  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude', 'codex', 'opencode', 'pi']]
+  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless']]
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
     const out = spex('init', '.', '--harness', selected.join(','))

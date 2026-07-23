@@ -74,7 +74,10 @@ test('publishEndpoint writes atomically; dropOwnEndpoint removes only its own re
 
 test('reconcile validates instance identity and unions with the durable catalog', async () => {
   const home = freshHome('reconcile')
-  const rootOk = '/proj/ok', rootBad = '/proj/bad', rootDead = '/proj/dead', rootCatalog = '/proj/catalog-only'
+  const repos = join(home, 'repos')
+  const rootOk = join(repos, 'ok'), rootBad = join(repos, 'bad'), rootDead = join(repos, 'dead')
+  const rootCatalog = join(repos, 'catalog-only'), rootMissing = join(repos, 'missing')
+  for (const root of [rootOk, rootBad, rootDead, rootCatalog]) mkdirSync(root, { recursive: true })
   const okIdentity = { instanceId: 'inst-ok', root: rootOk, identity: { title: 'Alpha', icon: 'compass' } }
   const ok = await fakeBackend(okIdentity)
   const bad = await fakeBackend({ instanceId: 'DIFFERENT', root: rootBad })   // identity mismatch
@@ -91,7 +94,9 @@ test('reconcile validates instance identity and unions with the durable catalog'
     const legacySlot = join(home, 'projects', encodeProject('/proj/legacy'))
     mkdirSync(legacySlot, { recursive: true })
     writeFileSync(join(legacySlot, 'backend.json'), JSON.stringify({ url: ok.url, pid: 1 }))
-    writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [{ root: rootCatalog, addedAt: 'x' }] }))
+    writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [
+      { root: rootCatalog, addedAt: 'x' }, { root: rootMissing, addedAt: 'x' },
+    ] }))
 
     const list = await reconcileProjects()
     const by = Object.fromEntries(list.map((p) => [p.root, p]))
@@ -103,6 +108,7 @@ test('reconcile validates instance identity and unions with the durable catalog'
     assert.equal(by[rootBad].url, null)
     assert.equal(by[rootDead].online, false, 'dead url must read offline')
     assert.equal(by[rootCatalog].online, false, 'catalog-only project listed offline')
+    assert.equal(by[rootMissing], undefined, 'a remembered root whose directory is gone is not listed')
     assert.equal(by['/proj/foreign'], undefined, 'a mis-slotted record must yield nothing')
     assert.equal(by['/proj/legacy'], undefined, 'a legacy record must yield nothing')
     // auto-adoption: the validated live root became durable catalog knowledge
@@ -198,7 +204,8 @@ test('structured gateway and offline-project icon writes are admin-only', async 
 
 test('host dashboard on the hub: admin list + stream, /p proxy, registration, config, ops, shell, WS pipe', async () => {
   const home = freshHome('gateway')
-  const rootLive = '/proj/live-one'
+  const rootLive = join(home, 'live-one'), rootAsleep = join(home, 'asleep')
+  mkdirSync(rootLive, { recursive: true }); mkdirSync(rootAsleep, { recursive: true })
   const backend = await fakeBackend({ instanceId: 'inst-live', root: rootLive, identity: { title: 'Live One', icon: 'compass' } })
   // the fake backend also answers a WS upgrade so the raw pipe can be proven end to end
   let upgradePath = ''
@@ -207,7 +214,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\nhello-from-backend')
   })
   publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-live', identity: { title: 'Live One', icon: 'compass' } }))
-  writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [{ root: '/proj/asleep', addedAt: 'x' }] }))
+  writeFileSync(join(home, 'projects.json'), JSON.stringify({ projects: [{ root: rootAsleep, addedAt: 'x' }] }))
   const dist = mkdtempSync(join(tmpdir(), 'spex-host-dist-'))
   writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
 
@@ -229,7 +236,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.deepEqual(live.identity, { title: 'Live One', icon: 'compass' })
     assert.equal(list.body.gateway.icon, 'gateway')
     assert.equal(typeof list.body.gateway.revision, 'string')
-    assert.equal(list.body.projects.find((p: any) => p.root === '/proj/asleep').online, false)
+    assert.equal(list.body.projects.find((p: any) => p.root === rootAsleep).online, false)
 
     const gatewayIcon = await fetch(`${base}/projects/icon`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
@@ -256,7 +263,7 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(proxied.status, 200)
     assert.equal(proxied.body.echoedPath, '/api/graph?x=1')
     assert.equal((await getJson(`${base}/p/no-such/api/graph`)).status, 404)
-    assert.equal((await getJson(`${base}/p/${encodeProject('/proj/asleep')}/api/graph`)).status, 404)
+    assert.equal((await getJson(`${base}/p/${encodeProject(rootAsleep)}/api/graph`)).status, 404)
     // non-/p, non-/projects paths fall back to the dashboard shell; /p non-API paths reach the backend
     for (const p of ['/index.html', '/somepage']) {
       const r = await fetch(`${base}${p}`)
@@ -378,8 +385,9 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
 })
 
 test('startHostDashboard passes tls through to the hub: the ONE host gateway serves HTTPS directly', async () => {
-  freshHome('tls')
-  const rootLive = '/proj/tls-live'
+  const home = freshHome('tls')
+  const rootLive = join(home, 'tls-live')
+  mkdirSync(rootLive, { recursive: true })
   const backend = await fakeBackend({ instanceId: 'inst-tls', root: rootLive })
   publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-tls' }))
   const dist = mkdtempSync(join(tmpdir(), 'spex-host-dist-'))

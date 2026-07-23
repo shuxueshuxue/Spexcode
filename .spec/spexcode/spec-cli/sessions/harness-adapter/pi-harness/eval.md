@@ -105,4 +105,72 @@ scenarios:
       Zero residue: the tmux window is gone, no process of that worktree survives, worktree and
       branch are retired, and the session's record/store dir is swept (durable history lives in git
       and the eval filings, not the record).
+  # harness-delivery-campaign:start
+  - name: delivery-combo-pi-launch-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / launch / idle" }
+    description: >-
+      Through the real pi launcher, measure the launch first prompt path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-pi-launch-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / launch / in-turn" }
+    description: >-
+      Through the real pi launcher, measure the launch first prompt path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      The cell is reported BLOCKED because a launch first prompt creates its turn and cannot be
+      injected into a pre-existing in-progress turn. The runner invents no substitute launch or
+      private transport, and the remaining launch/idle cell carries launch-path coverage.
+  - name: delivery-combo-pi-dashboard-note-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / dashboard-note / idle" }
+    description: >-
+      Through the real pi launcher, measure the dashboard note composer path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-pi-dashboard-note-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / dashboard-note / in-turn" }
+    description: >-
+      Through the real pi launcher, measure the dashboard note composer path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-pi-cli-send-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / cli-send / idle" }
+    description: >-
+      Through the real pi launcher, measure the CLI session send path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-pi-cli-send-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "pi / cli-send / in-turn" }
+    description: >-
+      Through the real pi launcher, measure the CLI session send path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  # harness-delivery-campaign:end
 ---

@@ -203,6 +203,151 @@ scenarios:
       discovery walks the date tree newest-first but exhaustively, so future-dated junk cannot mask the real
       current-day rollout. No duplicate prompt/thread retry is created, and cleanup leaves no seeded directory,
       session record, tmux window, worktree, or branch behind.
+  # harness-delivery-campaign:start
+  - name: delivery-combo-claude-launch-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / launch / idle" }
+    description: >-
+      Through the real claude launcher, measure the launch first prompt path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-claude-launch-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / launch / in-turn" }
+    description: >-
+      Through the real claude launcher, measure the launch first prompt path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      The cell is reported BLOCKED because a launch first prompt creates its turn and cannot be
+      injected into a pre-existing in-progress turn. The runner invents no substitute launch or
+      private transport, and the remaining launch/idle cell carries launch-path coverage.
+  - name: delivery-combo-claude-dashboard-note-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / dashboard-note / idle" }
+    description: >-
+      Through the real claude launcher, measure the dashboard note composer path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-claude-dashboard-note-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / dashboard-note / in-turn" }
+    description: >-
+      Through the real claude launcher, measure the dashboard note composer path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-claude-cli-send-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / cli-send / idle" }
+    description: >-
+      Through the real claude launcher, measure the CLI session send path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-claude-cli-send-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "claude / cli-send / in-turn" }
+    description: >-
+      Through the real claude launcher, measure the CLI session send path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-codex-launch-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / launch / idle" }
+    description: >-
+      Through the real codex launcher, measure the launch first prompt path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-codex-launch-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / launch / in-turn" }
+    description: >-
+      Through the real codex launcher, measure the launch first prompt path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      The cell is reported BLOCKED because a launch first prompt creates its turn and cannot be
+      injected into a pre-existing in-progress turn. The runner invents no substitute launch or
+      private transport, and the remaining launch/idle cell carries launch-path coverage.
+  - name: delivery-combo-codex-dashboard-note-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / dashboard-note / idle" }
+    description: >-
+      Through the real codex launcher, measure the dashboard note composer path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-codex-dashboard-note-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / dashboard-note / in-turn" }
+    description: >-
+      Through the real codex launcher, measure the dashboard note composer path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-codex-cli-send-idle
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / cli-send / idle" }
+    description: >-
+      Through the real codex launcher, measure the CLI session send path at idle/wake: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: delivery-combo-codex-cli-send-in-turn
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "codex / cli-send / in-turn" }
+    description: >-
+      Through the real codex launcher, measure the CLI session send path at in-turn steer/queue: use
+      only `spex session new`, the public `/api/sessions/:id/input` route, or plain
+      `spex session send`, then read the public timeline/board and the real pane where applicable.
+    expected: >-
+      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      every observed liveness value is truthful for the live session; and a post-delivery authored
+      declaration is present. A missing default note hint on a headless target is a failure.
+  - name: harness-delivery-combination-campaign
+    tags: [backend-api, cli]
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "8 x 3 x 2 aggregate" }
+    description: >-
+      Run the full delivery campaign across four interactive and four headless harness forms, three prompt
+      origins, and idle versus in-turn timing. Preserve one real conversation per launcher so channel
+      transitions are exercised, and aggregate every cell transcript into one Markdown result table.
+    expected: >-
+      All 40 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;
+      the eight launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,
+      silently inferred, or replaced by an internal transport.
+  # harness-delivery-campaign:end
 ---
 # eval.md — harness-adapter
 

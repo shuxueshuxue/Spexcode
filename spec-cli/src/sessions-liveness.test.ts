@@ -35,6 +35,12 @@ test('opencode-headless liveness is the intact record, independent of sleeping t
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
 })
 
+test('codex-headless liveness is the intact record, independent of the shared app-server process', () => {
+  const headless = rec({ harness: 'codex-headless' })
+  assert.equal(liveness(headless, snap()), 'online')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+})
+
 test('claude online requires a live listener, not just a tmux window (listener-verify)', () => {
   const id = 'sess-live-1'
   const withWindow = new Map([[id, {}]])

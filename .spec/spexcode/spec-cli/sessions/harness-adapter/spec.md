@@ -19,8 +19,8 @@ related:
 
 ## raw source
 
-SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, OpenCode,
-pi ([[pi-harness]]), and pi headless ([[pi-headless]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
+SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, Codex headless,
+OpenCode, pi ([[pi-harness]]), and pi headless ([[pi-headless]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
@@ -48,7 +48,9 @@ its launcher + node alone, zero new runner code. A harness whose evidence is onl
 measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
 semantic difference is measured by a replacement scenario rather than forced into a false common shape.
 [[claude-headless]] replaces the matrix's stop/resume and kill/offline rows with its own idle-resume and
-record-liveness rows, and adds native message-stream and hard-interrupt readings. [[pi-headless]] replaces
+record-liveness rows, and adds native message-stream and hard-interrupt readings. [[codex-headless]] replaces
+the matrix's process-resident stop/resume and kill/offline rows with its no-TUI idle-turn and record-liveness
+readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
 the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
 rendezvous-steer/cold-resume readings; it intentionally has no message stream.
 
@@ -173,7 +175,8 @@ surface:
   is a separate adapter capability: it means the adapter persists native events that the dashboard may expose
   through the optional full-process drill-down. Product surfaces consume this data projection rather than
   branching on the adapter id; a headless adapter can omit the stream, and a future capable adapter needs no
-  UI registry change.
+  UI registry change. A one-shot headless adapter may also declare `launchOneShot`, which tells the generic
+  launcher not to treat its intentional fast exit as a failed boot worth replaying.
 - **runtime: liveness + delivery + interrupt + cleanup** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window
@@ -284,7 +287,7 @@ surface:
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-`slash-commands.ts`. They now live in `harness.ts` (five adapters gathered in `HARNESSES`),
+`slash-commands.ts`. They now live in `harness.ts` (eight adapters gathered in `HARNESSES`),
 which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
 `if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.

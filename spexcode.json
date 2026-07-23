@@ -1,5 +1,5 @@
 {
-  "harnesses": ["claude", "codex", "opencode", "pi", "pi-headless"],
+  "harnesses": ["claude", "codex", "opencode", "pi", "pi-headless", "codex-headless"],
   "lint": {
     "governedRoots": ["spec-dashboard/src", "spec-cli/src", "spec-forge/src", "spec-eval/src"],
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],
@@ -18,6 +18,7 @@
       "claude": { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" },
       "claude-headless": { "harness": "claude-headless", "cmd": "claude --dangerously-skip-permissions" },
       "codex": { "harness": "codex", "cmd": "codex --yolo" },
+      "codex-headless": { "harness": "codex-headless", "cmd": "codex --yolo" },
       "pi": { "harness": "pi", "cmd": "pi" },
       "pi-headless": { "harness": "pi-headless", "cmd": "pi" }
     },

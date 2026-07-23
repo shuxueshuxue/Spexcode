@@ -10,6 +10,7 @@ import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlash
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
@@ -27,7 +28,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'opencode-headless' | 'pi-headless'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -47,6 +48,9 @@ export interface Harness {
   // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
   // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
   readonly headless: boolean
+  // whether the launch command intentionally exits after its first turn instead of owning a resident process.
+  // One-shot adapters must not be mistaken for a failed fast boot and retried with a duplicate prompt.
+  readonly launchOneShot?: boolean
   // whether this harness persists a native event stream that the console may expose as an optional
   // full-process drill-down ([[message-stream]]). This is adapter data, never a harness-id branch in UI.
   readonly messageStream: boolean
@@ -446,7 +450,7 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
-export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot()): string {
+export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -516,11 +520,17 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: 
     // rollout has landed (resume-ready), so a fail-loud (empty output / non-zero) must ABORT — never `resume ""`.
     `if [ "$1" = "--resume" ]; then`,
     `  tid=$2`,
+    ...(attachTui ? [] : [
+      // A headless forced reopen has no TUI to attach and the shared app-server already owns the thread. Keep it
+      // a no-op instead of calling codex-launch without a prompt (which would mint an unrelated empty thread).
+      `elif [ "$#" -eq 0 ]; then`,
+      `  exit 0`,
+    ]),
     `else`,
     `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
-    `exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`,
+    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`] : []),
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -1230,6 +1240,24 @@ export const codexHarness: Harness = {
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
 }
 
+// Codex headless is an independent adapter: its materialization and app-server delivery are exactly Codex's,
+// while launch only runs the backend-owned thread/start + first turn. There is no TUI to attach after that turn;
+// the shared project app-server keeps the thread addressable and idle sends use the inherited JSON-RPC channel.
+export const codexHeadlessHarness: Harness = {
+  ...codexHarness,
+  id: 'codex-headless',
+  headless: true,
+  launchOneShot: true,
+  messageStream: false,
+  launchCmd: (id, runtimeDir, cmd) => codexHeadlessLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),
+  // Record-backed liveness is the family contract for sleeping headless threads. A broken app-server or missing
+  // thread is surfaced by the inherited delivery call rather than converted into a speculative offline state.
+  liveness: () => 'online',
+  // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
+  // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
+  resumeArg: () => '',
+}
+
 // @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:
 // the caller pins the session id at launch (`--session-id <id>`, creating the session if missing), the shim
 // lives IN the worktree, and the rendezvous prompt/liveness channel is REUSED wholesale — pi has no external
@@ -1367,7 +1395,7 @@ export const opencodeHeadlessHarness: Harness = {
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexHeadlessHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

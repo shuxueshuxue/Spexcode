@@ -20,6 +20,8 @@ const TIMINGS = [
   { id: 'in-turn', label: 'in-turn steer/queue' },
 ]
 const LIVE_CONTEXTS = new Set()
+const ISSUE_HEADLESS_WORKING = 'headless-session-turn-agent-working-online-242b6'
+const ISSUE_OPENCODE_PROVIDER = 'opencode-headless-spawn-turn-no-provider-availab'
 
 const ADAPTERS = [
   { id: 'claude', launcher: 'claude', node: 'harness-adapter', headless: false, wallMs: 300_000 },
@@ -27,6 +29,7 @@ const ADAPTERS = [
   { id: 'pi', launcher: 'pi', node: 'pi-harness', headless: false, wallMs: 480_000 },
   { id: 'opencode', launcher: 'opencode', node: 'opencode-harness', headless: false, wallMs: 360_000 },
   { id: 'claude-headless', launcher: 'claude-headless', node: 'claude-headless', headless: true, wallMs: 360_000 },
+  { id: 'codex-headless', launcher: 'codex-headless', node: 'codex-headless', headless: true, wallMs: 360_000 },
   { id: 'pi-headless', launcher: 'pi-headless', node: 'pi-headless', headless: true, wallMs: 480_000 },
   { id: 'opencode-headless', launcher: 'opencode-headless', node: 'opencode-headless', headless: true, wallMs: 360_000 },
 ]
@@ -36,6 +39,7 @@ const NODE_DIRS = {
   'pi-harness': '.spec/spexcode/spec-cli/sessions/harness-adapter/pi-harness',
   'opencode-harness': '.spec/spexcode/spec-cli/sessions/harness-adapter/opencode-harness',
   'claude-headless': '.spec/spexcode/spec-cli/sessions/harness-adapter/claude-headless',
+  'codex-headless': '.spec/spexcode/spec-cli/sessions/harness-adapter/codex-headless',
   'pi-headless': '.spec/spexcode/spec-cli/sessions/harness-adapter/pi-headless',
   'opencode-headless': '.spec/spexcode/spec-cli/sessions/harness-adapter/opencode-headless',
 }
@@ -43,7 +47,7 @@ const NODE_DIRS = {
 function usage() {
   console.log(`usage: node spec-eval/scenarios/harness-delivery-campaign.mjs [options]
 
-Runs the 7 harness forms x 3 prompt routes x 2 timings delivery campaign through real product surfaces.
+Runs the 8 harness forms x 3 prompt routes x 2 timings delivery campaign through real product surfaces.
 
   --plan                         print the 42-cell plan and exit
   --sync-scenarios               sync generated cell contracts into adapter eval.md files
@@ -134,14 +138,14 @@ function aggregateScenarioBlock() {
   return [
     '  - name: harness-delivery-combination-campaign',
     '    tags: [backend-api, cli]',
-    '    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "7 x 3 x 2 aggregate" }',
+    '    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "8 x 3 x 2 aggregate" }',
     '    description: >-',
-    '      Run the full delivery campaign across four interactive and three headless harness forms, three prompt',
+    '      Run the full delivery campaign across four interactive and four headless harness forms, three prompt',
     '      origins, and idle versus in-turn timing. Preserve one real conversation per launcher so channel',
     '      transitions are exercised, and aggregate every cell transcript into one Markdown result table.',
     '    expected: >-',
-    '      All 35 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;',
-    '      the seven launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,',
+    '      All 40 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;',
+    '      the eight launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,',
     '      silently inferred, or replaced by an internal transport.',
   ].join('\n')
 }
@@ -356,6 +360,13 @@ function livenessHonest(samples, start) {
     ['starting', 'online'].includes(sample.value) || (sample.value === 'offline' && sample.lifecycle === 'queued'))
 }
 
+function withKnownIssues(adapter, detail, observed) {
+  const refs = []
+  if (adapter.id === 'opencode-headless' && observed.deliver && (!observed.answer || !observed.declaration)) refs.push(ISSUE_OPENCODE_PROVIDER)
+  if (adapter.headless && observed.deliver && !observed.declaration && observed.show?.lifecycle === 'active' && observed.show?.liveness === 'online') refs.push(ISSUE_HEADLESS_WORKING)
+  return refs.length ? `${detail}; known issue(s): ${refs.join(', ')}` : detail
+}
+
 async function observeCell(ctx, { token, expected, timelineStart, livenessStart, wallMs, inTurn }) {
   const end = Date.now() + wallMs
   let pane = ''
@@ -440,7 +451,8 @@ async function runMeasuredCell(ctx, cell, deliver, opts) {
   const checks = { deliver: true, answer: observed.response, liveness: observed.honest, declaration: observed.declaration }
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)
   const status = failed.length ? 'fail' : 'pass'
-  const detail = failed.length ? `missing/false checks: ${failed.join(', ')}` : 'delivery confirmed; answer readable; liveness truthful; declaration landed'
+  const base = failed.length ? `missing/false checks: ${failed.join(', ')}` : 'delivery confirmed; answer readable; liveness truthful; declaration landed'
+  const detail = withKnownIssues(cell.adapter, base, { ...checks, show: observed.show })
   return resultFor(cell, status, detail, ctx.transcript(slice), checks)
 }
 
@@ -475,7 +487,8 @@ async function runAdapter(adapter, opts) {
       const observed = await observeCell(ctx, { token, expected, timelineStart, livenessStart, wallMs: adapter.wallMs, inTurn: false })
       const checks = { deliver: true, answer: observed.response, liveness: observed.honest, declaration: observed.declaration }
       const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name)
-      results.push(resultFor(launchIdle, failed.length ? 'fail' : 'pass', failed.length ? `missing/false checks: ${failed.join(', ')}` : 'launch confirmed; answer readable; liveness truthful; declaration landed', ctx.transcript(launchSlice), checks))
+      const base = failed.length ? `missing/false checks: ${failed.join(', ')}` : 'launch confirmed; answer readable; liveness truthful; declaration landed'
+      results.push(resultFor(launchIdle, failed.length ? 'fail' : 'pass', withKnownIssues(adapter, base, { ...checks, show: observed.show }), ctx.transcript(launchSlice), checks))
     }
   }
   if (selected(opts, launchActive)) {
@@ -502,7 +515,8 @@ async function runAdapter(adapter, opts) {
       if (!(await recoverSettled(ctx))) {
         const slice = ctx.startSlice(`${route.id}/idle`)
         ctx.log('BLOCKED: session could not be returned to an idle/declared state')
-        results.push(resultFor(idle, 'blocked', 'runtime: no idle state', ctx.transcript(slice)))
+        const show = await ctx.show()
+        results.push(resultFor(idle, 'blocked', withKnownIssues(adapter, 'runtime: no idle state', { deliver: true, answer: false, declaration: false, show }), ctx.transcript(slice)))
       } else results.push(await runMeasuredCell(ctx, idle, (prompt) => ctx.send(route.id, prompt), opts))
     }
     const active = { adapter, route, timing: TIMINGS[1] }
@@ -511,7 +525,8 @@ async function runAdapter(adapter, opts) {
       const prepared = await openActiveWindow(ctx, route.id)
       if (!prepared.ok) {
         ctx.log(`BLOCKED: ${prepared.reason}`)
-        results.push(resultFor(active, 'blocked', `runtime: ${prepared.reason}`, ctx.transcript(slice)))
+        const show = await ctx.show()
+        results.push(resultFor(active, 'blocked', withKnownIssues(adapter, `runtime: ${prepared.reason}`, { deliver: true, answer: false, declaration: false, show }), ctx.transcript(slice)))
       } else results.push(await runMeasuredCell(ctx, active, (prompt) => ctx.send(route.id, prompt), opts))
     }
     await recoverSettled(ctx)
@@ -552,8 +567,8 @@ async function fileAggregate(results, table, output) {
   const failed = results.filter((result) => result.status === 'fail' || (result.status === 'blocked' && !result.structuralBlocked))
   const status = failed.length ? 'fail' : 'pass'
   const note = failed.length
-    ? `FAIL: ${failed.length} runnable cell(s) failed or were runtime-blocked; 7 structural launch/in-turn blocks expected`
-    : 'PASS: all runnable cells passed; 7 structural launch/in-turn cells blocked as expected'
+    ? `FAIL: ${failed.length} runnable cell(s) failed or were runtime-blocked; 8 structural launch/in-turn blocks expected`
+    : 'PASS: all runnable cells passed; 8 structural launch/in-turn cells blocked as expected'
   const evidence = [
     `harness delivery combination campaign`,
     `completed=${iso()}`,

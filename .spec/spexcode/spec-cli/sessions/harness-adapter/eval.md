@@ -338,14 +338,14 @@ scenarios:
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: harness-delivery-combination-campaign
     tags: [backend-api, cli]
-    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "7 x 3 x 2 aggregate" }
+    test: { path: spec-eval/scenarios/harness-delivery-campaign.mjs, name: "8 x 3 x 2 aggregate" }
     description: >-
-      Run the full delivery campaign across four interactive and three headless harness forms, three prompt
+      Run the full delivery campaign across four interactive and four headless harness forms, three prompt
       origins, and idle versus in-turn timing. Preserve one real conversation per launcher so channel
       transitions are exercised, and aggregate every cell transcript into one Markdown result table.
     expected: >-
-      All 35 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;
-      the seven launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,
+      All 40 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;
+      the eight launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,
       silently inferred, or replaced by an internal transport.
   # harness-delivery-campaign:end
 ---

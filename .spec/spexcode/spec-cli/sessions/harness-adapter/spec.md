@@ -56,7 +56,7 @@ the process-resident liveness and idle-resume rows with record-backed liveness p
 rendezvous-steer/cold-resume readings; it intentionally has no message stream.
 
 Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered interactive
-and headless adapter: harness form x prompt origin (launch's first prompt, the terminal-free input route with
+and headless adapter (currently four of each, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
 `replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
 runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
 the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default

@@ -10,6 +10,7 @@ import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlash
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
 
@@ -25,7 +26,7 @@ import { git } from './git.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'opencode-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
@@ -192,7 +193,13 @@ export interface Harness {
 // (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
 // re-exports it for its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
-export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
+export type HarnessDeliveryRecord = {
+  session: string
+  worktreePath?: string
+  harnessSessionId?: string | null
+  runtimeDir?: string
+  launchCmd?: string | null
+}
 // the on-demand surface artifacts a materialize pass wrote, by node NAME — so clean() knows EXACTLY which
 // skill subdirs / agent files are SpexCode's to remove (name-scoped, never a blind wipe of a dir the user may
 // also populate). materialize passes the live skill/agent node names; clean reconstructs the same paths.
@@ -1313,8 +1320,32 @@ export const opencodeHarness: Harness = {
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : '--continue'),
 }
 
+// OpenCode headless is a separate harness, not an opencode mode. Its materialize half is exactly
+// opencodeHarness; only the one-turn runtime and its capability row differ.
+export const opencodeHeadlessHarness: Harness = {
+  ...opencodeHarness,
+  id: 'opencode-headless',
+  headless: true,
+  messageStream: false,
+  launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
+  // A sleeping native conversation is still addressable by its record. Transport breakage belongs to the
+  // next delivery, where the live rendezvous or pane wake reports it loudly.
+  liveness: () => 'online',
+  deliver: async (rec, text) => {
+    const probe = await rendezvousListening(rec.session)
+    if (probe === 'live') return deliverViaRendezvous(rec.session, text)
+    if (probe === 'unproven') {
+      return {
+        ok: false,
+        error: `opencode-headless rendezvous probe was inconclusive for session ${rec.session} - refusing to start a possibly duplicate turn`,
+      }
+    }
+    return spawnOpenCodeHeadlessTurn(rec, text, opencodeBaseCmd(rec.launchCmd ?? undefined), rvSock(rec.session))
+  },
+}
+
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

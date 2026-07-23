@@ -41,10 +41,12 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
   fresh repo just works and a mature one can still curate explicit roots. The planted file also carries the
   CHOSEN `harnesses` set (next paragraph) and seeds an ordinary [[launcher-select]] launcher for each
-  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). Every
-  seeded `cmd` is the harness's plain command, preserving its normal permission model; auth wrappers and
-  automatic-permission flags are explicit user or host-local launcher definitions, never init defaults. Thus
-  session-create works out of the box without seeding launchers for tools the adopter never picked. The same
+  SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). Interactive
+  harnesses seed their plain command, preserving the tool's normal permission model; auth wrappers and
+  automatic-permission flags remain explicit user or host-local launcher definitions for those adapters. The
+  independent `opencode-headless` adapter is the deliberate exception: its runnable non-interactive form is
+  `opencode --auto`, so that exact command is its seed rather than a plain command that would reopen the TUI.
+  Thus session-create works out of the box without seeding launchers for tools the adopter never picked. The same
   starter explicitly plants `dashboard.showHeadlessLaunchers: false`, [[launcher-visibility]]'s portable default.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the

@@ -33,7 +33,13 @@ own half plays two roles:
   no opencode parse arm — the default (claude) branch handles it, exactly like the `plugin` bundle form.
   The runtime's verdict is consumed through opencode's own channels: a PreToolUse block throws (opencode
   aborts the tool call), a Stop block re-injects the gate's parsed reason as a follow-up prompt via the
-  runtime's `dispatchStop` — the `stop_hook_active` loop-termination bit riding the payload so the gate's
+  runtime's `dispatchStop`. The Stop dispatch starts from `session.idle`, but its full promise is deliberately
+  NOT awaited by that event callback: opencode must finish publishing the just-completed assistant turn before
+  `client.session.prompt` starts the blocked-stop continuation. Awaiting the injected turn inside the idle
+  callback re-enters the same session before its final text is durably visible, allowing the continuation to
+  declare success while the requested answer disappears. This scheduling is an opencode host fact, not a
+  shared-runtime rule — pi's awaited `agent_end` continuation remains correct. The
+  `stop_hook_active` loop-termination bit rides the payload so the gate's
   escape paths end the block loop instead of re-blocking until the host dies ([[shim-runtime]]), a lost
   inject reported loud. Tool events from a non-root
   opencode session are stamped `agent_id` so the subagent

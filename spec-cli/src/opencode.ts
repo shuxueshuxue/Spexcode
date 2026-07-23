@@ -120,10 +120,14 @@ export const SpexcodePlugin = async (ctx) => {
         const sid = p.sessionID || ""
         if (sid && rootSession && sid !== rootSession) return   // a subagent going idle is not this worker's Stop
         adopt(sid)
-        // the stop-gate loop closes in-process via the runtime's dispatchStop: stop_hook_active rides the
-        // payload (the gate's loop-termination bit) and the gate's parsed reason re-enters as a follow-up
-        // prompt; an inject the host can no longer take is reported loud.
-        await rt.dispatchStop((reason) => injectPrompt(reason), "blocked by a spexcode hook")
+        // Start the Stop dispatch now, but RETURN this idle callback before a blocked verdict injects its
+        // follow-up turn. Awaiting client.session.prompt here re-enters opencode before it has published the
+        // just-finished assistant text: the continuation can declare success while the requested final answer
+        // disappears. This is opencode host scheduling, not shared dispatchStop semantics (pi correctly awaits
+        // its agent_end continuation). dispatchStop catches inject failures; this final catch keeps substrate
+        // failures loud without throwing them into opencode after the event callback has returned.
+        void rt.dispatchStop((reason) => injectPrompt(reason), "blocked by a spexcode hook")
+          .catch((e) => console.error("spexcode: Stop dispatch failed: " + String(e)))
       }
     },
     "chat.message": async (input, output) => {

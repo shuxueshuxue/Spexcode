@@ -167,7 +167,11 @@ surface:
 - **headless** — whether the adapter launches without an interactive TUI. [[launcher-visibility]] consumes
   this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
   id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
-  pi each declare `false`; an actually non-interactive adapter declares `true` on its own row.
+  pi each declare `false`; an actually non-interactive adapter declares `true` on its own row. **`messageStream`**
+  is a separate adapter capability: it means the adapter persists native events that the dashboard may expose
+  through the optional full-process drill-down. Product surfaces consume this data projection rather than
+  branching on the adapter id; a headless adapter can omit the stream, and a future capable adapter needs no
+  UI registry change.
 - **runtime: liveness + delivery + interrupt + cleanup** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window

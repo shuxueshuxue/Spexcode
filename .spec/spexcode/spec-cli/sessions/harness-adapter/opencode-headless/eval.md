@@ -40,6 +40,11 @@ scenarios:
     expected: Delivery returns a non-success result naming the failed wake; it never records a sent message or silently falls back to terminal typing.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
+  - name: opencode-headless-wake-turn-fail-loud
+    description: Through the public session send surface, cold-wake a real governed session with an OpenCode launcher whose turn process exits non-zero immediately after spawn.
+    expected: Delivery returns non-success with the observed turn exit, the active-only turn-outcome CAS records lifecycle error, and no sent-success event is recorded merely because tmux accepted the respawn.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/opencode-headless.ts]
   # harness-delivery-campaign:start
   - name: delivery-combo-opencode-headless-launch-idle
     tags: [backend-api, cli]

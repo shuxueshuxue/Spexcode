@@ -38,13 +38,16 @@ test('launch and wake commands preserve the native id capture/resume markers and
   const dir = mkdtempSync(join(tmpdir(), 'spex-oh-launch-'))
   const log = join(dir, 'calls.ndjson')
   const stub = join(dir, 'opencode')
+  const loginShell = join(dir, 'login-shell')
   writeFileSync(stub, [
     '#!/usr/bin/env node',
     "const { appendFileSync } = require('node:fs')",
-    `appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), rid: process.env.SPEXCODE_OPENCODE_RESUME_ID || '', cont: process.env.SPEXCODE_OPENCODE_CONTINUE || '' }) + '\\n')`,
+    `appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), rid: process.env.SPEXCODE_OPENCODE_RESUME_ID || '', cont: process.env.SPEXCODE_OPENCODE_CONTINUE || '', auth: process.env.OPENCODE_INTERACTIVE_AUTH || '' }) + '\\n')`,
   ].join('\n'))
+  writeFileSync(loginShell, '#!/bin/sh\n[ "$#" -eq 0 ] && exit 0\n[ "$1" = "-ilc" ] || exit 97\nexport OPENCODE_INTERACTIVE_AUTH=from-login-shell\nshift\nexec /bin/bash -lc "$@"\n')
   chmodSync(stub, 0o755)
-  const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SHELL: '/bin/true' }
+  chmodSync(loginShell, 0o755)
+  const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SHELL: loginShell }
   const run = (command: string, tail = '') => execFileSync('bash', ['-c', `${command} ${tail}`], { env })
 
   run(opencodeHeadlessLaunchCommand('opencode --auto'), "'first prompt'")
@@ -55,11 +58,11 @@ test('launch and wake commands preserve the native id capture/resume markers and
 
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
   assert.deepEqual(calls, [
-    { argv: ['run', '--auto', 'first prompt'], rid: '', cont: '' },
-    { argv: ['run', '--auto', '--session', 'oc_abc'], rid: 'oc_abc', cont: '' },
-    { argv: ['run', '--auto', '--continue'], rid: '', cont: '1' },
-    { argv: ['run', '--auto', '--session', 'oc_abc', 'wake with spaces'], rid: 'oc_abc', cont: '' },
-    { argv: ['run', '--auto', '--continue', 'wake by continue'], rid: '', cont: '1' },
+    { argv: ['run', '--auto', 'first prompt'], rid: '', cont: '', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--session', 'oc_abc'], rid: 'oc_abc', cont: '', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--continue'], rid: '', cont: '1', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--session', 'oc_abc', 'wake with spaces'], rid: 'oc_abc', cont: '', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--continue', 'wake by continue'], rid: '', cont: '1', auth: 'from-login-shell' },
   ])
   assert.ok(calls.every((call) => !call.argv.includes('--format')), 'default output format stays untouched')
   assert.match(opencodeHeadlessLaunchCommand('opencode --auto'), /internal session-turn-fail.*opencode-headless/, 'non-zero launch turns report through the shared outcome seam')
@@ -145,4 +148,25 @@ writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(
   }, 'must fail')
   assert.equal(missing.ok, false)
   assert.match(missing.error || '', /could not start a turn.*no-such-tmux-home/)
+
+  const deadTurn = join(dir, 'dead-opencode')
+  writeFileSync(deadTurn, '#!/bin/sh\nexit 23\n')
+  chmodSync(deadTurn, 0o755)
+  const died = await opencodeHeadlessHarness.deliver({
+    session: id,
+    worktreePath: dir,
+    harnessSessionId: 'oc_native',
+    launchCmd: JSON.stringify(deadTurn),
+  }, 'must report the dead turn')
+  assert.equal(died.ok, false)
+  assert.match(died.error || '', /turn exited.*23/)
+
+  const malformed = await opencodeHeadlessHarness.deliver({
+    session: id,
+    worktreePath: dir,
+    harnessSessionId: 'oc_native',
+    launchCmd: "opencode 'unterminated",
+  }, 'must not accept an unparsed pane script')
+  assert.equal(malformed.ok, false)
+  assert.match(malformed.error || '', /never confirmed startup|turn wrapper died/)
 })

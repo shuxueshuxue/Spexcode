@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
+import { headlessTurnFailureShell } from './harness.js'
 
 const pexec = promisify(execFile)
 
@@ -12,6 +13,7 @@ function turnHome(command: string): string {
   const script = [
     command,
     '__spex_rc=$?',
+    `if [ "$__spex_rc" -ne 0 ]; then ${headlessTurnFailureShell('opencode-headless')}; fi`,
     '[ "$__spex_rc" -eq 0 ] || printf "[spex opencode-headless] turn exited rc=%s\\n" "$__spex_rc" >&2',
     'exec "${SHELL:-/bin/sh}"',
   ].join('\n')

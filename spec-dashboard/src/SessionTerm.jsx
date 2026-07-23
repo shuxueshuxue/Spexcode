@@ -8,6 +8,15 @@ import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.j
 
 const SYNC_BEGIN = '\x1b[?2026h'
 const SYNC_END = '\x1b[?2026l'
+// Motion-tracking and legacy mouse modes never reach xterm. A human pointer drifts constantly, and
+// all-motion tracking (1003) would stream a report per hover pixel into the agent TUI — mouse input
+// is what stalls claude's status-line repaint (measured: 48s frozen while the pointer kept moving).
+// Button mode 1000 + SGR 1006 pass through: they are what makes xterm emit wheel reports at all.
+const MOTION_TRACKING_MODES = new Set([9, 1002, 1003, 1005, 1015])
+
+function onlyMotionTrackingModes(params) {
+  return params.length > 0 && params.every((param) => typeof param === 'number' && MOTION_TRACKING_MODES.has(param))
+}
 
 function onlySynchronizedOutput(params) {
   return params.length > 0 && params.every((param) => param === 2026)
@@ -109,12 +118,15 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       }
     })
 
-    // Mouse ownership is native: tmux (mouse on) and the pane TUI enable mouse-report mode on this
-    // client, xterm honors it and performs the classic wheel/click→SGR conversion itself — the same
-    // battle-tested path every real terminal (iTerm, VS Code) uses, cell-height quanta with a signed
-    // fractional carry that survives direction flips. No bridge-owned wheel synthesis exists. Local
-    // selection follows the universal convention: Shift-drag (Option-drag on macOS) forces a browser
-    // selection while the application owns the mouse.
+    // Pointer belongs to the browser, wheel belongs to tmux, and the agent TUI receives ZERO mouse
+    // events. Three cuts close every path: motion-tracking DECSETs are consumed here (no hover
+    // reports exist), the patched selection predicate (patch-xterm-sync-resize.mjs) turns every
+    // plain drag into a LOCAL browser selection (no button reports, modifier-free copy), and tmux's
+    // server rebinds route the remaining wheel reports to copy-mode history (never to the pane).
+    const motionModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
+      { prefix: '?', final },
+      (params) => onlyMotionTrackingModes(params),
+    ))
     // A bridge-owned geometry frame already has one outer synchronized hold. tmux's native bytes contain
     // their own 2026 pairs; treating those as nested would close the outer hold early because DEC mode 2026
     // is boolean, not a counter. Consume only those inner markers while that exact frame is parsed.
@@ -238,12 +250,11 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       sock.send(JSON.stringify({ t: 'input', data }))
     })
 
-    // Wheel navigation is xterm-native: with this client in mouse-report mode (tmux `mouse on` enables
-    // it on attach), xterm converts wheel events to SGR mouse reports itself — cell-height quanta with a
-    // signed fractional carry that survives direction flips — and they travel through the ordinary
-    // onData→input path to the real tmux client. tmux then decides: copy-mode history for a plain pane,
-    // pass-through for a mouse-owning TUI — exactly as it would for iTerm. No custom wheel handler,
-    // quantizer, tick ledger, or synthetic bottoming exists in the browser.
+    // Wheel navigation is xterm-native and terminates in tmux: reports ride the ordinary onData→input
+    // path to this viewer's real tmux client, whose rebinds always scroll copy-mode history (the
+    // primary-screen transcript — sessions launch with alternate-screen off) and exit at the bottom.
+    // No custom wheel handler, quantizer, tick ledger, or synthetic bottoming exists in the browser,
+    // and the pane application never sees a mouse event.
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
     let copiedTimer
@@ -296,6 +307,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       window.removeEventListener('pagehide', onPageHide)
       ro.disconnect()
       window.removeEventListener('resize', measureAndRequest)
+      for (const handler of motionModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
       inputSub.dispose()
       unsubscribeFont()

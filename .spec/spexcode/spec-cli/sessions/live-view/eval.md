@@ -139,25 +139,28 @@ scenarios:
   - name: scroll-return-resumes-live-tail
     tags: [frontend-e2e, desktop]
     description: >-
-      Through the real dashboard, view a mouse-owning TUI pane whose status line ticks with live output.
-      Wheel up into its scrollback while the pane keeps producing content, then wheel back down by exactly
-      the same travel. Record the pane's scrolled-state indicator, the rendered terminal, and the
-      byte stream across the return, repeating enough rounds to cover clean notches, momentum-style
-      micro-delta gestures with sub-quantum tails, and returns during active content growth.
+      Through the real dashboard, view a live claude TUI pane whose status line ticks. Wheel up into
+      history and back down across many rounds — clean notches, momentum micro-delta gestures with
+      sub-quantum tails, gentle landings that stop the instant the view reads as bottomed — while the
+      pointer keeps drifting over the terminal between gestures (a human hand never holds still).
+      Record the rendered terminal and the pane truth (capture-pane) across each round.
     expected: >-
-      The return gesture lands the view on the live tail: within about a second the scrolled-state
-      indicator is gone and the ticking status line resumes on screen. No round leaves a frozen
-      scrolled view impersonating the live bottom for seconds, and a reader who stays parked deep in
-      history is never yanked to the bottom by the mechanism that guarantees the return.
+      Wheel-up shows tmux copy-mode over the transcript history with tmux's position indicator; the
+      return exits copy-mode at the bottom and the live tail's ticking status line resumes within about
+      a second. The pane application receives no mouse events, so its status line NEVER stalls: across
+      every round and during pointer drift, the pane-truth timer keeps flowing (no window where the
+      displayed elapsed time freezes while the clock runs). No frozen view ever impersonates the live
+      bottom.
   - name: wheel-uses-real-tmux-client
     tags: [backend-api]
     description: >-
-      Through the dashboard wheel path, scroll a normal shell with pre-attach history and a full-screen TUI
-      that owns SGR mouse input, then return the shell to its live bottom.
+      Through the dashboard wheel path, scroll a normal shell with pre-attach history AND a full-screen
+      TUI that requests SGR mouse input, then return each to its live bottom.
     expected: >-
-      tmux enters and renders its own copy-mode for the shell, including history produced before attach,
-      while the TUI receives its own wheel events. The browser has no independent scrollback or scrollbar,
-      and no pane-mode capture/reconstruction path is involved.
+      Both pane types scroll tmux's own copy-mode — the server rebinds never `send -M` a wheel to the
+      pane, so even the mouse-owning TUI receives no wheel events. History produced before attach is
+      reachable, the return exits copy-mode at the bottom, and the browser has no independent
+      scrollback, scrollbar, or pane-mode capture/reconstruction path.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

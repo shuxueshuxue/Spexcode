@@ -2,7 +2,7 @@
 title: session-console
 status: active
 hue: 280
-desc: The Enter surface — two-pane session interface whose console is a live tmux terminal or a headless harness message stream.
+desc: The Enter surface — a two-pane session interface whose console is a live tmux terminal or the shared TimelineChat conversation for a headless session.
 code:
   - spec-dashboard/src/SessionInterface.jsx#SessionInterface
 related:
@@ -42,8 +42,8 @@ originator chip, while ↑/↓ navigation continues to walk only the visible for
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
 Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
-terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless
-[[message-stream]] reconnects from its persisted cursor when selected again. Page display itself
+terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
+keeps its timeline polling cursor and resumes from the latest board snapshot when selected again. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
@@ -93,11 +93,12 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session's harness chooses one real console surface. A pane-backed harness shows its **live
+An existing session's adapter chooses one real console surface. A pane-backed adapter shows its **live
 interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
-its **liveness** ([[state]]) is live (`online`/`starting`). A headless harness has no pane at any liveness;
-its console is [[message-stream]], the harness-native events persisted in `messages.ndjson`, and remains
-readable after the process goes offline. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+its **liveness** ([[state]]) is live (`online`/`starting`). A headless adapter has no pane at any liveness;
+its main console is the shared `TimelineChat` conversation over [[session-timeline]], readable after the process
+goes offline. The optional [[message-stream]] full-process door is exposed only when the adapter's data capability
+`messageStream` is true; the UI consumes that capability and never branches on a harness id. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
@@ -108,9 +109,10 @@ no nested levels, and no permanently reserved second-input strip. Its own prompt
 pane's bottom edge. `Cmd/Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar**
-contains only three things: the current surface, evaluation, and available commands. Its surface group contains
-one real tab (`role=tab` in the only `tablist`): **Terminal** for a pane-backed harness, **Messages** for a
-headless harness. The selected surface stays visually attached to its console. Session identity, lifecycle,
+contains only three things: the current surface, evaluation, and available commands. A pane-backed session exposes
+its one **Terminal** tab; a headless session keeps TimelineChat as the main surface and may expose one
+**full process** door when the adapter advertises `messageStream`. The door opens the native message stream as a
+drill-down on both viewport classes; it is never a replacement console or an id-specific UI branch. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
@@ -158,13 +160,14 @@ the public terminal parser consumes those mode toggles at the adapter boundary. 
 one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
 continues through [[live-view]]'s explicit tmux-client control path.
 
-The desktop right pane has **one console slot with two truthful transports**. A pane-backed harness mounts the
-warm, input-enabled `SessionTerm` described here. A headless harness mounts [[message-stream]] instead: no
-terminal placeholder and no tmux socket are created for a process that owns neither. The harness id already
-carried by the session row selects the registered console transport; no adapter definition or native event is
-reinterpreted here. This differs from the phone's [[session-timeline]] conversation, which is a viewport surface
-over SpexCode lifecycle notes rather than the harness-native stream. Session rows still carry only their status
-and activity vocabulary — no redundant mode badge.
+The desktop right pane has **one console slot with two truthful transports**. A pane-backed adapter mounts the
+warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
+phone, with no terminal placeholder and no tmux socket. Its optional full-process door delegates to
+[[message-stream]] only when the adapter capability is present; native events remain an enhancement over the
+timeline, not the main conversation. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+terminal-free surface property, and the note data arrives because the agent executes the external
+`spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
+Session rows still carry only their status and activity vocabulary — no redundant mode badge.
 
 For a pane-backed console, input has **two explicit channels**. [[terminal-input]] is the default: xterm owns ordinary keys, paste, and
 browser IME composition and sends its ordered data through the visible terminal WebSocket into the same native

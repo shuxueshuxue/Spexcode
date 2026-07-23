@@ -3,7 +3,7 @@ title: mobile-ui
 status: active
 session: e335f3af-0695-488c-b12e-5fd1299e8b6a
 hue: 210
-desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a terminal-free session surface (the persisted timeline as the conversation, a composer that asks for note replies), reusing the same polled data and API routes as the desktop.
+desc: The phone-sized face of the board — a touch drill-down of the spec tree plus the shared TimelineChat terminal-free session surface, reusing the same polled data and API routes as the desktop.
 code:
   - spec-dashboard/src/MobileApp.jsx#MobileApp
   - spec-dashboard/src/MobileApp.jsx#MobileSessionDetail
@@ -25,14 +25,13 @@ query, reactive so a rotate or resize flips it with no reload); both faces read 
 board, so nothing about the data or the backend forks. The phone face is its **own lazy chunk**
 ([[dashboard-shell]]): a phone downloads none of the desktop's graph/terminal/annotator libraries.
 
-**Not a degraded desktop — a purpose-built terminal-free surface.** The desktop's
-session surface is a live pane; the phone deliberately mounts none. What replaces it is the
-persisted **[[session-timeline]]**: without a pane, the agent's declaration notes ARE its replies,
-and the timeline of status transitions + delivered prompts IS the conversation. This is a property
-of the phone surface, never a session type selected at launch. The chat body lives in
-**`TimelineChat`** (timeline poll + board-push refresh + send-then-refresh,
-`replyVia:"note"` fixed); this node's `MobileSessionDetail` is the thin phone wrapper around it
-(identity card, back control, eval entry).
+**Not a degraded desktop — a purpose-built terminal-free surface.** Pane-backed sessions keep their
+desktop TUI. A headless session has no pane at any liveness, so both a phone and the desktop console
+render the persisted **[[session-timeline]]**: declaration notes are the agent's replies, and status
+transitions plus delivered prompts are the conversation. The chat body is one shared
+**`TimelineChat`** component (timeline poll + board-push refresh + send-then-refresh,
+`replyVia:"note"` fixed); `MobileSessionDetail` is only the phone wrapper around it (identity card,
+back control, and eval entry). Viewport width changes chrome and layout, never the conversation model.
 
 **The review and Settings pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
 [[side-nav]] route family: a `#/evals`/`#/issues` address (list or detail) opened at phone width renders
@@ -48,8 +47,9 @@ uses, through the shared `data.js` helpers: the pushed/polled lean board for bot
 Issues/Evals list endpoints only while their route is open, the
 `/api/specs/:id/*` panes (content/history/issues/evals — the SAME React pane components, no second
 markdown or diff renderer), `/api/sessions/:id` + `/timeline` for the conversation, and the ONE
-`/api/sessions/:id/input` route for sending. The sole phone-flavored bit rides that same route as
-a flag (`replyVia:"note"`), and even its phrase lives server-side ([[session-timeline]]).
+`/api/sessions/:id/input` route for sending. The shared terminal-free bit rides that same route as
+a flag (`replyVia:"note"`); it describes the session's reply channel, not the viewport, and its
+transport phrase lives server-side ([[session-timeline]]).
 
 The two planes, made native to touch:
 
@@ -66,8 +66,9 @@ The two planes, made native to touch:
   vertical box (matching top and bottom edges). The composer stops at the tab bar; `.m-tabbar` alone
   owns the viewport-bottom safe-area inset. Every dispatch from this surface carries
   `replyVia:"note"` SILENTLY — a terminal-free reader can only ever see declaration notes, so
-  asking for the reply there is the surface's fixed property, never a per-message option and never
-  a visible control (an earlier toggle chip read as unexplained noise and was deleted). The
+  the reply channel is the surface's fixed property, never a per-message option and never a visible
+  control. The note itself is produced when the agent executes the external `spex session <verb>
+  --note` CLI; turn-boundary hooks only remind the agent and carry no note data. The
   timeline's pending state reads the GENERIC loading word — never another surface's loading phrase
   (it once borrowed the graph HUD's "loading specs from git…", which read as a wrong screen). The
   detail keeps the conversation tab-less — header, timeline, composer; no tab row spends a line on
@@ -80,7 +81,10 @@ The two planes, made native to touch:
   address (a shared link, or the scoped eval pages' terminal door — [[evals-view]]) opens that session's
   conversation on a cold phone load, one-way route→state — leaving the detail via its back control is
   phone-local and never rewrites the hash. Reading the measured loss is exactly what a
-  phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The scroller is chat-shaped
+  phone reviewer needs; ACTING on it (merge/close) stays desktop scope. When the session adapter's
+  `messageStream` capability is true, the same header also exposes a **full process** door to the
+  native [[message-stream]] view; the capability comes from adapter data, so claude-headless is the
+  current provider and all other harnesses omit the door. The scroller is chat-shaped
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).

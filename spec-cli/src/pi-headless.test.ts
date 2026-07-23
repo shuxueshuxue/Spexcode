@@ -15,7 +15,7 @@ const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
 }
 
 test('pi-headless composes pi materialization and replaces only the runtime half', () => {
-  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless'])
+  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless'])
   const proj = '/tmp/project'
   assert.equal(piHeadlessHarness.shimFile(proj), piHarness.shimFile(proj))
   assert.deepEqual(piHeadlessHarness.contractFiles(proj), piHarness.contractFiles(proj))

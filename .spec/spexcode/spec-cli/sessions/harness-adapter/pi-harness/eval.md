@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: pi-materialized-system-context-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real interactive pi session through SpexCode with pi's built-in `--no-tools` flag. Ask the
+      model for the exact uppercase titles of disciplines 2 and 4 from the preloaded SpexCode contract,
+      without naming either title in the prompt. Capture the real pane and pi session transcript.
+    expected: >-
+      The model answers `COMMIT BEFORE YOU DECLARE|KEEP THE LOSS SIGNAL HONEST` from startup context while
+      no file or shell tool exists. The transcript also shows project trust was accepted and the generated
+      extension loaded; an artifact existing on disk or a later file read is not sufficient evidence.
+  - name: pi-materialized-skill-live
+    tags: [backend-api, cli]
+    description: >-
+      Launch a real interactive pi session with `--no-tools` and invoke the discovered `taste` skill through
+      pi's native `/skill:taste` command. Ask for the exact title of principle 14 and capture the expanded
+      native skill invocation plus the model response from the real pi session.
+    expected: >-
+      Pi resolves the materialized `.pi/skills/taste/SKILL.md` through native skill discovery, expands the
+      slash invocation, and the model answers `Capabilities enter the ecosystem through the pillars we
+      already stand on`; no file or shell tool is available to imitate skill loading.
   - name: pi-materialize-full-footprint
     tags: [backend-api]
     description: >-

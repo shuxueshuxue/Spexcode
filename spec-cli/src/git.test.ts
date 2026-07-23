@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, mergeBaseDiff, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, mergeBaseDiff, worktreeSpecDelta, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -128,4 +128,80 @@ test('mergeBaseDiff preserves the old path of a pure rename for merge-base reade
     additions: 0,
     deletions: 0,
   }])
+})
+
+// ---- worktreeSpecDelta ([[worktree-linker]]): an op = differs-from-main-tip AND branch-touched-since-fork ----
+
+// one fixture, four judgments: main gains .spec after a pre-spec root commit; worktrees exercise each
+// staleness/proposal combination against it.
+function specRepo() {
+  const root = mkdtempSync(join(tmpdir(), 'spex-delta-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  run('init', '-q', '-b', 'main')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'test')
+  writeFileSync(join(root, 'README.md'), 'scratch\n')
+  run('add', '.'); run('commit', '-qm', 'pre-spec root'); run('tag', 'prespec')
+  for (const n of ['a', 'b']) {
+    mkdirSync(join(root, '.spec', n), { recursive: true })
+    writeFileSync(join(root, '.spec', n, 'spec.md'), `---\ntitle: ${n}\n---\n# ${n}\n`)
+  }
+  run('add', '.'); run('commit', '-qm', 'spec tree')
+  const wt = (name: string, ref: string) => {
+    const path = join(root, '.worktrees', name)
+    run('worktree', 'add', '-q', '-b', `node/${name}`, path, ref)
+    return path
+  }
+  return { root, run, wt }
+}
+
+test('foreign-base worktree whose .spec equals main tip yields ZERO ops (the +440 phantom)', async () => {
+  const { run, wt } = specRepo()
+  const w = wt('foreign', 'prespec')                       // fork point predates .spec entirely
+  const wrun = (...a: string[]) => execFileSync('git', ['-C', w, ...a], { encoding: 'utf8' })
+  wrun('checkout', '-q', 'main', '--', '.spec')            // restore .spec byte-identical to main
+  wrun('add', '-A', '.spec'); wrun('commit', '-qm', 'restore .spec')
+  assert.equal(run('merge-base', 'main', `node/foreign`), run('rev-parse', 'prespec'))
+  assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])
+
+  // …and ONE real edit on that same foreign base surfaces as exactly ONE op, typed vs main: `edited`
+  // (the node exists on main), never a spurious `added` from the ancient fork point.
+  appendFileSync(join(w, '.spec/a/spec.md'), 'real change\n')
+  const ops = await worktreeSpecDelta(w, 'main')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].nodeId, 'a')
+  assert.equal(ops[0].op, 'edited')
+  assert.equal(ops[0].dirty, true)
+})
+
+test('a worktree merely BEHIND an advanced main contributes no phantom ops', async () => {
+  const { root, run, wt } = specRepo()
+  const w = wt('stale', 'main')                            // forks at main tip…
+  mkdirSync(join(root, '.spec', 'c'), { recursive: true })
+  writeFileSync(join(root, '.spec', 'c', 'spec.md'), '---\ntitle: c\n---\n# c\n')
+  run('add', '.'); run('commit', '-qm', 'main advances: add c')  // …then main moves on
+  assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])
+})
+
+test('a genuine branch-added node reads `added` and committed', async () => {
+  const { wt } = specRepo()
+  const w = wt('feature', 'main')
+  mkdirSync(join(w, '.spec', 'd'), { recursive: true })
+  writeFileSync(join(w, '.spec', 'd', 'spec.md'), '---\ntitle: d\n---\n# d\n')
+  const wrun = (...a: string[]) => execFileSync('git', ['-C', w, ...a], { encoding: 'utf8' })
+  wrun('add', '-A', '.spec'); wrun('commit', '-qm', 'add d')
+  const ops = await worktreeSpecDelta(w, 'main')
+  assert.equal(ops.length, 1)
+  assert.deepEqual([ops[0].nodeId, ops[0].op, ops[0].committed], ['d', 'added', true])
+})
+
+test('ops already LANDED on main dissolve from the overlay', async () => {
+  const { root, run, wt } = specRepo()
+  const w = wt('landed', 'main')
+  const wrun = (...a: string[]) => execFileSync('git', ['-C', w, ...a], { encoding: 'utf8' })
+  appendFileSync(join(w, '.spec/b/spec.md'), 'landed edit\n')
+  wrun('add', '-A', '.spec'); wrun('commit', '-qm', 'edit b')
+  assert.equal((await worktreeSpecDelta(w, 'main')).length, 1)   // pending before the merge…
+  execFileSync('git', ['-C', root, 'merge', '-q', '--no-ff', '-m', 'merge node/landed', 'node/landed'])
+  assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])       // …gone once main contains it
 })

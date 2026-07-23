@@ -2,6 +2,9 @@
   "lint": {
     "governedRoots": ["."]
   },
+  "dashboard": {
+    "showHeadlessLaunchers": false
+  },
   "sessions": {
     "launchers": {
       "claude": { "harness": "claude", "cmd": "claude" },

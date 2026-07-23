@@ -380,14 +380,19 @@ async function observeCell(ctx, { token, expected, timelineStart, livenessStart,
   let events = []
   let show = null
   let declaration = null
+  let sawActive = false
   let response = false
   let settledWithoutAnswerAt = 0
   while (Date.now() < end) {
     show = await ctx.show()
     ctx.sampleLiveness(show, 'cell')
+    if (show?.lifecycle === 'active') sawActive = true
     events = await ctx.timeline()
     const fresh = events.slice(timelineStart)
-    declaration = fresh.find((event) => event.kind === 'status' && !['active', 'launch-queued'].includes(event.status)) || null
+    declaration ||= fresh.find((event) => event.kind === 'status' && !['active', 'launch-queued'].includes(event.status)) || null
+    if (!declaration && sawActive && show?.liveness === 'online' && SETTLED.has(show.lifecycle)) {
+      declaration = { status: show.lifecycle, note: show.note ?? null, source: 'live board transition' }
+    }
     if (ctx.adapter.headless || token.route === 'dashboard-note') {
       response = fresh.some((event) => event.kind === 'status' && typeof event.note === 'string' && event.note.includes(expected))
     } else {

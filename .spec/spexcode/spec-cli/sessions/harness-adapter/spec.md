@@ -63,7 +63,9 @@ the answer is readable at the requested/available user surface (`replyVia:"note"
 land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
 truthful, and the authored declaration lands. A pane reading includes its real tmux scrollback: stop-gate
 guidance may scroll a valid answer above the current viewport, which is still user-readable pane output, not
-a missing response. The launch prompt has no second in-turn invocation, so
+a missing response. Declaration landing is proven by the live board's observed `active -> settled` transition;
+it does not require a matching history row because the debounced timeline observer can legitimately fold a fast
+turn that returns to the same status between samples. The launch prompt has no second in-turn invocation, so
 `launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
 BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
 reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner

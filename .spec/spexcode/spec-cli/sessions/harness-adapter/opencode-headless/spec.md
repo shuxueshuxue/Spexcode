@@ -31,7 +31,9 @@ changes only its id and runtime capabilities. There is no second plugin generato
 materialize or session product code.
 
 Each governed session keeps one tmux window as the home for its current turn. A fresh launch runs
-`opencode run <prompt>` there; OpenCode mints its native session id and the existing plugin reports the first
+`opencode run <configured flags> <prompt>` there: `run` is inserted immediately after the launcher executable,
+so the seeded `opencode --auto` becomes OpenCode's valid `opencode run --auto`, never the invalid
+`opencode --auto run`. OpenCode mints its native session id and the existing plugin reports the first
 event through `opencode-capture`. When the turn exits, the pane returns to a shell and the conversation sleeps.
 The ordinary output format is used because SpexCode does not scrape stdout; `--format json` is deliberately
 absent.

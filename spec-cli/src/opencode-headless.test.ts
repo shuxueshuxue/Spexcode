@@ -31,7 +31,7 @@ test('opencode-headless is an independent adapter with OpenCode materialization 
   assert.equal(opencodeHeadlessHarness.messageStream, false)
   assert.equal(opencodeHeadlessHarness.ownsRendezvous, true)
   assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
-  assert.match(opencodeHeadlessHarness.launchCmd('abc', '/runtime', 'opencode-custom --auto'), /opencode-custom --auto run/)
+  assert.match(opencodeHeadlessHarness.launchCmd('abc', '/runtime', 'opencode-custom --auto'), /__spex_cmd=\(opencode-custom --auto\)/)
 })
 
 test('launch and wake commands preserve the native id capture/resume markers and ordinary output format', () => {
@@ -55,11 +55,11 @@ test('launch and wake commands preserve the native id capture/resume markers and
 
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
   assert.deepEqual(calls, [
-    { argv: ['--auto', 'run', 'first prompt'], rid: '', cont: '' },
-    { argv: ['--auto', 'run', '--session', 'oc_abc'], rid: 'oc_abc', cont: '' },
-    { argv: ['--auto', 'run', '--continue'], rid: '', cont: '1' },
-    { argv: ['--auto', 'run', '--session', 'oc_abc', 'wake with spaces'], rid: 'oc_abc', cont: '' },
-    { argv: ['--auto', 'run', '--continue', 'wake by continue'], rid: '', cont: '1' },
+    { argv: ['run', '--auto', 'first prompt'], rid: '', cont: '' },
+    { argv: ['run', '--auto', '--session', 'oc_abc'], rid: 'oc_abc', cont: '' },
+    { argv: ['run', '--auto', '--continue'], rid: '', cont: '1' },
+    { argv: ['run', '--auto', '--session', 'oc_abc', 'wake with spaces'], rid: 'oc_abc', cont: '' },
+    { argv: ['run', '--auto', '--continue', 'wake by continue'], rid: '', cont: '1' },
   ])
   assert.ok(calls.every((call) => !call.argv.includes('--format')), 'default output format stays untouched')
   rmSync(dir, { recursive: true, force: true })
@@ -101,12 +101,13 @@ test('a live turn uses the existing parse-confirmed rendezvous delivery', async 
 
 test('an idle turn respawns opencode run in the session tmux home and a missing home fails loud', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-oh-wake-'))
-  const fake = join(dir, 'fake-opencode.mjs')
+  const fake = join(dir, 'fake-opencode')
   const log = join(dir, 'wake.json')
-  writeFileSync(fake, `
+  writeFileSync(fake, `#!/usr/bin/env node
 import { writeFileSync } from 'node:fs'
 writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), sid: process.env.SPEXCODE_SESSION_ID, sock: process.env.CLAUDE_BG_RENDEZVOUS_SOCK }))
 `)
+  chmodSync(fake, 0o755)
   const id = `oh-wake-${process.pid}`
   const tmuxSock = `spex-oh-${process.pid}`
   const oldTmux = process.env.SPEXCODE_TMUX
@@ -124,12 +125,12 @@ writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(
     session: id,
     worktreePath: dir,
     harnessSessionId: 'oc_native',
-    launchCmd: `${process.execPath} ${JSON.stringify(fake)} --auto`,
+    launchCmd: `${JSON.stringify(fake)} --auto`,
   }, 'wake the model')
   assert.deepEqual(result, { ok: true })
   await waitFor(() => existsSync(log))
   assert.deepEqual(JSON.parse(readFileSync(log, 'utf8')), {
-    argv: ['--auto', 'run', '--session', 'oc_native', 'wake the model'],
+    argv: ['run', '--auto', '--session', 'oc_native', 'wake the model'],
     sid: id,
     sock: rvSock(id),
   })
@@ -138,7 +139,7 @@ writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(
     session: 'no-such-tmux-home',
     worktreePath: dir,
     harnessSessionId: 'oc_native',
-    launchCmd: `${process.execPath} ${JSON.stringify(fake)}`,
+    launchCmd: JSON.stringify(fake),
   }, 'must fail')
   assert.equal(missing.ok, false)
   assert.match(missing.error || '', /could not start a turn.*no-such-tmux-home/)

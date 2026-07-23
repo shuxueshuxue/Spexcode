@@ -999,6 +999,16 @@ if (cmd === 'serve') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     const { s, sess, mark, noRecord } = await stateKit()
     console.log(mark(() => s.markError(sess)) ? 'marked error' : noRecord())
+  } else if (sub === 'session-turn-fail') {
+    // Headless adapters report an ephemeral turn's non-zero exit through this one shared CAS. A declaration
+    // that landed before teardown wins, so a late child close can never erase an agent-authored state.
+    const sessionId = process.argv[4], harness = process.argv[5], exitCode = process.argv[6]
+    if (!sessionId || !harness || !exitCode) {
+      console.error('usage: spex internal session-turn-fail <session-id> <harness> <exit-code|signal>')
+      process.exit(2)
+    }
+    const { markHeadlessTurnFailure } = await import('./sessions.js')
+    console.log(markHeadlessTurnFailure(sessionId, harness, exitCode) ? `marked error (${harness} ${exitCode})` : 'noop (no active session record)')
   } else if (sub === 'session-idle') {
     // the Notification(idle_prompt) hook marks its session (--session from the payload) idle when claude waits
     // at its prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,

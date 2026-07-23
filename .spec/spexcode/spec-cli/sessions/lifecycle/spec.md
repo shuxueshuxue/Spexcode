@@ -23,8 +23,9 @@ The three concerns each own their detail:
   non-truncating launch-prompt delivery, the materialized-contract auto-discovery (no `--append-system-prompt`,
   no hidden `CLAUDE.md`), and the concurrency cap with its durable launch queue.
 - **[[state]]** — the lifecycle state machine: the declared statuses, the per-session `Stop` / `PreToolUse`
-  / `Notification` hooks that gate them, AskUserQuestion → `asking`, and socket-based liveness via
-  `reconcile`. Agent-authored, never inferred.
+  / `Notification` hooks that gate them, AskUserQuestion → `asking`, and adapter-derived liveness. Lifecycle is
+  agent-authored except for a proven hard runtime outcome: a headless turn's non-zero exit may compare-and-set
+  an otherwise undeclared `active` record to `error`, never overwrite a declaration.
 - **[[runtime]]** — the per-session GLOBAL store under `~/.spexcode` (keyed by `session_id`, grouped per
   project), NOT the worktree: every harness-written artifact (state record, originating + queued prompts,
   launch script, recorded comms, spec sentinels) lives there, so the worktree holds zero per-session

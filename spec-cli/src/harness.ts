@@ -450,6 +450,22 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
+
+// Headless adapters all feed non-zero ephemeral turn exits through one state writer. Keep this reporter at the
+// adapter seam: controllers may call it directly, while shell-homed turns use headlessTurnFailureShell below.
+export async function reportHeadlessTurnExit(id: string, harness: string, code: number | null, cwd = process.cwd()): Promise<void> {
+  if (code === 0) return
+  const exitCode = code === null ? 'signal' : String(code)
+  try {
+    await pexec(SPEX, ['internal', 'session-turn-fail', id, harness, exitCode], { cwd, env: process.env })
+  } catch (error) {
+    console.error(`[spex ${harness}] could not record turn failure for ${id}: ${(error as Error).message}`)
+  }
+}
+
+export function headlessTurnFailureShell(harness: string): string {
+  return `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote(harness)} "$__spex_rc" || true`
+}
 export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
@@ -527,7 +543,11 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: 
       `  exit 0`,
     ]),
     `else`,
-    `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@") || exit 1`,
+    `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@")`,
+    `  __spex_rc=$?`,
+    ...(attachTui ? [`  [ "$__spex_rc" -eq 0 ] || exit 1`] : [
+      `  if [ "$__spex_rc" -ne 0 ]; then ${headlessTurnFailureShell('codex-headless')}; exit "$__spex_rc"; fi`,
+    ]),
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
     ...(attachTui ? [`exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`] : []),

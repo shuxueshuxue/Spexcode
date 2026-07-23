@@ -48,17 +48,18 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   there. Back restores text, the exact page-address form, results, and the list scroll position level by
   level. Omitted page and explicit `page=1` are intentional action/history states, not a dual-address bug.
 - **`ListPage` is the measured GitHub ListView skeleton.** A quiet title/action and the 32px query precede
-  ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and ONE
-  semantic secondary **Filters** trigger for REAL low-frequency/width-displaced facets — the
+  ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and,
+  whenever at least one REAL low-frequency/width-displaced facet has usable options (or an active value
+  needs its off-switch), ONE semantic secondary **Filters** trigger — the
   low-cardinality set only (state, verdict, freshness, evidence, store, source-session presence); this
   menu never houses commands or non-filter actions. The trigger is the same visual family as a facet
   button: the icon system's filter/funnel glyph, localized Filters text, and chevron-down — never a kebab,
   ellipsis, or "More actions" affordance. A stable badge counts ACTIVE filter GROUPS currently housed in
   that menu (not matching rows): desktop excludes a facet still visible beside the trigger, while 390px
   includes every displaced group; zero has no badge. Its accessible name includes the same active count.
-  Tab counts are computed under the REST of the query. No real options means no fake control, and an
-  ACTIVE value whose menu option vanished keeps a cheap All off-switch (the visible text is the canonical
-  release).
+  Tab counts are computed under the REST of the query. When no secondary group has real options and none
+  is active, the trigger is absent: no real options means no fake control. An ACTIVE value whose menu
+  option vanished keeps a cheap All off-switch (the visible text is the canonical release).
   Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
   as a named Fail/Pass pressed-button quick-filter group because verdict is non-exhaustive; neither button
   is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a

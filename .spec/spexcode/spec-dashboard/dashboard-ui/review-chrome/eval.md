@@ -49,7 +49,7 @@ scenarios:
     code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >
       In a real browser at a live backend, open #/evals and #/issues and compare the two list pages'
-      DOM: the 32px query, ListView container, section/facet/secondary-filter metadata bar, structured row elements
+      DOM and paged response: the 32px query, ListView container, section/facet/secondary-filter metadata bar, structured row elements
       (tag, classes, state/title/meta/aside, hairline divider), menus, and empty-state
       class. Open direct and secondary-filter menus by mouse and keyboard; read focus transfer, checked item,
       Arrow/Home/End roving, trigger restoration, outside dismissal, one-layer Escape, and the Chromium
@@ -64,15 +64,18 @@ scenarios:
       Record the menu, viewport, and theme interactions as video evidence.
     expected: >
       Both list pages render the SAME ListPage chrome — a `.rl-query`, one bordered `.rl-list`, one
-      `.lp-head` with counted section tabs left and real invisible facet buttons + ONE semantic secondary
-      Filters trigger right, `.lp-row` REAL anchors whose shared `.rl-row-grid` holds state/title/meta/aside,
+      `.lp-head` with counted section tabs left and real invisible facet buttons plus the SAME conditional
+      secondary-filter slot right: Evals exposes exactly ONE semantic Filters trigger because its fixed
+      review lifecycle is a real group; Issues exposes exactly ONE when its paged response supplies usable
+      source-session choices or an active token needs an off-switch, and exposes NONE when that group has
+      no real options. `.lp-row` REAL anchors whose shared `.rl-row-grid` holds state/title/meta/aside,
       and one
       `.lp-empty` — and both detail
       pages the SAME DetailShell skeleton (`.ds-head` title, `.ds-status`, `.ds-main` beside `.ds-side`,
       the composer in `.ds-compose` docked sticky at the main column's foot). No page-local fork of
       either skeleton exists. Desktop query/header/row measure approximately 32/48/64px. At 390px query
       width is viewport minus 32px, metadata is ~49px, only the primary facet remains beside tabs and all
-      displaced real facets are usable through the filter/funnel + localized Filters + chevron trigger;
+      displaced real facets, when any exist, are usable through the filter/funnel + localized Filters + chevron trigger;
       the trigger contains only named radio filter groups, never actions, and its badge/accessibility name
       counts active groups currently hidden there (zero omitted, desktop excluding still-visible facets,
       390px including every displaced group). A long title wraps to at most three lines with no body or

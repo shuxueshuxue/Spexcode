@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: headless-turn-exit-error
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Through real `spex session new` launches, give each registered headless adapter a controlled harness
+      command whose turn process exits non-zero without calling a lifecycle declaration. Read the session only
+      through the public `spex session show --json` surface. Also run control turns that exit zero and turns
+      whose record is already declared before process teardown.
+    expected: >-
+      Each non-zero undeclared turn leaves the durable session visible but changes its lifecycle/status from
+      active/working to error within a bounded wall, with a note naming the harness and exit code or signal.
+      Liveness remains online only when the adapter can still accept a subsequent delivery. Zero exits do not
+      manufacture an error, and a declaration that lands before teardown is never overwritten.
   - name: nested-subagent-hooks-do-not-clobber-parent-record
     tags: [backend-api]
     code: spec-cli/hooks/harness.sh

@@ -3,7 +3,7 @@ title: session-timeline
 status: active
 session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
-desc: The persisted per-session interaction history — every authored status transition (with its full note) and every delivered prompt, timestamped in timeline.ndjson — recorded by ONE store observer so even the sed-writing shell hook is covered; what a terminal-free surface renders as the conversation.
+desc: The persisted per-session interaction history — every authored status transition (with its full note) and every delivered prompt, timestamped in the append-only timeline.ndjson; what a terminal-free surface renders as the conversation.
 code:
   - spec-cli/src/session-timeline.ts
 related:
@@ -28,13 +28,19 @@ human: *what happened, when, and what the agent said at each stop*. So the lifec
   human input, `spex session send`, the merge dispatch). `from` = the sending session, null = a human.
   The recorded text is the message BEFORE mechanism inserts — hints are transport, not conversation.
 
-**One observer, not writer instrumentation.** The lifecycle has a writer the TS layer never sees: the
-mark-active hook value-replaces status/proposal/note with pure-shell sed. Instrumenting writers would always
-miss it, so the recorder (serve-process only, `superviseTimeline`) OBSERVES the store — an fs.watch on the
-sessions root, debounced, backstopped by a slow reconcile tick — and appends whatever (status, proposal,
-note) moved since last seen. Every writer is covered by construction; granularity is the debounce window,
-same as the board's. On restart each id re-seeds from its persisted last status line, so an unchanged
-session appends nothing and a moved one appends once, with an honest observed-now timestamp.
+**Append authored state at its write boundary; observe the writer outside TypeScript.** A declaration note
+is conversation content, so it cannot depend on a later sample of the mutable current-state record. Every
+TypeScript lifecycle write compares the prior `(status, proposal, note)` and synchronously appends a moved
+value after the new `session.json` lands. A later status may replace the current snapshot, but it can never
+replace or erase the already-appended declaration event.
+
+The lifecycle also has a writer the TypeScript layer never sees: the mark-active hook value-replaces those
+three fields with pure-shell sed. The serve-process `superviseTimeline` therefore remains as the coverage and
+repair observer for external writes — an fs.watch on the sessions root, debounced, backstopped by a slow
+reconcile tick. A direct append and an observation may both record one move; the read's adjacent-duplicate
+fold makes that harmless. On restart each id re-seeds from its persisted last status line, so an unchanged
+session appends nothing and a moved one appends once, with an honest observed-now timestamp. The mutable
+record is the present-state projection; `timeline.ndjson` is the append-only conversation history.
 
 Only the AUTHORED axis is history. Liveness (offline/starting/unknown) is a present-tense probe derivation
 ([[state]]) — re-derived, never authored — so it stays off the durable log; surfaces show current liveness
@@ -43,9 +49,9 @@ from the board row. The timeline dies with the session record (close sweeps the 
 Read surface: `GET /api/sessions/:id/timeline` — the tail (default 500), oldest first, each status event
 carrying its composed display word (awaiting→its proposal's label, active→working: the same vocabulary
 every other surface speaks). The read FOLDS adjacent status lines with identical (status, proposal, note)
-into their first: two serve processes observing one store (a throwaway worktree/eval serve beside the live
-one) each keep their own last-seen and can append a single record move twice — the log stays best-effort
-append-only and duplicates die at read time, the same read-aggregation stance as the board.
+into their first: the direct writer and observer, or two serve processes observing one store (a throwaway
+worktree/eval serve beside the live one), can append a single record move twice — the log stays append-only
+and duplicates die at read time, the same read-aggregation stance as the board.
 
 **Reply-channel readability belongs to the target session, not the sending surface.** One server-side prompt
 composition seam receives the raw prompt, the target session, and an optional explicit `replyVia`; it alone

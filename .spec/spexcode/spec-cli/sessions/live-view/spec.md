@@ -7,6 +7,8 @@ code:
   - spec-cli/src/pty-bridge.ts
 related:
   - spec-cli/src/pty-helper.mjs
+  - spec-cli/src/pty-native-helper.mjs
+  - spec-cli/src/pty-native-helper.test.ts
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
@@ -96,6 +98,15 @@ own viewer; it cannot keep a dead sibling terminal alive or leave another browse
 The helper's stdout is raw terminal output and its stdin is a small resize/navigation/input control stream.
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
 at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
+
+Before its first native spawn, the helper resolves the exact addon `node-pty` loaded and checks for
+`spawn-helper` beside that addon. When that native helper exists but lacks execute bits, SpexCode adds them
+idempotently before calling `pty.spawn`; it never guesses a platform/architecture directory. This runtime
+check complements the packaged-artifact guard in [[packaging]] because an older installed dependency or a
+permission-losing copy can still reach the bridge. If native-helper preparation or `pty.spawn` cannot start,
+the helper emits one bounded startup error and the bridge writes that error into the viewer's terminal byte
+stream. Identical restore attempts remain rate-limited and do not repeat the same message, so recovery stays
+alive-gated without turning an unstartable terminal into either a silent black pane or an error flood.
 
 The visible viewer may send bounded `{t:'input', data}` messages on its existing socket. The bridge preserves
 their order and hands each xterm-produced byte string to the helper, which writes it to the native client's PTY.

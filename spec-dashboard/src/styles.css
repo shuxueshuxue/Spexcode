@@ -1048,7 +1048,7 @@ a.scenario-count:hover { background: var(--panel2); }
      stays dark on its own (--term-bg), the one surface that is legitimately a dark terminal. */
   flex: 1; min-width: 0;
   background: var(--paper); border: none; border-radius: 0;
-  overflow: hidden; display: flex;
+  overflow: clip; display: flex;   /* clip, not hidden: never a caret-reveal scroll target (see .st-host) */
 }
 .si-list {
   /* a dense INDEX, not where a title lives — kept narrow so it doesn't steal width from the terminal
@@ -1691,7 +1691,8 @@ a.scenario-count:hover { background: var(--panel2); }
   .si-eval-door { padding-inline: 5px; }
 }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
-.si-term-body { container-type: size; flex: 1; min-height: 0; overflow: hidden; padding: 6px 10px 4px; background: var(--term-bg); }
+/* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */
+.si-term-body { container-type: size; flex: 1; min-height: 0; overflow: clip; padding: 6px 10px 4px; background: var(--term-bg); }
 .si-line { font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
 .si-op { color: var(--blue); font-weight: var(--weight-bold); }
@@ -1744,7 +1745,10 @@ a.scenario-count:hover { background: var(--panel2); }
    remainder rests naturally BELOW the last row — the same breathing strip a plain terminal shows.
    (A previous flex-end pinned the block to the bottom and moved that gap to the top, which read as a
    cramped bottom edge.) */
-.st-host { width: 100%; height: 100%; overflow: hidden; }
+/* overflow:CLIP, never hidden — hidden is still a programmatic scroll container, and Chromium's
+   caret-reveal scrolls it sideways to chase xterm's composition textarea when an IME opens at the
+   rightmost columns (the pane lurched left by the composition's width). clip removes the scroller. */
+.st-host { width: 100%; height: 100%; overflow: clip; }
 /* one-glance copy hint, a small LEGIBLE chip in the bottom-right of the dark pane. Click-through so it
    never blocks the live output, but readable at a glance (no straining): a bordered pill with light text
    on a solid dark backing. It flips to a solid GREEN "copied ✓" badge when the copy chord fires, then

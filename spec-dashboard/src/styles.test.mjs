@@ -133,13 +133,22 @@ test('terminal viewport clips — tmux owns all scrolling', () => {
   assert.doesNotMatch(css, /\.st-host \.xterm-viewport\s*\{[^}]*overflow-y:\s*auto/s)
 })
 
+test('terminal chrome is overflow:clip — never a caret-reveal scroll container', () => {
+  // overflow:hidden is still programmatically scrollable, and Chromium's caret-reveal drags it sideways
+  // to chase xterm's composition textarea when an IME opens at the rightmost columns — the whole pane
+  // lurched left by the composition's width. clip removes the scroller on every chrome box around xterm.
+  assert.match(css, /\.st-host\s*\{[^}]*overflow:\s*clip;/s)
+  assert.match(css, /\.si-term-body\s*\{[^}]*overflow:\s*clip;/s)
+  assert.match(css, /\.si-panel\s*\{[^}]*overflow:\s*clip;/s)
+})
+
 test('the fit remainder rests naturally below the last row — no alignment artifice', () => {
   // a plain terminal top-aligns content and lets the fractional leftover sit at the BOTTOM. The old
   // flex-end pinned the grid to the bottom edge and moved that natural gap to the top, which read as
   // a cramped bottom. Normal flow, no flex, no reserved padding.
   assert.doesNotMatch(css, /\.st-host\s*\{[^}]*flex-end/s)
   assert.doesNotMatch(css, /\.st-host\s+\.xterm\s*\{[^}]*padding-bottom/s)
-  assert.match(css, /\.st-host\s*\{[^}]*overflow:\s*hidden;\s*\}/s)
+  assert.match(css, /\.st-host\s*\{[^}]*overflow:\s*clip;\s*\}/s)
   assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;/s)
 })
 

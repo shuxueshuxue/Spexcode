@@ -10,8 +10,10 @@ related:
   - spec-cli/src/pty-helper.mjs
   - spec-cli/src/index.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/styles.css
   - spec-dashboard/test/terminal-input.e2e.mjs
   - spec-dashboard/test/terminal-chrome-focus.e2e.mjs
+  - spec-dashboard/test/terminal-hscroll.e2e.mjs
 ---
 
 # terminal-input
@@ -28,7 +30,11 @@ console that legitimately takes focus — the search palette, a modal — return
 ([[focus-return]] owns that boundary), so leaving any pop lands you typing again, never on dead chrome.
 
 xterm owns ordinary keyboard input and its hidden textarea owns browser IME composition; SpexCode does not
-translate DOM keydowns into a second vocabulary. Consecutive composition commits are independent: a new
+translate DOM keydowns into a second vocabulary. The pane also **never moves while you type**: xterm parks
+that textarea at the cursor cell and widens it to the composition string, so at the rightmost columns the
+focused box pokes past the pane edge — and the browser's caret-reveal will drag ANY scrollable ancestor
+sideways to chase it, overflow:hidden included. The console's terminal chrome is therefore `overflow: clip`
+(not a scroll container at all), so a right-edge composition finds nothing to scroll and the grid stays put. Consecutive composition commits are independent: a new
 Chinese/Japanese/Korean candidate can never reuse or replace itself with the prior committed candidate. xterm's
 ordered `onData` bytes travel on the terminal WebSocket to the visible viewer's one [[live-view]] helper,
 which writes them to that same native tmux client's PTY. Rendering, resize, wheel navigation, and input are

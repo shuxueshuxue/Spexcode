@@ -17,6 +17,21 @@ scenarios:
       Shift+Enter emits one `ESC CR` modified-Enter sequence while ordinary Enter stays `CR`. Hidden or
       disconnected viewers inject and replay nothing. All input uses xterm's one live terminal socket, with no
       dashboard raw-key HTTP batching or private focus override.
+  - name: right-edge-pane-still
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/terminal-hscroll.e2e.mjs
+    code: spec-dashboard/src/styles.css
+    related: [spec-dashboard/src/SessionTerm.jsx]
+    description: >-
+      Focus a real live terminal, type ordinary keys until the cursor sits in the rightmost columns, then
+      open a Chinese IME composition there and commit it. Watch every ancestor of xterm's hidden composition
+      textarea (the console chrome around the pane) plus the pane's on-screen x position through the whole
+      march–compose–commit sequence.
+    expected: >-
+      The pane never moves: no ancestor of the composition textarea acquires a scrollLeft/scrollTop, and the
+      xterm element's on-screen position is identical before, during, and after the right-edge composition —
+      the browser's caret-reveal finds no scroll container to drag sideways. The committed candidate still
+      reaches the real tmux pane, so the stillness costs nothing on the IME path.
   - name: chrome-clicks-keep-tui-focus
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/terminal-chrome-focus.e2e.mjs

@@ -66,6 +66,7 @@ Example for this host:
 function parseArgs(argv) {
   const opts = {
     api: process.env.SPEXCODE_API_URL || 'http://127.0.0.1:8787',
+    baseline: null,
     cells: null,
     file: true,
     only: null,
@@ -200,6 +201,7 @@ class RunContext {
   constructor(adapter, opts) {
     this.adapter = adapter
     this.api = opts.api.replace(/\/$/, '')
+    this.baseline = opts.baseline
     this.launcher = opts.profiles.get(adapter.id) || adapter.launcher
     this.id = null
     this.lines = []
@@ -221,6 +223,7 @@ class RunContext {
   transcript(start) {
     return [
       `harness delivery combination campaign`,
+      `baseline=${this.baseline}`,
       `adapter=${this.adapter.id} launcher=${this.launcher} session=${this.id || '(none)'}`,
       ...this.lines.slice(start),
     ].join('\n') + '\n'
@@ -368,6 +371,7 @@ function withKnownIssues(adapter, detail, observed) {
 }
 
 async function observeCell(ctx, { token, expected, timelineStart, livenessStart, wallMs, inTurn }) {
+  const startedAt = Date.now()
   const end = Date.now() + wallMs
   let pane = ''
   let events = []
@@ -392,6 +396,10 @@ async function observeCell(ctx, { token, expected, timelineStart, livenessStart,
       settledWithoutAnswerAt ||= Date.now()
       if (Date.now() - settledWithoutAnswerAt >= 6000) break
     } else settledWithoutAnswerAt = 0
+    if (ctx.adapter.id === 'opencode-headless' && show?.lifecycle === 'active' && !response && !declaration && Date.now() - startedAt >= 30_000) {
+      ctx.log(`known failure signature held for 30s: working/online with no answer or declaration (${ISSUE_OPENCODE_PROVIDER}, ${ISSUE_HEADLESS_WORKING})`)
+      break
+    }
     await sleep(2500)
   }
   if (!pane && !ctx.adapter.headless) pane = await ctx.capture()
@@ -404,18 +412,25 @@ async function observeCell(ctx, { token, expected, timelineStart, livenessStart,
 }
 
 async function openActiveWindow(ctx, route) {
-  if (!(await ctx.waitSettled())) return { ok: false, reason: 'session did not settle before active-window preparation' }
+  const settled = await ctx.waitSettled(ctx.adapter.id === 'opencode-headless' ? 20_000 : ctx.adapter.wallMs)
+  if (!settled && ctx.adapter.id !== 'opencode-headless') return { ok: false, reason: 'session did not settle before active-window preparation' }
+  if (!settled) ctx.log(`continuing through known stale-working signature (${ISSUE_HEADLESS_WORKING}) so the runnable cell is exercised, not blocked`)
   const token = `PREP_${ctx.adapter.id.replaceAll('-', '_')}_${randomBytes(3).toString('hex')}`
   const before = (await ctx.timeline()).length
   const delivered = await ctx.send(route, prepPrompt(token))
   if (!delivered.confirmed) return { ok: false, reason: `preparation delivery was not confirmed: ${delivered.detail}` }
   const end = Date.now() + ctx.adapter.wallMs
+  const startedAt = Date.now()
   while (Date.now() < end) {
     const show = await ctx.show()
     ctx.sampleLiveness(show, 'prepare-active')
     const events = (await ctx.timeline()).slice(before)
-    if (show?.liveness === 'online' && (show.lifecycle === 'active' || events.some((event) => event.kind === 'status' && event.status === 'active'))) {
+    if (show?.liveness === 'online' && ((settled && show.lifecycle === 'active') || events.some((event) => event.kind === 'status' && event.status === 'active'))) {
       ctx.log(`observed in-turn window for ${route}`)
+      return { ok: true }
+    }
+    if (ctx.adapter.id === 'opencode-headless' && Date.now() - startedAt >= 5000) {
+      ctx.log(`no fresh active transition after confirmed preparation; continuing to the target send so the known provider failure is measured (${ISSUE_OPENCODE_PROVIDER})`)
       return { ok: true }
     }
     await sleep(2000)
@@ -458,6 +473,10 @@ async function runMeasuredCell(ctx, cell, deliver, opts) {
 
 async function recoverSettled(ctx) {
   if (await ctx.waitSettled(20_000)) return true
+  if (ctx.adapter.id === 'opencode-headless') {
+    ctx.log(`record remains working after the native turn window; preserving the known signature for cell evidence (${ISSUE_HEADLESS_WORKING})`)
+    return false
+  }
   ctx.log('session did not settle; sending a note-routed recovery prompt so later cells remain measurable')
   const token = `RECOVER_${randomBytes(3).toString('hex')}`
   const sent = await ctx.send('dashboard-note', answerPrompt(token))
@@ -512,21 +531,26 @@ async function runAdapter(adapter, opts) {
   for (const route of ROUTES.slice(1)) {
     const idle = { adapter, route, timing: TIMINGS[0] }
     if (selected(opts, idle)) {
-      if (!(await recoverSettled(ctx))) {
+      const settled = await recoverSettled(ctx)
+      if (!settled && !adapter.headless) {
         const slice = ctx.startSlice(`${route.id}/idle`)
         ctx.log('BLOCKED: session could not be returned to an idle/declared state')
         const show = await ctx.show()
         results.push(resultFor(idle, 'blocked', withKnownIssues(adapter, 'runtime: no idle state', { deliver: true, answer: false, declaration: false, show }), ctx.transcript(slice)))
-      } else results.push(await runMeasuredCell(ctx, idle, (prompt) => ctx.send(route.id, prompt), opts))
+      } else {
+        if (!settled) ctx.log('headless record did not settle; still sending through the real adapter so the cell records FAIL rather than BLOCKED')
+        results.push(await runMeasuredCell(ctx, idle, (prompt) => ctx.send(route.id, prompt), opts))
+      }
     }
     const active = { adapter, route, timing: TIMINGS[1] }
     if (selected(opts, active)) {
       const slice = ctx.startSlice(`${route.id}/in-turn preparation`)
       const prepared = await openActiveWindow(ctx, route.id)
       if (!prepared.ok) {
-        ctx.log(`BLOCKED: ${prepared.reason}`)
+        ctx.log(`${adapter.headless ? 'FAIL' : 'BLOCKED'}: ${prepared.reason}`)
         const show = await ctx.show()
-        results.push(resultFor(active, 'blocked', withKnownIssues(adapter, `runtime: ${prepared.reason}`, { deliver: true, answer: false, declaration: false, show }), ctx.transcript(slice)))
+        const status = adapter.headless ? 'fail' : 'blocked'
+        results.push(resultFor(active, status, withKnownIssues(adapter, `runtime: ${prepared.reason}`, { deliver: true, answer: false, declaration: false, show }), ctx.transcript(slice)))
       } else results.push(await runMeasuredCell(ctx, active, (prompt) => ctx.send(route.id, prompt), opts))
     }
     await recoverSettled(ctx)
@@ -563,7 +587,7 @@ function markdownTable(results) {
   return lines.join('\n')
 }
 
-async function fileAggregate(results, table, output) {
+async function fileAggregate(results, table, output, baseline) {
   const failed = results.filter((result) => result.status === 'fail' || (result.status === 'blocked' && !result.structuralBlocked))
   const status = failed.length ? 'fail' : 'pass'
   const note = failed.length
@@ -571,6 +595,7 @@ async function fileAggregate(results, table, output) {
     : 'PASS: all runnable cells passed; 8 structural launch/in-turn cells blocked as expected'
   const evidence = [
     `harness delivery combination campaign`,
+    `baseline=${baseline}`,
     `completed=${iso()}`,
     `backend=${process.env.SPEXCODE_API_URL ? '(session backend)' : 'http://127.0.0.1:8787'}`,
     '',
@@ -607,6 +632,10 @@ async function main() {
     return
   }
   if (opts.file) await assertCleanStart()
+  const head = (await runFile('git', ['rev-parse', 'HEAD'], { quiet: true })).out.trim()
+  const postFix = (await runFile('git', ['merge-base', '--is-ancestor', '93b35610', head], { quiet: true })).code === 0
+  opts.baseline = `${postFix ? 'post-fix composeSessionPrompt' : 'pre-fix composeSessionPrompt'}; runnerHead=${head}`
+  console.log(`baseline: ${opts.baseline}`)
   const results = []
   const cleanupFailures = []
   for (const adapter of adapters) {
@@ -623,7 +652,7 @@ async function main() {
   console.log(`\n${table}`)
   if (cleanupFailures.length) console.error(`cleanup failures: ${cleanupFailures.join(', ')}`)
   const output = opts.output || join(tmpdir(), `spex-harness-delivery-${Date.now()}.md`)
-  if (opts.file) await fileAggregate(results, table, output)
+  if (opts.file) await fileAggregate(results, table, output, opts.baseline)
   else writeFileSync(output, table + '\n')
   console.log(`campaign evidence: ${output}`)
   if (results.some((result) => result.status === 'fail' || (result.status === 'blocked' && !result.structuralBlocked)) || cleanupFailures.length) process.exitCode = 1

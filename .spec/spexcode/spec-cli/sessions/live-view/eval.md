@@ -109,6 +109,21 @@ scenarios:
       The backend owns no PTY master, every helper owns only its own master, and tmux clients inherit no
       sibling master. Killing one helper detaches only its viewer's native client; sibling viewers and the
       shared tmux server remain responsive.
+  - name: native-helper-permission-recovers-or-fails-loud
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      On a Darwin host, record the installed node-pty native spawn-helper's mode, remove its execute bits,
+      then open a live session through the real dashboard and hold the visible terminal for eight seconds
+      while recording the browser and terminal WebSocket frames. Also exercise a native-helper startup
+      failure that cannot be repaired and capture the same viewer stream. Restore the original mode after
+      each run.
+    expected: >-
+      The repairable 0644 helper gains execute bits before node-pty's first native spawn and the existing
+      terminal WebSocket receives the complete tmux repaint instead of staying at zero terminal frames.
+      Repeating the check is a no-op. If preparation or spawn still cannot start, that same terminal stream
+      receives one concise visible startup error; alive-gated restore may continue, but identical attempts do
+      not flood the pane. No platform/architecture path is constructed by SpexCode, and no user must repair
+      node_modules manually.
   - name: attach-and-rebind-replay-current-screen
     tags: [backend-api]
     description: >-

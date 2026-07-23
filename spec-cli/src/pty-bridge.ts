@@ -20,6 +20,7 @@ type Subscription = {
   bridge?: Bridge
   lingerTimer?: ReturnType<typeof setTimeout>
   restoreTimer?: ReturnType<typeof setTimeout>
+  startupError?: string
 }
 
 type Bridge = {
@@ -37,6 +38,7 @@ type Bridge = {
   refreshRunning: boolean
   refreshOffset?: number
   deliveryTimer?: ReturnType<typeof setTimeout>
+  startupError?: string
 }
 
 const subscribers = new Map<string, Map<Viewer, Subscription>>()
@@ -103,6 +105,8 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
     const ready = line.match(/^READY (\d+)$/)
     if (ready) {
       bridge.ptyPid = Number(ready[1])
+      const subscription = currentSubscription(bridge.id, bridge.viewer)
+      if (subscription) subscription.startupError = undefined
       if (bridge.delivery === 'initial') {
         armDeliveryBoundary(bridge)
         queueRefresh(bridge)
@@ -117,9 +121,26 @@ function onHelperStderr(bridge: Bridge, chunk: Buffer): void {
         queueRefresh(bridge)
       }
     } else if (line) {
+      const failed = line.match(/^ERROR (.+)$/)
+      if (failed) reportStartupError(bridge, failed[1])
       console.error(`[terminal helper ${bridge.id}/${bridge.ptyPid ?? 'starting'}] ${line}`)
     }
   }
+}
+
+function reportStartupError(bridge: Bridge, detail: string): void {
+  const subscription = currentSubscription(bridge.id, bridge.viewer)
+  if (!subscription || subscription.bridge !== bridge) return
+  const message = boundedStartupError(detail)
+  bridge.startupError = message
+  if (!message || subscription.startupError === message) return
+  subscription.startupError = message
+  deliver(bridge, Buffer.from(`\r\n[SpexCode terminal unavailable] ${message}\r\n`, 'utf8'))
+}
+
+function boundedStartupError(detail: unknown): string {
+  return (detail instanceof Error ? detail.message : String(detail))
+    .replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 500) || 'native PTY failed to start'
 }
 
 function ensureBridge(id: string, viewer: Viewer, subscription: Subscription, cols: number, rows: number): { bridge: Bridge | null; created: boolean } {
@@ -130,8 +151,13 @@ function ensureBridge(id: string, viewer: Viewer, subscription: Subscription, co
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
     })
-  } catch {
+  } catch (error) {
     try { proc?.kill() } catch { /* spawn did not complete */ }
+    const detail = boundedStartupError(error)
+    if (subscription.startupError !== detail) {
+      subscription.startupError = detail
+      try { viewer.send(Buffer.from(`\r\n[SpexCode terminal unavailable] ${detail}\r\n`, 'utf8')) } catch { /* socket closed */ }
+    }
     return { bridge: null, created: false }
   }
   const bridge: Bridge = {
@@ -142,18 +168,19 @@ function ensureBridge(id: string, viewer: Viewer, subscription: Subscription, co
   proc.stdout.on('data', (data: Buffer) => onHelperOutput(bridge, data))
   proc.stderr.on('data', (data: Buffer) => onHelperStderr(bridge, data))
   let reaped = false
-  const gone = () => {
+  const gone = (detail?: string) => {
     if (reaped) return
     reaped = true
     const current = currentSubscription(id, viewer)
     if (current?.bridge !== bridge) return
+    if (!bridge.ptyPid && !bridge.startupError) reportStartupError(bridge, detail || 'helper exited before native PTY startup')
     current.bridge = undefined
     clearDelivery(bridge)
     try { bridge.proc.kill() } catch { /* already gone */ }
     scheduleRestore(id, viewer, current)
   }
-  proc.on('exit', gone)
-  proc.on('error', gone)
+  proc.on('exit', (code, signal) => gone(`helper exited before native PTY startup (${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`})`))
+  proc.on('error', (error) => gone(`helper process failed: ${error.message}`))
   return { bridge, created: true }
 }
 

@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import { execFileSync } from 'node:child_process'
+import { ensureExecutableIfPresent, nodePtySpawnHelperPath } from './pty-native-helper.mjs'
 
 const [id, colsArg, rowsArg] = process.argv.slice(2)
 const cols = Number(colsArg)
@@ -40,12 +41,21 @@ try {
   }
 } catch { /* attach below fails loudly if the tmux server/session is unavailable */ }
 
-const terminal = pty.spawn('tmux', ['-u', '-L', socket, 'attach-session', '-t', id], {
-  name: 'xterm-256color',
-  cols,
-  rows,
-  env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
-})
+let terminal
+try {
+  ensureExecutableIfPresent(nodePtySpawnHelperPath(pty.native))
+  terminal = pty.spawn('tmux', ['-u', '-L', socket, 'attach-session', '-t', id], {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' },
+  })
+} catch (error) {
+  const detail = (error instanceof Error ? error.message : String(error))
+    .replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 500)
+  process.stderr.write(`ERROR ${detail || 'native PTY failed to start'}\n`)
+  process.exit(1)
+}
 
 terminal.onData((data) => process.stdout.write(Buffer.from(data, 'utf8')))
 terminal.onExit(({ exitCode }) => process.exit(exitCode === 0 ? 0 : 1))

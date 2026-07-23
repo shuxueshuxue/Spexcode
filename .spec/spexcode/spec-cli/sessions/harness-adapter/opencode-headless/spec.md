@@ -38,6 +38,12 @@ event through `opencode-capture`. When the turn exits, the pane returns to a she
 The ordinary output format is used because SpexCode does not scrape stdout; `--format json` is deliberately
 absent.
 
+The pane wrapper observes the real `opencode run` exit code. A non-zero exit is sent through the shared
+[[harness-adapter]] turn-outcome seam before the shell prompt returns, projecting an undeclared active record to
+`error` with the code; zero exits and declarations that landed first are not rewritten. A record can stay
+`online` only when the headless transport can accept a later wake; the `error` lifecycle exposes the failed turn
+rather than hiding it behind the sleeping pane.
+
 Delivery first probes the session's rendezvous socket. During a live turn, the generated plugin owns that
 socket, so delivery reuses the existing parse-confirmed `deliverViaRendezvous`; the plugin injects the prompt
 through `client.session.prompt` into the active native session. When no listener exists, delivery respawns the

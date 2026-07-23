@@ -1490,6 +1490,17 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
+// @@@ headless turn outcome - a harness turn is an ephemeral child, so its non-zero exit is the one external
+// runtime fact that must become visible on the durable board. Compare-and-set only an undeclared active record:
+// a zero exit is never routed here, and a declaration that landed before teardown is authoritative.
+export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
+  if (exitCode === '0') return false
+  const rec = readRecord(sessionId)
+  if (!rec || rec.status !== 'active') return false
+  const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
+  writeRecord({ ...rec, status: 'error', proposal: null, note: `${harness} turn exited with ${outcome}` })
+  return true
+}
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false

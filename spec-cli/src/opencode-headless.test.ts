@@ -62,6 +62,8 @@ test('launch and wake commands preserve the native id capture/resume markers and
     { argv: ['run', '--auto', '--continue', 'wake by continue'], rid: '', cont: '1' },
   ])
   assert.ok(calls.every((call) => !call.argv.includes('--format')), 'default output format stays untouched')
+  assert.match(opencodeHeadlessLaunchCommand('opencode --auto'), /internal session-turn-fail.*opencode-headless/, 'non-zero launch turns report through the shared outcome seam')
+  assert.match(opencodeHeadlessWakeCommand('opencode --auto', 'oc_abc', 'wake with spaces'), /internal session-turn-fail.*opencode-headless/, 'non-zero wake turns report through the shared outcome seam')
   rmSync(dir, { recursive: true, force: true })
 })
 

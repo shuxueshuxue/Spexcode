@@ -224,6 +224,7 @@ export class ClaudeHeadlessController {
       if (stdoutBuffer) console.error('[spex claude-headless] dropped a partial non-line stdout event')
       if (this.child === turn) this.child = null
       resolveExit(code)
+      if (code !== 0 && !this.closing) void import('./harness.js').then(({ reportHeadlessTurnExit }) => reportHeadlessTurnExit(this.id, 'claude-headless', code, this.cwd))
     })
     await this.writeLine(turn, userEvent(text))
     await Promise.race([

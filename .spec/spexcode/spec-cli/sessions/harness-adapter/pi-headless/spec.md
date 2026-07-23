@@ -33,3 +33,8 @@ rendezvous socket. When a listener is present, the existing `deliverViaRendezvou
 spawns `pi -p --session <id> <msg>` to wake the exact saved conversation; `--session-id` is never used for this
 path because it can silently create a new session. The controller remains resident so the tmux window is a
 stable home for later deliveries and resumes.
+
+Each controller child reports a non-zero exit through the shared [[harness-adapter]] turn-outcome seam. The active
+undeclared record therefore becomes `error` with the pi turn's exit code, while zero exits and an agent-authored
+declaration that landed before teardown remain authoritative. Record-backed `online` still describes a controller
+that can accept a later delivery; it no longer masks the failed turn.

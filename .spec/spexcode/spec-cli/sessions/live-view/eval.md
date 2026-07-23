@@ -137,7 +137,9 @@ scenarios:
     expected: >-
       The pane viewport clips on both axes: its computed overflow is hidden, so no themed browser scrollbar
       can float over the terminal's right edge under any DPR or geometry overshoot. Wheel input still travels
-      to the real tmux client — no browser scroll region exists to compete with tmux's own scrolling.
+      to the real tmux client — no browser scroll region exists to compete with tmux's own scrolling. The
+      grid sits in normal flow: the fractional fit remainder rests below the last row (a plain terminal's
+      natural bottom strip), not relocated above the first row by any bottom-pinning alignment.
   - name: scroll-return-resumes-live-tail
     tags: [frontend-e2e, desktop]
     description: >-

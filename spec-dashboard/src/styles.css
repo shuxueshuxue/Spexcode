@@ -1740,7 +1740,11 @@ a.scenario-count:hover { background: var(--panel2); }
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* Live interactive tmux terminal: xterm owns keyboard/IME input while tmux owns render and history. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
-.st-host { width: 100%; height: 100%; overflow: hidden; display: flex; align-items: flex-end; }
+/* No alignment artifice: the xterm block sits in normal flow (top-aligned), so the fractional fit
+   remainder rests naturally BELOW the last row — the same breathing strip a plain terminal shows.
+   (A previous flex-end pinned the block to the bottom and moved that gap to the top, which read as a
+   cramped bottom edge.) */
+.st-host { width: 100%; height: 100%; overflow: hidden; }
 /* one-glance copy hint, a small LEGIBLE chip in the bottom-right of the dark pane. Click-through so it
    never blocks the live output, but readable at a glance (no straining): a bordered pill with light text
    on a solid dark backing. It flips to a solid GREEN "copied ✓" badge when the copy chord fires, then
@@ -1767,7 +1771,7 @@ a.scenario-count:hover { background: var(--panel2); }
 /* DARK terminal background (matches SessionTerm's xterm theme) so the dark-designed Claude TUI renders as
    intended — no light gutter/flash around the pane while xterm paints. */
 .st-host .xterm {
-  width: auto !important; height: auto !important; flex: none; background: var(--term-bg) !important;
+  width: auto !important; height: auto !important; background: var(--term-bg) !important;
 }
 .st-host .xterm-screen {
   background: var(--term-bg) !important;

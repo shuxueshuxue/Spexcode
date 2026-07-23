@@ -142,21 +142,27 @@ ghost tmux client or geometry vote behind indefinitely.
 
 ## navigation and recovery
 
-Mouse and wheel are owned by the native terminal path, not by a bridge vocabulary. The helper sets
-`mouse on` at the tmux boundary, tmux enables mouse-report mode on each attached client, and the browser
-xterm honors those DECSETs exactly as iTerm or VS Code would: xterm's own battle-tested conversion turns
-wheel events into SGR mouse reports — cell-height quanta with a signed fractional carry that survives
-direction flips — and those reports travel through the ordinary input path to that viewer's real tmux
-client. SpexCode synthesizes no wheel protocol of its own: no pixel quantizer, no tick ledger, no
-synthetic bottoming burst — the browser holds no wheel state and never inspects pane mode. tmux itself
-decides whether a report scrolls copy-mode history or passes through to a mouse-owning full-screen
-application, so the browser is byte-indistinguishable from a native terminal attached to the same
-session. Local text selection follows the universal convention of mouse-owning terminals: Shift-drag
-(Option-drag on macOS) forces a browser selection while the application owns the mouse. The
-browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
-copy-mode viewport. The pane viewport therefore clips rather than scrolls: with no xterm scrollback its
-overflow is hidden on both axes, so a fractional device-pixel or geometry overshoot cannot surface a
-phantom themed browser scrollbar competing with tmux's own scroll.
+The pointer belongs to the browser, the wheel belongs to tmux, and the agent TUI receives no mouse
+events at all. Mouse input measurably stalls claude's status-line repaint (the frozen-timer bug: a
+drifting pointer under all-motion tracking re-arms the stall indefinitely, keyboard input clears it),
+so the contract is delivery-zero rather than encoding-perfect — no wheel encoding can fix the
+recipient. Three cuts close every path. Motion-tracking and legacy mouse DECSETs (9, 1002, 1003,
+1005, 1015) are consumed at the browser adapter, so hover produces no reports; button mode 1000 and
+SGR 1006 pass through because they are what makes xterm emit wheel reports natively — cell-height
+quanta with a signed fractional carry, the same conversion iTerm ships. A patched selection predicate
+turns every plain drag into a local browser selection, so button events never become reports and copy
+stays modifier-free. The wheel reports that remain reach the viewer's real tmux client, whose
+server-wide rebinds always scroll tmux copy-mode — never `send -M` to the pane — and sessions are
+created with `alternate-screen off` so the TUI renders on the primary screen and its transcript
+accumulates as real tmux history, the same scrollback a plain terminal would hold. Wheel-down inside
+copy-mode scrolls toward the bottom and exits there (`copy-mode -e`); outside copy-mode it is a no-op,
+because the live view already is the bottom. SpexCode synthesizes no wheel protocol of its own: no
+pixel quantizer, no tick ledger, no synthetic bottoming burst — the browser holds no wheel state and
+never inspects pane mode, and native attaches get the identical behavior from the same server rebinds.
+The browser keeps no independent scrollback and the bridge does not reconstruct a copy-mode viewport.
+The pane viewport therefore clips rather than scrolls: with no xterm scrollback its overflow is hidden
+on both axes, so a fractional device-pixel or geometry overshoot cannot surface a phantom themed
+browser scrollbar competing with tmux's own scroll.
 
 Viewer subscriptions belong to the session id and WebSocket rather than a replaceable helper process. If one
 visible helper exits, an alive-gated, rate-limited restore creates a new helper for that same viewer; native

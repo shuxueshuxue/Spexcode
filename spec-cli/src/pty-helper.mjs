@@ -23,6 +23,13 @@ try {
   execFileSync('tmux', ['-L', socket, 'set-window-option', '-t', id, 'window-size', 'largest'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'mouse', 'on'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'history-limit', '50000'])
+  // The wheel ALWAYS scrolls tmux copy-mode history and is NEVER forwarded to the pane application:
+  // mouse-report input stalls claude's TUI repaint loop for ~10s (the frozen-timer bug), and no wheel
+  // encoding can fix the recipient. Rebinding at the server strips tmux's default mouse_any_flag
+  // pass-through for every client — browser and native attach behave identically. Wheel-down outside
+  // copy-mode is a deliberate no-op (the live view is already the bottom).
+  execFileSync('tmux', ['-L', socket, 'bind-key', '-n', 'WheelUpPane', 'if', '-F', '-t=', '#{pane_in_mode}', 'send-keys -M', 'copy-mode -et='])
+  execFileSync('tmux', ['-L', socket, 'bind-key', '-n', 'WheelDownPane', 'if', '-F', '-t=', '#{pane_in_mode}', 'send-keys -M', ''])
   const features = execFileSync('tmux', ['-L', socket, 'show-options', '-gsv', 'terminal-features'], { encoding: 'utf8' })
   const xtermFeatures = new Set(features.split('\n').filter((line) => line.startsWith('xterm*:')).flatMap((line) => line.split(':').slice(1)))
   const missing = ['sync', 'hyperlinks'].filter((feature) => !xtermFeatures.has(feature))

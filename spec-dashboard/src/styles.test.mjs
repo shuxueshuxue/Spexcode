@@ -47,12 +47,14 @@ test('wheel is xterm-native — no browser quantizer, ledger, or synthetic botto
   assert.doesNotMatch(terminal, /t: 'wheel'/)
 })
 
-test('mouse-report DECSETs reach xterm; selection uses the modifier convention', () => {
-  // tmux (mouse on) and the pane TUI enable mouse-report mode on this client and xterm honors it
-  // natively — no parser handler eats the mode list. Local selection follows every real terminal:
-  // Shift-drag (Option-drag on macOS via macOptionClickForcesSelection) forces browser selection.
-  assert.doesNotMatch(terminal, /MOUSE_REPORT_MODES|onlyMouseReportModes/)
-  assert.match(terminal, /macOptionClickForcesSelection:\s*true/)
+test('pointer is the browser\'s; motion never reports; wheel-only reporting reaches tmux', () => {
+  // three cuts keep mouse events away from the agent TUI: motion-tracking DECSETs are consumed
+  // (hover emits nothing), the patched selection predicate makes plain drag a local selection
+  // (button events never become reports), and button mode 1000 + SGR 1006 pass through so xterm
+  // still emits the wheel reports tmux's copy-mode rebinds consume.
+  assert.match(terminal, /MOTION_TRACKING_MODES\s*=\s*new Set\(\[9, 1002, 1003, 1005, 1015\]\)/)
+  assert.match(terminal, /onlyMotionTrackingModes/)
+  assert.match(xtermRuntime, /shouldForceSelection\(e\)\{return!0\}/)
   assert.match(terminal, /disableStdin:\s*false/)
   assert.match(terminal, /term\.onData\(\(data\)/)
   assert.match(terminal, /sock\.send\(JSON\.stringify\(\{ t: 'input', data \}\)\)/)

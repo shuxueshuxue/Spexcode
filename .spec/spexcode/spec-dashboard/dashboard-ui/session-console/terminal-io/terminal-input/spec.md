@@ -41,8 +41,8 @@ and the agent's own TUI by default. Opening [[command-box]] moves focus to its t
 sending from it returns focus to xterm. No type mode, raw-key batching, menu sniff, or private xterm focus
 override exists.
 
-Pointer input is native: mouse-report DECSETs from tmux and the pane TUI reach xterm untouched, and
-xterm's own mouse-report mode converts clicks and wheel into the SGR reports a real terminal sends,
-riding the same input path as keystrokes. Copy stays a local affordance — selection follows the
-universal mouse-owning-terminal convention (Shift-drag, Option-drag on macOS) and ⌘/Ctrl+C copies it;
-paste remains xterm's native bracketed paste.
+The pointer is the browser's and never the application's. Plain drag always makes a local xterm
+selection (the patched selection predicate diverts every button event from mouse reporting), ⌘/Ctrl+C
+copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. Motion
+tracking is filtered at the adapter so hovering emits nothing; only wheel reports leave the browser,
+and tmux's rebinds keep even those away from the agent TUI ([[live-view]] owns that contract).

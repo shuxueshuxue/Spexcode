@@ -61,7 +61,9 @@ and headless adapter (currently four of each, including [[codex-headless]]): har
 runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
 the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default
 land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
-truthful, and the authored declaration lands. The launch prompt has no second in-turn invocation, so
+truthful, and the authored declaration lands. A pane reading includes its real tmux scrollback: stop-gate
+guidance may scroll a valid answer above the current viewport, which is still user-readable pane output, not
+a missing response. The launch prompt has no second in-turn invocation, so
 `launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
 BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
 reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner

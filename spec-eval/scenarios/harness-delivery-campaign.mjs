@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const SPEX = join(ROOT, 'spec-cli/bin/spex.mjs')
+const TMUX_SOCK = 'spexcode'
 const SETTLED = new Set(['asking', 'awaiting', 'parked', 'idle', 'review', 'done', 'close-pending'])
 const ROUTES = [
   { id: 'launch', label: 'launch first prompt' },
@@ -270,8 +271,10 @@ class RunContext {
 
   async capture() {
     if (!this.id) return ''
-    const result = await this.spex(['session', 'show', this.id, '--capture'], true)
-    return result.code === 0 ? result.out : ''
+    const visible = await this.spex(['session', 'show', this.id, '--capture'], true)
+    const history = await runFile('tmux', ['-L', TMUX_SOCK, 'capture-pane', '-p', '-S', '-', '-t', this.id], { quiet: true })
+    if (history.code === 0) return history.out
+    return visible.code === 0 ? visible.out : ''
   }
 
   sampleLiveness(show, phase) {

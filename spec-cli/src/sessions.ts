@@ -892,12 +892,12 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
-// @@@ withNoteReplyHint - the TERMINAL-FREE sender's insert, withSenderHint's sibling: a phone (or any
-// no-terminal surface, [[mobile-ui]]) cannot read the pane, so the only text that ever reaches its human is
-// the declaration NOTE ([[session-timeline]]). This one-line insert tells the agent exactly that, so its
-// next stop carries the complete answer in `--note` instead of prose that dies in an unseen terminal.
-// Appended server-side (the input route passes replyVia:'note'), so the phrase lives in ONE place and any
-// surface — desktop included, later — can opt in with the same flag. The notice declares itself
+// @@@ withNoteReplyHint - the HEADLESS TARGET's insert, withSenderHint's sibling: a session with no readable
+// terminal can return text to its human only through its declaration NOTE ([[session-timeline]]). This
+// one-line insert tells the agent exactly that, so its next stop carries the complete answer in `--note`
+// instead of prose that dies in an unseen output stream. composeSessionPrompt is the only production caller
+// deciding whether it applies; a surface may explicitly request note, but the target adapter owns the
+// default. The notice declares itself
 // PER-MESSAGE, and withTerminalReplyHint (below) is its counter-signal: without both, an agent that
 // note-replied a few times keeps note-replying from context inertia long after the human is back at a
 // terminal — the sticky-note failure this pair exists to prevent.
@@ -995,6 +995,30 @@ export async function resolveCommandPrompt(raw: string, loadedSpecs?: CommandSpe
   if (!preset) return raw
   const specs = loadedSpecs ?? (nodeFromPrompt(raw) ? await loadSpecs() : [])
   return composeCommandPrompt(raw, [preset], specs)
+}
+
+type SessionPromptTarget = Pick<SessRec, 'session' | 'harness'>
+type SessionPromptOptions = {
+  from?: string
+  replyVia?: 'note'
+  loadedSpecs?: CommandSpec[]
+  suffix?: string
+}
+export type ComposedSessionPrompt = { text: string; replyVia?: 'note' }
+
+// @@@ composeSessionPrompt - the ONE prompt-delivery seam: raw caller text + target session become the
+// exact text handed to an adapter. Launch, ordinary input, CLI send, issue dispatch, watch greetings, and
+// merge all enter here (directly or through sendText). `replyVia` is target readability: an explicit note
+// request wins; otherwise a headless adapter defaults to note. This function alone decides and appends the
+// note/terminal inserts, so clients never own the policy or duplicate the phrase.
+export async function composeSessionPrompt(raw: string, target: SessionPromptTarget, opts: SessionPromptOptions = {}): Promise<ComposedSessionPrompt> {
+  const resolved = await resolveCommandPrompt(raw, opts.loadedSpecs)
+  const prompt = opts.suffix ? `${resolved}${opts.suffix}` : resolved
+  const h = harnessById(target.harness || defaultHarness.id)
+  const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
+  const text = replyVia === 'note' ? withNoteReplyHint(prompt)
+    : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
+  return { text, ...(replyVia ? { replyVia } : {}) }
 }
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
@@ -1290,19 +1314,25 @@ export async function newSession(prompt: string, parent: string | null = null, l
   const chosen = resolveLauncher(lname)
   const h = harnessById(chosen.harness)
   const pinned = h.baseCmd(chosen.cmd)
-  // Resolve a command preset at the shared backend prompt boundary, before any worktree exists. The RAW prompt remains the
-  // identity + originating-prompt source; only `launchPrompt` is expanded for the agent. This preserves the
-  // no-target rule even when the plugin body itself contains `[[links]]`.
   const rawPrompt = prompt
   // node identity + label: the RAW prompt's first `[[id]]` topic ref is the only binding channel; expanded
   // plugin prose is payload only and can never invent scope.
   const ref = nodeFromPrompt(rawPrompt)
   const launchSpecs = ref ? await loadSpecs() : null
-  let launchPrompt = await resolveCommandPrompt(rawPrompt, launchSpecs ?? undefined)
   const title = ref ? null : titleFromPrompt(rawPrompt)
   const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
+  // Compose the FINAL launch text before making the worktree, preserving fail-before-side-effects if live
+  // preset resolution breaks. The optional spec pointer is a seam input; the note insert remains last.
+  const spec = ref ? launchSpecs?.find((n) => n.id === ref) : undefined
+  const suffix = spec
+    ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
+    : undefined
+  const launchPrompt = (await composeSessionPrompt(rawPrompt, { session: id, harness: h.id }, {
+    loadedSpecs: launchSpecs ?? undefined,
+    suffix,
+  })).text
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // the checkout delivers the tracked spec sources and the materialize below delivers the materialized
   // artifacts; the ONE
@@ -1335,15 +1365,6 @@ export async function newSession(prompt: string, parent: string | null = null, l
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
   // own memory load too.
   bootstrapMaterialize(rec)
-  if (ref) {
-    // @@@ spec pointer - the prompt's first [[id]] ref named an EXISTING node.
-    // Append ONE line pointing the agent at that node's spec.md as an ABSOLUTE path INSIDE its own worktree, so
-    // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
-    // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only
-    // a real node gets a pointer; an unknown id resolves to nothing and we fail quiet (no pointer appended).
-    const spec = launchSpecs?.find((n) => n.id === ref)
-    if (spec) launchPrompt = `${launchPrompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
-  }
   writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
   const after = readRecord(id) ?? rec   // 'active' if the drain launched it, else still 'queued'
@@ -2000,19 +2021,13 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
       if (blocked) return { ok: false, error: blocked }
     } catch { /* no pane to consult — let the delivery channel decide */ }
   }
-  const prompt = await resolveCommandPrompt(text)
-  // a terminal-free sender's dispatch carries the note-reply insert; a human send WITHOUT the flag whose
-  // previous human send carried it is the note→terminal transition and gets the one-shot counter-insert
-  // ([[session-timeline]]). Both appended here, beside the delivery, so every input surface shares the one
-  // phrase pair and the timeline records the message WITHOUT it (the hint is transport, not conversation).
-  const wrapped = opts.replyVia === 'note' ? withNoteReplyHint(prompt)
-    : !from && lastHumanSendVia(id) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, wrapped)
+  const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, prompt.text)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)
   // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.
-  if (r.ok) recordSent(id, text, from ?? null, opts.replyVia)
+  if (r.ok) recordSent(id, text, from ?? null, prompt.replyVia)
   return r
 }
 

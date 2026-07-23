@@ -1,7 +1,7 @@
 ---
 concern: Claude headless can leave a completed turn process alive and reject later delivery
 by: a3271939-68d9-478e-a364-52c83154178a
-status: open
+status: landed
 nodes: claude-headless, harness-adapter
 evidence: aecd56b61a50861afff88fc26de496d71f17b557c1474cec5dfe22630d270c68, 03dc3aa78e43ec6265f2538c83cb1126c36cd6e6b9a7d40a4ae5c57d4e96f872, af4be59e5f902c9a59f185f1ffb9a8807a559162dea10abaaa9cad25a4e8d8e2, b111af56e78b948415fb9ca7de42cb2dcc4f34987928db8e1bce3200514573ac, 4fb8f824a700444b9cc4b3bc309b0a7b930a82598bb17e08b2e56a94a105f226
 created: 2026-07-23T11:55:50.087Z

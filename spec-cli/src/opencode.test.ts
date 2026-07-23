@@ -15,7 +15,7 @@ import { HARNESSES, harnessById, opencodeHarness, opencodeLaunchCommand, deliver
 // everything here runs the generated artifacts with stubs, no opencode binary involved.
 
 test('adapter surface: third native harness, claude-family runtime facts', () => {
-  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless'])
+  assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless'])
   const h = harnessById('opencode')
   assert.equal(h, opencodeHarness)
   assert.equal(h.ownsRendezvous, true)                       // the generated plugin binds the rendezvous socket

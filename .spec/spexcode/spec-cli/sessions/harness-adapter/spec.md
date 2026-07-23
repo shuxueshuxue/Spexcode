@@ -63,6 +63,9 @@ the answer is readable at the requested/available user surface (`replyVia:"note"
 land in a timeline declaration note; an interactive plain launch/send lands in its pane), liveness stays
 truthful, and the authored declaration lands. The launch prompt has no second in-turn invocation, so
 `launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
+BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
+reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner
+still invokes later cells through the real adapter instead of converting one failure into skipped coverage.
 Every cell files its own transcript-backed reading on the most specific adapter node available; the aggregate
 table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
 preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.

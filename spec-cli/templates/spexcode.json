@@ -11,7 +11,8 @@
       "claude-headless": { "harness": "claude-headless", "cmd": "claude" },
       "codex": { "harness": "codex", "cmd": "codex" },
       "opencode": { "harness": "opencode", "cmd": "opencode" },
-      "pi": { "harness": "pi", "cmd": "pi" }
+      "pi": { "harness": "pi", "cmd": "pi" },
+      "pi-headless": { "harness": "pi-headless", "cmd": "pi" }
     },
     "defaultLauncher": "claude"
   }

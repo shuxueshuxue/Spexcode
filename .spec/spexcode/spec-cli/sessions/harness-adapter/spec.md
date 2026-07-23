@@ -19,8 +19,8 @@ related:
 
 ## raw source
 
-SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, OpenCode, and pi
-([[pi-harness]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
+SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, OpenCode,
+pi ([[pi-harness]]), and pi headless ([[pi-headless]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
@@ -48,7 +48,9 @@ its launcher + node alone, zero new runner code. A harness whose evidence is onl
 measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
 semantic difference is measured by a replacement scenario rather than forced into a false common shape.
 [[claude-headless]] replaces the matrix's stop/resume and kill/offline rows with its own idle-resume and
-record-liveness rows, and adds native message-stream and hard-interrupt readings.
+record-liveness rows, and adds native message-stream and hard-interrupt readings. [[pi-headless]] replaces
+the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
+rendezvous-steer/cold-resume readings; it intentionally has no message stream.
 
 ## expanded spec
 

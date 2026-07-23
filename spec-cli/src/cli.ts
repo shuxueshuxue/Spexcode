@@ -952,6 +952,15 @@ if (cmd === 'serve') {
     }
     const { runClaudeHeadlessController } = await import('./claude-headless.js')
     await runClaudeHeadlessController(id, runtimeDir, claudeCmd, process.argv.slice(8))
+  } else if (sub === 'pi-headless-run') {
+    const id = process.argv[4], runtimeDir = process.argv[5], piCmd = process.argv[6]
+    const divider = process.argv[7]
+    if (!id || !runtimeDir || !piCmd || divider !== '--') {
+      console.error('usage: spex internal pi-headless-run <session-id> <runtime-dir> <pi-cmd> -- [--session-id <id> <prompt> | --session <id>]')
+      process.exit(2)
+    }
+    const { runPiHeadlessController } = await import('./pi-headless.js')
+    await runPiHeadlessController(id, runtimeDir, piCmd, process.argv.slice(8))
   } else if (sub === 'commit-surgery') {
     // the pre-commit footprint anchor ([[commit-surgery]]): unconditional materialize + staged-index repair
     // (strip our sentinel block from staged blobs, unstage HEAD-untracked generated artifacts). Called only

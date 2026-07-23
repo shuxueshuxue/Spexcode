@@ -1112,6 +1112,11 @@ a.scenario-count:hover { background: var(--panel2); }
   color: var(--zh);
 }
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+/* the offline zone's header is the ONE disclosure for session history ([[session-console]]): a real
+   button (chevron + count chip), same dim zone-label look, pointer-inert for focus like all console chrome. */
+.si-zone-fold { border: 0; background: transparent; font-family: inherit; cursor: pointer; width: 100%; text-align: left; }
+.si-zone-fold:hover { color: var(--ink); }
+.si-zone-count { flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8; }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }

@@ -207,8 +207,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
   // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
   // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
+  // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
+  // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled by
+  // the header, and the selected session stays a visible row even while the zone is folded.
   const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
-  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  const [offlineOpen, setOfflineOpen] = useState(false)
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
+    zoneFolded: (z) => z === 'offline' && !offlineOpen,
+    keepVisible: (s) => s.id === sel,
+  }), [sessions, expanded, offlineOpen, sel])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const validIds = useMemo(() => new Set(['new', ...sessions.map((s) => s.id)]), [sessions])
@@ -690,7 +697,25 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
             // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
             // only while their parent is expanded); within a zone the newest session is on top (automatic ordering).
-            if (it.type === 'zone') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+            // A FOLDABLE zone header (offline — session history) is the one disclosure: hidden count + chevron,
+            // aria-expanded speaking the state; toggling is pointer-inert for focus like all console chrome.
+            if (it.type === 'zone') {
+              if (it.zone !== 'offline') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+              return (
+                <button
+                  key={`zone-${it.zone}`}
+                  type="button"
+                  className={`si-zone si-zone-${it.zone} si-zone-fold${it.folded ? '' : ' open'}`}
+                  aria-expanded={!it.folded}
+                  data-tip={t(it.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: it.count })}
+                  onClick={() => setOfflineOpen((v) => !v)}
+                >
+                  <Icon name={it.folded ? 'chevron-right' : 'chevron-down'} size={11} />
+                  {t(`sessionZone.${it.zone}`)}
+                  {it.count > 0 && <span className="si-zone-count">{it.count}</span>}
+                </button>
+              )
+            }
             const s = it.s
             const lead = (it.expandable || it.depth)
               ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />

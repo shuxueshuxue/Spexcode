@@ -63,6 +63,11 @@ pane-backed target keeps the ordinary terminal reply. The launch prompt, the one
 For an effective note reply, that seam appends `withNoteReplyHint`. The insert is transport guidance only:
 the agent writes the actual declaration by executing the external `spex session <verb> --note <text>` CLI,
 and lifecycle hooks only delimit or remind the agent at turn boundaries; hooks never carry the note data.
+Because the declaration call is the reply transport rather than task work, the insert explicitly requires it even when the
+raw message forbids tools or asks for output only. A simple answer awaiting the next human message gets the concrete
+`spex session ask --note "<complete reply>"` action; a genuinely done or parked turn instead puts the same complete reply
+on that truthful declaration. Printing a normal final answer alone does not deliver it, and a generic stop-gate auto-note
+does not satisfy the reply.
 The phrase has one owner here beside the other delivery inserts. The timeline records the raw conversational
 text without inserts and `replyVia:"note"` whenever note is the effective channel (absence means terminal),
 so restart-safe channel history describes where a reply was actually readable rather than which caller

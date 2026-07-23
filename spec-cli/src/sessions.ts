@@ -903,15 +903,16 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
 }
 // @@@ withNoteReplyHint - the HEADLESS TARGET's insert, withSenderHint's sibling: a session with no readable
 // terminal can return text to its human only through its declaration NOTE ([[session-timeline]]). This
-// one-line insert tells the agent exactly that, so its next stop carries the complete answer in `--note`
-// instead of prose that dies in an unseen output stream. composeSessionPrompt is the only production caller
+// insert tells the agent exactly that, so its next stop carries the complete answer in `--note` instead of
+// prose that dies in an unseen output stream. The declaration is TRANSPORT, not task work: a raw prompt's
+// "no tools" / "only print" constraint does not cancel it. composeSessionPrompt is the only production caller
 // deciding whether it applies; a surface may explicitly request note, but the target adapter owns the
 // default. The notice declares itself
 // PER-MESSAGE, and withTerminalReplyHint (below) is its counter-signal: without both, an agent that
 // note-replied a few times keeps note-replying from context inertia long after the human is back at a
 // terminal — the sticky-note failure this pair exists to prevent.
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-free client: the sender CANNOT see your terminal output. When you next stop (done/ask/park), put your COMPLETE reply to this message in the declaration's --note (e.g. spex session done --note "<full answer>") — the note is the only text that reaches them. This notice is PER-MESSAGE: a later message arriving WITHOUT it means the sender is back at a terminal and reads your normal output again.`
+  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
 // @@@ withTerminalReplyHint - the BACK-AT-A-TERMINAL counter-insert, appended exactly once at the
 // note→terminal transition (a human send with no note flag whose previous human send carried one —
 // [[session-timeline]] lastHumanSendVia). It explicitly countermands the note-reply instruction: telling

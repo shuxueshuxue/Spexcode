@@ -178,7 +178,9 @@ test('block semantics: a PreToolUse block THROWS (aborts the tool call); a Stop 
     /gate says no: PreToolUse/,
   )
   await t.hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'oc_root' } } })
-  assert.equal(t.prompts.length, 1)                          // the stop-gate loop closes in-process
+  assert.equal(t.prompts.length, 0, 'idle callback returns before the continuation prompt starts')
+  for (let i = 0; i < 100 && t.prompts.length === 0; i++) await new Promise((r) => setTimeout(r, 20))
+  assert.equal(t.prompts.length, 1)                          // the stop-gate loop still closes in-process
   const p = t.prompts[0] as { path: { id: string }; body: { parts: { text: string }[] } }
   assert.equal(p.path.id, 'oc_root')
   assert.match(p.body.parts[0].text, /gate says no: Stop/)
@@ -187,7 +189,12 @@ test('block semantics: a PreToolUse block THROWS (aborts the tool call); a Stop 
   // on it, which is what guarantees the block loop ends instead of re-blocking until the host dies.
   assert.equal(t.payload('Stop').stop_hook_active, false, 'natural stop → bit false')
   await t.hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'oc_root' } } })
-  assert.equal(t.payload('Stop').stop_hook_active, true, 'post-block settle → bit true')
+  let stopActive = false
+  for (let i = 0; i < 100 && !stopActive; i++) {
+    try { stopActive = t.payload('Stop').stop_hook_active === true } catch { /* child is replacing the JSON */ }
+    if (!stopActive) await new Promise((r) => setTimeout(r, 20))
+  }
+  assert.equal(stopActive, true, 'post-block settle → bit true')
   rmSync(t.dir, { recursive: true, force: true })
 })
 
@@ -197,6 +204,7 @@ test('stop-gate wire shape: a stdout decision:block JSON (stderr empty) injects 
   const t = await loadPlugin({ session: `oc-t3b-${process.pid}`, blockJson: ['Stop', 'PreToolUse'] })
   await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
   await t.hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'oc_root' } } })
+  for (let i = 0; i < 100 && t.prompts.length === 0; i++) await new Promise((r) => setTimeout(r, 20))
   assert.equal(t.prompts.length, 1)
   const text = (t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text
   assert.equal(text, 'declare first — pick ONE state:\n  • done\n  • ask')   // parsed reason, \n now REAL newlines

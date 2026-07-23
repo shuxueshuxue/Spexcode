@@ -4,7 +4,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { claudeHarness } from './harness.js'
+import { claudeHarness, codexHeadlessHarness } from './harness.js'
 import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath } from './layout.js'
 
@@ -124,6 +124,22 @@ test('launch retry log names the fast exit without guessing a daemon race', () =
 
     assert.match(stderr, /\[spex launch\] attempt 1 exited in \d+s \(rc=1\) - fast launcher exit before readiness; retrying/)
     assert.doesNotMatch(stderr, /likely a launcher daemon race|daemon-not-ready race/i)
+  } finally {
+    if (prevHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prevHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('one-shot headless launch does not retry a successful fast exit', () => {
+  const prevHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-one-shot-launch-'))
+  process.env.SPEXCODE_HOME = home
+  try {
+    const script = launchScript('one-shot-launch-test', '', codexHeadlessHarness, 'true')
+    const body = readFileSync(script, 'utf8')
+    assert.doesNotMatch(body, /for __spex_try in 1 2 3/)
+    assert.doesNotMatch(body, /fast launcher exit before readiness/)
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome

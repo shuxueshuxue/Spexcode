@@ -45,6 +45,9 @@ export interface Harness {
   // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
   // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
   readonly headless: boolean
+  // whether this harness persists a native event stream that the console may expose as an optional
+  // full-process drill-down ([[message-stream]]). This is adapter data, never a harness-id branch in UI.
+  readonly messageStream: boolean
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
   // Codex's canonical hook event set (its `HookEventName` enum, codex 0.142.3) has no failed-stop and no
   // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
@@ -1091,6 +1094,7 @@ export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
 export const claudeHarness: Harness = {
   id: 'claude',
   headless: false,
+  messageStream: false,
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
@@ -1132,6 +1136,7 @@ export const claudeHeadlessHarness: Harness = {
   ...claudeHarness,
   id: 'claude-headless',
   headless: true,
+  messageStream: true,
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
@@ -1147,6 +1152,7 @@ export const claudeHeadlessHarness: Harness = {
 export const codexHarness: Harness = {
   id: 'codex',
   headless: false,
+  messageStream: false,
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
@@ -1230,6 +1236,7 @@ export const codexHarness: Harness = {
 export const piHarness: Harness = {
   id: 'pi',
   headless: false,
+  messageStream: false,
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
@@ -1263,6 +1270,7 @@ export const piHarness: Harness = {
 export const opencodeHarness: Harness = {
   id: 'opencode',
   headless: false,
+  messageStream: false,
   events: OPENCODE_EVENTS,
   // LITERALLY true: the generated plugin ([[opencode-harness]], opencode.ts) BINDS the per-session rendezvous
   // socket the launch env hands it and speaks the reply/repaint mini-protocol, so claude's deliver (atomic

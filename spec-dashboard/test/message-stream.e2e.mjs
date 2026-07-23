@@ -19,11 +19,12 @@ const page = await context.newPage()
 const started = Date.now()
 const timeline = []
 const step = (name) => timeline.push({ at: Date.now() - started, step: name })
+let exposeMessageStream = true
 
 try {
-  // The claude-headless adapter is landing on a parallel branch. Until then, keep the real graph/session
-  // payload and alter only this fixture row's harness id; disable graph push so its unmodified full frame
-  // cannot replace the fixture during this short proof.
+  // Keep the real graph/session payload and alter only this fixture row's adapter projection; disable graph
+  // push so its unmodified full frame cannot replace the fixture during this short proof. The UI must consume
+  // capabilities only — the harness id remains untouched.
   await page.route('**/api/graph*', async (route) => {
     const url = new URL(route.request().url())
     if (url.pathname.endsWith('/api/graph/stream')) { await route.abort(); return }
@@ -31,18 +32,24 @@ try {
     const response = await route.fetch()
     const graph = await response.json()
     graph.sessions = (graph.sessions || []).map((session) => session.id === sessionId
-      ? { ...session, harness: 'claude-headless' }
+      ? { ...session, capabilities: { headless: true, messageStream: exposeMessageStream } }
       : session)
     await route.fulfill({ response, json: graph })
   })
 
   await page.goto(`${base}/#/sessions/${encodeURIComponent(sessionId)}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.tl-chat', { state: 'visible', timeout: 20_000 })
+  await page.waitForSelector('.tl-process-door', { state: 'visible' })
+  assert.equal(await page.locator('.ms-console').count(), 0, 'native stream is a drill-down, not the headless main console')
+  assert.equal(await page.locator('.xterm, .st-host').count(), 0, 'headless console must not mount xterm')
+  assert.equal((await page.locator('.si-tab.on').innerText()).trim().toLowerCase(), 'conversation')
+  step('open headless timeline conversation')
+
+  await page.locator('.tl-process-door').click()
   await page.waitForSelector('.ms-console', { state: 'visible', timeout: 20_000 })
   await page.waitForSelector('.ms-tool', { state: 'visible' })
-  step('open headless messages console')
+  step('open complete-process message stream')
 
-  assert.equal(await page.locator('.xterm, .st-host').count(), 0, 'headless console must not mount xterm')
-  assert.equal((await page.locator('.si-tab.on').innerText()).trim().toLowerCase(), 'messages')
   assert.ok(await page.locator('.ms-turn.user').count() >= 1, 'user bubble missing')
   assert.ok(await page.locator('.ms-turn.assistant').count() >= 2, 'assistant bubbles missing')
   assert.match(await page.locator('.ms-tool').first().innerText(), /Read[\s\S]*messages\.ndjson/)
@@ -70,6 +77,15 @@ try {
   const image = join(out, 'headless-message-console.png')
   await page.screenshot({ path: image, fullPage: false })
   step('capture settled message console')
+
+  exposeMessageStream = false
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.tl-chat', { state: 'visible', timeout: 20_000 })
+  assert.equal(await page.locator('.tl-process-door').count(), 0, 'door must stay absent without messageStream capability')
+  assert.equal(await page.locator('.ms-console').count(), 0, 'native stream must stay unreachable without the capability')
+  assert.equal(await page.locator('.xterm, .st-host').count(), 0, 'headless timeline remains terminal-free without a stream')
+  step('verify messageStream-negative headless conversation')
+
   const video = await page.video().path()
   await context.close()
   const timelinePath = join(out, 'headless-message-console.timeline.json')

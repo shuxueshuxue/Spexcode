@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import SessionMessages, { isMessageStreamSession } from './SessionMessages.jsx'
+import TimelineChat from './TimelineChat.jsx'
+import { isHeadlessSession } from './messageStream.js'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest } from './session.js'
@@ -231,15 +232,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [listW, listDrag, resetListW] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
-  const messageConsole = isMessageStreamSession(selSession)
-  const surfaceTabId = messageConsole ? 'si-messages-tab' : 'si-terminal-tab'
-  const surfacePanelId = messageConsole ? 'si-messages-panel' : 'si-terminal-panel'
+  const terminalFree = isHeadlessSession(selSession)
+  const surfaceTabId = terminalFree ? 'si-conversation-tab' : 'si-terminal-tab'
+  const surfacePanelId = terminalFree ? 'si-conversation-panel' : 'si-terminal-panel'
   const commandAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
-  const showRelaunch = !messageConsole && noLivePane && selSession?.status !== 'queued'
+  const showRelaunch = !terminalFree && noLivePane && selSession?.status !== 'queued'
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -270,13 +271,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => { if (!commandAvailable) setCommandOpen(false) }, [commandAvailable])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
 
-  // Keep every live terminal mounted for its warm-pane contract. Headless consoles have no pane and remain
-  // readable offline, so their message component stays available regardless of liveness.
+  // Keep every live terminal mounted for its warm-pane contract. Headless conversations have no pane and
+  // remain readable offline, so their shared TimelineChat stays available regardless of liveness.
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
       const next = new Set()
-      for (const s of sessions) if (isMessageStreamSession(s) || s.liveness !== 'offline') next.add(s.id)
+      for (const s of sessions) if (isHeadlessSession(s) || s.liveness !== 'offline') next.add(s.id)
       if (next.size !== prev.size) return next
       for (const id of next) if (!prev.has(id)) return next
       return prev
@@ -782,7 +783,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               pointerEvents: active === 'new' ? 'none' : 'auto',
             }}
           >
-              <header className="si-tabbar" aria-label={t(messageConsole ? 'session.messagesToolbarLabel' : 'session.toolbarLabel')}>
+              <header className="si-tabbar" aria-label={t(terminalFree ? 'session.conversationToolbarLabel' : 'session.toolbarLabel')}>
                 <div className="si-surface">
                   <div className="si-tabs" role="tablist" aria-label={t('session.surfaceLabel')}>
                     <button
@@ -794,8 +795,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       className="si-tab on"
                       onClick={() => activateTerminal(active)}
                     >
-                      <Icon name={messageConsole ? 'message-square' : 'terminal'} size={13} />
-                      <span className="si-tab-label">{t(messageConsole ? 'session.tabMessages' : 'session.tabTerminal')}</span>
+                      <Icon name={terminalFree ? 'message-square' : 'terminal'} size={13} />
+                      <span className="si-tab-label">{t(terminalFree ? 'session.tabConversation' : 'session.tabTerminal')}</span>
                     </button>
                   </div>
                 </div>
@@ -838,7 +839,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
-                className={`si-term-body${messageConsole ? ' is-messages' : ''}`}
+                className={`si-term-body${terminalFree ? ' is-conversation' : ''}`}
                 id={`${surfacePanelId}-${active}`}
                 role="tabpanel"
                 aria-labelledby={surfaceTabId}
@@ -846,15 +847,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               >
                 {/* every opened session's pane stays mounted; only the active one is shown. */}
                 {[...opened].map((id) => {
-                  const stream = isMessageStreamSession(sessions.find((session) => session.id === id))
+                  const session = sessions.find((candidate) => candidate.id === id)
+                  const headless = isHeadlessSession(session)
                   return (
                     <div key={id} className="si-term-layer" style={{
                       position: 'absolute', inset: 0,
                       visibility: id === active ? 'visible' : 'hidden',
                       pointerEvents: id === active ? 'auto' : 'none',
                     }}>
-                      {stream
-                        ? <SessionMessages sessionId={id} active={open && id === active} />
+                      {headless
+                        ? <TimelineChat s={session} sessions={sessions} active={open && id === active} />
                         : <SessionTerm sessionId={id} active={open && id === active}
                             focused={open && id === active && !commandOpen && !showRelaunch}
                             focusRequest={id === active ? terminalFocusRequest : 0} />}

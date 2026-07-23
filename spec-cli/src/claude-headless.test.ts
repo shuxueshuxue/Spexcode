@@ -25,6 +25,8 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(claudeHeadlessHarness.sessionIdArg('abc'), '--session-id abc')
   assert.equal(claudeHeadlessHarness.resumeArg({ session: 'abc' }), '--resume abc')
   assert.equal(claudeHeadlessHarness.headless, true)
+  assert.equal(claudeHeadlessHarness.messageStream, true)
+  assert.equal(claudeHarness.messageStream, false)
   assert.equal(claudeHeadlessHarness.ownsRendezvous, false)
   assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
+import { inertChromePress } from './focus.js'
 import { Icon } from './icons.jsx'
 import { PROJECT_ID, projectHref, hubHref } from './project.js'
 import { PAGES, routeHash } from './route.js'
@@ -88,7 +89,10 @@ export default function SideBar({ page, identity, catalog }) {
   const t = useT()
   const catalogOk = catalog?.state === 'ok'
   return (
-    <nav className="side-rail" aria-label={t('nav.railLabel')}>
+    // the rail is inert chrome for pointer focus ([[focus-return]]): a press acts (link navigates, chip
+    // menu opens) without taking DOM focus, so chrome never becomes the focus-return ticket and an
+    // overlay close can never land focus here. Keyboard Tab still reaches every entry.
+    <nav className="side-rail" aria-label={t('nav.railLabel')} onMouseDownCapture={inertChromePress}>
       {PROJECT_ID && <ProjectChip
         identity={identity}
         projects={catalogOk ? catalog.projects : null}

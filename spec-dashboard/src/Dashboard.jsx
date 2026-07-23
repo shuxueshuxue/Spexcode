@@ -402,8 +402,10 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
         // ([[keyboard-nav]]'s native-control restraint, extended for the embedded review filters): typing
         // (h/j/l/digits), caret arrows, menu roving, and ArrowDown-to-open must never become pane switches
         // or scrolls. Escape still falls through — the esc stack peels the menu first, then this branch
-        // closes the popup.
-        if (e.key !== 'Escape' && e.target?.closest?.('input, textarea, select, [role="menu"], [role="menuitemradio"], [aria-haspopup="menu"]')) return
+        // closes the popup. Scoped to controls INSIDE the popup: stray DOM focus on a control elsewhere
+        // (the rail's project chip is also [aria-haspopup]) must not swallow the popup's j/k.
+        const keyOwner = e.key === 'Escape' ? null : e.target?.closest?.('input, textarea, select, [role="menu"], [role="menuitemradio"], [aria-haspopup="menu"]')
+        if (keyOwner?.closest('[data-focus-overlay]')) return
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         // the popup is a LENS, not a modal ([[keyboard-nav]]): Shift+nav (⇧h/j/k/l, ⇧arrows) walks the
         // tree exactly like the bare board — the popup stays open and follows the new focus (NodeView is

@@ -34,10 +34,11 @@ renamed, or removed like any other launcher. A project that intentionally wants 
 an automatic-permission command (`claude --dangerously-skip-permissions`, `codex --yolo`, `opencode --auto`)
 declares that command as an explicit launcher choice in `spexcode.json` or the gitignored
 `spexcode.local.json`; clean init and the old-record compatibility fallback never grant those permissions
-silently. There is NO runtime env or harness-specific branch that rewrites a launcher's command. So the picker
-lists exactly the config's real launchers, and two names
-can never resolve to the same command as ghost duplicates. Because a launcher NAMES a harness, picking a
-launcher is the ONLY user-facing launch selection. The old free-standing harness pick is gone.
+silently. There is NO runtime env or harness-specific branch that rewrites a launcher's command. The complete
+launcher registry therefore lists exactly the config's real launchers, and two names can never resolve to the
+same command as ghost duplicates; the dashboard applies only [[launcher-visibility]]'s adapter-capability
+projection on top. Because a launcher NAMES a harness, picking a launcher is the ONLY user-facing launch
+selection. The old free-standing harness pick is gone.
 
 `sessions.defaultLauncher` names the profile a session with no explicit choice uses; it is required for any
 no-choice create. Omitting it is a configuration error for those create paths, reported with the repair: write
@@ -52,19 +53,21 @@ the committed file — a launcher name is portable, its `cmd` is a machine fact.
 launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill button wearing the selected
 launcher's harness vendor mark + name (no caret, no label; its tooltip names `spexcode.json` /
 `spexcode.local.json` as where launchers change) that opens a **viewport-centred pop-out card** over a light
-backdrop (not an anchored dropdown). The card contains **one row per launcher**: its harness glyph + name and
-its complete `cmd` as read-only display text. The **entire row is ONE pick target**: a click anywhere on it —
+backdrop (not an anchored dropdown). The card contains **one row per dashboard-visible launcher**: its harness
+glyph + name and its complete `cmd` as read-only display text. The **entire row is ONE pick target**: a click anywhere on it —
 the `cmd` line included — picks the launcher and closes the pop. The `cmd` never behaves as a surface of
 its own (no control, no independent text-selection region: a cmd click that merely started a text
 selection instead of picking read as a broken row). So a human can
 inspect exactly what a launcher runs before picking it, without any edit surface — config files stay the sole
-place a `cmd` is written. That endpoint reports `{ launchers: [{ name, harness, cmd }], default }`; the command
-rides the payload only as display data (the dashboard sits behind the deployment's gateway auth). The mobile
+place a `cmd` is written. That endpoint reports `{ launchers: [{ name, harness, cmd, headless }], default }`;
+the list is already narrowed by [[launcher-visibility]]'s committed dashboard policy, while the capability
+marker still identifies any revealed headless row. The command rides the payload only as display data (the
+dashboard sits behind the deployment's gateway auth). The mobile
 composer keeps a plain native launcher select — the pop-out is desktop chrome. The picker's INITIAL selection
-is always a visible launcher choice: a still-valid remembered (per-browser) pick wins, else the configured
-`default`, else the first real launcher in the list. That last case is not an implicit backend fallback — the
+is always a visible launcher choice: a still-valid remembered (per-browser) pick wins, else a visible configured
+`default`, else the first visible launcher in the list. That last case is not an implicit backend fallback — the
 dashboard sends the selected launcher name explicitly. The seeded `claude`/`codex` profiles are ordinary
-selectable entries (and a default may name one of them), never an implicit no-choice fallback.
+configured entries (and a default may name one of them), never an implicit no-choice fallback.
 A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400 from
 the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not
 create-session inputs; callers use `--launcher <name>` / `{ launcher }`. CLI parsing rejects every unknown
@@ -74,7 +77,7 @@ unsupported inputs never disappear into a defaulted launch.
 The universal actor mention has the same create-time choice: bare `@new` uses `defaultLauncher`, while
 `@new:<launcher>` passes that explicit profile name into the SAME `newSession` call. The dashboard's shared
 `@` autocomplete makes the choice reachable instead of asking the human to memorize syntax: accepting its
-`@new` row opens the configured launcher rows, and accepting one inserts the durable, inspectable
+`@new` row opens the dashboard-visible launcher rows, and accepting one inserts the durable, inspectable
 `@new:<launcher>` token into the prose. The qualifier changes only this one spawn; it never changes the
 configured default or the New-Session picker's remembered choice. An unknown qualifier is the same loud
 create failure as an unknown `--launcher` value, reported in the mention dispatch outcome while the issue

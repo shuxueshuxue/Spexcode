@@ -44,7 +44,8 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   SELECTED harness (from the template's per-harness pool, `sessions.defaultLauncher` = the first). Every
   seeded `cmd` is the harness's plain command, preserving its normal permission model; auth wrappers and
   automatic-permission flags are explicit user or host-local launcher definitions, never init defaults. Thus
-  session-create works out of the box without seeding launchers for tools the adopter never picked.
+  session-create works out of the box without seeding launchers for tools the adopter never picked. The same
+  starter explicitly plants `dashboard.showHeadlessLaunchers: false`, [[launcher-visibility]]'s portable default.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string

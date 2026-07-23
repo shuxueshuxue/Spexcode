@@ -77,13 +77,13 @@ launch `POST /api/sessions` carries only `launcher`; the backend derives `harnes
 The picker is a clean pill **button** wearing the selected launcher's harness vendor mark + name — no caret,
 no label; its tooltip points at `spexcode.json` / `spexcode.local.json` as the one place launchers change.
 It opens a **centred pop-out card** — a viewport-centred dialog over a light backdrop, deliberately
-not an anchored dropdown — with **one row per launcher** (the row's
+not an anchored dropdown — with **one row per dashboard-visible launcher** ([[launcher-visibility]]) (the row's
 harness glyph + name, the selected row marked), and beneath each name the profile's configured command
 **in full, as inert read-only text** (selectable for copying, but not a control — nothing in the card is
 clickable except the row select itself; no chevron buttons, no edit surface: config files remain the
 sole place a `cmd` is written). Selecting a row closes the pop;
-a backdrop click or Esc closes it too. Built-in `claude` and `codex` launchers keep the picker present even in a
-zero-config project, and configured profiles add more names. The launcher pick is
+a backdrop click or Esc closes it too. Seeded interactive launchers keep the picker present in an initialized
+project, and configured dashboard-visible profiles add more names. The launcher pick is
 **remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
 never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 The launch **substance** — that grammar's composition, the launcher fetch/default/remembered-pick, and the

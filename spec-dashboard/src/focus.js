@@ -49,7 +49,10 @@ export function returnFocus() {
 // keeps its default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
 const FOCUS_OWNERS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
 
+// scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
+// glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.
 const inScrollbarGutter = (el, e) => {
+  if (!(el instanceof HTMLElement)) return false
   const rect = el.getBoundingClientRect()
   return e.clientX - rect.left - el.clientLeft >= el.clientWidth
     || e.clientY - rect.top - el.clientTop >= el.clientHeight

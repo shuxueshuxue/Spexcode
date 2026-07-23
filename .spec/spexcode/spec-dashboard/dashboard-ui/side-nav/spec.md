@@ -35,7 +35,12 @@ restores the list.
   carrying its page's address (`href="#/…"`): a click is a native hash navigation — the *same transaction*
   the address bar, a bookmark, ⌥digit, or any in-page door produces — so middle-click/new-tab/copy-address
   come free and no click handler re-implements routing. The rail is chrome, not a
-  page — it never scrolls away and never overlays content.
+  page — it never scrolls away and never overlays content. And it is **inert chrome for pointer
+  focus** ([[focus-return]]'s acquisition-side guard): a press on a rail entry or the project chip
+  acts — the link navigates, the chip menu opens — without moving DOM focus, so the rail never
+  becomes the focus-return ticket and closing an overlay can never land focus on the top-left chip
+  (where, as a menu trigger, it would swallow the node popup's keys). Keyboard Tab still reaches
+  every entry, and a Tab-focused control keeps its native Enter/Space activation.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
   unknown hash lands here), `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
   `#/evals/<node>/<scenario>`, the canonical eval DETAIL address — each segment encoded on its own so the

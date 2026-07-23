@@ -49,8 +49,10 @@ only in the store slot its own root encodes to, and only to a loopback url — t
 
 **The durable known-project catalog remembers what records cannot.** Records die with their serve; the
 catalog (`~/.spexcode/projects.json`) is the host's memory, populated by explicit registration and by
-auto-adoption of any validated live record. Explicit registration is one admin-scoped workflow over the
-real host filesystem: a read-only directory browser selects an existing folder, then `POST /projects`
+auto-adoption of any validated live record. The reconciled view includes a remembered or record-claimed
+root only while that root is still an existing directory; a removed checkout/worktree disappears from
+`GET /projects` without mutating the catalog file. Explicit registration is one admin-scoped workflow over
+the real host filesystem: a read-only directory browser selects an existing folder, then `POST /projects`
 normalizes it to the repo's main checkout. An existing Git repo can be cataloged directly; a plain folder
 enters only after the user explicitly chooses the bounded `git init` side effect. Optional SpexCode setup
 still runs the real `spex init` with an explicit harness choice, never a dashboard-owned initializer. A

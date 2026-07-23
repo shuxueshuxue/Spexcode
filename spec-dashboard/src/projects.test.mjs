@@ -5,7 +5,7 @@ import {
   setProjectPassword, clearProjectPassword, setAdminPassword, submitCredential,
   browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig, runProjectOp, initProject, doctorProject, startProjectBackend,
   saveGatewayIcon, saveProjectIcon,
-  selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult,
+  selectGatewayIdentity, selectProjectIdentity, tabTitle, applyCatalogResult, paginateProjects,
 } from './projects.js'
 
 // The narrow catalog client ([[projects-hub]]): these tests pin the client half of the LANDED hub
@@ -67,6 +67,14 @@ test('normalizeProjects accepts the hub envelope or a bare array, rejects anythi
   assert.equal(normalizeProjects([{ id: 'b' }])[0].id, 'b')
   assert.equal(normalizeProjects({ nope: 1 }), null)
   assert.equal(normalizeProjects('<!doctype html>'), null)
+})
+
+test('paginateProjects keeps source order and clamps to a valid page', () => {
+  const projects = Array.from({ length: 21 }, (_, i) => ({ id: String(i + 1) }))
+  assert.deepEqual(paginateProjects(projects, 1).items.map((p) => p.id), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+  assert.deepEqual(paginateProjects(projects, 3).items.map((p) => p.id), ['21'])
+  assert.equal(paginateProjects(projects.slice(0, 4), 3).page, 1)
+  assert.equal(projects.length, 21)
 })
 
 test('pathname-selected catalog identity cannot be replaced by the last board that loaded', () => {

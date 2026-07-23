@@ -18,7 +18,8 @@ scenarios:
       backend the probe cannot reach), the gated rows wearing the lock. With no admin password the
       ungated hint shows; setting one through the UI succeeds and the very next catalog poll still
       answers (the hub rotated the setter's cookie — no logout). Project password set/clear round-trips
-      (PUT/DELETE) and the row's lock badge follows. A registry change made outside the page lands via
+      (PUT/DELETE) and the row's lock badge follows. More than ten reconciled rows page without dropping
+      or reordering projects, and a registry change made outside the page lands via
       the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic dashboard renders
       that project's board through the scoped /p/<id>/api lane. Its rail carries the current-project
       chip and only the five project-owned page buttons; the chip's "All projects" action returns to

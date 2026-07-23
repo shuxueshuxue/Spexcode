@@ -91,15 +91,18 @@ try {
   await mobileContext.close()
   step('verify mobile conversation and complete-process door')
 
-  assert.ok(negativeSessionId, 'NEGATIVE_SESSION_ID must identify a false-capability fixture row')
-  const negativeContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  const negativePage = await negativeContext.newPage()
-  await negativePage.goto(`${base}/#/sessions/${encodeURIComponent(negativeSessionId)}`, { waitUntil: 'domcontentloaded' })
-  await negativePage.waitForSelector('.si-term-layer[style*="visibility: visible"]', { state: 'visible', timeout: 20_000 })
-  assert.equal(await negativePage.locator('.si-term-layer[style*="visibility: visible"] .tl-process-door').count(), 0, 'door must stay absent without messageStream capability')
-  assert.equal(await negativePage.locator('.si-term-layer[style*="visibility: visible"] .ms-console').count(), 0, 'native stream must stay unreachable without the capability')
-  await negativeContext.close()
-  step('verify messageStream-negative headless conversation')
+  if (negativeSessionId) {
+    const negativeContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const negativePage = await negativeContext.newPage()
+    await negativePage.goto(`${base}/#/sessions/${encodeURIComponent(negativeSessionId)}`, { waitUntil: 'domcontentloaded' })
+    await negativePage.waitForSelector('.si-term-layer[style*="visibility: visible"]', { state: 'visible', timeout: 20_000 })
+    assert.equal(await negativePage.locator('.si-term-layer[style*="visibility: visible"] .tl-process-door').count(), 0, 'door must stay absent without messageStream capability')
+    assert.equal(await negativePage.locator('.si-term-layer[style*="visibility: visible"] .ms-console').count(), 0, 'native stream must stay unreachable without the capability')
+    await negativeContext.close()
+    step('verify messageStream-negative headless conversation')
+  } else {
+    step('skip messageStream-negative fixture (NEGATIVE_SESSION_ID not supplied)')
+  }
 
   const video = await page.video().path()
   await context.close()

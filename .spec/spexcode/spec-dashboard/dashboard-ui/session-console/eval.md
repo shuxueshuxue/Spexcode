@@ -90,8 +90,9 @@ scenarios:
     expected: >-
       Plain drag produces one uninterrupted LOCAL selection — the pointer is always the browser's, no
       button or motion report ever reaches the application — and copy works on secure and plain HTTP
-      contexts without moving the glyph grid. Hover emits nothing. The wheel scrolls tmux copy-mode
-      (never the application), and keyboard input remains live through xterm.
+      contexts without moving the glyph grid. Hover emits nothing. The wheel follows tmux's native
+      routing (copy-mode or the mouse-owning application), and keyboard input remains live through
+      xterm.
   - name: terminal-toolbar-and-eval-door
     tags: [frontend-e2e, desktop]
     description: >-

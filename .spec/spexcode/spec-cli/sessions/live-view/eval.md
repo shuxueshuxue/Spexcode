@@ -71,10 +71,12 @@ scenarios:
       Open two simultaneous visible dashboard viewers for one live session at different terminal sizes, inspect
       each browser screen and native tmux client, then close each viewer independently.
     expected: >-
-      Each visible WebSocket owns one real client at its measured grid. With `window-size largest`, the large
-      client determines the session's application grid while the small client uses tmux's native viewport; the
-      large browser is never letterboxed to the small grid. Closing either socket immediately removes only its
-      client, and tmux recomputes naturally from the remaining client without a bridge-owned size vote.
+      Each visible WebSocket owns one real client at its measured grid. With `window-size latest`, the
+      most recently ACTIVE client owns the application grid: when the small viewer interacts it takes
+      the window and sees the whole pane (no cropped corner it cannot escape), and the idle large
+      viewer letterboxes that grid — content complete on both. Closing either socket immediately
+      removes only its client, and tmux recomputes naturally from the remaining client without a
+      bridge-owned size vote.
   - name: synchronized-output-is-atomic
     tags: [frontend-e2e, desktop]
     description: >-
@@ -145,22 +147,23 @@ scenarios:
       pointer keeps drifting over the terminal between gestures (a human hand never holds still).
       Record the rendered terminal and the pane truth (capture-pane) across each round.
     expected: >-
-      Wheel-up shows tmux copy-mode over the transcript history with tmux's position indicator; the
-      return exits copy-mode at the bottom and the live tail's ticking status line resumes within about
-      a second. The pane application receives no mouse events, so its status line NEVER stalls: across
-      every round and during pointer drift, the pane-truth timer keeps flowing (no window where the
-      displayed elapsed time freezes while the clock runs). No frozen view ever impersonates the live
-      bottom.
+      The bridge-owned contract: wheel reports reach the TUI (its own scrolled view engages and its
+      indicator appears), the return travels symmetrically, and pointer DRIFT alone never arms a
+      stall (motion is filtered — hover produces zero reports). A residual status-line stall after
+      actual wheeling is claude's DOCUMENTED upstream TUI defect (mouse input pauses its pinned-line
+      repaint until a keystroke or content change) — file it as such, not as a bridge regression;
+      the pane-truth capture must show whether the stall lives in the pane (upstream) or only in the
+      browser (ours).
   - name: wheel-uses-real-tmux-client
     tags: [backend-api]
     description: >-
       Through the dashboard wheel path, scroll a normal shell with pre-attach history AND a full-screen
       TUI that requests SGR mouse input, then return each to its live bottom.
     expected: >-
-      Both pane types scroll tmux's own copy-mode — the server rebinds never `send -M` a wheel to the
-      pane, so even the mouse-owning TUI receives no wheel events. History produced before attach is
-      reachable, the return exits copy-mode at the bottom, and the browser has no independent
-      scrollback, scrollbar, or pane-mode capture/reconstruction path.
+      tmux's default routing decides: the shell pane enters tmux copy-mode (history produced before
+      attach is reachable, the return exits at the bottom) while the mouse-owning TUI receives its
+      own wheel events and scrolls its internal view. The browser has no independent scrollback,
+      scrollbar, or pane-mode capture/reconstruction path.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

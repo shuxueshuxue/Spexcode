@@ -16,11 +16,12 @@ const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(join(SRC, '..', 'templates', 'spexcode.json'), 'utf8')).lint.governedRoots)
-const SAFE_LAUNCHERS = {
+const SEEDED_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
   'claude-headless': { harness: 'claude-headless', cmd: 'claude' },
   codex: { harness: 'codex', cmd: 'codex' },
   opencode: { harness: 'opencode', cmd: 'opencode' },
+  'opencode-headless': { harness: 'opencode-headless', cmd: 'opencode --auto' },
   pi: { harness: 'pi', cmd: 'pi' },
 } as const
 
@@ -82,20 +83,22 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
   assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
 })
 
-test('--harness seeds ONLY safe ordinary launchers for every fresh selected-harness config', { skip: !gitAvailable() && 'git not available' }, () => {
-  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless']]
+test('--harness seeds only the selected launchers, with automatic permission limited to the headless runtime that requires it', { skip: !gitAvailable() && 'git not available' }, () => {
+  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['opencode-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless']]
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
     const out = spex('init', '.', '--harness', selected.join(','))
     const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
-    const expectedNames = Object.keys(SAFE_LAUNCHERS).filter((name) => selected.includes(name))
-    const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SAFE_LAUNCHERS[name as keyof typeof SAFE_LAUNCHERS]]))
+    const expectedNames = Object.keys(SEEDED_LAUNCHERS).filter((name) => selected.includes(name))
+    const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SEEDED_LAUNCHERS[name as keyof typeof SEEDED_LAUNCHERS]]))
 
     assert.deepEqual(cfg.harnesses, selected, 'the choice is persisted as the harnesses field')
     assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
-    assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands stay ordinary')
+    assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands match their runtime form')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
-    assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo|--auto/, 'clean init never grants automatic permissions')
+    assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo/, 'clean init never seeds wrapper-specific permission bypasses')
+    const autoLaunchers = Object.entries(cfg.sessions.launchers).filter(([, launcher]: any) => launcher.cmd.includes('--auto')).map(([name]) => name)
+    assert.deepEqual(autoLaunchers, selected.includes('opencode-headless') ? ['opencode-headless'] : [], 'only the explicitly selected headless OpenCode runtime receives --auto')
 
     if (selected.length === 1 && selected[0] === 'claude') {
       assert.match(out, /contract: CLAUDE\.md/, 'the materialize receipt reports the Claude contract')

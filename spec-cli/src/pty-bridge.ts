@@ -330,12 +330,6 @@ export function resizeBridge(id: string, viewer: Viewer, colsValue: number, rows
   }
 }
 
-export function forwardWheel(id: string, viewer: Viewer, up: boolean, col: number, row: number, ticks: number): void {
-  const subscription = currentSubscription(id, viewer)
-  if (!subscription?.visible || !subscription.bridge) return
-  sendControl(subscription.bridge, { t: 'wheel', up, col, row, ticks })
-}
-
 const MAX_INPUT_BYTES = 64 * 1024
 
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {

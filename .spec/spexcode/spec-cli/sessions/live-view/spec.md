@@ -142,20 +142,17 @@ ghost tmux client or geometry vote behind indefinitely.
 
 ## navigation and recovery
 
-Wheel coordinates become SGR-encoded terminal mouse reports written to the real tmux client — the same
-pure-ASCII form a real terminal sends, never classic X10, whose col+32 byte arithmetic crosses 0x7f past
-column 95 and desyncs the client's UTF-8 input parser: wheel events get eaten position-dependently and
-payload bytes leak into the pane as literal keystrokes. Browser wheel deltas
-accumulate into whole tmux ticks — one per fixed pixel quantum, remainder carried, a direction flip
-dropping it — so a trackpad's micro-delta momentum gesture travels proportionally instead of inflating
-every event to a full tick and overshooting its return leg. A net-tick ledger finishes the return: pane
-content that grows during a scroll excursion leaves an exactly-symmetric return short of the live bottom,
-where a mouse-owning application's scrolled view impersonates the live tail while its in-place updates
-freeze. When the ledger crosses back to zero the browser sends a bottoming burst — the natural human
-overshoot restored — which is a no-op at the bottom on every pane type and never fires for a reader
-parked deep in history. The browser still holds no scroll state of its own and never inspects pane
-mode. tmux itself decides
-whether they scroll copy-mode history or pass through to a mouse-owning full-screen application. The
+Mouse and wheel are owned by the native terminal path, not by a bridge vocabulary. The helper sets
+`mouse on` at the tmux boundary, tmux enables mouse-report mode on each attached client, and the browser
+xterm honors those DECSETs exactly as iTerm or VS Code would: xterm's own battle-tested conversion turns
+wheel events into SGR mouse reports — cell-height quanta with a signed fractional carry that survives
+direction flips — and those reports travel through the ordinary input path to that viewer's real tmux
+client. SpexCode synthesizes no wheel protocol of its own: no pixel quantizer, no tick ledger, no
+synthetic bottoming burst — the browser holds no wheel state and never inspects pane mode. tmux itself
+decides whether a report scrolls copy-mode history or passes through to a mouse-owning full-screen
+application, so the browser is byte-indistinguishable from a native terminal attached to the same
+session. Local text selection follows the universal convention of mouse-owning terminals: Shift-drag
+(Option-drag on macOS) forces a browser selection while the application owns the mouse. The
 browser keeps no independent scrollback and the bridge does not inspect pane mode or reconstruct a
 copy-mode viewport. The pane viewport therefore clips rather than scrolls: with no xterm scrollback its
 overflow is hidden on both axes, so a fractional device-pixel or geometry overshoot cannot surface a

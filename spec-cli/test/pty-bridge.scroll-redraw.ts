@@ -4,14 +4,18 @@
 // way back down copy-mode exits and the bridge re-seeds the view from a capture. A capture restores the GRID
 // but not the CURSOR, so if the re-seed leaves the cursor at the body's end, the TUI's next relative redraw
 // erases the wrong rows and the bottom UI DOUBLES. Fix: the frame ends by placing the cursor where the pane
-// really has it. This drives the REAL bridge (attachViewer + forwardWheel) against an Ink-style redrawer and
+// really has it. This drives the REAL bridge (attachViewer + native SGR wheel reports over forwardInput) against an Ink-style redrawer and
 // replays the viewer stream through a small emulator to count how many times the frame's single marker survives.
 //
 // Run (from spec-cli/): SPEXCODE_TMUX=redraw-<pid> npx tsx test/pty-bridge.scroll-redraw.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { writeFileSync } from 'node:fs'
-import { attachViewer, detachViewer, forwardWheel, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+import { attachViewer, detachViewer, forwardInput, resizeBridge, type Viewer } from '../src/pty-bridge.js'
+
+// what a native mouse-report-mode xterm emits for one wheel notch — the browser no longer synthesizes
+// wheel controls, so the test speaks the same SGR bytes through the ordinary input path.
+const wheelReport = (up: boolean, col: number, row: number) => `\x1b[<${up ? 64 : 65};${col};${row}M`
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || `redraw-${process.pid}`
@@ -118,10 +122,10 @@ async function main() {
   await sleep(1500)   // let the box redraw a few times live
 
   // scroll UP (enter copy-mode, freeze) while the box keeps advancing underneath
-  for (let i = 0; i < 5; i++) { forwardWheel(SESSION, viewer, true, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 5; i++) { forwardInput(SESSION, viewer, wheelReport(true, 40, 5)); await sleep(200) }
   await sleep(800)
   // scroll DOWN past the bottom → copy-mode exits → re-seed → live redraws resume
-  for (let i = 0; i < 8; i++) { forwardWheel(SESSION, viewer, false, 40, 5, 1); await sleep(200) }
+  for (let i = 0; i < 8; i++) { forwardInput(SESSION, viewer, wheelReport(false, 40, 5)); await sleep(200) }
   await sleep(1500)   // let several relative redraws land on the re-seeded screen
 
   detachViewer(SESSION, viewer)

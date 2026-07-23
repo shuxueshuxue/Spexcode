@@ -93,9 +93,15 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
 export default function SessionWindow({ sessions, activeId, onPick, onOpenSession }) {
   const t = useT()
   const { expanded, toggle } = useFold()
+  // the offline zone rests folded here too ([[session-console]] — one disclosure per surface, collapsed on
+  // every fresh mount); the graph-locked session stays a visible row even while the zone is folded.
+  const [offlineOpen, setOfflineOpen] = useState(false)
   // memoized off the exposed fold Set (stable per state), matching the console list — the forest's
   // nest+zone-sort otherwise re-runs on every board poll AND every unrelated re-render of the glance.
-  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
+    zoneFolded: (z) => z === 'offline' && !offlineOpen,
+    keepVisible: (s) => s.source === activeId,
+  }), [sessions, expanded, offlineOpen, activeId])
   return (
     <div className="sesswin">
       {sessions.length === 0 ? (
@@ -106,7 +112,22 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
         // sessions fold under their spawner ([[session-nesting]]): the forest gives zone headers + rows, and a
         // parent's children appear only while expanded (collapsed by default).
         forest.map((it) => {
-          if (it.type === 'zone') return <div className={`sesswin-zone sesswin-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+          if (it.type === 'zone') {
+            if (it.zone !== 'offline') return <div className={`sesswin-zone sesswin-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+            return (
+              <button
+                key={`zone-${it.zone}`} type="button"
+                className={`sesswin-zone sesswin-zone-${it.zone} si-zone-fold${it.folded ? '' : ' open'}`}
+                aria-expanded={!it.folded}
+                data-tip={t(it.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: it.count })}
+                onClick={() => setOfflineOpen((v) => !v)}
+              >
+                <Icon name={it.folded ? 'chevron-right' : 'chevron-down'} size={11} />
+                {t(`sessionZone.${it.zone}`)}
+                {it.count > 0 && <span className="si-zone-count">{it.count}</span>}
+              </button>
+            )
+          }
           const s = it.s
           // activeId is the locked session's worktree path (board highlight matches overlays by source),
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).

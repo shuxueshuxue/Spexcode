@@ -133,9 +133,14 @@ test('terminal viewport clips — tmux owns all scrolling', () => {
   assert.doesNotMatch(css, /\.st-host \.xterm-viewport\s*\{[^}]*overflow-y:\s*auto/s)
 })
 
-test('a native client grid stays bottom-aligned through fractional fit remainder', () => {
-  assert.match(css, /\.st-host\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;/s)
-  assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;[^}]*flex:\s*none;/s)
+test('the fit remainder rests naturally below the last row — no alignment artifice', () => {
+  // a plain terminal top-aligns content and lets the fractional leftover sit at the BOTTOM. The old
+  // flex-end pinned the grid to the bottom edge and moved that natural gap to the top, which read as
+  // a cramped bottom. Normal flow, no flex, no reserved padding.
+  assert.doesNotMatch(css, /\.st-host\s*\{[^}]*flex-end/s)
+  assert.doesNotMatch(css, /\.st-host\s+\.xterm\s*\{[^}]*padding-bottom/s)
+  assert.match(css, /\.st-host\s*\{[^}]*overflow:\s*hidden;\s*\}/s)
+  assert.match(css, /\.st-host\s+\.xterm\s*\{[^}]*width:\s*auto\s*!important;[^}]*height:\s*auto\s*!important;/s)
 })
 
 test('selected nested session keeps its lead separated from the revealed headline', () => {

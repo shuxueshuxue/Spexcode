@@ -128,14 +128,14 @@ test('composeSessionPrompt owns headless defaults, explicit overrides, and final
     })
     assert.equal(headless.replyVia, 'note')
     assert.ok(headless.text.startsWith('answer this\n\nThe spec node is at /tmp/spec.md.'), headless.text)
-    assert.ok(headless.text.indexOf('/tmp/spec.md') < headless.text.indexOf('terminal-free client'), headless.text)
+    assert.ok(headless.text.indexOf('/tmp/spec.md') < headless.text.indexOf('REQUIRED REPLY TRANSPORT'), headless.text)
 
     const interactive = await composeSessionPrompt('answer normally', { session: ID, harness: 'claude' })
     assert.deepEqual(interactive, { text: 'answer normally' })
 
     const explicit = await composeSessionPrompt('put this in note', { session: ID, harness: 'claude' }, { replyVia: 'note' })
     assert.equal(explicit.replyVia, 'note')
-    assert.ok(explicit.text.includes('terminal-free client'), explicit.text)
+    assert.ok(explicit.text.includes('REQUIRED REPLY TRANSPORT'), explicit.text)
   })
 })
 
@@ -148,10 +148,13 @@ test('composeSessionPrompt owns the one-shot note-to-terminal counter-insert', a
   })
 })
 
-test('withNoteReplyHint: keeps the message, asks for the reply in --note, and declares itself PER-MESSAGE', () => {
+test('withNoteReplyHint: makes the note declaration required reply transport even for no-tools prompts', () => {
   const out = withNoteReplyHint('how is the merge going?')
   assert.ok(out.startsWith('how is the merge going?'), out)
-  assert.ok(out.includes('--note'), out)
+  assert.ok(out.includes('spex session ask --note'), out)
+  assert.ok(out.includes('reply transport'), out)
+  assert.ok(out.includes('even when the message says to use no tools'), out)
+  assert.ok(out.includes('FINAL action'), out)
   assert.ok(out.includes('PER-MESSAGE'), out)
 })
 

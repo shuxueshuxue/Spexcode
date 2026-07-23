@@ -68,6 +68,10 @@ it does not require a matching history row because the debounced timeline observ
 turn that returns to the same status between samples. That board proof never substitutes for a required timeline
 ANSWER: a note-routed cell still waits for the marker in `/timeline`. The launch prompt has no second in-turn invocation, so
 `launch x in-turn` is an explicit BLOCKED cell rather than a fabricated send path.
+The note insert treats the declaration command as reply TRANSPORT, not as part of the requested work: even a raw prompt that
+says "use no tools" or "only print the answer" must still finish by placing the complete reply in the truthful declaration's
+`--note`. Normal final output is invisible on this route, and the stop-gate's generic auto-declaration is lifecycle recovery,
+never an answer substitute.
 BLOCKED is reserved for that structural non-cell: a runnable cell whose turn cannot start, exits without a
 reply/declaration, or leaves a stale lifecycle is a FAIL (with any matching issue referenced), and the runner
 still invokes later cells through the real adapter instead of converting one failure into skipped coverage.

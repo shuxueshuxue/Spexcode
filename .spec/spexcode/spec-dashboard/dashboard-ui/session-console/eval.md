@@ -139,6 +139,19 @@ scenarios:
     expected: >-
       The window stays bounded above the stats strip and scrolls internally. It retains avatars, shared compact
       headlines, status glyphs, triage grouping, and graph-lock gestures without becoming the console sidebar.
+  - name: offline-history-disclosure
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Against a board carrying several retained terminal/offline history sessions (an adopter's deep-linked CR
+      records is the live case), open the console session list at a narrow sidebar viewport. Inspect the offline
+      zone at rest, expand it through its header, and select an offline session from outside the list while it
+      is folded.
+    expected: >-
+      At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
+      dormant history no longer floods the list. Needs-you and running rows are all present at every fold
+      state. Clicking the header reveals every offline row; clicking again folds them back. A session selected
+      by URL/search/menu stays rendered even while its zone is folded. No session record is deleted or mutated
+      by any of it.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

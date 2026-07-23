@@ -207,8 +207,8 @@ export async function loadSessionTimeline(id) {
   return res.json()
 }
 
-// A headless session's native harness events ([[message-stream]]). REST returns the complete file plus the
-// byte cursor after its last complete line; the companion EventSource follows from exactly that boundary.
+// A capable adapter's optional native harness events ([[message-stream]]). REST returns the complete file
+// plus the byte cursor after its last complete line; the companion EventSource follows from that boundary.
 export async function loadSessionMessages(id) {
   const res = await apiFetch(sessionUrl(id, 'messages'), { cache: 'no-store' })
   if (!res.ok) throw new Error(`messages HTTP ${res.status}`)

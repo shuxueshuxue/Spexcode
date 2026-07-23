@@ -2,14 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-import { isMessageStreamSession, rowsFromMessages } from './messageStream.js'
+import { isHeadlessSession, isMessageStreamSession, rowsFromMessages } from './messageStream.js'
 
 const sessionInterface = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 
-test('only registered headless harnesses select the message console', () => {
-  assert.equal(isMessageStreamSession({ harness: 'claude-headless' }), true)
-  assert.equal(isMessageStreamSession({ harness: 'claude' }), false)
-  assert.equal(isMessageStreamSession({ harness: 'codex' }), false)
+test('console surfaces read adapter capabilities without interpreting harness ids', () => {
+  assert.equal(isHeadlessSession({ capabilities: { headless: true, messageStream: false } }), true)
+  assert.equal(isHeadlessSession({ harness: 'claude-headless' }), false)
+  assert.equal(isMessageStreamSession({ capabilities: { headless: true, messageStream: true } }), true)
+  assert.equal(isMessageStreamSession({ harness: 'claude-headless' }), false)
 })
 
 test('native turns become ordered bubbles and compact tool summaries', () => {
@@ -36,9 +38,17 @@ test('tool results and non-conversation envelopes stay out of the chat', () => {
   assert.deepEqual(rowsFromMessages(messages), [])
 })
 
-test('headless layers mount SessionMessages instead of SessionTerm, including while offline', () => {
-  assert.match(sessionInterface, /isMessageStreamSession\(s\) \|\| s\.liveness !== 'offline'/)
-  assert.match(sessionInterface, /stream\s*\? <SessionMessages sessionId=\{id\}/)
+test('headless layers reuse TimelineChat while pane-backed layers retain SessionTerm', () => {
+  assert.match(sessionInterface, /isHeadlessSession\(s\) \|\| s\.liveness !== 'offline'/)
+  assert.match(sessionInterface, /headless\s*\? <TimelineChat s=\{session\}/)
   assert.match(sessionInterface, /: <SessionTerm sessionId=\{id\}/)
-  assert.match(sessionInterface, /!messageConsole && noLivePane/)
+  assert.doesNotMatch(sessionInterface, /claude-headless/)
+})
+
+test('TimelineChat gates the native full-process drill-down on messageStream capability', () => {
+  assert.match(timelineChat, /const hasFullProcess = isMessageStreamSession\(s\)/)
+  assert.match(timelineChat, /hasFullProcess && \(/)
+  assert.match(timelineChat, /<SessionMessages sessionId=\{s\.id\} active=\{active\} \/>/)
+  assert.match(timelineChat, /sendSessionText\(s\.id, text, \{ replyVia: 'note' \}\)/)
+  assert.doesNotMatch(timelineChat, /claude-headless/)
 })

@@ -437,8 +437,8 @@ app.get('/api/sessions/:id/timeline', (c) => {
   const r = readTimeline(c.req.param('id'), Number.isFinite(limit) && limit > 0 ? limit : undefined)
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// A headless harness has no pane: its console is the adapter-appended native event log. REST establishes the
-// complete ordered snapshot + byte cursor; SSE follows appends from that cursor (or Last-Event-ID on reconnect).
+// An adapter may expose its native event log as the console's optional full-process drill-down. REST establishes
+// the complete ordered snapshot + byte cursor; SSE follows appends from that cursor (or Last-Event-ID on reconnect).
 app.get('/api/sessions/:id/messages', (c) => {
   const r = readSessionMessages(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)

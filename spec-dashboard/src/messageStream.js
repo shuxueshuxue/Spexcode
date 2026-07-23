@@ -1,6 +1,7 @@
-const HEADLESS_CONSOLES = new Set(['claude-headless'])
-
-export const isMessageStreamSession = (session) => HEADLESS_CONSOLES.has(session?.harness)
+// Console behavior comes from the adapter capability projection on the session row. Harness ids remain
+// backend facts; adding another capable adapter requires no dashboard branch.
+export const isHeadlessSession = (session) => session?.capabilities?.headless === true
+export const isMessageStreamSession = (session) => session?.capabilities?.messageStream === true
 
 const summaryKeys = ['command', 'file_path', 'path', 'pattern', 'query', 'description', 'prompt', 'url']
 

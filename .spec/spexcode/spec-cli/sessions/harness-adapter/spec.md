@@ -161,6 +161,10 @@ surface:
   summary) → false, so its headline falls through to the launch-prompt preview rather than showing the folder.
   Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
   that path (no `if (codex)`).
+- **headless** — whether the adapter launches without an interactive TUI. [[launcher-visibility]] consumes
+  this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
+  id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
+  pi each declare `false`; an actually non-interactive adapter declares `true` on its own row.
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window

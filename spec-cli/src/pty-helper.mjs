@@ -18,24 +18,20 @@ try {
   // the requested PTY grid the pane grid too; filtering a coloured final row in xterm would corrupt real
   // pane content. SpexCode owns these sessions, so a later foreground attach sees the same status-free pane.
   execFileSync('tmux', ['-L', socket, 'set-option', '-t', id, 'status', 'off'])
-  // Idempotent per-session migration of the primary-screen contract: launch() sets this for new
-  // sessions, but a session created before this release still has its window on the alternate
-  // screen (copy-mode over it reads [0/0] — alt screens have no history). Setting the window
-  // option here converts it the next time its harness restarts; until then scrolling is honestly
-  // empty rather than frozen.
-  execFileSync('tmux', ['-L', socket, 'set-option', '-w', '-t', id, 'alternate-screen', 'off'])
-  // Let tmux's native multi-client policy choose the application grid. A small browser gets tmux's
-  // viewport into the largest attached client; it never forces a real large display down to its size.
-  execFileSync('tmux', ['-L', socket, 'set-window-option', '-t', id, 'window-size', 'largest'])
+  // Control follows the person actually driving: `latest` sizes the window to the most recently
+  // active client, so a small screen takes the grid the moment its user interacts and sees the WHOLE
+  // pane, while an idle larger viewer letterboxes. `largest` optimized the big display's real estate
+  // but left a small concurrent viewer a cropped corner it could never take back.
+  execFileSync('tmux', ['-L', socket, 'set-window-option', '-t', id, 'window-size', 'latest'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'mouse', 'on'])
   execFileSync('tmux', ['-L', socket, 'set-option', '-g', 'history-limit', '50000'])
-  // The wheel ALWAYS scrolls tmux copy-mode history and is NEVER forwarded to the pane application:
-  // mouse-report input stalls claude's TUI repaint loop for ~10s (the frozen-timer bug), and no wheel
-  // encoding can fix the recipient. Rebinding at the server strips tmux's default mouse_any_flag
-  // pass-through for every client — browser and native attach behave identically. Wheel-down outside
-  // copy-mode is a deliberate no-op (the live view is already the bottom).
-  execFileSync('tmux', ['-L', socket, 'bind-key', '-n', 'WheelUpPane', 'if', '-F', '-t=', '#{pane_in_mode}', 'send-keys -M', 'copy-mode -et='])
-  execFileSync('tmux', ['-L', socket, 'bind-key', '-n', 'WheelDownPane', 'if', '-F', '-t=', '#{pane_in_mode}', 'send-keys -M', ''])
+  // Wheel routing stays tmux-default: copy-mode history for a plain pane, pass-through to a
+  // mouse-owning TUI. Claude's TUI virtual-scrolls its own transcript on those reports (it lives on
+  // the alternate screen and repaints in place, so tmux history cannot substitute — an in-place
+  // renderer never scrolls lines off the top). Restore the default bindings idempotently in case an
+  // earlier release rebound them server-wide; the unbind may already be clean, so it fails quietly.
+  execFileSync('tmux', ['-L', socket, 'bind-key', '-n', 'WheelUpPane', 'if', '-F', '-t=', '#{||:#{pane_in_mode},#{mouse_any_flag}}', 'send-keys -M', 'copy-mode -et='])
+  try { execFileSync('tmux', ['-L', socket, 'unbind-key', '-n', 'WheelDownPane']) } catch { /* already unbound */ }
   const features = execFileSync('tmux', ['-L', socket, 'show-options', '-gsv', 'terminal-features'], { encoding: 'utf8' })
   const xtermFeatures = new Set(features.split('\n').filter((line) => line.startsWith('xterm*:')).flatMap((line) => line.split(':').slice(1)))
   const missing = ['sync', 'hyperlinks'].filter((feature) => !xtermFeatures.has(feature))

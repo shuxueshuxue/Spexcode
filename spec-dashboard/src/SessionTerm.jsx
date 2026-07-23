@@ -118,11 +118,11 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       }
     })
 
-    // Pointer belongs to the browser, wheel belongs to tmux, and the agent TUI receives ZERO mouse
-    // events. Three cuts close every path: motion-tracking DECSETs are consumed here (no hover
-    // reports exist), the patched selection predicate (patch-xterm-sync-resize.mjs) turns every
-    // plain drag into a LOCAL browser selection (no button reports, modifier-free copy), and tmux's
-    // server rebinds route the remaining wheel reports to copy-mode history (never to the pane).
+    // Pointer belongs to the browser: motion-tracking DECSETs are consumed here (a drifting pointer
+    // emits nothing — hover reports are what armed claude's status-line stall indefinitely), and the
+    // patched selection predicate (patch-xterm-sync-resize.mjs) turns every plain drag into a LOCAL
+    // browser selection (no button reports, modifier-free copy). Only wheel reports leave, under
+    // tmux's native routing.
     const motionModeHandlers = ['h', 'l'].map((final) => term.parser.registerCsiHandler(
       { prefix: '?', final },
       (params) => onlyMotionTrackingModes(params),
@@ -250,11 +250,11 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       sock.send(JSON.stringify({ t: 'input', data }))
     })
 
-    // Wheel navigation is xterm-native and terminates in tmux: reports ride the ordinary onData→input
-    // path to this viewer's real tmux client, whose rebinds always scroll copy-mode history (the
-    // primary-screen transcript — sessions launch with alternate-screen off) and exit at the bottom.
-    // No custom wheel handler, quantizer, tick ledger, or synthetic bottoming exists in the browser,
-    // and the pane application never sees a mouse event.
+    // Wheel navigation is xterm-native: reports ride the ordinary onData→input path to this viewer's
+    // real tmux client, and tmux's default routing decides — copy-mode for a plain pane, pass-through
+    // for a mouse-owning TUI (claude virtual-scrolls its own transcript, as under iTerm). No custom
+    // wheel handler, quantizer, tick ledger, or synthetic bottoming exists in the browser. Claude's
+    // residual status-line stall after wheeling is its documented upstream TUI defect (see live-view).
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
     let copiedTimer

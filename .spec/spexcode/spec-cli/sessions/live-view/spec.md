@@ -126,12 +126,13 @@ are visible. Backgrounding the browser tab therefore withdraws the claim. Past t
 xterm remain but its tmux client does not; returning exposes the cache immediately, then native attach replaces
 it with the current screen. Lingered bytes are written as they arrive, never queued for fast-forward.
 
-Concurrent visible viewers use tmux's classic multi-client model. The session window uses `window-size largest`:
-the largest attached client owns the application's one possible PTY geometry, so a real large display is never
-shrunk by a smaller peer. Each client still renders at its own outer-terminal grid; a smaller viewer receives
-tmux's native viewport into the larger window rather than forcing every viewer to the smallest dimensions.
-`Ctrl+b z` remains tmux's pane-layout zoom and is not repurposed as a size-arbitration command. When the largest
-client hides, disconnects, or dies, tmux removes that client and naturally recomputes from those that remain.
+Concurrent visible viewers use tmux's classic multi-client model with `window-size latest`: the
+window takes the grid of the most recently active client, so control follows the person actually
+driving. A phone-sized viewer that interacts immediately owns the geometry and sees the whole pane,
+instead of being parked on a cropped corner of a bigger idle display with no way to take the view
+back; the idle larger viewer letterboxes the smaller grid, losing real estate but never content.
+`Ctrl+b z` remains tmux's pane-layout zoom and is not repurposed as a size-arbitration command. When
+the sizing client hides, disconnects, or dies, tmux recomputes naturally from those that remain.
 SpexCode does not implement a parallel min/max/latest vote or broadcast one client's bytes to another.
 
 The terminal WebSocket and its native client have the same owner. An ordinary close removes the subscription
@@ -142,27 +143,27 @@ ghost tmux client or geometry vote behind indefinitely.
 
 ## navigation and recovery
 
-The pointer belongs to the browser, the wheel belongs to tmux, and the agent TUI receives no mouse
-events at all. Mouse input measurably stalls claude's status-line repaint (the frozen-timer bug: a
-drifting pointer under all-motion tracking re-arms the stall indefinitely, keyboard input clears it),
-so the contract is delivery-zero rather than encoding-perfect — no wheel encoding can fix the
-recipient. Three cuts close every path. Motion-tracking and legacy mouse DECSETs (9, 1002, 1003,
-1005, 1015) are consumed at the browser adapter, so hover produces no reports; button mode 1000 and
-SGR 1006 pass through because they are what makes xterm emit wheel reports natively — cell-height
-quanta with a signed fractional carry, the same conversion iTerm ships. A patched selection predicate
-turns every plain drag into a local browser selection, so button events never become reports and copy
-stays modifier-free. The wheel reports that remain reach the viewer's real tmux client, whose
-server-wide rebinds always scroll tmux copy-mode — never `send -M` to the pane — and sessions are
-created with `alternate-screen off` so the TUI renders on the primary screen and its transcript
-accumulates as real tmux history, the same scrollback a plain terminal would hold. Wheel-down inside
-copy-mode scrolls toward the bottom and exits there (`copy-mode -e`); outside copy-mode it is a no-op,
-because the live view already is the bottom. SpexCode synthesizes no wheel protocol of its own: no
-pixel quantizer, no tick ledger, no synthetic bottoming burst — the browser holds no wheel state and
-never inspects pane mode, and native attaches get the identical behavior from the same server rebinds.
-The browser keeps no independent scrollback and the bridge does not reconstruct a copy-mode viewport.
-The pane viewport therefore clips rather than scrolls: with no xterm scrollback its overflow is hidden
-on both axes, so a fractional device-pixel or geometry overshoot cannot surface a phantom themed
-browser scrollbar competing with tmux's own scroll.
+The pointer belongs to the browser; the wheel is native and terminates wherever tmux's own routing
+sends it. Motion-tracking and legacy mouse DECSETs (9, 1002, 1003, 1005, 1015) are consumed at the
+browser adapter, so a drifting pointer produces no reports; button mode 1000 and SGR 1006 pass
+through because they are what makes xterm emit wheel reports natively — cell-height quanta with a
+signed fractional carry, the same conversion iTerm ships, never a hand-rolled quantizer, tick ledger,
+or synthetic bottoming. A patched selection predicate turns every plain drag into a local browser
+selection, so button events never become reports and copy stays modifier-free. Wheel reports reach
+the viewer's real tmux client under tmux's default bindings: copy-mode history for a plain pane,
+pass-through for a mouse-owning TUI — claude virtual-scrolls its own in-memory transcript exactly as
+it would under iTerm. One known upstream defect is accepted and documented rather than papered over:
+claude's TUI stalls its pinned status-line repaint after receiving mouse input (measured at pane
+truth: 48s frozen elapsed-timer while the transcript kept repainting), until a keystroke or content
+change clears it. The motion filter removes the hover trigger — only actual wheeling can arm it —
+and the residual stall is claude's bug to fix, not this bridge's to disguise. The tempting
+alternative — denying the alternate screen and scrolling real tmux history — was measured and
+rejected: claude repaints in place, so nothing ever scrolls off the top and the "history" a viewer
+reaches is an empty [0/0]. The browser keeps no independent scrollback and the bridge does not
+inspect pane mode or reconstruct a copy-mode viewport. The pane viewport therefore clips rather than
+scrolls: with no xterm scrollback its overflow is hidden on both axes, so a fractional device-pixel
+or geometry overshoot cannot surface a phantom themed browser scrollbar competing with tmux's own
+scroll.
 
 Viewer subscriptions belong to the session id and WebSocket rather than a replaceable helper process. If one
 visible helper exits, an alive-gated, rate-limited restore creates a new helper for that same viewer; native

@@ -1072,13 +1072,6 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
 }
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  // Before the harness boots: deny the alternate screen so the TUI renders on the primary screen and
-  // its transcript accumulates as REAL tmux history — that history is what wheel scrolling shows
-  // (tmux copy-mode), since mouse events are never forwarded to the agent TUI (mouse input stalls
-  // claude's repaint loop; scrollback belongs to tmux, exactly as in a plain terminal without an
-  // alternate screen). Window-local and set before the app's smcup: a global option does not reach
-  // an already-created window, and after smcup it is too late.
-  await tmux(['set-option', '-w', '-t', id, 'alternate-screen', 'off'])
   await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up

@@ -45,4 +45,4 @@ The pointer is the browser's and never the application's. Plain drag always make
 selection (the patched selection predicate diverts every button event from mouse reporting), ⌘/Ctrl+C
 copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. Motion
 tracking is filtered at the adapter so hovering emits nothing; only wheel reports leave the browser,
-and tmux's rebinds keep even those away from the agent TUI ([[live-view]] owns that contract).
+routed by tmux's native bindings ([[live-view]] owns that contract).

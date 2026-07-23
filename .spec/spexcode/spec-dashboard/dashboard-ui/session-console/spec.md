@@ -2,7 +2,7 @@
 title: session-console
 status: active
 hue: 280
-desc: The Enter surface — two-pane session interface with a live tmux terminal.
+desc: The Enter surface — two-pane session interface whose console is a live tmux terminal or a headless harness message stream.
 code:
   - spec-dashboard/src/SessionInterface.jsx#SessionInterface
 related:
@@ -41,8 +41,9 @@ visible rows: a session hidden under a collapsed nesting parent can still be ope
 originator chip, while ↑/↓ navigation continues to walk only the visible forest rows. Opening such a
 hidden session from outside the list — including the graph's node menu — automatically unfolds every present
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
-Leaving the page never unmounts it — the terminals keep their sockets and scroll warm, while the selected
-terminal withdraws its [[live-view]] visibility claim until the shared pane opens again. Page display itself
+Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
+terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless
+[[message-stream]] reconnects from its persisted cursor when selected again. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
@@ -92,9 +93,11 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session shows its **live interactive tmux terminal** (SessionTerm) — the agent's own TUI is the
-default input surface — but only when its **liveness** ([[state]]) is live
-(`online`/`starting`). The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+An existing session's harness chooses one real console surface. A pane-backed harness shows its **live
+interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
+its **liveness** ([[state]]) is live (`online`/`starting`). A headless harness has no pane at any liveness;
+its console is [[message-stream]], the harness-native events persisted in `messages.ndjson`, and remains
+readable after the process goes offline. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
@@ -106,8 +109,9 @@ pane's bottom edge. `Cmd/Alt+I` suspends [[command-box]] over the lower middle w
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar**
 contains only three things: the current surface, evaluation, and available commands. Its surface group contains
-**Terminal as the sole real tab** (`role=tab` in the only `tablist`) and keeps that selected surface visually
-attached to the live pane. Session identity, lifecycle, and liveness do **not** repeat here: the selected row in the
+one real tab (`role=tab` in the only `tablist`): **Terminal** for a pane-backed harness, **Messages** for a
+headless harness. The selected surface stays visually attached to its console. Session identity, lifecycle,
+and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
 a REAL anchor whose href is
@@ -115,7 +119,7 @@ the canonical session-scoped Evals list address (the scoped default query, minte
 copy-link/middle-click work for free), and it sits outside the tablist, so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
-eval pane of its own, so the terminal's width is stable and the warm pane is never reflowed;
+eval pane of its own, so the console width is stable and a warm pane is never reflowed;
 see [[live-view]]). The door carries a compact, symbolic glance over that SAME worktree-rooted session model,
 already bounded by [[session-eval]] to scenarios this worktree affected or measured. Its four mutually exclusive
 scenario tallies are the complete visible accounting: reliable current pass/fail counts use [[review-chrome]]'s
@@ -135,10 +139,10 @@ last-known until an authoritative reconnect snapshot re-anchors it. `ready` with
 only empty state, distinct from loading, updating, disconnected, and error.
 
 The toolbar wears the app-chrome background with a bottom separator, so it reads
-**visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
+**visibly apart from the console** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
 focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
-narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping Terminal, the
+narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, the
 Eval door, and every currently available icon tool inside the pane. The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
 all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
@@ -154,14 +158,15 @@ the public terminal parser consumes those mode toggles at the adapter boundary. 
 one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
 continues through [[live-view]]'s explicit tmux-client control path.
 
-The desktop right pane has **one session shape**: every launched session is an ordinary interactive session,
-so its first tab is Terminal and mounts the warm, input-enabled `SessionTerm` described here. Launchers choose a
-harness and command/auth profile; they do not change the desktop session shape, hide the terminal behind a
-capability placeholder, or replace it with a timeline chat. The phone's terminal-free conversation is a
-property of that viewport's surface ([[mobile-ui]]), not durable session identity. Session rows therefore
-carry only their status and activity vocabulary — no mode mark or other launch-axis badge.
+The desktop right pane has **one console slot with two truthful transports**. A pane-backed harness mounts the
+warm, input-enabled `SessionTerm` described here. A headless harness mounts [[message-stream]] instead: no
+terminal placeholder and no tmux socket are created for a process that owns neither. The harness id already
+carried by the session row selects the registered console transport; no adapter definition or native event is
+reinterpreted here. This differs from the phone's [[session-timeline]] conversation, which is a viewport surface
+over SpexCode lifecycle notes rather than the harness-native stream. Session rows still carry only their status
+and activity vocabulary — no redundant mode badge.
 
-Input has **two explicit channels**. [[terminal-input]] is the default: xterm owns ordinary keys, paste, and
+For a pane-backed console, input has **two explicit channels**. [[terminal-input]] is the default: xterm owns ordinary keys, paste, and
 browser IME composition and sends its ordered data through the visible terminal WebSocket into the same native
 tmux client that renders the agent's TUI. Re-selecting the active session or Terminal tab restores xterm focus
 without first ending its composition. There is no dashboard type mode, general raw-key vocabulary, menu sniff,

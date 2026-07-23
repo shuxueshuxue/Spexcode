@@ -1692,9 +1692,50 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
 .si-term-body { container-type: size; flex: 1; min-height: 0; overflow: hidden; padding: 6px 10px 4px; background: var(--term-bg); }
+.si-term-body.is-messages { padding: 0; background: var(--paper); }
 .si-line { font-size: var(--type-control); line-height: var(--leading-body); color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
 .si-op { color: var(--blue); font-weight: var(--weight-bold); }
+
+/* [[message-stream]] — a headless harness's console is the native event conversation, not a terminal-shaped
+   placeholder. Bubbles carry turns; tool calls remain compact rows in the same ordered stream. */
+.ms-console { height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); }
+.ms-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
+  gap: 12px; padding: 18px clamp(16px, 4%, 44px) 24px; scrollbar-gutter: stable;
+}
+.ms-turn { width: min(78%, 760px); min-width: 0; display: flex; flex-direction: column; gap: 4px; align-self: flex-start; }
+.ms-turn.user { width: min(72%, 680px); align-self: flex-end; align-items: flex-end; }
+.ms-role { font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-body); color: var(--muted); }
+.ms-bubble {
+  max-width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.ms-turn.user .ms-bubble {
+  border-color: color-mix(in srgb, var(--blue) 35%, var(--line));
+  background: color-mix(in srgb, var(--blue) 10%, var(--paper));
+}
+.ms-tool {
+  width: min(78%, 760px); min-width: 0; align-self: flex-start; display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; box-sizing: border-box; border-left: 2px solid color-mix(in srgb, var(--cyan) 55%, var(--line));
+  color: var(--muted); background: color-mix(in srgb, var(--panel) 72%, transparent);
+  font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-body);
+}
+.ms-tool > svg { flex: none; color: var(--cyan); }
+.ms-tool-name { flex: none; color: var(--ink2); font-weight: var(--weight-bold); }
+.ms-tool-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.ms-empty { margin: auto; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }
+.ms-state {
+  flex: none; padding: 6px 14px; border-top: 1px solid var(--line); background: var(--panel);
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-body);
+}
+.ms-state.error { color: var(--red); }
+
+@container (max-width: 520px) {
+  .ms-turn, .ms-turn.user, .ms-tool { width: 90%; }
+  .ms-scroll { padding-inline: 12px; }
+}
 
 /* Command Box ([[command-box]]): the layer occupies the terminal only as a click-away boundary. The box's
    bottom is fixed at 78% from the pane top (`bottom:22%`), so the shared footer never walks as lines grow. */

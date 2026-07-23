@@ -96,12 +96,14 @@ scenarios:
   - name: terminal-toolbar-and-eval-door
     tags: [frontend-e2e, desktop]
     description: >-
-      Switch live sessions and route through the permanent Eval door at wide and narrow desktop widths across
-      themes, locales, long headlines, Command Box visibility, and eval loading/error/zero states.
+      Switch between a live pane-backed session and a headless message-stream session, then route through the
+      permanent Eval door at wide and narrow desktop widths across themes, locales, long headlines, Command Box
+      visibility, and eval loading/error/zero states.
     expected: >-
-      Terminal is the sole tab; Eval is a real canonical anchor outside the tablist and no inline eval pane
-      mounts. The compact toolbar stays one line, visually separate from the terminal, with honest eval summary
-      states and all available icon tools visible. The warm terminal survives navigation and browser Back.
+      Exactly one console tab is present: Terminal for the pane-backed session and Messages for the headless
+      session. Eval is a real canonical anchor outside the tablist and no inline eval pane mounts. The compact
+      toolbar stays one line, visually separate from either console, with honest eval summary states and all
+      available icon tools visible. The warm terminal survives navigation and browser Back.
   - name: create-stays-on-new-and-close-falls-back
     tags: [frontend-e2e, desktop]
     description: >-
@@ -118,7 +120,7 @@ scenarios:
     expected: >-
       A centered pop-out lists each profile once with its harness icon, name, full inert command, and selected
       state. Selection closes and persists while valid, otherwise the configured default wins. No inline command
-      editor or launcher-specific session shape appears.
+      editor or launcher-configuration controls appear.
   - name: row-context-and-external-reveal
     tags: [frontend-e2e, desktop]
     description: >-

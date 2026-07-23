@@ -145,6 +145,26 @@ scenarios:
       and the Alt page jumps.
     code:
       - spec-dashboard/src/Dashboard.jsx
+  - name: rail-chip-never-steals-focus-or-keys
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Under the multi-project gateway (a `/p/<id>/` scoped page whose catalog probe succeeded, so the
+      rail's project chip carries its switcher menu), on the graph: (1) click the project chip once
+      (menu opens; close it with Esc), press `i` to open the node-info popup on a node with an
+      overflowing spec pane, and press `j` a few times — read the pane's scrollTop. (2) Park DOM focus
+      on the empty canvas (activeElement === body), press `i` then Esc, and read
+      document.activeElement after the popup closes. Record the whole run as a video (multi-step
+      interaction) and file with
+      `spex eval add keyboard-nav --scenario rail-chip-never-steals-focus-or-keys --video <webm>`.
+    expected: >-
+      j/k scroll the popup pane in BOTH cases. A control outside the popup never owns the popup's
+      keys — the widened key restraint applies only to a field/menu/trigger INSIDE the popup — and a
+      pointer press on rail chrome never moves DOM focus at all (focus-return's inert chrome), so
+      after the popup closes focus does not land on the project chip; it stays with the real prior
+      holder. A chip focused by real keyboard Tab still owns Enter/Space activation.
+    code:
+      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/SideBar.jsx
   - name: palette-fits-screen-and-truncates-rows
     tags: [frontend-e2e, desktop]
     description: >-

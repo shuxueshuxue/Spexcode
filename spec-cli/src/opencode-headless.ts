@@ -18,31 +18,52 @@ function turnHome(command: string): string {
   return `bash -lc ${shQuote(script)} spexcode-opencode-headless`
 }
 
+// Launcher profiles carry a base executable plus its configured flags (`opencode --auto`). OpenCode parses
+// `run` as a subcommand, so it must sit between those two halves (`opencode run --auto`), not at the tail.
+function runPrelude(opencodeCmd: string): string[] {
+  return [
+    `__spex_cmd=(${opencodeCmd})`,
+    '__spex_env=()',
+    'while [ "${#__spex_cmd[@]}" -gt 0 ] && [[ "${__spex_cmd[0]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do',
+    '  __spex_env+=("${__spex_cmd[0]}")',
+    '  __spex_cmd=("${__spex_cmd[@]:1}")',
+    'done',
+    '__spex_run() { env "${__spex_env[@]}" "${__spex_cmd[0]}" run "${__spex_cmd[@]:1}" "$@"; }',
+  ]
+}
+
 export function opencodeHeadlessLaunchCommand(opencodeCmd = 'opencode'): string {
   const script = [
+    ...runPrelude(opencodeCmd),
     'if [ "${1:-}" = "--resume" ]; then',
     '  export SPEXCODE_OPENCODE_RESUME_ID="$2"',
     '  unset SPEXCODE_OPENCODE_CONTINUE',
-    `  ${opencodeCmd} run --session "$2"`,
+    '  __spex_run --session "$2"',
     'elif [ "${1:-}" = "--continue" ]; then',
     '  unset SPEXCODE_OPENCODE_RESUME_ID',
     '  export SPEXCODE_OPENCODE_CONTINUE=1',
-    `  ${opencodeCmd} run --continue`,
+    '  __spex_run --continue',
     'elif [ -n "${1:-}" ]; then',
     '  unset SPEXCODE_OPENCODE_RESUME_ID SPEXCODE_OPENCODE_CONTINUE',
-    `  ${opencodeCmd} run "$1"`,
+    '  __spex_run "$1"',
     'else',
-    `  ${opencodeCmd} run`,
+    '  __spex_run',
     'fi',
   ].join('\n')
   return turnHome(script)
 }
 
 export function opencodeHeadlessWakeCommand(opencodeCmd: string, harnessSessionId: string | null | undefined, text: string): string {
-  const resume = harnessSessionId
-    ? `export SPEXCODE_OPENCODE_RESUME_ID=${shQuote(harnessSessionId)}; unset SPEXCODE_OPENCODE_CONTINUE; ${opencodeCmd} run --session ${shQuote(harnessSessionId)} ${shQuote(text)}`
-    : `unset SPEXCODE_OPENCODE_RESUME_ID; export SPEXCODE_OPENCODE_CONTINUE=1; ${opencodeCmd} run --continue ${shQuote(text)}`
-  return turnHome(resume)
+  const resume = harnessSessionId ? [
+    `export SPEXCODE_OPENCODE_RESUME_ID=${shQuote(harnessSessionId)}`,
+    'unset SPEXCODE_OPENCODE_CONTINUE',
+    `__spex_run --session ${shQuote(harnessSessionId)} ${shQuote(text)}`,
+  ] : [
+    'unset SPEXCODE_OPENCODE_RESUME_ID',
+    'export SPEXCODE_OPENCODE_CONTINUE=1',
+    `__spex_run --continue ${shQuote(text)}`,
+  ]
+  return turnHome([...runPrelude(opencodeCmd), ...resume].join('\n'))
 }
 
 export async function spawnOpenCodeHeadlessTurn(

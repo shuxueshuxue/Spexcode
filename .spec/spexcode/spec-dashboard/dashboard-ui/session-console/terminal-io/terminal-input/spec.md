@@ -50,6 +50,10 @@ override exists.
 
 The pointer is the browser's and never the application's. Plain drag always makes a local xterm
 selection (the patched selection predicate diverts every button event from mouse reporting), ⌘/Ctrl+C
-copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. Motion
+copies it, and paste remains xterm's native bracketed paste — no modifier is ever required. While a
+terminal selection exists the copy chord is consumed **before** xterm's own key handling (it must never
+fall through as `\x03`/SIGINT into the application), and it stands down only for a **real composer
+field's** own selection — the helper textarea's mirrored selection *is* the terminal's, never a
+stand-down reason. Without a selection the chord stays the terminal's ordinary interrupt. Motion
 tracking is filtered at the adapter so hovering emits nothing; only wheel reports leave the browser,
 routed by tmux's native bindings ([[live-view]] owns that contract).

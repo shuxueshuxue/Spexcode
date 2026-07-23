@@ -20,6 +20,7 @@ const SEEDED_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
   'claude-headless': { harness: 'claude-headless', cmd: 'claude' },
   codex: { harness: 'codex', cmd: 'codex' },
+  'codex-headless': { harness: 'codex-headless', cmd: 'codex --yolo' },
   opencode: { harness: 'opencode', cmd: 'opencode' },
   'opencode-headless': { harness: 'opencode-headless', cmd: 'opencode --auto' },
   pi: { harness: 'pi', cmd: 'pi' },
@@ -85,7 +86,7 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
 })
 
 test('--harness seeds only the selected launchers, with automatic permission limited to the headless runtime that requires it', { skip: !gitAvailable() && 'git not available' }, () => {
-  const selections = [['claude'], ['codex'], ['opencode'], ['pi'], ['claude-headless'], ['opencode-headless'], ['pi-headless'], ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless']]
+  const selections = [['claude'], ['codex'], ['codex-headless'], ['opencode'], ['pi'], ['claude-headless'], ['opencode-headless'], ['pi-headless'], ['claude', 'codex', 'codex-headless', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless']]
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
     const out = spex('init', '.', '--harness', selected.join(','))
@@ -97,7 +98,8 @@ test('--harness seeds only the selected launchers, with automatic permission lim
     assert.equal(cfg.dashboard.showHeadlessLaunchers, false, 'fresh init explicitly hides headless dashboard launchers')
     assert.deepEqual(cfg.sessions.launchers, expectedLaunchers, 'unselected harnesses got no launcher and selected commands match their runtime form')
     assert.equal(cfg.sessions.defaultLauncher, expectedNames[0], 'defaultLauncher names the first real planted entry')
-    assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo/, 'clean init never seeds wrapper-specific permission bypasses')
+    if (!selected.includes('codex-headless'))
+      assert.doesNotMatch(JSON.stringify(cfg.sessions), /dangerously-skip-permissions|--yolo/, 'clean init never seeds wrapper-specific permission bypasses')
     const autoLaunchers = Object.entries(cfg.sessions.launchers).filter(([, launcher]: any) => launcher.cmd.includes('--auto')).map(([name]) => name)
     assert.deepEqual(autoLaunchers, selected.includes('opencode-headless') ? ['opencode-headless'] : [], 'only the explicitly selected headless OpenCode runtime receives --auto')
 

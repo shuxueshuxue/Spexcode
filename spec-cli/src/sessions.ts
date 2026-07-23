@@ -1057,7 +1057,10 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // retry window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This
   // only closes startup unready failures — it adds no fallback and never masks a genuinely dead agent (3
   // attempts, then give up).
-  writeFileSync(file, [
+  // A one-shot adapter (currently codex-headless) deliberately exits after its first turn while the shared
+  // app-server stays alive. Retrying that successful fast exit would mint a duplicate thread/prompt, so the
+  // retry loop is a runtime capability rather than a harness-id branch.
+  const launchBody = harness.launchOneShot ? [born, ''] : [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
     `  ${born}`,
@@ -1068,7 +1071,8 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
     `done`,
     `exit $__spex_rc`,
     ``,
-  ].join('\n'))
+  ]
+  writeFileSync(file, launchBody.join('\n'))
   return file
 }
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {

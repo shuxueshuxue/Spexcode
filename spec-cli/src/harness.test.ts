@@ -4,7 +4,27 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { execFileSync } from 'node:child_process'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { shQuote } from './sh.js'
+
+test('shQuote preserves a single quote through a POSIX shell', () => {
+  const input = "alpha'beta"
+  const encoded = shQuote(input)
+  assert.equal(encoded, `'alpha'\\''beta'`)
+  assert.equal(execFileSync('/bin/sh', ['-c', `printf %s ${encoded}`], { encoding: 'utf8' }), input)
+})
+
+test('launchEnv keeps rendezvous bootstrap knowledge in the owning adapters', () => {
+  const id = 'env-session'
+  const rendezvous = ['CLAUDE_BG_BACKEND=daemon', `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`]
+  for (const harness of [claudeHarness, piHarness, opencodeHarness, piHeadlessHarness, opencodeHeadlessHarness]) {
+    assert.deepEqual(harness.launchEnv(id), rendezvous, harness.id)
+  }
+  for (const harness of [claudeHeadlessHarness, codexHarness, codexHeadlessHarness]) {
+    assert.deepEqual(harness.launchEnv(id), [], harness.id)
+  }
+})
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -73,7 +93,8 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /tid=\$2/)
   // codex-launch only prints an id once its rollout is resume-ready; a fail-loud (non-zero / empty) must ABORT,
   // never `resume ""` — so the codex-launch call propagates failure and an empty tid is guarded before resume.
-  assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"\) \|\| exit 1/)
+  assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"\)/)
+  assert.match(cmd, /__spex_rc=\$\?\n  \[ "\$__spex_rc" -eq 0 \] \|\| exit 1/)
   assert.match(cmd, /\[ -n "\$tid" \] \|\| \{ echo .* exit 1; \}/)
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })

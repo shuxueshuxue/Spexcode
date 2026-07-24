@@ -38,20 +38,19 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
 - **Inert chrome.** The acquisition-side twin: a pointer-down on anything that is not itself an input surface
   (an editable field, the xterm screen, or a scrollbar gutter) is **prevented from moving focus at all** — the
   click still lands and acts. Selectable conversation text is interaction content, but not an exception to
-  this rule: its surface keeps the sink continuously focused and translates pointer coordinates into an
-  ordinary document Range with its own selection driver. Drag and double-click selection therefore remain
-  visible and copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles,
-  and editable controls are outside that driver, while their click actions still work under the same inert
-  press. A surface or menu attaches this one capture-phase guard, and then most pops need no return because
-  focus never left: the ticket stays pinned to the real input region instead of getting polluted by the
-  button that opened the pop.
+  this rule: its surface keeps the sink continuously focused and translates pointer coordinates into a CSS Custom
+  Highlight Range, never a document Selection. Drag and double-click selection therefore remain visible and
+  copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles, and editable
+  controls are outside that driver, while their click actions still work under the same inert press. A surface or
+  menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the
+  ticket stays pinned to the real input region instead of getting polluted by the button that opened the pop.
 
 The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it.
-For a terminal-free conversation it is continuous through chrome presses and text selection; the first editing
-intent retires the external Range and re-arms the textarea's own start/end captured before that Range existed,
-without any focus transition. The **session
-interface is a surface, not a transient overlay** — it owns its own focus discipline and hosts the sink, so it
-stays outside this boundary; the boundary governs only the modals that float over it.
+For a terminal-free conversation it is continuous through chrome presses and text selection; the textarea's own
+native caret remains authoritative even while a custom highlight is painted, so the first edit needs no synthetic
+handoff or caret restoration. The **session interface is a surface, not a transient overlay** — it owns its own
+focus discipline and hosts the sink, so it stays outside this boundary; the boundary governs only the modals that
+float over it.
 
 ## why decoupled, not a focus stack
 

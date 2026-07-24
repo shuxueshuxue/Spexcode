@@ -24,6 +24,24 @@ const EDITING_KEYS = new Set([
   'Home', 'End', 'PageUp', 'PageDown',
 ])
 
+const hasTimelineHighlight = () => typeof Highlight !== 'undefined'
+  && typeof CSS !== 'undefined' && !!CSS.highlights
+
+const clearTimelineHighlight = () => {
+  if (hasTimelineHighlight()) CSS.highlights.delete('timeline-sel')
+}
+
+const setTimelineHighlight = (range) => {
+  if (!hasTimelineHighlight() || !range || range.collapsed) return false
+  CSS.highlights.set('timeline-sel', new Highlight(range))
+  return true
+}
+
+const copyTimelineText = (text) => {
+  const copy = navigator.clipboard?.writeText(text)
+  copy?.catch(() => {})
+}
+
 const rangeAtPoint = (timeline, clientX, clientY) => {
   const range = document.caretRangeFromPoint?.(clientX, clientY)
   return range && timeline.contains(range.startContainer) ? range : null
@@ -80,7 +98,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const selectionDragRef = useRef(null)
-  const composerCaretRef = useRef({ start: 0, end: 0 })
+  const timelineRangeRef = useRef(null)
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -104,18 +122,18 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
 
-  const selectionIsInTimeline = (selection) => {
-    const timeline = scrollRef.current
-    return !!(timeline && selection && !selection.isCollapsed
-      && (timeline.contains(selection.anchorNode) || timeline.contains(selection.focusNode)))
+  const clearSelection = () => {
+    timelineRangeRef.current = null
+    clearTimelineHighlight()
   }
 
-  // @@@ Continuous sink selection - native text selection moves focus to BODY, so the conversation keeps
-  // its press inert and drives the same document Selection from caret coordinates instead.
+  // @@@ The composer is a continuous sink. Conversation selection is painted by CSS Custom Highlight,
+  // so no document Selection ever competes with the textarea's real caret.
   const beginTimelineSelection = (e) => {
     const timeline = scrollRef.current
     const target = e.target
     if (e.button !== 0 || !timeline || !(target instanceof Element)) return
+    clearSelection()
     const control = target.closest(SELECTION_CONTROLS)
     if (control && timeline.contains(control)) return
     if (target === timeline) {
@@ -126,12 +144,6 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     const anchor = rangeAtPoint(timeline, e.clientX, e.clientY)
     if (!anchor) return
     e.preventDefault()
-    const selection = window.getSelection()
-    const input = inputRef.current
-    if (selection?.isCollapsed && input) {
-      composerCaretRef.current = { start: input.selectionStart, end: input.selectionEnd }
-    }
-    selection?.removeAllRanges()
     selectionDragRef.current = { anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
   }
 
@@ -145,9 +157,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     if (!range) return
     e.preventDefault()
     selectionDragRef.current = null
-    const selection = window.getSelection()
-    selection.removeAllRanges()
-    selection.setBaseAndExtent(range.startContainer, range.startOffset, range.endContainer, range.endOffset)
+    timelineRangeRef.current = range
+    setTimelineHighlight(range)
   }
 
   useEffect(() => {
@@ -160,56 +171,49 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return
       const focus = rangeAtPoint(timeline, e.clientX, e.clientY)
       if (!focus || !drag.anchor.startContainer.isConnected) return
-      window.getSelection()?.setBaseAndExtent(
-        drag.anchor.startContainer,
-        drag.anchor.startOffset,
-        focus.startContainer,
-        focus.startOffset,
-      )
+      const range = document.createRange()
+      const forward = drag.anchor.compareBoundaryPoints(Range.START_TO_START, focus) <= 0
+      const start = forward ? drag.anchor : focus
+      const end = forward ? focus : drag.anchor
+      range.setStart(start.startContainer, start.startOffset)
+      range.setEnd(end.startContainer, end.startOffset)
+      timelineRangeRef.current = range
+      setTimelineHighlight(range)
     }
     const onMouseUp = () => { selectionDragRef.current = null }
     const onKeyDown = (e) => {
-      const selection = window.getSelection?.()
-      if (!selectionIsInTimeline(selection)) return
-      if (document.activeElement !== inputRef.current) return
+      const range = timelineRangeRef.current
+      const input = inputRef.current
+      if (!range || range.collapsed || !input) return
       const primary = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
-      if (primary && key === 'c') return
+      if (e.key === 'Escape') { clearSelection(); return }
+      if (primary && key === 'c') {
+        if (document.activeElement !== input || input.selectionStart !== input.selectionEnd) return
+        e.preventDefault(); e.stopPropagation()
+        const copy = navigator.clipboard?.writeText(range.toString())
+        copy?.catch(() => {})
+        return
+      }
+      if (document.activeElement !== input) return
       const printable = e.key.length === 1 && !primary && !e.altKey
       const editingShortcut = primary && !e.altKey && ['a', 'v', 'x', 'y', 'z'].includes(key)
       const composing = e.isComposing || e.key === 'Process' || e.key === 'Dead'
-      if (!printable && !editingShortcut && !composing && !EDITING_KEYS.has(e.key)) return
-      selection.removeAllRanges()
-      const input = inputRef.current
-      const { start, end } = composerCaretRef.current
-      input.setSelectionRange(
-        Math.min(start, input.value.length),
-        Math.min(end, input.value.length),
-      )
+      if (printable || editingShortcut || composing || EDITING_KEYS.has(e.key)) clearSelection()
     }
     document.addEventListener('mousemove', onMouseMove, true)
     document.addEventListener('mouseup', onMouseUp, true)
-    window.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('keydown', onKeyDown, true)
     return () => {
       selectionDragRef.current = null
+      clearSelection()
       document.removeEventListener('mousemove', onMouseMove, true)
       document.removeEventListener('mouseup', onMouseUp, true)
-      window.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('keydown', onKeyDown, true)
     }
   }, [active])
 
-  const prepareComposerPress = () => {
-    const selection = window.getSelection?.()
-    if (selectionIsInTimeline(selection)) selection.removeAllRanges()
-  }
-  const rememberComposerCaret = (e) => {
-    const selection = window.getSelection?.()
-    if (selectionIsInTimeline(selection)) return
-    composerCaretRef.current = {
-      start: e.currentTarget.selectionStart,
-      end: e.currentTarget.selectionEnd,
-    }
-  }
+  const prepareComposerPress = () => clearSelection()
 
   const send = async () => {
     const text = draft.trim()
@@ -245,7 +249,16 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             <span className="m-ev-word" style={{ color: STATUS_COLOR[d] }}>{t(`status.${d}`)}</span>
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
-          {e.note && <div className="m-ev-note">{e.note}</div>}
+          {e.note && (
+            <div className="m-ev-note">
+              {e.note}
+              {!hasTimelineHighlight() && (
+                <button type="button" className="m-copy-note" onClick={() => copyTimelineText(e.note)}>
+                  {t('mobile.copy')}
+                </button>
+              )}
+            </div>
+          )}
         </div>,
       )
     } else {
@@ -312,7 +325,6 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}
             onMouseDownCapture={prepareComposerPress}
-            onSelect={rememberComposerCaret}
             onChange={(e) => setDraft(e.target.value)}
           />
           <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>

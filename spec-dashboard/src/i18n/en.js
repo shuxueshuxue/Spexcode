@@ -654,6 +654,8 @@ export default {
     inputPlaceholder: 'message the agent…',
     send: 'send',
     copy: 'copy',
+    copied: 'copied',
+    copyFailed: 'copy failed — selection kept',
     sendFailed: 'not delivered — the agent may be offline',
     offlineHint: 'agent offline — messages cannot be delivered until it is relaunched',
   },

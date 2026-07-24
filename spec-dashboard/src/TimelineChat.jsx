@@ -40,9 +40,33 @@ const setTimelineHighlight = (range) => {
   return true
 }
 
-const copyTimelineText = (text) => {
-  const copy = navigator.clipboard?.writeText(text)
-  copy?.catch(() => {})
+const execCopyFallback = (text) => {
+  let eventConfirmed = false
+  const onCopy = (event) => {
+    if (!event.clipboardData) return
+    try {
+      event.clipboardData.setData('text/plain', text)
+      event.preventDefault()
+      eventConfirmed = true
+    } catch { /* the result remains an honest failure */ }
+  }
+  document.addEventListener('copy', onCopy, true)
+  let commandConfirmed = false
+  try { commandConfirmed = document.execCommand('copy') === true } catch { /* the result remains an honest failure */ }
+  document.removeEventListener('copy', onCopy, true)
+  return eventConfirmed && commandConfirmed
+}
+
+// One clipboard capability seam for the custom Range shortcut and the no-Custom-Highlight copy button.
+// The event fallback writes the payload without creating a Selection, temporary textarea, or focus handoff.
+const copyTimelineText = async (text) => {
+  try {
+    if (typeof navigator.clipboard?.writeText === 'function') {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch { /* plain HTTP and denied permissions continue through the synchronous browser copy path */ }
+  return execCopyFallback(text)
 }
 
 const rangeAtPoint = (timeline, clientX, clientY) => {
@@ -119,11 +143,13 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
+  const [copyStatus, setCopyStatus] = useState(null)
   const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
+  const copyStatusTimerRef = useRef(null)
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -131,7 +157,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   }), [s.id])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -150,7 +176,21 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const clearSelection = () => {
     timelineRangeRef.current = null
     clearTimelineHighlight()
+    setCopyStatus(null)
   }
+
+  const copyText = useCallback(async (text) => {
+    clearTimeout(copyStatusTimerRef.current)
+    setCopyStatus(null)
+    const copied = await copyTimelineText(text)
+    setCopyStatus(copied ? 'copied' : 'failed')
+    if (copied) {
+      copyStatusTimerRef.current = setTimeout(() => setCopyStatus(null), 1200)
+    }
+    return copied
+  }, [])
+
+  useEffect(() => () => clearTimeout(copyStatusTimerRef.current), [])
 
   // @@@ The composer is a continuous sink. Conversation selection is painted by CSS Custom Highlight,
   // so no document Selection ever competes with the textarea's real caret. Like xterm's
@@ -214,8 +254,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       if (primary && key === 'c') {
         if (document.activeElement !== input || input.selectionStart !== input.selectionEnd) return
         e.preventDefault(); e.stopPropagation()
-        const copy = navigator.clipboard?.writeText(range.toString())
-        copy?.catch(() => {})
+        copyText(range.toString())
         return
       }
       if (document.activeElement !== input) return
@@ -234,7 +273,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       document.removeEventListener('mouseup', onMouseUp, true)
       document.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [active])
+  }, [active, copyText])
 
   const prepareComposerPress = () => clearSelection()
 
@@ -276,7 +315,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             <div className="m-ev-note">
               {e.note}
               {!hasTimelineHighlight() && (
-                <button type="button" className="m-copy-note" onClick={() => copyTimelineText(e.note)}>
+                <button type="button" className="m-copy-note" onClick={() => copyText(e.note)}>
                   {t('mobile.copy')}
                 </button>
               )}
@@ -335,6 +374,11 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           ? <div className="m-empty">{t('common.loading')}</div>
           : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
       </div>
+      {copyStatus && (
+        <div className={`m-copy-status ${copyStatus}`} role="status" aria-live="polite" aria-atomic="true">
+          {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
+        </div>
+      )}
       {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
       {sendErr && <div className="m-senderr">{sendErr}</div>}
       <div className="m-composer">

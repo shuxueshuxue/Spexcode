@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
+  - spec-dashboard/test/timeline-chat-clipboard.e2e.mjs
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
   - spec-dashboard/src/useIsMobile.js
 ---
@@ -115,10 +116,17 @@ The two planes, made native to touch:
   printable text, Backspace, Delete, arrows, Enter, paste, and IME input land immediately through the
   unchanged native editing path even while a custom timeline highlight is visible. A document capture
   listener owns only the `Ctrl/Cmd+C` exception, gated to a non-collapsed timeline Range and an empty
-  composer selection, and copies `range.toString()` with `navigator.clipboard.writeText`; a composer's
-  own non-collapsed selection wins. Escape, a new timeline gesture, or a composer press/first edit
-  deletes the custom highlight as visual cleanup, never by moving focus. If Custom Highlight is missing,
-  the surface degrades to its ordinary text/copy affordances without pretending a native selection is safe.
+  composer selection; a composer's own non-collapsed selection wins. Keyboard copy and the note copy
+  button enter ONE clipboard seam with the rendered Range/note text. The seam prefers the secure Clipboard
+  API when available, then on API absence or rejection performs the browser's synchronous `copy` command
+  from that same user gesture while a one-shot `copy` event writes `text/plain` into `clipboardData`. It
+  creates no textarea, document Selection, or focus handoff. Success means the API resolved, or BOTH the
+  fallback event accepted the text and `execCommand("copy")` returned true; a false/throw/unconfirmed event
+  fails loud through the conversation's restrained live status, keeps the custom highlight, and never flashes
+  a false success. Successful copy gets only a brief acknowledgement. Escape, a new timeline gesture, or a
+  composer press/first edit deletes the custom highlight as visual cleanup, never by moving focus. If Custom
+  Highlight is missing, the surface degrades to its ordinary text/copy affordances without pretending a native
+  selection is safe, and those copy buttons use the same seam and honest result state.
   The active TimelineChat alone declares that composer as its surface sink; warm hidden headless layers declare
   none, so two mounted conversations can never route input to the wrong draft.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.

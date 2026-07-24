@@ -5,7 +5,6 @@ hue: 320
 desc: A transient overlay returns the focus it took — never leaves it on <body>.
 code:
   - spec-dashboard/src/focus.js#returnFocus
-  - spec-dashboard/src/focus.js#focusSinkPreservingSelection
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Modal.jsx
@@ -40,9 +39,10 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   (not an editable field, the xterm screen, a scrollbar gutter, or an explicitly marked native-selection
   region) is **prevented from moving focus at all** — the click still lands and acts. A native-selection
   region keeps the browser's default press so ordinary text can be drag-selected, double-clicked, and copied.
-  When that gesture ends, the surface returns keyboard ownership to its exact local sink while restoring any
-  non-collapsed document Selection: selection remains visible/copyable, yet the next printable key reaches the
-  draft instead of `body`. It is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
+  Selection content owns the browser's natural document focus while its non-collapsed Range remains visible;
+  it cannot simultaneously pretend an editable sink owns an authoritative caret. The surface returns keyboard
+  ownership to its exact local sink after a collapsed press or when the next editing intent retires that Range.
+  It is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
   then most pops need no return because focus never left: the ticket stays pinned to the real input region
   instead of getting polluted by the button that opened the pop.
 

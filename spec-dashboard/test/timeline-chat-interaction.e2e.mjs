@@ -27,7 +27,7 @@ const started = Date.now()
 const events = [{
   atMs: 0,
   kind: 'narrate',
-  label: '▶ timeline-interaction-refresh-stability · TimelineChat keeps refreshes, selection, and follow-on typing in one interaction',
+  label: '▶ timeline-interaction-refresh-stability · TimelineChat hands native selection back to native composer editing',
 }]
 const results = []
 const mark = (viewport, step) => events.push({
@@ -82,7 +82,7 @@ async function showReadout(viewport, step, snapshot) {
       `focus=${current.focus ?? '-'} connected=${current.connected ?? '-'}`,
       `draft=${JSON.stringify(current.draft ?? '')}`,
       `selection=${JSON.stringify(current.selection ?? '')}`,
-      `typed=${current.typed ?? '-'} sinks=${current.sinks ?? '-'}`,
+      `caret=${current.caret ?? '-'} typed=${current.typed ?? '-'} sinks=${current.sinks ?? '-'}`,
     ].join('\n')
   }, { phaseName: phase, viewportName: viewport, currentStep: step, current: snapshot })
 }
@@ -94,6 +94,7 @@ async function readInteraction(inputHandle, draft) {
     draft: input.value,
     draftKept: input.value === expectedDraft,
     selection: getSelection()?.toString() || '',
+    caret: `${input.selectionStart}:${input.selectionEnd}`,
   }), { input: inputHandle, expectedDraft: draft })
 }
 
@@ -130,6 +131,63 @@ async function activeSinkCount() {
   return page.locator('.m-input[data-focus-sink]').count()
 }
 
+async function setComposerState(inputHandle, value, start = value.length, end = start) {
+  await page.evaluate(({ input, nextValue, selectionStart, selectionEnd }) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+    setter.call(input, nextValue)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.focus()
+    input.setSelectionRange(selectionStart, selectionEnd)
+  }, { input: inputHandle, nextValue: value, selectionStart: start, selectionEnd: end })
+}
+
+const keyCases = [
+  { name: 'Backspace', press: 'Backspace', value: 'abcef', caret: 3 },
+  { name: 'Delete', press: 'Delete', value: 'abcdf', caret: 4 },
+  { name: 'ArrowLeft', press: 'ArrowLeft', value: 'abcdef', caret: 3 },
+  { name: 'Enter', press: 'Enter', value: 'abcd\nef', caret: 5 },
+  { name: 'paste', press: 'Control+v', value: 'abcdPASTEDef', caret: 10, paste: true },
+  { name: 'printable', press: 'X', value: 'abcdXef', caret: 5 },
+]
+
+async function verifyEditingHandoff(viewport, inputHandle, note) {
+  const cases = []
+  for (const keyCase of keyCases) {
+    await setComposerState(inputHandle, 'abcdef', 4)
+    const selected = await dragSelectNote(note)
+    const before = await page.evaluate((input) => ({
+      focus: document.activeElement === input,
+      caret: input.selectionStart,
+      end: input.selectionEnd,
+      selection: getSelection()?.toString() || '',
+    }), inputHandle)
+    if (keyCase.paste) await page.evaluate(() => navigator.clipboard.writeText('PASTED'))
+    await page.keyboard.press(keyCase.press)
+    const after = await page.evaluate((input) => ({
+      focus: document.activeElement === input,
+      value: input.value,
+      caret: input.selectionStart,
+      end: input.selectionEnd,
+      selection: getSelection()?.toString() || '',
+    }), inputHandle)
+    const pass = selected.length > 0 && !before.focus && before.caret === 4 && before.end === 4
+      && after.focus && after.value === keyCase.value && after.caret === keyCase.caret
+      && after.end === keyCase.caret && after.selection.length === 0
+    cases.push({ key: keyCase.name, pass, before, after })
+    await showReadout(viewport, `${keyCase.name} selection-to-composer handoff`, {
+      focus: after.focus,
+      draft: after.value,
+      selection: selected,
+      caret: `${before.caret}->${after.caret}`,
+      typed: pass,
+      pass,
+    })
+    mark(viewport, `${keyCase.name} native handoff (${pass ? 'pass' : 'fail'})`)
+    await page.waitForTimeout(650)
+  }
+  return { pass: cases.every((entry) => entry.pass), cases }
+}
+
 async function verifySecondConversationSink(viewport) {
   await page.goto(`${base}/#/sessions/${encodeURIComponent(secondSessionId)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
@@ -149,7 +207,9 @@ async function verifySecondConversationSink(viewport) {
   const sinks = await activeSinkCount()
   await page.keyboard.type('Z')
   const afterType = await input.inputValue()
-  const pass = sinks === 1 && beforeType.focus && selected.length > 0 && afterType === `${draft}Z`
+  const afterFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
+  const pass = sinks === 1 && !beforeType.focus && selected.length > 0
+    && afterFocus && afterType === `${draft}Z`
   await showReadout(viewport, 'second warm layer owns sink + typing', {
     ...beforeType, selection: selected, typed: afterType === `${draft}Z`, sinks, pass,
   })
@@ -191,11 +251,11 @@ async function runViewport(name, viewport) {
   const note = page.locator('.m-ev-note:visible').last()
   const selectedBefore = await dragSelectNote(note)
   const afterDrag = await readInteraction(inputHandle, draft)
-  const dragPass = selectedBefore.length > 0 && afterDrag.focus && afterDrag.draftKept
-  await showReadout(name, 'pointer drag returns exact composer', {
+  const dragPass = selectedBefore.length > 0 && !afterDrag.focus && afterDrag.draftKept
+  await showReadout(name, 'pointer drag leaves document selection authoritative', {
     ...afterDrag, selection: selectedBefore, typed: 'not yet', pass: dragPass,
   })
-  mark(name, `drag selection + exact composer focus (${dragPass ? 'pass' : 'fail'})`)
+  mark(name, `drag selection owns document focus (${dragPass ? 'pass' : 'fail'})`)
 
   const selectionToken = `SELECT-${phase}-${name}-${Date.now()}`
   await sendBackground(`${selectionToken}: reply immediately with another short complete note and remain available.`)
@@ -207,21 +267,24 @@ async function runViewport(name, viewport) {
   const selectionPass = selectedBefore.length > 0
     && selectionReadings.every((reading) => reading.selection === selectedBefore)
     && selectedAfter === selectedBefore
-    && selectionReadings.every((reading) => reading.focus && reading.draftKept)
+    && selectionReadings.every((reading) => !reading.focus && reading.draftKept)
   await showReadout(name, 'selection after refresh', {
     ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: selectionPass,
   })
   mark(name, `selection after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
   await page.waitForTimeout(1_200)
 
-  await page.keyboard.type('XYZ')
-  const typedDraft = `${draft}XYZ`
-  const typingPass = await input.inputValue() === typedDraft
-  await showReadout(name, 'printable keys after selection', {
-    ...await readInteraction(inputHandle, typedDraft), typed: typingPass, pass: typingPass,
+  await page.keyboard.press('Control+c')
+  const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
+  const copyPass = copied === selectedAfter
+  await showReadout(name, 'copy keeps document selection', {
+    ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: copyPass,
   })
-  mark(name, `XYZ after selection enters draft (${typingPass ? 'pass' : 'fail'})`)
-  await page.waitForTimeout(1_000)
+  mark(name, `copy selected timeline text (${copyPass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(900)
+
+  const keyMatrix = await verifyEditingHandoff(name, inputHandle, note)
+  const typedDraft = keyCases.at(-1).value
 
   await note.click({ position: { x: 16, y: 12 } })
   const afterClick = await readInteraction(inputHandle, typedDraft)
@@ -239,18 +302,18 @@ async function runViewport(name, viewport) {
   const doubleClickSelection = await page.evaluate(() => getSelection()?.toString() || '')
   const doubleClickFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
   await page.keyboard.press('Control+c')
-  const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
-  const copyPass = doubleClickFocus && doubleClickSelection.length > 0 && copied === doubleClickSelection
+  const doubleCopied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
+  const doubleClickPass = !doubleClickFocus && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
   await showReadout(name, 'double-click + copy', {
-    ...await readInteraction(inputHandle, `${typedDraft}Q`), selection: doubleClickSelection, pass: copyPass,
+    ...await readInteraction(inputHandle, `${typedDraft}Q`), selection: doubleClickSelection, pass: doubleClickPass,
   })
-  mark(name, `double-click and copy selected text (${copyPass ? 'pass' : 'fail'})`)
+  mark(name, `double-click and copy selected text (${doubleClickPass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(1_600)
 
   const secondSink = name === 'desktop' ? await verifySecondConversationSink(name) : null
   const result = {
-    viewport: name, focusPass, dragPass, selectionPass, typingPass, clickPass, copyPass,
-    secondSink, selectedBefore, selectedAfter, copied,
+    viewport: name, focusPass, dragPass, selectionPass, copyPass, keyMatrix, clickPass, doubleClickPass,
+    secondSink, selectedBefore, selectedAfter, copied, doubleCopied,
   }
   results.push(result)
   return result
@@ -262,16 +325,18 @@ try {
   console.log(JSON.stringify({ phase, results }, null, 2))
   if (phase === 'A') {
     assert.ok(results.some((result) => !result.focusPass || !result.dragPass || !result.selectionPass
-      || !result.typingPass || !result.clickPass || !result.copyPass || result.secondSink?.pass === false),
+      || !result.copyPass || !result.keyMatrix.pass || !result.clickPass || !result.doubleClickPass
+      || result.secondSink?.pass === false),
       `phase A unexpectedly passed: ${JSON.stringify(results)}`)
   } else {
     for (const result of results) {
       assert.equal(result.focusPass, true, `${result.viewport} focus/draft failed`)
-      assert.equal(result.dragPass, true, `${result.viewport} drag did not return the exact composer`)
+      assert.equal(result.dragPass, true, `${result.viewport} drag did not keep document selection authoritative`)
       assert.equal(result.selectionPass, true, `${result.viewport} selection refresh failed`)
-      assert.equal(result.typingPass, true, `${result.viewport} typing after selection was dropped`)
+      assert.equal(result.keyMatrix.pass, true, `${result.viewport} selection-to-composer key matrix failed`)
       assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
       assert.equal(result.copyPass, true, `${result.viewport} copy failed`)
+      assert.equal(result.doubleClickPass, true, `${result.viewport} double-click copy failed`)
       if (result.secondSink) assert.equal(result.secondSink.pass, true, 'second warm headless layer did not own the exact sink')
     }
   }

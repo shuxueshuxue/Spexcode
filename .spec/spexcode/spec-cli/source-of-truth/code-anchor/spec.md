@@ -50,7 +50,8 @@ the selector, a miss is silent; related stays never-block, never-ack, no eval fr
 **Judgment.** The window is the spec's last version → HEAD: the same non-merge, ack-filtered commit
 set [[drift-by-ancestry]]'s walk already derives (one ack rule, shared — `Spec-OK` quiets an anchor
 hit too, and the ack's reason is recorded in the ack commit body because quieting a hit is a strong
-claim). Per window commit, the file's `--unified=0` hunks are intersected with the unit's line range
+claim). Large histories derive this same window through governed path-scoped Git queries with bounded
+memoization; ordinary histories retain the in-memory walk. Per window commit, the file's `--unified=0` hunks are intersected with the unit's line range
 extracted from the file **as it existed at that commit** — never from HEAD, so later renames/moves
 attribute correctly. Any intersection unacked → `anchor-drift` error, and the ordinary errors-block
 gate ([[ci-gate]], the pre-commit shim) carries it; there is no separate staged-index gate, and

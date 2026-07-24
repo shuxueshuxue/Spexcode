@@ -54,13 +54,13 @@ belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to an
 by default, so a fleet reads as one row until
 opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
 
-The desktop console also gives that same presentation state a dashboard-only key: **⌘/Ctrl+Shift+E toggles
-the currently selected parent session's fold** — `E` for expand, and a second press closes it again. The
-chord works from the live TUI or either composer just like the console's modifier+↑/↓ session switching; it
-changes only the selected row's existing fold state, never session data or selection. A leaf has nothing to
-disclose, so the chord is left unclaimed there and the focused terminal/input keeps its native key. The pod
-remains pointer-only and non-focusable — keyboard disclosure is a console-level route into the same fold
-state, not a second control or a second tree. Arrow keys retain their normal terminal/input semantics.
+The desktop console also gives that same presentation state the standard tree-key grammar: **→ expands the
+currently selected parent session and ← collapses it** when a session-row button/list chrome owns focus. The
+router claims those unmodified arrows only outside xterm and editable controls, so a terminal or composer keeps
+its native caret/navigation semantics. The action changes only the selected row's existing fold state, never
+session data or selection. A leaf has nothing to disclose, so its arrows remain native. The pod remains
+pointer-only and non-focusable — keyboard disclosure is a console-level route into the same fold state, not a
+second control or a second tree.
 
 **The parent row's own status is the group's status — no aggregation.** The folded parent's status glyph and
 which triage zone it sorts into (needs-you vs self-running) are the PARENT'S OWN, full stop; child statuses

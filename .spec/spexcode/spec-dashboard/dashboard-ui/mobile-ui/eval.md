@@ -91,26 +91,31 @@ scenarios:
       Through the running dashboard in a real browser, open the SAME real headless session's
       TimelineChat at a 390x844 phone viewport and a 1280x800 desktop viewport. In each viewport,
       focus the composer, type an unsent multi-word draft, and hold through a timeline poll plus a
-      board refresh. Then pointer-drag across the headless agent's note and keep the drag selection
-      active while another refresh arrives; inspect activeElement and the textarea caret. Copy the selected
+      board refresh. Then pointer-drag across the headless agent's note, repeatedly sampling activeElement
+      between mousedown and mouseup, and keep the drag selection active while another refresh arrives. Copy the selected
       text, then repeat the selection from a saved middle caret before pressing Backspace, Delete, ArrowLeft,
       Enter, Ctrl+V, and a printable key without directly targeting the textarea. Repeat with a plain click
       and a double-click. On desktop keep two headless sessions mounted, switch to the second, and repeat the
       selection/edit handoff there. Record the complete two-viewport interaction as video.
     expected: |
       Every refresh leaves the composer as document.activeElement and preserves the complete unsent
-      draft. Note, sent-message, and reply copy is ordinary browser-selectable text: pointer drag and
+      draft. The same exact composer remains active at mousedown, through every sampled pointer move, and
+      after mouseup; it never goes dark on BODY and is never refocused as cleanup. Note, sent-message, and reply copy is ordinary browser-selectable text: pointer drag and
       double-click produce a non-empty Selection whose text matches the rendered conversation. A
       refresh during that selection neither remounts TimelineChat nor clears or collapses the selection.
-      A real selection retains document focus while it remains visible and copyable. The first subsequent
-      editing or navigation key clears that external Range, focuses the exact conversation composer, restores
-      its saved caret, and takes effect once through the textarea's native editing path. Backspace, Delete,
+      A real selection coexists with the continuously focused composer while it remains visible and copyable.
+      The first subsequent editing or navigation key clears that external Range before its unchanged native
+      event re-arms the composer selection saved before the Range existed and takes effect once through the
+      textarea's native editing path. This includes replacing an existing non-collapsed composer selection.
+      Backspace, Delete,
       ArrowLeft, Enter, Ctrl+V, and printable input therefore match their no-external-selection results; the
       textarea's DOM `selectionStart` agrees with the actual insertion/deletion point after every handoff. A
-      plain click returns focus immediately with a collapsed Selection and its next key enters the draft.
-      Existing click and double-click behavior elsewhere in the console still works. Only the active TimelineChat exposes
+      plain timeline click produces no Selection, leaves focus untouched, and its next key enters the draft.
+      Clicking the composer itself clears a pending conversation Range before its native caret placement, and
+      the next key edits there. Details
+      summaries still toggle, and double-click manually selects a non-empty word. Only the active TimelineChat exposes
       `data-focus-sink`; with two warm desktop layers mounted, switching to the second makes its composer
-      the sole sink and the press returns there, never to the hidden first draft. Phone and desktop satisfy
+      the sole sink and input remains there, never on the hidden first draft. Phone and desktop satisfy
       the same interaction contract because both mount the shared TimelineChat.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]

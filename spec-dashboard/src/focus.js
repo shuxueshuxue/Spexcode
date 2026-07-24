@@ -51,10 +51,11 @@ export function returnFocus() {
 // back. Attached as a capture-phase mousedown handler on a surface whose focus rests on its sink (the
 // session console's panel, a context menu): a press on anything that is not itself an input surface is
 // stopped from moving focus — the click still lands and acts, the press just stops stealing. Editable
-// fields and the xterm screen keep their native press-to-focus; explicitly marked selection regions keep
-// the browser's native drag/double-click selection. A press in a scroller's scrollbar gutter keeps its
-// default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
-const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, [data-native-selection]'
+// fields and the xterm screen keep their native press-to-focus. Selectable surface content stays inert too:
+// its owner drives a document Range from pointer coordinates without surrendering its sink. A press in a
+// scroller's scrollbar gutter keeps its default (cancelling it breaks thumb dragging, and gutter presses
+// never move focus anyway).
+const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
 
 // scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
 // glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.

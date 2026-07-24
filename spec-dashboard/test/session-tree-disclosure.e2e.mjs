@@ -23,18 +23,31 @@ for (const session of sessions) {
 const parent = sessions.find((session) => session.liveness !== 'offline'
   && childrenOf.get(session.id)?.some((child) => child.liveness !== 'offline'))
 const child = parent && childrenOf.get(parent.id).find((candidate) => candidate.liveness !== 'offline')
-const offline = sessions.filter((session) => session.liveness === 'offline').slice(0, 2)
+const leaf = sessions.find((session) => session.liveness !== 'offline'
+  && ['working', 'parked'].includes(session.status) && !childrenOf.get(session.id)?.length)
+const retainedOffline = sessions.filter((session) => session.liveness === 'offline').slice(0, 2)
+const offline = retainedOffline.length ? retainedOffline : sessions.filter((session) =>
+  session.id !== parent?.id && session.id !== child?.id && session.id !== leaf?.id
+  && !session.parent && !childrenOf.get(session.id)?.length).slice(0, 1)
+const fixtureNeedsOffline = retainedOffline.length === 0
 assert.ok(parent && child, 'the live board needs one present parent/child session pair')
-assert.ok(offline.length, 'the live board needs at least one retained offline session')
+assert.ok(leaf, 'the live board needs one live leaf session')
+assert.ok(offline.length, 'the board needs one unrelated session record for the offline fixture')
 
-// Keep the live board's real session records and nesting. Promote only retained offline records to roots so
-// the deterministic fixture exposes the history zone without mutating the backend or any session.json.
+// Keep the live board's real session records and nesting. Promote retained offline records to roots; when a
+// clean board has none, mark one unrelated root offline only in this intercepted snapshot. The running
+// backend and every session.json stay untouched while the real dashboard still renders the full state shape.
 const fixture = structuredClone(graph)
 const offlineIds = new Set(offline.map((session) => session.id))
-fixture.sessions = fixture.sessions.map((session) => offlineIds.has(session.id) ? { ...session, parent: null } : session)
+fixture.sessions = fixture.sessions.map((session) => offlineIds.has(session.id)
+  ? { ...session, parent: null, ...(fixtureNeedsOffline ? { status: 'offline', liveness: 'offline' } : {}) }
+  : session)
 
 const transcript = []
+const timeline = []
 const record = (surface, fact, value) => transcript.push({ surface, fact, value })
+let videoStartedAt = 0
+const mark = (step) => timeline.push({ at: Date.now() - videoStartedAt, step })
 const expanded = (locator) => locator.getAttribute('aria-expanded')
 const visibleRows = (page, selector) => page.locator(selector).count()
 
@@ -46,6 +59,7 @@ const context = await browser.newContext({
 await context.addInitScript(() => {
   window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
 })
+videoStartedAt = Date.now()
 const page = await context.newPage()
 await page.route('**/api/graph*', (route) => route.fulfill({
   status: 200,
@@ -56,6 +70,7 @@ await page.route('**/api/graph*', (route) => route.fulfill({
 try {
   await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-list').waitFor({ state: 'visible' })
+  mark('open sessions')
 
   const interfaceParent = page.locator(`.si-tree-row:has(> .si-item[data-sid="${parent.id}"])`)
   const interfaceBody = interfaceParent.locator('> .si-item')
@@ -70,6 +85,18 @@ try {
   assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
   record('SessionInterface', 'row click leaves fold', await expanded(interfacePod))
 
+  const visibleSessionIds = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  const parentIndex = visibleSessionIds.indexOf(parent.id)
+  const tabDirection = parentIndex < visibleSessionIds.length - 1 ? 'ArrowDown' : 'ArrowUp'
+  const tabReturn = tabDirection === 'ArrowDown' ? 'ArrowUp' : 'ArrowDown'
+  const expectedMovedSession = visibleSessionIds[parentIndex + (tabDirection === 'ArrowDown' ? 1 : -1)]
+  await page.keyboard.press(`Alt+${tabDirection}`)
+  const movedSession = await page.locator('.si-item.on').getAttribute('data-sid')
+  assert.equal(movedSession, expectedMovedSession, 'plain Alt arrows must keep moving the selected session tab')
+  await page.keyboard.press(`Alt+${tabReturn}`)
+  assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), parent.id, 'plain Alt+ArrowUp must return to the selected parent')
+  record('SessionInterface', 'plain Alt arrows move tabs', true)
+
   await page.evaluate(() => { document.activeElement.dataset.sessionTreeFocusProbe = 'before-fold' })
   await interfacePod.click()
   assert.equal(await expanded(interfacePod), 'true')
@@ -78,6 +105,34 @@ try {
   record('SessionInterface', 'count click opens fold', await expanded(interfacePod))
   record('SessionInterface', 'count click keeps focus owner', true)
   await interfacePod.click()
+
+  await interfaceBody.click()
+  mark('expand current parent with Alt+Shift+ArrowDown')
+  await page.keyboard.press('Alt+Shift+ArrowDown')
+  assert.equal(await expanded(interfacePod), 'true', 'Alt+Shift+ArrowDown must expand the selected parent')
+  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 1)
+  await page.keyboard.press('Alt+Shift+ArrowUp')
+  assert.equal(await expanded(interfacePod), 'false', 'Alt+Shift+ArrowUp must collapse the selected parent')
+  assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
+  record('SessionInterface', 'Alt+Shift arrows disclose current parent', 'false→true→false')
+
+  await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, leaf.id)
+  const leafRow = page.locator(`.si-item[data-sid="${leaf.id}"]`)
+  await leafRow.waitFor({ state: 'visible' })
+  await leafRow.click()
+  await page.waitForFunction((id) => document.querySelector(`.si-item[data-sid="${id}"]`)?.classList.contains('on'), leaf.id)
+  await page.keyboard.press('Alt+i')
+  const leafCommand = page.locator('.si-command-input')
+  await leafCommand.waitFor({ state: 'visible' })
+  await leafCommand.fill('alpha beta')
+  await leafCommand.evaluate((input) => input.setSelectionRange(0, 0))
+  await page.keyboard.press('ArrowRight')
+  assert.ok(await leafCommand.evaluate((input) => input.selectionStart) > 0, 'ArrowRight must keep native input navigation')
+  await page.keyboard.press('Alt+Shift+ArrowDown')
+  assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), leaf.id, 'leaf shortcut must not move the selected tab')
+  assert.equal(await leafCommand.inputValue(), 'alpha beta', 'leaf shortcut must leave the composer draft intact')
+  record('SessionInterface', 'leaf Alt+Shift shortcut is a no-op', true)
+  await page.keyboard.press('Escape')
 
   const interfaceOffline = page.locator('.si-zone-offline')
   const interfaceOfflineCount = interfaceOffline.locator('> .si-zone-count')
@@ -98,10 +153,42 @@ try {
   await page.locator(`.si-item[data-sid="${child.id}"]`).waitFor({ state: 'visible' })
   assert.equal(await expanded(interfacePod), 'true', 'a nested deep link must reveal its present ancestors')
   assert.equal(await page.locator('.si-list button button').count(), 0)
+
+  // Compare the two real product surfaces. Fully disclose the dashboard forest, read its DOM order, then
+  // open the empty Sessions palette and verify that its session plane inherits that exact order.
+  const offlineDisclosure = page.locator('.si-zone-offline > .si-zone-count')
+  if (await offlineDisclosure.count() && await expanded(offlineDisclosure) === 'false') await offlineDisclosure.click()
+  while (await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').count()) {
+    await page.locator('.si-list .sess-fold-control[aria-expanded="false"]').first().click()
+  }
+  const dashboardSessionOrder = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  mark('open empty session search')
+  await page.keyboard.press('Control+/')
+  assert.equal(await page.locator('.search-panel').count(), 0, 'Control+/ must remain native and not open app search')
+  await page.keyboard.press('Alt+/')
+  await page.locator('.search-panel').waitFor({ state: 'visible' })
+  const paletteSessionOrder = await page.locator('.search-item[data-kind="session"]').evaluateAll((rows) => rows.map((row) => row.dataset.target))
+  assert.deepEqual(paletteSessionOrder, dashboardSessionOrder.slice(0, paletteSessionOrder.length))
+  mark('session orders match')
+  record('Session search', 'empty order follows disclosed dashboard forest', paletteSessionOrder)
+  await page.screenshot({ path: `${OUT}/session-search-empty.png` })
+  await page.keyboard.press('Escape')
   await page.screenshot({ path: `${OUT}/session-interface.png` })
 
   await page.goto(`${BASE}/#/graph`, { waitUntil: 'domcontentloaded' })
   await page.locator('.sesswin').waitFor({ state: 'visible' })
+  await page.keyboard.press('/')
+  await page.locator('.search-panel').waitFor({ state: 'visible' })
+  const graphPlainLead = await page.locator('.search-item').first().getAttribute('data-kind')
+  assert.equal(graphPlainLead, 'spec', 'plain / on the graph must open the spec-node-first palette')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Alt+/')
+  await page.locator('.search-panel').waitFor({ state: 'visible' })
+  const graphOptionLead = await page.locator('.search-item').first().getAttribute('data-kind')
+  assert.equal(graphOptionLead, 'session', 'Alt+/ on the graph must open the session-first palette')
+  record('Graph search', 'plain vs Option slash lead', `${graphPlainLead}→${graphOptionLead}`)
+  await page.screenshot({ path: `${OUT}/graph-session-search.png` })
+  await page.keyboard.press('Escape')
   const windowParent = page.locator('.sesswin-tree-row:has(> .sess-fold-control)').first()
   const windowBody = windowParent.locator('> .sess-row')
   const windowPod = windowParent.locator('> .sess-fold-control')
@@ -160,4 +247,5 @@ try {
 }
 
 writeFileSync(`${OUT}/result.json`, `${JSON.stringify({ parent: parent.id, child: child.id, offline: [...offlineIds], transcript }, null, 2)}\n`)
+writeFileSync(`${OUT}/timeline.json`, `${JSON.stringify({ v: 2, axis: 'time', events: timeline }, null, 2)}\n`)
 console.log(`session tree disclosure proof: ${OUT}`)

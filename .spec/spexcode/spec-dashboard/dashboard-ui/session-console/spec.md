@@ -53,7 +53,7 @@ remap). The one surface that stays dark on its own is the **embedded terminal** 
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
 **morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
-the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
+the `＋` New Session button and a **Search** button, the click twin of the ⌥+/ palette
 ([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
@@ -107,7 +107,7 @@ conversation (the transcript and the session's global record survive — see [[r
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
 frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
-pane's bottom edge. `Cmd/Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
+pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar**
 contains only three things: the current surface, evaluation, and available commands. A pane-backed session exposes
@@ -185,10 +185,10 @@ that does take focus returns it on exit. Only the composers' own textareas, the 
 screen take pointer focus.
 
 [[command-box]] is the authored control channel, opened by its resident toolbar icon or the reserved single-
-modifier `Cmd+I` / `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses
+modifier `Alt+I` chord. It floats in the lower middle, never reserves terminal layout, and uses
 [[composer]]'s fixed footer with upward auto-growth. The draft belongs to the session and survives closing,
 tab switches, and routing to Evals. Escape or an outside click closes it and returns focus to xterm; an
-`Alt+Cmd+I` chord stays with the browser. An **Enter that commits an IME composition** belongs to the input and
+Modified Command/Ctrl/Shift combinations stay with the browser. An **Enter that commits an IME composition** belongs to the input and
 never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches through the **control socket** (never typed into the pane), so one prompt lands
@@ -228,13 +228,17 @@ owns no raw PTY or tmux geometry, while a visited hidden xterm keeps its cached 
 paint. List navigation lives at the **window level** only when focus is outside xterm and every text input.
 Plain **↑/↓** therefore walk the list from inert console chrome, while the live TUI and the New/Command Box
 textareas keep their own arrows entirely. To switch sessions while typing or driving the TUI, use the modifier combos:
-**⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
-matter which input has focus (the guaranteed up/down switch a work console gives you). **⌥+N** reaching the New Session composer is no longer this console's own
+**⌥+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
+matter which input has focus (the guaranteed up/down switch a work console gives you). The same window router
+reserves **⌥+Shift+↓ to expand and ⌥+Shift+↑ to collapse** the selected row's existing [[session-nesting]]
+fold. It consumes those chords before the ordinary ⌥+↑/↓ session move, so selection never changes; a leaf or
+already-matching state is a no-op. Unmodified arrows and every editable control keep their native key, and the
+action never changes session data. **⌥+N** reaching the New Session composer is no longer this console's own
 chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
 key handling deliberately **falls through unhandled** so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
-that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
-reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **toolbar's command
+that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
+can actually own.) The **toolbar's command
 group** renders the same board-command registry, narrowed to the current state: **Command Box** whenever live
 and **merge** at review/done. Command Box is the resident tool and always sits at the group's right edge — it
 is the one command present the whole time a session is live, so its position stays fixed while transient action

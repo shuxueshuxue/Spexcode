@@ -33,6 +33,20 @@ scenarios:
       Clicking the fold pod toggles the fold but never moves focus: xterm's helper textarea remains active in
       the first pass and Command Box's textarea remains active with its draft undisturbed in the second. The pod
       never becomes the active element and focus never lands on its session-row-button ancestor.
+  - name: primary-arrows-disclose-current-session
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
+    description: >
+      Through the running dashboard in a real browser, select a collapsed PARENT row in the session console
+      while its CHILD is hidden. From the console surface press Alt+Shift+ArrowDown, then
+      Alt+Shift+ArrowUp. Record the row's `aria-expanded` state and the CHILD row's visibility after each key,
+      plus the selected session id. Repeat Alt+Shift+ArrowDown on a selected leaf while a real input/terminal
+      owns focus and observe the key is consumed without moving to another session.
+    expected: |
+      Alt+Shift+ArrowDown expands the currently selected PARENT and Alt+Shift+ArrowUp collapses it through the
+      same fold state as its leading count pod, without changing selection or session data. On a leaf the chord
+      is consumed as a no-op, so it cannot move the tab selection. No second tree or persisted expansion state
+      is introduced.
   - name: triangle-colour-is-an-informational-rollup
     tags: [frontend-e2e, desktop]
     description: >

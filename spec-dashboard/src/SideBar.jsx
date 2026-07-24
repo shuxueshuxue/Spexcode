@@ -34,7 +34,8 @@ function RailLink({ page, active, label }) {
 }
 
 // the current-project chip + switcher menu. `projects` is the catalog list when the admin scope holds,
-// else null (chip only). Navigation is a plain same-tab location change — the pathname carries the scope.
+// else null (chip only). Online/unknown rows navigate with a plain same-tab location change; an explicitly
+// offline row stays visible as a disabled status item because its scoped backend cannot serve the shell.
 function ProjectChip({ identity, projects, gatewayIdentity, t }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -62,19 +63,24 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
       </button>
       {open && projects && (
         <div className="proj-menu" role="menu">
-          {projects.map((p) => (
-            <a
-              key={p.id}
-              role="menuitem"
-              className={p.id === PROJECT_ID ? 'proj-menu-item current' : 'proj-menu-item'}
-              href={projectHref(p.id)}
-            >
-              <IdentityIcon icon={p.identity.icon} size={16} className="proj-menu-mark" />
-              {p.gated && <Icon name="lock" size={11} />}
-              <span className="proj-menu-name">{p.identity.title}</span>
-              {p.id === PROJECT_ID && <Icon name="check" size={12} />}
-            </a>
-          ))}
+          {projects.map((p) => {
+            const offline = p.online === false
+            const current = p.id === PROJECT_ID
+            const state = offline ? t('nav.projectOffline') : p.online === true ? t('nav.projectOnline') : null
+            const className = `proj-menu-item${current ? ' current' : ''}${offline ? ' offline' : ''}`
+            const content = (
+              <>
+                <IdentityIcon icon={p.identity.icon} size={16} className="proj-menu-mark" />
+                {p.gated && <Icon name="lock" size={11} />}
+                <span className="proj-menu-name">{p.identity.title}</span>
+                {state && <span className={`proj-menu-status ${offline ? 'offline' : 'online'}`} aria-hidden="true">{state}</span>}
+                {current && <Icon name="check" size={12} />}
+              </>
+            )
+            return offline
+              ? <div key={p.id} role="menuitem" aria-disabled="true" className={className}>{content}</div>
+              : <a key={p.id} role="menuitem" className={className} href={projectHref(p.id)}>{content}</a>
+          })}
           <a role="menuitem" className="proj-menu-item all" href={hubHref()}>
             <IdentityIcon icon={gatewayIdentity?.icon} fallback="gateway" size={16} className="proj-menu-mark" />
             <span className="proj-menu-name">{t('nav.allProjects')}</span>

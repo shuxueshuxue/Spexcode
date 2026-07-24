@@ -28,17 +28,20 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
 
 - **The return ticket.** A single listener remembers the last element focused **outside** any overlay. An overlay marks its root so focus landing inside it is never recorded as the ticket — a modal's own input is transient, never a return target.
 - **Return on close.** When the **last** transient overlay closes, focus goes back to the ticket if it is still
-  on-screen and focusable, **else to the declared sink**. The session page exposes exactly one current sink:
-  New's textarea, Command Box's textarea while open, or the active xterm helper textarea. Hidden xterms remove
-  the marker. Never `<body>`. The return is deferred one frame and reads the ticket live; if a successor
+  on-screen and focusable, **else to the first currently focusable declared sink** — never merely the first
+  sink in DOM order. The session page exposes exactly one current sink: New's textarea, Command Box's textarea
+  while open, the active xterm helper textarea, or the active terminal-free conversation's composer. Warm
+  hidden layers remove the marker. Never `<body>`. The return is deferred one frame and reads the ticket live; if a successor
   overlay already holds focus by then, it owns it — the return never yanks. The shared modal chrome returns
   on its own unmount, so every closing path — Esc, backdrop, cancel, submit — honors the contract without
   each caller wiring it.
 - **Inert chrome.** The acquisition-side twin: a pointer-down on chrome that is not itself an input surface
   (not an editable field, the xterm screen, a scrollbar gutter, or an explicitly marked native-selection
   region) is **prevented from moving focus at all** — the click still lands and acts. A native-selection
-  region keeps the browser's default press so ordinary text can be drag-selected, double-clicked, and copied;
-  it is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
+  region keeps the browser's default press so ordinary text can be drag-selected, double-clicked, and copied.
+  When that gesture ends, the surface returns keyboard ownership to its exact local sink while restoring any
+  non-collapsed document Selection: selection remains visible/copyable, yet the next printable key reaches the
+  draft instead of `body`. It is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
   then most pops need no return because focus never left: the ticket stays pinned to the real input region
   instead of getting polluted by the button that opened the pop.
 

@@ -92,14 +92,22 @@ scenarios:
       TimelineChat at a 390x844 phone viewport and a 1280x800 desktop viewport. In each viewport,
       focus the composer, type an unsent multi-word draft, and hold through a timeline poll plus a
       board refresh. Then pointer-drag across the headless agent's note and keep the drag selection
-      active while another refresh arrives. Record the complete two-viewport interaction as video.
+      active while another refresh arrives; inspect activeElement, type `XYZ` without directly targeting
+      the textarea, and read the draft. Repeat with a plain click and a double-click. On desktop keep two
+      headless sessions mounted, switch to the second, and repeat the press there. Record the complete
+      two-viewport interaction as video.
     expected: |
       Every refresh leaves the composer as document.activeElement and preserves the complete unsent
       draft. Note, sent-message, and reply copy is ordinary browser-selectable text: pointer drag and
       double-click produce a non-empty Selection whose text matches the rendered conversation. A
       refresh during that selection neither remounts TimelineChat nor clears or collapses the selection.
-      Existing click and double-click behavior elsewhere in the console still works. Phone and desktop
-      satisfy the same interaction contract because both mount the shared TimelineChat.
+      Completing a timeline press returns activeElement to that conversation's composer without clearing
+      a real selection; `XYZ` typed after the drag is appended intact to the existing draft. A plain click
+      returns focus with a collapsed Selection and its next key also enters the draft. Existing click and
+      double-click behavior elsewhere in the console still works. Only the active TimelineChat exposes
+      `data-focus-sink`; with two warm desktop layers mounted, switching to the second makes its composer
+      the sole sink and the press returns there, never to the hidden first draft. Phone and desktop satisfy
+      the same interaction contract because both mount the shared TimelineChat.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]
     description: >

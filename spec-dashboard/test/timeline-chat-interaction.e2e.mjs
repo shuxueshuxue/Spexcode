@@ -7,9 +7,11 @@ const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/stu
 const chromiumPath = process.env.SPEXCODE_CHROMIUM_PATH || '/snap/bin/chromium'
 const base = process.env.BASE_URL || 'http://127.0.0.1:5198'
 const sessionId = process.env.SESSION_ID
+const secondSessionId = process.env.SECOND_SESSION_ID
 const phase = (process.env.PHASE || 'A').toUpperCase()
 const out = resolve(process.env.OUT || `/tmp/timeline-chat-${phase.toLowerCase()}`)
 if (!sessionId) throw new Error('SESSION_ID=<real-headless-session-id> is required')
+if (!secondSessionId) throw new Error('SECOND_SESSION_ID=<second-real-headless-session-id> is required')
 if (!['A', 'B'].includes(phase)) throw new Error('PHASE must be A or B')
 mkdirSync(out, { recursive: true })
 
@@ -25,7 +27,7 @@ const started = Date.now()
 const events = [{
   atMs: 0,
   kind: 'narrate',
-  label: '▶ timeline-interaction-refresh-stability · TimelineChat keeps focus, drafts, and text selection through refreshes',
+  label: '▶ timeline-interaction-refresh-stability · TimelineChat keeps refreshes, selection, and follow-on typing in one interaction',
 }]
 const results = []
 const mark = (viewport, step) => events.push({
@@ -80,6 +82,7 @@ async function showReadout(viewport, step, snapshot) {
       `focus=${current.focus ?? '-'} connected=${current.connected ?? '-'}`,
       `draft=${JSON.stringify(current.draft ?? '')}`,
       `selection=${JSON.stringify(current.selection ?? '')}`,
+      `typed=${current.typed ?? '-'} sinks=${current.sinks ?? '-'}`,
     ].join('\n')
   }, { phaseName: phase, viewportName: viewport, currentStep: step, current: snapshot })
 }
@@ -107,8 +110,7 @@ async function waitForTimelineToken(viewport, token, sample) {
   throw new Error(`timeline did not render background token ${token}`)
 }
 
-async function dragSelectNote() {
-  const note = page.locator('.m-ev-note').last()
+async function dragSelectNote(note = page.locator('.m-ev-note').last()) {
   await note.scrollIntoViewIfNeeded()
   const box = await note.boundingBox()
   if (!box) throw new Error('visible note has no bounding box')
@@ -122,6 +124,36 @@ async function dragSelectNote() {
   await page.mouse.move(end.x, end.y, { steps: 18 })
   await page.mouse.up()
   return page.evaluate(() => getSelection()?.toString() || '')
+}
+
+async function activeSinkCount() {
+  return page.locator('.m-input[data-focus-sink]').count()
+}
+
+async function verifySecondConversationSink(viewport) {
+  await page.goto(`${base}/#/sessions/${encodeURIComponent(secondSessionId)}`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
+  const input = page.locator('.m-input:visible')
+  const note = page.locator('.m-ev-note:visible').last()
+  await note.waitFor({ state: 'visible', timeout: 30_000 })
+  const mounted = await page.locator('.si-term-layer .m-input').count()
+  assert.ok(mounted >= 2, `expected two warm headless composers, got ${mounted}`)
+  const inputHandle = await input.elementHandle()
+  assert.ok(inputHandle)
+  const draft = `${phase}-desktop-second-layer`
+  await input.fill(draft)
+  const selected = await dragSelectNote(note)
+  const beforeType = await readInteraction(inputHandle, draft)
+  const sinks = await activeSinkCount()
+  await page.keyboard.type('Z')
+  const afterType = await input.inputValue()
+  const pass = sinks === 1 && beforeType.focus && selected.length > 0 && afterType === `${draft}Z`
+  await showReadout(viewport, 'second warm layer owns sink + typing', {
+    ...beforeType, selection: selected, typed: afterType === `${draft}Z`, sinks, pass,
+  })
+  mark(viewport, `second warm layer exact sink (${pass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(1_400)
+  return { pass, mounted, sinks, selected, afterType }
 }
 
 async function runViewport(name, viewport) {
@@ -154,9 +186,14 @@ async function runViewport(name, viewport) {
 
   await waitForActionable()
   await page.waitForFunction(() => document.querySelectorAll('.m-ev-note').length > 0)
-  const selectedBefore = await dragSelectNote()
-  await showReadout(name, 'pointer drag selection', { ...await readInteraction(inputHandle, draft), selection: selectedBefore, pass: selectedBefore.length > 0 })
-  mark(name, `drag select rendered note (${selectedBefore.length} chars)`)
+  const note = page.locator('.m-ev-note').last()
+  const selectedBefore = await dragSelectNote(note)
+  const afterDrag = await readInteraction(inputHandle, draft)
+  const dragPass = selectedBefore.length > 0 && afterDrag.focus && afterDrag.draftKept
+  await showReadout(name, 'pointer drag returns exact composer', {
+    ...afterDrag, selection: selectedBefore, typed: 'not yet', pass: dragPass,
+  })
+  mark(name, `drag selection + exact composer focus (${dragPass ? 'pass' : 'fail'})`)
 
   const selectionToken = `SELECT-${phase}-${name}-${Date.now()}`
   await sendBackground(`${selectionToken}: reply immediately with another short complete note and remain available.`)
@@ -168,25 +205,51 @@ async function runViewport(name, viewport) {
   const selectionPass = selectedBefore.length > 0
     && selectionReadings.every((reading) => reading.selection === selectedBefore)
     && selectedAfter === selectedBefore
+    && selectionReadings.every((reading) => reading.focus && reading.draftKept)
   await showReadout(name, 'selection after refresh', {
     ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: selectionPass,
   })
   mark(name, `selection after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
   await page.waitForTimeout(1_200)
 
-  const note = page.locator('.m-ev-note').last()
+  await page.keyboard.type('XYZ')
+  const typedDraft = `${draft}XYZ`
+  const typingPass = await input.inputValue() === typedDraft
+  await showReadout(name, 'printable keys after selection', {
+    ...await readInteraction(inputHandle, typedDraft), typed: typingPass, pass: typingPass,
+  })
+  mark(name, `XYZ after selection enters draft (${typingPass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(1_000)
+
+  await note.click({ position: { x: 16, y: 12 } })
+  const afterClick = await readInteraction(inputHandle, typedDraft)
+  const clickSelection = await page.evaluate(() => getSelection()?.toString() || '')
+  await page.keyboard.type('Q')
+  const clickTypingPass = await input.inputValue() === `${typedDraft}Q`
+  const clickPass = afterClick.focus && clickSelection.length === 0 && clickTypingPass
+  await showReadout(name, 'plain click returns composer', {
+    ...afterClick, selection: clickSelection, typed: clickTypingPass, pass: clickPass,
+  })
+  mark(name, `plain click + next key enters draft (${clickPass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(1_000)
+
   await note.dblclick({ position: { x: 40, y: 12 } })
   const doubleClickSelection = await page.evaluate(() => getSelection()?.toString() || '')
+  const doubleClickFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
   await page.keyboard.press('Control+c')
   const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
-  const copyPass = doubleClickSelection.length > 0 && copied === doubleClickSelection
+  const copyPass = doubleClickFocus && doubleClickSelection.length > 0 && copied === doubleClickSelection
   await showReadout(name, 'double-click + copy', {
-    ...await readInteraction(inputHandle, draft), selection: doubleClickSelection, pass: copyPass,
+    ...await readInteraction(inputHandle, `${typedDraft}Q`), selection: doubleClickSelection, pass: copyPass,
   })
   mark(name, `double-click and copy selected text (${copyPass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(1_600)
 
-  const result = { viewport: name, focusPass, selectionPass, copyPass, selectedBefore, selectedAfter, copied }
+  const secondSink = name === 'desktop' ? await verifySecondConversationSink(name) : null
+  const result = {
+    viewport: name, focusPass, dragPass, selectionPass, typingPass, clickPass, copyPass,
+    secondSink, selectedBefore, selectedAfter, copied,
+  }
   results.push(result)
   return result
 }
@@ -195,13 +258,18 @@ try {
   await runViewport('desktop', { width: 1280, height: 800 })
   await runViewport('mobile', { width: 390, height: 844 })
   if (phase === 'A') {
-    assert.ok(results.some((result) => !result.focusPass || !result.selectionPass || !result.copyPass),
+    assert.ok(results.some((result) => !result.focusPass || !result.dragPass || !result.selectionPass
+      || !result.typingPass || !result.clickPass || !result.copyPass || result.secondSink?.pass === false),
       `phase A unexpectedly passed: ${JSON.stringify(results)}`)
   } else {
     for (const result of results) {
       assert.equal(result.focusPass, true, `${result.viewport} focus/draft failed`)
+      assert.equal(result.dragPass, true, `${result.viewport} drag did not return the exact composer`)
       assert.equal(result.selectionPass, true, `${result.viewport} selection refresh failed`)
+      assert.equal(result.typingPass, true, `${result.viewport} typing after selection was dropped`)
+      assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
       assert.equal(result.copyPass, true, `${result.viewport} copy failed`)
+      if (result.secondSink) assert.equal(result.secondSink.pass, true, 'second warm headless layer did not own the exact sink')
     }
   }
   const summaryPath = join(out, `timeline-chat-${phase.toLowerCase()}.json`)

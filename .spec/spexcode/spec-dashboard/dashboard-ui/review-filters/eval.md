@@ -13,7 +13,8 @@ scenarios:
       row, and use the down gesture to disclose the next row. Repeat the compact interactions at 390px and
       include both themes in the recording. File the dynamic run as video evidence.
     expected: >-
-      Canonical and embedded Issues/Evals filtering agree for query, lifecycle/verdict, freshness,
+      Canonical and embedded Issues/Evals filtering agree for query, lifecycle/verdict (including the
+      declared-without-reading `unmeasured` Eval value), freshness,
       evidence, author/filer, store, node, and source-session presence wherever those real fields exist.
       Canonical actions
       remain hash-query history pushes and Back restores their exact view; embedded actions leave the hash

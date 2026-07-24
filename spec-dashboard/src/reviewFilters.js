@@ -139,7 +139,11 @@ export function issueFilterModel(items, raw = {}, context = {}) {
 }
 
 const evalIsResult = (entry) => entry.filterKind === EVAL_FILTER_KIND.RESULT
-const verdictOf = (entry) => evalIsResult(entry) ? (entry.verdict?.status || 'unscored') : 'unscored'
+const verdictOf = (entry) => evalIsResult(entry)
+  ? (entry.verdict?.status || 'unscored')
+  : entry.filterKind === EVAL_FILTER_KIND.BLIND || entry.filterKind === EVAL_FILTER_KIND.UNMEASURED
+    ? 'unmeasured'
+    : 'unscored'
 const reviewStateOf = (entry) => (evalIsResult(entry) && entry.fresh && entry.humanOk ? 'reviewed' : 'current')
 export const evalReviewState = (reading) => {
   const status = reading?.verdict?.status
@@ -166,7 +170,11 @@ const EVAL_CONFIG = {
   search: (entry) => [entry.scenario, entry.node, entry.by, entry.evaluator],
   section: {
     key: 'verdict', value: verdictOf,
-    options: [{ value: 'fail', label: 'reviewList.verdict.fail' }, { value: 'pass', label: 'reviewList.verdict.pass' }],
+    options: [
+      { value: 'fail', label: 'reviewList.verdict.fail' },
+      { value: 'pass', label: 'reviewList.verdict.pass' },
+      { value: 'unmeasured', label: 'reviewList.verdict.unmeasured' },
+    ],
   },
   facets: [
     {

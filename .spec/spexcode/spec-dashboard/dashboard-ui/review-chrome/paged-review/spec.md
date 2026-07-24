@@ -20,8 +20,10 @@ positive page; `perPage` is the product constant 25. Canonical current lists, sc
 pane, the node Eval timeline mode, and search-palette review planes all consume the same response protocol.
 The domain source first becomes one deterministic
 ordered population under one stable revision: merged local/forge Issues are newest-first with an id
-tie-break; trunk Evals are current declared scenarios' latest readings; scoped Evals are the worktree model's
-blind rows, session-owned readings, then inherited readings. Session presence is joined before matching.
+tie-break; trunk and scoped Evals are current declared scenarios' latest readings ordered by filed time
+newest-first regardless of source ownership, followed by blind scenarios that have no filed time with a
+deterministic identity tie-break. An unmeasured row is never promoted ahead of a filed reading. Session
+presence is joined before matching.
 
 The server imports [[review-filters]] and [[review-query]] directly. There is no server copy of tokenization,
 qualifier mapping, or field predicates. It applies source selection, matching, section counts, and facet

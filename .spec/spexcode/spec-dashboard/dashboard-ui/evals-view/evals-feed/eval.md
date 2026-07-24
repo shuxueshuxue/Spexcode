@@ -1,19 +1,48 @@
 ---
 scenarios:
+  - name: unmeasured-filter-and-default-order
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]
+    related: [spec-dashboard/src/styles.css]
+    description: >
+      Against the branch-local backend, open #/evals in a real Chromium with measured and blind scenarios.
+      Walk every server page to read the default item order, then read the visible quick-filter labels and
+      counts. Click Unmeasured, inspect the URL and every returned/rendered row, click it again to clear,
+      then repeat the header geometry check at 390px and capture the interaction as video.
+    expected: >
+      Default results are ordered by filed time newest-first regardless of trunk/session ownership; every
+      measured row precedes blind rows that have no filed time. The header exposes Fail, Pass, and
+      Unmeasured with stable full-population counts and no pressed default. Clicking Unmeasured pushes
+      `verdict:unmeasured`, returns only inert declared-without-reading rows, and clicking it again restores
+      the bare default.
+  - name: unmeasured-filter-mobile-header
+    tags: [frontend-e2e, mobile]
+    code: [spec-dashboard/src/EvalsFeed.jsx]
+    related: [spec-dashboard/src/styles.css]
+    description: >
+      Open #/evals directly in a fresh real Chromium context at 390px. Read the three status buttons, the
+      secondary Filters trigger, the list header, and document/body scroll width; capture the settled page.
+    expected: >
+      Fail, Pass, and Unmeasured retain their icons, complete labels, and counts beside the complete Filters
+      trigger. All four controls stay inside the 49px header without overlap or horizontal overflow; each
+      status button retains at least a 44px hit target.
   - name: feed-current-loss-listview
     tags: [frontend-e2e]
     description: >
       With fresh video/image readings, stale readings, at least one human-ok'd reading, and blind/unscored
-      data, open #/evals in a real browser. Read the query/header/rows, Fail and Pass counts, Human review builder, media element count,
-      row hrefs, state SVGs, and /api/graph requests; open a video row.
+      data, open #/evals in a real browser. Read the query/header/rows, Fail, Pass, and Unmeasured counts,
+      default row order, Human review builder, media element count, row hrefs, state SVGs, and /api/graph
+      requests; open a video row.
     expected: |
-      The list is one GitHub-style ListView over latest-per-scenario rows: 32px query, a Fail/Pass
+      The list is one GitHub-style ListView over latest-per-scenario rows: 32px query, a Fail/Pass/Unmeasured
       counted quick-filter group, real secondary facets, ~64px desktop structured anchors. Each `.rl-row-grid` leads with the
       shared verdict icon, then scenario title, node/filer/time metadata, and kind/scope facts. Fresh
       human-ok'd readings match Human review: Reviewed; everything else matches Needs review. That
       lifecycle is a secondary builder and visible state: token, never the top section. The bare address
-      shows `is:eval` and keeps blind/unscored/unknown rows reachable while neither Fail nor Pass is pressed.
-      Fail/Pass counts exclude their own verdict token but honor every other query token. The
+      shows `is:eval` and keeps blind/unscored/unknown rows reachable while no quick filter is pressed.
+      Filed readings are newest-first across source ownership; blind rows with no filed time follow them
+      instead of being promoted. The three counts exclude their own verdict token but honor every other
+      query token; Unmeasured selects exactly declared scenarios without a reading. The
       list mounts zero video/image elements and fires zero extra /api/graph reads; media exists only after
       the real anchor opens the standalone detail page. The list state icon matches that detail's icon for
       the same verdict.
@@ -27,10 +56,10 @@ scenarios:
     expected: |
       Menus are pure query builders: a pick writes its verdict:/freshness:/evidence: token into the
       visible text and pushes; All removes the token. Options map only real reading fields: verdict reads
-      pass/fail/unscored, freshness the live fresh bit, evidence the reading's kind SET (a mixed reading
+      pass/fail/unmeasured/unscored, freshness the live fresh bit, evidence the reading's kind SET (a mixed reading
       matches each carried kind; the default is all with no data-dependent fallback) and all returns
       non-media readings too. Stale readings stay in the default Current list, never silently hidden.
-      Blind rows match their node/unscored/query facts but disappear under Fail/Pass, evidence, freshness, filer, or
+      Blind rows match their node/`verdict:unmeasured`/query facts but disappear under Fail/Pass, evidence, freshness, filer, or
       source-session presence tokens because they own no reading facts; they remain inert when visible,
       and the default list never hides them merely because the top axis is non-exhaustive. Combined tokens
       are conjunctive and an honest zero says no evals match this view
@@ -54,7 +83,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Open #/evals and record history.length. Edit and submit the query text, click Fail, click it again
-      to clear, click Pass, pick Human review/freshness/evidence builders, and add a scope: token; read
+      to clear, click Pass, click Unmeasured, pick Human review/freshness/evidence builders, and add a scope: token; read
       hash/history and pressed/menu AX state after each. Reload,
       then drive Back one state at a time.
     expected: >

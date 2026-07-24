@@ -77,9 +77,10 @@ test('recorded viewport scenarios satisfy the e2e-review one-pair-per-directory 
 test('browser proof requires scoped blind rows, real long details, and every themed surface', () => {
   assert.match(e2e, /async function findLongDetail/)
   assert.match(e2e, /best\.scrollHeight > best\.clientHeight \+ 400/)
-  assert.match(e2e, /assert\.ok\(blindRows > 0/)
+  assert.match(e2e, /page\.counts\?\.unmeasured > 0/)
   assert.doesNotMatch(e2e, /\/api\/sessions\/.*\/evals/)
-  assert.match(e2e, /defaultCounts\[0\] \+ defaultCounts\[1\] < scopedPage\.total/)
+  assert.match(e2e, /defaultCounts\[2\], scopedPage\.counts\.unmeasured/)
+  assert.match(e2e, /unmeasuredPage\.items\.every\(\(item\) => item\.filterKind === 'blind'\)/)
   assert.match(e2e, /assert\.deepEqual\(await sectionCounts\(\), reviewCounts/)
   assert.match(e2e, /async function assertScopedStatus/)
   assert.match(e2e, /scoped status stays pinned at the PageScroll inset/)

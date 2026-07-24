@@ -202,7 +202,7 @@ export default {
     sessionMissing: 'Missing',
     openedBy: ({ by }) => `opened by ${by}`,
     openedAt: ({ at }) => `opened ${at} ago`,
-    verdict: { pass: 'Pass', fail: 'Fail', unscored: 'Unscored' },
+    verdict: { pass: 'Pass', fail: 'Fail', unmeasured: 'Unmeasured', unscored: 'Unscored' },
     freshness: { fresh: 'Fresh', stale: 'Stale' },
     pagination: 'Pagination',
     previous: 'Previous',

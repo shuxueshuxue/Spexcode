@@ -2,7 +2,7 @@
 title: evals-view
 status: active
 hue: 200
-desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Fail/Pass loss axis + secondary human-review/freshness/evidence builders over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
+desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Fail/Pass/Unmeasured loss axis + secondary human-review/freshness/evidence builders over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
 code:
   - spec-dashboard/src/EvalsPage.jsx#EvalsPage
   - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
@@ -64,11 +64,13 @@ filter (default off) picking the root.
   [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
-- **Fail / Pass leads measured loss; review lifecycle does not.** The ListView's top quick-filter group
-  renders Fail then Pass through the shared ReviewState icon/tone/count and toggles `verdict:` by token
-  surgery + PUSH. The pair is intentionally non-exhaustive: with neither active, the default list still
-  shows blind, unscored, and unknown verdict rows; their presence is never falsified to make a binary
-  tab model fit. Counts are stable under every other token. `state:current|reviewed` remains visible in
+- **Fail / Pass / Unmeasured leads measured loss; review lifecycle does not.** The ListView's top
+  quick-filter group renders Fail, Pass, then Unmeasured through the shared ReviewState icon/tone/count and
+  toggles `verdict:` by token surgery + PUSH. Unmeasured is the declared-without-reading population, not a
+  catch-all for unscored or unknown readings. The group is intentionally non-exhaustive: with none active,
+  the default list still shows every row, ordered by filed time newest-first with no-filed-time blind rows
+  last; their presence is never falsified to make a binary tab model fit. Counts are stable under every
+  other token. `state:current|reviewed` remains visible in
   the query and in the secondary Human review builder (Needs review / Reviewed), with the same reload and
   Back replay, but no longer consumes the page's primary hierarchy. Issues keeps its natural Open/Closed
   lifecycle tabs; only the chrome/query/state primitives and geometry are shared.

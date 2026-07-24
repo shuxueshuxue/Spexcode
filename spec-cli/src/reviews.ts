@@ -129,12 +129,12 @@ export async function issuesReview(query: string | undefined, requestedPage: unk
   }
 }
 
-const byNewest = (a: any, b: any): number => String(b.ts ?? '').localeCompare(String(a.ts ?? ''))
+const byNewest = (a: any, b: any): number => Number(b.filterKind === EVAL_FILTER_KIND.RESULT) - Number(a.filterKind === EVAL_FILTER_KIND.RESULT)
+  || String(b.ts ?? '').localeCompare(String(a.ts ?? ''))
   || String(a.node ?? '').localeCompare(String(b.node ?? ''))
   || String(a.scenario ?? '').localeCompare(String(b.scenario ?? ''))
 
 export function trunkEvalReviewItems(nodes: any[]): ReviewItem[] {
-  const blind: any[] = []
   const items: any[] = []
   for (const node of nodes ?? []) {
     const latest = new Map<string, any>()
@@ -142,7 +142,7 @@ export function trunkEvalReviewItems(nodes: any[]): ReviewItem[] {
     for (const scenario of node.scenarios ?? []) {
       const reading = latest.get(scenario.name)
       if (!reading) {
-        blind.push({
+        items.push({
           scenario: scenario.name,
           expected: scenario.expected,
           tags: scenario.tags,
@@ -163,21 +163,18 @@ export function trunkEvalReviewItems(nodes: any[]): ReviewItem[] {
       })
     }
   }
-  blind.sort((a, b) => String(a.node).localeCompare(String(b.node)) || String(a.scenario).localeCompare(String(b.scenario)))
-  return [...blind, ...items.sort(byNewest)]
+  return items.sort(byNewest)
 }
 
 export function scopedEvalReviewItems(model: SessionEvals): ReviewItem[] {
-  const blind: any[] = []
-  const own: any[] = []
-  const inherited: any[] = []
+  const items: any[] = []
   for (const node of model.nodes ?? []) {
     const latest = new Map<string, any>()
     for (const reading of node.evals ?? []) if (!latest.has(reading.scenario)) latest.set(reading.scenario, reading)
     for (const scenario of node.scenarios ?? []) {
       const reading = latest.get(scenario.name)
       if (!reading) {
-        blind.push({
+        items.push({
           scenario: scenario.name,
           expected: scenario.expected,
           tags: scenario.tags,
@@ -197,10 +194,10 @@ export function scopedEvalReviewItems(model: SessionEvals): ReviewItem[] {
         hue: node.hue,
         filterKind: EVAL_FILTER_KIND.RESULT,
       }
-      ;(reading.inSession ? own : inherited).push(item)
+      items.push(item)
     }
   }
-  return [...blind, ...own.sort(byNewest), ...inherited.sort(byNewest)]
+  return items.sort(byNewest)
 }
 
 const evalItemKey = (item: any): string => `${String(item?.node ?? '')}\0${String(item?.scenario ?? '')}`

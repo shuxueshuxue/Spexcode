@@ -61,8 +61,8 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   is active, the trigger is absent: no real options means no fake control. An ACTIVE value whose menu
   option vanished keeps a cheap All off-switch (the visible text is the canonical release).
   Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
-  as a named Fail/Pass pressed-button quick-filter group because verdict is non-exhaustive; neither button
-  is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
+  as a named Fail/Pass/Unmeasured pressed-button quick-filter group because the axis is non-exhaustive; no
+  button is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
   SELECTION releases like every builder — into the query input, its trigger keeping focus only when the
   pick changed nothing — and outside click keeps clicked focus. Each secondary facet is its own named
   radio group inside the menu,
@@ -92,7 +92,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
 - **Pagination is address state and real navigation.** The shared `Pagination` primitive renders one named
   navigation landmark with real page/Previous/Next anchors, `aria-current="page"` on the active page, and
   browser-default Enter/middle-click/copy behavior. Clicking a page PUSHES. Editing/submitting the query or
-  changing an Open/Closed, Fail/Pass, or facet builder resets to page 1 and PUSHES an address without
+  changing an Open/Closed, Fail/Pass/Unmeasured, or facet builder resets to page 1 and PUSHES an address without
   `page`; a pagination anchor returning to page 1 mints `page=1`. Direct open, refresh, Back, and Forward
   preserve whichever page-1 form history contains and re-request/replay the full query+page state.
   Opening a row detail PUSHES; browser Back restores query, page, and the review scrollport offset. The

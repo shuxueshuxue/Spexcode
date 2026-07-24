@@ -72,12 +72,13 @@ test('opening a filer or originator session uses no retired eval-view state', ()
 
 test('blind eval rows obey every reading-only token and remain inert', async () => {
   // the FUSED path: token text ([[review-query]]) bridged into the one engine ([[review-filters]])
-  const { evalFilterModel, tokenFilterState } = await import('./reviewFilters.js')
-  const blind = { node: 'alpha', scenario: 'never measured', reading: false }
+  const { EVAL_FILTER_KIND, evalFilterModel, tokenFilterState } = await import('./reviewFilters.js')
+  const blind = { node: 'alpha', scenario: 'never measured', filterKind: EVAL_FILTER_KIND.BLIND }
   const matches = (text) => evalFilterModel([blind], tokenFilterState(text, 'eval'), { sessions: [], defaultKind: 'all' }).shown.length === 1
 
   assert.equal(matches('is:eval'), true)
-  assert.equal(matches('verdict:unscored'), true)
+  assert.equal(matches('verdict:unmeasured'), true)
+  assert.equal(matches('verdict:unscored'), false)
   assert.equal(matches('node:alpha'), true)
   assert.equal(matches('never'), true)
   assert.equal(matches('scope:s-1 state:current'), true)
@@ -94,7 +95,7 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
   assert.equal(matches('absent'), false)
   assert.equal(matches('frobnicate:xyz'), false)
 
-  const blindRows = feed.slice(feed.indexOf('...shownBlind.map'), feed.indexOf('...shown.map'))
+  const blindRows = feed.slice(feed.indexOf('if (item.filterKind === EVAL_FILTER_KIND.BLIND)'), feed.indexOf('if (item.filterKind === EVAL_FILTER_KIND.RESULT)'))
   assert.match(blindRows, /cls: 'se-blind'/)
   assert.doesNotMatch(blindRows, /href:/)
 })

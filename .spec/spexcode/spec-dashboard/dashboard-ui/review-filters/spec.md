@@ -48,7 +48,8 @@ radio groups, keyboard/Escape behavior, and honest filtered-empty result as the 
 
 Surface defaults may differ where the products already differ: canonical Issues opens on outstanding work,
 while canonical Evals opens on its complete bound record with the evidence default `all` (a plain enum
-default, never data-dependent). Evals derives Fail/Pass as its non-exhaustive verdict section counts and
+default, never data-dependent). Evals derives Fail/Pass/Unmeasured as its non-exhaustive verdict section
+counts (`unmeasured` means a declared scenario with no reading, not an unscored reading) and
 derives human review (`current` / `reviewed`) as a separate fixed-value facet; the fixed lifecycle choices
 remain editable even when one currently has zero rows. A node popup also initially shows its complete bound
 record. Once a value is active, parsing and matching are identical. A node-local list naturally omits node
@@ -56,5 +57,6 @@ and scope facets because they have no choice; this is absence of data, not a spe
 Eval consumers present one tagged set to the adapter: a filed measurement is a result, while blind,
 unmeasured, and dangling rows are distinct non-result kinds. That shared kind enum is the only discriminator;
 the canonical list and embedded node pane do not carry a parallel legacy boolean or dual-name fallback.
-Those non-result rows belong to neither Fail nor Pass but remain present in the no-verdict default and may
-match Needs review; selecting a measured verdict excludes them honestly.
+Blind non-result rows belong to the Unmeasured section, remain present in the no-verdict default, and may
+match Needs review; selecting a measured verdict excludes them honestly. Other non-result kinds do not
+become unmeasured merely because they carry no scored verdict.

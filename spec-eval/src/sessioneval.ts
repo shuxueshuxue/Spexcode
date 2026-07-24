@@ -965,6 +965,13 @@ type SummaryBuildResult =
 
 export type SessionEvalSummaryBuilder = (id: string, path: string) => Promise<SummaryBuildResult>
 
+type DemandJob<T> = {
+  id: string
+  run: () => Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
 type ProjectionEntry = {
   id: string
   path: string
@@ -999,6 +1006,8 @@ export class SessionEvalProjectionCache {
   private batch: Promise<void> | null = null
   private notify: () => void
   private precompute: boolean
+  private readonly demandQueue: DemandJob<any>[] = []
+  private readonly demands = new Map<string, Promise<unknown>>()
 
   constructor(
     private readonly build: SessionEvalSummaryBuilder,
@@ -1033,6 +1042,26 @@ export class SessionEvalProjectionCache {
     if ((entry.phase === 'loading' || entry.phase === 'updating')
       && entry.running !== entry.generation && entry.scheduled !== entry.generation)
       entry.scheduled = entry.generation
+  }
+
+  private ensureEntry(id: string, path: string): ProjectionEntry {
+    let entry = this.entries.get(id)
+    if (entry) {
+      entry.path = path || entry.path
+      return entry
+    }
+    entry = {
+      id,
+      path,
+      liveness: 'offline',
+      generation: 0,
+      phase: 'loading',
+      scheduled: null,
+      running: null,
+      observerHolds: new Set(),
+    }
+    this.entries.set(id, entry)
+    return entry
   }
 
   snapshot(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
@@ -1140,6 +1169,25 @@ export class SessionEvalProjectionCache {
     return entry ? this.project(entry) : null
   }
 
+  async demand<T>(id: string, path: string, run: () => Promise<T>): Promise<T> {
+    const existing = this.demands.get(id)
+    if (existing) return existing as Promise<T>
+    const entry = this.ensureEntry(id, path)
+    // A queued summary for this same generation is superseded by the full demand build. A running
+    // summary is left alone; the priority job waits for it to settle before taking the slot.
+    if (entry.running == null) entry.scheduled = null
+    let resolve!: (value: T) => void
+    let reject!: (error: unknown) => void
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+    this.demands.set(id, promise)
+    this.demandQueue.push({ id, run, resolve, reject })
+    promise.finally(() => {
+      if (this.demands.get(id) === promise) this.demands.delete(id)
+    }).catch(() => {})
+    queueMicrotask(() => this.startBatch())
+    return promise
+  }
+
   async idle(): Promise<void> {
     await Promise.resolve()
     while (this.batch) await this.batch
@@ -1175,10 +1223,16 @@ export class SessionEvalProjectionCache {
   private startBatch(): void {
     if (this.batch) return
     const hasScheduled = () => [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
-    if (!hasScheduled()) return
+    if (!hasScheduled() && !this.demandQueue.length) return
     this.batch = (async () => {
       let publish = false
-      while (hasScheduled()) {
+      while (hasScheduled() || this.demandQueue.length) {
+        const demand = this.demandQueue.shift()
+        if (demand) {
+          try { demand.resolve(await demand.run()) }
+          catch (error) { demand.reject(error) }
+          continue
+        }
         const jobs = [...this.entries.values()]
           .filter((entry) => entry.scheduled != null && entry.running == null)
           .slice(0, PROJECTION_CONCURRENCY)
@@ -1274,35 +1328,39 @@ export function releaseSessionEvalProjectionObserver(observer: string): boolean 
 export async function awaitSessionEvalProjectionIdle(): Promise<void> { await projectionCache.idle() }
 
 export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
-  // A full model is demand-only. It fences itself against both the content fingerprint and the graph cache's
-  // generation, and only publishes its summary when it is still the newest observed generation.
+  // A full model is demand-only, but it still runs through the projection queue. This gives a selected session
+  // priority over unrelated queued summaries without opening a second git/build lane.
   for (;;) {
-    await projectionCache.idle()
-    const payload = await reviewPayload(id)
-    if (!payload) return null
-    const wtPath = worktreePathForBranch(payload.branch)
-    const ctxPath = wtPath ?? repoRoot()
-    await awaitObservableInputs(id, ctxPath)
-    const known = projectionCache.get(id)
-    const generation = known?.generation ?? 0
-    const before = await sessionEvalContentRevision(ctxPath)
-    const model = await buildSessionEvalModel(id, payload, wtPath, false)
-    const after = await sessionEvalContentRevision(ctxPath)
-    const current = projectionCache.get(id)
-    if (before !== after || projectionCache.isObserverHeld(id, ctxPath)
-      || (current && current.generation !== generation)) {
-      if (before !== after) projectionCache.invalidate({ id })
-      continue
-    }
-    const summary = sessionEvalSummary(model.nodes)
-    const cacheKey = `${id}\0${after}`
-    for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
-    summaryByContent.set(cacheKey, summary)
-    if (current) projectionCache.accept(id, generation, after, summary)
+    const attempt = await projectionCache.demand(id, '', async () => {
+      const payload = await reviewPayload(id)
+      if (!payload) return { kind: 'missing' as const }
+      const wtPath = worktreePathForBranch(payload.branch)
+      const ctxPath = wtPath ?? repoRoot()
+      const known = projectionCache.get(id)
+      const generation = known?.generation ?? 0
+      await awaitObservableInputs(id, ctxPath)
+      const before = await sessionEvalContentRevision(ctxPath)
+      const model = await buildSessionEvalModel(id, payload, wtPath, false)
+      const after = await sessionEvalContentRevision(ctxPath)
+      const current = projectionCache.get(id)
+      if (before !== after || projectionCache.isObserverHeld(id, ctxPath)
+        || (current && current.generation !== generation)) {
+        if (before !== after) projectionCache.invalidate({ id })
+        return { kind: 'retry' as const }
+      }
+      const summary = sessionEvalSummary(model.nodes)
+      const cacheKey = `${id}\0${after}`
+      for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
+      summaryByContent.set(cacheKey, summary)
+      if (current) projectionCache.accept(id, generation, after, summary)
+      return { kind: 'ready' as const, model, summary, generation, revision: after }
+    })
+    if (attempt.kind === 'missing') return null
+    if (attempt.kind === 'retry') continue
     return {
-      ...model,
-      summary,
-      evalRevision: { epoch: projectionCache.epoch, generation, content: after },
+      ...attempt.model,
+      summary: attempt.summary,
+      evalRevision: { epoch: projectionCache.epoch, generation: attempt.generation, content: attempt.revision },
     }
   }
 }

@@ -99,6 +99,12 @@ is a runtime capacity control shared by all projects, not a production-size exce
 and per-worktree history indexes from multiplying with session count, while the scoped Evals route remains the
 explicit demand path for one opened session.
 
+That demand path has priority inside the same queue. A selected session cancels its own queued summary for the
+current generation, waits only for the currently running job, then runs its full model before unrelated queued
+summaries; a second demand for the same id joins the first promise. The queue never opens a second concurrency
+lane, and ordinary summaries resume after the demand settles. A demand that arrives while its own summary is
+already running joins that generation's completion rather than enqueueing a duplicate job.
+
 **Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
 moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
 watched recursively for dirty source, rename, scenario and sidecar edits, and its gitdir index is watched for

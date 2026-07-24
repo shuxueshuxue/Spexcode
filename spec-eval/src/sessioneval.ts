@@ -968,6 +968,7 @@ export type SessionEvalSummaryBuilder = (id: string, path: string) => Promise<Su
 type ProjectionEntry = {
   id: string
   path: string
+  liveness: string
   generation: number
   phase: SessionEvalProjection['phase']
   current?: { generation: number; revision: string; value: SessionEvalSummary }
@@ -977,6 +978,15 @@ type ProjectionEntry = {
 }
 
 type ProjectionTarget = 'all' | { id?: string; path?: string }
+
+// Summary builds touch a session worktree's diff, history, and eval sidecars. Running one job per row
+// multiplies those git children and their parsed indexes by the retained session count, so the shared
+// projection queue has one bounded capacity for every project. A deployment can tune the capacity, but the
+// default is deliberately serial: board assembly remains responsive and memory has a natural settle point.
+const configuredProjectionConcurrency = Number(process.env.SPEXCODE_SESSION_EVAL_CONCURRENCY || 1)
+const PROJECTION_CONCURRENCY = Number.isFinite(configuredProjectionConcurrency)
+  ? Math.max(1, Math.floor(configuredProjectionConcurrency))
+  : 1
 
 // Pure generation coordinator around an injected stable builder. Snapshot construction only serializes
 // entries and authorizes the newest dirty generations; the async batch runs after that snapshot has captured
@@ -988,13 +998,42 @@ export class SessionEvalProjectionCache {
   private readonly observerWaiters = new Set<() => void>()
   private batch: Promise<void> | null = null
   private notify: () => void
+  private precompute: boolean
 
-  constructor(private readonly build: SessionEvalSummaryBuilder, notify: () => void = () => {}, epoch: string = randomUUID()) {
+  constructor(
+    private readonly build: SessionEvalSummaryBuilder,
+    notify: () => void = () => {},
+    epoch: string = randomUUID(),
+    precompute = true,
+  ) {
     this.notify = notify
     this.epoch = epoch
+    this.precompute = precompute
   }
 
   setNotify(notify: () => void): void { this.notify = notify }
+
+  setPrecompute(enabled: boolean): void {
+    if (this.precompute === enabled) return
+    this.precompute = enabled
+    for (const entry of this.entries.values()) {
+      if (!enabled) {
+        // A running build is allowed to settle; dropping only queued work prevents a last subscriber's
+        // departure from starting another historical walk after the era has ended.
+        if (entry.running == null) entry.scheduled = null
+        continue
+      }
+      this.authorize(entry)
+    }
+    if (enabled) queueMicrotask(() => this.startBatch())
+  }
+
+  private authorize(entry: ProjectionEntry): void {
+    if (!this.precompute || entry.liveness === 'offline' || entry.observerHolds.size) return
+    if ((entry.phase === 'loading' || entry.phase === 'updating')
+      && entry.running !== entry.generation && entry.scheduled !== entry.generation)
+      entry.scheduled = entry.generation
+  }
 
   snapshot(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
     const live = new Set(sessions.map((session) => session.id))
@@ -1006,6 +1045,8 @@ export class SessionEvalProjectionCache {
         entry = {
           id: session.id,
           path: session.path,
+          // Unit tests and direct callers omit liveness; those callers retain the historical eager default.
+          liveness: session.liveness ?? 'online',
           generation: 0,
           phase: 'loading',
           scheduled: null,
@@ -1013,19 +1054,19 @@ export class SessionEvalProjectionCache {
           observerHolds: new Set(),
         }
         this.entries.set(session.id, entry)
-      } else entry.path = session.path
+      } else {
+        entry.path = session.path
+        entry.liveness = session.liveness ?? 'online'
+      }
       entry.observerHolds = new Set([...this.observerHolds]
         .filter(([, target]) => this.matches(entry!, target))
         .map(([observer]) => observer))
       if (entry.observerHolds.size) entry.phase = 'updating'
       // Dormant history is demand-only. The graph still exposes a loading/last-known projection for an
       // offline row, but does not fan out a summary build for every retained session. Selecting that row's
-      // eval calls buildSessionEvals directly; live rows retain the eager toolbar-summary batch.
-      const precompute = session.liveness !== 'offline'
-      if (!precompute && entry.running == null) entry.scheduled = null
-      if (precompute && (entry.phase === 'loading' || entry.phase === 'updating')
-        && entry.observerHolds.size === 0
-        && entry.running !== entry.generation && entry.scheduled !== entry.generation) entry.scheduled = entry.generation
+      // eval calls buildSessionEvals directly; live rows are eager only during a delta stream era.
+      if (session.liveness === 'offline' && entry.running == null) entry.scheduled = null
+      this.authorize(entry)
       out.set(session.id, this.project(entry))
     }
     queueMicrotask(() => this.startBatch())
@@ -1138,7 +1179,9 @@ export class SessionEvalProjectionCache {
     this.batch = (async () => {
       let publish = false
       while (hasScheduled()) {
-        const jobs = [...this.entries.values()].filter((entry) => entry.scheduled != null && entry.running == null)
+        const jobs = [...this.entries.values()]
+          .filter((entry) => entry.scheduled != null && entry.running == null)
+          .slice(0, PROJECTION_CONCURRENCY)
         const changed = await Promise.all(jobs.map((entry) => this.runEntry(entry)))
         publish = publish || changed.some(Boolean)
       }
@@ -1203,7 +1246,7 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
 }
 
 const summaryByContent = new Map<string, SessionEvalSummary>()
-const projectionCache = new SessionEvalProjectionCache(buildSummaryAttempt)
+const projectionCache = new SessionEvalProjectionCache(buildSummaryAttempt, () => {}, randomUUID(), false)
 const OBSERVER_RECOVERY_TIMEOUT_MS = 10_000
 
 async function awaitObservableInputs(id: string, path: string): Promise<void> {
@@ -1212,6 +1255,7 @@ async function awaitObservableInputs(id: string, path: string): Promise<void> {
 }
 
 export function setSessionEvalProjectionNotify(notify: () => void): void { projectionCache.setNotify(notify) }
+export function setSessionEvalProjectionWarmup(enabled: boolean): void { projectionCache.setPrecompute(enabled) }
 export function sessionEvalProjections(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
   return projectionCache.snapshot(sessions)
 }

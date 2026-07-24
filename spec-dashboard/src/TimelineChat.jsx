@@ -5,7 +5,6 @@ import SessionMessages from './SessionMessages.jsx'
 import { isMessageStreamSession } from './messageStream.js'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
-import { focusSinkPreservingSelection } from './focus.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -35,7 +34,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
-  const inputSelectionRef = useRef({ start: 0, end: 0 })
+  const inputSelectionRef = useRef({ start: 0, end: 0, direction: 'none' })
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -58,26 +57,54 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     inputSelectionRef.current = {
       start: inputRef.current.selectionStart ?? draft.length,
       end: inputRef.current.selectionEnd ?? draft.length,
+      direction: inputRef.current.selectionDirection || 'none',
     }
   }
+  const focusComposer = () => {
+    const input = inputRef.current
+    if (!input?.isConnected || input.disabled) return false
+    const { start, end, direction } = inputSelectionRef.current
+    input.focus({ preventScroll: true })
+    input.setSelectionRange(
+      Math.min(start, input.value.length),
+      Math.min(end, input.value.length),
+      direction,
+    )
+    return document.activeElement === input
+  }
+  const selectionIsInTimeline = (selection) => {
+    const timeline = scrollRef.current
+    return !!(timeline && selection && !selection.isCollapsed
+      && (timeline.contains(selection.anchorNode) || timeline.contains(selection.focusNode)))
+  }
   const returnComposerFocus = (e) => {
-    if (e.button === 0) focusSinkPreservingSelection(inputRef.current, inputSelectionRef.current)
-  }
-  // Focusing a textarea while an external document Range is restored leaves Chromium's default insertion
-  // path inert: keydown/keypress fire, but beforeinput/input do not. Insert exactly the first printable key,
-  // clear the copied Range, then ordinary textarea input resumes for every following key.
-  const typeAfterTimelineSelection = (e) => {
+    if (e.button !== 0) return
     const selection = window.getSelection?.()
-    if (!selection || selection.isCollapsed || e.nativeEvent?.isComposing || e.key.length !== 1
-      || e.metaKey || e.ctrlKey || e.altKey) return
-    e.preventDefault()
-    const el = e.currentTarget
-    const { start, end } = inputSelectionRef.current
-    el.setRangeText(e.key, start, end, 'end')
-    setDraft(el.value)
-    inputSelectionRef.current = { start: start + e.key.length, end: start + e.key.length }
-    selection.removeAllRanges()
+    if (selectionIsInTimeline(selection)) return
+    focusComposer()
   }
+  useEffect(() => {
+    if (!active) return undefined
+    const onKeyDown = (e) => {
+      const selection = window.getSelection?.()
+      if (!selectionIsInTimeline(selection)) return
+      if (['Alt', 'Control', 'Meta', 'Shift'].includes(e.key)) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') return
+
+      selection.removeAllRanges()
+      if (!focusComposer()) return
+
+      // Chromium binds Backspace's default action to the old BODY target even after focus changes during
+      // capture. Its own delete command supplies that one missed native edit; every other key continues
+      // through the same real key event now that the textarea is authoritative again.
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        document.execCommand('delete')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [active])
 
   const send = async () => {
     const text = draft.trim()
@@ -179,7 +206,6 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={typeAfterTimelineSelection}
           />
           <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
         </div>

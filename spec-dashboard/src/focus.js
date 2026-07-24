@@ -47,26 +47,6 @@ export function returnFocus() {
   })
 }
 
-// A selectable region must accept the native pointer gesture, but its surface still owns keyboard focus.
-// Focus the exact local sink after mouseup, then restore the document ranges that focus() would otherwise
-// collapse. The sink handles the first printable key specially while that external selection remains.
-export function focusSinkPreservingSelection(sink, inputSelection = null) {
-  if (!focusableNow(sink)) return false
-  const selection = window.getSelection?.()
-  const ranges = selection && !selection.isCollapsed
-    ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
-    : []
-  sink.focus({ preventScroll: true })
-  if (inputSelection && typeof sink.setSelectionRange === 'function') {
-    sink.setSelectionRange(inputSelection.start, inputSelection.end)
-  }
-  if (ranges.length && selection) {
-    selection.removeAllRanges()
-    for (const range of ranges) selection.addRange(range)
-  }
-  return document.activeElement === sink
-}
-
 // The acquisition-side twin of returnFocus: INERT CHROME NEVER TAKES FOCUS, so there is nothing to give
 // back. Attached as a capture-phase mousedown handler on a surface whose focus rests on its sink (the
 // session console's panel, a context menu): a press on anything that is not itself an input surface is

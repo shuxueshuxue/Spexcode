@@ -99,9 +99,20 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     term.loadAddon(fit)
     term.open(hostRef.current)
     try { fit.fit() } catch { /* the first measurable layout pass retries below */ }
-    // Browsers do not expose Shift+Enter as a distinct terminal byte by default. Encode the one modified
-    // Enter sequence accepted by Codex and Claude in a true tmux client, while leaving IME confirmation alone.
+    const helper = hostRef.current?.querySelector('.xterm-helper-textarea')
+    const clearCommittedText = (event) => {
+      if (event.inputType === 'insertText' && !event.isComposing) helper.value = ''
+    }
+    helper?.addEventListener('input', clearCommittedText)
+    // Printable text must come from the browser's text event, not xterm's physical-key mapping on keydown:
+    // under a Chinese IME the Comma key is physical `,` while the browser commits `，` through keypress/input.
+    // Returning false here stops xterm's eager keydown handling without cancelling that native DOM event.
+    // Browsers do not expose Shift+Enter as a distinct terminal byte by default, so encode that one modified
+    // Enter sequence while leaving IME confirmation alone.
     term.attachCustomKeyEventHandler((event) => {
+      const browserTextKey = event.type === 'keydown' && event.key.length === 1
+        && !event.ctrlKey && !event.altKey && !event.metaKey
+      if (browserTextKey) return false
       const shiftEnter = event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey
       if (!shiftEnter || event.isComposing || event.keyCode === 229) return true
       event.preventDefault()
@@ -315,6 +326,7 @@ export default function SessionTerm({ sessionId, active = true, focused = active
       window.removeEventListener('resize', measureAndRequest)
       for (const handler of motionModeHandlers) handler.dispose()
       for (const handler of frameSyncHandlers) handler.dispose()
+      helper?.removeEventListener('input', clearCommittedText)
       inputSub.dispose()
       unsubscribeFont()
       sock.close()   // intentional close → the resilient socket stops reopening for good

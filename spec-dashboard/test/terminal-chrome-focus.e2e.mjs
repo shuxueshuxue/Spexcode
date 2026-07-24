@@ -175,7 +175,8 @@ try {
   await context.close()
   context = null
   await video.saveAs(join(OUT, 'terminal-chrome-focus.webm'))
-  writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
+  const timelineEvents = events.map(({ at, step }) => ({ at, step }))
+  writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events: timelineEvents }, null, 2))
   writeFileSync(join(OUT, 'result.json'), JSON.stringify({ scratch, events, failures }, null, 2))
   console.log(JSON.stringify({ ok: failures.length === 0, failures, video: join(OUT, 'terminal-chrome-focus.webm'), result: join(OUT, 'result.json') }))
   if (failures.length) process.exitCode = 1

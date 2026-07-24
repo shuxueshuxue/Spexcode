@@ -30,7 +30,11 @@ console that legitimately takes focus — the search palette, a modal — return
 ([[focus-return]] owns that boundary), so leaving any pop lands you typing again, never on dead chrome.
 
 xterm owns ordinary keyboard input and its hidden textarea owns browser IME composition; SpexCode does not
-translate DOM keydowns into a second vocabulary. The pane also **never moves while you type**: xterm parks
+translate DOM keydowns into a second vocabulary. Unmodified printable keys complete through the browser's
+native text events instead of xterm eagerly translating their physical key code on `keydown`; the IME's
+committed text therefore wins when the same comma or period key means `，` or `。`. Once xterm publishes an
+ordinary `insertText`, its terminal-only helper value is cleared; sent keystrokes never accumulate invisibly
+and displace the next composition. The pane also **never moves while you type**: xterm parks
 that textarea at the cursor cell and widens it to the composition string, so at the rightmost columns the
 focused box pokes past the pane edge — and the browser's caret-reveal will drag ANY scrollable ancestor
 sideways to chase it, overflow:hidden included. The console's terminal chrome is therefore `overflow: clip`

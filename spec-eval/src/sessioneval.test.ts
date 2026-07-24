@@ -596,6 +596,22 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
   assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
 })
 
+test('a demand enqueued in the batch-finally gap is not lost', async () => {
+  let demand!: Promise<string>
+  let cache!: SessionEvalProjectionCache
+  cache = new SessionEvalProjectionCache(async (id) => {
+    if (id === 's1') {
+      // Queue the demand from the same turn that resolves the only summary. Depending on promise reaction
+      // ordering this lands between the batch body resolving and its finally callback, the lost-wakeup gap.
+      queueMicrotask(() => { demand = cache.demand('s2', '/wt/s2', async () => 'settled') })
+    }
+    return { kind: 'stable', revision: `r-${id}`, summary: summary(1) }
+  }, () => {}, 'epoch')
+  cache.snapshot([{ id: 's1', path: '/wt/s1', liveness: 'online' }])
+  await cache.idle()
+  assert.equal(await demand, 'settled', 'the gap demand must wake a new or current batch')
+})
+
 test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
   const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))

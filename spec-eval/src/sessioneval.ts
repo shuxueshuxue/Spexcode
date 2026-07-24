@@ -1222,11 +1222,12 @@ export class SessionEvalProjectionCache {
 
   private startBatch(): void {
     if (this.batch) return
-    const hasScheduled = () => [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
-    if (!hasScheduled() && !this.demandQueue.length) return
+    const hasPending = () => this.demandQueue.length > 0
+      || [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
+    if (!hasPending()) return
     this.batch = (async () => {
       let publish = false
-      while (hasScheduled() || this.demandQueue.length) {
+      while (hasPending()) {
         const demand = this.demandQueue.shift()
         if (demand) {
           try { demand.resolve(await demand.run()) }
@@ -1242,7 +1243,7 @@ export class SessionEvalProjectionCache {
       if (publish) this.notify()
     })().finally(() => {
       this.batch = null
-      if (hasScheduled()) this.startBatch()
+      if (hasPending()) this.startBatch()
     })
   }
 

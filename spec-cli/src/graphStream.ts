@@ -443,7 +443,13 @@ function registryWatcherFailed(): void {
 }
 
 async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Promise<void> {
-  if (registryWatcher) { await reconcileWorktrees(forceSessionId); return }
+  // The registry watcher already reconciles add/remove events. Re-scanning every ordinary graph/evals read
+  // turns a large worktree registry into an artificial request latency floor; only a scoped read may demand
+  // one target after startup, while the unscoped hot path reuses the attached live watchers.
+  if (registryWatcher) {
+    if (forceSessionId) await reconcileWorktrees(forceSessionId)
+    return
+  }
   if (isDisabled('worktrees')) {
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
     return

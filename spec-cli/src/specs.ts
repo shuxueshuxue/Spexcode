@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftForAsync, fileDiffAt } from './git.js'
 import { parseCodeEntry, parseRelation } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
@@ -256,7 +256,7 @@ export async function loadSpecs(root: string = ROOT) {
     const driftFiles = []
     for (const f of code) {
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: f, behind: driftFor(didx, S, f) }
+      const d = { file: f, behind: await driftForAsync(didx, S, f) }
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -268,7 +268,7 @@ export async function loadSpecs(root: string = ROOT) {
     for (const e of relatedRel.entries) {
       if (e.selectors.length) continue
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: e.path, behind: driftFor(didx, S, e.path) }
+      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path) }
       if (d.behind > 0) relatedDriftFiles.push(d)
     }
     const fmStatus = str(r.fm.status, '') || null

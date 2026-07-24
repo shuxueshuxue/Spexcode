@@ -550,6 +550,34 @@ export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: strin
   return commits
 }
 
+async function commitReachableAsync(idx: DriftIndex, sha: string): Promise<boolean> {
+  if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
+  const hit = idx.lazy.reachable.get(sha)
+  if (hit !== undefined) return hit
+  const reachable = (await gitTry(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD'])).ok
+  idx.lazy.reachable.set(sha, reachable)
+  return reachable
+}
+
+async function pathCommitsSinceAsync(idx: DriftIndex, sinceHash: string, path: string): Promise<string[] | null> {
+  if (!idx.lazy) return pathCommitsSince(idx, sinceHash, path)
+  if (!await commitReachableAsync(idx, sinceHash)) return null
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.rawWindows.get(key)
+  if (hit) return hit
+  const commits = (await gitA(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path]))
+    .split('\n').map((s) => s.trim()).filter(Boolean)
+  idx.lazy.rawWindows.set(key, commits)
+  return commits
+}
+
+// Prime the lazy representation through async Git before a synchronous freshness verdict reads it. The
+// verdict functions remain pure/cache-backed while production HTTP keeps accepting work during child I/O.
+export async function primeLazyPathWindows(idx: DriftIndex, sinceHash: string, paths: string[]): Promise<void> {
+  if (!idx.lazy || !await commitReachableAsync(idx, sinceHash)) return
+  for (const path of new Set(paths)) await pathCommitsSinceAsync(idx, sinceHash, path)
+}
+
 // the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,
 // so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured; an ack counts
 // only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that
@@ -600,6 +628,20 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
     n++
   }
   return n
+}
+
+export async function driftForAsync(idx: DriftIndex, sinceHash: string, path: string): Promise<number> {
+  if (!idx.lazy) return driftFor(idx, sinceHash, path)
+  if (!sinceHash) return 0
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.counts.get(key)
+  if (hit !== undefined) return hit
+  const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+  const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+  const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+  const count = Number((await gitA(args)).trim()) || 0
+  idx.lazy.counts.set(key, count)
+  return count
 }
 
 // the paths git is about to commit (index vs HEAD), scoping the pre-commit drift gate to this commit's files.

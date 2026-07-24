@@ -27,7 +27,7 @@ const started = Date.now()
 const events = [{
   atMs: 0,
   kind: 'narrate',
-  label: '▶ timeline-interaction-refresh-stability · TimelineChat hands native selection back to native composer editing',
+  label: '▶ timeline-interaction-refresh-stability · TimelineChat keeps native selection visible while the composer stays focused',
 }]
 const results = []
 const mark = (viewport, step) => events.push({
@@ -170,7 +170,7 @@ async function verifyEditingHandoff(viewport, inputHandle, note) {
       end: input.selectionEnd,
       selection: getSelection()?.toString() || '',
     }), inputHandle)
-    const pass = selected.length > 0 && !before.focus && before.caret === 4 && before.end === 4
+    const pass = selected.length > 0 && before.focus && before.caret === before.end
       && after.focus && after.value === keyCase.value && after.caret === keyCase.caret
       && after.end === keyCase.caret && after.selection.length === 0
     cases.push({ key: keyCase.name, pass, before, after })
@@ -208,7 +208,7 @@ async function verifySecondConversationSink(viewport) {
   await page.keyboard.type('Z')
   const afterType = await input.inputValue()
   const afterFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
-  const pass = sinks === 1 && !beforeType.focus && selected.length > 0
+  const pass = sinks === 1 && beforeType.focus && selected.length > 0
     && afterFocus && afterType === `${draft}Z`
   await showReadout(viewport, 'second warm layer owns sink + typing', {
     ...beforeType, selection: selected, typed: afterType === `${draft}Z`, sinks, pass,
@@ -251,11 +251,11 @@ async function runViewport(name, viewport) {
   const note = page.locator('.m-ev-note:visible').last()
   const selectedBefore = await dragSelectNote(note)
   const afterDrag = await readInteraction(inputHandle, draft)
-  const dragPass = selectedBefore.length > 0 && !afterDrag.focus && afterDrag.draftKept
-  await showReadout(name, 'pointer drag leaves document selection authoritative', {
+  const dragPass = selectedBefore.length > 0 && afterDrag.focus && afterDrag.draftKept
+  await showReadout(name, 'pointer drag keeps the exact composer focused', {
     ...afterDrag, selection: selectedBefore, typed: 'not yet', pass: dragPass,
   })
-  mark(name, `drag selection owns document focus (${dragPass ? 'pass' : 'fail'})`)
+  mark(name, `drag selection + exact composer focus (${dragPass ? 'pass' : 'fail'})`)
 
   const selectionToken = `SELECT-${phase}-${name}-${Date.now()}`
   await sendBackground(`${selectionToken}: reply immediately with another short complete note and remain available.`)
@@ -267,11 +267,11 @@ async function runViewport(name, viewport) {
   const selectionPass = selectedBefore.length > 0
     && selectionReadings.every((reading) => reading.selection === selectedBefore)
     && selectedAfter === selectedBefore
-    && selectionReadings.every((reading) => !reading.focus && reading.draftKept)
+    && selectionReadings.every((reading) => reading.focus && reading.draftKept)
   await showReadout(name, 'selection after refresh', {
     ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: selectionPass,
   })
-  mark(name, `selection after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
+  mark(name, `selection + composer focus after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
   await page.waitForTimeout(1_200)
 
   await page.keyboard.press('Control+c')
@@ -304,7 +304,7 @@ async function runViewport(name, viewport) {
   const doubleClickFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
   await page.keyboard.press('Control+c')
   const doubleCopied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
-  const doubleClickPass = !doubleClickFocus && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
+  const doubleClickPass = doubleClickFocus && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
   await showReadout(name, 'double-click + copy', {
     ...await readInteraction(inputHandle, clickDraft), selection: doubleClickSelection, pass: doubleClickPass,
   })
@@ -332,7 +332,7 @@ try {
   } else {
     for (const result of results) {
       assert.equal(result.focusPass, true, `${result.viewport} focus/draft failed`)
-      assert.equal(result.dragPass, true, `${result.viewport} drag did not keep document selection authoritative`)
+      assert.equal(result.dragPass, true, `${result.viewport} drag did not keep the exact composer focused`)
       assert.equal(result.selectionPass, true, `${result.viewport} selection refresh failed`)
       assert.equal(result.keyMatrix.pass, true, `${result.viewport} selection-to-composer key matrix failed`)
       assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)

@@ -23,6 +23,9 @@ const EDITING_KEYS = new Set([
   'Backspace', 'Delete', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
   'Home', 'End', 'PageUp', 'PageDown',
 ])
+// Mirrors @xterm/xterm 6 SelectionService: mousedown chooses the mode from event.detail and the
+// document mousemove for that same press extends the mode-specific anchor.
+const SelectionMode = Object.freeze({ NORMAL: 0, WORD: 1, LINE: 2 })
 
 const hasTimelineHighlight = () => typeof Highlight !== 'undefined'
   && typeof CSS !== 'undefined' && !!CSS.highlights
@@ -80,6 +83,28 @@ const wordRangeAtPoint = (timeline, clientX, clientY) => {
   return range
 }
 
+const lineRangeAtPoint = (timeline, clientX, clientY) => {
+  const point = rangeAtPoint(timeline, clientX, clientY)
+  const node = point?.startContainer
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement
+  const line = element?.closest('.m-ev-note, .m-ev-text')
+  if (!line || !timeline.contains(line)) return null
+  const range = document.createRange()
+  range.selectNodeContents(line)
+  return range
+}
+
+const rangeFromAnchorToFocus = (anchor, focus, mode) => {
+  const forward = anchor.compareBoundaryPoints(Range.START_TO_START, focus) <= 0
+  const start = forward ? anchor : focus
+  const end = forward ? focus : anchor
+  const range = document.createRange()
+  range.setStart(start.startContainer, start.startOffset)
+  if (mode === SelectionMode.NORMAL) range.setEnd(end.startContainer, end.startOffset)
+  else range.setEnd(end.endContainer, end.endOffset)
+  return range
+}
+
 // @@@ the terminal-free conversation body ([[session-timeline]]) — the phone's session detail
 // ([[mobile-ui]]). Without a pane to read, the persisted timeline IS the interaction record: every
 // authored status transition (with the full declaration note — the agent's reply) and every delivered
@@ -128,7 +153,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   }
 
   // @@@ The composer is a continuous sink. Conversation selection is painted by CSS Custom Highlight,
-  // so no document Selection ever competes with the textarea's real caret.
+  // so no document Selection ever competes with the textarea's real caret. Like xterm's
+  // SelectionService, click detail chooses the mode on mousedown; there is no late dblclick override.
   const beginTimelineSelection = (e) => {
     const timeline = scrollRef.current
     const target = e.target
@@ -141,24 +167,22 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       if (e.clientX - rect.left - timeline.clientLeft >= timeline.clientWidth
         || e.clientY - rect.top - timeline.clientTop >= timeline.clientHeight) return
     }
-    const anchor = rangeAtPoint(timeline, e.clientX, e.clientY)
+    const mode = e.detail === 1 ? SelectionMode.NORMAL
+      : e.detail === 2 ? SelectionMode.WORD
+        : e.detail === 3 ? SelectionMode.LINE : null
+    if (mode === null) return
+    const anchor = mode === SelectionMode.WORD
+      ? wordRangeAtPoint(timeline, e.clientX, e.clientY)
+      : mode === SelectionMode.LINE
+        ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
+        : rangeAtPoint(timeline, e.clientX, e.clientY)
     if (!anchor) return
     e.preventDefault()
-    selectionDragRef.current = { anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
-  }
-
-  const selectTimelineWord = (e) => {
-    const target = e.target
-    const timeline = scrollRef.current
-    if (e.button !== 0 || !timeline || !(target instanceof Element)) return
-    const control = target.closest(SELECTION_CONTROLS)
-    if (control && timeline.contains(control)) return
-    const range = wordRangeAtPoint(timeline, e.clientX, e.clientY)
-    if (!range) return
-    e.preventDefault()
-    selectionDragRef.current = null
-    timelineRangeRef.current = range
-    setTimelineHighlight(range)
+    selectionDragRef.current = { mode, anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
+    if (mode !== SelectionMode.NORMAL) {
+      timelineRangeRef.current = anchor
+      setTimelineHighlight(anchor)
+    }
   }
 
   useEffect(() => {
@@ -168,15 +192,14 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       const timeline = scrollRef.current
       if (!drag || !timeline) return
       e.preventDefault()
-      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return
-      const focus = rangeAtPoint(timeline, e.clientX, e.clientY)
+      if (drag.mode === SelectionMode.NORMAL && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return
+      const focus = drag.mode === SelectionMode.WORD
+        ? wordRangeAtPoint(timeline, e.clientX, e.clientY)
+        : drag.mode === SelectionMode.LINE
+          ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
+          : rangeAtPoint(timeline, e.clientX, e.clientY)
       if (!focus || !drag.anchor.startContainer.isConnected) return
-      const range = document.createRange()
-      const forward = drag.anchor.compareBoundaryPoints(Range.START_TO_START, focus) <= 0
-      const start = forward ? drag.anchor : focus
-      const end = forward ? focus : drag.anchor
-      range.setStart(start.startContainer, start.startOffset)
-      range.setEnd(end.startContainer, end.startOffset)
+      const range = rangeFromAnchorToFocus(drag.anchor, focus, drag.mode)
       timelineRangeRef.current = range
       setTimelineHighlight(range)
     }
@@ -301,8 +324,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
         </div>
       )}
       <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
-        onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}
-        onDoubleClick={selectTimelineWord}>
+        onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>

@@ -98,13 +98,18 @@ The two planes, made native to touch:
   highlight. The active TimelineChat's composer is its **continuous sink**: a plain press or drag in
   conversation text is prevented from moving DOM focus, so that exact textarea remains
   `document.activeElement` from mousedown through every move and mouseup. Because suppressing the press
-  also suppresses the browser's native selection start, one coordinate-driven selection mechanism turns
-  the press point into an anchor Range, extends a `CSS.highlights` entry from later pointer coordinates only
-  after real movement, and resolves a double-click point to its word boundary. A plain click therefore
-  leaves no highlight, while a drag or double-click leaves ordinary rendered conversation text painted by
-  `::highlight(timeline-sel)` and copyable without ever creating a `document Selection`. Buttons, links,
-  summaries, roles, and editable controls are outside the driver; their native click actions still land
-  while inert chrome keeps them from stealing the sink.
+  also suppresses the browser's native selection start, the coordinate driver follows xterm.js
+  `SelectionService`'s one interaction model: **mousedown** maps `MouseEvent.detail` to NORMAL (one click),
+  WORD (two), or LINE (three) and establishes that mode's anchor immediately; there is no independent
+  double-click or triple-click handler after the gesture. Document mousemove is that same gesture's
+  `_selectTo`: NORMAL extends caret point to caret point after real movement, WORD snaps both ends to the
+  anchor and focus words, and LINE snaps to whole-note boundaries in either direction; mouseup only freezes
+  the resulting Range. A plain click therefore leaves no highlight, a double-click selects one word, a
+  double-click whose second press stays down and drags grows continuously from the first word through the
+  landing word, and a triple-click selects the complete note. Every result is ordinary rendered conversation
+  text painted by `::highlight(timeline-sel)` and copyable without ever creating a `document Selection`.
+  Buttons, links, summaries, roles, and editable controls are outside the driver; their native click actions
+  still land while inert chrome keeps them from stealing the sink.
 
   The composer remains a real focused textarea and its native caret is never re-armed or handed off:
   printable text, Backspace, Delete, arrows, Enter, paste, and IME input land immediately through the

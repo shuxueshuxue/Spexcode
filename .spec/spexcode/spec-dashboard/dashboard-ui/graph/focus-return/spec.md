@@ -39,7 +39,10 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   (an editable field, the xterm screen, or a scrollbar gutter) is **prevented from moving focus at all** — the
   click still lands and acts. Selectable conversation text is interaction content, but not an exception to
   this rule: its surface keeps the sink continuously focused and translates pointer coordinates into a CSS Custom
-  Highlight Range, never a document Selection. Drag and double-click selection therefore remain visible and
+  Highlight Range, never a document Selection. That driver ports xterm.js `SelectionService`'s mousedown
+  `MouseEvent.detail` modes rather than layering late click handlers over a drag: NORMAL extends by character,
+  WORD keeps a double-click-and-drag snapped from its anchor word through its landing word, and LINE selects a
+  whole note. Drag, double-click, double-click-and-drag, and triple-click selection therefore remain visible and
   copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles, and editable
   controls are outside that driver, while their click actions still work under the same inert press. A surface or
   menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the

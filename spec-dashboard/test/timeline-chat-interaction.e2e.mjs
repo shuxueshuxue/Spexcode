@@ -155,6 +155,169 @@ async function dragSelectNote(inputHandle, note = page.locator('.m-ev-note:visib
   }
 }
 
+async function readTimelineSelection(inputHandle) {
+  return page.evaluate((input) => {
+    const paint = CSS.highlights?.get('timeline-sel')
+    const range = paint ? Array.from(paint)[0] : null
+    const text = range?.toString() || ''
+    const words = typeof Intl.Segmenter === 'function'
+      ? [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text)]
+        .filter((segment) => segment.isWordLike).length
+      : (text.match(/[\p{L}\p{M}\p{N}_]+/gu) || []).length
+    return {
+      text,
+      words,
+      highlight: !!range && !range.collapsed,
+      native: getSelection()?.toString() || '',
+      focus: document.activeElement === input,
+    }
+  }, inputHandle)
+}
+
+async function noteSelectionFixture(note) {
+  await note.scrollIntoViewIfNeeded()
+  return note.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let node = walker.nextNode()
+    while (node && !node.data.trim()) node = walker.nextNode()
+    if (!node) throw new Error('note has no selectable text node')
+    const segments = typeof Intl.Segmenter === 'function'
+      ? [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(node.data)]
+        .filter((segment) => segment.isWordLike)
+      : [...node.data.matchAll(/[\p{L}\p{M}\p{N}_]+/gu)]
+        .map((match) => ({ segment: match[0], index: match.index }))
+    if (segments.length < 4) throw new Error(`note needs four words for WORD drag proof: ${node.data}`)
+
+    const startWord = segments[0]
+    const endWord = segments[Math.min(3, segments.length - 1)]
+    const singleWord = segments[Math.min(1, segments.length - 1)]
+    const pointIn = (segment, ratio = 0.5) => {
+      const charIndex = segment.index + Math.min(
+        segment.segment.length - 1,
+        Math.max(0, Math.floor(segment.segment.length * ratio)),
+      )
+      const range = document.createRange()
+      range.setStart(node, charIndex)
+      range.setEnd(node, charIndex + 1)
+      const rect = [...range.getClientRects()].find((candidate) => candidate.width && candidate.height)
+      if (!rect) throw new Error(`word has no client rect: ${segment.segment}`)
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }
+    const charStart = pointIn(startWord, 0.25)
+    const charEnd = pointIn(endWord, 0.6)
+    const startCaret = document.caretRangeFromPoint(charStart.x, charStart.y)
+    const endCaret = document.caretRangeFromPoint(charEnd.x, charEnd.y)
+    if (!startCaret || !endCaret) throw new Error('browser did not resolve character fixture points')
+    const charRange = document.createRange()
+    const forward = startCaret.compareBoundaryPoints(Range.START_TO_START, endCaret) <= 0
+    const charRangeStart = forward ? startCaret : endCaret
+    const charRangeEnd = forward ? endCaret : startCaret
+    charRange.setStart(charRangeStart.startContainer, charRangeStart.startOffset)
+    charRange.setEnd(charRangeEnd.startContainer, charRangeEnd.startOffset)
+    const lineRange = document.createRange()
+    lineRange.selectNodeContents(element)
+    return {
+      charStart,
+      charEnd,
+      charExpected: charRange.toString(),
+      wordStart: pointIn(startWord),
+      wordEnd: pointIn(endWord),
+      wordExpected: node.data.slice(startWord.index, endWord.index + endWord.segment.length),
+      wordEndText: endWord.segment,
+      singlePoint: pointIn(singleWord),
+      singleExpected: singleWord.segment,
+      linePoint: pointIn(segments[Math.min(2, segments.length - 1)]),
+      lineExpected: lineRange.toString(),
+    }
+  })
+}
+
+async function moveDrag(start, end, clickCount = 1) {
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down({ clickCount })
+  for (let step = 1; step <= 10; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / 10,
+      start.y + ((end.y - start.y) * step) / 10,
+    )
+  }
+  await page.mouse.up({ clickCount })
+}
+
+async function clickWithDetail(point, detail) {
+  await page.mouse.click(point.x, point.y, { clickCount: detail })
+}
+
+async function verifySelectionModes(viewport, inputHandle, note) {
+  const fixture = await noteSelectionFixture(note)
+
+  await moveDrag(fixture.charStart, fixture.charEnd)
+  const normal = await readTimelineSelection(inputHandle)
+  normal.pass = normal.focus && normal.native === '' && normal.text === fixture.charExpected
+    && normal.text.length > 1
+  await showReadout(viewport, 'NORMAL character range', {
+    focus: normal.focus, selection: normal.text, typed: `${normal.text.length} chars`, pass: normal.pass,
+  })
+  mark(viewport, `NORMAL exact character range (${normal.pass ? 'pass' : 'fail'}, ${normal.text.length} chars)`)
+  await page.waitForTimeout(900)
+
+  await clickWithDetail(fixture.singlePoint, 1)
+  await clickWithDetail(fixture.singlePoint, 2)
+  const word = await readTimelineSelection(inputHandle)
+  word.pass = word.focus && word.native === '' && word.text === fixture.singleExpected && word.words === 1
+  await showReadout(viewport, 'WORD stationary double-click', {
+    focus: word.focus, selection: word.text, typed: `${word.words} word`, pass: word.pass,
+  })
+  mark(viewport, `WORD exact stationary word (${word.pass ? 'pass' : 'fail'}, ${word.words} word)`)
+  await page.waitForTimeout(900)
+
+  await clickWithDetail(fixture.wordStart, 1)
+  await moveDrag(fixture.wordStart, fixture.wordEnd, 2)
+  const wordDrag = await readTimelineSelection(inputHandle)
+  wordDrag.pass = wordDrag.focus && wordDrag.native === '' && wordDrag.text === fixture.wordExpected
+    && wordDrag.words >= 4
+  wordDrag.collapsedToLandingWord = wordDrag.text === fixture.wordEndText && wordDrag.words === 1
+  await page.keyboard.press('Control+c')
+  wordDrag.copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
+  wordDrag.copyPass = wordDrag.copied === wordDrag.text
+  await showReadout(viewport, 'WORD double-click then drag', {
+    focus: wordDrag.focus, selection: wordDrag.text,
+    typed: `${wordDrag.words} words · copy=${wordDrag.copyPass}`, pass: wordDrag.pass && wordDrag.copyPass,
+  })
+  mark(viewport, `WORD continuous multi-word range (${wordDrag.pass ? 'pass' : 'fail'}, ${wordDrag.words} words)`)
+  await page.waitForTimeout(1_200)
+
+  await clickWithDetail(fixture.linePoint, 1)
+  await clickWithDetail(fixture.linePoint, 2)
+  await clickWithDetail(fixture.linePoint, 3)
+  const line = await readTimelineSelection(inputHandle)
+  line.pass = line.focus && line.native === '' && line.text === fixture.lineExpected
+  await showReadout(viewport, 'LINE triple-click whole note', {
+    focus: line.focus, selection: line.text, typed: `${line.text.length} chars`, pass: line.pass,
+  })
+  mark(viewport, `LINE exact whole note (${line.pass ? 'pass' : 'fail'}, ${line.text.length} chars)`)
+  await page.waitForTimeout(1_000)
+
+  await page.keyboard.press('Escape')
+  const afterEscape = await readTimelineSelection(inputHandle)
+  afterEscape.pass = afterEscape.focus && afterEscape.native === '' && !afterEscape.highlight && afterEscape.text === ''
+  await showReadout(viewport, 'Escape clears custom highlight', {
+    focus: afterEscape.focus, selection: afterEscape.text, typed: 'n/a', pass: afterEscape.pass,
+  })
+  mark(viewport, `Escape clears highlight only (${afterEscape.pass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(800)
+
+  return {
+    pass: normal.pass && word.pass && wordDrag.pass && wordDrag.copyPass && line.pass && afterEscape.pass,
+    fixture,
+    normal,
+    word,
+    wordDrag,
+    line,
+    afterEscape,
+  }
+}
+
 async function activeSinkCount() {
   return page.locator('.m-input[data-focus-sink]').count()
 }
@@ -386,13 +549,16 @@ async function runViewport(name, viewport) {
   const keyMatrix = await verifyEditingHandoff(name, inputHandle, note)
   const typedDraft = keyCases.at(-1).value
 
+  const selectionModes = await verifySelectionModes(name, inputHandle, note)
+
   await note.click({ position: { x: 16, y: 12 } })
   const afterClick = await readInteraction(inputHandle, typedDraft)
   const clickSelection = await page.evaluate(() => getSelection()?.toString() || '')
   await page.keyboard.type('Q')
   const clickDraft = 'abcdXQef'
   const clickTypingPass = await input.inputValue() === clickDraft
-  const clickPass = afterClick.focus && clickSelection.length === 0 && clickTypingPass
+  const clickPass = afterClick.focus && clickSelection.length === 0
+    && !afterClick.highlight && afterClick.highlightText === '' && clickTypingPass
   await showReadout(name, 'plain click returns composer', {
     ...afterClick, selection: clickSelection, typed: clickTypingPass, pass: clickPass,
   })
@@ -422,7 +588,7 @@ async function runViewport(name, viewport) {
   const secondSink = name === 'desktop' ? await verifySecondConversationSink(name) : null
   const result = {
     viewport: name, focusPass, gestureFocusPass, gestureFocusSamples: firstDrag.focusSamples,
-    dragPass, selectionPass, copyPass, keyMatrix, clickPass, doubleClickPass, composerPress, detailsToggle,
+    dragPass, selectionPass, copyPass, keyMatrix, selectionModes, clickPass, doubleClickPass, composerPress, detailsToggle,
     secondSink, selectedBefore, selectedAfter, nativeSelectionBefore: firstDrag.selection,
     highlightBefore: firstDrag.highlight, copied, doubleCopied,
   }
@@ -435,8 +601,11 @@ try {
   await runViewport('mobile', { width: 390, height: 844 })
   console.log(JSON.stringify({ phase, results }, null, 2))
   if (phase === 'A') {
-    assert.ok(results.every((result) => result.nativeSelectionBefore.length > 0),
-      `phase A never reproduced the native Selection theft: ${JSON.stringify(results)}`)
+    for (const result of results) {
+      assert.equal(result.selectionModes.wordDrag.collapsedToLandingWord, true,
+        `${result.viewport} did not reproduce the WORD drag collapse: ${JSON.stringify(result.selectionModes.wordDrag)}`)
+      assert.equal(result.selectionModes.wordDrag.native, '', `${result.viewport} unexpectedly created a native Selection`)
+    }
   } else {
     for (const result of results) {
       assert.equal(result.focusPass, true, `${result.viewport} focus/draft failed`)
@@ -446,6 +615,7 @@ try {
       assert.equal(result.nativeSelectionBefore, '', `${result.viewport} created a native document Selection`)
       assert.equal(result.highlightBefore.exists, true, `${result.viewport} did not create a CSS highlight`)
       assert.equal(result.keyMatrix.pass, true, `${result.viewport} selection-to-composer key matrix failed`)
+      assert.equal(result.selectionModes.pass, true, `${result.viewport} xterm selection mode matrix failed`)
       assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
       assert.equal(result.copyPass, true, `${result.viewport} copy failed`)
       assert.equal(result.doubleClickPass, true, `${result.viewport} double-click copy failed`)

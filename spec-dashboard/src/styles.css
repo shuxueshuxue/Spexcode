@@ -2109,9 +2109,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-ev-prompt summary { font-family: var(--mono); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
-.m-offline, .m-senderr { flex: none; padding: 6px 14px; font-size: var(--type-control); }
+.m-offline, .m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
 .m-senderr { color: var(--red); }
+.m-copy-status { color: var(--muted); }
+.m-copy-status.failed { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
 .m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {

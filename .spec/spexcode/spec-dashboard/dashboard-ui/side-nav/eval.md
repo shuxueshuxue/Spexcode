@@ -17,6 +17,19 @@ scenarios:
       one full-page redirect to `/projects`, where the global management page renders. Zero loss = the
       scoped rail, the URL, and the visible page never disagree while project management has one home.
     code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js]
+  - name: offline-switcher-is-inert
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the real multi-project gateway, open a still-running project's scoped dashboard while a
+      second catalog project is explicitly offline. Open the current-project chip and inspect both rows,
+      then press the offline row and read the pathname.
+    expected: >
+      The online row is visibly marked online and remains a native project link. The offline row remains
+      visible but is visibly marked offline, has `aria-disabled="true"`, no `href`, and no navigation
+      action; pressing it leaves the still-running project's pathname unchanged. The global All projects
+      row remains the available door to start the stopped backend. Zero loss = the switcher never sends a
+      user into a project scope whose backend is known to be stopped.
+    code: [spec-dashboard/src/SideBar.jsx]
   - name: resolved-identity-head
     tags: [frontend-e2e, desktop]
     description: >

@@ -653,6 +653,7 @@ export default {
     you: 'you',
     inputPlaceholder: 'message the agent…',
     send: 'send',
+    copy: 'copy',
     sendFailed: 'not delivered — the agent may be offline',
     offlineHint: 'agent offline — messages cannot be delivered until it is relaunched',
   },

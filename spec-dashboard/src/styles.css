@@ -2083,6 +2083,9 @@ a.scenario-count:hover { background: var(--panel2); }
   flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px;
   user-select: text; -webkit-user-select: text;
 }
+/* TimelineChat keeps the real composer caret focused while this browser-owned highlight paints a
+   conversation Range. It deliberately never creates a document Selection. */
+::highlight(timeline-sel) { background-color: #264f78; color: #f0f6fc; }
 .m-day { text-align: center; margin: 10px 0 6px; font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
 .m-ev { margin: 8px 0; }
 .m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: var(--type-control); }
@@ -2093,6 +2096,7 @@ a.scenario-count:hover { background: var(--panel2); }
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
   white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
 }
+.m-copy-note { display: block; margin-top: 8px; padding: 3px 7px; color: var(--blue); background: transparent; border: 1px solid var(--line); border-radius: 4px; font: inherit; cursor: pointer; }
 .m-ev-sent .m-ev-from { font-weight: var(--weight-bold); color: var(--blue); }
 .m-ev-text {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink);

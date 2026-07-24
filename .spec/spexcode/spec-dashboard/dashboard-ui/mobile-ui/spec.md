@@ -15,6 +15,8 @@ related:
   - spec-dashboard/src/focus.js
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/i18n/en.js
+  - spec-dashboard/src/i18n/zh.js
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
   - spec-dashboard/src/useIsMobile.js
 ---
@@ -92,29 +94,26 @@ The two planes, made native to touch:
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
-  through a note or message, refresh work neither remounts the conversation nor clears the browser
-  selection. The active TimelineChat's composer is its **continuous sink**: a plain press or drag in
+  through a note or message, refresh work neither remounts the conversation nor clears its custom
+  highlight. The active TimelineChat's composer is its **continuous sink**: a plain press or drag in
   conversation text is prevented from moving DOM focus, so that exact textarea remains
   `document.activeElement` from mousedown through every move and mouseup. Because suppressing the press
   also suppresses the browser's native selection start, one coordinate-driven selection mechanism turns
-  the press point into an anchor Range, extends the document Selection from later pointer coordinates only
+  the press point into an anchor Range, extends a `CSS.highlights` entry from later pointer coordinates only
   after real movement, and resolves a double-click point to its word boundary. A plain click therefore
-  leaves no Range, while a drag or double-click leaves ordinary rendered conversation text highlighted and
-  copyable without ever extinguishing the composer. Buttons, links, summaries, roles, and editable controls
-  are outside the driver; their native click actions still land while inert chrome keeps them from stealing
-  the sink.
+  leaves no highlight, while a drag or double-click leaves ordinary rendered conversation text painted by
+  `::highlight(timeline-sel)` and copyable without ever creating a `document Selection`. Buttons, links,
+  summaries, roles, and editable controls are outside the driver; their native click actions still land
+  while inert chrome keeps them from stealing the sink.
 
-  A non-collapsed conversation Range and the focused textarea can coexist, but Chromium withholds textarea
-  editing while that external Range survives. The first printable, editing, paste, or navigation key therefore
-  removes the Range in capture and re-arms the textarea's own selection before the unchanged native key reaches
-  the already-focused control; Copy is the exception and reads the highlighted conversation text. Chromium
-  reports a desynchronized zero textarea caret while the external Range lives, so the re-arm uses the textarea's
-  start/end captured at the selection gesture's mousedown, before that Range exists. Those two values preserve
-  both a collapsed caret and an existing textarea selection. A direct composer press clears any pending
-  conversation Range before the native textarea press sets its next selection, which becomes the next reliable
-  saved caret. There is no blur/refocus, saved/restored document Range, mouseup handoff, or synthetic edit
-  command: Backspace, Delete, arrows, Enter, paste, printable text, and IME all meet the same continuously
-  focused authoritative textarea.
+  The composer remains a real focused textarea and its native caret is never re-armed or handed off:
+  printable text, Backspace, Delete, arrows, Enter, paste, and IME input land immediately through the
+  unchanged native editing path even while a custom timeline highlight is visible. A document capture
+  listener owns only the `Ctrl/Cmd+C` exception, gated to a non-collapsed timeline Range and an empty
+  composer selection, and copies `range.toString()` with `navigator.clipboard.writeText`; a composer's
+  own non-collapsed selection wins. Escape, a new timeline gesture, or a composer press/first edit
+  deletes the custom highlight as visual cleanup, never by moving focus. If Custom Highlight is missing,
+  the surface degrades to its ordinary text/copy affordances without pretending a native selection is safe.
   The active TimelineChat alone declares that composer as its surface sink; warm hidden headless layers declare
   none, so two mounted conversations can never route input to the wrong draft.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.

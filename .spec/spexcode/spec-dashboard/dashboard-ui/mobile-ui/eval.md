@@ -92,31 +92,24 @@ scenarios:
       TimelineChat at a 390x844 phone viewport and a 1280x800 desktop viewport. In each viewport,
       focus the composer, type an unsent multi-word draft, and hold through a timeline poll plus a
       board refresh. Then pointer-drag across the headless agent's note, repeatedly sampling activeElement
-      between mousedown and mouseup, and keep the drag selection active while another refresh arrives. Copy the selected
-      text, then repeat the selection from a saved middle caret before pressing Backspace, Delete, ArrowLeft,
-      Enter, Ctrl+V, and a printable key without directly targeting the textarea. Repeat with a plain click
-      and a double-click. On desktop keep two headless sessions mounted, switch to the second, and repeat the
-      selection/edit handoff there. Record the complete two-viewport interaction as video.
+      between mousedown and mouseup, and keep the CSS Custom Highlight active while another refresh arrives.
+      Assert that `window.getSelection().toString()` stays empty, the `CSS.highlights` range remains present,
+      and the focused textarea accepts immediate typing. Copy the highlighted text, repeat with a double-click
+      word highlight, exercise a plain click, a composer press, Escape, and the details summary. On desktop keep
+      two headless sessions mounted and verify the second remains the sole active sink. Record both viewports as video.
     expected: |
       Every refresh leaves the composer as document.activeElement and preserves the complete unsent
       draft. The same exact composer remains active at mousedown, through every sampled pointer move, and
-      after mouseup; it never goes dark on BODY and is never refocused as cleanup. Note, sent-message, and reply copy is ordinary browser-selectable text: pointer drag and
-      double-click produce a non-empty Selection whose text matches the rendered conversation. A
-      refresh during that selection neither remounts TimelineChat nor clears or collapses the selection.
-      A real selection coexists with the continuously focused composer while it remains visible and copyable.
-      The first subsequent editing or navigation key clears that external Range before its unchanged native
-      event re-arms the composer selection saved before the Range existed and takes effect once through the
-      textarea's native editing path. This includes replacing an existing non-collapsed composer selection.
-      Backspace, Delete,
-      ArrowLeft, Enter, Ctrl+V, and printable input therefore match their no-external-selection results; the
-      textarea's DOM `selectionStart` agrees with the actual insertion/deletion point after every handoff. A
-      plain timeline click produces no Selection, leaves focus untouched, and its next key enters the draft.
-      Clicking the composer itself clears a pending conversation Range before its native caret placement, and
-      the next key edits there. Details
-      summaries still toggle, and double-click manually selects a non-empty word. Only the active TimelineChat exposes
-      `data-focus-sink`; with two warm desktop layers mounted, switching to the second makes its composer
-      the sole sink and input remains there, never on the hidden first draft. Phone and desktop satisfy
-      the same interaction contract because both mount the shared TimelineChat.
+      after mouseup; it never goes dark on BODY and is never refocused as cleanup. Pointer drag and double-click
+      paint a non-collapsed `CSS.highlights.get('timeline-sel')` Range whose text matches the rendered conversation,
+      while `window.getSelection().toString()` remains `''` throughout. A refresh during that highlight neither
+      remounts TimelineChat nor clears it. `Ctrl/Cmd+C` copies `range.toString()` through the capture listener;
+      a composer's own non-collapsed selection stands down the timeline copy. Printable input, Backspace, Delete,
+      arrows, Enter, Ctrl+V, and IME input immediately change the still-focused textarea, and the first edit
+      clears only the visual highlight. Escape, a new gesture, or a composer press deletes the highlight without
+      moving focus. A plain timeline click produces no highlight, details summaries still toggle, and the active
+      TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers mounted, switching to the second
+      makes its composer the sole sink. Phone and desktop satisfy the same shared TimelineChat contract.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]
     description: >

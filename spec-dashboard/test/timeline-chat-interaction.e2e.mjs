@@ -86,14 +86,21 @@ async function showReadout(viewport, step, snapshot) {
 }
 
 async function readInteraction(inputHandle, draft) {
-  return page.evaluate(({ input, expectedDraft }) => ({
-    connected: input.isConnected,
-    focus: document.activeElement === input,
-    draft: input.value,
-    draftKept: input.value === expectedDraft,
-    selection: getSelection()?.toString() || '',
-    caret: `${input.selectionStart}:${input.selectionEnd}`,
-  }), { input: inputHandle, expectedDraft: draft })
+  return page.evaluate(({ input, expectedDraft }) => {
+    const highlight = CSS.highlights?.get('timeline-sel')
+    const range = highlight ? Array.from(highlight)[0] : null
+    return {
+      connected: input.isConnected,
+      focus: document.activeElement === input,
+      draft: input.value,
+      draftKept: input.value === expectedDraft,
+      selection: getSelection()?.toString() || '',
+      highlight: !!range && !range.collapsed,
+      highlightText: range?.toString() || '',
+      highlights: CSS.highlights?.size || 0,
+      caret: `${input.selectionStart}:${input.selectionEnd}`,
+    }
+  }, { input: inputHandle, expectedDraft: draft })
 }
 
 async function waitForTimelineToken(viewport, token, sample) {
@@ -138,6 +145,11 @@ async function dragSelectNote(inputHandle, note = page.locator('.m-ev-note:visib
   await sampleFocus('mouseup')
   return {
     selection: await page.evaluate(() => getSelection()?.toString() || ''),
+    highlight: await page.evaluate(() => {
+      const paint = CSS.highlights?.get('timeline-sel')
+      const range = paint ? Array.from(paint)[0] : null
+      return { exists: !!range && !range.collapsed, text: range?.toString() || '', size: CSS.highlights?.size || 0 }
+    }),
     focusSamples,
     focusPass: focusSamples.every((sample) => sample.focused),
   }
@@ -175,7 +187,7 @@ async function verifyEditingHandoff(viewport, inputHandle, note) {
     const end = keyCase.end ?? start
     await setComposerState(inputHandle, 'abcdef', start, end)
     const drag = await dragSelectNote(inputHandle, note)
-    const selected = drag.selection
+    const selected = drag.highlight.text || drag.selection
     const before = await page.evaluate((input) => ({
       focus: document.activeElement === input,
       caret: input.selectionStart,
@@ -191,7 +203,7 @@ async function verifyEditingHandoff(viewport, inputHandle, note) {
       end: input.selectionEnd,
       selection: getSelection()?.toString() || '',
     }), inputHandle)
-    const pass = drag.focusPass && selected.length > 0 && before.focus && before.caret === before.end
+    const pass = drag.focusPass && selected.length > 0 && before.focus
       && after.focus && after.value === keyCase.value && after.caret === keyCase.caret
       && after.end === keyCase.caret && after.selection.length === 0
     cases.push({ key: keyCase.name, pass, composerSelection: { start, end }, dragFocusSamples: drag.focusSamples, before, after })
@@ -203,7 +215,7 @@ async function verifyEditingHandoff(viewport, inputHandle, note) {
       typed: pass,
       pass,
     })
-    mark(viewport, `${keyCase.name} native handoff (${pass ? 'pass' : 'fail'})`)
+    mark(viewport, `${keyCase.name} native edit under custom highlight (${pass ? 'pass' : 'fail'})`)
     await page.waitForTimeout(650)
   }
   return { pass: cases.every((entry) => entry.pass), cases }
@@ -224,7 +236,7 @@ async function verifySecondConversationSink(viewport) {
   await input.click()
   await input.pressSequentially(draft, { delay: 20 })
   const drag = await dragSelectNote(inputHandle, note)
-  const selected = drag.selection
+  const selected = drag.highlight.text || drag.selection
   const beforeType = await readInteraction(inputHandle, draft)
   const sinks = await activeSinkCount()
   await page.keyboard.type('Z')
@@ -258,7 +270,11 @@ async function verifyDetailsToggle(viewport, inputHandle) {
 }
 
 async function verifyComposerPress(viewport, inputHandle) {
-  const selectionBefore = await page.evaluate(() => getSelection()?.toString() || '')
+  const highlightBefore = await page.evaluate(() => {
+    const paint = CSS.highlights?.get('timeline-sel')
+    const range = paint ? Array.from(paint)[0] : null
+    return range?.toString() || ''
+  })
   const input = page.locator('.m-input:visible')
   const valueBefore = await input.inputValue()
   const box = await input.boundingBox()
@@ -267,12 +283,18 @@ async function verifyComposerPress(viewport, inputHandle) {
   const afterPress = await page.evaluate((inputElement) => ({
     focus: document.activeElement === inputElement,
     selection: getSelection()?.toString() || '',
+    highlight: (() => {
+      const paint = CSS.highlights?.get('timeline-sel')
+      const range = paint ? Array.from(paint)[0] : null
+      return range?.toString() || ''
+    })(),
     caret: inputElement.selectionStart,
   }), inputHandle)
   await page.keyboard.type('R')
   const valueAfter = await input.inputValue()
   const expected = `${valueBefore.slice(0, afterPress.caret)}R${valueBefore.slice(afterPress.caret)}`
-  const pass = selectionBefore.length > 0 && afterPress.focus && afterPress.selection.length === 0
+  const pass = highlightBefore.length > 0 && afterPress.focus && afterPress.selection.length === 0
+    && afterPress.highlight.length === 0
     && valueAfter === expected
   await showReadout(viewport, 'composer press retires external selection', {
     focus: afterPress.focus, draft: valueAfter, selection: afterPress.selection,
@@ -280,7 +302,7 @@ async function verifyComposerPress(viewport, inputHandle) {
   })
   mark(viewport, `composer press + native caret (${pass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(800)
-  return { pass, selectionBefore, afterPress, valueBefore, valueAfter, expected }
+  return { pass, highlightBefore, afterPress, valueBefore, valueAfter, expected }
 }
 
 async function runViewport(name, viewport) {
@@ -315,7 +337,7 @@ async function runViewport(name, viewport) {
   await page.waitForFunction(() => document.querySelectorAll('.m-ev-note').length > 0)
   const note = page.locator('.m-ev-note:visible').last()
   const firstDrag = await dragSelectNote(inputHandle, note)
-  const selectedBefore = firstDrag.selection
+  const selectedBefore = firstDrag.highlight.text || firstDrag.selection
   const afterDrag = await readInteraction(inputHandle, draft)
   const gestureFocusPass = firstDrag.focusPass
   const dragPass = gestureFocusPass && selectedBefore.length > 0 && afterDrag.focus && afterDrag.draftKept
@@ -330,22 +352,32 @@ async function runViewport(name, viewport) {
   const selectionReadings = await waitForTimelineToken(name, selectionToken, async () => ({
     ...await readInteraction(inputHandle, draft),
     selection: await page.evaluate(() => getSelection()?.toString() || ''),
+    highlight: await page.evaluate(() => {
+      const paint = CSS.highlights?.get('timeline-sel')
+      const range = paint ? Array.from(paint)[0] : null
+      return range?.toString() || ''
+    }),
   }))
-  const selectedAfter = await page.evaluate(() => getSelection()?.toString() || '')
+  const selectedAfter = await page.evaluate(() => {
+    const paint = CSS.highlights?.get('timeline-sel')
+    const range = paint ? Array.from(paint)[0] : null
+    return range?.toString() || ''
+  })
   const selectionPass = selectedBefore.length > 0
-    && selectionReadings.every((reading) => reading.selection === selectedBefore)
+    && selectionReadings.every((reading) => reading.selection === '')
+    && selectionReadings.every((reading) => reading.highlight === selectedBefore)
     && selectedAfter === selectedBefore
     && selectionReadings.every((reading) => reading.focus && reading.draftKept)
   await showReadout(name, 'selection after refresh', {
     ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: selectionPass,
   })
-  mark(name, `selection + composer focus after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
+  mark(name, `custom highlight + composer focus after real refresh (${selectionPass ? 'pass' : 'fail'}, ${selectedAfter.length} chars)`)
   await page.waitForTimeout(1_200)
 
   await page.keyboard.press('Control+c')
   const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
   const copyPass = copied === selectedAfter
-  await showReadout(name, 'copy keeps document selection', {
+  await showReadout(name, 'copy keeps custom highlight', {
     ...await readInteraction(inputHandle, draft), selection: selectedAfter, pass: copyPass,
   })
   mark(name, `copy selected timeline text (${copyPass ? 'pass' : 'fail'})`)
@@ -368,11 +400,17 @@ async function runViewport(name, viewport) {
   await page.waitForTimeout(1_000)
 
   await note.dblclick({ position: { x: 40, y: 12 } })
-  const doubleClickSelection = await page.evaluate(() => getSelection()?.toString() || '')
+  const doubleClickSelection = await page.evaluate(() => {
+    const paint = CSS.highlights?.get('timeline-sel')
+    const range = paint ? Array.from(paint)[0] : null
+    return range?.toString() || ''
+  })
+  const nativeDoubleSelection = await page.evaluate(() => getSelection()?.toString() || '')
   const doubleClickFocus = await page.evaluate((inputElement) => document.activeElement === inputElement, inputHandle)
   await page.keyboard.press('Control+c')
   const doubleCopied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
-  const doubleClickPass = doubleClickFocus && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
+  const doubleClickPass = doubleClickFocus && nativeDoubleSelection.length === 0
+    && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
   await showReadout(name, 'double-click + copy', {
     ...await readInteraction(inputHandle, clickDraft), selection: doubleClickSelection, pass: doubleClickPass,
   })
@@ -385,7 +423,8 @@ async function runViewport(name, viewport) {
   const result = {
     viewport: name, focusPass, gestureFocusPass, gestureFocusSamples: firstDrag.focusSamples,
     dragPass, selectionPass, copyPass, keyMatrix, clickPass, doubleClickPass, composerPress, detailsToggle,
-    secondSink, selectedBefore, selectedAfter, copied, doubleCopied,
+    secondSink, selectedBefore, selectedAfter, nativeSelectionBefore: firstDrag.selection,
+    highlightBefore: firstDrag.highlight, copied, doubleCopied,
   }
   results.push(result)
   return result
@@ -396,14 +435,16 @@ try {
   await runViewport('mobile', { width: 390, height: 844 })
   console.log(JSON.stringify({ phase, results }, null, 2))
   if (phase === 'A') {
-    assert.ok(results.some((result) => !result.gestureFocusPass),
-      `phase A never reproduced the focus outage: ${JSON.stringify(results)}`)
+    assert.ok(results.every((result) => result.nativeSelectionBefore.length > 0),
+      `phase A never reproduced the native Selection theft: ${JSON.stringify(results)}`)
   } else {
     for (const result of results) {
       assert.equal(result.focusPass, true, `${result.viewport} focus/draft failed`)
       assert.equal(result.gestureFocusPass, true, `${result.viewport} composer lost focus during pointer gesture`)
       assert.equal(result.dragPass, true, `${result.viewport} drag did not keep the exact composer focused`)
       assert.equal(result.selectionPass, true, `${result.viewport} selection refresh failed`)
+      assert.equal(result.nativeSelectionBefore, '', `${result.viewport} created a native document Selection`)
+      assert.equal(result.highlightBefore.exists, true, `${result.viewport} did not create a CSS highlight`)
       assert.equal(result.keyMatrix.pass, true, `${result.viewport} selection-to-composer key matrix failed`)
       assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
       assert.equal(result.copyPass, true, `${result.viewport} copy failed`)

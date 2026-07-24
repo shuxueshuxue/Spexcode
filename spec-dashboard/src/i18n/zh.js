@@ -644,6 +644,7 @@ export default {
     you: '我',
     inputPlaceholder: '给 agent 发消息…',
     send: '发送',
+    copy: '复制',
     sendFailed: '未送达 —— agent 可能已离线',
     offlineHint: 'agent 已离线 —— 需要重新拉起后消息才能送达',
   },

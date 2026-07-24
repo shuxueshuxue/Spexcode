@@ -45,6 +45,30 @@ scenarios:
       real eval renders the honest not-found face with a link back to #/evals — never a silent rewrite.
       Zero loss = list→detail is a real navigation, Back is the browser's, and every page is directly
       openable.
+  - name: cold-detail-light-entry
+    test: spec-dashboard/test/evals-light-entry.e2e.mjs
+    tags: [frontend-e2e, desktop, mobile]
+    code: [spec-dashboard/src/Root.jsx]
+    related: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
+    description: >
+      In a brand-new real Chromium context with cache disabled, open the same existing Eval detail first
+      through its canonical #/evals/<node>/<scenario> URL and then through the legacy
+      #/sessions/<id>/eval/<node>/<scenario> URL. Record the full CDP Network waterfall through the settled
+      first screen, including encoded bytes, request resource types, EventSource requests, WebSocket
+      creation, and loaded JS chunks. Read the final normalized hash and detail DOM. Then follow a real
+      rail/back/session/node anchor to a board-backed route, record which runtime starts after navigation,
+      and use browser Back to return to the detail. Repeat at desktop and phone widths; compare the canonical
+      URL's cold ledger against main before the route-entry split.
+    expected: >
+      Both canonical and legacy cold detail links settle on the same canonical hash and render the same
+      standalone detail page. Before any outbound navigation the waterfall contains the one bounded
+      /api/evals/detail request plus only evidence and detail-local review resources: ZERO /api/graph,
+      ZERO /api/graph/stream EventSource, ZERO /api/sessions collection/detail/timeline reads, ZERO session
+      WebSockets, and no Dashboard/xyflow/xterm chunks. The page retains its real navigation anchors and the
+      phone keeps the existing one-column review shell/tab bar. Following a board-backed anchor then starts
+      the ordinary graph/runtime communication exactly once; Back returns to the detail without restarting
+      or tearing down that now-warm runtime. Zero loss = an external permanent evidence
+      link costs only evidence review; the dashboard exists only after the visitor actually enters it.
   - name: detail-back-anchor-destinations
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/address.js]

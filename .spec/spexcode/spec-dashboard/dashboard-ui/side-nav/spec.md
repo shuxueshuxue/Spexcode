@@ -92,7 +92,9 @@ restores the list.
   an initial derived from whichever board loaded last. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
   switching plus an "All projects" door to the global `/projects` hub. Every menu row leads with the
   catalog identity mark in one aligned slot — project marks for project rows, gateway mark for the global
-  row — while its accessible name and current check remain intact. It never adds a Projects rail page
+  row — while its accessible name and current check remain intact. Online (and legacy/unknown) project
+  rows remain native same-tab links; an explicitly offline row is a disabled status item with no project
+  URL, so selecting a stopped backend cannot send the shell into a dead scope. It never adds a Projects rail page
   or mounts project management inside the scoped shell. When the catalog is denied the chip still names
   the current project but carries no menu, so a direct-project guest never sees the fleet or any global
   admin affordance: the gate is absence of data, not a hidden element.

@@ -2624,10 +2624,16 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .proj-menu-item:hover { background: var(--panel2); color: var(--ink2); }
 .proj-menu-item.current { color: var(--blue); }
+.proj-menu-item.offline { color: var(--muted); cursor: default; }
+.proj-menu-item.offline:hover { background: transparent; color: var(--muted); }
+.proj-menu-item.offline .proj-menu-mark { opacity: .55; }
 .proj-menu-item.all { border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; padding-top: 7px; color: var(--muted); }
 .proj-menu-item.all:hover { color: var(--ink2); }
 .proj-menu-mark { display: block; flex: 0 0 16px; width: 16px; height: 16px; }
 .proj-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-menu-status { flex: none; font-size: var(--type-caption); color: var(--muted); }
+.proj-menu-status.online { color: var(--green); }
+.proj-menu-status.offline { color: var(--muted); }
 
 /* narrow viewports: the catalog stays one column; row actions wrap under the name/path line */
 @media (max-width: 640px) {

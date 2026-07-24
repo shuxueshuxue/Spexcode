@@ -82,7 +82,9 @@ pick). A `/p/<id>/` shell contains only project-owned views and never mounts the
 management controls in the rail. The old direct `/p/<id>/#/projects` address remains a compatibility door:
 arrival performs one full-page redirect to `/projects`, leaving no duplicate in-shell admin route behind.
 The rail's current-project chip and catalog-backed switcher remain the scoped project's one project-changing
-control. As a document-shaped global face, `/projects` consumes [[page-scroll]] directly: the page shell
+control. The switcher reflects instance-validated liveness: online (or legacy/unknown) rows remain
+switchable links, while an offline row is visibly stopped and non-navigable; the global `/projects` row is
+the repair door for starting it. As a document-shaped global face, `/projects` consumes [[page-scroll]] directly: the page shell
 defines the full viewport while the shared primitive owns its inset scrollbar, one-axis overflow, and
 phone geometry. Drawers and bounded editors retain their own local overflow and never become competing
 full-page scroll owners.

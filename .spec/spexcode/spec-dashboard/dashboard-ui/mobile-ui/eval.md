@@ -120,6 +120,23 @@ scenarios:
       still toggle, and the active TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers
       mounted, switching to the second makes its composer the sole sink. Phone and desktop satisfy the same shared
       TimelineChat contract.
+  - name: timeline-focus-on-active
+    tags: [frontend-e2e, mobile, desktop]
+    test: spec-dashboard/test/timeline-chat-focus.e2e.mjs
+    code: spec-dashboard/src/TimelineChat.jsx
+    related: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/useIsMobile.js]
+    description: >
+      Through the running dashboard with two real headless sessions, keep an unsent draft in the first desktop
+      TimelineChat, switch to the second session and back without clicking either composer, and sample the exact
+      visible textarea against `document.activeElement` after the next animation frame. Type immediately after
+      each switch. Then repeat session entry at a 390x844 phone viewport after returning to the session list, again
+      without pressing the composer. Record the complete desktop-to-phone interaction as video.
+    expected: |
+      Each desktop activation makes that session's mounted `.m-input` the exact `document.activeElement`, leaves it
+      as the sole `data-focus-sink`, accepts immediate typing without a click, and preserves the first session's
+      unsent draft across the round trip. At phone width the newly mounted `.m-input` is still the sole declared
+      sink but is not automatically focused; immediate keyboard input does not enter it, so a session switch cannot
+      summon the soft keyboard.
   - name: timeline-http-clipboard
     tags: [frontend-e2e, mobile, desktop]
     code: spec-dashboard/src/TimelineChat.jsx

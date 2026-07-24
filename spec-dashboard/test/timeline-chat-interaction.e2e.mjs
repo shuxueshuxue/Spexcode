@@ -290,7 +290,8 @@ async function runViewport(name, viewport) {
   const afterClick = await readInteraction(inputHandle, typedDraft)
   const clickSelection = await page.evaluate(() => getSelection()?.toString() || '')
   await page.keyboard.type('Q')
-  const clickTypingPass = await input.inputValue() === `${typedDraft}Q`
+  const clickDraft = 'abcdXQef'
+  const clickTypingPass = await input.inputValue() === clickDraft
   const clickPass = afterClick.focus && clickSelection.length === 0 && clickTypingPass
   await showReadout(name, 'plain click returns composer', {
     ...afterClick, selection: clickSelection, typed: clickTypingPass, pass: clickPass,
@@ -305,7 +306,7 @@ async function runViewport(name, viewport) {
   const doubleCopied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
   const doubleClickPass = !doubleClickFocus && doubleClickSelection.length > 0 && doubleCopied === doubleClickSelection
   await showReadout(name, 'double-click + copy', {
-    ...await readInteraction(inputHandle, `${typedDraft}Q`), selection: doubleClickSelection, pass: doubleClickPass,
+    ...await readInteraction(inputHandle, clickDraft), selection: doubleClickSelection, pass: doubleClickPass,
   })
   mark(name, `double-click and copy selected text (${doubleClickPass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(1_600)

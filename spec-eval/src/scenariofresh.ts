@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { git, gitA, headSha } from '../../spec-cli/src/git.js'
+import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
 
 // @@@ per-scenario content freshness — the SCENARIO axis, sub-file
@@ -224,6 +224,27 @@ function oidAt(root: string, rev: string, path: string): string {
   oidMemo.set(k, v)
   if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
   return v
+}
+
+async function oidAtAsync(root: string, rev: string, path: string): Promise<string> {
+  if (!FULL_SHA.test(rev)) return (await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])).stdout.trim()
+  const k = `${root}\x1f${rev}\x1f${path}`
+  const hit = oidMemo.get(k)
+  if (hit !== undefined) { oidMemo.delete(k); oidMemo.set(k, hit); return hit }
+  const result = await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])
+  const oid = result.ok ? result.stdout.trim() : ''
+  oidMemo.set(k, oid)
+  if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+  return oid
+}
+
+export async function primeScenarioBlocksAt(root: string, revs: string[], path: string): Promise<void> {
+  for (const rev of revs) {
+    const oid = await oidAtAsync(root, rev, path)
+    if (!oid || blockByOid.has(oid)) continue
+    const src = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing
+    if (src) blockByOid.set(oid, blockContent(src))
+  }
 }
 
 // canonical per-scenario SEMANTIC blocks of `rev:path` (the blockContent projection), for the off-history

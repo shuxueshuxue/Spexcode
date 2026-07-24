@@ -1,7 +1,7 @@
-import { git, headSha, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
+import { git, gitA, gitTry, headSha, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { scenarioHash, type Scenario } from './scenarios.js'
-import { scenarioChangeCommits, scenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
+import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
@@ -22,6 +22,7 @@ export type ContentProbe = {
   scenarioDiffers(anchorSha: string, evalPath: string, scenario: string): boolean
   // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
   behind(anchorSha: string, path: string): number
+  prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
 }
 
 // (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory,
@@ -38,11 +39,35 @@ function memo<V>(m: Map<string, V>, k: string, build: () => V): V {
   if (m.size > 4096) m.delete(m.keys().next().value!)
   return v
 }
+function putMemo<V>(m: Map<string, V>, k: string, value: V): void {
+  m.set(k, value)
+  if (m.size > 4096) m.delete(m.keys().next().value!)
+}
 
 export function contentProbeFor(root: string): ContentProbe {
   let head: string | undefined
   const headOf = () => (head ??= headSha(root))
   return {
+    async prime(sha, paths, evalPath) {
+      const current = headOf()
+      const diffKey = `${root}\x1f${sha}\x1f${current}`
+      if (!diffMemo.has(diffKey)) {
+        const result = await gitTry(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, current])
+        putMemo(diffMemo, diffKey, result.ok
+          ? new Set(result.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
+          : null)
+      }
+      const diff = diffMemo.get(diffKey)
+      if (!diff) return
+      for (const path of new Set(paths)) {
+        if (!diff.has(path)) continue
+        const behindKey = `${root}\x1f${sha}\x1f${current}\x1f${path}`
+        if (behindMemo.has(behindKey)) continue
+        const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
+        putMemo(behindMemo, behindKey, Number.isFinite(n) && n > 0 ? n : 1)
+      }
+      if (diff.has(evalPath)) await primeScenarioBlocksAt(root, [sha, current], evalPath)
+    },
     changedPaths(sha) {
       return memo(diffMemo, `${root}\x1f${sha}\x1f${headOf()}`, () => {
         try {

@@ -9,7 +9,9 @@ code:
   - spec-dashboard/src/EvalsPage.jsx#EvalDetailPage
   - spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor
 related:
+  - spec-dashboard/src/Root.jsx
   - spec-dashboard/test/evals-entry.e2e.mjs
+  - spec-dashboard/test/evals-light-entry.e2e.mjs
   - spec-dashboard/src/i18n/zh.test.mjs
 ---
 
@@ -34,6 +36,19 @@ filter (default off) picking the root.
   rail entry, ⌥3/⌥F, and the board's bare `f` land on the list. The list uses [[review-chrome]]'s ONE
   25-row paged-review server contract for both trunk and `scope:` sources; it never slices the graph board
   or the scoped REST model in React.
+- **A cold DETAIL address is a lightweight route entry, not a board boot.** Before the board runtime is
+  imported or mounted, the shell resolves canonical and legacy detail hashes and mounts the SAME
+  responsive `EvalsPage`/`EventDetail` face in a small route shell. That entry requests only its bounded
+  `/api/evals/detail` projection, the addressed evidence, and detail-local review resources; it makes no
+  `/api/graph` read, opens no graph SSE, reads no session collection/timeline/detail, opens no session
+  WebSocket, and downloads no graph/terminal chunk. The URL and rendered detail are the same route family
+  as a visit from inside the dashboard; `#/sessions/<id>/eval/<node>/<scenario>` normalizes before the
+  entry decision, so existing MR-note links receive the same light path. Navigation is the initialization
+  gate: following the rail, the detail's list anchor, or its spec-node reference to a board-backed
+  destination mounts the ordinary dashboard runtime then, never speculatively
+  during the external visitor's cold detail view. Phone width keeps the existing mobile review shell and
+  bottom navigation over an empty board projection; it does not boot the board merely to preserve
+  responsive chrome.
 - **The list's state is its URL — as ONE token query.** The whole face rides [[review-chrome]]'s visible
   query text (`is:eval` by default; the [[review-query]] engine) — verdict, freshness,
   evidence kind, node, filer, source-session presence, worktree scope, and human-review lifecycle

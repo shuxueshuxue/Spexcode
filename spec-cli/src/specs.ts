@@ -229,9 +229,13 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 // root as their readings/indexes, or a branch-NEW node simply does not exist for them.
 export async function loadSpecs(root: string = ROOT) {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
-  // the event loop). Every node below is then a pure lookup.
+  // the event loop). The ordinary DAG representation makes every node below a pure lookup; the large-history
+  // representation delegates path windows to synchronous Git, so yield between nodes rather than joining
+  // hundreds of short probes into one liveness-blocking event-loop wall.
   const [idx, didx, allRaws] = await Promise.all([historyIndex(root), driftIndex(root), rawsAsync(root)])
-  return Promise.all(allRaws.map(async (r) => {
+  const loaded = []
+  for (const r of allRaws) {
+    if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     const h = rowsFor(idx, r.relPath)
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
@@ -261,7 +265,7 @@ export async function loadSpecs(root: string = ROOT) {
       .map((e) => ({ file: e.path, behind: driftFor(didx, S, e.path) }))
       .filter((d) => d.behind > 0)
     const fmStatus = str(r.fm.status, '') || null
-    return {
+    loaded.push({
       id: r.id,
       parent: r.parent,
       path: r.relPath,
@@ -287,8 +291,9 @@ export async function loadSpecs(root: string = ROOT) {
       // cold load); the history tab fetches it lazily via specDiffAt. See [[work-pane]].
       body: r.body.trim(),
       parts: parseParts(r.body),
-    }
-  }))
+    })
+  }
+  return loaded
 }
 
 // per-node version timeline; each row sums the node's spec.md stat (rename-followed, via statsFor) and its

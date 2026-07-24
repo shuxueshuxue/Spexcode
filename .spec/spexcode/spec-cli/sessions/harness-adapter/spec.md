@@ -6,6 +6,8 @@ desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex
 code:
   - spec-cli/src/harness.ts
 related:
+  - spec-cli/src/headless-controller.ts
+  - spec-cli/src/sh.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
   - spec-cli/src/sessions.ts
@@ -184,7 +186,10 @@ surface:
   harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
   worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient
   worktree: a daemon that inherited a worktree cwd is bricked when that worktree is later removed (its cwd goes
-  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`).
+  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`). `launchEnv(id)`
+  owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
+  while a transport that needs neither returns no adapter env; the session launcher only composes those values
+  with the governed session id and configured home variables.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's
@@ -316,6 +321,13 @@ records the harness plus exit code, so a turn that died before declaring can nev
 landed before process teardown is authoritative and is never overwritten. `online` may remain true when the
 adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal `error`
 lifecycle is the honest signal that the previous turn failed.
+
+The runtime's behavior-identical mechanics are shared once across adapter rows: shell arguments use one POSIX
+single-quote encoder; resident headless controllers use one newline-delimited JSON socket client and timeout;
+socket-backed headless delivery uses one `live` / `unproven` / `absent` gate before its adapter-specific cold
+wake; listener-backed liveness and record-backed liveness are named predicates; and per-session socket cleanup
+uses one unlink helper. Adapter rows retain only the real differences: request payloads, timeout/error labels,
+cold-wake spawners, listener-or-pid fallback, delivery refusal text, and the sockets each runtime owns.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in

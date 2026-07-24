@@ -173,7 +173,11 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
   // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
   const probe = contentProbeFor(root)
-  const readings: EvalEntry[] = applyRetractions(rawReadings, retractions).map((r) => {
+  const readings: EvalEntry[] = []
+  for (const r of applyRetractions(rawReadings, retractions)) {
+    // Large-history freshness delegates reachability/path windows to synchronous Git. One reading stays a
+    // coherent verdict, but yield between readings so a production-scale fold cannot starve HTTP/SSE I/O.
+    if (idx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
@@ -191,7 +195,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // the sign-off join ([[human-ok]]): the ok binds by exact (scenario, ts), so only the very reading the
     // human blessed carries it — a newer or retract-revealed reading reads unblessed.
     const okRow = humanOkFor(oks, r.scenario, r.ts)
-    return {
+    readings.push({
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',
       codeSha: r.codeSha,
@@ -209,8 +213,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       blobState: primary ? primary.state : 'none',
       ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),
       ...(okRow ? { humanOk: { by: okRow.by, ts: okRow.ts } } : {}),
-    }
-  })
+    })
+  }
   readings.reverse()   // newest-first
   // R2 display overlay ([[remark-teeth]]): pin each remark to the reading it JUDGED (targetCodeSha match),
   // else the scenario's latest reading (first in newest-first order) — a dangling target never HIDES the

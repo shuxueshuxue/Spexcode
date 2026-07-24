@@ -240,6 +240,8 @@ function ensureRefsWatcher(retry = true): void {
 // therefore owns a recursive working-root watcher plus a non-recursive watcher on git's worktree metadata
 // dir (`index`). A delivered event advances that worktree's eval generation before the graph rebuild.
 let registryWatcher: FSWatcher | null = null
+let registryReady = false
+let registryRetryScheduled = false
 type WorktreeWatch = { path: string; root: FSWatcher; index: FSWatcher }
 const worktreeWatchers = new Map<string, WorktreeWatch>()
 const worktreeRetryAttempted = new Set<string>()
@@ -450,6 +452,12 @@ async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Pr
     if (forceSessionId) await reconcileWorktrees(forceSessionId)
     return
   }
+  // A platform may reject recursive registry watches. Once the initial reconciliation has run, ordinary
+  // reads must not repeat its full worktree scan while the one scheduled retry is pending; scoped reads can
+  // still demand their target explicitly.
+  if (registryReady && !forceSessionId) return
+  if (registryReady && forceSessionId) { await reconcileWorktrees(forceSessionId); return }
+  registryReady = true
   if (isDisabled('worktrees')) {
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
     return
@@ -466,7 +474,14 @@ async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Pr
   } catch {
     registryWatcher = null
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
-    if (retry) setImmediate(() => { void ensureWorktreeRegistry(false) })
+    if (retry && !registryRetryScheduled) {
+      registryRetryScheduled = true
+      setImmediate(() => {
+        registryRetryScheduled = false
+        registryReady = false
+        void ensureWorktreeRegistry(false)
+      })
+    }
   }
   await reconcileWorktrees(forceSessionId)   // attach for the live/demanded worktrees that already exist
   if (registryWatcher && releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)) fireChanged('full')

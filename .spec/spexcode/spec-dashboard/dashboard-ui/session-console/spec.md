@@ -177,7 +177,7 @@ or per-keystroke HTTP batching; the adapter's one modified-key bridge encodes Sh
 Codex and Claude inside true tmux.
 
 Around both channels, **console chrome is pointer-inert for focus** (the panel-wide blanket;
-[[terminal-input]] and [[focus-return]] carry the contract): pressing rows, zone headers, fold pods, the
+[[terminal-input]] and [[focus-return]] carry the contract): pressing rows, zone headers, parent disclosure rows, the
 resizer, pills, toolbar buttons, or the launcher pop acts without taking focus, so the current sink — TUI,
 Command Box, or the New composer — keeps typing focus through any pointer work on the console, and a pop
 that does take focus returns it on exit. Only the composers' own textareas, the rename input, and the xterm
@@ -281,12 +281,18 @@ header leading each — and within a zone the **newest** session sits on top. Th
 **liveness, not the authored lifecycle**: a session whose process died while it was `asking`/`review`/`error`
 keeps that pre-death lifecycle, yet it cannot act until relaunched, so it sorts to **offline** rather than
 wrongly sitting under *needs you*; a merely booting session (`starting`/`queued`) stays under *running*. The
-**offline zone rests folded behind its own header** — the ONE disclosure for session history. Retired and
+**offline zone rests folded behind its own header** — the ONE disclosure for session history. Its header is a
+single row with the COUNT badge first and the `OFFLINE` label second; it contains no `>`/chevron/caret/`▸`
+direction symbol. Retired and
 dormant sessions accumulate (an adopter's CR record sessions are deliberately kept alive for their external
 deep links), and a list that renders every one of them drowns the two zones a human acts on; but they are
 records, so they are never deleted and never more than one click away. The zone header carries the hidden
 COUNT and an expanded/collapsed affordance (`aria-expanded` speaks it); clicking toggles — pointer-inert for
-focus like every zone header. Folding is **presentation only** (per-surface state, collapsed again on a
+focus like every zone header. A parent row with sub sessions uses the same grammar: its child-count badge is
+the first content before the title/status body, never a trailing action, and the row itself toggles its children
+(`aria-expanded` remains on that row). Neither surface renders a directional glyph for parent disclosure;
+hierarchy is communicated only by the count's leading slot, indentation, and the resulting row structure.
+Folding is **presentation only** (per-surface state, collapsed again on a
 fresh mount; no session record is touched), it applies to **no other zone** — *needs you* and *running* rows
 can never be hidden by any fold — and the **selected session stays revealed**: a row chosen by URL,
 search, an originator chip, or the graph's node menu renders even while its zone is folded, so a deep link

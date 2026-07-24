@@ -6,7 +6,7 @@ import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
-import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
+import { SessionRow, SessionZone, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -697,28 +697,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
             // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
             // only while their parent is expanded); within a zone the newest session is on top (automatic ordering).
-            // A FOLDABLE zone header (offline — session history) is the one disclosure: hidden count + chevron,
+            // A FOLDABLE zone header (offline — session history) is the one disclosure: count before label,
             // aria-expanded speaking the state; toggling is pointer-inert for focus like all console chrome.
             if (it.type === 'zone') {
-              if (it.zone !== 'offline') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
-              return (
-                <button
-                  key={`zone-${it.zone}`}
-                  type="button"
-                  className={`si-zone si-zone-${it.zone} si-zone-fold${it.folded ? '' : ' open'}`}
-                  aria-expanded={!it.folded}
-                  data-tip={t(it.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: it.count })}
-                  onClick={() => setOfflineOpen((v) => !v)}
-                >
-                  <Icon name={it.folded ? 'chevron-right' : 'chevron-down'} size={11} />
-                  {t(`sessionZone.${it.zone}`)}
-                  {it.count > 0 && <span className="si-zone-count">{it.count}</span>}
-                </button>
-              )
+              return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="si-zone" onToggle={() => setOfflineOpen((v) => !v)} />
             }
             const s = it.s
             const lead = (it.expandable || it.depth)
-              ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />
+              ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
               : null
             // A click switches tabs. Locking is an explicit item in the right-click menu below; double-click
             // deliberately has no extra meaning, so it only leaves the clicked tab selected.
@@ -731,8 +717,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 key={s.id}
                 data-sid={s.id}
                 className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
+                aria-expanded={it.expandable ? it.expanded : undefined}
                 style={{ '--ov': labelColor(s.id) }}
-                onClick={() => (selecting ? togglePick(s.id) : activateTerminal(s.id))}
+                onClick={() => {
+                  if (selecting) return togglePick(s.id)
+                  activateTerminal(s.id)
+                  if (it.expandable) toggleFold(s.id)
+                }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
               >

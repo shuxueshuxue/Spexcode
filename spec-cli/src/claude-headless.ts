@@ -1,11 +1,13 @@
 import { rmSync } from 'node:fs'
-import { createConnection, createServer, type Server, type Socket } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
+import { controlRequest, withTimeout } from './headless-controller.js'
+import { shQuote } from './sh.js'
 
 type ControlRequest = { type: 'deliver'; text: string; mode: 'steer' | 'wake' } | { type: 'interrupt' }
 type ClaudeHeadlessDeliveryRecord = HarnessDeliveryRecord & { status?: string }
@@ -32,7 +34,6 @@ const RESULT_EXIT_GRACE_MS = 500
 const TERM_EXIT_GRACE_MS = 500
 const KILL_EXIT_GRACE_MS = 2_000
 
-const shQuote = (s: string) => `'${s.replace(/'/g, `'\''`)}'`
 const userEvent = (text: string) => JSON.stringify({
   type: 'user',
   message: { role: 'user', content: [{ type: 'text', text }] },
@@ -44,52 +45,17 @@ export function claudeHeadlessLaunchCommand(id: string, runtimeDir: string, clau
   return [shQuote(SPEX), 'internal', 'claude-headless-run', shQuote(id), shQuote(runtimeDir), shQuote(claudeCmd), '--'].join(' ')
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms)
-    promise.then(
-      (value) => { clearTimeout(timer); resolve(value) },
-      (error) => { clearTimeout(timer); reject(error) },
-    )
-  })
-}
-
-function controlRequest(id: string, request: ControlRequest): Promise<DispatchResult> {
-  return new Promise((resolve) => {
-    const socket = createConnection(claudeHeadlessSock(id))
-    let buffer = ''
-    let settled = false
-    const finish = (result: DispatchResult) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      socket.destroy()
-      resolve(result)
-    }
-    const timer = setTimeout(() => finish({ ok: false, error: `claude-headless control timed out for session ${id}` }), CONTROL_TIMEOUT_MS)
-    socket.setEncoding('utf8')
-    socket.on('connect', () => socket.write(`${JSON.stringify(request)}\n`))
-    socket.on('data', (chunk) => {
-      buffer += chunk
-      const nl = buffer.indexOf('\n')
-      if (nl < 0) return
-      try {
-        const response = JSON.parse(buffer.slice(0, nl)) as DispatchResult
-        finish(response.ok ? { ok: true } : { ok: false, error: response.error || 'claude-headless control rejected the request' })
-      } catch (error) {
-        finish({ ok: false, error: `claude-headless returned an invalid control response: ${(error as Error).message}` })
-      }
-    })
-    socket.on('error', (error) => finish({ ok: false, error: `claude-headless controller unreachable for session ${id}: ${error.message}` }))
-    socket.on('close', () => finish({ ok: false, error: `claude-headless controller closed before confirming session ${id}` }))
-  })
-}
-
 export const deliverViaClaudeHeadless = (rec: ClaudeHeadlessDeliveryRecord, text: string) =>
-  controlRequest(rec.session, { type: 'deliver', text, mode: rec.status === 'active' ? 'steer' : 'wake' })
+  controlRequest(claudeHeadlessSock(rec.session), { type: 'deliver', text, mode: rec.status === 'active' ? 'steer' : 'wake' }, {
+    name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+    rejected: 'claude-headless control rejected the request',
+  })
 
 export const interruptClaudeHeadless = (rec: HarnessDeliveryRecord) =>
-  controlRequest(rec.session, { type: 'interrupt' })
+  controlRequest(claudeHeadlessSock(rec.session), { type: 'interrupt' }, {
+    name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+    rejected: 'claude-headless control rejected the request',
+  })
 
 export class ClaudeHeadlessController {
   private server: Server | null = null

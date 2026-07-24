@@ -15,6 +15,7 @@ import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './open
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { git } from './git.js'
+import { shQuote } from './sh.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -86,6 +87,9 @@ export interface Harness {
   sessionIdArg(id: string): string
   // the env var the agent's OWN process carries so its `spex …` calls know their session id.
   readonly sessionEnvVar: string
+  // transport bootstrap variables scoped to this launch. Rendezvous adapters own their daemon mode + socket;
+  // product launch code only composes these with generic session/home env.
+  launchEnv(id: string): string[]
 
   // --- materialize: shim + contract + trust ([[harness-delivery]]) ---
   // the auto-discovered hook shim file for this harness (.claude/settings.json vs .codex/hooks.json).
@@ -275,10 +279,6 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 
-function shQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`
-}
-
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
 // the launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
 // exec's the visible TUI. The launcher, never a raw `tsx cli.ts` pair: it owns tsx resolution and the
@@ -364,6 +364,18 @@ export async function deliverViaRendezvous(id: string, text: string, wallMs?: nu
     await new Promise((r) => setTimeout(r, 60 + Math.random() * 140))
   }
   return { ok: false, error: `rendezvous delivery was kicked by concurrent connects ${DELIVER_ATTEMPTS}× — prompt NOT delivered, retry the send` }
+}
+
+export async function deliverViaSocketOrWake(
+  id: string,
+  text: string,
+  coldWake: () => Promise<DispatchResult>,
+  unprovenError: string,
+): Promise<DispatchResult> {
+  const probe = await rendezvousListening(id)
+  if (probe === 'live') return deliverViaRendezvous(id, text)
+  if (probe === 'unproven') return { ok: false, error: unprovenError }
+  return coldWake()
 }
 
 type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
@@ -460,8 +472,8 @@ export async function reportHeadlessTurnExit(id: string, harness: string, code: 
   }
 }
 
-export function headlessTurnFailureShell(harness: string): string {
-  return `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote(harness)} "$__spex_rc" || true`
+export function headlessTurnFailureShell(harness: string, swallow = true): string {
+  return `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote(harness)} "$__spex_rc"${swallow ? ' || true' : ''}`
 }
 export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
@@ -1126,6 +1138,26 @@ export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
   return `bash -lc ${shQuote(script)} spexcode-opencode`
 }
 
+const socketListenerLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) =>
+  (tmuxAlive && !!socketLive ? 'online' : 'offline')
+
+const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
+  (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline')
+
+const recordOnline: Harness['liveness'] = () => 'online'
+
+const unlinkSocks = (...paths: string[]): void => {
+  for (const path of paths) {
+    try { rmSync(path, { force: true }) } catch { /* already gone */ }
+  }
+}
+
+const rendezvousLaunchEnv = (id: string): string[] => [
+  'CLAUDE_BG_BACKEND=daemon',
+  `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`,
+]
+const noLaunchEnv = (): string[] => []
+
 export const claudeHarness: Harness = {
   id: 'claude',
   headless: false,
@@ -1136,6 +1168,7 @@ export const claudeHarness: Harness = {
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
+  launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
   worktreeHookAnchor: () => null,                    // claude's shim already lives in the worktree (.claude/settings.json) — self-anchors, no root rewrite
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
@@ -1149,9 +1182,9 @@ export const claudeHarness: Harness = {
   // online iff the window is up AND a LIVE LISTENER is on the rendezvous socket (`socketLive`, connect-probed by
   // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
   // dead-pane-reads-working bug). See rendezvousListening.
-  liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
+  liveness: socketListenerLiveness,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
-  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
+  cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   // the TUI's sessions panel ("← for agents"): a reply injected here is parsed + enqueued to the PANEL context
   // and never drained (verified live: `queue-operation: enqueue` with no dequeue, no turn, daemon silent), so
   // the parse-confirmed delivery above would still report a false success into it. Matched on the panel's own
@@ -1173,12 +1206,13 @@ export const claudeHeadlessHarness: Harness = {
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
+  launchEnv: noLaunchEnv,
   // Liveness is the intact record's property. A missing controller/child fails loudly at control time rather
   // than turning an idle (no child) session into a speculative offline row.
-  liveness: () => 'online',
+  liveness: recordOnline,
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
-  cleanupRuntime: (rec) => { try { rmSync(claudeHeadlessSock(rec.session), { force: true }) } catch { /* already gone */ } },
+  cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
   deliveryBlockedBy: undefined,
 }
 
@@ -1192,6 +1226,7 @@ export const codexHarness: Harness = {
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',
+  launchEnv: noLaunchEnv,
   // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's
   // (codex-rs `root_checkout_hooks_folder_for_dir` rewrites the hooks-config folder to <repo_root>/<rel>/.codex
   // for any linked worktree). Every worktree's thread (cwd = worktree root) therefore reads the SAME
@@ -1265,7 +1300,7 @@ export const codexHeadlessHarness: Harness = {
   launchCmd: (id, runtimeDir, cmd) => codexHeadlessLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),
   // Record-backed liveness is the family contract for sleeping headless threads. A broken app-server or missing
   // thread is surfaced by the inherited delivery call rather than converted into a speculative offline state.
-  liveness: () => 'online',
+  liveness: recordOnline,
   // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
   // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
   resumeArg: () => '',
@@ -1276,8 +1311,8 @@ export const codexHeadlessHarness: Harness = {
 // lives IN the worktree, and the rendezvous prompt/liveness channel is REUSED wholesale — pi has no external
 // hook binding (its lifecycle surface is the in-process extension API), so the shim is a GENERATED TypeScript
 // extension (.pi/extensions/spexcode.ts, run natively by pi) that forwards five claude-shaped events to
-// dispatch.sh AND binds this session's rendezvous socket itself (sessions.ts already exports
-// CLAUDE_BG_RENDEZVOUS_SOCK to every ownsRendezvous launch) speaking the reclaude line protocol — so
+// dispatch.sh AND binds this session's rendezvous socket itself (the adapter's launchEnv exports
+// CLAUDE_BG_RENDEZVOUS_SOCK) speaking the reclaude line protocol — so
 // deliverViaRendezvous and the socket-listener liveness work UNCHANGED. Trust: pi gates project-local
 // extensions behind saved per-directory trust (~/.pi/agent/trust.json), so writeTrust stamps the main
 // checkout there (the nearest-parent lookup covers nested worktrees) and the launch carries `--approve` as
@@ -1292,6 +1327,7 @@ export const piHarness: Harness = {
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
   sessionEnvVar: 'PI_SESSION_ID',                    // exported by the generated extension at session_start; tool subprocesses inherit it
+  launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
   worktreeHookAnchor: () => null,                    // the extension lives in the worktree and self-anchors, like claude
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // pi auto-loads AGENTS.md context files (shared with codex — writeManagedBlock is idempotent)
@@ -1307,9 +1343,9 @@ export const piHarness: Harness = {
   slashCommands: piSlashCommands,
   // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
   // socket the generated extension binds. socketLive is already probed for every windowed session.
-  liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
+  liveness: socketListenerLiveness,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
-  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
+  cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   // reopen the SAME conversation: `--session <id>` resumes the exact session we pinned at launch and FAILS
   // LOUD when its file is gone (unlike `--session-id`, which would silently mint a fresh empty session).
   resumeArg: (rec) => `--session ${rec.session}`,
@@ -1325,12 +1361,9 @@ export const piHeadlessHarness: Harness = {
   headless: true,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
-  liveness: () => 'online',
+  liveness: recordOnline,
   deliver: deliverViaPiHeadless,
-  cleanupRuntime: (rec) => {
-    try { rmSync(piHeadlessSock(rec.session), { force: true }) } catch { /* already gone */ }
-    try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ }
-  },
+  cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
   deliveryBlockedBy: undefined,
   resumeArg: (rec) => `--session ${rec.session}`,
 }
@@ -1352,6 +1385,7 @@ export const opencodeHarness: Harness = {
   // (no codex-style shared-server contamination). This var is therefore never set; envSessionId's
   // SPEXCODE_SESSION_ID tier resolves the record.
   sessionEnvVar: 'OPENCODE_SESSION_ID',
+  launchEnv: rendezvousLaunchEnv,
   // the "shim" is a generated opencode PLUGIN in the worktree's own tree — opencode auto-loads project plugins
   // by walking the cwd, so like claude it self-anchors and needs no root-checkout rewrite or worktree anchor.
   shimFile: (proj) => join(proj, '.opencode', 'plugins', 'spexcode.ts'),
@@ -1369,10 +1403,9 @@ export const opencodeHarness: Harness = {
   // online iff the window is up AND the agent answers on a channel: PREFER the rendezvous socket listener
   // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to
   // load still reads honestly from the process signal instead of a false offline.
-  liveness: (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
-    (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline'),
+  liveness: socketListenerOrPidAliveLiveness,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
-  cleanupRuntime: (rec) => { try { rmSync(rvSock(rec.session), { force: true }) } catch { /* already gone */ } },
+  cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   // owned opencode session id → `--resume <id>` marker (the launch script re-attaches `--session <id>`, the
   // SAME conversation); never captured → `--continue` marker (opencode's own "last session in this directory",
   // which in a dedicated worktree is this worker's). The discriminator is sound for the same reason codex's
@@ -1389,17 +1422,14 @@ export const opencodeHeadlessHarness: Harness = {
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
   // A sleeping native conversation is still addressable by its record. Transport breakage belongs to the
   // next delivery, where the live rendezvous or pane wake reports it loudly.
-  liveness: () => 'online',
+  liveness: recordOnline,
   deliver: async (rec, text) => {
-    const probe = await rendezvousListening(rec.session)
-    if (probe === 'live') return deliverViaRendezvous(rec.session, text)
-    if (probe === 'unproven') {
-      return {
-        ok: false,
-        error: `opencode-headless rendezvous probe was inconclusive for session ${rec.session} - refusing to start a possibly duplicate turn`,
-      }
-    }
-    return spawnOpenCodeHeadlessTurn(rec, text, opencodeBaseCmd(rec.launchCmd ?? undefined), rvSock(rec.session))
+    return deliverViaSocketOrWake(
+      rec.session,
+      text,
+      () => spawnOpenCodeHeadlessTurn(rec, text, opencodeBaseCmd(rec.launchCmd ?? undefined), rvSock(rec.session)),
+      `opencode-headless rendezvous probe was inconclusive for session ${rec.session} - refusing to start a possibly duplicate turn`,
+    )
   },
 }
 

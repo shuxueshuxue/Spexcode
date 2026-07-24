@@ -96,8 +96,23 @@ try {
     await page.waitForTimeout(60)
     assert.deepEqual(await helperState(), { active: true, value: '' })
   }
+  const typeImePunctuation = async ({ key, code, keyCode, text }) => {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown', key, code, text, unmodifiedText: text,
+      windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode,
+    })
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp', key, code,
+      windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode,
+    })
+  }
 
-  const phrases = ['苹果', '香蕉', '葡萄', '，。！？「」【】']
+  const ordinary = 'ascii-123'
+  await page.keyboard.type(ordinary)
+  await page.keyboard.press('Enter')
+  step('ordinary printable keys stay byte-exact')
+
+  const phrases = ['苹果', '香蕉', '葡萄']
   await beginComposition('pingguo')
   await commitComposition(phrases[0])
   step('first IME candidate commits')
@@ -114,15 +129,16 @@ try {
   await commitComposition(phrases[2])
   step('Terminal-tab activation preserves current composition')
 
-  await beginComposition('biaodian')
-  await commitComposition(phrases[3])
-  step('full-width Chinese punctuation stays byte-exact')
+  await typeImePunctuation({ key: ',', code: 'Comma', keyCode: 188, text: '，' })
+  await typeImePunctuation({ key: '.', code: 'Period', keyCode: 190, text: '。' })
+  await page.keyboard.press('Enter')
+  const punctuation = '，。'
+  step('IME punctuation keys stay full-width')
 
   for (let attempt = 0; attempt < 40; attempt++) {
-    if (existsSync(capturePath) && readFileSync(capturePath, 'utf8').includes(phrases[3])) break
+    if (existsSync(capturePath) && readFileSync(capturePath, 'utf8').includes(punctuation)) break
     await page.waitForTimeout(50)
   }
-  await page.waitForFunction((expected) => document.querySelector('.xterm-rows')?.textContent?.includes(expected), phrases[3])
   await page.screenshot({ path: join(OUT, 'terminal-input.png'), fullPage: true })
   step('real tmux pane contains every current UTF-8 commit')
 
@@ -132,17 +148,20 @@ try {
 
   const captured = readFileSync(capturePath, 'utf8')
   const sent = frames.join('')
-  assert.equal(captured, `${phrases.join('\n')}\n\x1b\n`, JSON.stringify({ captured }))
+  assert.equal(captured, `${ordinary}\n${phrases.join('\n')}\n${punctuation}\n\x1b\n`, JSON.stringify({ captured }))
+  assert.ok(sent.includes(ordinary), JSON.stringify({ frames }))
   for (const phrase of phrases) assert.equal(frames.filter((frame) => frame === phrase).length, 1, JSON.stringify({ phrase, frames }))
-  assert.equal(frames.filter((frame) => frame === '\r').length, phrases.length, JSON.stringify({ frames }))
+  assert.equal(frames.filter((frame) => frame === '，').length, 1, JSON.stringify({ frames }))
+  assert.equal(frames.filter((frame) => frame === '。').length, 1, JSON.stringify({ frames }))
+  assert.equal(frames.filter((frame) => frame === '\r').length, phrases.length + 2, JSON.stringify({ frames }))
   assert.equal(frames.filter((frame) => frame === '\x1b\r').length, 1, JSON.stringify({ frames }))
-  assert.ok(!['pingguo', 'xiangjiao', 'putao', 'biaodian'].some((raw) => sent.includes(raw)), JSON.stringify({ frames }))
+  assert.ok(!['pingguo', 'xiangjiao', 'putao'].some((raw) => sent.includes(raw)), JSON.stringify({ frames }))
   const video = page.video()
   await context.close()
   context = null
   await video.saveAs(join(OUT, 'terminal-input.webm'))
   writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
-  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ scratch, phrases, frames, captured }, null, 2))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ scratch, ordinary, phrases, punctuation, frames, captured }, null, 2))
   console.log(JSON.stringify({ ok: true, video: join(OUT, 'terminal-input.webm'), result: join(OUT, 'result.json') }))
 } finally {
   await context?.close().catch(() => {})

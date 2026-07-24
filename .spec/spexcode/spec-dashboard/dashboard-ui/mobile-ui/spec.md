@@ -12,8 +12,10 @@ related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/focus.js
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
   - spec-dashboard/src/useIsMobile.js
 ---
 # mobile-ui
@@ -88,6 +90,11 @@ The two planes, made native to touch:
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
+  Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
+  push neither replaces that input nor loses its unsent draft; while the reader drags a selection
+  through a note or message, refresh work neither remounts the conversation nor clears the browser
+  selection. Conversation copy is ordinary selectable text on both viewport classes — pointer drag,
+  double-click, and copy remain browser-native rather than becoming console chrome gestures.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
 - **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out

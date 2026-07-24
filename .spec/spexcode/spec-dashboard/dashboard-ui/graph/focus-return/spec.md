@@ -35,9 +35,11 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   on its own unmount, so every closing path — Esc, backdrop, cancel, submit — honors the contract without
   each caller wiring it.
 - **Inert chrome.** The acquisition-side twin: a pointer-down on chrome that is not itself an input surface
-  (not an editable field, not the xterm screen, not a scrollbar gutter) is **prevented from moving focus at
-  all** — the click still lands and acts. A surface or menu attaches this one capture-phase guard, and then
-  most pops need no return because focus never left: the ticket stays pinned to the real input region
+  (not an editable field, the xterm screen, a scrollbar gutter, or an explicitly marked native-selection
+  region) is **prevented from moving focus at all** — the click still lands and acts. A native-selection
+  region keeps the browser's default press so ordinary text can be drag-selected, double-clicked, and copied;
+  it is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
+  then most pops need no return because focus never left: the ticket stays pinned to the real input region
   instead of getting polluted by the button that opened the pop.
 
 The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it. The **session interface is a surface, not a transient overlay** — it owns its own focus discipline and hosts the sink, so it stays outside this boundary; the boundary governs only the modals that float over it.

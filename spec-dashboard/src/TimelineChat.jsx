@@ -126,7 +126,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           </button>
         </div>
       )}
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
+      <div className="m-timeline" ref={scrollRef} onScroll={onScroll} data-native-selection>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>

@@ -45,9 +45,10 @@ export function returnFocus() {
 // back. Attached as a capture-phase mousedown handler on a surface whose focus rests on its sink (the
 // session console's panel, a context menu): a press on anything that is not itself an input surface is
 // stopped from moving focus — the click still lands and acts, the press just stops stealing. Editable
-// fields and the xterm screen keep their native press-to-focus; a press in a scroller's scrollbar gutter
-// keeps its default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
-const FOCUS_OWNERS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
+// fields and the xterm screen keep their native press-to-focus; explicitly marked selection regions keep
+// the browser's native drag/double-click selection. A press in a scroller's scrollbar gutter keeps its
+// default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
+const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, [data-native-selection]'
 
 // scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
 // glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.
@@ -61,7 +62,7 @@ const inScrollbarGutter = (el, e) => {
 export function inertChromePress(e) {
   const el = e.target
   if (!(el instanceof Element)) return
-  if (el.closest(FOCUS_OWNERS)) return
+  if (el.closest(NATIVE_PRESS_TARGETS)) return
   if (inScrollbarGutter(el, e)) return
   e.preventDefault()
 }

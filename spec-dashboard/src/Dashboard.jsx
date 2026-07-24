@@ -73,6 +73,11 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
   const { page, param } = useRoute()
+  // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
+  // it on graph/evals/issues routes: a cold dashboard should not open every session transport just because
+  // the console is available as a sibling route.
+  const [sessionWarm, setSessionWarm] = useState(() => page === 'sessions')
+  useEffect(() => { if (page === 'sessions') setSessionWarm(true) }, [page])
   // focus survives a reload / a mobile↔desktop breakpoint remount within this tab (sessionStorage, so a
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
   const [focusId, setFocusId] = useState(() => {
@@ -624,9 +629,8 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
       {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} onClose={() => setOverlay(false)} />}
-      {/* the console mounts immediately (warm terminals — its chunk is fetched right after the shell
-          paints); visibility is the pane's, its loading intermediate the shared fallback, like any page. */}
-      <PagePane active={page === 'sessions'} warm className="page-sessions">
+      {/* The console mounts on first entry, then remains warm while other routes are shown. */}
+      <PagePane active={page === 'sessions'} warm={sessionWarm} className="page-sessions">
         <SessionInterface
           sessions={sessions}
           specs={specs}

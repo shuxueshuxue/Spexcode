@@ -38,13 +38,19 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
     if (d) setEvents((prev) => (sameEvents(prev, d.events) ? prev : d.events))
   }), [s.id])
-  useEffect(() => { setEvents(null); setDetail(null); pinnedRef.current = true; load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) }) }, [s.id, load])
+  useEffect(() => {
+    if (!active) return undefined
+    setEvents(null); setDetail(null); pinnedRef.current = true
+    load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
+    return undefined
+  }, [s.id, load, active])
   useEffect(() => { setFullProcess(false) }, [s.id, hasFullProcess])
   useEffect(() => {
+    if (!active) return undefined
     const iv = setInterval(load, 8000)
     return () => clearInterval(iv)
-  }, [load])
-  useEffect(() => { load() }, [s.status, s.note, load])
+  }, [load, active])
+  useEffect(() => { if (active) load() }, [s.status, s.note, load, active])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }

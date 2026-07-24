@@ -120,6 +120,32 @@ scenarios:
       still toggle, and the active TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers
       mounted, switching to the second makes its composer the sole sink. Phone and desktop satisfy the same shared
       TimelineChat contract.
+  - name: timeline-http-clipboard
+    tags: [frontend-e2e, mobile, desktop]
+    code: spec-dashboard/src/TimelineChat.jsx
+    related: [spec-dashboard/src/styles.css, spec-dashboard/src/i18n/en.js, spec-dashboard/src/i18n/zh.js, spec-dashboard/test/timeline-chat-clipboard.e2e.mjs]
+    description: >
+      Serve the built dashboard from a non-loopback plain-HTTP address and open the shared TimelineChat at
+      1280x800 and 390x844. Keep a non-empty draft and saved caret in the focused composer, create an exact
+      CSS Custom Highlight Range, press Ctrl/Cmd+C, then focus an independent test input and paste the OS
+      clipboard into it. Repeat through the no-Custom-Highlight note copy button. Exercise the clipboard
+      capability matrix: secure Clipboard API success; API rejection to fallback; Clipboard API absent to
+      fallback; and fallback command false, throw, or return true without a confirmed copy event. Also give
+      the composer its own non-collapsed native selection, hide one warm TimelineChat behind another, and
+      clear the timeline highlight through typing and Escape. Record the interaction as video and screenshot
+      the visible failure state.
+    expected: |
+      Keyboard and button copies enter one seam. A resolving Clipboard API wins without invoking fallback.
+      API rejection or absence falls through to a one-shot copy event plus document.execCommand("copy"); the
+      event writes the exact Range/note text as text/plain, and pasting the real OS clipboard into the
+      independent input returns that text byte-for-byte on non-loopback HTTP. The fallback creates no element,
+      document Selection, or focus handoff. It succeeds only when the copy event accepted the payload AND the
+      command returned true. False, throw, or an unconfirmed event shows the restrained localized copy-failed
+      live status, never a success acknowledgement, and preserves the custom highlight. A confirmed copy gets
+      only a brief acknowledgement. Throughout, the original composer stays document.activeElement with draft
+      and caret unchanged and getSelection().toString()===''; a composer's own non-collapsed native selection
+      bypasses the timeline seam. Typing/Escape clear only the custom highlight, and a hidden warm TimelineChat
+      owns neither the global highlight nor a focus sink.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]
     description: >

@@ -15,7 +15,7 @@ test('eval detail copy names filed measurements as results in both locales', () 
 test('the authored control surface is consistently named Command Box in Chinese', () => {
   assert.equal(zh.session.commandBtn, 'Command Box')
   assert.equal(zh.session.commandBox, 'Command Box')
-  assert.match(zh.session.commandTitle, /完整指令.*Alt\/Cmd\+I/)
+  assert.match(zh.session.commandTitle, /完整指令.*Alt\+I/)
   assert.match(zh.session.commandPlaceholder, /完整指令/)
   assert.match(zh.session.commandSend, /Command Box/)
 })

@@ -19,6 +19,7 @@ related:
   - spec-dashboard/src/i18n/zh.js
   - spec-dashboard/test/timeline-chat-clipboard.e2e.mjs
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
+  - spec-dashboard/test/timeline-chat-focus.e2e.mjs
   - spec-dashboard/src/useIsMobile.js
 ---
 # mobile-ui
@@ -96,7 +97,10 @@ The two planes, made native to touch:
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
   through a note or message, refresh work neither remounts the conversation nor clears its custom
-  highlight. The active TimelineChat's composer is its **continuous sink**: a plain press or drag in
+  highlight. When a terminal-free console becomes active, desktop focuses its mounted composer on the
+  next animation frame so typing can continue immediately; the phone surface never auto-focuses it,
+  because a tab switch must not summon the soft keyboard. The active TimelineChat's composer is its
+  **continuous sink**: a plain press or drag in
   conversation text is prevented from moving DOM focus, so that exact textarea remains
   `document.activeElement` from mousedown through every move and mouseup. Because suppressing the press
   also suppresses the browser's native selection start, the coordinate driver follows xterm.js

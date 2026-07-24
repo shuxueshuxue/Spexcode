@@ -2,18 +2,24 @@
 scenarios:
   - name: child-folds-under-its-spawner
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
     description: >
       Through the running dashboard in a real browser, drive the actual product: from one live session (call
       it PARENT), run `spex new "<a small task>"` in its terminal so the backend launches a CHILD from inside
       PARENT's process. Wait for the child to appear, then open the session console (Enter). Read the left
       session list. The child must NOT sit as its own top-level tab beside PARENT; instead PARENT's row shows the
-      fold pod (a pill with the subtree count). Screenshot the collapsed list. Click PARENT's pod. Screenshot again.
+      fold pod (a pill with the subtree count). Screenshot the collapsed list. Click PARENT's row body and
+      confirm its surface-native selection/open action without changing the fold; then click PARENT's pod and
+      screenshot again. Repeat the row-body-versus-pod check in the map-side SessionWindow and phone Sessions
+      list at narrow browser widths.
       Finally, close PARENT (row right-click → Close) and force a board reload; screenshot the list once more.
     expected: |
       Collapsed: the child is HIDDEN — PARENT is one row leading with a FILLED fold pod whose number is the
       subtree count (1 here); the child is not a sibling top-level tab. PARENT's own status glyph and which
       triage zone it sits in (needs-you vs self-running) are PARENT's OWN — never an aggregate of the child.
-      After clicking the pod it turns OUTLINE (count unchanged) and the child row appears indented directly
+      Clicking the row body never changes the fold; it only selects/opens/locks according to that list surface.
+      Only the leading pod carries `aria-expanded`. After clicking the pod it turns OUTLINE (count unchanged)
+      and the child row appears indented directly
       beneath PARENT (recursively — a child that itself spawned would carry its own pod). After PARENT is closed and the board reloads, the child AUTO-PROMOTES to a
       top-level row (its dangling parent pointer is dropped at read time) — no orphan is lost, no migration ran.
   - name: pod-click-keeps-current-surface-focus

@@ -51,8 +51,8 @@ is pi's OWN half, chosen so the rest of the product needs NO pi branch:
   reason is **sent back in as a user message** (awaited `pi.sendUserMessage`, deliverAs steer) — pi's
   equivalent of claude's Stop-hook continuation — and a genuinely uninjectable host is reported loud by
   the runtime.
-- **The rendezvous inject.** sessions.ts already exports `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>` to every
-  `ownsRendezvous` launch; the runtime's server binds it and pi supplies only the inject —
+- **The rendezvous inject.** The pi adapter's `launchEnv(id)` exports
+  `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>`; the runtime's server binds it and pi supplies only the inject —
   `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. claude's delivery
   (`deliverViaRendezvous`, parse-confirmed by the repaint barrier) and claude's liveness (the socket-LISTENER
   connect probe) work for pi **unchanged** — `ownsRendezvous: true`, zero new transport code; the runtime's

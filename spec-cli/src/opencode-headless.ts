@@ -3,18 +3,14 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
-import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
+import { headlessTurnFailureShell, type DispatchResult, type HarnessDeliveryRecord } from './harness.js'
+import { shQuote } from './sh.js'
 
 const pexec = promisify(execFile)
-const SPEX = join(fileURLToPath(new URL('..', import.meta.url)), 'bin', 'spex.mjs')
 const WAKE_EARLY_EXIT_MS = 5_000
 const OUTCOME_POLL_MS = 25
 
-const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const turnFailureShell = (swallow: boolean) =>
-  `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote('opencode-headless')} "$__spex_rc"${swallow ? ' || true' : ''}`
 
 function accountLoginShell(): string {
   try { return userInfo().shell || '' } catch { return '' }
@@ -33,12 +29,12 @@ function turnHome(command: string, outcomePath?: string): string {
     '__spex_cas_rc=0',
     'if [ "$__spex_rc" -ne 0 ]; then',
     '  __spex_outcome "reporting:$$:$__spex_rc" || true',
-    `  ${turnFailureShell(false)}`,
+    `  ${headlessTurnFailureShell('opencode-headless', false)}`,
     '  __spex_cas_rc=$?',
     'fi',
     '__spex_outcome "exit:$__spex_rc:cas:$__spex_cas_rc" || printf "[spex opencode-headless] could not finalize turn outcome marker\\n" >&2',
   ] : [
-    `if [ "$__spex_rc" -ne 0 ]; then ${turnFailureShell(true)}; fi`,
+    `if [ "$__spex_rc" -ne 0 ]; then ${headlessTurnFailureShell('opencode-headless')}; fi`,
   ]
   const script = [
     ...outcomeSetup,

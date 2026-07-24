@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -72,12 +72,9 @@ function maxActive(): number {
   return Math.max(1, Math.floor(v ?? DEFAULT_MAX_ACTIVE))
 }
 
-// the rendezvous control socket path + its prompt-delivery/liveness logic now live in the [[harness-adapter]]
-// (claude OWNS the rendezvous; codex does not), so product code asks the adapter rather than hard-wiring it.
-// rvSock is imported only for the two NON-delivery uses that remain product-level: building the launch env var
-// (rvEnv, below) and the best-effort socket sweep on close.
-// env prefix put in front of the spawned agent so it creates this session's rendezvous control socket — and
-// so its hooks + materialize write to the SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
+// The adapter owns any transport bootstrap env (rendezvous daemon + socket); product launch only composes it
+// with the governed session id and home vars. This env prefix also ensures hooks + materialize write to the
+// SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
@@ -85,13 +82,12 @@ const rvEnv = (id: string, harness = HARNESS) => {
   // SPEXCODE_SESSION_ID is the governed record id. Claude's harness id is the same value, so hooks and CLI
   // calls can use it directly. Codex cannot trust this env inside the long-lived shared app-server; codex hooks
   // start from the payload thread id and alias through harness_session_id, while the short-lived codex-launch
-  // process uses this env only to store the freshly started thread id on the governed record. The CLAUDE_BG
-  // rendezvous control socket is the reclaude prompt-delivery path and exists ONLY for harnesses that own one
-  // (claude/pi/opencode) — codex has no such daemon, so it is omitted there.
-  const parts = [`SPEXCODE_SESSION_ID=${id}`]
-  if (harness.ownsRendezvous) parts.push(`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`)
-  for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }
-  return parts.join(' ')
+  // process uses this env only to store the freshly started thread id on the governed record.
+  const homeVars = ['SPEXCODE_HOME', 'CODEX_HOME'].flatMap((v) => {
+    const value = process.env[v]
+    return value ? [`${v}=${value}`] : []
+  })
+  return [`SPEXCODE_SESSION_ID=${id}`, ...harness.launchEnv(id), ...homeVars].join(' ')
 }
 
 // the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]
@@ -1378,12 +1374,11 @@ export async function newSession(prompt: string, parent: string | null = null, l
   writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
   const after = readRecord(id) ?? rec   // 'active' if the drain launched it, else still 'queued'
-  // Every adapter answers from its own truth. Asking with no process facts distinguishes a record-backed
-  // adapter (online immediately) from process-backed queued/booting adapters (offline/starting) without an
-  // extra whole-box tmux snapshot on the creation hot path.
-  const recordOnline = h.liveness(after, false, runtimeRoot()) === 'online'
+  // Every headless adapter is record-backed and therefore online immediately; interactive adapters still need
+  // their real process/transport snapshot. Read that capability directly instead of smuggling a harness-mode
+  // probe through liveness with fake tmuxAlive=false.
   const queued = after.status === 'queued'
-  return toSession(after, queued ? 'queued' : 'working', recordOnline ? 'online' : queued ? 'offline' : 'starting')
+  return toSession(after, queued ? 'queued' : 'working', h.headless ? 'online' : queued ? 'offline' : 'starting')
 }
 
 // @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what writes

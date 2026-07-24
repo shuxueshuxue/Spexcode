@@ -1,10 +1,12 @@
-import { createConnection, createServer, type Server, type Socket } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
+import { controlRequest, withTimeout } from './headless-controller.js'
+import { shQuote } from './sh.js'
 
 type ControlRequest = { type: 'deliver'; text: string }
 type ChildTurn = { process: ChildProcess; exited: Promise<number | null> }
@@ -14,8 +16,6 @@ const SPEX = join(PKG, 'bin', 'spex.mjs')
 const CONTROL_TIMEOUT_MS = 30_000
 const START_TIMEOUT_MS = 30_000
 
-const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
-
 /** The resident controller socket is distinct from pi's per-turn rendezvous socket. */
 export const piHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ph-${id}.sock`)
 
@@ -23,53 +23,11 @@ export function piHeadlessLaunchCommand(id: string, runtimeDir: string, piCmd: s
   return [shQuote(SPEX), 'internal', 'pi-headless-run', shQuote(id), shQuote(runtimeDir), shQuote(piCmd), '--'].join(' ')
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms)
-    promise.then(
-      (value) => { clearTimeout(timer); resolve(value) },
-      (error) => { clearTimeout(timer); reject(error) },
-    )
-  })
-}
-
-function controlRequest(id: string, request: ControlRequest): Promise<DispatchResult> {
-  return new Promise((resolve) => {
-    let socket: Socket | undefined
-    let settled = false
-    let buffer = ''
-    const finish = (result: DispatchResult) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      socket?.destroy()
-      resolve(result)
-    }
-    const timer = setTimeout(() => finish({ ok: false, error: `pi-headless control timed out for session ${id}` }), CONTROL_TIMEOUT_MS)
-    try { socket = createConnection(piHeadlessSock(id)) } catch (error) {
-      finish({ ok: false, error: `pi-headless controller connect failed for session ${id}: ${(error as Error).message}` })
-      return
-    }
-    socket.setEncoding('utf8')
-    socket.on('connect', () => socket!.write(`${JSON.stringify(request)}\n`))
-    socket.on('data', (chunk) => {
-      buffer += chunk
-      const nl = buffer.indexOf('\n')
-      if (nl < 0) return
-      try {
-        const response = JSON.parse(buffer.slice(0, nl)) as DispatchResult
-        finish(response.ok ? { ok: true } : { ok: false, error: response.error || 'pi-headless controller rejected the request' })
-      } catch (error) {
-        finish({ ok: false, error: `pi-headless returned an invalid control response: ${(error as Error).message}` })
-      }
-    })
-    socket.on('error', (error) => finish({ ok: false, error: `pi-headless controller unreachable for session ${id}: ${error.message}` }))
-    socket.on('close', () => finish({ ok: false, error: `pi-headless controller closed before confirming session ${id}` }))
-  })
-}
-
 export const deliverViaPiHeadless = (rec: HarnessDeliveryRecord, text: string) =>
-  controlRequest(rec.session, { type: 'deliver', text })
+  controlRequest(piHeadlessSock(rec.session), { type: 'deliver', text }, {
+    name: 'pi-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+    rejected: 'pi-headless controller rejected the request',
+  })
 
 export class PiHeadlessController {
   private server: Server | null = null
@@ -144,14 +102,12 @@ export class PiHeadlessController {
 
     // A live extension listener is an in-flight pi turn. The native steer path is parse-confirmed by the
     // shared rendezvous protocol. Only a proven absent listener may cold-wake a saved session.
-    const { deliverViaRendezvous, rendezvousListening } = await import('./harness.js')
-    const listener = await rendezvousListening(this.id)
-    if (listener === 'live') return deliverViaRendezvous(this.id, request.text)
-    if (listener === 'unproven') return { ok: false, error: `could not determine whether pi turn ${this.id} is live — prompt NOT delivered` }
-
-    if (this.child) await withTimeout(this.child.exited, 5_000, `previous pi-headless turn did not exit for session ${this.id}`)
-    await this.spawnTurn(request.text, true)
-    return { ok: true }
+    const { deliverViaSocketOrWake } = await import('./harness.js')
+    return deliverViaSocketOrWake(this.id, request.text, async () => {
+      if (this.child) await withTimeout(this.child.exited, 5_000, `previous pi-headless turn did not exit for session ${this.id}`)
+      await this.spawnTurn(request.text, true)
+      return { ok: true }
+    }, `could not determine whether pi turn ${this.id} is live — prompt NOT delivered`)
   }
 
   private async spawnTurn(text: string, resume: boolean): Promise<void> {

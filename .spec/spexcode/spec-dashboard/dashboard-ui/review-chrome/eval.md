@@ -54,7 +54,7 @@ scenarios:
       class. Open direct and secondary-filter menus by mouse and keyboard; read focus transfer, checked item,
       Arrow/Home/End roving, trigger restoration, outside dismissal, one-layer Escape, and the Chromium
       accessibility tree's named group/radio ownership. On Issues read tablist/tab/tabpanel names and
-      relations and press Up/Down on a horizontal tab; on Evals read the named Fail/Pass button group,
+      relations and press Up/Down on a horizontal tab; on Evals read the named Fail/Pass/Unmeasured button group,
       pressed states, ReviewState names, and toggle-to-clear behavior. Then open one
       eval detail and one issue detail and compare the detail skeletons: header,
       status band and state SVG, main column, side rail, docked composer classes. Resize list and detail to
@@ -90,9 +90,9 @@ scenarios:
       only the top registered layer before focus returns to its trigger. Each overflow facet is a distinct
       accessible radio group named by its visible label. Issues' horizontal section tablist is named; every tab
       controls the one results tabpanel, the panel is labelled by the active tab, and Up/Down neither changes
-      section nor suppresses normal scrolling. Evals instead exposes a named Fail/Pass button group with
-      honest aria-pressed state: neither is pressed on the default all-verdict result region, and blind or
-      unscored rows remain reachable rather than being forced into either button.
+      section nor suppresses normal scrolling. Evals instead exposes a named Fail/Pass/Unmeasured button
+      group with honest aria-pressed state: none is pressed on the default all-verdict result region, blind
+      rows select only through Unmeasured, and unscored rows remain reachable without being mislabeled.
   - name: detail-side-rail-sticky
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
@@ -200,7 +200,7 @@ scenarios:
       `scope:` suggests only sessions on the current board. Back restores URL + input text + result set
       at every level. Legacy addresses replace-normalize to the token form (live=1→session:present,
       session=<id>→scope:<id>, ok=1→state:reviewed, kind=all→the bare default); Evals' bare default is
-      `is:eval`, Fail/Pass toggle `verdict:` and Human review builds `state:`; a scoped list shows the
+      `is:eval`, Fail/Pass/Unmeasured toggle `verdict:` and Human review builds `state:`; a scoped list shows the
       gates strip and its rows' details carry ?q=scope:<id> alone. At 390px the input keeps full width
       and highlight with no horizontal overflow; every theme keeps the overlay colored and aligned.
   - name: detail-header-alignment

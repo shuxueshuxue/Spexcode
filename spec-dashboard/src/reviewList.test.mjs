@@ -258,19 +258,21 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(shell, /const activeSectionIndex = Math\.max\(0, sections\.findIndex/)
   assert.match(shell, /tabIndex=\{sectionsAreTabs \? \(index === activeSectionIndex \? 0 : -1\) : undefined\}/)
   // Issues remains the exhaustive lifecycle tablist; Evals declares a pressed-button group because
-  // blind/unscored/unknown rows make Fail/Pass non-exhaustive.
+  // unscored/unknown readings keep Fail/Pass/Unmeasured non-exhaustive.
   assert.match(issues, /active: section === '' \|\| section === 'open'/)
   assert.match(evals, /sectionMode="filters"/)
   assert.match(evals, /active: verdict === 'fail'/)
   assert.match(evals, /active: verdict === 'pass'/)
+  assert.match(evals, /active: verdict === 'unmeasured'/)
   assert.match(shell, /aria-pressed=\{sectionsAreTabs \? undefined : section\.active\}/)
   // blind rows travel through the SAME result-kind enum and stay in the default population, while
-  // Fail/Pass counts come from the shared verdict section under the rest of the query.
+  // All three counts come from the shared verdict section under the rest of the query.
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.BLIND/)
   assert.doesNotMatch(evals, /reading: (?:true|false)/)
   assert.match(evals, /count: failCount/)
   assert.match(evals, /count: passCount/)
+  assert.match(evals, /count: unmeasuredCount/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
@@ -334,6 +336,7 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /\.lp-head\s*\{[^}]*height:\s*48px;/s)
   assert.match(css, /\.rl-row-grid\s*\{[^}]*min-height:\s*64px;/s)
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*height:\s*49px;/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}[\s\S]*\.rl-facets\s*\{\s*flex:\s*none;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
   assert.match(shell, /const buttonLabel = selectedLabel \? `\$\{label\}: \$\{selectedLabel\}` : label/)
   assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)

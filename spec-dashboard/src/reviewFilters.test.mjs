@@ -36,23 +36,25 @@ test('eval adapter gives blind rows only the fields they honestly own', () => {
     { scenario: 'video pass', node: 'alpha', filterKind: EVAL_FILTER_KIND.RESULT, by: 'on-board', fresh: true, humanOk: { by: 'human' }, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
     { scenario: 'image fail', node: 'beta', filterKind: EVAL_FILTER_KIND.RESULT, by: 'vanished', fresh: false, verdict: { status: 'fail' }, evidence: [{ kind: 'image', hash: 'i' }] },
     { scenario: 'never measured', node: 'alpha', filterKind: EVAL_FILTER_KIND.BLIND },
+    { scenario: 'timeline gap', node: 'gamma', filterKind: EVAL_FILTER_KIND.UNMEASURED },
+    { scenario: 'dangling thread', node: 'gamma', filterKind: EVAL_FILTER_KIND.DANGLING },
   ]
   const shown = (state) => evalFilterModel(rows, state, { sessions, t, defaultKind: 'all' }).shown.map((item) => item.scenario)
 
-  assert.deepEqual(shown({ kind: 'all' }), ['video pass', 'image fail', 'never measured'])
+  assert.deepEqual(shown({ kind: 'all' }), ['video pass', 'image fail', 'never measured', 'timeline gap', 'dangling thread'])
   assert.deepEqual(shown({ kind: 'video' }), ['video pass'])
   assert.deepEqual(shown({ freshness: 'stale' }), ['image fail'])
-  assert.deepEqual(shown({ verdict: 'unscored' }), ['never measured'])
+  assert.deepEqual(shown({ verdict: 'unmeasured' }), ['never measured', 'timeline gap'])
+  assert.deepEqual(shown({ verdict: 'unscored' }), ['dangling thread'])
   assert.deepEqual(shown({ session: 'present' }), ['video pass'])
   assert.deepEqual(shown({ session: 'missing' }), ['image fail'])
   assert.deepEqual(shown({ q: 'ALPHA' }), ['video pass', 'never measured'])
-  // Fail/Pass counts come out under the REST of the query: the active verdict never hides the other
-  // button's stable count, while the non-exhaustive blind row belongs to neither count.
+  // Section counts come out under the REST of the query: the active verdict never hides the others.
   const model = evalFilterModel(rows, { verdict: 'fail' }, { sessions, t, defaultKind: 'all' })
-  assert.deepEqual(model.sections, { fail: 1, pass: 1 })
+  assert.deepEqual(model.sections, { fail: 1, pass: 1, unmeasured: 2 })
   assert.deepEqual(model.shown.map((item) => item.scenario), ['image fail'])
   assert.deepEqual(shown({ review: 'reviewed' }), ['video pass'])
-  assert.deepEqual(shown({ review: 'current' }), ['image fail', 'never measured'])
+  assert.deepEqual(shown({ review: 'current' }), ['image fail', 'never measured', 'timeline gap', 'dangling thread'])
   assert.deepEqual(model.facets.review.options.map((option) => option.value), ['', 'current', 'reviewed'])
 
   const untagged = { ...rows[0] }

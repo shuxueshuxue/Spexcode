@@ -6,7 +6,7 @@ scenarios:
     description: >
       Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
-      elements' tag/href and structured content, 32px query with its visible token text, Fail/Pass
+      elements' tag/href and structured content, 32px query with its visible token text, Fail/Pass/Unmeasured
       quick filters, Human review builder, direct menus, and overflow. Edit the query, toggle verdict/evidence values, and add a
       scope: token; read the hash, reload, and Back through the prior states.
     expected: >
@@ -14,8 +14,8 @@ scenarios:
       `is:eval`. The page is a GitHub-style full-width
       ListView — one structured row per (node, scenario), each row a REAL <a> anchor whose href is that eval's canonical
       detail address (#/evals/<node>/<scenario>), copyable/middle-clickable; NO master-detail split pane
-      and NO in-page detail. Fail/Pass ReviewState icons + counts sit left as a named quick-filter group;
-      neither is pressed on the honest default that also reaches blind/unscored/unknown rows. Human review
+      and NO in-page detail. Fail/Pass/Unmeasured ReviewState icons + counts sit left as a named quick-filter
+      group; none is pressed on the honest default that also reaches blind/unscored/unknown rows. Human review
       (Needs review / Reviewed), freshness, and evidence are secondary builders while node/filer/scope are
       query tokens only. A query or builder pick
       writes the ONE canonical address (e.g. #/evals?q=is:eval verdict:fail) as a history
@@ -170,9 +170,9 @@ scenarios:
     expected: >
       Scoping rewrites the address to the scoped LIST query (#/evals?q=is:eval scope:<id> —
       the same text every session door mints) and the list becomes that session's
-      WORKTREE-rooted model: the gates strip (the review numbers + the HTML export door) above, blind
-      spots leading as inert unmeasured rows, the session's own readings ✦-marked, then the inherited
-      baseline. Row hrefs carry ?q=scope:<id> ALONE — a detail address never drags list filters — so the
+      WORKTREE-rooted model: the gates strip (the review numbers + the HTML export door) above, readings
+      newest-first across session ownership, then inert unmeasured rows with no filed time. The session's
+      own readings remain ✦-marked. Row hrefs carry ?q=scope:<id> ALONE — a detail address never drags list filters — so the
       detail's A/B history walks the worktree readings, and the detail's way back to the list is the
       scoped default query again. The legacy #/sessions/<id>/eval address NORMALIZES (replace) to the
       scoped default list — old links keep working, the old shape never shows in the bar. The console's

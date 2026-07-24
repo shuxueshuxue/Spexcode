@@ -40,10 +40,10 @@ consumer that needs canonical review addresses (e.g. eval anchors on other board
 - **Default view = bare address.** queryParam compares token-normalized text against the page default
   (Issues `is:issue state:open`, Evals `is:eval`) — equal or empty means the bare page
   address, anything else exactly `?q=<raw text>`. The evidence default is `all` with no hidden
-  data-dependent fallback. Evals deliberately defaults to the honest whole scenario population: Fail/Pass
-  are non-exhaustive `verdict:` quick filters, while `state:current|reviewed` remains the visible human-review
-  lifecycle token and secondary builder. Blind, unscored, and unknown verdicts therefore remain reachable
-  when no verdict token is active.
+  data-dependent fallback. Evals deliberately defaults to the honest whole scenario population:
+  Fail/Pass/Unmeasured are non-exhaustive `verdict:` quick filters (`unmeasured` means declared without a
+  reading), while `state:current|reviewed` remains the visible human-review lifecycle token and secondary
+  builder. Blind, unscored, and unknown verdicts therefore remain reachable when no verdict token is active.
 - **Legacy params replay as the full visible state.** An old structured list address rebuilds the
   default text with each param surgically applied — state/concluded→state:, ok=1→state:reviewed,
   kind→evidence: (kind=all → nothing), store/author/node/filer/verdict/freshness→their token,

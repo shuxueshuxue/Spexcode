@@ -59,12 +59,9 @@ const rel = (ts) => {
   return `${Math.floor(s / 86400)}d`
 }
 
-// `entries`: the scope's latest-per-scenario rows, newest-first (the page computes them — the project
-// scope from the paged API, the session scope from the worktree-rooted model). `blind`: the session
-// scope's declared-never-measured scenarios, rendered as INERT leading rows (outstanding loss has no
-// reading to open) — they travel through the SAME engine as reading:false items, so they honestly own
-// only their node/unscored/query/section facts. `queryText`/`onQueryText`: the URL's raw token text and
-// its push writer ([[evals-view]] — the writer owns the default↔bare equivalence).
+// The paged API supplies latest-per-scenario rows in default order: filed readings newest-first, then
+// blind scenarios without a filed time. Blind rows stay INERT, but retain their server position and
+// travel through the same filter engine with an honest `unmeasured` verdict.
 const optionsOf = (pageData, key, allLabel, labelValue = (value) => value) => (pageData?.facets?.[key]?.options ?? []).map((option) => ({
   value: option.value,
   label: option.value === '' ? allLabel : labelValue(option.value),
@@ -77,23 +74,25 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
   const surgery = (key, value) => onQueryText(setToken(text, key, value))
 
   const items = Array.isArray(pageData?.items) ? pageData.items : []
-  const shown = items.filter((item) => item.filterKind === EVAL_FILTER_KIND.RESULT)
-  const shownBlind = items.filter((item) => item.filterKind === EVAL_FILTER_KIND.BLIND)
   const failCount = pageData?.counts?.fail || 0
   const passCount = pageData?.counts?.pass || 0
+  const unmeasuredCount = pageData?.counts?.unmeasured || 0
   const verdict = readToken(text, 'verdict')
 
-  const rows = [
-    ...shownBlind.map((b) => ({
-      key: `blind:${b.node}·${b.scenario}`,
+  const rows = items.flatMap((item) => {
+    if (item.filterKind === EVAL_FILTER_KIND.BLIND) return [{
+      key: `blind:${item.node}·${item.scenario}`,
       cls: 'se-blind',
       content: (
-        <ReviewListRow state={<ReviewState kind="eval" state="missing" />} title={b.scenario}
-          meta={<><span className="ef-node" style={{ color: `hsl(${b.hue ?? 210} 60% 70%)` }}>{b.node}</span><span>{t('sessionEval.unmeasured')}</span></>} />
+        <ReviewListRow state={<ReviewState kind="eval" state="missing" />} title={item.scenario}
+          meta={<><span className="ef-node" style={{ color: `hsl(${item.hue ?? 210} 60% 70%)` }}>{item.node}</span><span>{t('sessionEval.unmeasured')}</span></>} />
       ),
-    })),
-    ...shown.map((e) => ({ key: entryKey(e), href: hrefFor(e), content: <EvalRow e={e} /> })),
-  ]
+    }]
+    if (item.filterKind === EVAL_FILTER_KIND.RESULT) {
+      return [{ key: entryKey(item), href: hrefFor(item), content: <EvalRow e={item} /> }]
+    }
+    return []
+  })
 
   // menus are pure query builders over the ADAPTER's data-derived options — zero private state; the
   // evidence default is `all` (a plain enum default, never data-dependent) and All removes the token.
@@ -139,10 +138,10 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
         },
       }}
       sections={[
-        // Verdict is intentionally NON-exhaustive: neither quick filter is pressed on the honest default,
-        // so blind/unscored/unknown rows remain reachable instead of being forced into a fake binary tab.
+        // The axis remains non-exhaustive: an unscored/unknown reading is not an unmeasured scenario.
         { key: 'fail', label: <ReviewState kind="eval" state="fail" title={t('reviewList.verdict.fail')} showLabel />, count: failCount, active: verdict === 'fail', onSelect: () => surgery('verdict', verdict === 'fail' ? '' : 'fail') },
         { key: 'pass', label: <ReviewState kind="eval" state="pass" title={t('reviewList.verdict.pass')} showLabel />, count: passCount, active: verdict === 'pass', onSelect: () => surgery('verdict', verdict === 'pass' ? '' : 'pass') },
+        { key: 'unmeasured', label: <ReviewState kind="eval" state="missing" title={t('reviewList.verdict.unmeasured')} showLabel />, count: unmeasuredCount, active: verdict === 'unmeasured', onSelect: () => surgery('verdict', verdict === 'unmeasured' ? '' : 'unmeasured') },
       ]}
       sectionMode="filters"
       facets={

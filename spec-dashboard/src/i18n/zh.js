@@ -201,7 +201,7 @@ export default {
     sessionMissing: '已不在',
     openedBy: ({ by }) => `由 ${by} 发起`,
     openedAt: ({ at }) => `${at}前发起`,
-    verdict: { pass: '通过', fail: '未通过', unscored: '未评分' },
+    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', unscored: '未评分' },
     freshness: { fresh: '最新', stale: '过期' },
     pagination: '分页',
     previous: '上一页',

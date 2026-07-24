@@ -105,7 +105,7 @@ async function findScopedSession() {
     const response = await fetch(`${base}/api/evals?${params}`)
     if (!response.ok) continue
     const page = await response.json()
-    if (page.items?.some((item) => item.filterKind === 'blind')) return session.id
+    if (page.counts?.unmeasured > 0) return session.id
   }
   return null
 }
@@ -364,12 +364,14 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   assert.equal(await page.locator('.se-gates').count(), 0, 'trunk Evals creates no empty scoped status strip')
   const total = await page.locator('.lp-row').count()
   const buttons = page.locator('.rl-section')
-  assert.equal(await buttons.count(), 2)
+  assert.equal(await buttons.count(), 3)
   assert.match(await buttons.nth(0).innerText(), /^Fail\n\d+$/)
   assert.match(await buttons.nth(1).innerText(), /^Pass\n\d+$/)
+  assert.match(await buttons.nth(2).innerText(), /^Unmeasured\n\d+$/)
   assert.equal(await buttons.nth(0).getAttribute('aria-pressed'), 'false')
   assert.equal(await buttons.nth(1).getAttribute('aria-pressed'), 'false')
-  assert.match(await page.locator('.rl-sections').ariaSnapshot(), /group "Evals"[\s\S]*button "Fail \d+"[\s\S]*button "Pass \d+"/)
+  assert.equal(await buttons.nth(2).getAttribute('aria-pressed'), 'false')
+  assert.match(await page.locator('.rl-sections').ariaSnapshot(), /group "Evals"[\s\S]*button "Fail \d+"[\s\S]*button "Pass \d+"[\s\S]*button "Unmeasured \d+"/)
   await assertPageScroll('evals-list')
 
   assert.ok(scopedSession, 'real session data supplies a scoped Evals model')
@@ -383,15 +385,15 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await page.goto(`${base}/${scopedHash}`)
   const scopedPage = await (await scopedPageWaiting).json()
   await settle('.se-gates')
-  await page.locator('.se-blind').first().waitFor({ state: 'visible', timeout: 30_000 })
+  await page.locator('.lp-row').first().waitFor({ state: 'visible', timeout: 30_000 })
   const scopedGeometry = await assertGeometry('evals-scoped-list')
   assert.equal(scopedGeometry.owner.y, 10, 'scoped gates live inside, not above, the shared scrollport')
   await assertScopedStatus('evals-scoped-list')
   const scopedTotal = await page.locator('.lp-row').count()
   const blindRows = await page.locator('.se-blind').count()
-  assert.ok(blindRows > 0, 'real scoped blind scenarios reach the paged UI')
+  assert.ok(scopedPage.counts.unmeasured > 0, 'real scoped data includes blind scenarios')
   const defaultCounts = await sectionCounts()
-  assert.ok(defaultCounts[0] + defaultCounts[1] < scopedPage.total, 'Fail/Pass is honestly non-exhaustive over the full server set')
+  assert.equal(defaultCounts[2], scopedPage.counts.unmeasured, 'Unmeasured exposes the server blind count')
   const scopedUpdate = async (action) => {
     const waiting = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -418,6 +420,14 @@ async function runScenario(browser, projectsBase, { name, title, viewport, mobil
   await scopedUpdate(() => page.goBack())
   assert.equal(await page.evaluate(() => location.hash), scopedHash)
   assert.equal(await page.locator('.rl-section').nth(1).getAttribute('aria-pressed'), 'false')
+  const unmeasuredPage = await scopedUpdate(() => buttons.nth(2).click())
+  assert.match(await page.evaluate(() => location.hash), /verdict%3Aunmeasured/)
+  assert.equal(await buttons.nth(2).getAttribute('aria-pressed'), 'true')
+  assert.equal(unmeasuredPage.total, scopedPage.counts.unmeasured)
+  assert.ok(unmeasuredPage.items.every((item) => item.filterKind === 'blind'))
+  assert.equal(await page.locator('.se-blind').count(), unmeasuredPage.items.length)
+  await scopedUpdate(() => buttons.nth(2).click())
+  assert.equal(await page.evaluate(() => location.hash), scopedHash)
 
   await page.locator('.rl-secondary-filters-trigger').last().click()
   const reviewGroup = page.getByRole('group', { name: mobile ? /Human review|人工复核/ : 'Human review' })

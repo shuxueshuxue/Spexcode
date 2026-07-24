@@ -56,6 +56,12 @@ const expected = {
   unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length || 0), 0),
   diffFiles: review.diff.length,
   names: states.map((state) => `${state.node}/${state.scenario}`).sort(),
+  order: states.slice().sort((a, b) => (
+    Number(Boolean(b.reading)) - Number(Boolean(a.reading))
+    || String(b.reading?.ts ?? '').localeCompare(String(a.reading?.ts ?? ''))
+    || a.node.localeCompare(b.node)
+    || a.scenario.localeCompare(b.scenario)
+  )).map((state) => `${state.node}/${state.scenario}`),
 }
 
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true, args: ['--no-sandbox'] })
@@ -88,11 +94,11 @@ try {
   await page.waitForFunction((count) => document.querySelectorAll('.lp-row').length === count, expected.total)
   const list = await page.evaluate(() => ({
     hash: location.hash,
-    rows: [...document.querySelectorAll('.lp-row')].map((row) => {
+    orderedRows: [...document.querySelectorAll('.lp-row')].map((row) => {
       const node = row.querySelector('.ef-node')?.textContent?.trim() || ''
       const scenario = row.querySelector('.rl-row-title')?.textContent?.trim() || ''
       return `${node}/${scenario}`
-    }).sort(),
+    }),
     measured: document.querySelectorAll('a.lp-row').length,
     blind: document.querySelectorAll('.lp-row.inert.se-blind').length,
     verdicts: [...document.querySelectorAll('.rl-sections > button')].map((button) => ({
@@ -102,11 +108,15 @@ try {
     unknownTips: [...document.querySelectorAll('.se-gates > .se-gate')].map((gate) => gate.getAttribute('data-tip')).filter(Boolean),
     scrollOwners: document.querySelectorAll('.page-scroll').length,
   }))
+  list.rows = list.orderedRows.slice().sort()
   check('scoped list lands on the canonical default address', list.hash === scopedHash, list.hash)
   check('scoped list row set equals the API affected-scenario set', JSON.stringify(list.rows) === JSON.stringify(expected.names), `${list.rows.length}/${expected.names.length}`)
   check('measured rows stay navigable and missing rows stay inert', list.measured === expected.measured && list.blind === expected.blind, `${list.measured} links, ${list.blind} blind`)
-  check('Fail/Pass remain non-exhaustive by default', list.verdicts.length === 2 && list.verdicts.every((item) => item.pressed === 'false'), JSON.stringify(list.verdicts))
-  check('Fail/Pass counts match the scoped latest verdicts', list.verdicts[0]?.text.endsWith(String(expected.fail)) && list.verdicts[1]?.text.endsWith(String(expected.pass)), JSON.stringify(list.verdicts))
+  check('default order is newest-first with blind rows last', JSON.stringify(list.orderedRows) === JSON.stringify(expected.order), JSON.stringify(list.orderedRows))
+  check('Fail/Pass/Unmeasured remain non-exhaustive by default', list.verdicts.length === 3 && list.verdicts.every((item) => item.pressed === 'false'), JSON.stringify(list.verdicts))
+  check('status counts match the scoped latest rows', list.verdicts[0]?.text.endsWith(String(expected.fail))
+    && list.verdicts[1]?.text.endsWith(String(expected.pass))
+    && list.verdicts[2]?.text.endsWith(String(expected.blind)), JSON.stringify(list.verdicts))
   check('unknown coverage stays in leading, outside scenario rows', expected.unknown === 0 || list.unknownTips.some((tip) => tip?.includes(`${expected.unknown}`) && tip?.toLowerCase().includes('unknown')), JSON.stringify(list.unknownTips))
   check('scoped gates and rows share one PageScroll', list.scrollOwners === 1, String(list.scrollOwners))
   await page.screenshot({ path: join(OUT, 'scoped-list.png'), fullPage: true })

@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals ListView rows and filters through [[review-chrome]] — latest result per scenario, structured state/title/filer/time/kind rows, Fail/Pass verdict quick filters, secondary human-review/freshness/evidence/presence builders, and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
+desc: The Evals ListView rows and filters through [[review-chrome]] — latest result per scenario, structured state/title/filer/time/kind rows, Fail/Pass/Unmeasured quick filters, secondary human-review/freshness/evidence/presence builders, and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
@@ -26,11 +26,15 @@ page, not a selection in a pane.
 ## expanded spec
 
 Default view: **latest result per scenario, newest first — fresh and stale, reviewed and unreviewed,
-scored and blind mixed honestly**. A stale result is real measured loss and remains visible; freshness is
-an honest facet, never a default hide. The leading quick-filter axis is **Fail / Pass**: each action wears
-the ONE [[review-chrome]] ReviewState icon + tone + count and surgically toggles `verdict:fail|pass` in the
-visible query. It is deliberately a named pressed-button group, not a tablist: verdict is not exhaustive,
-so the default `is:eval` list may show blind, unscored, or unknown rows while neither button is pressed.
+scored and blind mixed honestly**. Filed readings sort by filed time descending across source ownership;
+blind scenarios, which have no filed time, follow measured rows with a deterministic tie-break and are
+never promoted as a leading block. A stale result is real measured loss and remains visible; freshness is
+an honest facet, never a default hide. The leading quick-filter axis is **Fail / Pass / Unmeasured**: each
+action wears the ONE [[review-chrome]] ReviewState icon + tone + count and surgically toggles
+`verdict:fail|pass|unmeasured` in the visible query. Unmeasured names exactly a declared scenario with no
+reading, not an unscored or unknown reading. It is deliberately a named pressed-button group, not a
+tablist: the axis is still not exhaustive, so the default `is:eval` list may show unscored or unknown rows
+while no button is pressed.
 Counts are computed under the rest of the query, excluding the active verdict token, and a second click
 clears it back to the honest whole list. A fresh human-ok'd result is `state:reviewed`; everything else is
 `state:current`. That lifecycle remains transparent in the query and editable through the secondary
@@ -52,7 +56,7 @@ URL-query state**: a human's action pushes `?q=<raw text>` (the default view sta
 fully replay, and no local filter state survives. If live data contracts, an active menu value keeps its
 All off-switch — and the visible text is always the canonical release, whatever state the scope is in.
 An inert blind-spot row participates in that SAME conjunctive contract: it can match its real node,
-unscored verdict, and query text, but a selected Fail/Pass quick filter, evidence kind, freshness, filer,
+`verdict:unmeasured`, and query text, but a selected Fail/Pass quick filter, evidence kind, freshness, filer,
 or source-session presence value excludes it
 because an unmeasured scenario owns none of those result facts. Blind rows never leak into a filtered
 result population and never gain an href just to satisfy list structure. Filed results and non-result
@@ -77,7 +81,8 @@ history PUSH onto the detail page; `j`/`k` move the cursor and Enter opens it ([
 query and route page. The server owns latest-per-scenario selection, shared matching, full-population
 counts/facets, stable ordering/revision, and the one 25-row slice; the feed receives only that page and
 owns no local matcher or full-list prop. `scope:<id>` selects the worktree snapshot through the same
-contract and row grammar — ✦ marking the in-session rows, blind spots as inert unmeasured lines — while
+contract, row grammar, and newest-first order — ✦ marking the in-session rows, blind spots as inert
+unmeasured lines after filed readings — while
 the session toolbar consumes only its canonical lean graph summary ([[session-eval]]), never the list or
 a row model. Unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
 empty, and failed models do not replace the list shell: the scope

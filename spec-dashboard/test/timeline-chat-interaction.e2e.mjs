@@ -104,13 +104,13 @@ async function waitForTimelineToken(viewport, token, sample) {
     const reading = await sample()
     readings.push(reading)
     await showReadout(viewport, 'background refresh', reading)
-    if ((await page.locator('.m-timeline').innerText()).includes(token)) return readings
+    if ((await page.locator('.m-timeline:visible').innerText()).includes(token)) return readings
     await page.waitForTimeout(400)
   }
   throw new Error(`timeline did not render background token ${token}`)
 }
 
-async function dragSelectNote(note = page.locator('.m-ev-note').last()) {
+async function dragSelectNote(note = page.locator('.m-ev-note:visible').last()) {
   await note.scrollIntoViewIfNeeded()
   const box = await note.boundingBox()
   if (!box) throw new Error('visible note has no bounding box')
@@ -134,14 +134,16 @@ async function verifySecondConversationSink(viewport) {
   await page.goto(`${base}/#/sessions/${encodeURIComponent(secondSessionId)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
   const input = page.locator('.m-input:visible')
-  const note = page.locator('.m-ev-note:visible').last()
+  const notes = page.locator('.m-ev-note:visible')
+  const note = await notes.count() ? notes.last() : page.locator('.m-ev-word:visible').last()
   await note.waitFor({ state: 'visible', timeout: 30_000 })
   const mounted = await page.locator('.si-term-layer .m-input').count()
   assert.ok(mounted >= 2, `expected two warm headless composers, got ${mounted}`)
   const inputHandle = await input.elementHandle()
   assert.ok(inputHandle)
   const draft = `${phase}-desktop-second-layer`
-  await input.fill(draft)
+  await input.click()
+  await input.pressSequentially(draft, { delay: 20 })
   const selected = await dragSelectNote(note)
   const beforeType = await readInteraction(inputHandle, draft)
   const sinks = await activeSinkCount()
@@ -160,8 +162,8 @@ async function runViewport(name, viewport) {
   await waitForActionable()
   await page.setViewportSize(viewport)
   await page.goto(`${base}/#/sessions/${encodeURIComponent(sessionId)}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.tl-chat').waitFor({ state: 'visible', timeout: 30_000 })
-  await page.locator('.m-ev-note').last().waitFor({ state: 'visible', timeout: 30_000 })
+  await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
+  await page.locator('.m-ev-note:visible').last().waitFor({ state: 'visible', timeout: 30_000 })
   await installReadout(name)
   mark(name, 'open real headless TimelineChat')
 
@@ -186,7 +188,7 @@ async function runViewport(name, viewport) {
 
   await waitForActionable()
   await page.waitForFunction(() => document.querySelectorAll('.m-ev-note').length > 0)
-  const note = page.locator('.m-ev-note').last()
+  const note = page.locator('.m-ev-note:visible').last()
   const selectedBefore = await dragSelectNote(note)
   const afterDrag = await readInteraction(inputHandle, draft)
   const dragPass = selectedBefore.length > 0 && afterDrag.focus && afterDrag.draftKept
@@ -257,6 +259,7 @@ async function runViewport(name, viewport) {
 try {
   await runViewport('desktop', { width: 1280, height: 800 })
   await runViewport('mobile', { width: 390, height: 844 })
+  console.log(JSON.stringify({ phase, results }, null, 2))
   if (phase === 'A') {
     assert.ok(results.some((result) => !result.focusPass || !result.dragPass || !result.selectionPass
       || !result.typingPass || !result.clickPass || !result.copyPass || result.secondSink?.pass === false),

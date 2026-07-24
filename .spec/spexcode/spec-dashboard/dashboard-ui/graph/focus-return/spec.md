@@ -5,6 +5,7 @@ hue: 320
 desc: A transient overlay returns the focus it took — never leaves it on <body>.
 code:
   - spec-dashboard/src/focus.js#returnFocus
+  - spec-dashboard/src/focus.js#focusSinkPreservingSelection
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Modal.jsx

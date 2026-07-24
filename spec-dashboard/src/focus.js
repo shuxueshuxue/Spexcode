@@ -17,9 +17,15 @@
 let ticket = null
 
 const inOverlay = (el) => !!(el && el.closest && el.closest('[data-focus-overlay]'))
-// "focusable right now": still in the DOM, enabled, and actually rendered (getClientRects covers fixed
-// elements that offsetParent reports as hidden).
-const focusableNow = (el) => !!(el && el.isConnected && !el.disabled && el.getClientRects().length)
+// "focusable right now": still in the DOM, enabled, and actually visible. A visibility:hidden warm layer
+// keeps layout boxes, so getClientRects alone lies; Chromium's visibilityProperty option sees through the
+// ancestor, with an explicit computed-style fallback for browsers without checkVisibility.
+const visibleNow = (el) => {
+  if (!el?.getClientRects().length) return false
+  if (typeof el.checkVisibility === 'function') return el.checkVisibility({ visibilityProperty: true })
+  return getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none'
+}
+const focusableNow = (el) => !!(el && el.isConnected && !el.disabled && visibleNow(el))
 
 if (typeof window !== 'undefined') {
   window.addEventListener('focusin', (e) => {
@@ -36,9 +42,29 @@ export function returnFocus() {
   requestAnimationFrame(() => {
     if (inOverlay(document.activeElement)) return
     if (focusableNow(ticket)) { ticket.focus(); return }
-    const sink = document.querySelector('[data-focus-sink]')
+    const sink = [...document.querySelectorAll('[data-focus-sink]')].find(focusableNow)
     if (focusableNow(sink)) sink.focus()
   })
+}
+
+// A selectable region must accept the native pointer gesture, but its surface still owns keyboard focus.
+// Focus the exact local sink after mouseup, then restore the document ranges that focus() would otherwise
+// collapse. The sink handles the first printable key specially while that external selection remains.
+export function focusSinkPreservingSelection(sink, inputSelection = null) {
+  if (!focusableNow(sink)) return false
+  const selection = window.getSelection?.()
+  const ranges = selection && !selection.isCollapsed
+    ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
+    : []
+  sink.focus({ preventScroll: true })
+  if (inputSelection && typeof sink.setSelectionRange === 'function') {
+    sink.setSelectionRange(inputSelection.start, inputSelection.end)
+  }
+  if (ranges.length && selection) {
+    selection.removeAllRanges()
+    for (const range of ranges) selection.addRange(range)
+  }
+  return document.activeElement === sink
 }
 
 // The acquisition-side twin of returnFocus: INERT CHROME NEVER TAKES FOCUS, so there is nothing to give

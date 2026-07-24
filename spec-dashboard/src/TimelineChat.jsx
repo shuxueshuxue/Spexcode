@@ -5,6 +5,7 @@ import SessionMessages from './SessionMessages.jsx'
 import { isMessageStreamSession } from './messageStream.js'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
+import { focusSinkPreservingSelection } from './focus.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -33,6 +34,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [sendErr, setSendErr] = useState(null)
   const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
+  const inputSelectionRef = useRef({ start: 0, end: 0 })
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -49,6 +52,32 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
+
+  const rememberComposerSelection = (e) => {
+    if (e.button !== 0 || !inputRef.current) return
+    inputSelectionRef.current = {
+      start: inputRef.current.selectionStart ?? draft.length,
+      end: inputRef.current.selectionEnd ?? draft.length,
+    }
+  }
+  const returnComposerFocus = (e) => {
+    if (e.button === 0) focusSinkPreservingSelection(inputRef.current, inputSelectionRef.current)
+  }
+  // Focusing a textarea while an external document Range is restored leaves Chromium's default insertion
+  // path inert: keydown/keypress fire, but beforeinput/input do not. Insert exactly the first printable key,
+  // clear the copied Range, then ordinary textarea input resumes for every following key.
+  const typeAfterTimelineSelection = (e) => {
+    const selection = window.getSelection?.()
+    if (!selection || selection.isCollapsed || e.nativeEvent?.isComposing || e.key.length !== 1
+      || e.metaKey || e.ctrlKey || e.altKey) return
+    e.preventDefault()
+    const el = e.currentTarget
+    const { start, end } = inputSelectionRef.current
+    el.setRangeText(e.key, start, end, 'end')
+    setDraft(el.value)
+    inputSelectionRef.current = { start: start + e.key.length, end: start + e.key.length }
+    selection.removeAllRanges()
+  }
 
   const send = async () => {
     const text = draft.trim()
@@ -126,7 +155,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           </button>
         </div>
       )}
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll} data-native-selection>
+      <div className="m-timeline" ref={scrollRef} onScroll={onScroll} onMouseDown={rememberComposerSelection}
+        onMouseUp={returnComposerFocus} onDoubleClick={returnComposerFocus} data-native-selection>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
@@ -142,11 +172,14 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       <div className="m-composer">
         <div className="m-composer-line">
           <textarea
+            ref={inputRef}
             className="m-input"
+            data-focus-sink={active ? '' : undefined}
             rows={1}
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={typeAfterTimelineSelection}
           />
           <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
         </div>

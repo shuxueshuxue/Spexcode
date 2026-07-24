@@ -132,7 +132,7 @@ export function subtreeRollup(id, childrenOf) {
   return { color: need ? STATUS_COLOR.asking : run ? STATUS_COLOR.working : STATUS_COLOR.idle, count }
 }
 
-// @@@ the ordered render list ([[session-nesting]]) both session-list surfaces share. Roots are zone-sorted by
+// @@@ the ordered render list ([[session-nesting]]) all desktop/mobile session-list surfaces share. Roots are zone-sorted by
 // their OWN status (no aggregation), each carrying a zone header when the zone changes; a parent's children
 // follow it (zone-sorted among themselves) ONLY when `isExpanded(id)` — collapsed by default, so a fleet reads
 // as one row. Emits {type:'zone',zone} and {type:'row', s, depth, expandable, expanded, rollup, guides}; the

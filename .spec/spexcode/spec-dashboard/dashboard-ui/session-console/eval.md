@@ -140,20 +140,25 @@ scenarios:
       The window stays bounded above the stats strip and scrolls internally. It retains avatars, shared compact
       headlines, status glyphs, triage grouping, and graph-lock gestures without becoming the console sidebar.
   - name: offline-history-disclosure
-    tags: [frontend-e2e, desktop]
+    tags: [frontend-e2e, desktop, mobile]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
     description: >-
       Against a board carrying several retained terminal/offline history sessions (an adopter's deep-linked CR
-      records is the live case), open the console session list at a narrow sidebar viewport. Inspect the offline
-      zone at rest, expand it through its header, and select an offline session from outside the list while it
-      is folded.
+      records is the live case), use a real browser to inspect the narrow SessionInterface sidebar, the
+      map-side SessionWindow, and the phone Sessions list. In each surface inspect the offline zone and a
+      nesting parent at rest; click the parent row body, then its leading child-count pod; click the OFFLINE
+      label, then its leading count pod; finally select or deep-link an offline/nested session from outside the
+      folded list.
     expected: >-
       At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
       dormant history no longer floods the list. Needs-you and running rows are all present at every fold
-      state. The header has the count badge before the OFFLINE label and no `>`/chevron/caret/`▸` direction
-      symbol. Parent rows with children likewise put their child count before the title/status body, with no
-      direction symbol; the whole parent row toggles and keeps `aria-expanded`. Clicking the offline header
-      reveals every offline row; clicking again folds them back. A session selected by URL/search/menu stays
-      rendered even while its zone is folded. No session record is deleted or mutated by any of it.
+      state. The header has the count pod before the OFFLINE label and no `>`/chevron/caret/`▸` direction
+      symbol. Parent rows likewise put their child count before the title/status body. Only those leading count
+      pods carry `aria-expanded` and toggle: row-body clicks select/open/lock as native to the surface without
+      changing the parent fold, and the OFFLINE label does nothing. Clicking either count again folds its rows
+      back. The controls are siblings, with no button nested in a button. A session selected by URL/search/menu
+      stays rendered and its present ancestors unfold as required, while a deep-linked offline row remains
+      visible even when the offline zone itself is folded. No session record is deleted or mutated by any of it.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

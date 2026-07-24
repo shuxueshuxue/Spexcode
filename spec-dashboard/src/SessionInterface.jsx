@@ -6,7 +6,7 @@ import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
-import { SessionRow, SessionZone, RowLead, useFold } from './SessionWindow.jsx'
+import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -208,8 +208,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
   // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
   // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
-  // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled by
-  // the header, and the selected session stays a visible row even while the zone is folded.
+  // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled only
+  // by the header's leading count pod, and the selected session stays visible while the zone is folded.
   const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
@@ -704,14 +704,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
             // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
             // only while their parent is expanded); within a zone the newest session is on top (automatic ordering).
-            // A FOLDABLE zone header (offline — session history) is the one disclosure: count before label,
-            // aria-expanded speaking the state; toggling is pointer-inert for focus like all console chrome.
+            // A FOLDABLE zone header (offline — session history) has one disclosure: the count before its inert
+            // label. The count alone carries aria-expanded and toggles without taking console focus.
             if (it.type === 'zone') {
               return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="si-zone" onToggle={() => setOfflineOpen((v) => !v)} />
             }
             const s = it.s
             const lead = (it.expandable || it.depth)
-              ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
+              ? <RowLead guides={it.guides} expandable={it.expandable} kin={it.kin} />
               : null
             // A click switches tabs. Locking is an explicit item in the right-click menu below; double-click
             // deliberately has no extra meaning, so it only leaves the clicked tab selected.
@@ -720,23 +720,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // its pick (never switches the pane), and the row action menu is suppressed.
             const isPicked = selecting && picked.has(s.id)
             return (
-              <button
-                key={s.id}
-                data-sid={s.id}
-                className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
-                aria-expanded={it.expandable ? it.expanded : undefined}
-                style={{ '--ov': labelColor(s.id) }}
-                onClick={() => {
-                  if (selecting) return togglePick(s.id)
-                  activateTerminal(s.id)
-                  if (it.expandable) toggleFold(s.id)
-                }}
-                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
-                data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
-              >
-                {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
-                <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
-              </button>
+              <div key={s.id} className="sess-tree-row si-tree-row" style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
+                <button
+                  type="button"
+                  data-sid={s.id}
+                  className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
+                  style={{ '--ov': labelColor(s.id) }}
+                  onClick={() => {
+                    if (selecting) return togglePick(s.id)
+                    activateTerminal(s.id)
+                  }}
+                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
+                  data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
+                >
+                  {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
+                  <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
+                </button>
+                {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />}
+              </div>
             )
           })}
         </aside>

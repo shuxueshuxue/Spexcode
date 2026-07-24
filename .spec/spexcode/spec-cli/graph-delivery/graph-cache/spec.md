@@ -7,6 +7,7 @@ code:
   - spec-cli/src/graphCache.ts
 related:
   - spec-cli/src/graphScope.test.ts
+  - spec-cli/src/graphCache.test.ts
 ---
 
 # graph-cache
@@ -49,6 +50,16 @@ The graph is built **once per change, not once per poll — and only as much of 
   so the next read rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
+- **Truthful stale-while-revalidate.** The cache has one explicit consistency seam with two policies. A
+  first-cold read with no last-good board waits for the current build and fails or times out honestly; it
+  never invents a snapshot. Once a last-good board exists, a dirty ordinary HTTP read returns that exact
+  serialized board immediately with an explicit stale/refreshing signal and starts at most one background
+  rebuild. Fresh waiters (the stream, delta path, and callers that need current content) join that same
+  flight and wait for its completion, so a stale HTTP read cannot consume a stream update. A failed
+  background build keeps the last-good board, logs loudly, exposes a non-refreshing stale state during a
+  bounded retry backoff, and never creates an unhandled rejection or a retry storm. A successful fresh
+  completion replaces the JSON/ETag anchor and is the only event that makes the stale signal disappear.
+
 Session rows' eval summaries compose with this cache rather than hiding inside it ([[session-eval]]): graph
 assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated
 entries. A summary completion invalidates the board at `sessions` scope, so the sessions splice attaches the
@@ -71,16 +82,17 @@ sync gap. Only the hot graph path uses the async twins; the light one-shot calle
 **Degrade loudly, never pile up — and the build NECESSARILY settles.** A build slower than a budget logs
 one warning (the fail-loud regression alarm — a silent slow graph is how this returned). The route races
 the build against a hard timeout: a genuinely-wedged build answers a 503 instead of holding a connection
-open unboundedly. But "slow" and "never" are different failures: the single-flight promise is released
-only when the build settles, so a build that never settles (a hung git child, fs/promises under a starved
-libuv threadpool) would otherwise pin `inflight` forever — every later read short-circuits into the pinned
-promise before the cache's validity is even consulted, invalidation can't help, no log ever fires, and
-only a restart cures it. So the build itself races a build-level watchdog at the single-flight boundary:
-far above the slowest legitimate cold build, it REJECTS loudly (a warning names the wedge), and the
-rejection flows through the same release path as success — `inflight` clears and the very next read
-retries fresh. This one wall guarantees settlement for every cause, child process or not; the git layer's
-own child timeouts ([[source-of-truth]]) merely make the common cause die sooner and reap the hung
-children. Budget, route timeout, and watchdog are env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
+open unboundedly. But "slow" and "never" are different failures: the single-flight slot is released
+only when the underlying build settles, so a watchdog rejection can never let a second build start while
+the first's git/fs work is still alive. The watchdog aborts the shared build signal; git children receive
+that signal and are SIGKILLed, so the common wedge really terminates and the slot can recover. If a
+non-process operation cannot be interrupted, the same slot remains occupied until it settles; later
+readers receive the last-good board or the honest cold timeout, never a concurrent retry. The warning,
+abort, release, and bounded backoff are one path: no abandoned child, unhandled rejection, or retry storm.
+The process and memory contract is observable: after repeated successful full builds the active builder/
+child count returns to its stable platform, and current-checkout history caches evict old HEAD entries
+instead of retaining one full index per historical commit. Budget, route timeout, and watchdog are
+env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
 `SPEXCODE_BOARD_TIMEOUT_MS` / `SPEXCODE_BOARD_BUILD_TIMEOUT_MS`).
 
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the

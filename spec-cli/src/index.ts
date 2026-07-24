@@ -79,9 +79,19 @@ const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
 app.get('/api/graph', etag(), async (c) => {
   ensureBoardFileWatchers()
   const timeout = Symbol('timeout')
-  const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
-  if (json === timeout) return c.json({ error: 'graph build timed out' }, 503)
-  return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const result = await Promise.race([
+    getBoardJson('stale-ok'),
+    new Promise<typeof timeout>((resolve) => {
+      timer = setTimeout(() => resolve(timeout), BOARD_TIMEOUT_MS)
+      timer.unref?.()
+    }),
+  ])
+  clearTimeout(timer)
+  if (result === timeout) return c.json({ error: 'graph build timed out' }, 503)
+  const freshness = result.refreshing ? `${result.freshness}, refreshing` : result.freshness
+  c.header('x-spexcode-graph', freshness)
+  return c.body(result.json, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
 // the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
 // reloads the instant status moves instead of waiting for its slow fallback poll ([[graph-stream]]).

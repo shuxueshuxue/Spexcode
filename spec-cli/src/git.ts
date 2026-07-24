@@ -1,5 +1,5 @@
 import { execFileSync, execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 
@@ -12,6 +12,15 @@ const US = '\x1f', RS = '\x1e'
 // call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
 // gitA maps failure to '', which would otherwise hide the pathology as an innocently-empty result.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+const gitAbort = new AsyncLocalStorage<AbortSignal>()
+
+// A board build owns one abort signal. Async git calls inherit it without every graph layer growing a
+// cancellation parameter; aborting the build therefore reaches every child spawned below the graph seam.
+export function withGitAbortSignal<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+  return gitAbort.run(signal, run)
+}
+
+const inheritedSignal = (): AbortSignal | undefined => gitAbort.getStore()
 function warnIfTimedOut(e: any, args: string[]): void {
   if (e?.signal === 'SIGKILL') console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
 }
@@ -25,23 +34,63 @@ export function git(args: string[]): string {
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
-const pexecFile = promisify(execFile)
+type GitExec = { stdout: string; stderr: string }
+
+// execFile's AbortSignal kills only its direct child. A wedged adapter may have descendants (the
+// deterministic tests use a shell + sleep), so async git runs in their own process group and abort/timeout
+// kills the whole group. The callback still carries the same stdout/stderr/error shape to gitA/gitTry.
+function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<GitExec> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let aborted = false
+    const killTree = () => {
+      if (!child?.pid) return
+      try { process.kill(-child.pid, 'SIGKILL') } catch { /* group may already be gone */ }
+      try { child.kill('SIGKILL') } catch { /* already exited */ }
+    }
+    const onAbort = () => { aborted = true; killTree() }
+    child = execFile('git', args, {
+      encoding: 'utf8', env, maxBuffer: 1 << 24, detached: true,
+      ...(signal ? { signal, killSignal: 'SIGKILL' } : {}),
+    } as any, (error: any, stdout: string, stderr: string) => {
+      if (timer) clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      if (error) {
+        error.stdout = stdout ?? ''
+        error.stderr = stderr ?? ''
+        if (aborted) error.name = 'AbortError'
+        reject(error)
+      } else resolve({ stdout, stderr })
+    })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    timer = setTimeout(() => killTree(), GIT_TIMEOUT_MS)
+    timer.unref?.()
+  })
+}
+
 export async function gitA(args: string[]): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  const signal = inheritedSignal()
   try {
-    const { stdout } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    const { stdout } = await execGit(args, env, signal)
     return stdout
-  } catch (e: any) { warnIfTimedOut(e, args); return '' }
+  } catch (e: any) {
+    if (signal?.aborted || e?.name === 'AbortError') throw e
+    warnIfTimedOut(e, args); return ''
+  }
 }
 
 export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  const signal = inheritedSignal()
   try {
-    const { stdout, stderr } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    const { stdout, stderr } = await execGit(args, env, signal)
     return { ok: true, stdout, stderr }
   } catch (e: any) {
+    if (signal?.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args)
     return { ok: false, stdout: e?.stdout ?? '', stderr: e?.stderr ?? String(e?.message ?? e) }
   }
@@ -160,27 +209,52 @@ function parseStatPath(token: string): { from: string; to: string } {
 // `git log` and re-parses it on the event loop — which is what starves every other request (the board,
 // remark posts) under load. So the cache is a small LRU keyed by HEAD (same head ⇒ same index, whatever
 // the root), holding the in-flight PROMISE so concurrent requests for one head share a single build.
-const INDEX_SLOTS = 16
-function lruGet<V>(m: Map<string, V>, k: string): V | undefined {
-  const v = m.get(k)
-  if (v !== undefined) { m.delete(k); m.set(k, v) }   // refresh recency
-  return v
-}
-function lruPut<V>(m: Map<string, V>, k: string, v: V): void {
-  m.set(k, v)
-  while (m.size > INDEX_SLOTS) m.delete(m.keys().next().value!)
+const indexCache = new Map<string, Promise<HistoryIndex>>()
+const indexRoots = new Map<string, string>()
+const driftRoots = new Map<string, string>()
+const driftIdxCache = new Map<string, Promise<DriftIndex>>()   // HEAD-keyed, referenced by current roots
+const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROOTS || 32))
+
+function rootKey(root: string): string { return resolve(root) }
+
+// HEAD identifies the immutable index contents; the root owns which HEAD is still useful. Moving one
+// checkout therefore drops its old history immediately, while equal HEADs across live roots still share
+// one promise/index. The bounded root map prevents closed/demand-only worktrees from becoming a leak.
+function touchRoot(roots: Map<string, string>, cache: Map<string, Promise<unknown>>, root: string, head: string): void {
+  const key = rootKey(root)
+  const previous = roots.get(key)
+  if (previous !== head) {
+    roots.set(key, head)
+    if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
+  } else {
+    roots.delete(key)
+    roots.set(key, head)
+  }
+  while (roots.size > INDEX_ROOT_SLOTS) {
+    const oldest = roots.keys().next().value as string | undefined
+    if (oldest === undefined) break
+    const oldHead = roots.get(oldest)
+    roots.delete(oldest)
+    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
+  }
 }
 
-const indexCache = new Map<string, Promise<HistoryIndex>>()
+function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise: Promise<unknown>): void {
+  if (cache.get(head) !== promise) return
+  // A rejected index is never reusable, even when its root still points at that HEAD. The next read must
+  // start a fresh walk after a watchdog abort or transient git failure.
+  cache.delete(head)
+}
 
 export function historyIndex(root: string): Promise<HistoryIndex> {
   const head = headOrEmpty(root)
   if (!head) return buildIndex(root)
-  const hit = lruGet(indexCache, head)
+  touchRoot(indexRoots, indexCache, root, head)
+  const hit = indexCache.get(head)
   if (hit) return hit
   const p = buildIndex(root)
-  p.catch(() => { indexCache.delete(head) })   // don't pin a failed build
-  lruPut(indexCache, head, p)
+  p.catch(() => { dropFailed(indexCache, head, p) })   // don't pin a failed build
+  indexCache.set(head, p)
   return p
 }
 
@@ -287,8 +361,6 @@ export type DriftIndex = {
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
 }
-const driftIdxCache = new Map<string, Promise<DriftIndex>>()   // HEAD-keyed LRU, same shape as indexCache above
-
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileCommits = new Map<string, string[]>()
@@ -328,12 +400,17 @@ async function buildDriftIndex(root: string): Promise<DriftIndex> {
 export function driftIndex(root: string): Promise<DriftIndex> {
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
   if (!head) return buildDriftIndex(root)
-  const hit = lruGet(driftIdxCache, head)
+  touchRoot(driftRoots, driftIdxCache, root, head)
+  const hit = driftIdxCache.get(head)
   if (hit) return hit
   const p = buildDriftIndex(root)
-  p.catch(() => { driftIdxCache.delete(head) })
-  lruPut(driftIdxCache, head, p)
+  p.catch(() => { dropFailed(driftIdxCache, head, p) })
+  driftIdxCache.set(head, p)
   return p
+}
+
+export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {
+  return { historyHeads: indexCache.size, driftHeads: driftIdxCache.size, historyRoots: indexRoots.size, driftRoots: driftRoots.size }
 }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;

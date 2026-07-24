@@ -25,7 +25,7 @@ used because it can hang on the supported local runtime.
 The adapter is literal object composition over `piHarness` for shim, contract, skills, trust, slash commands,
 events, and session identity. Its runtime is record-backed: while the governed session record exists it reports
 `online`; a missing controller, child, or rendezvous listener is surfaced by delivery as a loud transport error.
-The adapter does not persist a native message stream.
+Its text output remains a transport detail; the note timeline is the terminal-free conversation.
 
 The controller starts a fresh turn with `pi -p --session-id <id> <prompt>`. A delivery first probes pi's
 rendezvous socket. When a listener is present, the existing `deliverViaRendezvous` protocol sends

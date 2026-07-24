@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
-import SessionMessages from './SessionMessages.jsx'
-import { isMessageStreamSession } from './messageStream.js'
-import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
@@ -139,14 +136,12 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 export default function TimelineChat({ s, sessions = [], active = true }) {
   const t = useT()
   const isMobile = useIsMobile()
-  const hasFullProcess = isMessageStreamSession(s)
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const [copyStatus, setCopyStatus] = useState(null)
-  const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const selectionDragRef = useRef(null)
@@ -163,17 +158,16 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
-  useEffect(() => { setFullProcess(false) }, [s.id, hasFullProcess])
   useEffect(() => {
-    if (!active || isMobile || fullProcess || document.visibilityState === 'hidden') return undefined
+    if (!active || isMobile || document.visibilityState === 'hidden') return undefined
     const focusFrame = requestAnimationFrame(() => {
       const input = inputRef.current
-      if (active && !isMobile && !fullProcess && document.visibilityState !== 'hidden'
+      if (active && !isMobile && document.visibilityState !== 'hidden'
         && input?.offsetParent !== null && getComputedStyle(input).visibility !== 'hidden'
         && document.activeElement !== input) input.focus()
     })
     return () => cancelAnimationFrame(focusFrame)
-  }, [s.id, active, isMobile, fullProcess])
+  }, [s.id, active, isMobile])
   useEffect(() => {
     if (!active) return undefined
     const iv = setInterval(load, 8000)
@@ -349,31 +343,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   }
 
   const offline = s.liveness === 'offline' || s.status === 'offline'
-  if (fullProcess && hasFullProcess) {
-    return (
-      <div className="tl-process">
-        <header className="tl-process-head">
-          <button type="button" className="tl-process-back" onClick={() => setFullProcess(false)}>
-            <Icon name="arrow-left" size={14} />
-            <span>{t('session.backToConversation')}</span>
-          </button>
-          <span className="tl-process-title">{t('session.fullProcess')}</span>
-        </header>
-        <SessionMessages sessionId={s.id} active={active} />
-      </div>
-    )
-  }
   return (
     <div className="tl-chat">
-      {hasFullProcess && (
-        <div className="tl-chat-tools">
-          <button type="button" className="tl-process-door" onClick={() => setFullProcess(true)}>
-            <Icon name="list-checks" size={14} />
-            <span>{t('session.fullProcess')}</span>
-            <Icon name="chevron-right" size={13} />
-          </button>
-        </div>
-      )}
       <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
         onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}>
         {detail?.prompt && (

@@ -28,7 +28,7 @@ scenarios:
     expected: >-
       The initial turn completes in pi's default text mode, idle delivery resumes the exact same session with
       `pi -p --session <id>`, and the active-turn delivery uses the existing rendezvous steer path exactly once;
-      the public record remains online and reports `{ headless: true, messageStream: false }`.
+      the public record remains online and reports `{ headless: true }`.
     tags: [backend-api, cli]
     code: [spec-cli/src/pi-headless.ts]
   - name: pi-headless-close-residue

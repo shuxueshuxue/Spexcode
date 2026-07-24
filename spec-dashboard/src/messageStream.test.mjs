@@ -6,6 +6,7 @@ import { isHeadlessSession, isMessageStreamSession, rowsFromMessages } from './m
 
 const sessionInterface = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
+const dashboard = readFileSync(new URL('./Dashboard.jsx', import.meta.url), 'utf8')
 
 test('console surfaces read adapter capabilities without interpreting harness ids', () => {
   assert.equal(isHeadlessSession({ capabilities: { headless: true, messageStream: false } }), true)
@@ -39,10 +40,17 @@ test('tool results and non-conversation envelopes stay out of the chat', () => {
 })
 
 test('headless layers reuse TimelineChat while pane-backed layers retain SessionTerm', () => {
-  assert.match(sessionInterface, /isHeadlessSession\(s\) \|\| s\.liveness !== 'offline'/)
+  assert.match(sessionInterface, /!isHeadlessSession\(s\) && s\.liveness !== 'offline'/)
+  assert.match(sessionInterface, /selected && isHeadlessSession\(selected\)/)
+  assert.match(sessionInterface, /setOpened\(\(prev\) => \(prev\.has\(id\) \? prev : new Set\(prev\)\.add\(id\)\)\)/)
   assert.match(sessionInterface, /headless\s*\? <TimelineChat s=\{session\}/)
   assert.match(sessionInterface, /: <SessionTerm sessionId=\{id\}/)
   assert.doesNotMatch(sessionInterface, /claude-headless/)
+})
+
+test('session console is mounted on first route entry, not on every page', () => {
+  assert.match(dashboard, /const \[sessionWarm, setSessionWarm\] = useState\(\(\) => page === 'sessions'\)/)
+  assert.match(dashboard, /<PagePane active=\{page === 'sessions'\} warm=\{sessionWarm\} className="page-sessions">/)
 })
 
 test('TimelineChat gates the native full-process drill-down on messageStream capability', () => {

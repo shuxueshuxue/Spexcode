@@ -43,7 +43,7 @@ hidden session from outside the list — including the graph's node menu — aut
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
 Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
 terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
-keeps its timeline polling cursor and resumes from the latest board snapshot when selected again. Page display itself
+keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
@@ -212,11 +212,15 @@ drag-to-reorder gesture. Both authored composers accept an **attached file** (pa
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
 emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in — see [[file-attach]].
 
-Terminals are **warm and always connected**: every live pane mounts and opens its socket when the board loads —
-never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
-place** (socket + last painted buffer survive), New Session included. Hidden layers remain laid out at the final
-terminal geometry under `visibility:hidden`, keeping their xterm and stable default renderer ready; switching
-changes visibility, not socket attachment or renderer identity. No pane loads a visibility-scoped WebGL addon,
+Pane-backed terminals are **warm and always connected**: every live pane mounts and opens its socket when the
+console is first entered — never lazily on focus — and stays mounted even while the console is closed, so
+switching tabs **never loses your place** (socket + last painted buffer survive), New Session included. Headless
+sessions have no pane or socket to warm: their `TimelineChat` mounts when first selected (including a deep link),
+then remains mounted after deselection or going offline so its timeline cursor and rendered history survive
+revisits; its refresh timer runs only while selected. Unvisited headless rows remain inert and make no
+timeline/detail reads or polling timers. Hidden
+pane-backed layers remain laid out at the final terminal geometry under `visibility:hidden`, keeping their xterm
+and stable default renderer ready; switching changes visibility, not socket attachment or renderer identity. No pane loads a visibility-scoped WebGL addon,
 so hidden sessions neither expose an empty replacement renderer nor accumulate capped GPU contexts. [[live-view]]
 owns the matching backend rule: an unselected session, a closed Sessions route, or a background browser tab
 owns no raw PTY or tmux geometry, while a visited hidden xterm keeps its cached pixels for an immediate return

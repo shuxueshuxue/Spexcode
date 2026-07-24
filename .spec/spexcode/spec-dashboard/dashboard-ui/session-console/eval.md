@@ -154,6 +154,18 @@ scenarios:
       direction symbol; the whole parent row toggles and keeps `aria-expanded`. Clicking the offline header
       reveals every offline row; clicking again folds them back. A session selected by URL/search/menu stays
       rendered even while its zone is folded. No session record is deleted or mutated by any of it.
+  - name: headless-conversation-mount-is-bounded
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/command-box.e2e.mjs
+    description: >-
+      Open a desktop console backed by many headless session rows (including retained offline history), record
+      timeline/detail requests and visible conversation mounts before and after selecting one headless row, then
+      switch away and back.
+    expected: >-
+      Before selection, unvisited headless rows render no TimelineChat and issue no timeline/detail requests.
+      Selecting one mounts exactly its conversation and performs its bounded reads; switching away stops its
+      refresh timer without discarding the rendered history, and returning resumes from that history without a
+      duplicate mount storm. Live pane-backed terminals keep their existing warm sockets.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

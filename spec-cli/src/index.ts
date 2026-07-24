@@ -77,11 +77,21 @@ app.get('/api/instance', (c) => {
 // is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
 app.get('/api/graph', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  await ensureBoardFileWatchers()
   const timeout = Symbol('timeout')
-  const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
-  if (json === timeout) return c.json({ error: 'graph build timed out' }, 503)
-  return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const result = await Promise.race([
+    getBoardJson('stale-ok'),
+    new Promise<typeof timeout>((resolve) => {
+      timer = setTimeout(() => resolve(timeout), BOARD_TIMEOUT_MS)
+      timer.unref?.()
+    }),
+  ])
+  clearTimeout(timer)
+  if (result === timeout) return c.json({ error: 'graph build timed out' }, 503)
+  const freshness = result.refreshing ? `${result.freshness}, refreshing` : result.freshness
+  c.header('x-spexcode-graph', freshness)
+  return c.body(result.json, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
 // the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
 // reloads the instant status moves instead of waiting for its slow fallback poll ([[graph-stream]]).
@@ -206,14 +216,15 @@ app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.quer
 // Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
 // it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
 app.get('/api/evals', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  const scope = c.req.query('q')?.match(/(?:^|\s)scope:([^\s]+)/)?.[1]
+  await ensureBoardFileWatchers(scope)
   const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
   return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
 })
 // ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
 // most five lightweight neighbors. It never serializes another scenario's history or the scoped model.
 app.get('/api/evals/detail', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  await ensureBoardFileWatchers(c.req.query('scope')?.trim() || undefined)
   const node = c.req.query('node')?.trim()
   const scenario = c.req.query('scenario')?.trim()
   if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)

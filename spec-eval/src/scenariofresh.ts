@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { git, gitA, headSha } from '../../spec-cli/src/git.js'
+import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
 
 // @@@ per-scenario content freshness — the SCENARIO axis, sub-file
@@ -161,9 +161,33 @@ async function build(root: string, evalPaths: string[]): Promise<ScenarioIndex> 
 // whatever the caller. Holds the in-flight promise so concurrent board builds share one build.
 const SLOTS = 16
 const cache = new Map<string, Promise<ScenarioIndex>>()
+const roots = new Map<string, string>()
+
+// A checkout moving from HEAD A to HEAD B no longer needs A's full scenario chains. Keep an old index only
+// while another checkout still points at that immutable HEAD; otherwise a sequence of successful rebuilds
+// retains one whole history-shaped index per commit until the broad LRU fills.
+function touchRoot(root: string, head: string): void {
+  const previous = roots.get(root)
+  if (previous === head) {
+    roots.delete(root)
+    roots.set(root, head)
+    return
+  }
+  roots.set(root, head)
+  if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
+  while (roots.size > SLOTS) {
+    const oldest = roots.keys().next().value as string | undefined
+    if (oldest === undefined) break
+    const oldHead = roots.get(oldest)
+    roots.delete(oldest)
+    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
+  }
+}
+
 export function scenarioIndex(root: string, evalPaths: string[]): Promise<ScenarioIndex> {
   let head: string
   try { head = headSha(root) } catch { return build(root, evalPaths) }
+  touchRoot(root, head)
   const hit = cache.get(head)
   if (hit) { cache.delete(head); cache.set(head, hit); return hit }
   const p = build(root, evalPaths)
@@ -171,6 +195,10 @@ export function scenarioIndex(root: string, evalPaths: string[]): Promise<Scenar
   cache.set(head, p)
   while (cache.size > SLOTS) cache.delete(cache.keys().next().value!)
   return p
+}
+
+export function scenarioCacheStats(): { heads: number; roots: number } {
+  return { heads: cache.size, roots: roots.size }
 }
 
 export function scenarioChangeCommits(idx: ScenarioIndex, evalPath: string, scenario: string): string[] {
@@ -196,6 +224,27 @@ function oidAt(root: string, rev: string, path: string): string {
   oidMemo.set(k, v)
   if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
   return v
+}
+
+async function oidAtAsync(root: string, rev: string, path: string): Promise<string> {
+  if (!FULL_SHA.test(rev)) return (await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])).stdout.trim()
+  const k = `${root}\x1f${rev}\x1f${path}`
+  const hit = oidMemo.get(k)
+  if (hit !== undefined) { oidMemo.delete(k); oidMemo.set(k, hit); return hit }
+  const result = await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])
+  const oid = result.ok ? result.stdout.trim() : ''
+  oidMemo.set(k, oid)
+  if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+  return oid
+}
+
+export async function primeScenarioBlocksAt(root: string, revs: string[], path: string): Promise<void> {
+  for (const rev of revs) {
+    const oid = await oidAtAsync(root, rev, path)
+    if (!oid || blockByOid.has(oid)) continue
+    const src = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing
+    if (src) blockByOid.set(oid, blockContent(src))
+  }
 }
 
 // canonical per-scenario SEMANTIC blocks of `rev:path` (the blockContent projection), for the off-history

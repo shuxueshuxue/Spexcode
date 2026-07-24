@@ -17,6 +17,31 @@ scenarios:
       tens-of-seconds a per-request rebuild causes. The baseline (route calling buildBoard() inline, no
       cache) fails this: warm /api/graph rebuilds every time (~5s) and worst /health under the storm blows
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
+  - name: stale-readers-ride-last-good-during-rebuild
+    tags: [backend-api]
+    description: >-
+      Measure the SWR contract at production scale through the REAL HTTP surface. Corpus: a zcode-shaped
+      repo (~440 spec nodes, ~10k commits, ~26 governed session records over ~26 worktrees — a full rebuild
+      after a main-branch commit costs seconds, not ms). Start a throwaway backend from the corpus dir on a
+      pinned free port (`env -u SPEXCODE_API_URL PORT=<free> SPEXCODE_HOME=<iso> npx tsx
+      spec-cli/src/index.ts`), warm the cache with one `/api/graph` (record its ETag), and open one
+      `/api/graph/stream?mode=delta` subscriber logging event arrival times. Then fire a REAL full
+      invalidation (a `git commit` on the corpus main branch — the refs watcher fires 'full') and
+      immediately launch 20 concurrent `curl /api/graph` readers plus sequential `/health` probes, timing
+      every response. After the rebuild settles, read `/api/graph` once more and compare ETag + the
+      stale/refreshing response headers across the three phases.
+    expected: >-
+      Once a last-good board exists, a full-dirty window never blocks or 503s a plain HTTP reader: all 20
+      concurrent readers return the last-good board in well under 200ms, each explicitly labeled stale
+      (x-spexcode-graph: stale, refreshing) — never silently fresh — while exactly ONE background rebuild
+      runs (single-flight; one budget-warning line, not twenty). /health keeps answering near idle latency
+      throughout. When the rebuild completes the content genuinely advances: the post-settle /api/graph
+      returns a NEW ETag with no stale label, and the delta subscriber receives the fresh
+      graph-delta/graph-full without any client action. A first-cold reader (no last-good yet) still waits
+      honestly for the first build — it is never handed a fabricated board. The pre-SWR baseline fails the
+      core clause: every reader during the dirty window blocks the full rebuild length (measured 7.7s on the
+      corpus box; 22s→503 on zcode production) because getBoard() makes every caller await the in-flight
+      full build even when a perfectly good last-good board is cached.
   - name: wedged-build-settles-and-recovers
     tags: [backend-api]
     description: >-
@@ -38,6 +63,24 @@ scenarios:
       every clause: inflight stays pinned (finally never runs), /api/graph 503s forever with ZERO log
       lines even minutes after git recovered (restart the only cure), /api/specs holds connections open
       indefinitely (http=000) while HEAD is stationary, and the hung git children accumulate unkilled.
+  - name: normal-build-memory-platform
+    tags: [backend-api]
+    description: >-
+      Measure repeated successful full builds on the local production-scale zcode corpus through the
+      isolated backend/CLI harness only (never a deployed service). Pin a throwaway backend port and
+      `env -u SPEXCODE_API_URL`, warm the board, then make at least three successive corpus HEAD commits
+      and request one full board after each commit. During every phase record `process.memoryUsage()`
+      (heapUsed, external, arrayBuffers, rss), the builder/process tree (active builders, child count and
+      peak child RSS), the inotify watch count, and the history-cache entry count/bytes. Let each build
+      settle before the next commit and record the idle platform after every round; the scratch corpus,
+      profile script, and sanitized transcript are evidence only and must not be committed.
+    expected: >-
+      Each successful full build leaves zero active builders and zero live git/fs children before the
+      next round; child RSS returns to its idle platform. JS heap and native/external memory, process RSS,
+      inotify watches, and history-cache entries converge to a bounded plateau rather than growing with
+      the number of successful HEADs or retaining a full index per historical commit. A bounded increase
+      from cold startup is acceptable only when it stabilizes across later rounds; a monotonic RSS/heap,
+      child, watcher, or cache count is a failure even when every HTTP request returned 200.
 ---
 # eval.md — board-cache
 

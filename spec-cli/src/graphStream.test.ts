@@ -6,10 +6,24 @@ import { join } from 'node:path'
 
 import {
   scheduleWorktreeResubscribe,
+  sessionWorktreeWatchPaths,
   watchSessionEvalRefs,
   watchSessionEvalRegistry,
   watchSessionEvalWorktree,
 } from './graphStream.js'
+
+test('recursive worktree observers cover live sessions and an explicitly demanded offline session only', () => {
+  const sessions = [
+    { id: 'live', path: '/repo/.worktrees/live', liveness: 'live' },
+    { id: 'offline-a', path: '/repo/.worktrees/offline-a', liveness: 'offline' },
+    { id: 'offline-b', path: '/repo/.worktrees/offline-b', liveness: 'offline' },
+  ]
+  assert.deepEqual([...sessionWorktreeWatchPaths(sessions)], ['/repo/.worktrees/live'])
+  assert.deepEqual(
+    [...sessionWorktreeWatchPaths(sessions, new Set(['offline-b']))],
+    ['/repo/.worktrees/live', '/repo/.worktrees/offline-b'],
+  )
+})
 
 async function waitFor(predicate: () => boolean, message: string): Promise<void> {
   const deadline = Date.now() + 2_000

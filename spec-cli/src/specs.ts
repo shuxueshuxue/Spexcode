@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftForAsync, fileDiffAt } from './git.js'
 import { parseCodeEntry, parseRelation } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
@@ -229,9 +229,13 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 // root as their readings/indexes, or a branch-NEW node simply does not exist for them.
 export async function loadSpecs(root: string = ROOT) {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
-  // the event loop). Every node below is then a pure lookup.
+  // the event loop). The ordinary DAG representation makes every node below a pure lookup; the large-history
+  // representation delegates path windows to synchronous Git, so yield between nodes rather than joining
+  // hundreds of short probes into one liveness-blocking event-loop wall.
   const [idx, didx, allRaws] = await Promise.all([historyIndex(root), driftIndex(root), rawsAsync(root)])
-  return Promise.all(allRaws.map(async (r) => {
+  const loaded = []
+  for (const r of allRaws) {
+    if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     const h = rowsFor(idx, r.relPath)
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
@@ -249,19 +253,26 @@ export async function loadSpecs(root: string = ROOT) {
     const relatedScoped = relatedRel.entries.filter((e) => e.selectors.length > 0)
     const relationProblems = [...codeRel.problems, ...relatedRel.problems]
     const S = h[0]?.hash || ''
-    const driftFiles = code
-      .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
-      .filter((d) => d.behind > 0)
+    const driftFiles = []
+    for (const f of code) {
+      if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
+      const d = { file: f, behind: await driftForAsync(didx, S, f) }
+      if (d.behind > 0) driftFiles.push(d)
+    }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
     // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
     // `drift` — it never feeds status, the commit gate, or eval freshness. It surfaces only as a lint warn nudge.
     // A SCOPED related entry is excluded here: its file-level movement is silent by design — only a
     // selector HIT warns, and that verdict needs the anchor engine, so lint derives it, not the loader.
-    const relatedDriftFiles = relatedRel.entries.filter((e) => !e.selectors.length)
-      .map((e) => ({ file: e.path, behind: driftFor(didx, S, e.path) }))
-      .filter((d) => d.behind > 0)
+    const relatedDriftFiles = []
+    for (const e of relatedRel.entries) {
+      if (e.selectors.length) continue
+      if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
+      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path) }
+      if (d.behind > 0) relatedDriftFiles.push(d)
+    }
     const fmStatus = str(r.fm.status, '') || null
-    return {
+    loaded.push({
       id: r.id,
       parent: r.parent,
       path: r.relPath,
@@ -287,8 +298,9 @@ export async function loadSpecs(root: string = ROOT) {
       // cold load); the history tab fetches it lazily via specDiffAt. See [[work-pane]].
       body: r.body.trim(),
       parts: parseParts(r.body),
-    }
-  }))
+    })
+  }
+  return loaded
 }
 
 // per-node version timeline; each row sums the node's spec.md stat (rename-followed, via statsFor) and its

@@ -4,7 +4,8 @@ import net from 'node:net'
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { statSync, readdirSync, type Dirent } from 'node:fs'
+import type { Dirent } from 'node:fs'
+import { stat, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
@@ -207,19 +208,27 @@ if (publicCfg) {
 // deaf: every 2s, take the newest .ts/.js/.json mtime across the trees; a jump triggers the debounced reload
 // (a burst of writes still lands as one). Polling a few small src trees is negligible cost.
 let timer: NodeJS.Timeout | undefined
-const newestMtime = (dir: string): number => {
+const newestMtime = async (dir: string): Promise<number> => {
   let max = 0
   let entries: Dirent[]
-  try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return 0 }   // a tree absent in some checkout → skip
+  try { entries = await readdir(dir, { withFileTypes: true }) } catch { return 0 }   // a tree absent in some checkout → skip
   for (const e of entries) {
-    if (e.isDirectory()) { if (e.name !== 'node_modules') max = Math.max(max, newestMtime(join(dir, e.name))) }
-    else if (/\.(ts|js|mjs|json)$/.test(e.name)) { try { max = Math.max(max, statSync(join(dir, e.name)).mtimeMs) } catch { /* raced unlink */ } }
+    if (e.isDirectory()) { if (e.name !== 'node_modules') max = Math.max(max, await newestMtime(join(dir, e.name))) }
+    else if (/\.(ts|js|mjs|json)$/.test(e.name)) { try { max = Math.max(max, (await stat(join(dir, e.name))).mtimeMs) } catch { /* raced unlink */ } }
   }
   return max
 }
-const scanMtime = (): number => { let m = 0; for (const root of watchRoots) m = Math.max(m, newestMtime(root)); return m }
-let lastMtime = scanMtime()   // baseline at boot — only a LATER change reloads
+const scanMtime = async (): Promise<number> => {
+  let m = 0
+  for (const root of watchRoots) m = Math.max(m, await newestMtime(root))
+  return m
+}
+let lastMtime = await scanMtime()   // baseline at boot — only a LATER change reloads
+let scanning = false
 setInterval(() => {
-  const m = scanMtime()
-  if (m > lastMtime) { lastMtime = m; clearTimeout(timer); timer = setTimeout(() => void reload('code change'), 150) }
+  if (scanning) return
+  scanning = true
+  void scanMtime().then((m) => {
+    if (m > lastMtime) { lastMtime = m; clearTimeout(timer); timer = setTimeout(() => void reload('code change'), 150) }
+  }).finally(() => { scanning = false })
 }, 2000).unref()

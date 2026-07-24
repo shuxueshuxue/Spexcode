@@ -528,6 +528,74 @@ test('ending and reopening a delta era does not enqueue a running generation twi
   assert.equal(cache.get('s')?.phase, 'ready')
 })
 
+test('a selected demand jumps ahead of unrelated queued summaries without opening a second lane', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  const order: string[] = []
+  let active = 0, maxActive = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    order.push(id)
+    active++
+    maxActive = Math.max(maxActive, active)
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    const result = await gate.promise
+    active--
+    return result
+  }, () => {}, 'epoch')
+  const sessions = Array.from({ length: 30 }, (_, i) => {
+    const id = `s${i + 1}`
+    return { id, path: `/wt/${id}`, liveness: 'online' }
+  })
+  cache.snapshot(sessions)
+  await Promise.resolve()
+  assert.deepEqual(order, ['s1'], 'the first summary owns the only running slot')
+
+  const demand = cache.demand('s30', '/wt/s30', async () => {
+    order.push('demand:s30')
+    return 'selected'
+  })
+  gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  for (let i = 0; i < 20 && order.length < 2; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(order.slice(0, 2), ['s1', 'demand:s30'], 'the selected id runs before the remaining queue')
+  assert.equal(await demand, 'selected')
+
+  for (const id of ['s2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18', 's19', 's20', 's21', 's22', 's23', 's24', 's25', 's26', 's27', 's28', 's29']) {
+    while (!gates.has(id)) await Promise.resolve()
+    gates.get(id)!.resolve({ kind: 'stable', revision: `r-${id}`, summary: summary(1) })
+    await Promise.resolve()
+  }
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s30', ...Array.from({ length: 28 }, (_, i) => `s${i + 2}`)])
+  assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
+})
+
+test('a rejected demand frees the slot and lets ordinary summaries continue', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  const order: string[] = []
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    order.push(id)
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    return gate.promise
+  }, () => {}, 'epoch')
+  cache.snapshot([
+    { id: 's1', path: '/wt/s1', liveness: 'online' },
+    { id: 's2', path: '/wt/s2', liveness: 'online' },
+    { id: 's3', path: '/wt/s3', liveness: 'online' },
+  ])
+  await Promise.resolve()
+  const demand = cache.demand('s3', '/wt/s3', async () => {
+    order.push('demand:s3')
+    throw new Error('selected demand failed')
+  })
+  gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  await assert.rejects(demand, /selected demand failed/)
+  while (!gates.has('s2')) await Promise.resolve()
+  gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
+})
+
 test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
   const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))

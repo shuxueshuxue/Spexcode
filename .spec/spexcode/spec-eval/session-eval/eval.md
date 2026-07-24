@@ -172,6 +172,20 @@ scenarios:
       present and inSession-marked when this session filed them — so the session-scoped Evals page and its
       deep link can land on a reading the session filed on a node it just created, while the branch is
       still un-merged. A session with no worktree keeps reading the trunk tree unchanged.
+  - name: demand-priority-under-delta-backlog
+    tags: [backend-api]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts]
+    description: >-
+      Start the default-Node supervisor on a throwaway corpus with 30 live session rows. Keep a
+      `/api/graph/stream?mode=delta` subscriber open so the bounded projection queue has queued warmup work,
+      then request one selected `/api/evals?q=is:eval scope:<id>` page while the first summary job is running.
+      Record request latency, the selected-before-remaining execution order, active git/node descendants, and
+      the response after a demand callback failure.
+    expected: >-
+      The selected demand runs after only the current job and before unrelated queued summaries, on the same
+      concurrency-1 queue; no second flight or duplicate generation starts. The selected HTTP response does not
+      wait for the queue tail, active git/node descendants stay within the queue bound, and a rejected demand
+      rejects only its own waiter while the ordinary queue resumes and settles.
 ---
 # session-eval loss
 

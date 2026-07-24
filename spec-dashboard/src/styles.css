@@ -2060,7 +2060,10 @@ a.scenario-count:hover { background: var(--panel2); }
   color: var(--muted); font-family: var(--mono); font-size: var(--type-control);
 }
 .tl-process .ms-console { flex: 1; min-height: 0; height: auto; }
-.m-timeline { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
+.m-timeline {
+  flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px;
+  user-select: text; -webkit-user-select: text;
+}
 .m-day { text-align: center; margin: 10px 0 6px; font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
 .m-ev { margin: 8px 0; }
 .m-ev-head { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: var(--type-control); }

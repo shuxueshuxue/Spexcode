@@ -94,9 +94,10 @@ The two planes, made native to touch:
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
   through a note or message, refresh work neither remounts the conversation nor clears the browser
   selection. Conversation copy and composer editing are consecutive native states, never an invalid
-  overlap: a real document Selection keeps document focus while it is visible and copyable; a collapsed
-  click, or the first editing/navigation key after a real selection, clears that Range and gives keyboard
-  ownership to that SAME conversation's composer at its saved caret before editing continues. Backspace,
+  overlap: a real document Selection keeps document focus while it is visible and copyable; after a
+  timeline mouseup or double-click, that SAME conversation's composer remains the active element while
+  the Range stays intact. A collapsed click, or the first editing/navigation key after a real selection,
+  clears that Range and gives keyboard ownership to the composer at its saved caret before editing continues. Backspace,
   Delete, arrows, Enter, paste, printable text, and IME therefore meet an ordinary authoritative textarea,
   rather than a focused textarea whose DOM caret has been corrupted by an external Range. The active
   TimelineChat declares that composer as its surface sink; warm hidden headless layers declare none, so two

@@ -86,8 +86,14 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const returnComposerFocus = (e) => {
     if (e.button !== 0) return
     const selection = window.getSelection?.()
-    if (selectionIsInTimeline(selection)) return
+    const ranges = selectionIsInTimeline(selection) && selection?.rangeCount
+      ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
+      : []
     focusComposer()
+    if (ranges.length && selection) {
+      selection.removeAllRanges()
+      for (const range of ranges) selection.addRange(range)
+    }
   }
   useEffect(() => {
     if (!active) return undefined

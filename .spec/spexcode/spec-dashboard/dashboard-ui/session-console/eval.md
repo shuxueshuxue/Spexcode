@@ -148,9 +148,8 @@ scenarios:
       map-side SessionWindow, and the phone Sessions list. In each surface inspect the offline zone and a
       nesting parent at rest; click the parent row body, then its leading child-count pod; click the OFFLINE
       label, then its leading count pod; finally select or deep-link an offline/nested session from outside the
-      folded list. In the desktop console, Tab-focus the parent row and press ArrowRight then ArrowLeft;
-      repeat ArrowRight on a live leaf while Command Box owns focus, alongside the ordinary Ctrl/Cmd+Right
-      input key.
+      folded list. In the desktop console, press Alt+Shift+ArrowDown then Alt+Shift+ArrowUp on the selected
+      parent; repeat Alt+Shift+ArrowDown on a live leaf while Command Box owns focus.
     expected: >-
       At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
       dormant history no longer floods the list. Needs-you and running rows are all present at every fold
@@ -160,9 +159,9 @@ scenarios:
       changing the parent fold, and the OFFLINE label does nothing. Clicking either count again folds its rows
       back. The controls are siblings, with no button nested in a button. A session selected by URL/search/menu
       stays rendered and its present ancestors unfold as required, while a deep-linked offline row remains
-      visible even when the offline zone itself is folded. On desktop, ArrowRight/ArrowLeft expands/collapses
-      the selected parent through that same fold state only when the row owns focus; a leaf and every input leave
-      native arrow navigation untouched. No session record is deleted or mutated by any of it.
+      visible even when the offline zone itself is folded. On desktop, Alt+Shift+ArrowDown/ArrowUp
+      expands/collapses the selected parent without moving the selected tab; on a leaf the chords are consumed
+      as no-ops. No session record is deleted or mutated by any of it.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

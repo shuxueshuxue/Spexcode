@@ -626,6 +626,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
+      // Shift keeps the existing Alt+↑/↓ tab family but changes its action: Alt+Shift+↓ expands and
+      // Alt+Shift+↑ collapses the selected session's disclosure. Consume both chords even when the selected
+      // row has no matching state, so they never fall through and move the tab selection.
+      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault(); e.stopPropagation()
+        if (foldableIds.has(active)) {
+          if (e.key === 'ArrowDown' && !expanded.has(active)) expandFolds([active])
+          if (e.key === 'ArrowUp' && expanded.has(active)) toggleFold(active)
+        }
+        return
+      }
       // ⌘/⌥/⌃+↑/↓ always walk the session list; the modifier frees ↑/↓ from caret/TUI navigation.
       if (e.metaKey || e.altKey || e.ctrlKey) {
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -633,23 +644,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           let i = order.indexOf(active); if (i < 0) i = 0
           const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
           setSel(order[ni]); return
-        }
-      }
-      // Session rows are a tree: use the standard unmodified horizontal arrows, but only while focus is
-      // outside xterm and every editable control. This keeps the direction's meaning visible and leaves all
-      // terminal/composer caret movement to its native owner. The row buttons are tabbable, so keyboard users
-      // can deliberately give the list focus before using the tree grammar.
-      const editingTarget = e.target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')
-      if (!editingTarget && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey && foldableIds.has(active)) {
-        if (e.key === 'ArrowRight' && !expanded.has(active)) {
-          e.preventDefault(); e.stopPropagation()
-          expandFolds([active])
-          return
-        }
-        if (e.key === 'ArrowLeft' && expanded.has(active)) {
-          e.preventDefault(); e.stopPropagation()
-          toggleFold(active)
-          return
         }
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt

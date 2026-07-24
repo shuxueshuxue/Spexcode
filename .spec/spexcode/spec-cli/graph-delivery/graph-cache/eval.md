@@ -63,6 +63,24 @@ scenarios:
       every clause: inflight stays pinned (finally never runs), /api/graph 503s forever with ZERO log
       lines even minutes after git recovered (restart the only cure), /api/specs holds connections open
       indefinitely (http=000) while HEAD is stationary, and the hung git children accumulate unkilled.
+  - name: normal-build-memory-platform
+    tags: [backend-api]
+    description: >-
+      Measure repeated successful full builds on the local production-scale zcode corpus through the
+      isolated backend/CLI harness only (never a deployed service). Pin a throwaway backend port and
+      `env -u SPEXCODE_API_URL`, warm the board, then make at least three successive corpus HEAD commits
+      and request one full board after each commit. During every phase record `process.memoryUsage()`
+      (heapUsed, external, arrayBuffers, rss), the builder/process tree (active builders, child count and
+      peak child RSS), the inotify watch count, and the history-cache entry count/bytes. Let each build
+      settle before the next commit and record the idle platform after every round; the scratch corpus,
+      profile script, and sanitized transcript are evidence only and must not be committed.
+    expected: >-
+      Each successful full build leaves zero active builders and zero live git/fs children before the
+      next round; child RSS returns to its idle platform. JS heap and native/external memory, process RSS,
+      inotify watches, and history-cache entries converge to a bounded plateau rather than growing with
+      the number of successful HEADs or retaining a full index per historical commit. A bounded increase
+      from cold startup is acceptable only when it stabilizes across later rounds; a monotonic RSS/heap,
+      child, watcher, or cache count is a failure even when every HTTP request returned 200.
 ---
 # eval.md — board-cache
 

@@ -93,8 +93,13 @@ The two planes, made native to touch:
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
   through a note or message, refresh work neither remounts the conversation nor clears the browser
-  selection. Conversation copy is ordinary selectable text on both viewport classes — pointer drag,
-  double-click, and copy remain browser-native rather than becoming console chrome gestures.
+  selection. Conversation copy and composer focus are one interaction, not competing modes: pointer
+  drag, double-click, and copy remain browser-native, but completing a press in the timeline returns
+  keyboard ownership to that SAME conversation's composer without collapsing a real document selection.
+  A plain click therefore leaves no focus on `body`, and after selecting copy the next printable key enters
+  the existing draft instead of falling on the floor. The active TimelineChat declares that composer as
+  its surface sink; warm hidden headless layers declare none, so two mounted conversations can never return
+  focus to the wrong draft.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
 - **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out

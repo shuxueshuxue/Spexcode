@@ -17,17 +17,10 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ RowLead ([[session-nesting]]) — the leading gutter on a nested session row: file-tree connector RAILS
-// (one thin-line column per `guides` entry, the last a `├`/`└` branch pointing at the row, earlier ones a
-// pass-through `│` or a blank) that draw the child's belonging to its spawner, then — for a parent — the fold
-// POD. The pod shows the SUBTREE COUNT (how much fleet hides here) on the subtree-rollup COLOUR (STATUS_COLOR
-// hues, the same purely-informational hint the old triangle tinted): FILLED while collapsed (content hidden
-// behind it), OUTLINE once expanded. Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation)
-// and WITHOUT stealing focus: mousedown is preventDefault'd so the pointerdown never shifts focus onto the pod
-// or its focusable row-button ancestor — whichever surface currently owns input (TUI, Command Box, or New)
-// keeps focus. A leaf child needs no pod — its branch rail is the affordance. Rendered only when
-// nesting is in play (parent or depth>0), so a flat list with no children looks exactly as before.
-export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, onToggle }) {
+// @@@ RowLead ([[session-nesting]]) — the leading gutter on a nested session row: indentation rails plus a
+// subtree-count badge for parents. The badge is deliberately passive: the whole row owns disclosure, so both
+// desktop surfaces expose one click target with `aria-expanded` and never need a directional glyph.
+export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0 }) {
   return (
     <span className="sess-lead">
       {guides.map((cont, i) => {
@@ -36,11 +29,9 @@ export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, on
       })}
       {expandable && (
         <span
-          className={`sess-fold pod${expanded ? ' open' : ''}`} role="button"
+          className={`sess-fold pod${expanded ? ' open' : ''}`}
           style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
-          data-tip={`${kin} nested session${kin === 1 ? '' : 's'} — click to ${expanded ? 'collapse' : 'expand'}`}
-          onClick={(e) => { e.stopPropagation(); onToggle?.() }}
-          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+          data-tip={`${kin} nested session${kin === 1 ? '' : 's'}`}
         >{kin}</span>
       )}
     </span>
@@ -90,6 +81,25 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   )
 }
 
+// Both desktop list surfaces use the same zone grammar. Offline is the sole foldable zone; its count leads
+// the label and the header itself is the only disclosure control.
+export function SessionZone({ item, baseClass, onToggle }) {
+  const t = useT()
+  const classes = `${baseClass} ${baseClass}-${item.zone}${item.zone === 'offline' ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}`
+  if (item.zone !== 'offline') return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
+  return (
+    <button
+      type="button" className={classes}
+      aria-expanded={!item.folded}
+      data-tip={t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })}
+      onClick={onToggle}
+    >
+      {item.count > 0 && <span className="si-zone-count">{item.count}</span>}
+      <span className="si-zone-label">{t(`sessionZone.${item.zone}`)}</span>
+    </button>
+  )
+}
+
 export default function SessionWindow({ sessions, activeId, onPick, onOpenSession }) {
   const t = useT()
   const { expanded, toggle } = useFold()
@@ -113,34 +123,22 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
         // parent's children appear only while expanded (collapsed by default).
         forest.map((it) => {
           if (it.type === 'zone') {
-            if (it.zone !== 'offline') return <div className={`sesswin-zone sesswin-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
-            return (
-              <button
-                key={`zone-${it.zone}`} type="button"
-                className={`sesswin-zone sesswin-zone-${it.zone} si-zone-fold${it.folded ? '' : ' open'}`}
-                aria-expanded={!it.folded}
-                data-tip={t(it.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: it.count })}
-                onClick={() => setOfflineOpen((v) => !v)}
-              >
-                <Icon name={it.folded ? 'chevron-right' : 'chevron-down'} size={11} />
-                {t(`sessionZone.${it.zone}`)}
-                {it.count > 0 && <span className="si-zone-count">{it.count}</span>}
-              </button>
-            )
+            return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="sesswin-zone" onToggle={() => setOfflineOpen((v) => !v)} />
           }
           const s = it.s
           // activeId is the locked session's worktree path (board highlight matches overlays by source),
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
           const locked = s.source === activeId
           const lead = (it.expandable || it.depth)
-            ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
+            ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
             : null
           return (
             <button
               key={s.id}
               className={locked ? 'sess-row locked' : 'sess-row'}
+              aria-expanded={it.expandable ? it.expanded : undefined}
               style={{ '--ov': labelColor(s.id) }}
-              onClick={() => onPick(s)}
+              onClick={() => { onPick(s); if (it.expandable) toggle(s.id) }}
               onDoubleClick={() => onOpenSession(s.id)}
               data-tip={t('sessionWindow.rowTitle')}
             >

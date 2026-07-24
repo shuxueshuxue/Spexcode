@@ -66,13 +66,7 @@ export function useFold() {
     missing.forEach((id) => next.add(id))
     return next
   }), [])
-  const collapse = useCallback((id) => setExpanded((prev) => {
-    if (!prev.has(id)) return prev
-    const next = new Set(prev)
-    next.delete(id)
-    return next
-  }), [])
-  return { expanded, toggle, expand, collapse }
+  return { expanded, toggle, expand }
 }
 
 // THE session row face — ONE face for every list surface, desktop and mobile: the headline plus a single

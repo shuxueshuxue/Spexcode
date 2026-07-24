@@ -38,16 +38,16 @@ scenarios:
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
     description: >
       Through the running dashboard in a real browser, select a collapsed PARENT row in the session console
-      while its CHILD is hidden. From the console surface press Ctrl+Right (or Cmd+Right on macOS), then
-      Ctrl+Left/Cmd+Left. Record the row's `aria-expanded` state and the CHILD row's visibility after each
-      key. Repeat Right on a selected leaf while a real input/terminal owns focus and observe the key is not
-      claimed by the console.
+      while its CHILD is hidden. From the console surface press Ctrl+Shift+E (or Cmd+Shift+E on macOS) twice.
+      Record the row's `aria-expanded` state and the CHILD row's visibility after each key. Repeat the chord
+      on a selected leaf while a real input/terminal owns focus and observe the key is not claimed by the
+      console; also confirm Ctrl/Cmd+Right remains native input navigation.
     expected: |
-      Primary+Right expands the currently selected PARENT through the same fold state as its leading count
-      pod, revealing the CHILD without changing selection or session data. Primary+Left collapses that same
-      PARENT and hides the CHILD. A selected leaf has no disclosure action, so neither chord is consumed by
-      the console; the focused input/terminal retains its native key behavior. No second tree or persisted
-      expansion state is introduced.
+      Primary+Shift+E toggles the currently selected PARENT through the same fold state as its leading count
+      pod: the first press reveals the CHILD and the second hides it, without changing selection or session
+      data. A selected leaf has no disclosure action, so the chord is not consumed by the console; the focused
+      input/terminal retains its native key behavior, including the ordinary horizontal arrows. No second tree
+      or persisted expansion state is introduced.
   - name: triangle-colour-is-an-informational-rollup
     tags: [frontend-e2e, desktop]
     description: >

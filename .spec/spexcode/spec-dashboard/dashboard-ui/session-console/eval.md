@@ -149,9 +149,11 @@ scenarios:
     expected: >-
       At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
       dormant history no longer floods the list. Needs-you and running rows are all present at every fold
-      state. Clicking the header reveals every offline row; clicking again folds them back. A session selected
-      by URL/search/menu stays rendered even while its zone is folded. No session record is deleted or mutated
-      by any of it.
+      state. The header has the count badge before the OFFLINE label and no `>`/chevron/caret/`▸` direction
+      symbol. Parent rows with children likewise put their child count before the title/status body, with no
+      direction symbol; the whole parent row toggles and keeps `aria-expanded`. Clicking the offline header
+      reveals every offline row; clicking again folds them back. A session selected by URL/search/menu stays
+      rendered even while its zone is folded. No session record is deleted or mutated by any of it.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

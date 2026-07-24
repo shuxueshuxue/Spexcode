@@ -111,11 +111,11 @@ export function sessionAncestorIds(sessions, id) {
   return ids
 }
 
-// @@@ subtree rollup ([[session-nesting]]) — the disclosure-triangle COLOUR: a PURELY informational summary of
-// the hidden subtree that must NOT touch the parent's own status/glyph/zone/sort. Dark-yellow if ANY descendant
+// @@@ subtree rollup ([[session-nesting]]) — the count-badge COLOUR: a PURELY informational summary of the
+// hidden subtree that must NOT touch the parent's own status/glyph/zone/sort. Dark-yellow if ANY descendant
 // needs attention (the needs-you zone, error folded in — the widest signal wins); else green if any descendant
 // is actively running (a STATUS_COLOR-green status: working/parked); else neutral (all idle/offline). Reuses
-// the STATUS_COLOR hues so the triangle speaks the same four-hue language as every other status mark.
+// the STATUS_COLOR hues so the badge speaks the same four-hue language as every other status mark.
 export function subtreeRollup(id, childrenOf) {
   let need = false, run = false, count = 0
   const walk = (pid, seen) => {

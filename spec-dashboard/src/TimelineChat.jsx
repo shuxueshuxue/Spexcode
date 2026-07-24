@@ -6,6 +6,7 @@ import { isMessageStreamSession } from './messageStream.js'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
+import { useIsMobile } from './useIsMobile.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -137,6 +138,7 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 // already live in the host app), plus one after every send.
 export default function TimelineChat({ s, sessions = [], active = true }) {
   const t = useT()
+  const isMobile = useIsMobile()
   const hasFullProcess = isMessageStreamSession(s)
   const [events, setEvents] = useState(null)
   const [detail, setDetail] = useState(null)   // the record detail — carries the full originating prompt
@@ -162,6 +164,16 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     return undefined
   }, [s.id, load, active])
   useEffect(() => { setFullProcess(false) }, [s.id, hasFullProcess])
+  useEffect(() => {
+    if (!active || isMobile || fullProcess || document.visibilityState === 'hidden') return undefined
+    const focusFrame = requestAnimationFrame(() => {
+      const input = inputRef.current
+      if (active && !isMobile && !fullProcess && document.visibilityState !== 'hidden'
+        && input?.offsetParent !== null && getComputedStyle(input).visibility !== 'hidden'
+        && document.activeElement !== input) input.focus()
+    })
+    return () => cancelAnimationFrame(focusFrame)
+  }, [s.id, active, isMobile, fullProcess])
   useEffect(() => {
     if (!active) return undefined
     const iv = setInterval(load, 8000)

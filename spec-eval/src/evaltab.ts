@@ -1,5 +1,5 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
+import { repoRoot, driftIndex, historyIndex, primeLazyPathWindows, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { evalNodes, type EvalNode, type ScenarioTestReference } from './scenarios.js'
@@ -173,13 +173,19 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
   // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
   const probe = contentProbeFor(root)
-  const readings: EvalEntry[] = applyRetractions(rawReadings, retractions).map((r) => {
+  const readings: EvalEntry[] = []
+  for (const r of applyRetractions(rawReadings, retractions)) {
+    // Large-history freshness delegates reachability/path windows to synchronous Git. One reading stays a
+    // coherent verdict, but yield between readings so a production-scale fold cannot starve HTTP/SSE I/O.
+    if (idx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
+    const reachable = await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
+    if (!reachable) await probe.prime?.(r.codeSha, cf, ynode.evalPath)
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
@@ -191,7 +197,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // the sign-off join ([[human-ok]]): the ok binds by exact (scenario, ts), so only the very reading the
     // human blessed carries it — a newer or retract-revealed reading reads unblessed.
     const okRow = humanOkFor(oks, r.scenario, r.ts)
-    return {
+    readings.push({
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',
       codeSha: r.codeSha,
@@ -209,8 +215,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       blobState: primary ? primary.state : 'none',
       ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),
       ...(okRow ? { humanOk: { by: okRow.by, ts: okRow.ts } } : {}),
-    }
-  })
+    })
+  }
   readings.reverse()   // newest-first
   // R2 display overlay ([[remark-teeth]]): pin each remark to the reading it JUDGED (targetCodeSha match),
   // else the scenario's latest reading (first in newest-first order) — a dangling target never HIDES the

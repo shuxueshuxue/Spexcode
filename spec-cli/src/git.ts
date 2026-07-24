@@ -1,5 +1,5 @@
 import { execFileSync, execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 
@@ -12,6 +12,20 @@ const US = '\x1f', RS = '\x1e'
 // call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
 // gitA maps failure to '', which would otherwise hide the pathology as an innocently-empty result.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+// A complete commit/parent/file map is useful for ordinary repositories, but its JS object overhead is
+// unbounded in a production monorepo. Large histories use the path-scoped rev-list representation below;
+// this is a size policy, never a product/path exception.
+const DRIFT_LAZY_COMMIT_THRESHOLD = Math.max(10_000, Number(process.env.SPEXCODE_DRIFT_LAZY_THRESHOLD || 100_000))
+const DRIFT_LAZY_OUTPUT_BYTES = Math.max(1_000_000, Number(process.env.SPEXCODE_DRIFT_LAZY_OUTPUT_BYTES || 1_000_000))
+const gitAbort = new AsyncLocalStorage<AbortSignal>()
+
+// A board build owns one abort signal. Async git calls inherit it without every graph layer growing a
+// cancellation parameter; aborting the build therefore reaches every child spawned below the graph seam.
+export function withGitAbortSignal<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+  return gitAbort.run(signal, run)
+}
+
+const inheritedSignal = (): AbortSignal | undefined => gitAbort.getStore()
 function warnIfTimedOut(e: any, args: string[]): void {
   if (e?.signal === 'SIGKILL') console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
 }
@@ -25,23 +39,63 @@ export function git(args: string[]): string {
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
-const pexecFile = promisify(execFile)
+type GitExec = { stdout: string; stderr: string }
+
+// execFile's AbortSignal kills only its direct child. A wedged adapter may have descendants (the
+// deterministic tests use a shell + sleep), so async git runs in their own process group and abort/timeout
+// kills the whole group. The callback still carries the same stdout/stderr/error shape to gitA/gitTry.
+function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<GitExec> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let aborted = false
+    const killTree = () => {
+      if (!child?.pid) return
+      try { process.kill(-child.pid, 'SIGKILL') } catch { /* group may already be gone */ }
+      try { child.kill('SIGKILL') } catch { /* already exited */ }
+    }
+    const onAbort = () => { aborted = true; killTree() }
+    child = execFile('git', args, {
+      encoding: 'utf8', env, maxBuffer: 1 << 24, detached: true,
+      ...(signal ? { signal, killSignal: 'SIGKILL' } : {}),
+    } as any, (error: any, stdout: string, stderr: string) => {
+      if (timer) clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      if (error) {
+        error.stdout = stdout ?? ''
+        error.stderr = stderr ?? ''
+        if (aborted) error.name = 'AbortError'
+        reject(error)
+      } else resolve({ stdout, stderr })
+    })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    timer = setTimeout(() => killTree(), GIT_TIMEOUT_MS)
+    timer.unref?.()
+  })
+}
+
 export async function gitA(args: string[]): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  const signal = inheritedSignal()
   try {
-    const { stdout } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    const { stdout } = await execGit(args, env, signal)
     return stdout
-  } catch (e: any) { warnIfTimedOut(e, args); return '' }
+  } catch (e: any) {
+    if (signal?.aborted || e?.name === 'AbortError') throw e
+    warnIfTimedOut(e, args); return ''
+  }
 }
 
 export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  const signal = inheritedSignal()
   try {
-    const { stdout, stderr } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    const { stdout, stderr } = await execGit(args, env, signal)
     return { ok: true, stdout, stderr }
   } catch (e: any) {
+    if (signal?.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args)
     return { ok: false, stdout: e?.stdout ?? '', stderr: e?.stderr ?? String(e?.message ?? e) }
   }
@@ -160,27 +214,52 @@ function parseStatPath(token: string): { from: string; to: string } {
 // `git log` and re-parses it on the event loop — which is what starves every other request (the board,
 // remark posts) under load. So the cache is a small LRU keyed by HEAD (same head ⇒ same index, whatever
 // the root), holding the in-flight PROMISE so concurrent requests for one head share a single build.
-const INDEX_SLOTS = 16
-function lruGet<V>(m: Map<string, V>, k: string): V | undefined {
-  const v = m.get(k)
-  if (v !== undefined) { m.delete(k); m.set(k, v) }   // refresh recency
-  return v
-}
-function lruPut<V>(m: Map<string, V>, k: string, v: V): void {
-  m.set(k, v)
-  while (m.size > INDEX_SLOTS) m.delete(m.keys().next().value!)
+const indexCache = new Map<string, Promise<HistoryIndex>>()
+const indexRoots = new Map<string, string>()
+const driftRoots = new Map<string, string>()
+const driftIdxCache = new Map<string, Promise<DriftIndex>>()   // HEAD-keyed, referenced by current roots
+const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROOTS || 32))
+
+function rootKey(root: string): string { return resolve(root) }
+
+// HEAD identifies the immutable index contents; the root owns which HEAD is still useful. Moving one
+// checkout therefore drops its old history immediately, while equal HEADs across live roots still share
+// one promise/index. The bounded root map prevents closed/demand-only worktrees from becoming a leak.
+function touchRoot(roots: Map<string, string>, cache: Map<string, Promise<unknown>>, root: string, head: string): void {
+  const key = rootKey(root)
+  const previous = roots.get(key)
+  if (previous !== head) {
+    roots.set(key, head)
+    if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
+  } else {
+    roots.delete(key)
+    roots.set(key, head)
+  }
+  while (roots.size > INDEX_ROOT_SLOTS) {
+    const oldest = roots.keys().next().value as string | undefined
+    if (oldest === undefined) break
+    const oldHead = roots.get(oldest)
+    roots.delete(oldest)
+    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
+  }
 }
 
-const indexCache = new Map<string, Promise<HistoryIndex>>()
+function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise: Promise<unknown>): void {
+  if (cache.get(head) !== promise) return
+  // A rejected index is never reusable, even when its root still points at that HEAD. The next read must
+  // start a fresh walk after a watchdog abort or transient git failure.
+  cache.delete(head)
+}
 
 export function historyIndex(root: string): Promise<HistoryIndex> {
   const head = headOrEmpty(root)
   if (!head) return buildIndex(root)
-  const hit = lruGet(indexCache, head)
+  touchRoot(indexRoots, indexCache, root, head)
+  const hit = indexCache.get(head)
   if (hit) return hit
   const p = buildIndex(root)
-  p.catch(() => { indexCache.delete(head) })   // don't pin a failed build
-  lruPut(indexCache, head, p)
+  p.catch(() => { dropFailed(indexCache, head, p) })   // don't pin a failed build
+  indexCache.set(head, p)
   return p
 }
 
@@ -286,10 +365,78 @@ export type DriftIndex = {
   acks: Map<string, Set<string>>      // commit hash -> node ids acknowledged via `Spec-OK:` trailers
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
+  lazy?: LazyDriftIndex
 }
-const driftIdxCache = new Map<string, Promise<DriftIndex>>()   // HEAD-keyed LRU, same shape as indexCache above
+type LazyDriftIndex = {
+  root: string
+  specNodes: Map<string, Set<string>>
+  ackByNode: Map<string, string[]>
+  counts: Map<string, number>
+  windows: Map<string, string[]>
+  rawWindows: Map<string, string[]>
+  reachable: Map<string, boolean>
+}
 
+function lazySpecNode(path: string): string | null {
+  const m = path.replaceAll('\\', '/').match(/\/([^/]+)\/spec\.md$/)
+  return m?.[1] ?? null
+}
+
+function parseLazySpecNodes(out: string): Map<string, Set<string>> {
+  const specNodes = new Map<string, Set<string>>()
+  for (const rec of out.split(RS)) {
+    const r = rec.replace(/^\n/, '')
+    if (!r) continue
+    const lines = r.split('\n')
+    const hash = lines[0].split(US)[0]
+    if (!hash) continue
+    for (const path of lines.slice(1)) {
+      const node = lazySpecNode(path.trim())
+      if (!node) continue
+      let nodes = specNodes.get(hash)
+      if (!nodes) { nodes = new Set(); specNodes.set(hash, nodes) }
+      nodes.add(node)
+    }
+  }
+  return specNodes
+}
+
+async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
+  // Version commits are the only source of node ownership; ack stamps are empty commits whose subject is
+  // stable (`ack: Spec-OK …`). Both walks are tiny compared with the all-files commit graph and retain only
+  // the hashes needed to form rev-list exclusions later.
+  const [specOut, ackOut] = await Promise.all([
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, 'HEAD', '--', '.spec']),
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=' + RS + '%H' + US + '%s', '--grep=^ack: Spec-OK', 'HEAD']),
+  ])
+  const specNodes = parseLazySpecNodes(specOut)
+  const ackByNode = new Map<string, string[]>()
+  for (const rec of ackOut.split(RS)) {
+    const r = rec.replace(/^\n/, '')
+    if (!r) continue
+    const [hash, subject = ''] = r.split(US)
+    const m = subject.match(/^ack: Spec-OK\s+(.+)$/)
+    if (!hash || !m) continue
+    for (const node of m[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+      const hashes = ackByNode.get(node) ?? []
+      hashes.push(hash)
+      ackByNode.set(node, hashes)
+    }
+  }
+  return {
+    ord: new Map(), parents: new Map(), fileCommits: new Map(), acks: new Map(), specNodes, anc: new Map(),
+    lazy: { root, specNodes, ackByNode, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable: new Map() },
+  }
+}
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
+  // File fan-out, not just commit count, determines the object-graph size: a ten-thousand-commit fixture can
+  // still touch millions of paths. Probe the raw name stream once and use its byte budget as the generic
+  // large-history switch. Drop the probe before the richer parser so its bytes cannot overlap the retained maps.
+  let probe = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'])
+  if (probe.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root)
+  const count = Number((await gitA(['-C', root, 'rev-list', '--count', 'HEAD'])).trim())
+  if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root)
+  probe = ''
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileCommits = new Map<string, string[]>()
   const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
@@ -328,12 +475,17 @@ async function buildDriftIndex(root: string): Promise<DriftIndex> {
 export function driftIndex(root: string): Promise<DriftIndex> {
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
   if (!head) return buildDriftIndex(root)
-  const hit = lruGet(driftIdxCache, head)
+  touchRoot(driftRoots, driftIdxCache, root, head)
+  const hit = driftIdxCache.get(head)
   if (hit) return hit
   const p = buildDriftIndex(root)
-  p.catch(() => { driftIdxCache.delete(head) })
-  lruPut(driftIdxCache, head, p)
+  p.catch(() => { dropFailed(driftIdxCache, head, p) })
+  driftIdxCache.set(head, p)
   return p
+}
+
+export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {
+  return { historyHeads: indexCache.size, driftHeads: driftIdxCache.size, historyRoots: indexRoots.size, driftRoots: driftRoots.size }
 }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
@@ -366,6 +518,68 @@ export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boo
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
 }
 
+// The large-history representation delegates reachability and path windows to Git's compact commit graph
+// instead of materializing every commit/file edge as JS Maps. `null` means the anchor is off HEAD history;
+// callers retain their existing content-based conservative fallback for that case.
+export function commitReachable(idx: DriftIndex, sha: string): boolean {
+  if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
+  const hit = idx.lazy.reachable.get(sha)
+  if (hit !== undefined) return hit
+  let reachable = false
+  try { git(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD']); reachable = true }
+  catch { reachable = false }
+  idx.lazy.reachable.set(sha, reachable)
+  return reachable
+}
+
+export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: string): string[] | null {
+  if (!idx.lazy) {
+    const base = ancestorsOf(idx, sinceHash)
+    return base ? (idx.fileCommits.get(path) ?? []).filter((hash) => !inAncestors(idx, base, hash)) : null
+  }
+  if (!commitReachable(idx, sinceHash)) return null
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.rawWindows.get(key)
+  if (hit) return hit
+  let commits: string[]
+  try {
+    commits = git(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path])
+      .split('\n').map((s) => s.trim()).filter(Boolean)
+  } catch { commits = [] }
+  idx.lazy.rawWindows.set(key, commits)
+  return commits
+}
+
+async function commitReachableAsync(idx: DriftIndex, sha: string): Promise<boolean> {
+  if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
+  const hit = idx.lazy.reachable.get(sha)
+  if (hit !== undefined) return hit
+  const reachable = (await gitTry(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD'])).ok
+  idx.lazy.reachable.set(sha, reachable)
+  return reachable
+}
+
+async function pathCommitsSinceAsync(idx: DriftIndex, sinceHash: string, path: string): Promise<string[] | null> {
+  if (!idx.lazy) return pathCommitsSince(idx, sinceHash, path)
+  if (!await commitReachableAsync(idx, sinceHash)) return null
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.rawWindows.get(key)
+  if (hit) return hit
+  const commits = (await gitA(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path]))
+    .split('\n').map((s) => s.trim()).filter(Boolean)
+  idx.lazy.rawWindows.set(key, commits)
+  return commits
+}
+
+// Prime the lazy representation through async Git before a synchronous freshness verdict reads it. The
+// verdict functions remain pure/cache-backed while production HTTP keeps accepting work during child I/O.
+export async function primeLazyPathWindows(idx: DriftIndex, sinceHash: string, paths: string[]): Promise<boolean> {
+  if (!idx.lazy) return true
+  if (!await commitReachableAsync(idx, sinceHash)) return false
+  for (const path of new Set(paths)) await pathCommitsSinceAsync(idx, sinceHash, path)
+  return true
+}
+
 // the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,
 // so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured; an ack counts
 // only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that
@@ -392,6 +606,19 @@ export function ackCoverFor(idx: DriftIndex, sinceHash: string): Uint8Array[] {
 // in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
 // An off-history `sinceHash` → 0: no basis on HEAD to measure from.
 export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
+  if (idx.lazy) {
+    if (!sinceHash) return 0
+    const key = `${sinceHash}\0${path}`
+    const hit = idx.lazy.counts.get(key)
+    if (hit !== undefined) return hit
+    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+    const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+    const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    let count = 0
+    try { count = Number(git(args).trim()) || 0 } catch { count = 0 }
+    idx.lazy.counts.set(key, count)
+    return count
+  }
   if (!sinceHash) return 0
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return 0
@@ -403,6 +630,20 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
     n++
   }
   return n
+}
+
+export async function driftForAsync(idx: DriftIndex, sinceHash: string, path: string): Promise<number> {
+  if (!idx.lazy) return driftFor(idx, sinceHash, path)
+  if (!sinceHash) return 0
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.counts.get(key)
+  if (hit !== undefined) return hit
+  const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+  const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+  const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+  const count = Number((await gitA(args)).trim()) || 0
+  idx.lazy.counts.set(key, count)
+  return count
 }
 
 // the paths git is about to commit (index vs HEAD), scoping the pre-commit drift gate to this commit's files.

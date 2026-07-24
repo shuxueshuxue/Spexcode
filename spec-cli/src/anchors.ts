@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './git.js'
+import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -402,6 +402,18 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
 // for merge commits — the window is non-merge by construction.)
 export function windowCommits(idx: DriftIndex, sinceHash: string, path: string): string[] {
   if (!sinceHash) return []
+  if (idx.lazy) {
+    const key = `${sinceHash}\0${path}`
+    const hit = idx.lazy.windows.get(key)
+    if (hit) return hit
+    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+    const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+    const args = ['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    let commits: string[] = []
+    try { commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean) } catch { commits = [] }
+    idx.lazy.windows.set(key, commits)
+    return commits
+  }
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return []
   const cover = ackCoverFor(idx, sinceHash)

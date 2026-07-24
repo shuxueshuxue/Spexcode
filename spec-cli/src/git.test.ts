@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, mergeBaseDiff, worktreeSpecDelta, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -102,6 +102,34 @@ test('an off-history spec version yields 0 drift (no basis on HEAD to measure fr
     specNodes: new Map([['LOST', new Set(['X'])]]),
   })
   assert.equal(driftFor(i, 'LOST', 'f.ts'), 0)
+})
+
+test('large-history representation delegates reachable path windows to git without materializing a DAG', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-lazy-drift-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  run('init', '-q')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'test')
+  writeFileSync(join(root, 'f.ts'), 'one\n')
+  run('add', '.'); run('commit', '-qm', 'version')
+  const version = run('rev-parse', 'HEAD')
+  appendFileSync(join(root, 'f.ts'), 'two\n')
+  run('commit', '-qam', 'move code')
+  const changed = run('rev-parse', 'HEAD')
+  const lazy = {
+    root,
+    specNodes: new Map([[version, new Set(['X'])]]),
+    ackByNode: new Map<string, string[]>(),
+    counts: new Map<string, number>(), windows: new Map<string, string[]>(),
+    rawWindows: new Map<string, string[]>(), reachable: new Map<string, boolean>(),
+  }
+  const i = { ...idx({}), lazy } as DriftIndex
+
+  assert.equal(commitReachable(i, version), true)
+  assert.deepEqual(pathCommitsSince(i, version, 'f.ts'), [changed])
+  assert.equal(driftFor(i, version, 'f.ts'), 1)
+  assert.equal(commitReachable(i, '0'.repeat(40)), false)
+  assert.equal(pathCommitsSince(i, '0'.repeat(40), 'f.ts'), null)
 })
 
 test('mergeBaseDiff preserves the old path of a pure rename for merge-base readers', async () => {

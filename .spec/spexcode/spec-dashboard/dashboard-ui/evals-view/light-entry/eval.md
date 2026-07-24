@@ -6,16 +6,16 @@ scenarios:
     code: [spec-dashboard/src/Root.jsx]
     related: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
     description: >
-      In fresh desktop and phone Chromium contexts with cache disabled, open an existing Eval detail by
-      its canonical URL and by the legacy session URL. Record CDP requests, EventSource and WebSocket
-      creation, loaded chunks, the normalized address, and the rendered detail. From the canonical page,
-      follow the real Graph rail anchor and then browser Back.
+      In fresh desktop and phone Chromium contexts with cache disabled, open the canonical Evals LIST and
+      an existing Eval detail by its canonical URL and by the legacy session URL. Record CDP requests,
+      EventSource and WebSocket creation, loaded chunks, the normalized address, and the rendered list/detail.
+      From the canonical list/detail pages, follow the real Graph rail anchor and then browser Back.
     expected: >
-      Canonical and legacy links render the same detail and normalize to the canonical route. Before real
-      navigation there is one bounded Eval detail request plus its evidence, with no graph request or SSE,
-      no session request or socket, and no board/graph/terminal chunk. The phone renders the same responsive
-      review face. Entering Graph starts the ordinary graph request and SSE exactly once; Back restores the
-      detail without restarting the now-warm dashboard runtime.
+      The trunk list, canonical detail, and legacy detail render their Evals face; legacy links normalize to
+      the canonical route. Before real board navigation there is only one bounded list/detail request plus
+      any detail evidence, with no graph request or SSE, no session request or socket, and no board/graph/
+      terminal chunk. The phone renders the same responsive review face. Entering Graph starts the ordinary
+      graph request and SSE exactly once; Back restores the list/detail without restarting the now-warm runtime.
 ---
 # measuring light-entry
 

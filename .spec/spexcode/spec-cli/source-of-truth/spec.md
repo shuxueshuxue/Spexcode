@@ -36,15 +36,20 @@ clears a node's pending drift, not just on the exact commit that moved a file.
 
 Two principles keep that derivation cheap on a long-running server:
 
-- **Scale with history, not node count.** Two single git walks back the whole board: one over the `.spec`
-  timeline (every node's version + history rows) and one `git log --name-only HEAD` over all files (the drift
-  index), each cached on HEAD. Resolving any node — its version and its drift — is then a **pure in-memory
-  lookup**, not a per-node history query, so drift-checking is no exception to this rule. The recent/history tab for a single node is served off that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
+- **Scale with history, not node count.** Ordinary repositories use two single git walks back the whole board:
+  one over the `.spec` timeline (every node's version + history rows) and one `git log --name-only HEAD` over
+  all files (the drift index), each cached on HEAD. For a large name-stream, the drift/anchor index switches
+  to governed path-scoped `rev-list` windows plus Git reachability, retaining the same DAG semantics without
+  retaining every commit/file edge in JS. Resolving any node is a pure lookup in the small-index mode, while
+  the large-index path memoizes bounded path windows. The recent/history tab for a single node is served off
+  that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
-  worktree (the eval surfaces root their readings at the session's branch) — so the cache holds a
-  **slot per HEAD**, not one global slot: the roots warm independently and never evict each other (a
-  single-slot cache thrashed between board and eval reads, re-walking full history on every request),
-  and concurrent readers of one HEAD share a single in-flight build.
+  worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
+  in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When
+  a root advances to a new HEAD, its old index is released immediately unless another live root still
+  references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
+  retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
+  in-flight build.
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable

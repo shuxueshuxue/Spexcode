@@ -25,7 +25,9 @@ join **server-side** so every surface reads the SAME overlay.
 ## The teeth — the non-git freshness axis
 
 Freshness has two git-derived axes (`code` | `scenario`): a reading stales when a governed
-file or the scenario's content moves past its codeSha. The remark adds an
+file or the scenario's content moves past its codeSha. The ancestry verdict is unchanged across
+repository sizes: ordinary histories use the cached DAG, while large histories use bounded governed
+path windows and Git reachability without retaining a whole commit/file graph. The remark adds an
 axis that is **not** git-derived — it is read from the trunk issue store's remark track:
 
 > **clean ⟺ latest reading passes ∧ no code drift ∧ every remark resolved ∧ the latest reading post-dates

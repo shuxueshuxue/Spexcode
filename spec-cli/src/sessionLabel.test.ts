@@ -23,12 +23,12 @@ test('wire shape: no top-level title/name — only label/headline + raw parts', 
   assert.equal(s.raw.title, 'seven word prompt truncation title here')
   assert.equal(typeof s.label, 'string')
   assert.equal(typeof s.headline, 'string')
-  assert.deepEqual(s.capabilities, { headless: false, messageStream: false })
+  assert.deepEqual(s.capabilities, { headless: false })
 })
 
 test('wire shape projects console capabilities from the harness adapter', () => {
   const s = toSession(rec({ harness: 'claude-headless' }), 'working', 'online')
-  assert.deepEqual(s.capabilities, { headless: true, messageStream: true })
+  assert.deepEqual(s.capabilities, { headless: true })
 })
 
 test('label precedence: name > node > title > branch > id', () => {

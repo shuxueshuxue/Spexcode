@@ -69,6 +69,6 @@ introduced. An inconclusive socket probe never starts a possibly duplicate turn.
 Liveness is record-backed: while the governed record exists, the adapter reports `online` regardless of tmux,
 process, or socket probes. This describes a durable addressable sleeping conversation, not a resident process;
 the next delivery is where a missing pane, native conversation, or plugin fails loudly. The adapter declares
-`headless: true` and `messageStream: false`: the note conversation is the console trunk, so OpenCode stdout needs
-no parallel message collector. Closing remains the terminal operation that removes the record, worktree, tmux
+`headless: true`; the note conversation is the console trunk, so OpenCode stdout needs no parallel collector.
+Closing remains the terminal operation that removes the record, worktree, tmux
 home, and rendezvous residue.

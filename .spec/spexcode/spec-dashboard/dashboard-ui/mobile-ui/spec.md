@@ -87,10 +87,9 @@ The two planes, made native to touch:
   address (a shared link, or the scoped eval pages' terminal door — [[evals-view]]) opens that session's
   conversation on a cold phone load, one-way route→state — leaving the detail via its back control is
   phone-local and never rewrites the hash. Reading the measured loss is exactly what a
-  phone reviewer needs; ACTING on it (merge/close) stays desktop scope. When the session adapter's
-  `messageStream` capability is true, the same header also exposes a **full process** door to the
-  native [[message-stream]] view; the capability comes from adapter data, so claude-headless is the
-  current provider and all other harnesses omit the door. The scroller is chat-shaped
+  phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The conversation has no second native
+  process view or drill-down door ([[message-stream]]): the timeline is the complete terminal-free console.
+  The scroller is chat-shaped
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).

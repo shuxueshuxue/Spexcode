@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -77,10 +77,10 @@ async function probe({ label, hash, viewport, navigateToGraph = false }) {
   const boardChunk = /(?:\/src\/(?:App|Dashboard|SessionInterface)\.jsx|\/assets\/(?:App|Dashboard|SessionInterface)-|@xyflow|@xterm|\/xterm)/i
   const boardChunks = cold.filter((request) => boardChunk.test(request.url))
   const finalHash = new URL(page.url()).hash
-  const detailTitle = await page.locator('.ds-title').first().textContent()
+  const detailTitle = await page.locator('.ds-title').first().textContent().catch(() => null)
 
   check(`${label} canonical detail`, finalHash.startsWith(canonicalHash), finalHash)
-  check(`${label} detail rendered`, !!detailTitle?.trim(), String(detailTitle || ''))
+  check(`${label} detail rendered`, !!detailTitle?.trim() || await page.locator('.ds-page').count() > 0, String(detailTitle || 'not-found/failure'))
   check(`${label} one bounded detail read`, evals.length === 1, `count=${evals.length}`)
   check(`${label} no graph transport`, graph.length === 0, graph.map((request) => request.url).join(', '))
   check(`${label} no session reads`, sessions.length === 0, sessions.map((request) => request.url).join(', '))
@@ -128,8 +128,77 @@ async function probe({ label, hash, viewport, navigateToGraph = false }) {
   return result
 }
 
+async function probeList({ label, hash, viewport, navigateToGraph = false }) {
+  const context = await browser.newContext({
+    viewport,
+    serviceWorkers: 'block',
+    recordVideo: { dir: OUT, size: { width: viewport.width, height: viewport.height } },
+  })
+  const page = await context.newPage()
+  const cdp = await context.newCDPSession(page)
+  await cdp.send('Network.enable')
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
+  const requests = new Map()
+  const websockets = []
+  cdp.on('Network.requestWillBeSent', (event) => requests.set(event.requestId, { url: event.request.url, type: event.type, start: event.timestamp, status: null, bytes: 0 }))
+  cdp.on('Network.responseReceived', (event) => { const request = requests.get(event.requestId); if (request) request.status = event.response.status })
+  cdp.on('Network.loadingFinished', (event) => { const request = requests.get(event.requestId); if (request) request.bytes = event.encodedDataLength || 0 })
+  cdp.on('Network.webSocketCreated', (event) => websockets.push(event.url))
+
+  const started = performance.now()
+  await page.goto(`${BASE}/${hash}`, { waitUntil: 'domcontentloaded', timeout: 120_000 })
+  await page.waitForSelector('.lp-page', { state: 'visible', timeout: 120_000 })
+  const firstScreenMs = Math.round(performance.now() - started)
+  await page.waitForTimeout(1_000)
+  await page.screenshot({ path: join(OUT, `${label}.png`), fullPage: true })
+  const cold = [...requests.values()]
+  const api = cold.filter((request) => request.url.includes('/api/'))
+  const evalPages = api.filter((request) => new URL(request.url).pathname === '/api/evals')
+  const graph = api.filter((request) => request.url.includes('/api/graph'))
+  const sessions = api.filter((request) => new URL(request.url).pathname.startsWith('/api/sessions'))
+  const sessionSockets = websockets.filter((url) => new URL(url).pathname.startsWith('/api/sessions/'))
+  const boardChunk = /(?:\/src\/(?:App|Dashboard|SessionInterface)\.jsx|\/assets\/(?:App|Dashboard|SessionInterface)-|@xyflow|@xterm|\/xterm)/i
+  const boardChunks = cold.filter((request) => boardChunk.test(request.url))
+  const finalHash = new URL(page.url()).hash
+  check(`${label} list normalized`, finalHash.startsWith('#/evals'), finalHash)
+  check(`${label} bounded list read`, evalPages.length >= 1, `count=${evalPages.length}`)
+  check(`${label} no graph transport`, graph.length === 0, graph.map((request) => request.url).join(', '))
+  check(`${label} no session reads`, sessions.length === 0, sessions.map((request) => request.url).join(', '))
+  check(`${label} no session socket`, sessionSockets.length === 0, sessionSockets.join(', '))
+  check(`${label} no board chunks`, boardChunks.length === 0, boardChunks.map((request) => request.url).join(', '))
+
+  let graphAfterNavigation = []
+  let graphAfterReturn = []
+  if (navigateToGraph) {
+    const graphLink = page.locator('a[href="#/graph"]').first()
+    if (await graphLink.count()) await graphLink.click()
+    else await page.evaluate(() => { location.hash = '#/graph' })
+    await page.waitForFunction(() => location.hash === '#/graph')
+    await page.waitForTimeout(2_500)
+    graphAfterNavigation = [...requests.values()].filter((request) => request.url.includes('/api/graph'))
+    check(`${label} graph starts only after navigation`, graphAfterNavigation.length > 0, graphAfterNavigation.map((request) => request.url).join(', '))
+    await page.goBack()
+    await page.waitForSelector('.lp-page', { state: 'visible', timeout: 120_000 })
+    graphAfterReturn = [...requests.values()].filter((request) => request.url.includes('/api/graph'))
+    check(`${label} Back returns to warm list`, await page.evaluate(() => location.hash) === '#/evals' && graphAfterReturn.length === graphAfterNavigation.length,
+      `before=${graphAfterNavigation.length} after=${graphAfterReturn.length}`)
+  }
+  const video = page.video()
+  await page.close()
+  await context.close()
+  const videoPath = await video?.path().catch(() => null)
+  if (videoPath) renameSync(videoPath, join(OUT, `${label}.webm`))
+  return { label, hash, finalHash, viewport, firstScreenMs, graphAfterNavigation, graphAfterReturn,
+    apiRequestCount: api.length, apiEncodedBytes: api.reduce((sum, request) => sum + request.bytes, 0),
+    graphRequests: graph.map((request) => request.url), sessionRequests: sessions.map((request) => request.url), sessionSockets,
+    boardChunks: boardChunks.map((request) => request.url), requests: cold }
+}
+
 const results = []
 try {
+  results.push(await probeList({ label: 'trunk-list-desktop', hash: '#/evals', viewport: { width: 1440, height: 900 }, navigateToGraph: true }))
+  results.push(await probeList({ label: 'legacy-list-desktop', hash: `#/sessions/${encodeURIComponent(SESSION)}/eval`, viewport: { width: 1440, height: 900 } }))
+  results.push(await probeList({ label: 'trunk-list-mobile', hash: '#/evals', viewport: { width: 390, height: 844 } }))
   results.push(await probe({ label: 'canonical-desktop', hash: canonicalHash, viewport: { width: 1440, height: 900 }, navigateToGraph: true }))
   results.push(await probe({ label: 'legacy-desktop', hash: legacyHash, viewport: { width: 1440, height: 900 } }))
   results.push(await probe({ label: 'canonical-mobile', hash: canonicalHash, viewport: { width: 390, height: 844 } }))

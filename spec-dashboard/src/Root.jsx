@@ -46,15 +46,15 @@ function EvalEntry() {
 
 export default function Root() {
   const t = useT()
-  const { page, param } = useRoute()
-  const directEvalDetail = page === 'evals' && !!param
-  // @@@ cold-entry latch - only a tab born on a detail may bypass App; once the board starts, its warm
+  const { page } = useRoute()
+  const coldEvalsRoute = page === 'evals'
+  // @@@ cold-entry latch - a tab born on any Evals route may bypass App; once the board starts, its warm
   // graph/session state survives every later route change exactly as it did before this outer selector.
-  const [boardStarted, setBoardStarted] = useState(() => !directEvalDetail)
+  const [boardStarted, setBoardStarted] = useState(() => !coldEvalsRoute)
   useEffect(() => {
-    if (!directEvalDetail) setBoardStarted(true)
-  }, [directEvalDetail])
-  const lightweight = directEvalDetail && !boardStarted
+    if (!coldEvalsRoute) setBoardStarted(true)
+  }, [coldEvalsRoute])
+  const lightweight = coldEvalsRoute && !boardStarted
 
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>

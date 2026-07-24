@@ -152,6 +152,8 @@ try {
   const dashboardSessionOrder = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
   mark('open empty session search')
   await page.keyboard.press('Control+/')
+  assert.equal(await page.locator('.search-panel').count(), 0, 'Control+/ must remain native and not open app search')
+  await page.keyboard.press('Alt+/')
   await page.locator('.search-panel').waitFor({ state: 'visible' })
   const paletteSessionOrder = await page.locator('.search-item[data-kind="session"]').evaluateAll((rows) => rows.map((row) => row.dataset.target))
   assert.deepEqual(paletteSessionOrder, dashboardSessionOrder.slice(0, paletteSessionOrder.length))

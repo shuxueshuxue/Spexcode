@@ -997,11 +997,11 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .set-reset:hover { border-color: var(--red); color: var(--red); }
 
-/* @@@ search palette (`/` on the board, ⌘/Ctrl+/ over the session board) - a command-palette over the spec
+/* @@@ search palette (`/` on the board, ⌥+/ over the session board) - a command-palette over the spec
    tree + sessions: an input + ranked result rows. Top-aligned (not centred like .legend) so the list grows
    downward without the panel jumping as results change. Shares the dimmed/blurred .legend-backdrop look but
    anchors the panel near the top. z-index 60 floats it ABOVE every surface — including the session-board
-   page, which is where ⌘/Ctrl+/ opens it — so the palette never renders behind its surface. */
+   page, which is where ⌥+/ opens it — so the palette never renders behind its surface. */
 .search-backdrop {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
@@ -1165,7 +1165,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-pill.new { color: var(--blue); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
-/* the Search pill is the click twin of ⌘+/ ([[session-search]]): a secondary action beside New —
+/* the Search pill is the click twin of ⌥+/ ([[session-search]]): a secondary action beside New —
    muted at rest, inking blue on hover. Momentary (opens the palette), so it never wears an .on state. */
 .si-pill.search { color: var(--ink2); }
 .si-pill.search:hover { color: var(--blue); }

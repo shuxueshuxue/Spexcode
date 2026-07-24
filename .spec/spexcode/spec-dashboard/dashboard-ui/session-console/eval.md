@@ -15,13 +15,13 @@ scenarios:
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs
     description: >-
-      In a live terminal press Cmd+I or Alt+I, measure the Command Box and terminal before and after entering
-      several lines, then close and reopen it. Repeat in a narrow desktop pane and press Alt+Cmd+I.
+      In a live terminal press Alt+I, measure the Command Box and terminal before and after entering
+      several lines, then close and reopen it. Repeat in a narrow desktop pane and press Alt+Shift+I.
     expected: >-
       The named Command Box opens focused and horizontally centered in the lower middle, with its bottom edge
       near 68% of the terminal pane. Its width shrinks safely; its footer stays fixed while content grows upward
       to a cap; xterm geometry never changes. Close/reopen preserves the session draft and returns focus to the
-      TUI. Alt+Cmd+I is not consumed by the app.
+      TUI. Alt+Shift+I is not consumed by the app.
   - name: command-box-send-failure-and-success
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

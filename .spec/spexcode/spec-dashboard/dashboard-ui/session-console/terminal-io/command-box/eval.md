@@ -5,7 +5,7 @@ scenarios:
     test: spec-dashboard/test/command-box.e2e.mjs
     related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/styles.css]
     description: >-
-      In a real live session press Cmd+I or Alt+I, author a multi-line draft using mentions, slash rows, and
+      In a real live session press Alt+I, author a multi-line draft using mentions, slash rows, and
       an attachment, close and reopen it, then send once while recording the interaction and geometry.
     expected: >-
       A surface named Command Box opens focused in the lower middle with its bottom edge near 78% of the pane.

@@ -502,7 +502,7 @@ export default {
     lockTitle: '右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
-    searchTitle: '搜索（⌘+/）',
+    searchTitle: '搜索（⌥+/）',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: 'issues 工作流已关闭。',
     issuesEmpty: '暂无 issue。',
@@ -574,7 +574,7 @@ export default {
       `打开此会话的 Evals 页 — 新鲜通过 ${pass}，新鲜失败 ${fail}，待人工复核 ${review}，未评测 ${blind}，覆盖未知 ${unknown}`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
-    commandTitle: '打开 Command Box，发送完整指令或执行面板命令（Alt/Cmd+I）',
+    commandTitle: '打开 Command Box，发送完整指令或执行面板命令（Alt+I）',
     commandClose: '关闭 Command Box',
     commandPlaceholder: '发送完整指令或执行面板命令',
     commandSend: '从 Command Box 发送',

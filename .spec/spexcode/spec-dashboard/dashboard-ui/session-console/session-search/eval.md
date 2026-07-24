@@ -4,12 +4,12 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session console (Enter) so the session board
-      is the active surface. Press ⌘+/ (mac) or Ctrl+/ (win/linux). The SAME search palette the board's `/`
+      is the active surface. Press ⌥+/. The SAME search palette the board's `/`
       opens must appear, floating ABOVE the session board (not hidden behind it). Type a query that matches
       both a live session and a spec node (e.g. a word in a session's headline that is also a node name).
       Screenshot the open palette over the session board and the ranked result rows.
     expected: |
-      ⌘/Ctrl+/ opens the one shared palette over the session board — same input + ranked rows as the board's
+      ⌥+/ opens the one shared palette over the session board — same input + ranked rows as the board's
       `/`, never a second component, rendered above the board (z-index over .si-backdrop). With the query
       matching both planes, a SESSION row ranks at the TOP (the session plane is boosted to lead the
       interleave), with the matching spec node and any issues/scenarios reachable below — every plane still
@@ -23,12 +23,12 @@ scenarios:
       Through the running dashboard in a real browser, open the session console (Enter) and read the session
       list's top button row: beside the ＋ New Session pill there must be a Search pill whose glyph is a
       monochrome inline-SVG magnifier (currentColor stroke, never an emoji) and whose tooltip (title
-      attribute) teaches the ⌘+/ chord. Click it and compare what opens against pressing ⌘/Ctrl+/: it must
+      attribute) teaches the ⌥+/ chord. Click it and compare what opens against pressing ⌥+/: it must
       be the SAME palette component (`.search-panel` over its backdrop), sessions leading the ranked rows.
       Esc closes it back to the console with the selected tab unchanged and the pill wearing no pressed/on
       state. Screenshot the top row and the open palette.
     expected: |
-      A Search pill sits beside ＋ in the top row — inline-SVG magnifier, no emoji, title naming ⌘+/.
+      A Search pill sits beside ＋ in the top row — inline-SVG magnifier, no emoji, title naming ⌥+/.
       Clicking it opens the one shared search palette exactly as the chord does (same `.search-panel`,
       session plane boosted to lead), never a second search implementation; the selected session tab does
       not change, and after Esc the console is back with no persistent .on state on the pill. Button and
@@ -42,7 +42,7 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, open every parent disclosure and the offline history
       disclosure in the session console, then read the session ids from the rendered rows in order. Without
-      typing a query, open the shared palette with Ctrl+/ (or Cmd+/ on macOS) and read its session result ids
+      typing a query, open the shared palette with ⌥+/ and read its session result ids
       in order. Compare the two product surfaces directly rather than calling an internal rank helper.
     expected: |
       The empty palette's session rows are the dashboard's fully disclosed order, up to the palette's result
@@ -55,7 +55,7 @@ scenarios:
   - name: pick-routes-session-vs-node
     tags: [frontend-e2e, desktop]
     description: >
-      With the ⌘/Ctrl+/ palette open over the session board, first pick a SESSION result (click or Enter on a
+      With the ⌥+/ palette open over the session board, first pick a SESSION result (click or Enter on a
       highlighted session row) and watch where you land. Reopen the palette and this time pick a SPEC NODE
       result. Watch whether the session view stays or closes and where focus lands. Screenshot
       after each pick.
@@ -73,7 +73,7 @@ scenarios:
 # session-search — yatsu
 
 Measure through the **real running dashboard in a browser**, YATU-style: open the session console with
-`Enter`, fire the actual ⌘/Ctrl+/ chord, and drive the real palette — never a direct call into `SpecSearch`'s
+`Enter`, fire the actual ⌥+/ chord, and drive the real palette — never a direct call into `SpecSearch`'s
 `rank`/`onPick` and never an internal helper chosen to make the proof easy. The loss is the two contracts
 this node owns on top of the shared [[shared-ranker]] palette: **sessions lead** the ranking when opened from
 the session board (while every other plane stays visible below), and the **session-vs-node** select target

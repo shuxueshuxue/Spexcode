@@ -2,7 +2,7 @@
 title: session-search
 status: active
 hue: 280
-desc: From the sessions page, ⌘/Ctrl+/ opens the SAME search palette the graph page uses — sessions boosted to the top — and a pick either opens a session's tab or jumps to a node on the graph.
+desc: From the sessions page, ⌥+/ opens the SAME search palette the graph page uses — sessions boosted to the top — and a pick either opens a session's tab or jumps to a node on the graph.
 related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/App.jsx
@@ -13,11 +13,11 @@ related:
 ---
 # session-search
 
-The [[session-console]] is where you live while driving agents — but the jump-to escape hatch was reachable only from the graph page behind it (the `/` palette, see [[keyboard-nav]]). This node gives the sessions page its own way in: **⌘+/ (and Ctrl+/) opens the SAME palette**, never a second one. It sits beside the console's other reserved chords (⌥/⌘+I, ⌥+N) as a fixed binding, not a page verb.
+The [[session-console]] is where you live while driving agents — but the jump-to escape hatch was reachable only from the graph page behind it (the `/` palette, see [[keyboard-nav]]). This node gives the sessions page its own way in: **⌥+/ opens the SAME palette**, never a second one. It sits beside the console's other reserved Option chords (⌥+I, ⌥+N) as a fixed binding, not a page verb. Command/Ctrl shortcuts remain available to the browser and native controls.
 
 A chord alone is invisible, so the entry point is also **clickable**: the session list's top row carries a
 **Search pill** beside `＋` New ([[session-console]] hosts the row) — a monochrome inline-SVG magnifier in the
-dashboard's own glyph vocabulary, its tooltip teaching the ⌘+/ shortcut. The button fires the **same single
+dashboard's own glyph vocabulary, its tooltip teaching the ⌥+/ shortcut. The button fires the **same single
 open path** the chord does (the one sessions-boosted palette open threaded down from the app), never a second
 palette or a second search implementation; it is momentary — the palette floats above, no tab switch, no
 pressed state.
@@ -30,7 +30,7 @@ pressed state.
   [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first
   within a zone, and each parent immediately followed by its recursively ordered descendants. The palette
   does not restate those rules or sort session names; it inherits them from the shared forest, so a future
-  dashboard ordering change reaches the empty ⌘/Ctrl+/ list without a search-specific repair.
+  dashboard ordering change reaches the empty ⌥+/ list without a search-specific repair.
 - **Select target.** A result selects the product surface that owns that kind of thing, through the shared
   [[address-routing]] vocabulary. Picking a **session** opens (or switches to) that session's
   tab. Picking a **spec node** routes to the graph page and focuses that node. Picking an **issue** routes to

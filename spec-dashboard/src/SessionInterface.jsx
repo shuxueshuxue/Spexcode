@@ -610,12 +610,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
-      // Reserved Alt/Cmd+I toggles Command Box before xterm. Matched by
+      // Reserved Alt+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
-      // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
-      // leave it alone.
+      // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (commandAvailable) setCommandOpen((value) => !value)
         return
@@ -637,14 +636,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         }
         return
       }
-      // ⌘/⌥/⌃+↑/↓ always walk the session list; the modifier frees ↑/↓ from caret/TUI navigation.
-      if (e.metaKey || e.altKey || e.ctrlKey) {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault(); e.stopPropagation()
-          let i = order.indexOf(active); if (i < 0) i = 0
-          const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
-          setSel(order[ni]); return
-        }
+      // Alt+↑/↓ walks the session list; the modifier frees ↑/↓ from caret/TUI navigation.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault(); e.stopPropagation()
+        let i = order.indexOf(active); if (i < 0) i = 0
+        const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+        setSel(order[ni]); return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
@@ -712,7 +709,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
-            {/* the click twin of ⌘/Ctrl+/ ([[session-search]]) — same palette open, the tooltip
+            {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
             <button className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
               <span className="si-pill-glyph"><Icon name="search" size={15} /></span>

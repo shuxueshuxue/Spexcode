@@ -474,6 +474,144 @@ test('offline history projections stay demand-only', async () => {
   assert.equal(cache.get('offline')?.phase, 'loading')
 })
 
+test('projection warmup can be disabled for plain graph reads', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(1) }
+  }, () => {}, 'epoch', false)
+
+  cache.snapshot([{ id: 'live', path: '/wt/live', liveness: 'online' }])
+  await cache.idle()
+  assert.equal(builds, 0, 'a plain graph read leaves live projections loading')
+  cache.setPrecompute(true)
+  await cache.idle()
+  assert.equal(builds, 1, 'starting a delta era authorizes the current live projection')
+})
+
+test('projection queue never overlaps per-session history builds', async () => {
+  let active = 0, maxActive = 0, builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    active++
+    maxActive = Math.max(maxActive, active)
+    await new Promise((resolve) => setTimeout(resolve, 1))
+    active--
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(1) }
+  }, () => {}, 'epoch')
+
+  cache.snapshot(['a', 'b', 'c', 'd'].map((id) => ({ id, path: `/wt/${id}`, liveness: 'online' })))
+  await cache.idle()
+  assert.equal(builds, 4)
+  assert.equal(maxActive, 1, 'the bounded runner keeps worktree history walks serial')
+})
+
+test('ending and reopening a delta era does not enqueue a running generation twice', async () => {
+  const gate = deferred<any>()
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return gate.promise
+  }, () => {}, 'epoch', false)
+  const sessions = [{ id: 's', path: '/wt/s', liveness: 'online' }]
+
+  cache.snapshot(sessions)
+  cache.setPrecompute(true)
+  await Promise.resolve()
+  assert.equal(builds, 1)
+  cache.setPrecompute(false)
+  cache.setPrecompute(true)
+  await Promise.resolve()
+  assert.equal(builds, 1, 'reconnect joins the in-flight generation instead of duplicating it')
+  gate.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  await cache.idle()
+  assert.equal(cache.get('s')?.phase, 'ready')
+})
+
+test('a selected demand jumps ahead of unrelated queued summaries without opening a second lane', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  const order: string[] = []
+  let active = 0, maxActive = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    order.push(id)
+    active++
+    maxActive = Math.max(maxActive, active)
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    const result = await gate.promise
+    active--
+    return result
+  }, () => {}, 'epoch')
+  const sessions = Array.from({ length: 30 }, (_, i) => {
+    const id = `s${i + 1}`
+    return { id, path: `/wt/${id}`, liveness: 'online' }
+  })
+  cache.snapshot(sessions)
+  await Promise.resolve()
+  assert.deepEqual(order, ['s1'], 'the first summary owns the only running slot')
+
+  const demand = cache.demand('s30', '/wt/s30', async () => {
+    order.push('demand:s30')
+    return 'selected'
+  })
+  gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  for (let i = 0; i < 20 && order.length < 2; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(order.slice(0, 2), ['s1', 'demand:s30'], 'the selected id runs before the remaining queue')
+  assert.equal(await demand, 'selected')
+
+  for (const id of ['s2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18', 's19', 's20', 's21', 's22', 's23', 's24', 's25', 's26', 's27', 's28', 's29']) {
+    while (!gates.has(id)) await Promise.resolve()
+    gates.get(id)!.resolve({ kind: 'stable', revision: `r-${id}`, summary: summary(1) })
+    await Promise.resolve()
+  }
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s30', ...Array.from({ length: 28 }, (_, i) => `s${i + 2}`)])
+  assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
+})
+
+test('a rejected demand frees the slot and lets ordinary summaries continue', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  const order: string[] = []
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    order.push(id)
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    return gate.promise
+  }, () => {}, 'epoch')
+  cache.snapshot([
+    { id: 's1', path: '/wt/s1', liveness: 'online' },
+    { id: 's2', path: '/wt/s2', liveness: 'online' },
+    { id: 's3', path: '/wt/s3', liveness: 'online' },
+  ])
+  await Promise.resolve()
+  const demand = cache.demand('s3', '/wt/s3', async () => {
+    order.push('demand:s3')
+    throw new Error('selected demand failed')
+  })
+  gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  await assert.rejects(demand, /selected demand failed/)
+  while (!gates.has('s2')) await Promise.resolve()
+  gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
+})
+
+test('a demand enqueued in the batch-finally gap is not lost', async () => {
+  let demand!: Promise<string>
+  let cache!: SessionEvalProjectionCache
+  cache = new SessionEvalProjectionCache(async (id) => {
+    if (id === 's1') {
+      // Queue the demand from the same turn that resolves the only summary. Depending on promise reaction
+      // ordering this lands between the batch body resolving and its finally callback, the lost-wakeup gap.
+      queueMicrotask(() => { demand = cache.demand('s2', '/wt/s2', async () => 'settled') })
+    }
+    return { kind: 'stable', revision: `r-${id}`, summary: summary(1) }
+  }, () => {}, 'epoch')
+  cache.snapshot([{ id: 's1', path: '/wt/s1', liveness: 'online' }])
+  await cache.idle()
+  assert.equal(await demand, 'settled', 'the gap demand must wake a new or current batch')
+})
+
 test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
   const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))

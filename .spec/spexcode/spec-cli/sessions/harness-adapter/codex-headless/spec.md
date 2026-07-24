@@ -46,7 +46,7 @@ app-server remains the liveness address only when it can accept another delivery
 
 The session record is the liveness address: while it exists, the adapter reports `online` regardless of the
 empty pane or process probes. `headless: true` keeps it out of the dashboard launcher picker by default and
-`messageStream: false` leaves the note conversation as the console trunk. Resume is deliberately degraded to
+the note conversation is the console trunk. Resume is deliberately degraded to
 the no-TUI form: `resumeArg` is empty because the durable thread already lives in the shared server and there
 is no TUI to reattach or restart. Closing remains the terminal operation that
 removes the record, worktree, branch, pane, and shared runtime references owned by the session.

@@ -29,8 +29,6 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(claudeHeadlessHarness.sessionIdArg('abc'), '--session-id abc')
   assert.equal(claudeHeadlessHarness.resumeArg({ session: 'abc' }), '--resume abc')
   assert.equal(claudeHeadlessHarness.headless, true)
-  assert.equal(claudeHeadlessHarness.messageStream, true)
-  assert.equal(claudeHarness.messageStream, false)
   assert.equal(claudeHeadlessHarness.ownsRendezvous, false)
   assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)
@@ -40,17 +38,22 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(existsSync(claudeHeadlessSock(cleanupId)), false, 'adapter teardown removes a stale control socket')
 })
 
-test('controller cold-resumes idle turns, steers the active child, confirms interrupt, and stores native lines', async (t) => {
+test('controller cold-resumes idle turns, steers the active child, and confirms interrupt', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'spex-headless-test-'))
   const runtime = join(root, 'runtime')
   const invocations = join(root, 'invocations.ndjson')
+  const emitted = join(root, 'emitted.ndjson')
   const fake = join(root, 'fake-claude.mjs')
   writeFileSync(fake, `
 import { appendFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 const log = process.argv[2]
-appendFileSync(log, JSON.stringify({ pid: process.pid, args: process.argv.slice(3) }) + '\\n')
-const emit = (event) => process.stdout.write(JSON.stringify(event) + '\\n')
+const events = process.argv[3]
+appendFileSync(log, JSON.stringify({ pid: process.pid, args: process.argv.slice(4) }) + '\\n')
+const emit = (event) => {
+  appendFileSync(events, JSON.stringify(event) + '\\n')
+  process.stdout.write(JSON.stringify(event) + '\\n')
+}
 const textOf = (event) => event?.message?.content?.find?.((part) => part?.type === 'text')?.text || ''
 let finishing = false
 setInterval(() => {}, 60_000)
@@ -79,14 +82,13 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 })
 `)
   const id = 'headless-fixture'
-  const cmd = `${process.execPath} '${fake}' '${invocations}'`
+  const cmd = `${process.execPath} '${fake}' '${invocations}' '${emitted}'`
   const controller = new ClaudeHeadlessController(id, runtime, cmd, process.cwd())
   const wakeRecord = { session: id, status: 'asking' }
   const activeRecord = { session: id, status: 'active' }
   t.after(() => controller.close())
   await controller.start('INITIAL')
-  const messages = join(runtime, 'sessions', id, 'messages.ndjson')
-  await waitFor(() => existsSync(messages) && readFileSync(messages, 'utf8').includes('INITIAL'))
+  await waitFor(() => existsSync(emitted) && readFileSync(emitted, 'utf8').includes('INITIAL'))
 
   const idle = await deliverViaClaudeHeadless(wakeRecord, 'HOLD')
   assert.deepEqual(idle, { ok: true })
@@ -97,23 +99,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   const beforeSteer = readFileSync(invocations, 'utf8').trim().split('\n').length
   const steer = await deliverViaClaudeHeadless(activeRecord, 'STEER')
   assert.deepEqual(steer, { ok: true })
-  await waitFor(() => readFileSync(messages, 'utf8').includes('STEER'))
+  await waitFor(() => readFileSync(emitted, 'utf8').includes('STEER'))
   assert.equal(readFileSync(invocations, 'utf8').trim().split('\n').length, beforeSteer, 'mid-turn delivery reused the live child')
 
   const finishing = await deliverViaClaudeHeadless(wakeRecord, 'FINISHING')
   assert.deepEqual(finishing, { ok: true })
   const afterDeclaration = await deliverViaClaudeHeadless(wakeRecord, 'AFTER_FINISHING')
   assert.deepEqual(afterDeclaration, { ok: true })
-  await waitFor(() => readFileSync(messages, 'utf8').includes('AFTER_FINISHING'))
+  await waitFor(() => readFileSync(emitted, 'utf8').includes('AFTER_FINISHING'))
 
   const active = await deliverViaClaudeHeadless(wakeRecord, 'INTERRUPT')
   assert.deepEqual(active, { ok: true })
   const interrupted = await interruptClaudeHeadless({ session: id })
   assert.deepEqual(interrupted, { ok: true })
-  await waitFor(() => readFileSync(messages, 'utf8').includes('control_response'))
+  await waitFor(() => readFileSync(emitted, 'utf8').includes('control_response'))
   const after = await deliverViaClaudeHeadless(wakeRecord, 'AFTER')
   assert.deepEqual(after, { ok: true })
-  await waitFor(() => readFileSync(messages, 'utf8').includes('AFTER'))
+  await waitFor(() => readFileSync(emitted, 'utf8').includes('AFTER'))
 
   const args = readFileSync(invocations, 'utf8').trim().split('\n')
     .map((line) => JSON.parse(line) as { args?: string[] })
@@ -122,7 +124,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   assert.ok(args.slice(1).every((argv) => argv.includes('--resume') && argv.includes(id)), 'every idle wake cold-resumes the same conversation')
   assert.ok(args.every((argv) => argv.includes('-p') && argv.includes('stream-json') && argv.includes('--verbose')))
 
-  const nativeEvents = readFileSync(messages, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+  const nativeEvents = readFileSync(emitted, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
   assert.ok(nativeEvents.some((event) => event.type === 'control_response'))
-  assert.ok(nativeEvents.every((event) => typeof event.type === 'string' && !('spexcode' in event)), 'messages are native Claude events with no wrapper')
+  assert.ok(nativeEvents.every((event) => typeof event.type === 'string' && !('spexcode' in event)), 'controller forwards native Claude events unchanged')
 })

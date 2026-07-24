@@ -17,7 +17,6 @@ test('codex-headless composes Codex materialization and app-server delivery with
   assert.equal(codexHeadlessHarness.sessionIdArg('abc'), '')
   assert.equal(codexHeadlessHarness.resumeArg({ session: 'abc', harnessSessionId: 'thread-1' }), '')
   assert.equal(codexHeadlessHarness.headless, true)
-  assert.equal(codexHeadlessHarness.messageStream, false)
   assert.equal(codexHeadlessHarness.ownsRendezvous, false)
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)

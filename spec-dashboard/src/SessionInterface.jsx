@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
-import { isHeadlessSession } from './messageStream.js'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest } from './session.js'
@@ -20,6 +19,8 @@ import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
 import { inertChromePress } from './focus.js'
+
+const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)

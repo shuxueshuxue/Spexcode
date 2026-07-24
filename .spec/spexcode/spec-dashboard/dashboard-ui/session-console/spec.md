@@ -98,8 +98,8 @@ An existing session's adapter chooses one real console surface. A pane-backed ad
 interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
 its **liveness** ([[state]]) is live (`online`/`starting`). A headless adapter has no pane at any liveness;
 its main console is the shared `TimelineChat` conversation over [[session-timeline]], readable after the process
-goes offline. The optional [[message-stream]] full-process door is exposed only when the adapter's data capability
-`messageStream` is true; the UI consumes that capability and never branches on a harness id. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+goes offline. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
+drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
@@ -111,9 +111,8 @@ pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle witho
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar**
 contains only three things: the current surface, evaluation, and available commands. A pane-backed session exposes
-its one **Terminal** tab; a headless session keeps TimelineChat as the main surface and may expose one
-**full process** door when the adapter advertises `messageStream`. The door opens the native message stream as a
-drill-down on both viewport classes; it is never a replacement console or an id-specific UI branch. Session identity, lifecycle,
+its one **Terminal** tab; a headless session exposes its one TimelineChat **Conversation** surface. Neither console
+adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
@@ -163,9 +162,7 @@ continues through [[live-view]]'s explicit tmux-client control path.
 
 The desktop right pane has **one console slot with two truthful transports**. A pane-backed adapter mounts the
 warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
-phone, with no terminal placeholder and no tmux socket. Its optional full-process door delegates to
-[[message-stream]] only when the adapter capability is present; native events remain an enhancement over the
-timeline, not the main conversation. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.

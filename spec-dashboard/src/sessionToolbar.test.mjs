@@ -6,6 +6,7 @@ import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const feed = readFileSync(new URL('./EvalsFeed.jsx', import.meta.url), 'utf8')
 const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
@@ -25,6 +26,13 @@ test('session toolbar separates one Terminal tab from the canonical Eval anchor'
   const tablistEnd = source.indexOf('</div>', source.indexOf('className="si-tabs" role="tablist"'))
   const door = source.indexOf('className="si-eval-door')
   assert.ok(tablistEnd > 0 && door > tablistEnd, 'the navigation door must stay outside the tablist')
+})
+
+test('a headless console has one TimelineChat conversation surface', () => {
+  assert.match(source, /const isHeadlessSession = \(session\) => session\?\.capabilities\?\.headless === true/)
+  assert.match(source, /headless\s*\? <TimelineChat s=\{session\}/)
+  assert.match(timelineChat, /sendSessionText\(s\.id, text, \{ replyVia: 'note' \}\)/)
+  assert.equal((timelineChat.match(/className="tl-chat"/g) || []).length, 1)
 })
 
 test('session eval glance reuses the graph summary projection and review-state visual', () => {

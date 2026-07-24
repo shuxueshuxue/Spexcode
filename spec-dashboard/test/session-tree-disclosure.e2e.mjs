@@ -85,6 +85,18 @@ try {
   assert.equal(await page.locator(`.si-item[data-sid="${child.id}"]`).count(), 0)
   record('SessionInterface', 'row click leaves fold', await expanded(interfacePod))
 
+  const visibleSessionIds = await page.locator('.si-item[data-sid]').evaluateAll((rows) => rows.map((row) => row.dataset.sid))
+  const parentIndex = visibleSessionIds.indexOf(parent.id)
+  const tabDirection = parentIndex < visibleSessionIds.length - 1 ? 'ArrowDown' : 'ArrowUp'
+  const tabReturn = tabDirection === 'ArrowDown' ? 'ArrowUp' : 'ArrowDown'
+  const expectedMovedSession = visibleSessionIds[parentIndex + (tabDirection === 'ArrowDown' ? 1 : -1)]
+  await page.keyboard.press(`Alt+${tabDirection}`)
+  const movedSession = await page.locator('.si-item.on').getAttribute('data-sid')
+  assert.equal(movedSession, expectedMovedSession, 'plain Alt arrows must keep moving the selected session tab')
+  await page.keyboard.press(`Alt+${tabReturn}`)
+  assert.equal(await page.locator('.si-item.on').getAttribute('data-sid'), parent.id, 'plain Alt+ArrowUp must return to the selected parent')
+  record('SessionInterface', 'plain Alt arrows move tabs', true)
+
   await page.evaluate(() => { document.activeElement.dataset.sessionTreeFocusProbe = 'before-fold' })
   await interfacePod.click()
   assert.equal(await expanded(interfacePod), 'true')

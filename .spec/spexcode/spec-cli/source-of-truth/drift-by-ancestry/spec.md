@@ -26,10 +26,10 @@ No linear order can keep that promise — date or topological, a total order can
 commits sit on parallel branches", so any position compare silently under-reports whenever history
 isn't chronological: back-dated or long-lived branches merged in, cherry-picks, and hardest of all
 **adoption**, where a spec tree is back-extracted onto an existing history. The [[source-of-truth]]
-walk therefore carries the DAG itself: the one cached `git log HEAD` is enriched with each commit's
-parent edges, and "newer than the spec" is answered by in-memory reachability (memoized per queried
-sha as a bitset over the walk) — the exact equivalent of `git rev-list version..HEAD -- <file>`, with
-no per-query git fork, so "scale with history, not node count" still holds. The same one rule feeds
+walk therefore preserves the DAG question itself: ordinary histories use the cached `git log HEAD`
+parent edges and in-memory reachability, while a large name-stream delegates the same reachability and
+governed path windows to Git's commit graph with bounded path caches. Neither mode changes the ancestry
+verdict, and both avoid a per-node history walk, so "scale with history, not node count" still holds. The same one rule feeds
 every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
 

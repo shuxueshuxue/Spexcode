@@ -1,4 +1,4 @@
-import { git, headSha, ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
+import { git, headSha, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { scenarioHash, type Scenario } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -87,6 +87,12 @@ export function remarkStale(reading: { ts: string }, remarks: RemarkSignal[]): b
 // ContentProbe above); without a probe — or when the anchor object is gone — freshness can't be proven
 // from HEAD's history, so it reads stale rather than silently pass.
 export function changedSince(idx: DriftIndex, sinceSha: string, path: string, probe?: ContentProbe): boolean {
+  if (idx.lazy) {
+    const commits = pathCommitsSince(idx, sinceSha, path)
+    if (commits) return commits.length > 0
+    const diff = probe?.changedPaths(sinceSha)
+    return diff ? diff.has(path) : true
+  }
   const anc = ancestorsOf(idx, sinceSha)
   if (anc) return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
   const diff = probe?.changedPaths(sinceSha)
@@ -100,6 +106,19 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 // by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
 export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[], probe?: ContentProbe): { file: string; behind: number }[] {
+  if (idx.lazy) {
+    const reachable = commitReachable(idx, sinceSha)
+    const diff = reachable ? undefined : probe?.changedPaths(sinceSha)
+    const out: { file: string; behind: number }[] = []
+    for (const file of codeFiles) {
+      const commits = reachable ? pathCommitsSince(idx, sinceSha, file) ?? [] : []
+      const behind = reachable ? commits.length
+        : diff ? (diff.has(file) ? probe!.behind(sinceSha, file) : 0)
+        : 1
+      if (behind > 0) out.push({ file, behind })
+    }
+    return out
+  }
   const anc = ancestorsOf(idx, sinceSha)
   const diff = anc ? undefined : probe?.changedPaths(sinceSha)
   const out: { file: string; behind: number }[] = []
@@ -138,6 +157,17 @@ function scenarioStaleByHash(reading: Reading, current: Scenario | undefined): b
 // readings): the change-commit chain is built off a LINEARIZED log walk, so parallel branches editing one
 // eval.md cross-attribute each other's edits and can false-stale a sibling's reading across a merge.
 function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, evalPath: string, scenario: string, probe?: ContentProbe): boolean {
+  if (didx.lazy) {
+    const commits = pathCommitsSince(didx, sinceSha, evalPath)
+    if (commits) {
+      const after = new Set(commits)
+      return scenarioChangeCommits(scIdx, evalPath, scenario).some((hash) => after.has(hash))
+    }
+    const diff = probe?.changedPaths(sinceSha)
+    if (!diff) return true
+    if (!diff.has(evalPath)) return false
+    return probe!.scenarioDiffers(sinceSha, evalPath, scenario)
+  }
   const anc = ancestorsOf(didx, sinceSha)
   if (anc) return scenarioChangeCommits(scIdx, evalPath, scenario).some((h) => !inAncestors(didx, anc, h))
   const diff = probe?.changedPaths(sinceSha)
@@ -158,7 +188,7 @@ export function staleAxes(
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
   const byHash = scenarioStaleByHash(reading, current)
-  if (probe && !ancestorsOf(didx, reading.codeSha) && probe.changedPaths(reading.codeSha) === null) {
+  if (probe && !commitReachable(didx, reading.codeSha) && probe.changedPaths(reading.codeSha) === null) {
     // the anchor commit object is GONE — neither git axis can testify; say that, not "content changed".
     // The stored contract hash needs no anchor, so it still decides the scenario axis when present.
     axes.push('anchor')

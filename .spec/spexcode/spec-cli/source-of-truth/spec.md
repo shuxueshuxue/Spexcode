@@ -36,10 +36,13 @@ clears a node's pending drift, not just on the exact commit that moved a file.
 
 Two principles keep that derivation cheap on a long-running server:
 
-- **Scale with history, not node count.** Two single git walks back the whole board: one over the `.spec`
-  timeline (every node's version + history rows) and one `git log --name-only HEAD` over all files (the drift
-  index), each cached on HEAD. Resolving any node — its version and its drift — is then a **pure in-memory
-  lookup**, not a per-node history query, so drift-checking is no exception to this rule. The recent/history tab for a single node is served off that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
+- **Scale with history, not node count.** Ordinary repositories use two single git walks back the whole board:
+  one over the `.spec` timeline (every node's version + history rows) and one `git log --name-only HEAD` over
+  all files (the drift index), each cached on HEAD. For a large name-stream, the drift/anchor index switches
+  to governed path-scoped `rev-list` windows plus Git reachability, retaining the same DAG semantics without
+  retaining every commit/file edge in JS. Resolving any node is a pure lookup in the small-index mode, while
+  the large-index path memoizes bounded path windows. The recent/history tab for a single node is served off
+  that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
   in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When

@@ -91,7 +91,10 @@ readers receive the last-good board or the honest cold timeout, never a concurre
 abort, release, and bounded backoff are one path: no abandoned child, unhandled rejection, or retry storm.
 The process and memory contract is observable: after repeated successful full builds the active builder/
 child count returns to its stable platform, and current-checkout history caches evict old HEAD entries
-instead of retaining one full index per historical commit. Budget, route timeout, and watchdog are
+instead of retaining one full index per historical commit. Large-history drift/anchor reads use
+path-scoped Git windows and reachability rather than materializing every commit/file edge; small repositories
+keep the exact in-memory DAG path. A stale response gets a short flush window before background producer
+setup, so a dirty HTTP burst is not blocked by the producer's synchronous pre-await work. Budget, route timeout, and watchdog are
 env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
 `SPEXCODE_BOARD_TIMEOUT_MS` / `SPEXCODE_BOARD_BUILD_TIMEOUT_MS`).
 

@@ -36,6 +36,22 @@ scenarios:
     related:
       - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/App.jsx
+  - name: empty-search-follows-dashboard-session-order
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
+    description: >
+      Through the running dashboard in a real browser, open every parent disclosure and the offline history
+      disclosure in the session console, then read the session ids from the rendered rows in order. Without
+      typing a query, open the shared palette with Ctrl+/ (or Cmd+/ on macOS) and read its session result ids
+      in order. Compare the two product surfaces directly rather than calling an internal rank helper.
+    expected: |
+      The empty palette's session rows are the dashboard's fully disclosed order, up to the palette's result
+      limit: needs-you roots before running before offline; newest roots first within each zone; every parent
+      immediately followed by its recursively ordered descendants. Search adds no title-length or alphabetical
+      session ordering of its own. The session plane still leads because the palette was opened from Sessions.
+    related:
+      - spec-dashboard/src/SpecSearch.jsx
+      - spec-dashboard/src/session.js
   - name: pick-routes-session-vs-node
     tags: [frontend-e2e, desktop]
     description: >

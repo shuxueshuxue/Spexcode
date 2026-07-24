@@ -94,9 +94,14 @@ scenarios:
       board refresh. Then pointer-drag across the headless agent's note, repeatedly sampling activeElement
       between mousedown and mouseup, and keep the CSS Custom Highlight active while another refresh arrives.
       Assert that `window.getSelection().toString()` stays empty, the `CSS.highlights` range remains present,
-      and the focused textarea accepts immediate typing. Copy the highlighted text, repeat with a double-click
-      word highlight, exercise a plain click, a composer press, Escape, and the details summary. On desktop keep
-      two headless sessions mounted and verify the second remains the sole active sink. Record both viewports as video.
+      and the focused textarea accepts immediate typing. Exercise the complete xterm SelectionService click-mode
+      grammar against a note: single-click drag between known character offsets, double-click one known word,
+      then double-click again but keep the second press down and drag across at least three known words, and
+      triple-click the note. Read the actual `timeline-sel` Range text after each gesture and assert exact character
+      text, exact one-word text, continuous anchor-word-through-focus-word text with a multi-word count, and the
+      complete note text respectively — non-empty alone is not evidence. Copy the highlighted text, exercise a
+      plain click, a composer press, Escape, and the details summary. On desktop keep two headless sessions mounted
+      and verify the second remains the sole active sink. Record both viewports as video.
     expected: |
       Every refresh leaves the composer as document.activeElement and preserves the complete unsent
       draft. The same exact composer remains active at mousedown, through every sampled pointer move, and
@@ -106,10 +111,15 @@ scenarios:
       remounts TimelineChat nor clears it. `Ctrl/Cmd+C` copies `range.toString()` through the capture listener;
       a composer's own non-collapsed selection stands down the timeline copy. Printable input, Backspace, Delete,
       arrows, Enter, Ctrl+V, and IME input immediately change the still-focused textarea, and the first edit
-      clears only the visual highlight. Escape, a new gesture, or a composer press deletes the highlight without
-      moving focus. A plain timeline click produces no highlight, details summaries still toggle, and the active
-      TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers mounted, switching to the second
-      makes its composer the sole sink. Phone and desktop satisfy the same shared TimelineChat contract.
+      clears only the visual highlight. Selection is one continuous xterm-derived state machine rooted in
+      mousedown detail, never a late dblclick/tripleclick override: NORMAL returns the exact character span, WORD
+      returns exactly one word on a stationary double-click and the complete multi-word span when its second press
+      drags, and LINE returns the complete note. Every mode leaves `window.getSelection()` empty and the same
+      composer focused; Ctrl/Cmd+C returns the full highlighted Range. Escape, a new gesture, or a composer press
+      deletes the highlight without moving focus. A plain timeline click produces no highlight, details summaries
+      still toggle, and the active TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers
+      mounted, switching to the second makes its composer the sole sink. Phone and desktop satisfy the same shared
+      TimelineChat contract.
   - name: create-session-entry
     tags: [frontend-e2e, mobile]
     description: >

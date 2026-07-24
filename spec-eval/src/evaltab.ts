@@ -184,7 +184,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
-    await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
+    const reachable = await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
+    if (!reachable) await probe.prime?.(r.codeSha, cf, ynode.evalPath)
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.

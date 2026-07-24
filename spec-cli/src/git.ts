@@ -573,9 +573,11 @@ async function pathCommitsSinceAsync(idx: DriftIndex, sinceHash: string, path: s
 
 // Prime the lazy representation through async Git before a synchronous freshness verdict reads it. The
 // verdict functions remain pure/cache-backed while production HTTP keeps accepting work during child I/O.
-export async function primeLazyPathWindows(idx: DriftIndex, sinceHash: string, paths: string[]): Promise<void> {
-  if (!idx.lazy || !await commitReachableAsync(idx, sinceHash)) return
+export async function primeLazyPathWindows(idx: DriftIndex, sinceHash: string, paths: string[]): Promise<boolean> {
+  if (!idx.lazy) return true
+  if (!await commitReachableAsync(idx, sinceHash)) return false
   for (const path of new Set(paths)) await pathCommitsSinceAsync(idx, sinceHash, path)
+  return true
 }
 
 // the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,

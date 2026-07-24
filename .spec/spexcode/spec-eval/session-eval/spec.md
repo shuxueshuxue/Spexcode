@@ -85,8 +85,12 @@ the last-known value; a stable build publishes `ready` only when both its genera
 match. A changed generation or revision discards the result and the runner follows the newest generation. An
 error is explicit and also preserves last-known. Burst events may coalesce into one build/publication for the
 latest generation, but no older compute can overwrite it. The graph snapshot only batch-reads these cached lean
-projections; it never runs `buildSessionEvals` once per session row. Initial cache misses may start one batch, and
-completion nudges the existing graph mechanism once.
+projections; it never runs `buildSessionEvals` once per session row. Initial cache misses for live sessions may
+start one batch, and completion nudges the existing graph mechanism once. Dormant offline history is intentionally
+demand-only: the graph emits its loading/last-known projection without scheduling a summary build for every
+retained session, while opening that session's scoped Evals route builds only the requested worktree model. This
+keeps the toolbar projection useful for active work without turning historical session count into a cold-start
+fan-out.
 
 **Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
 moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is

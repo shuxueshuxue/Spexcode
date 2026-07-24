@@ -996,7 +996,7 @@ export class SessionEvalProjectionCache {
 
   setNotify(notify: () => void): void { this.notify = notify }
 
-  snapshot(sessions: { id: string; path: string }[]): Map<string, SessionEvalProjection> {
+  snapshot(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
     const live = new Set(sessions.map((session) => session.id))
     for (const id of this.entries.keys()) if (!live.has(id)) this.entries.delete(id)
     const out = new Map<string, SessionEvalProjection>()
@@ -1018,7 +1018,12 @@ export class SessionEvalProjectionCache {
         .filter(([, target]) => this.matches(entry!, target))
         .map(([observer]) => observer))
       if (entry.observerHolds.size) entry.phase = 'updating'
-      if ((entry.phase === 'loading' || entry.phase === 'updating')
+      // Dormant history is demand-only. The graph still exposes a loading/last-known projection for an
+      // offline row, but does not fan out a summary build for every retained session. Selecting that row's
+      // eval calls buildSessionEvals directly; live rows retain the eager toolbar-summary batch.
+      const precompute = session.liveness !== 'offline'
+      if (!precompute && entry.running == null) entry.scheduled = null
+      if (precompute && (entry.phase === 'loading' || entry.phase === 'updating')
         && entry.observerHolds.size === 0
         && entry.running !== entry.generation && entry.scheduled !== entry.generation) entry.scheduled = entry.generation
       out.set(session.id, this.project(entry))
@@ -1207,7 +1212,7 @@ async function awaitObservableInputs(id: string, path: string): Promise<void> {
 }
 
 export function setSessionEvalProjectionNotify(notify: () => void): void { projectionCache.setNotify(notify) }
-export function sessionEvalProjections(sessions: { id: string; path: string }[]): Map<string, SessionEvalProjection> {
+export function sessionEvalProjections(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
   return projectionCache.snapshot(sessions)
 }
 export function invalidateSessionEvalProjections(target: 'all' | { id?: string; path?: string } = 'all'): number {

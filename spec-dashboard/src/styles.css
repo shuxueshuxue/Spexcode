@@ -807,11 +807,11 @@ a.scenario-count:hover { background: var(--panel2); }
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   align-self: center; cursor: pointer; user-select: none;
 }
-/* the fold pod: the subtree COUNT on the rollup colour — filled = collapsed (sessions hidden behind it),
-   outline = expanded. A bigger, legible target than the old triangle; same informational colour language. */
+/* the passive subtree count badge: filled = collapsed (sessions hidden behind it), outline = expanded. The
+   row owns disclosure, so this badge never introduces a second click target or a directional symbol. */
 .sess-fold.pod {
   min-width: 16px; width: auto; height: 14px; padding: 0 4px; border-radius: 999px; border: 1px solid;
-  font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--paper);
+  font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--paper); cursor: inherit;
 }
 .sess-fold.pod.open { background: transparent; }
 .sess-fold.pod:hover { filter: brightness(1.25); }
@@ -1113,10 +1113,11 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
 /* the offline zone's header is the ONE disclosure for session history ([[session-console]]): a real
-   button (chevron + count chip), same dim zone-label look, pointer-inert for focus like all console chrome. */
+   button with the count before its label and no directional glyph, pointer-inert for focus like all console chrome. */
 .si-zone-fold { border: 0; background: transparent; font-family: inherit; cursor: pointer; width: 100%; text-align: left; }
 .si-zone-fold:hover { color: var(--ink); }
 .si-zone-count { flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8; }
+.si-zone-label { flex: none; }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }

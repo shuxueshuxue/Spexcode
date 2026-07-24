@@ -193,7 +193,7 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
 }
 
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
-// with fold pods (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
+// with passive count badges (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
 // beyond the touch-sized wrapper row and the create entry above the list (its own screen, MobileNewSession).
 function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft }) {
   const t = useT()
@@ -212,10 +212,10 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
         if (it.type === 'zone') return <div className="m-zone" key={`z-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
         const s = it.s
         const lead = (it.expandable || it.depth)
-          ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
+          ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
           : null
         return (
-          <button key={s.id} className="m-sess-row" onClick={() => setOpenId(s.id)}>
+          <button key={s.id} className="m-sess-row" aria-expanded={it.expandable ? it.expanded : undefined} onClick={() => { setOpenId(s.id); if (it.expandable) toggle(s.id) }}>
             <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
           </button>
         )

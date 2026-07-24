@@ -358,7 +358,7 @@ try {
   assert.equal(await offlineSwitcherItem.getAttribute('href'), null, 'offline project has no dead scoped URL')
   assert.match(await offlineSwitcherItem.textContent(), /offline/, 'offline state is visible in the switcher')
   const scopedRocketUrl = page.url()
-  await offlineSwitcherItem.click()
+  await offlineSwitcherItem.click({ force: true })
   assert.equal(page.url(), scopedRocketUrl, 'pressing offline project does not navigate')
   const onlineSwitcherItem = page.locator('.proj-menu').getByRole('menuitem', { name: 'Rocket Yard', exact: true })
   assert.equal(await onlineSwitcherItem.evaluate((node) => node.tagName), 'A', 'online project remains a native link')

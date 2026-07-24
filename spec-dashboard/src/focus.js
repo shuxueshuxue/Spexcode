@@ -17,9 +17,15 @@
 let ticket = null
 
 const inOverlay = (el) => !!(el && el.closest && el.closest('[data-focus-overlay]'))
-// "focusable right now": still in the DOM, enabled, and actually rendered (getClientRects covers fixed
-// elements that offsetParent reports as hidden).
-const focusableNow = (el) => !!(el && el.isConnected && !el.disabled && el.getClientRects().length)
+// "focusable right now": still in the DOM, enabled, and actually visible. A visibility:hidden warm layer
+// keeps layout boxes, so getClientRects alone lies; Chromium's visibilityProperty option sees through the
+// ancestor, with an explicit computed-style fallback for browsers without checkVisibility.
+const visibleNow = (el) => {
+  if (!el?.getClientRects().length) return false
+  if (typeof el.checkVisibility === 'function') return el.checkVisibility({ visibilityProperty: true })
+  return getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none'
+}
+const focusableNow = (el) => !!(el && el.isConnected && !el.disabled && visibleNow(el))
 
 if (typeof window !== 'undefined') {
   window.addEventListener('focusin', (e) => {
@@ -36,7 +42,7 @@ export function returnFocus() {
   requestAnimationFrame(() => {
     if (inOverlay(document.activeElement)) return
     if (focusableNow(ticket)) { ticket.focus(); return }
-    const sink = document.querySelector('[data-focus-sink]')
+    const sink = [...document.querySelectorAll('[data-focus-sink]')].find(focusableNow)
     if (focusableNow(sink)) sink.focus()
   })
 }
@@ -45,9 +51,10 @@ export function returnFocus() {
 // back. Attached as a capture-phase mousedown handler on a surface whose focus rests on its sink (the
 // session console's panel, a context menu): a press on anything that is not itself an input surface is
 // stopped from moving focus — the click still lands and acts, the press just stops stealing. Editable
-// fields and the xterm screen keep their native press-to-focus; a press in a scroller's scrollbar gutter
-// keeps its default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
-const FOCUS_OWNERS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
+// fields and the xterm screen keep their native press-to-focus; explicitly marked selection regions keep
+// the browser's native drag/double-click selection. A press in a scroller's scrollbar gutter keeps its
+// default too (cancelling it breaks thumb dragging, and gutter presses never move focus anyway).
+const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, [data-native-selection]'
 
 // scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
 // glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.
@@ -61,7 +68,7 @@ const inScrollbarGutter = (el, e) => {
 export function inertChromePress(e) {
   const el = e.target
   if (!(el instanceof Element)) return
-  if (el.closest(FOCUS_OWNERS)) return
+  if (el.closest(NATIVE_PRESS_TARGETS)) return
   if (inScrollbarGutter(el, e)) return
   e.preventDefault()
 }

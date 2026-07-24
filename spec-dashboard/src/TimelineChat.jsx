@@ -33,6 +33,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [sendErr, setSendErr] = useState(null)
   const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
+  const inputSelectionRef = useRef({ start: 0, end: 0, direction: 'none' })
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -55,6 +57,60 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
+
+  const rememberComposerSelection = (e) => {
+    if (e.button !== 0 || !inputRef.current) return
+    inputSelectionRef.current = {
+      start: inputRef.current.selectionStart ?? draft.length,
+      end: inputRef.current.selectionEnd ?? draft.length,
+      direction: inputRef.current.selectionDirection || 'none',
+    }
+  }
+  const focusComposer = () => {
+    const input = inputRef.current
+    if (!input?.isConnected || input.disabled) return false
+    const { start, end, direction } = inputSelectionRef.current
+    input.focus({ preventScroll: true })
+    input.setSelectionRange(
+      Math.min(start, input.value.length),
+      Math.min(end, input.value.length),
+      direction,
+    )
+    return document.activeElement === input
+  }
+  const selectionIsInTimeline = (selection) => {
+    const timeline = scrollRef.current
+    return !!(timeline && selection && !selection.isCollapsed
+      && (timeline.contains(selection.anchorNode) || timeline.contains(selection.focusNode)))
+  }
+  const returnComposerFocus = (e) => {
+    if (e.button !== 0) return
+    const selection = window.getSelection?.()
+    if (selectionIsInTimeline(selection)) return
+    focusComposer()
+  }
+  useEffect(() => {
+    if (!active) return undefined
+    const onKeyDown = (e) => {
+      const selection = window.getSelection?.()
+      if (!selectionIsInTimeline(selection)) return
+      if (['Alt', 'Control', 'Meta', 'Shift'].includes(e.key)) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') return
+
+      selection.removeAllRanges()
+      if (!focusComposer()) return
+
+      // Chromium binds Backspace's default action to the old BODY target even after focus changes during
+      // capture. Its own delete command supplies that one missed native edit; every other key continues
+      // through the same real key event now that the textarea is authoritative again.
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        document.execCommand('delete')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [active])
 
   const send = async () => {
     const text = draft.trim()
@@ -132,7 +188,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           </button>
         </div>
       )}
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}>
+      <div className="m-timeline" ref={scrollRef} onScroll={onScroll} onMouseDown={rememberComposerSelection}
+        onMouseUp={returnComposerFocus} onDoubleClick={returnComposerFocus} data-native-selection>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
@@ -148,7 +205,9 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       <div className="m-composer">
         <div className="m-composer-line">
           <textarea
+            ref={inputRef}
             className="m-input"
+            data-focus-sink={active ? '' : undefined}
             rows={1}
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}

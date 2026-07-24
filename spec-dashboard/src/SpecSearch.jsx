@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './specMeta.js'
 import { TagChips } from './score.jsx'
-import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
+import { STATUS_COLOR, sessionHandle, sessionHeadline, sessionPresentationOrder } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
@@ -69,7 +69,7 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
       name: entry.scenario || '', desc: '', body: entry.expected || '',
     })
   }
-  for (const s of sessions) {
+  for (const s of sessionPresentationOrder(sessions)) {
     // a session reads as ONE name everywhere: the shared sessionHeadline ([[session-activity]]) the board rows,
     // window, tabs, and console header all show — NOT the raw stable handle, which left the palette naming a
     // session differently from the board it was searched from. The handle rides in `body` as the match text;
@@ -91,7 +91,7 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
 
 // rank entries via the SHARED scorer (spec-cli/src/ranker.ts) — the same maths `spex search` runs server-side,
 // so the palette no longer ranks node prose more crudely than the agent. An empty query is the plain
-// jump-list (plane, then shorter name).
+// jump-list: planes group in caller-selected order and each plane keeps its source surface's stable order.
 //
 // Cross-plane: rank the LOCAL node/session planes separately, preserve the SERVER-MATCHED Issue/scenario
 // planes, then INTERLEAVE them (a node, a session, an issue, a scenario, repeat). NOT one rankDocs over all
@@ -101,7 +101,7 @@ export function buildEntries(specs, sessions, corpus, issues = [], evals = []) {
 // (The floor has only nodes, so it needs none of this cross-plane work.)
 function rank(entries, query, planes) {
   const order = Object.fromEntries(planes.map((k, i) => [k, i]))
-  const jump = (a, b) => order[a.kind] - order[b.kind] || a.name.length - b.name.length || a.key.localeCompare(b.key)
+  const jump = (a, b) => order[a.kind] - order[b.kind]
   if (!query.trim()) return entries.slice().sort(jump).slice(0, 15)
   const ranked = {}
   for (const k of planes) {
@@ -187,6 +187,8 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
             <li
               key={e.key}
               className={`search-item${i === sel ? ' on' : ''}`}
+              data-kind={e.kind}
+              data-target={e.target}
               onMouseEnter={() => setSel(i)}
               onClick={() => pick(e)}
             >

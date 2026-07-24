@@ -510,7 +510,7 @@ export default {
     lockTitle: 'right-click for session actions, including lock on graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
-    searchTitle: 'Search (⌘+/)',
+    searchTitle: 'Search (⌥+/)',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',
@@ -582,7 +582,7 @@ export default {
       `open this session's Evals page — ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
-    commandTitle: 'open Command Box for an atomic prompt or board command (Alt/Cmd+I)',
+    commandTitle: 'open Command Box for an atomic prompt or board command (Alt+I)',
     commandClose: 'close Command Box',
     commandPlaceholder: 'Send an atomic prompt or run a board command',
     commandSend: 'send from Command Box',

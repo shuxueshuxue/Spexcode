@@ -216,6 +216,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
     keepVisible: (s) => s.id === sel,
   }), [sessions, expanded, offlineOpen, sel])
+  const foldableIds = useMemo(() => new Set(forest.filter((item) => item.type === 'row' && item.expandable)
+    .map((item) => item.s.id)), [forest])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const validIds = useMemo(() => new Set(['new', ...sessions.map((s) => s.id)]), [sessions])
@@ -597,17 +599,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen }
+  stateRef.current = {
+    order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+    commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
+  }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen } = stateRef.current
+      const {
+        order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+        commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
+      } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
-      // Reserved Alt/Cmd+I toggles Command Box before xterm. Matched by
+      // Reserved Alt+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
-      // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
-      // leave it alone.
+      // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (commandAvailable) setCommandOpen((value) => !value)
         return
@@ -618,14 +625,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) return
-      // ⌘/⌥/⌃+↑/↓ always walk the session list; the modifier frees ↑/↓ from caret/TUI navigation.
-      if (e.metaKey || e.altKey || e.ctrlKey) {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault(); e.stopPropagation()
-          let i = order.indexOf(active); if (i < 0) i = 0
-          const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
-          setSel(order[ni]); return
+      // Shift keeps the existing Alt+↑/↓ tab family but changes its action: Alt+Shift+↓ expands and
+      // Alt+Shift+↑ collapses the selected session's disclosure. Consume both chords even when the selected
+      // row has no matching state, so they never fall through and move the tab selection.
+      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault(); e.stopPropagation()
+        if (foldableIds.has(active)) {
+          if (e.key === 'ArrowDown' && !expanded.has(active)) expandFolds([active])
+          if (e.key === 'ArrowUp' && expanded.has(active)) toggleFold(active)
         }
+        return
+      }
+      // Alt+↑/↓ walks the session list; the modifier frees ↑/↓ from caret/TUI navigation.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault(); e.stopPropagation()
+        let i = order.indexOf(active); if (i < 0) i = 0
+        const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+        setSel(order[ni]); return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
@@ -693,7 +709,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
-            {/* the click twin of ⌘/Ctrl+/ ([[session-search]]) — same palette open, the tooltip
+            {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
             <button className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
               <span className="si-pill-glyph"><Icon name="search" size={15} /></span>

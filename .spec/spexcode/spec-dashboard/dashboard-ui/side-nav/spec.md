@@ -103,7 +103,7 @@ restores the list.
   issues · settings — the rail tooltips carry the hints), `⌥N` to the New Session composer, `⌥F` to the
   Evals list (the leading loss surface, so the letter door and the bare `f` agree) — matched by physical
   key (`e.code`, the mac ⌥-dead-key rule), ⌥-only so ⌘/⌃ chords stay the browser's. The family is reserved
-  even over the console's raw-key nav mode (the same standing as its `⌥/⌘+I` toggle — a TUI never sees
+  even over the console's raw-key nav mode (the same standing as its `⌥+I` toggle — a TUI never sees
   `M-1` or `M-f`). Graph-scoped doors stay: `Enter` → the session board, bare `f` → the Evals list, `,` →
   settings (and `,` toggles back). Issues has no bare-key board door — the rail, `⌥4`, or history.
   **Esc routes nothing** — pages are peers, not layers, so Esc only closes transient overlays *within* a

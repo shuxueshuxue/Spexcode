@@ -2,7 +2,7 @@
 title: command-box
 status: active
 hue: 290
-desc: Cmd/Alt+I opens a lower-middle command surface for out-of-band prompts, board verbs, mentions, presets, and file paths.
+desc: Alt+I opens a lower-middle command surface for out-of-band prompts, board verbs, mentions, presets, and file paths.
 related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/Composer.jsx
@@ -19,9 +19,9 @@ The dashboard's authored control channel is a **Command Box**, not a second term
 why it exists: this is where a human addresses SpexCode's board and sends an atomic out-of-band prompt, while
 the agent's own TUI remains the default place to converse and drive interactive menus ([[terminal-input]]).
 
-The reserved single-modifier chord `Cmd+I` or `Alt+I` toggles it for a live session; `Alt+Cmd+I` remains the
-browser's developer-tools chord. The toolbar exposes the same action as an icon-only button named by its
-tooltip and accessible label. Opening focuses the Command Box. Escape or an outside click closes it without
+The reserved single-modifier chord `Alt+I` toggles it for a live session; Command/Ctrl+I remain native or
+browser-owned shortcuts. The toolbar exposes the same action as an icon-only button named by its tooltip and
+accessible label. Opening focuses the Command Box. Escape or an outside click closes it without
 discarding the draft, and focus returns to the TUI. Drafts are keyed by session and survive closing, routing
 away, and switching sessions. Vim behavior is deliberately outside the current contract.
 

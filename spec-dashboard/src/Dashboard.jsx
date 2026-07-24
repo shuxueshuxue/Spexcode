@@ -89,7 +89,7 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
-  const [search, setSearch] = useState(null)      // search palette mode: null | 'nodes' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
+  const [search, setSearch] = useState(null)      // search palette mode: null | 'nodes' (`/`, nodes lead) | 'sessions' (⌥+/, sessions lead)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -162,7 +162,7 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
     const srcs = [...new Set(node.overlays.map((o) => o.source))]
     return srcs.map((src) => sessions.find((s) => s.source === src)).filter(Boolean)
   }, [nodeMenu, specs, sessions])
-  // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): each row carries an app address
+  // one routing for BOTH palettes (board `/` and session-board ⌥+/): each row carries an app address
   // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
   // callbacks needed for non-hash state; the address helper owns the route shape.
   const onSearchPick = useCallback((e) => {
@@ -381,9 +381,10 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearch(null) }
         return
       }
-      // ⌘/Ctrl+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
-      // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
+      // ⌥+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
+      // reachable even while the session interface owns its keys. Match the physical slash key because
+      // Option+/ emits a platform-specific glyph on macOS. Plain `/` on the board stays nodes-first (below).
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -662,7 +663,7 @@ function Dashboard({ specs, sessions, reload, identity, catalog, boardLive }) {
       </PagePane>
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a
           routed page: it must float above whichever page is showing (the graph's `/`, the session board's
-          ⌘+/ and Search pill), and a page's display:none must never swallow it. */}
+          ⌥+/ and Search pill), and a page's display:none must never swallow it. */}
       {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
     </div>

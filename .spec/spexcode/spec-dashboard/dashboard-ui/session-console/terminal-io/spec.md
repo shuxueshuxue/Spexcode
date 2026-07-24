@@ -9,7 +9,7 @@ related:
 Inside the [[session-console]] the live session is a real terminal, and one cluster of concerns answers a single question — *how does a human read and drive that terminal pane?* These are the live-terminal half of the console; its sibling surfaces ([[session-activity]], [[session-rename]], the list's drag-to-reorder) are the other half — which session you are on and how it is labelled and ordered, not how you drive it.
 
 - [[terminal-input]] — xterm is the default interactive surface; its native keyboard and IME data drive the same tmux client that renders the pane.
-- [[command-box]] — `Cmd/Alt+I` opens the authored control plane for atomic prompts, board verbs, mentions, and presets.
+- [[command-box]] — `Alt+I` opens the authored control plane for atomic prompts, board verbs, mentions, and presets.
 - [[file-attach]] — a file dropped, pasted, or picked on an authored composer rides to the worker's `/tmp`, the composer left holding its path.
 - [[reconnect]] — the terminal's socket reopens itself after a real backend drop, with visible backoff, so a pane never needs a manual refresh.
 

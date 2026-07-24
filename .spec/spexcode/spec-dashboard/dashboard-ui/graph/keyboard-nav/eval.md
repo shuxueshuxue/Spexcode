@@ -137,11 +137,11 @@ scenarios:
       Ctrl/⌘+L (`l` is child nav), Ctrl/⌘+, (`,` is settings), Alt+Left (left is parent nav), and
       Ctrl/⌘+0 (`0` is zoom reset). Record whether those events arrive at the probe with
       `defaultPrevented === false` and the graph route / focused node / visible overlays unchanged.
-      Then press the intentional modified app shortcut Ctrl/⌘+/ and confirm it opens the search palette.
+      Then press the intentional modified app shortcut Alt+/ and confirm it opens the search palette.
     expected: >-
       Modified browser/system shortcuts pass through the graph handler: they are not prevented, do not
       move focus, do not open graph overlays, and do not navigate the dashboard. The only modified
-      shortcuts the graph claims are the explicit app accelerators: Ctrl/⌘+/ for session-boosted search
+      shortcuts the graph claims are the explicit app accelerators: Alt+/ for session-boosted search
       and the Alt page jumps.
     code:
       - spec-dashboard/src/Dashboard.jsx

@@ -73,7 +73,7 @@ scenarios:
     description: >-
       Through the running dashboard in a real browser, read the session names the human sees on the SESSION
       BOARD — the top-left window rows (`.sess-id`), where a live worker shows its self-summary headline, NOT
-      its raw node/branch/id. Then open the search palette (⌘/Ctrl+/ over the session board, or `/` on the
+      its raw node/branch/id. Then open the search palette (⌥+/ over the session board, or `/` on the
       board) and read the SESSION rows' titles. Compare them to the board headlines. Also lock a session
       (single-click its window row) and read the lock-hint banner's name. Finally, type a fragment of a
       session's LABEL (the server-derived stable name — a human rename or the prompt truncation) into the

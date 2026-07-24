@@ -38,8 +38,8 @@ the same shape materialize gives the plugin surfaces.
 A harness whose declared runtime semantics intentionally remove a matrix premise does not fake the row.
 [[claude-headless]] is record-backed and has ephemeral turn children, so `stop -> offline -> resume` and
 `SIGKILL -> offline` are categorically the wrong measurements; its own idle-resume and record-liveness scenarios
-replace those two rows while the remaining shared behaviors and its message-stream/interrupt additions stay live
-behavior readings.
+replace those two rows while the remaining shared behaviors and its interrupt addition stay live behavior
+readings.
 
 Verdicts stay honest three ways: a row that could not be provoked (the worker declared on its own; no
 mid-turn window opened) files NOTHING and reports skip — never a fabricated loss signal; a measured row

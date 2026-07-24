@@ -2,7 +2,7 @@
 scenarios:
   - name: codex-headless-real-loop
     description: Through a running backend and the real `codex-headless` launcher, create a session, wait for the initial app-server turn to finish, then send a follow-up to the idle session.
-    expected: The session is online with `{ headless: true, messageStream: false }`; its pane has no resident Codex TUI after the first turn, and the idle send is accepted as a new app-server `turn/start` on the same thread.
+    expected: The session is online with `{ headless: true }`; its pane has no resident Codex TUI after the first turn, and the idle send is accepted as a new app-server `turn/start` on the same thread.
     code: [spec-cli/src/codex-headless.ts]
     tags: [backend-api, cli]
   - name: codex-headless-live-steer

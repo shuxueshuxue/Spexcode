@@ -49,11 +49,11 @@ its launcher + node alone, zero new runner code. A harness whose evidence is onl
 measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
 semantic difference is measured by a replacement scenario rather than forced into a false common shape.
 [[claude-headless]] replaces the matrix's stop/resume and kill/offline rows with its own idle-resume and
-record-liveness rows, and adds native message-stream and hard-interrupt readings. [[codex-headless]] replaces
+record-liveness rows, and adds hard-interrupt readings. [[codex-headless]] replaces
 the matrix's process-resident stop/resume and kill/offline rows with its no-TUI idle-turn and record-liveness
 readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
 the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
-rendezvous-steer/cold-resume readings; it intentionally has no message stream.
+rendezvous-steer/cold-resume readings.
 
 Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered interactive
 and headless adapter (currently four of each, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
@@ -196,11 +196,8 @@ surface:
 - **headless** — whether the adapter launches without an interactive TUI. [[launcher-visibility]] consumes
   this capability to keep headless profiles out of the dashboard picker by default without learning an adapter
   id; the complete launcher registry and explicit CLI selection remain unchanged. Claude, Codex, OpenCode, and
-  pi each declare `false`; an actually non-interactive adapter declares `true` on its own row. **`messageStream`**
-  is a separate adapter capability: it means the adapter persists native events that the dashboard may expose
-  through the optional full-process drill-down. Product surfaces consume this data projection rather than
-  branching on the adapter id; a headless adapter can omit the stream, and a future capable adapter needs no
-  UI registry change. A one-shot headless adapter may also declare `launchOneShot`, which tells the generic
+  pi each declare `false`; an actually non-interactive adapter declares `true` on its own row. A one-shot
+  headless adapter may also declare `launchOneShot`, which tells the generic
   launcher not to treat its intentional fast exit as a failed boot worth replaying.
 - **runtime: liveness + delivery + interrupt + cleanup** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
@@ -302,7 +299,8 @@ surface:
   `claudeHarness` but replaces this whole runtime half: its intact record is always online, active delivery
   writes a native stream-json user event into the resident turn child, idle delivery spawns a
   `claude -p --resume` turn, and hard interrupt writes Claude's native `control_request/interrupt`. Every
-  complete native stdout event is appended unwrapped to the session store's `messages.ndjson`. Launch also registers the interactive agent process in
+  complete native stdout event is forwarded unchanged through the controller's stdout; it is not persisted as
+  a second SpexCode conversation record. Launch also registers the interactive agent process in
   `agent.pid`; adapters may use that per-session signal alongside their native transport proof. OpenCode
   prefers its rendezvous listener and falls back to the registered pid, so a plugin-load failure still reads
   honestly. Claude/pi use their live listener, while Codex uses the visible pane's descendant process tree.

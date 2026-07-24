@@ -25,7 +25,6 @@ test('pi-headless composes pi materialization and replaces only the runtime half
   assert.equal(piHeadlessHarness.sessionIdArg('abc'), '--session-id abc')
   assert.equal(piHeadlessHarness.resumeArg({ session: 'abc' }), '--session abc')
   assert.equal(piHeadlessHarness.headless, true)
-  assert.equal(piHeadlessHarness.messageStream, false)
   assert.equal(piHeadlessHarness.ownsRendezvous, true)
   assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.match(piHeadlessHarness.launchCmd('abc', '/runtime', 'pi-custom'), /pi-headless-run.*abc.*pi-custom/)

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -96,18 +96,14 @@ export class ClaudeHeadlessController {
   private child: ChildTurn | null = null
   private controlQueue: Promise<void> = Promise.resolve()
   private closing = false
-  private readonly messagesPath: string
   private readonly socketPath: string
 
   constructor(
     private readonly id: string,
-    runtimeDir: string,
+    _runtimeDir: string,
     private readonly claudeCmd: string,
     private readonly cwd = process.cwd(),
   ) {
-    const dir = join(runtimeDir, 'sessions', id)
-    mkdirSync(dir, { recursive: true })
-    this.messagesPath = join(dir, 'messages.ndjson')
     this.socketPath = claudeHeadlessSock(id)
   }
 
@@ -246,7 +242,6 @@ export class ClaudeHeadlessController {
         const line = stdoutBuffer.slice(0, nl)
         stdoutBuffer = stdoutBuffer.slice(nl + 1)
         const nativeLine = `${line}\n`
-        appendFileSync(this.messagesPath, nativeLine)
         globalThis.process.stdout.write(nativeLine)
         turn.sawFirstEvent()
         this.observeEvent(turn, line)

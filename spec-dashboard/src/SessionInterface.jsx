@@ -257,6 +257,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (id === 'new') return
     setCommandOpen(false)
     setMenu(null)
+    setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
     setTerminalFocusRequest((request) => request + 1)
   }
@@ -278,18 +279,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => { if (!commandAvailable) setCommandOpen(false) }, [commandAvailable])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
 
-  // Keep every live terminal mounted for its warm-pane contract. Headless conversations have no pane and
-  // remain readable offline, so their shared TimelineChat stays available regardless of liveness.
+  // Keep every live pane-backed terminal mounted for its warm-pane contract. Headless conversations have no
+  // pane to keep warm: mount the selected one on demand, then retain it (including after it goes offline) so
+  // revisiting a session keeps its timeline cursor and rendered history. Unvisited headless rows stay inert;
+  // mounting one TimelineChat per retained session would issue two reads plus an interval per row.
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
-      const next = new Set()
-      for (const s of sessions) if (isHeadlessSession(s) || s.liveness !== 'offline') next.add(s.id)
-      if (next.size !== prev.size) return next
-      for (const id of next) if (!prev.has(id)) return next
-      return prev
+      const valid = new Set(sessions.map((s) => s.id))
+      const next = new Set([...prev].filter((id) => valid.has(id)))
+      for (const s of sessions) if (!isHeadlessSession(s) && s.liveness !== 'offline') next.add(s.id)
+      if (active !== 'new') {
+        const selected = sessions.find((s) => s.id === active)
+        if (selected && isHeadlessSession(selected)) next.add(active)
+      }
+      if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
+      return next
     })
-  }, [sessions])
+  }, [sessions, active])
 
   // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
   // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.

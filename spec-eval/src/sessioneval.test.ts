@@ -457,6 +457,23 @@ test('projection cache batches initial misses into one publication', async () =>
   assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
 })
 
+test('offline history projections stay demand-only', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(1) }
+  }, () => {}, 'epoch')
+
+  const rows = cache.snapshot([
+    { id: 'live', path: '/wt/live', liveness: 'online' },
+    { id: 'offline', path: '/wt/offline', liveness: 'offline' },
+  ])
+  assert.deepEqual([...rows.values()].map((row) => row.phase), ['loading', 'loading'])
+  await cache.idle()
+  assert.equal(builds, 1, 'the graph precomputes the live toolbar summary only')
+  assert.equal(cache.get('offline')?.phase, 'loading')
+})
+
 test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
   const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))

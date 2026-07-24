@@ -11,6 +11,7 @@ import {
   invalidateSessionEvalProjections,
   releaseSessionEvalProjectionObserver,
   setSessionEvalProjectionNotify,
+  setSessionEvalProjectionWarmup,
 } from '../../spec-eval/src/sessioneval.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
@@ -537,6 +538,7 @@ function stopSourcesIfIdle(): void {
   // first subscriber would be anchored on it (its warm-terminal set then drops live sessions' panes, and the
   // client's recovery lanes can latch each other out — issue #70). A new era opens on a fresh build instead.
   if (deltaSubs.size === 0) { lastUnits = null; lastTag = ''; lastFullFrame = null }
+  if (deltaSubs.size === 0) setSessionEvalProjectionWarmup(false)
   if (plainSubs.size + deltaSubs.size > 0) return
   if (hotPoller) { clearInterval(hotPoller); hotPoller = null; lastHot = '' }
   if (warmPoller) { clearInterval(warmPoller); warmPoller = null; lastWarm = '' }
@@ -554,7 +556,11 @@ export async function boardStream(c: Context) {
     let aborted = false
     const send: DeltaSend = (frame) => { void stream.writeSSE(frame).catch(() => {}) }
     const notify: Notify = () => { void stream.writeSSE({ event: 'graph-changed', data: 'x' }).catch(() => {}) }
-    if (delta) { deltaSubs.add(send); ensureColdTick() } else { plainSubs.add(notify) }
+    if (delta) {
+      deltaSubs.add(send)
+      setSessionEvalProjectionWarmup(true)
+      ensureColdTick()
+    } else { plainSubs.add(notify) }
     ensurePollers()
     const unsub = (): void => { deltaSubs.delete(send); plainSubs.delete(notify); stopSourcesIfIdle() }
     stream.onAbort(() => { aborted = true; unsub() })

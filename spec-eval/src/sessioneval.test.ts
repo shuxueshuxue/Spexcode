@@ -474,6 +474,60 @@ test('offline history projections stay demand-only', async () => {
   assert.equal(cache.get('offline')?.phase, 'loading')
 })
 
+test('projection warmup can be disabled for plain graph reads', async () => {
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(1) }
+  }, () => {}, 'epoch', false)
+
+  cache.snapshot([{ id: 'live', path: '/wt/live', liveness: 'online' }])
+  await cache.idle()
+  assert.equal(builds, 0, 'a plain graph read leaves live projections loading')
+  cache.setPrecompute(true)
+  await cache.idle()
+  assert.equal(builds, 1, 'starting a delta era authorizes the current live projection')
+})
+
+test('projection queue never overlaps per-session history builds', async () => {
+  let active = 0, maxActive = 0, builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    active++
+    maxActive = Math.max(maxActive, active)
+    await new Promise((resolve) => setTimeout(resolve, 1))
+    active--
+    builds++
+    return { kind: 'stable', revision: `r${builds}`, summary: summary(1) }
+  }, () => {}, 'epoch')
+
+  cache.snapshot(['a', 'b', 'c', 'd'].map((id) => ({ id, path: `/wt/${id}`, liveness: 'online' })))
+  await cache.idle()
+  assert.equal(builds, 4)
+  assert.equal(maxActive, 1, 'the bounded runner keeps worktree history walks serial')
+})
+
+test('ending and reopening a delta era does not enqueue a running generation twice', async () => {
+  const gate = deferred<any>()
+  let builds = 0
+  const cache = new SessionEvalProjectionCache(async () => {
+    builds++
+    return gate.promise
+  }, () => {}, 'epoch', false)
+  const sessions = [{ id: 's', path: '/wt/s', liveness: 'online' }]
+
+  cache.snapshot(sessions)
+  cache.setPrecompute(true)
+  await Promise.resolve()
+  assert.equal(builds, 1)
+  cache.setPrecompute(false)
+  cache.setPrecompute(true)
+  await Promise.resolve()
+  assert.equal(builds, 1, 'reconnect joins the in-flight generation instead of duplicating it')
+  gate.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
+  await cache.idle()
+  assert.equal(cache.get('s')?.phase, 'ready')
+})
+
 test('content revision covers dirty source, index, rename, sidecar, remark, and main movement', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-revision-'))
   const remarks = mkdtempSync(join(tmpdir(), 'spex-session-remarks-'))

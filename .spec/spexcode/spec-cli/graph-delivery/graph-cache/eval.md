@@ -81,6 +81,25 @@ scenarios:
       the number of successful HEADs or retaining a full index per historical commit. A bounded increase
       from cold startup is acceptable only when it stabilizes across later rounds; a monotonic RSS/heap,
       child, watcher, or cache count is a failure even when every HTTP request returned 200.
+  - name: session-projection-era-gate
+    tags: [backend-api]
+    description: >-
+      Use the default-Node supervisor and a throwaway production-shaped corpus with at least 53 linked
+      worktrees and 30 governed session records. A: with zero `/api/graph/stream?mode=delta` subscribers,
+      issue a cold `/api/graph` and inspect its session projection phases plus the process tree. B: open one
+      delta subscriber, wait for the 30 live summaries to settle, then trigger at least three full invalidations
+      and sample `/health`, RSS, and classified backend descendants until each build settles. Close the
+      subscriber, trigger one more invalidation, reconnect once, and open one scoped Evals demand route for a
+      session. Do not call a deployed endpoint, lower the corpus size, force GC, or use a production-only branch.
+    expected: >-
+      A returns an honest cold/stale graph while all 30 summaries remain `loading` or last-known and starts
+      zero session-eval git work. B starts the eager batch only for the delta era; the default bounded queue
+      never overlaps more direct git children than its queue capacity plus the fixed per-job probe constant,
+      `/health` stays available, all active backend descendants (git/node/shell/zombie) reach zero after settle,
+      and RSS reaches a natural plateau across repeated full invalidations. The last subscriber prevents new
+      queued jobs while an in-flight job settles; one reconnect does not enqueue the same generation twice; the
+      explicit scoped Evals demand still builds its selected session without requiring a delta subscriber. Any
+      unbounded history preheat or monotonic post-settle RSS/child count fails this scenario.
 ---
 # eval.md — board-cache
 

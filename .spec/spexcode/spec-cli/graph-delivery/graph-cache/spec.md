@@ -67,6 +67,13 @@ new stable projection without rebuilding node/eval/issue units. Lifecycle-only s
 entries; a relevant refs/worktree/remark event first advances their own generations, then invalidates the board.
 The graph cache therefore never fans out a full session-eval build, and a quiet cache hit starts zero eval work.
 
+Projection warmup is subscriber-gated and bounded: an ordinary HTTP/CLI graph read never starts historical
+session-eval work merely because session records exist. The delta stream enables warmup for the current era;
+the projection runner drains that work through a bounded queue, so one board change cannot fan out one full
+git/history build per session. When the last delta subscriber leaves, new warmup is disabled (in-flight work
+is allowed to settle and is never overlapped by a second batch); scoped Evals demand remains the explicit
+way to build an individual session's full model.
+
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the
 object — it decomposes it into delta units ([[graph-delta]]).

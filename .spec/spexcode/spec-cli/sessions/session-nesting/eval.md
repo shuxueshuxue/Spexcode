@@ -38,14 +38,14 @@ scenarios:
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
     description: >
       Through the running dashboard in a real browser, select a collapsed PARENT row in the session console
-      while its CHILD is hidden. Tab focus to the selected parent row and press ArrowRight, then ArrowLeft.
-      Record the row's `aria-expanded` state and the CHILD row's visibility after each key. Repeat ArrowRight
-      on a selected leaf while a real input/terminal owns focus and observe the key is not claimed by the
-      console; also confirm Ctrl/Cmd+Right remains native input navigation.
+      while its CHILD is hidden. From the console surface press Alt+Shift+ArrowDown, then
+      Alt+Shift+ArrowUp. Record the row's `aria-expanded` state and the CHILD row's visibility after each key,
+      plus the selected session id. Repeat Alt+Shift+ArrowDown on a selected leaf while a real input/terminal
+      owns focus and observe the key is consumed without moving to another session.
     expected: |
-      ArrowRight expands the currently selected PARENT and ArrowLeft collapses it through the same fold state
-      as its leading count pod, without changing selection or session data. A selected leaf has no disclosure
-      action, and an input/terminal focus keeps ArrowRight native; no second tree or persisted expansion state
+      Alt+Shift+ArrowDown expands the currently selected PARENT and Alt+Shift+ArrowUp collapses it through the
+      same fold state as its leading count pod, without changing selection or session data. On a leaf the chord
+      is consumed as a no-op, so it cannot move the tab selection. No second tree or persisted expansion state
       is introduced.
   - name: triangle-colour-is-an-informational-rollup
     tags: [frontend-e2e, desktop]

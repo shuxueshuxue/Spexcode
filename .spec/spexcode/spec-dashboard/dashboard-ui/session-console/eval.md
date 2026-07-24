@@ -148,8 +148,8 @@ scenarios:
       map-side SessionWindow, and the phone Sessions list. In each surface inspect the offline zone and a
       nesting parent at rest; click the parent row body, then its leading child-count pod; click the OFFLINE
       label, then its leading count pod; finally select or deep-link an offline/nested session from outside the
-      folded list. In the desktop console, select the parent and press Ctrl/Cmd+Right then Ctrl/Cmd+Left;
-      repeat Right on a live leaf while Command Box owns focus.
+      folded list. In the desktop console, select the parent and press Ctrl/Cmd+Shift+E twice; repeat the
+      chord on a live leaf while Command Box owns focus, alongside the ordinary Ctrl/Cmd+Right input key.
     expected: >-
       At rest the offline zone shows ONLY its header row with the hidden count (aria-expanded=false) — the
       dormant history no longer floods the list. Needs-you and running rows are all present at every fold
@@ -159,9 +159,9 @@ scenarios:
       changing the parent fold, and the OFFLINE label does nothing. Clicking either count again folds its rows
       back. The controls are siblings, with no button nested in a button. A session selected by URL/search/menu
       stays rendered and its present ancestors unfold as required, while a deep-linked offline row remains
-      visible even when the offline zone itself is folded. On desktop, primary+Right/Left expands/collapses the
-      selected parent through that same fold state; a leaf leaves native input navigation untouched. No session
-      record is deleted or mutated by any of it.
+      visible even when the offline zone itself is folded. On desktop, primary+Shift+E toggles the selected
+      parent through that same fold state; a leaf leaves native input navigation untouched and arrow keys keep
+      their ordinary editing semantics. No session record is deleted or mutated by any of it.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

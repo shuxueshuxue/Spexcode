@@ -210,7 +210,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
   // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled only
   // by the header's leading count pod, and the selected session stays visible while the zone is folded.
-  const { expanded, toggle: toggleFold, expand: expandFolds, collapse: collapseFold } = useFold()
+  const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
@@ -601,13 +601,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const stateRef = useRef({})
   stateRef.current = {
     order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, expanded, foldableIds, expandFolds, collapseFold,
+    commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
   }
   useEffect(() => {
     const onKey = (e) => {
       const {
         order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-        commandAvailable, setCommandOpen, expanded, foldableIds, expandFolds, collapseFold,
+        commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // Reserved Alt/Cmd+I toggles Command Box before xterm. Matched by
@@ -635,20 +635,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           setSel(order[ni]); return
         }
       }
-      // The primary-modifier horizontal pair is the selected row's ordinary tree disclosure grammar
-      // ([[session-nesting]]). It routes into the SAME fold Set as the count pod. Claim the chord only when
-      // it can change a parent, so a leaf's terminal/input keeps its native line-navigation key.
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && foldableIds.has(active)) {
-        if (e.key === 'ArrowRight' && !expanded.has(active)) {
-          e.preventDefault(); e.stopPropagation()
-          expandFolds([active])
-          return
-        }
-        if (e.key === 'ArrowLeft' && expanded.has(active)) {
-          e.preventDefault(); e.stopPropagation()
-          collapseFold(active)
-          return
-        }
+      // The primary+Shift+E chord is the selected row's ordinary tree disclosure grammar ([[session-nesting]]).
+      // It routes into the SAME fold Set as the count pod. Claim it only for a visible parent, so a leaf's
+      // terminal/input keeps every native key and the common arrow editing vocabulary remains untouched.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'KeyE' && foldableIds.has(active)) {
+        e.preventDefault(); e.stopPropagation()
+        toggleFold(active)
+        return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.

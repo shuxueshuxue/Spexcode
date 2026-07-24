@@ -635,13 +635,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           setSel(order[ni]); return
         }
       }
-      // The primary+Shift+E chord is the selected row's ordinary tree disclosure grammar ([[session-nesting]]).
-      // It routes into the SAME fold Set as the count pod. Claim it only for a visible parent, so a leaf's
-      // terminal/input keeps every native key and the common arrow editing vocabulary remains untouched.
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'KeyE' && foldableIds.has(active)) {
-        e.preventDefault(); e.stopPropagation()
-        toggleFold(active)
-        return
+      // Session rows are a tree: use the standard unmodified horizontal arrows, but only while focus is
+      // outside xterm and every editable control. This keeps the direction's meaning visible and leaves all
+      // terminal/composer caret movement to its native owner. The row buttons are tabbable, so keyboard users
+      // can deliberately give the list focus before using the tree grammar.
+      const editingTarget = e.target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')
+      if (!editingTarget && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey && foldableIds.has(active)) {
+        if (e.key === 'ArrowRight' && !expanded.has(active)) {
+          e.preventDefault(); e.stopPropagation()
+          expandFolds([active])
+          return
+        }
+        if (e.key === 'ArrowLeft' && expanded.has(active)) {
+          e.preventDefault(); e.stopPropagation()
+          toggleFold(active)
+          return
+        }
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.

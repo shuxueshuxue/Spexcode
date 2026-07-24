@@ -2,7 +2,7 @@
 title: session-search
 status: active
 hue: 280
-desc: From the sessions page, ⌥+/ opens the SAME search palette the graph page uses — sessions boosted to the top — and a pick either opens a session's tab or jumps to a node on the graph.
+desc: Global ⌥+/ opens the shared palette with sessions first; the graph's plain / keeps nodes first.
 related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/App.jsx
@@ -13,7 +13,7 @@ related:
 ---
 # session-search
 
-The [[session-console]] is where you live while driving agents — but the jump-to escape hatch was reachable only from the graph page behind it (the `/` palette, see [[keyboard-nav]]). This node gives the sessions page its own way in: **⌥+/ opens the SAME palette**, never a second one. It sits beside the console's other reserved Option chords (⌥+I, ⌥+N) as a fixed binding, not a page verb. Command/Ctrl shortcuts remain available to the browser and native controls.
+The [[session-console]] is where you live while driving agents — but the jump-to escape hatch was reachable only from the graph page behind it (the `/` palette, see [[keyboard-nav]]). This node gives the sessions page its own way in without inventing another component. The entry matrix is deliberate: **plain `/` on the spec-node graph opens the shared palette with nodes first; global `⌥+/` opens that SAME palette with sessions first from every page, including the graph**. The Sessions Search pill is the click twin of the latter. `⌥+/` sits beside the console's other reserved Option chords (`⌥+I`, `⌥+N`) as a fixed binding, not a page verb. Command/Ctrl shortcuts remain available to the browser and native controls.
 
 A chord alone is invisible, so the entry point is also **clickable**: the session list's top row carries a
 **Search pill** beside `＋` New ([[session-console]] hosts the row) — a monochrome inline-SVG magnifier in the
@@ -24,7 +24,7 @@ pressed state.
 
 **Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly three things differ, each supplied by the caller or inherited from an existing source order:
 
-- **Lead weight.** You searched *from the sessions page*, so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. (The graph page's plain `/` still leads with nodes.) This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so a session always tops the list while nodes/issues/scenarios stay reachable below.
+- **Lead weight.** You chose the session-search entry (`⌥+/` anywhere, or the Sessions Search pill), so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. The graph page's plain `/` chooses the node-search entry and still leads with nodes. This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so every plane stays reachable below its chosen lead.
 - **Empty-query order.** Before a query exists there is no relevance score to invent. Each plane therefore
   keeps its source surface's stable order. The session plane feeds the palette the SAME fully disclosed
   [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first

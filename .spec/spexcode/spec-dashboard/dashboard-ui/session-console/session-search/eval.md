@@ -1,16 +1,18 @@
 ---
 scenarios:
-  - name: cmd-slash-opens-sessions-first
+  - name: option-slash-opens-sessions-first
     tags: [frontend-e2e, desktop]
     description: >
-      Through the running dashboard in a real browser, open the session console (Enter) so the session board
-      is the active surface. Press ⌥+/. The SAME search palette the board's `/`
-      opens must appear, floating ABOVE the session board (not hidden behind it). Type a query that matches
+      Through the running dashboard in a real browser, first stay on the spec-node graph and press plain `/`;
+      record that the shared palette leads with a NODE. Close it and press ⌥+/ on that same graph; record that
+      the same palette now leads with a SESSION. Then open the session console and press ⌥+/. The SAME search
+      palette must appear, floating ABOVE the session board (not hidden behind it). Type a query that matches
       both a live session and a spec node (e.g. a word in a session's headline that is also a node name).
       Screenshot the open palette over the session board and the ranked result rows.
     expected: |
-      ⌥+/ opens the one shared palette over the session board — same input + ranked rows as the board's
-      `/`, never a second component, rendered above the board (z-index over .si-backdrop). With the query
+      The graph's plain `/` opens the node-first mode; `⌥+/` on the graph switches the SAME palette to
+      session-first mode. `⌥+/` over the session board opens that same session-first palette above the board
+      (z-index over .si-backdrop), never a second component. With the query
       matching both planes, a SESSION row ranks at the TOP (the session plane is boosted to lead the
       interleave), with the matching spec node and any issues/scenarios reachable below — every plane still
       visible, sessions first. Esc / backdrop click closes it back to the session board.

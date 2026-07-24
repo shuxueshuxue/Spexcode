@@ -34,7 +34,7 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // fires on a genuine wedge.
 const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
 const RETRY_BACKOFF_MS = Number(process.env.SPEXCODE_BOARD_RETRY_BACKOFF_MS || 1000)
-const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 150)
+const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 300)
 
 // the cache's staleness has a DOMAIN, not just a bit: a 'sessions' change (a lifecycle write, a
 // liveness/activity poll flip) touches only the session rows, so the next read can SPLICE fresh sessions

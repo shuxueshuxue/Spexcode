@@ -5,6 +5,7 @@ import SessionMessages from './SessionMessages.jsx'
 import { isMessageStreamSession } from './messageStream.js'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
+import { inertChromePress } from './focus.js'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -16,6 +17,50 @@ const dayKey = (ts) => new Date(ts).toDateString()
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
 const sameEvents = (a, b) => a != null && a.length === b.length
   && (a.length === 0 || JSON.stringify(a[a.length - 1]) === JSON.stringify(b[b.length - 1]))
+
+const SELECTION_CONTROLS = 'button, summary, a, input, textarea, select, option, label, [role], [contenteditable]:not([contenteditable="false"])'
+const EDITING_KEYS = new Set([
+  'Backspace', 'Delete', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'Home', 'End', 'PageUp', 'PageDown',
+])
+
+const rangeAtPoint = (timeline, clientX, clientY) => {
+  const range = document.caretRangeFromPoint?.(clientX, clientY)
+  return range && timeline.contains(range.startContainer) ? range : null
+}
+
+const wordRangeAtPoint = (timeline, clientX, clientY) => {
+  const point = rangeAtPoint(timeline, clientX, clientY)
+  const node = point?.startContainer
+  if (!node || node.nodeType !== Node.TEXT_NODE || !node.data) return null
+
+  const offset = Math.min(point.startOffset, node.data.length)
+  let bounds = null
+  if (typeof Intl.Segmenter === 'function') {
+    const segments = [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(node.data)]
+    bounds = segments.find(({ index, segment, isWordLike }) => (
+      isWordLike && index <= offset && offset < index + segment.length
+    )) || segments.findLast(({ index, segment, isWordLike }) => (
+      isWordLike && index < offset && offset <= index + segment.length
+    ))
+    if (bounds) bounds = [bounds.index, bounds.index + bounds.segment.length]
+  }
+  if (!bounds) {
+    const isWord = (char) => /[\p{L}\p{M}\p{N}_]/u.test(char)
+    let start = Math.min(offset, node.data.length - 1)
+    if (!isWord(node.data[start]) && start > 0 && isWord(node.data[start - 1])) start -= 1
+    if (!isWord(node.data[start])) return null
+    let end = start + 1
+    while (start > 0 && isWord(node.data[start - 1])) start -= 1
+    while (end < node.data.length && isWord(node.data[end])) end += 1
+    bounds = [start, end]
+  }
+
+  const range = document.createRange()
+  range.setStart(node, bounds[0])
+  range.setEnd(node, bounds[1])
+  return range
+}
 
 // @@@ the terminal-free conversation body ([[session-timeline]]) — the phone's session detail
 // ([[mobile-ui]]). Without a pane to read, the persisted timeline IS the interaction record: every
@@ -34,7 +79,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [fullProcess, setFullProcess] = useState(false)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
-  const inputSelectionRef = useRef({ start: 0, end: 0, direction: 'none' })
+  const selectionDragRef = useRef(null)
+  const composerCaretRef = useRef({ start: 0, end: 0 })
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -58,65 +104,112 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
   useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
 
-  const rememberComposerSelection = (e) => {
-    if (e.button !== 0 || !inputRef.current) return
-    inputSelectionRef.current = {
-      start: inputRef.current.selectionStart ?? draft.length,
-      end: inputRef.current.selectionEnd ?? draft.length,
-      direction: inputRef.current.selectionDirection || 'none',
-    }
-  }
-  const focusComposer = () => {
-    const input = inputRef.current
-    if (!input?.isConnected || input.disabled) return false
-    const { start, end, direction } = inputSelectionRef.current
-    input.focus({ preventScroll: true })
-    input.setSelectionRange(
-      Math.min(start, input.value.length),
-      Math.min(end, input.value.length),
-      direction,
-    )
-    return document.activeElement === input
-  }
   const selectionIsInTimeline = (selection) => {
     const timeline = scrollRef.current
     return !!(timeline && selection && !selection.isCollapsed
       && (timeline.contains(selection.anchorNode) || timeline.contains(selection.focusNode)))
   }
-  const returnComposerFocus = (e) => {
-    if (e.button !== 0) return
-    const selection = window.getSelection?.()
-    const ranges = selectionIsInTimeline(selection) && selection?.rangeCount
-      ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
-      : []
-    focusComposer()
-    if (ranges.length && selection) {
-      selection.removeAllRanges()
-      for (const range of ranges) selection.addRange(range)
+
+  // @@@ Continuous sink selection - native text selection moves focus to BODY, so the conversation keeps
+  // its press inert and drives the same document Selection from caret coordinates instead.
+  const beginTimelineSelection = (e) => {
+    const timeline = scrollRef.current
+    const target = e.target
+    if (e.button !== 0 || !timeline || !(target instanceof Element)) return
+    const control = target.closest(SELECTION_CONTROLS)
+    if (control && timeline.contains(control)) return
+    if (target === timeline) {
+      const rect = timeline.getBoundingClientRect()
+      if (e.clientX - rect.left - timeline.clientLeft >= timeline.clientWidth
+        || e.clientY - rect.top - timeline.clientTop >= timeline.clientHeight) return
     }
+    const anchor = rangeAtPoint(timeline, e.clientX, e.clientY)
+    if (!anchor) return
+    e.preventDefault()
+    const selection = window.getSelection()
+    const input = inputRef.current
+    if (selection?.isCollapsed && input) {
+      composerCaretRef.current = { start: input.selectionStart, end: input.selectionEnd }
+    }
+    selection?.removeAllRanges()
+    selectionDragRef.current = { anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
   }
+
+  const selectTimelineWord = (e) => {
+    const target = e.target
+    const timeline = scrollRef.current
+    if (e.button !== 0 || !timeline || !(target instanceof Element)) return
+    const control = target.closest(SELECTION_CONTROLS)
+    if (control && timeline.contains(control)) return
+    const range = wordRangeAtPoint(timeline, e.clientX, e.clientY)
+    if (!range) return
+    e.preventDefault()
+    selectionDragRef.current = null
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.setBaseAndExtent(range.startContainer, range.startOffset, range.endContainer, range.endOffset)
+  }
+
   useEffect(() => {
     if (!active) return undefined
+    const onMouseMove = (e) => {
+      const drag = selectionDragRef.current
+      const timeline = scrollRef.current
+      if (!drag || !timeline) return
+      e.preventDefault()
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return
+      const focus = rangeAtPoint(timeline, e.clientX, e.clientY)
+      if (!focus || !drag.anchor.startContainer.isConnected) return
+      window.getSelection()?.setBaseAndExtent(
+        drag.anchor.startContainer,
+        drag.anchor.startOffset,
+        focus.startContainer,
+        focus.startOffset,
+      )
+    }
+    const onMouseUp = () => { selectionDragRef.current = null }
     const onKeyDown = (e) => {
       const selection = window.getSelection?.()
       if (!selectionIsInTimeline(selection)) return
-      if (['Alt', 'Control', 'Meta', 'Shift'].includes(e.key)) return
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') return
-
+      if (document.activeElement !== inputRef.current) return
+      const primary = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
+      if (primary && key === 'c') return
+      const printable = e.key.length === 1 && !primary && !e.altKey
+      const editingShortcut = primary && !e.altKey && ['a', 'v', 'x', 'y', 'z'].includes(key)
+      const composing = e.isComposing || e.key === 'Process' || e.key === 'Dead'
+      if (!printable && !editingShortcut && !composing && !EDITING_KEYS.has(e.key)) return
       selection.removeAllRanges()
-      if (!focusComposer()) return
-
-      // Chromium binds Backspace's default action to the old BODY target even after focus changes during
-      // capture. Its own delete command supplies that one missed native edit; every other key continues
-      // through the same real key event now that the textarea is authoritative again.
-      if (e.key === 'Backspace') {
-        e.preventDefault()
-        document.execCommand('delete')
-      }
+      const input = inputRef.current
+      const { start, end } = composerCaretRef.current
+      input.setSelectionRange(
+        Math.min(start, input.value.length),
+        Math.min(end, input.value.length),
+      )
     }
+    document.addEventListener('mousemove', onMouseMove, true)
+    document.addEventListener('mouseup', onMouseUp, true)
     window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
+    return () => {
+      selectionDragRef.current = null
+      document.removeEventListener('mousemove', onMouseMove, true)
+      document.removeEventListener('mouseup', onMouseUp, true)
+      window.removeEventListener('keydown', onKeyDown, true)
+    }
   }, [active])
+
+  const prepareComposerPress = () => {
+    const selection = window.getSelection?.()
+    if (selectionIsInTimeline(selection)) selection.removeAllRanges()
+  }
+  const rememberComposerCaret = (e) => {
+    const selection = window.getSelection?.()
+    if (selectionIsInTimeline(selection)) return
+    composerCaretRef.current = {
+      start: e.currentTarget.selectionStart,
+      end: e.currentTarget.selectionEnd,
+    }
+  }
 
   const send = async () => {
     const text = draft.trim()
@@ -194,8 +287,9 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           </button>
         </div>
       )}
-      <div className="m-timeline" ref={scrollRef} onScroll={onScroll} onMouseDown={rememberComposerSelection}
-        onMouseUp={returnComposerFocus} onDoubleClick={returnComposerFocus} data-native-selection>
+      <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
+        onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}
+        onDoubleClick={selectTimelineWord}>
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
@@ -217,6 +311,8 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             rows={1}
             placeholder={t('mobile.inputPlaceholder')}
             value={draft}
+            onMouseDownCapture={prepareComposerPress}
+            onSelect={rememberComposerCaret}
             onChange={(e) => setDraft(e.target.value)}
           />
           <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>

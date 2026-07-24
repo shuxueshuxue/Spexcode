@@ -93,15 +93,30 @@ The two planes, made native to touch:
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
   through a note or message, refresh work neither remounts the conversation nor clears the browser
-  selection. Conversation copy and composer editing are consecutive native states, never an invalid
-  overlap: a real document Selection keeps document focus while it is visible and copyable; after a
-  timeline mouseup or double-click, that SAME conversation's composer remains the active element while
-  the Range stays intact. A collapsed click, or the first editing/navigation key after a real selection,
-  clears that Range and gives keyboard ownership to the composer at its saved caret before editing continues. Backspace,
-  Delete, arrows, Enter, paste, printable text, and IME therefore meet an ordinary authoritative textarea,
-  rather than a focused textarea whose DOM caret has been corrupted by an external Range. The active
-  TimelineChat declares that composer as its surface sink; warm hidden headless layers declare none, so two
-  mounted conversations can never return focus to the wrong draft.
+  selection. The active TimelineChat's composer is its **continuous sink**: a plain press or drag in
+  conversation text is prevented from moving DOM focus, so that exact textarea remains
+  `document.activeElement` from mousedown through every move and mouseup. Because suppressing the press
+  also suppresses the browser's native selection start, one coordinate-driven selection mechanism turns
+  the press point into an anchor Range, extends the document Selection from later pointer coordinates only
+  after real movement, and resolves a double-click point to its word boundary. A plain click therefore
+  leaves no Range, while a drag or double-click leaves ordinary rendered conversation text highlighted and
+  copyable without ever extinguishing the composer. Buttons, links, summaries, roles, and editable controls
+  are outside the driver; their native click actions still land while inert chrome keeps them from stealing
+  the sink.
+
+  A non-collapsed conversation Range and the focused textarea can coexist, but Chromium withholds textarea
+  editing while that external Range survives. The first printable, editing, paste, or navigation key therefore
+  removes the Range in capture and re-arms the textarea's own selection before the unchanged native key reaches
+  the already-focused control; Copy is the exception and reads the highlighted conversation text. Chromium
+  reports a desynchronized zero textarea caret while the external Range lives, so the re-arm uses the textarea's
+  start/end captured at the selection gesture's mousedown, before that Range exists. Those two values preserve
+  both a collapsed caret and an existing textarea selection. A direct composer press clears any pending
+  conversation Range before the native textarea press sets its next selection, which becomes the next reliable
+  saved caret. There is no blur/refocus, saved/restored document Range, mouseup handoff, or synthetic edit
+  command: Backspace, Delete, arrows, Enter, paste, printable text, and IME all meet the same continuously
+  focused authoritative textarea.
+  The active TimelineChat alone declares that composer as its surface sink; warm hidden headless layers declare
+  none, so two mounted conversations can never route input to the wrong draft.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.
 - **Create** — a touch row above the list opens a full-screen composer: the desktop New Session
   tab's phone twin, with ALL substance shared through the one launch path (`launch.js`, split out

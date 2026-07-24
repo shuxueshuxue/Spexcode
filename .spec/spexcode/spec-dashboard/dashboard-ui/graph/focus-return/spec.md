@@ -35,18 +35,23 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   overlay already holds focus by then, it owns it — the return never yanks. The shared modal chrome returns
   on its own unmount, so every closing path — Esc, backdrop, cancel, submit — honors the contract without
   each caller wiring it.
-- **Inert chrome.** The acquisition-side twin: a pointer-down on chrome that is not itself an input surface
-  (not an editable field, the xterm screen, a scrollbar gutter, or an explicitly marked native-selection
-  region) is **prevented from moving focus at all** — the click still lands and acts. A native-selection
-  region keeps the browser's default press so ordinary text can be drag-selected, double-clicked, and copied.
-  Selection content owns the browser's natural document focus while its non-collapsed Range remains visible;
-  it cannot simultaneously pretend an editable sink owns an authoritative caret. The surface returns keyboard
-  ownership to its exact local sink after a collapsed press or when the next editing intent retires that Range.
-  It is interaction content, not dead chrome. A surface or menu attaches this one capture-phase guard, and
-  then most pops need no return because focus never left: the ticket stays pinned to the real input region
-  instead of getting polluted by the button that opened the pop.
+- **Inert chrome.** The acquisition-side twin: a pointer-down on anything that is not itself an input surface
+  (an editable field, the xterm screen, or a scrollbar gutter) is **prevented from moving focus at all** — the
+  click still lands and acts. Selectable conversation text is interaction content, but not an exception to
+  this rule: its surface keeps the sink continuously focused and translates pointer coordinates into an
+  ordinary document Range with its own selection driver. Drag and double-click selection therefore remain
+  visible and copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles,
+  and editable controls are outside that driver, while their click actions still work under the same inert
+  press. A surface or menu attaches this one capture-phase guard, and then most pops need no return because
+  focus never left: the ticket stays pinned to the real input region instead of getting polluted by the
+  button that opened the pop.
 
-The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it. The **session interface is a surface, not a transient overlay** — it owns its own focus discipline and hosts the sink, so it stays outside this boundary; the boundary governs only the modals that float over it.
+The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it.
+For a terminal-free conversation it is continuous through chrome presses and text selection; the first editing
+intent retires the external Range and re-arms the textarea's own start/end captured before that Range existed,
+without any focus transition. The **session
+interface is a surface, not a transient overlay** — it owns its own focus discipline and hosts the sink, so it
+stays outside this boundary; the boundary governs only the modals that float over it.
 
 ## why decoupled, not a focus stack
 

@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/MobileApp.jsx
+  - spec-dashboard/src/session.test.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
 ---
 # session-nesting
@@ -52,6 +53,14 @@ each child (an elbow at the last), and a pass-through spine down each ancestor c
 belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to any depth. The list is collapsed
 by default, so a fleet reads as one row until
 opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
+
+The desktop console also gives that same presentation state the ordinary tree-key grammar: **⌘/Ctrl+→
+expands the currently selected parent session and ⌘/Ctrl+← collapses it**. The chord works from the live TUI
+or either composer just like the console's modifier+↑/↓ session switching; it changes only the selected
+row's existing fold state, never session data or selection. A leaf has nothing to disclose, so the chord is
+left unclaimed there and the focused terminal/input keeps its native key. The pod remains pointer-only and
+non-focusable — keyboard disclosure is a console-level route into the same fold state, not a second control
+or a second tree.
 
 **The parent row's own status is the group's status — no aggregation.** The folded parent's status glyph and
 which triage zone it sorts into (needs-you vs self-running) are the PARENT'S OWN, full stop; child statuses

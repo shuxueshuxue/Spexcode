@@ -22,9 +22,15 @@ open path** the chord does (the one sessions-boosted palette open threaded down 
 palette or a second search implementation; it is momentary — the palette floats above, no tab switch, no
 pressed state.
 
-**Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly two things differ, and each is a single knob the caller turns:
+**Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly three things differ, each supplied by the caller or inherited from an existing source order:
 
 - **Lead weight.** You searched *from the sessions page*, so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. (The graph page's plain `/` still leads with nodes.) This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so a session always tops the list while nodes/issues/scenarios stay reachable below.
+- **Empty-query order.** Before a query exists there is no relevance score to invent. Each plane therefore
+  keeps its source surface's stable order. The session plane feeds the palette the SAME fully disclosed
+  [[session-nesting]] forest the dashboard list renders: triage zones in dashboard order, newest roots first
+  within a zone, and each parent immediately followed by its recursively ordered descendants. The palette
+  does not restate those rules or sort session names; it inherits them from the shared forest, so a future
+  dashboard ordering change reaches the empty ⌘/Ctrl+/ list without a search-specific repair.
 - **Select target.** A result selects the product surface that owns that kind of thing, through the shared
   [[address-routing]] vocabulary. Picking a **session** opens (or switches to) that session's
   tab. Picking a **spec node** routes to the graph page and focuses that node. Picking an **issue** routes to

@@ -201,3 +201,9 @@ export function sessionForest(sessions, isExpanded, { zoneFolded = () => false, 
   }
   return items
 }
+
+// The natural all-rows order behind every session list: same zones, newest-first roots, and recursive
+// parent-before-child disclosure as sessionForest. Consumers without local fold state (notably an empty
+// jump palette) inherit the dashboard's presentation order instead of restating its sorting rules.
+export const sessionPresentationOrder = (sessions) =>
+  sessionForest(sessions, () => true).filter((item) => item.type === 'row').map((item) => item.s)

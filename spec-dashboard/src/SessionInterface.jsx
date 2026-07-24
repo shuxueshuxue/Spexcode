@@ -210,12 +210,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // The OFFLINE zone rests FOLDED behind its header — the one disclosure for retained session history
   // ([[session-console]]): collapsed on every fresh mount (presentation state, never persisted), toggled only
   // by the header's leading count pod, and the selected session stays visible while the zone is folded.
-  const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
+  const { expanded, toggle: toggleFold, expand: expandFolds, collapse: collapseFold } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
     keepVisible: (s) => s.id === sel,
   }), [sessions, expanded, offlineOpen, sel])
+  const foldableIds = useMemo(() => new Set(forest.filter((item) => item.type === 'row' && item.expandable)
+    .map((item) => item.s.id)), [forest])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const validIds = useMemo(() => new Set(['new', ...sessions.map((s) => s.id)]), [sessions])
@@ -597,10 +599,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Window-level router owns only app shortcuts, Command Box/menu keys, and list navigation. Ordinary
   // terminal keys fall through to xterm.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen }
+  stateRef.current = {
+    order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+    commandAvailable, setCommandOpen, expanded, foldableIds, expandFolds, collapseFold,
+  }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen, commandAvailable, setCommandOpen } = stateRef.current
+      const {
+        order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
+        commandAvailable, setCommandOpen, expanded, foldableIds, expandFolds, collapseFold,
+      } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // Reserved Alt/Cmd+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
@@ -625,6 +633,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           let i = order.indexOf(active); if (i < 0) i = 0
           const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
           setSel(order[ni]); return
+        }
+      }
+      // The primary-modifier horizontal pair is the selected row's ordinary tree disclosure grammar
+      // ([[session-nesting]]). It routes into the SAME fold Set as the count pod. Claim the chord only when
+      // it can change a parent, so a leaf's terminal/input keeps its native line-navigation key.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && foldableIds.has(active)) {
+        if (e.key === 'ArrowRight' && !expanded.has(active)) {
+          e.preventDefault(); e.stopPropagation()
+          expandFolds([active])
+          return
+        }
+        if (e.key === 'ArrowLeft' && expanded.has(active)) {
+          e.preventDefault(); e.stopPropagation()
+          collapseFold(active)
+          return
         }
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt

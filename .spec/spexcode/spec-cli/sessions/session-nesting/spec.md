@@ -10,6 +10,8 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/MobileApp.jsx
+  - spec-dashboard/test/session-tree-disclosure.e2e.mjs
 ---
 # session-nesting
 
@@ -36,8 +38,9 @@ still present in the enumerated list — so closing a parent leaves its children
 the next read, auto-promotes them to top-level. No migration, no child rewrite. It is recursive to arbitrary
 depth, the whole forest reassembled each render.
 
-**The dashboard folds a child under its spawner.** Both session-list surfaces ([[session-console]]'s console
-tabs and the map-side `SessionWindow` glance) render that forest: a parent row leads with a **fold pod** — a
+**The dashboard folds a child under its spawner.** All session-list surfaces ([[session-console]]'s console
+tabs, the map-side `SessionWindow` glance, and [[mobile-ui]]'s Sessions list) render that forest: a parent row
+leads with a **fold pod** — a
 small pill showing the SUBTREE COUNT (how much fleet hides here), filled while collapsed and outline once
 expanded, a far more legible affordance than the old sliver of a triangle — and expanding reveals the child
 rows beneath. The pod is a **pointer-only toggle**: clicking it folds/unfolds WITHOUT selecting or opening the

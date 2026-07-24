@@ -18,9 +18,9 @@ export function opSummary(ops) {
 }
 
 // @@@ RowLead ([[session-nesting]]) — the leading gutter on a nested session row: indentation rails plus a
-// subtree-count badge for parents. The badge is deliberately passive: the whole row owns disclosure, so both
-// desktop surfaces expose one click target with `aria-expanded` and never need a directional glyph.
-export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0 }) {
+// reserved subtree-count slot for parents. FoldPod is rendered over that slot as a SIBLING of the row button,
+// keeping the original face geometry without nesting one button inside another.
+export function RowLead({ guides = [], expandable, kin = 0 }) {
   return (
     <span className="sess-lead">
       {guides.map((cont, i) => {
@@ -28,13 +28,28 @@ export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0 }) 
         return <span key={i} className={`sess-rail ${kind}`} aria-hidden="true" />
       })}
       {expandable && (
-        <span
-          className={`sess-fold pod${expanded ? ' open' : ''}`}
-          style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
-          data-tip={`${kin} nested session${kin === 1 ? '' : 's'}`}
-        >{kin}</span>
+        <span className="sess-fold pod sess-fold-slot" aria-hidden="true">{kin}</span>
       )}
     </span>
+  )
+}
+
+// The subtree count is the ONLY parent disclosure. It is pointer-only ([[session-nesting]]), carries the
+// expanded state itself, and suppresses mousedown focus without disturbing the current surface sink.
+export function FoldPod({ expanded, rollup, kin, onToggle }) {
+  const label = `${expanded ? 'Hide' : 'Show'} ${kin} nested session${kin === 1 ? '' : 's'}`
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      className={`sess-fold pod sess-fold-control${expanded ? ' open' : ''}`}
+      style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
+      aria-expanded={expanded}
+      aria-label={label}
+      data-tip={label}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+    >{kin}</button>
   )
 }
 
@@ -81,22 +96,29 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   )
 }
 
-// Both desktop list surfaces use the same zone grammar. Offline is the sole foldable zone; its count leads
-// the label and the header itself is the only disclosure control.
+// Every list surface uses the same zone grammar. Offline is the sole foldable zone; only its leading count
+// pod is a disclosure control. The adjacent label is deliberately inert.
 export function SessionZone({ item, baseClass, onToggle }) {
   const t = useT()
   const classes = `${baseClass} ${baseClass}-${item.zone}${item.zone === 'offline' ? ` si-zone-fold${item.folded ? '' : ' open'}` : ''}`
   if (item.zone !== 'offline') return <div className={classes}>{t(`sessionZone.${item.zone}`)}</div>
+  const label = t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })
   return (
-    <button
-      type="button" className={classes}
-      aria-expanded={!item.folded}
-      data-tip={t(item.folded ? 'sessionZone.showHistory' : 'sessionZone.hideHistory', { n: item.count })}
-      onClick={onToggle}
-    >
-      {item.count > 0 && <span className="si-zone-count">{item.count}</span>}
+    <div className={classes}>
+      {item.count > 0 && (
+        <button
+          type="button"
+          tabIndex={-1}
+          className="si-zone-count"
+          aria-expanded={!item.folded}
+          aria-label={label}
+          data-tip={label}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggle}
+        >{item.count}</button>
+      )}
       <span className="si-zone-label">{t(`sessionZone.${item.zone}`)}</span>
-    </button>
+    </div>
   )
 }
 
@@ -130,20 +152,22 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
           const locked = s.source === activeId
           const lead = (it.expandable || it.depth)
-            ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
+            ? <RowLead guides={it.guides} expandable={it.expandable} kin={it.kin} />
             : null
           return (
-            <button
-              key={s.id}
-              className={locked ? 'sess-row locked' : 'sess-row'}
-              aria-expanded={it.expandable ? it.expanded : undefined}
-              style={{ '--ov': labelColor(s.id) }}
-              onClick={() => { onPick(s); if (it.expandable) toggle(s.id) }}
-              onDoubleClick={() => onOpenSession(s.id)}
-              data-tip={t('sessionWindow.rowTitle')}
-            >
-              <SessionRow s={s} locked={locked} lead={lead} />
-            </button>
+            <div key={s.id} className="sess-tree-row sesswin-tree-row" style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
+              <button
+                type="button"
+                className={locked ? 'sess-row locked' : 'sess-row'}
+                style={{ '--ov': labelColor(s.id) }}
+                onClick={() => onPick(s)}
+                onDoubleClick={() => onOpenSession(s.id)}
+                data-tip={t('sessionWindow.rowTitle')}
+              >
+                <SessionRow s={s} locked={locked} lead={lead} />
+              </button>
+              {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />}
+            </div>
           )
         })
       )}

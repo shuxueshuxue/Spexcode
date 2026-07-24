@@ -755,7 +755,7 @@ a.scenario-count:hover { background: var(--panel2); }
   user-select: none; /* double-click opens — don't let it select the row text */
   transition: background .12s, border-left-width .12s;
 }
-.sess-row:last-child { border-bottom: none; }
+.sess-tree-row:last-child > .sess-row { border-bottom: none; }
 .sess-row:hover { background: var(--panel); }
 /* locked = this session owns the graph (everything else greyed). The row mirrors that grip: a thick
    spine in the session colour, a tinted fill, and the same lock the cursor is told about. */
@@ -786,8 +786,9 @@ a.scenario-count:hover { background: var(--panel2); }
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
 /* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` holds the
    file-tree connector RAILS (one 14px `.sess-rail` per depth level, drawn with thin borders like a notes-app
-   file tree) and then, for a parent, the fold POD. `.sess-lead` stretches to the row's full height so a
-   pass-through rail's vertical line meets the next row's, drawing an unbroken spine down a sibling group. */
+   file tree) and then, for a parent, an invisible count-sized SLOT. The real count button is a sibling of the
+   row button, absolutely covering that slot: identical geometry, no button-inside-button semantics. */
+.sess-tree-row { position: relative; --sess-fold-indent: 0px; --sess-fold-pad-x: 0px; }
 .sess-lead { flex: none; align-self: stretch; display: inline-flex; align-items: stretch; --rail: color-mix(in srgb, var(--muted) 42%, transparent); }
 /* a connector column. `.rail` = a full-height vertical (an ancestor whose branch continues below this row);
    `.tee`/`.elbow` = this row's own branch — a half vertical down to the mid-line plus a short horizontal tick
@@ -807,14 +808,21 @@ a.scenario-count:hover { background: var(--panel2); }
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   align-self: center; cursor: pointer; user-select: none;
 }
-/* the passive subtree count badge: filled = collapsed (sessions hidden behind it), outline = expanded. The
-   row owns disclosure, so this badge never introduces a second click target or a directional symbol. */
+/* The subtree count is the only disclosure: filled = collapsed, outline = expanded. `.sess-fold-slot` keeps
+   it in the row's flex/float layout; `.sess-fold-control` is the visible, pointer-only sibling button. */
 .sess-fold.pod {
   min-width: 16px; width: auto; height: 14px; padding: 0 4px; border-radius: 999px; border: 1px solid;
-  font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--paper); cursor: inherit;
+  font-family: inherit; font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-none); color: var(--paper);
 }
 .sess-fold.pod.open { background: transparent; }
 .sess-fold.pod:hover { filter: brightness(1.25); }
+.sess-fold-slot { visibility: hidden; pointer-events: none; }
+.sess-fold-control {
+  position: absolute; z-index: 2;
+  left: calc(var(--sess-fold-pad-x) + var(--sess-fold-indent));
+  top: 50%; transform: translateY(-50%); margin: 0;
+}
+.sesswin-tree-row { --sess-fold-pad-x: 9px; }
 /* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console
    ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
 .sesswin .sess-row { flex-wrap: nowrap; }
@@ -1103,6 +1111,10 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-item.on .sess-lead { float: left; margin-right: 7px; }
 .si-item.on .sess-meta { float: right; margin: 0 0 0 8px; }
 .si-item.on .sess-id { display: block; max-height: 3lh; white-space: normal; overflow: clip; overflow-wrap: anywhere; }
+.si-tree-row { --sess-fold-pad-x: 12px; }
+/* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
+   the taller row. Resting rows keep the generic vertical centring above. */
+.si-item.on + .sess-fold-control { top: 7px; transform: none; }
 /* zone divider — a clean SOLID small dim uppercase label with a subtle hairline rule trailing it. `--zh` is
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {
@@ -1112,11 +1124,14 @@ a.scenario-count:hover { background: var(--panel2); }
   color: var(--zh);
 }
 .si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
-/* the offline zone's header is the ONE disclosure for session history ([[session-console]]): a real
-   button with the count before its label and no directional glyph, pointer-inert for focus like all console chrome. */
-.si-zone-fold { border: 0; background: transparent; font-family: inherit; cursor: pointer; width: 100%; text-align: left; }
-.si-zone-fold:hover { color: var(--ink); }
-.si-zone-count { flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8; }
+/* The offline header stays one visual row, but only its leading count button toggles history. */
+.si-zone-fold { width: 100%; text-align: left; }
+.si-zone-count {
+  flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px;
+  background: transparent; color: inherit; cursor: pointer; font: inherit;
+  font-size: var(--type-caption); line-height: var(--line-badge); opacity: .8;
+}
+.si-zone-count:hover { color: var(--ink); opacity: 1; }
 .si-zone-label { flex: none; }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
@@ -2002,9 +2017,13 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-sess-row .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; font-size: var(--type-control); }
 .m-sess-row .sess-glyph { font-size: var(--type-body); width: 14px; }
 .m-sess-row .sess-ops { color: var(--muted); }   /* mobile keeps the tally muted, not the overlay hue */
+.m-sess-tree-row { --sess-fold-pad-x: 14px; }
+.m-sess-row .sess-fold-slot,
+.m-sess-tree-row .sess-fold-control { min-width: 24px; height: 24px; }
 
 /* zone headers on the mobile session list — same partition every desktop list draws ([[session-console]]). */
-.m-zone { padding: 10px 14px 4px; font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
+.m-zone { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); color: var(--muted); text-transform: uppercase; }
+.m-zone .si-zone-count { min-width: 24px; min-height: 24px; }
 
 /* session detail — the terminal-free conversation ([[session-timeline]]): identity card, then the
    timeline (status transitions with full notes + delivered prompts) over a docked composer. */

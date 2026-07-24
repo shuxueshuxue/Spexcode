@@ -18,6 +18,7 @@ related:
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
+  - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
 ---
 
@@ -290,19 +291,24 @@ single row with the COUNT badge first and the `OFFLINE` label second; it contain
 direction symbol. Retired and
 dormant sessions accumulate (an adopter's CR record sessions are deliberately kept alive for their external
 deep links), and a list that renders every one of them drowns the two zones a human acts on; but they are
-records, so they are never deleted and never more than one click away. The zone header carries the hidden
-COUNT and an expanded/collapsed affordance (`aria-expanded` speaks it); clicking toggles — pointer-inert for
-focus like every zone header. A parent row with sub sessions uses the same grammar: its child-count badge is
-the first content before the title/status body, never a trailing action, and the row itself toggles its children
-(`aria-expanded` remains on that row). Neither surface renders a directional glyph for parent disclosure;
-hierarchy is communicated only by the count's leading slot, indentation, and the resulting row structure.
+records, so they are never deleted and never more than one click away. The header's leading COUNT pod is the
+**only** disclosure control: it carries `aria-expanded`, toggles the zone, and stays pointer-inert for focus.
+The adjacent `OFFLINE` label is inert; clicking anywhere else in the header never changes the fold. A parent
+row with sub sessions uses the same grammar: its child-count pod is the first content before the title/status
+body, never a trailing action, and that pod alone toggles its children and carries `aria-expanded`. Clicking
+the rest of the parent row performs that surface's ordinary row action (select/open in the console or phone,
+graph lock/open in SessionWindow) without changing the fold. The disclosure pod and row action are sibling
+controls in the DOM, never a button nested inside another button. Neither surface renders a directional glyph
+for parent disclosure; hierarchy is communicated only by the count's leading slot, indentation, and the
+resulting row structure.
 Folding is **presentation only** (per-surface state, collapsed again on a
 fresh mount; no session record is touched), it applies to **no other zone** — *needs you* and *running* rows
 can never be hidden by any fold — and the **selected session stays revealed**: a row chosen by URL,
 search, an originator chip, or the graph's node menu renders even while its zone is folded, so a deep link
 into history always lands on its visible row. ↑/↓ walk only the visible rows, as with every fold. The
-selected row is marked by the **highlight wash alone**, no caret. Both list surfaces share this grouping +
-compact one-line layout; only the avatar differs (the map-side window keeps it, the console list drops it).
+selected row is marked by the **highlight wash alone**, no caret. The SessionInterface sidebar,
+SessionWindow, and phone Sessions list share this grouping + compact one-line layout; only the avatar differs
+(the map-side window keeps it, the console and phone lists drop it).
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue

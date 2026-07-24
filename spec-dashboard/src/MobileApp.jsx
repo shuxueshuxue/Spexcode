@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
-import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
+import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
@@ -193,13 +193,16 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
 }
 
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
-// with passive count badges (RowLead), and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
+// with count-only disclosure pods, and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
 // beyond the touch-sized wrapper row and the create entry above the list (its own screen, MobileNewSession).
 function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
-  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  const [offlineOpen, setOfflineOpen] = useState(false)
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
+    zoneFolded: (z) => z === 'offline' && !offlineOpen,
+  }), [sessions, expanded, offlineOpen])
   if (creating) return <MobileNewSession draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
   if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
   return (
@@ -209,15 +212,18 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
       </button>
       {!sessions.length && <div className="m-empty big">{t('mobile.noSessions')}</div>}
       {forest.map((it) => {
-        if (it.type === 'zone') return <div className="m-zone" key={`z-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+        if (it.type === 'zone') return <SessionZone key={`z-${it.zone}`} item={it} baseClass="m-zone" onToggle={() => setOfflineOpen((v) => !v)} />
         const s = it.s
         const lead = (it.expandable || it.depth)
-          ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} />
+          ? <RowLead guides={it.guides} expandable={it.expandable} kin={it.kin} />
           : null
         return (
-          <button key={s.id} className="m-sess-row" aria-expanded={it.expandable ? it.expanded : undefined} onClick={() => { setOpenId(s.id); if (it.expandable) toggle(s.id) }}>
-            <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
-          </button>
+          <div key={s.id} className="sess-tree-row m-sess-tree-row" style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
+            <button type="button" className="m-sess-row" onClick={() => setOpenId(s.id)}>
+              <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
+            </button>
+            {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />}
+          </div>
         )
       })}
     </div>

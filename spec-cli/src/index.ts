@@ -77,7 +77,7 @@ app.get('/api/instance', (c) => {
 // is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
 app.get('/api/graph', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  await ensureBoardFileWatchers()
   const timeout = Symbol('timeout')
   let timer: ReturnType<typeof setTimeout> | undefined
   const result = await Promise.race([
@@ -216,14 +216,15 @@ app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.quer
 // Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
 // it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
 app.get('/api/evals', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  const scope = c.req.query('q')?.match(/(?:^|\s)scope:([^\s]+)/)?.[1]
+  await ensureBoardFileWatchers(scope)
   const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
   return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
 })
 // ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
 // most five lightweight neighbors. It never serializes another scenario's history or the scoped model.
 app.get('/api/evals/detail', etag(), async (c) => {
-  ensureBoardFileWatchers()
+  await ensureBoardFileWatchers(c.req.query('scope')?.trim() || undefined)
   const node = c.req.query('node')?.trim()
   const scenario = c.req.query('scenario')?.trim()
   if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)

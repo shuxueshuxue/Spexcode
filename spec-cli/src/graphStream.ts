@@ -1,9 +1,9 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
-import { hotSignature, warmSignature } from './sessions.js'
+import { hotSignature, warmSignature, listSessions } from './sessions.js'
 import { getBoard, invalidateBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 import {
@@ -325,20 +325,42 @@ function watcherFailed(name: string, path: string): void {
   scheduleWorktreeRetry(name)
 }
 
-function reconcileWorktrees(): void {
+const forcedWorktreeSessions = new Set<string>()
+let worktreeReconcileFlight: Promise<void> | null = null
+
+export function sessionWorktreeWatchPaths(
+  sessions: { id: string; path: string; liveness?: string }[],
+  forcedSessions: Set<string> = new Set(),
+): Set<string> {
+  return new Set(sessions
+    .filter((session) => session.liveness !== 'offline' || forcedSessions.has(session.id))
+    .map((session) => resolve(session.path)))
+}
+
+async function reconcileWorktreePass(forcedSessions: Set<string>): Promise<void> {
   let dir: string
   try { dir = join(gitCommonDir(), 'worktrees') } catch { return }
+  let sessions: Awaited<ReturnType<typeof listSessions>>
+  try { sessions = await listSessions() } catch { return }
+  const wantedPaths = sessionWorktreeWatchPaths(sessions, forcedSessions)
   let ents: import('node:fs').Dirent[] = []
   try { ents = readdirSync(dir, { withFileTypes: true }) } catch { /* no worktrees registry yet */ }
-  const live = new Set<string>()
+  const wantedNames = new Set<string>()
   let released = false
   for (const e of ents) {
     if (!e.isDirectory()) continue
-    live.add(e.name)
+    let wtPath: string
+    try { wtPath = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim()) } catch { continue }
+    if (!wantedPaths.has(resolve(wtPath))) {
+      if (dropWorktreeWatcher(e.name)) released = releaseSessionEvalProjectionObserver(worktreeObserver(e.name)) || released
+      worktreeRetryAttempted.delete(e.name)
+      worktreeRetryCount.delete(e.name)
+      continue
+    }
+    wantedNames.add(e.name)
     if (worktreeWatchers.has(e.name) || worktreeRetryAttempted.has(e.name)) continue
     try {
       // the entry's `gitdir` file points at the worktree's `<tree>/.git` (file or dir); its parent is the tree.
-      const wtPath = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim())
       const { root, index } = watchSessionEvalWorktree(
         wtPath,
         join(dir, e.name),
@@ -355,22 +377,36 @@ function reconcileWorktrees(): void {
     } catch {
       // An attach failure is observable: mark unknown/full now. The next registry change or explicit graph
       // source setup retries; no patrol is allowed to call the eval projection current.
-      let path: string | null = null
-      try { path = dirname(readFileSync(join(dir, e.name, 'gitdir'), 'utf8').trim()) } catch { /* broken row */ }
-      if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), path ? { path } : 'all')) fireChanged('full')
+      if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), { path: wtPath })) fireChanged('full')
       scheduleWorktreeRetry(e.name)
     }
   }
-  for (const name of worktreeWatchers.keys()) if (!live.has(name)) {
+  for (const name of worktreeWatchers.keys()) if (!wantedNames.has(name)) {
     dropWorktreeWatcher(name)
     released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
   }
-  for (const name of worktreeRetryCount.keys()) if (!live.has(name)) {
+  for (const name of worktreeRetryCount.keys()) if (!wantedNames.has(name)) {
     worktreeRetryAttempted.delete(name)
     worktreeRetryCount.delete(name)
     released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
   }
   if (released) fireChanged('full')
+}
+
+function reconcileWorktrees(forceSessionId?: string): Promise<void> {
+  if (forceSessionId) forcedWorktreeSessions.add(forceSessionId)
+  if (worktreeReconcileFlight) return worktreeReconcileFlight
+  worktreeReconcileFlight = (async () => {
+    do {
+      const forced = new Set(forcedWorktreeSessions)
+      forcedWorktreeSessions.clear()
+      await reconcileWorktreePass(forced)
+    } while (forcedWorktreeSessions.size)
+  })().finally(() => { worktreeReconcileFlight = null })
+  void worktreeReconcileFlight.catch((error) => {
+    console.warn(`spec-cli: worktree watcher reconciliation failed — ${error instanceof Error ? error.message : String(error)}`)
+  })
+  return worktreeReconcileFlight
 }
 const WORKTREE_REGISTRY_OBSERVER = 'graph:worktree-registry'
 
@@ -403,11 +439,11 @@ export function watchSessionEvalRegistry(
 function registryWatcherFailed(): void {
   registryWatcher = null
   if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
-  setImmediate(() => ensureWorktreeRegistry(false))
+  setImmediate(() => { void ensureWorktreeRegistry(false) })
 }
 
-function ensureWorktreeRegistry(retry = true): void {
-  if (registryWatcher) { reconcileWorktrees(); return }
+async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Promise<void> {
+  if (registryWatcher) { await reconcileWorktrees(forceSessionId); return }
   if (isDisabled('worktrees')) {
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
     return
@@ -418,24 +454,24 @@ function ensureWorktreeRegistry(retry = true): void {
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
     registryWatcher = watchSessionEvalRegistry(dir, () => {
-      reconcileWorktrees()
+      void reconcileWorktrees()
       fireChanged('full', 'all')
     }, registryWatcherFailed)
   } catch {
     registryWatcher = null
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
-    if (retry) setImmediate(() => ensureWorktreeRegistry(false))
+    if (retry) setImmediate(() => { void ensureWorktreeRegistry(false) })
   }
-  reconcileWorktrees()   // attach for the worktrees that already exist when the source starts
+  await reconcileWorktrees(forceSessionId)   // attach for the live/demanded worktrees that already exist
   if (registryWatcher && releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)) fireChanged('full')
 }
 
 // Attach the canonical filesystem sources before an HTTP snapshot starts summary work. This closes the
 // request→SSE handoff gap: an edit after the snapshot build has a watcher before it can occur.
-export function ensureBoardFileWatchers(): void {
+export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<void> {
   ensureWatcher()
   ensureRefsWatcher()
-  ensureWorktreeRegistry()
+  await ensureWorktreeRegistry(true, forceSessionId)
 }
 
 // ---- event source 4: the two-tier tmux-derived pollers (liveness + activity — never a file write) → 'sessions' ----
@@ -448,7 +484,9 @@ let lastHot = ''
 let lastWarm = ''
 function ensurePollers(): void {
   if (!hotPoller) hotPoller = setInterval(() => {
-    void hotSignature().then((sig) => { if (sig !== lastHot) { lastHot = sig; fireChanged('sessions') } }).catch(() => {})
+    void hotSignature().then((sig) => {
+      if (sig !== lastHot) { lastHot = sig; void reconcileWorktrees(); fireChanged('sessions') }
+    }).catch(() => {})
   }, 100)
   if (!warmPoller) warmPoller = setInterval(() => {
     void warmSignature().then((sig) => { if (sig !== lastWarm) { lastWarm = sig; fireChanged('sessions') } }).catch(() => {})
@@ -488,9 +526,9 @@ function stopSourcesIfIdle(): void {
 // idle proxy never times the connection out. On a backend hot-reload the stream drops and EventSource
 // auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `graph-full`, so the
 // chain re-anchors with no client-side repair logic.
-export function boardStream(c: Context) {
+export async function boardStream(c: Context) {
   const delta = c.req.query('mode') === 'delta'
-  ensureBoardFileWatchers()
+  await ensureBoardFileWatchers()
   return streamSSE(c, async (stream) => {
     let aborted = false
     const send: DeltaSend = (frame) => { void stream.writeSSE(frame).catch(() => {}) }

@@ -34,6 +34,7 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // fires on a genuine wedge.
 const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
 const RETRY_BACKOFF_MS = Number(process.env.SPEXCODE_BOARD_RETRY_BACKOFF_MS || 1000)
+const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 150)
 
 // the cache's staleness has a DOMAIN, not just a bit: a 'sessions' change (a lifecycle write, a
 // liveness/activity poll flip) touches only the session rows, so the next read can SPLICE fresh sessions
@@ -83,7 +84,30 @@ function startBuild(): Flight | null {
   const t0 = Date.now()
   let watchdog: ReturnType<typeof setTimeout> | undefined
   let timedOut = false
-  const build = withGitAbortSignal(controller.signal, () => sessionsOnly ? spliceSessions(prev!) : buildBoard())
+  // Do not invoke the producer inline. buildBoard() has an asynchronous signature but performs a sizeable
+  // synchronous setup before its first await (Promise.all evaluates its arguments immediately). A stale HTTP
+  // caller must be able to return its last-good bytes before that setup runs; first-cold/fresh callers still
+  // await the same deferred promise below.
+  let resolveBuild!: (board: Board) => void
+  let rejectBuild!: (error: unknown) => void
+  const build = new Promise<Board>((resolve, reject) => {
+    resolveBuild = resolve
+    rejectBuild = reject
+  })
+  // Give a stale HTTP response a turn to flush before the producer's synchronous setup occupies the event
+  // loop. Fresh callers simply absorb this small scheduling window while waiting on the same flight.
+  setTimeout(() => {
+    if (controller.signal.aborted) {
+      rejectBuild(Object.assign(new Error('graph build aborted before start'), { name: 'AbortError' }))
+      return
+    }
+    try {
+      Promise.resolve(withGitAbortSignal(controller.signal, () => sessionsOnly ? spliceSessions(prev!) : buildBoard()))
+        .then(resolveBuild, rejectBuild)
+    } catch (error) {
+      rejectBuild(error)
+    }
+  }, BACKGROUND_START_DELAY_MS).unref?.()
   const timeoutError = () => new Error(`graph build did not settle within ${BUILD_TIMEOUT_MS}ms`)
 
   // `settle` owns the real builder. The watchdog only rejects `wait`; the slot remains occupied until this

@@ -12,6 +12,11 @@ const US = '\x1f', RS = '\x1e'
 // call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
 // gitA maps failure to '', which would otherwise hide the pathology as an innocently-empty result.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+// A complete commit/parent/file map is useful for ordinary repositories, but its JS object overhead is
+// unbounded in a production monorepo. Large histories use the path-scoped rev-list representation below;
+// this is a size policy, never a product/path exception.
+const DRIFT_LAZY_COMMIT_THRESHOLD = Math.max(10_000, Number(process.env.SPEXCODE_DRIFT_LAZY_THRESHOLD || 100_000))
+const DRIFT_LAZY_OUTPUT_BYTES = Math.max(1_000_000, Number(process.env.SPEXCODE_DRIFT_LAZY_OUTPUT_BYTES || 1_000_000))
 const gitAbort = new AsyncLocalStorage<AbortSignal>()
 
 // A board build owns one abort signal. Async git calls inherit it without every graph layer growing a
@@ -360,8 +365,78 @@ export type DriftIndex = {
   acks: Map<string, Set<string>>      // commit hash -> node ids acknowledged via `Spec-OK:` trailers
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
+  lazy?: LazyDriftIndex
+}
+type LazyDriftIndex = {
+  root: string
+  specNodes: Map<string, Set<string>>
+  ackByNode: Map<string, string[]>
+  counts: Map<string, number>
+  windows: Map<string, string[]>
+  rawWindows: Map<string, string[]>
+  reachable: Map<string, boolean>
+}
+
+function lazySpecNode(path: string): string | null {
+  const m = path.replaceAll('\\', '/').match(/\/([^/]+)\/spec\.md$/)
+  return m?.[1] ?? null
+}
+
+function parseLazySpecNodes(out: string): Map<string, Set<string>> {
+  const specNodes = new Map<string, Set<string>>()
+  for (const rec of out.split(RS)) {
+    const r = rec.replace(/^\n/, '')
+    if (!r) continue
+    const lines = r.split('\n')
+    const hash = lines[0].split(US)[0]
+    if (!hash) continue
+    for (const path of lines.slice(1)) {
+      const node = lazySpecNode(path.trim())
+      if (!node) continue
+      let nodes = specNodes.get(hash)
+      if (!nodes) { nodes = new Set(); specNodes.set(hash, nodes) }
+      nodes.add(node)
+    }
+  }
+  return specNodes
+}
+
+async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
+  // Version commits are the only source of node ownership; ack stamps are empty commits whose subject is
+  // stable (`ack: Spec-OK …`). Both walks are tiny compared with the all-files commit graph and retain only
+  // the hashes needed to form rev-list exclusions later.
+  const [specOut, ackOut] = await Promise.all([
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, 'HEAD', '--', '.spec']),
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=' + RS + '%H' + US + '%s', '--grep=^ack: Spec-OK', 'HEAD']),
+  ])
+  const specNodes = parseLazySpecNodes(specOut)
+  const ackByNode = new Map<string, string[]>()
+  for (const rec of ackOut.split(RS)) {
+    const r = rec.replace(/^\n/, '')
+    if (!r) continue
+    const [hash, subject = ''] = r.split(US)
+    const m = subject.match(/^ack: Spec-OK\s+(.+)$/)
+    if (!hash || !m) continue
+    for (const node of m[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+      const hashes = ackByNode.get(node) ?? []
+      hashes.push(hash)
+      ackByNode.set(node, hashes)
+    }
+  }
+  return {
+    ord: new Map(), parents: new Map(), fileCommits: new Map(), acks: new Map(), specNodes, anc: new Map(),
+    lazy: { root, specNodes, ackByNode, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable: new Map() },
+  }
 }
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
+  // File fan-out, not just commit count, determines the object-graph size: a ten-thousand-commit fixture can
+  // still touch millions of paths. Probe the raw name stream once and use its byte budget as the generic
+  // large-history switch. Drop the probe before the richer parser so its bytes cannot overlap the retained maps.
+  let probe = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'])
+  if (probe.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root)
+  const count = Number((await gitA(['-C', root, 'rev-list', '--count', 'HEAD'])).trim())
+  if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root)
+  probe = ''
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileCommits = new Map<string, string[]>()
   const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
@@ -443,6 +518,38 @@ export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boo
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
 }
 
+// The large-history representation delegates reachability and path windows to Git's compact commit graph
+// instead of materializing every commit/file edge as JS Maps. `null` means the anchor is off HEAD history;
+// callers retain their existing content-based conservative fallback for that case.
+export function commitReachable(idx: DriftIndex, sha: string): boolean {
+  if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
+  const hit = idx.lazy.reachable.get(sha)
+  if (hit !== undefined) return hit
+  let reachable = false
+  try { git(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD']); reachable = true }
+  catch { reachable = false }
+  idx.lazy.reachable.set(sha, reachable)
+  return reachable
+}
+
+export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: string): string[] | null {
+  if (!idx.lazy) {
+    const base = ancestorsOf(idx, sinceHash)
+    return base ? (idx.fileCommits.get(path) ?? []).filter((hash) => !inAncestors(idx, base, hash)) : null
+  }
+  if (!commitReachable(idx, sinceHash)) return null
+  const key = `${sinceHash}\0${path}`
+  const hit = idx.lazy.rawWindows.get(key)
+  if (hit) return hit
+  let commits: string[]
+  try {
+    commits = git(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path])
+      .split('\n').map((s) => s.trim()).filter(Boolean)
+  } catch { commits = [] }
+  idx.lazy.rawWindows.set(key, commits)
+  return commits
+}
+
 // the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,
 // so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured; an ack counts
 // only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that
@@ -469,6 +576,19 @@ export function ackCoverFor(idx: DriftIndex, sinceHash: string): Uint8Array[] {
 // in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
 // An off-history `sinceHash` → 0: no basis on HEAD to measure from.
 export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
+  if (idx.lazy) {
+    if (!sinceHash) return 0
+    const key = `${sinceHash}\0${path}`
+    const hit = idx.lazy.counts.get(key)
+    if (hit !== undefined) return hit
+    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+    const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+    const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    let count = 0
+    try { count = Number(git(args).trim()) || 0 } catch { count = 0 }
+    idx.lazy.counts.set(key, count)
+    return count
+  }
   if (!sinceHash) return 0
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return 0

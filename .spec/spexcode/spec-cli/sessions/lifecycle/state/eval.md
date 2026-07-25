@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: explicit-stop-is-authoritative-offline
+    tags: [backend-api, cli]
+    code: [spec-cli/src/sessions.ts]
+    description: >-
+      On a real headless session that has settled between turns and a real pane-backed control session, call
+      the public stop action. Confirm tmux/runtime teardown, sample graph and CLI liveness, then resume each and
+      compare lifecycle, proposal/note, and conversation history before and after.
+    expected: >-
+      Stop makes both sessions offline within seconds without changing their agent-authored lifecycle fields.
+      The explicit stopped fact remains authoritative even when a runtime probe cannot conclude. Resume clears
+      only that liveness fact, restores each session online, and preserves the same conversation and note; close
+      still removes the whole record instead of carrying stop metadata.
   - name: session-verb-chain-v030
     tags: [cli, backend-api]
     description: >-

@@ -30,7 +30,7 @@ import { shQuote } from './sh.js'
 // (materialize writes every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
-export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
+export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -1144,7 +1144,7 @@ const socketListenerLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDi
 const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
   (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline')
 
-const recordOnline: Harness['liveness'] = () => 'online'
+const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
 
 const unlinkSocks = (...paths: string[]): void => {
   for (const path of paths) {
@@ -1207,8 +1207,8 @@ export const claudeHeadlessHarness: Harness = {
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
   launchEnv: noLaunchEnv,
-  // Liveness is the intact record's property. A missing controller/child fails loudly at control time rather
-  // than turning an idle (no child) session into a speculative offline row.
+  // Liveness is the intact, non-stopped record's property. A missing controller/child fails loudly at control
+  // time rather than turning an idle (no child) session into a speculative offline row.
   liveness: recordOnline,
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
@@ -1298,8 +1298,8 @@ export const codexHeadlessHarness: Harness = {
   headless: true,
   launchOneShot: true,
   launchCmd: (id, runtimeDir, cmd) => codexHeadlessLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),
-  // Record-backed liveness is the family contract for sleeping headless threads. A broken app-server or missing
-  // thread is surfaced by the inherited delivery call rather than converted into a speculative offline state.
+  // Record-backed liveness is the family contract for sleeping headless threads. An explicit stop is the one
+  // offline marker; other app-server/thread failures surface through delivery rather than speculative liveness.
   liveness: recordOnline,
   // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
   // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
@@ -1420,8 +1420,8 @@ export const opencodeHeadlessHarness: Harness = {
   id: 'opencode-headless',
   headless: true,
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
-  // A sleeping native conversation is still addressable by its record. Transport breakage belongs to the
-  // next delivery, where the live rendezvous or pane wake reports it loudly.
+  // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
+  // to the next delivery, where the live rendezvous or pane wake reports it loudly.
   liveness: recordOnline,
   deliver: async (rec, text) => {
     return deliverViaSocketOrWake(

@@ -30,6 +30,7 @@ test('opencode-headless is an independent adapter with OpenCode materialization 
   assert.equal(opencodeHeadlessHarness.headless, true)
   assert.equal(opencodeHeadlessHarness.ownsRendezvous, true)
   assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(opencodeHeadlessHarness.launchCmd('abc', '/runtime', 'opencode-custom --auto'), /__spex_cmd=\(opencode-custom --auto\)/)
 })
 

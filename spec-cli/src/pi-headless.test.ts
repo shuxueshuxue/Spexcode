@@ -27,6 +27,7 @@ test('pi-headless composes pi materialization and replaces only the runtime half
   assert.equal(piHeadlessHarness.headless, true)
   assert.equal(piHeadlessHarness.ownsRendezvous, true)
   assert.equal(piHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(piHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(piHeadlessHarness.launchCmd('abc', '/runtime', 'pi-custom'), /pi-headless-run.*abc.*pi-custom/)
 })
 test('pi-headless cold delivery resumes the exact saved session in text mode', async (t) => {

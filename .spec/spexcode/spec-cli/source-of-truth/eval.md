@@ -8,15 +8,17 @@ scenarios:
       In an isolated spex-init repo, take one node through three git moves and read `spex graph --json` after
       each: (1) edit its spec.md body and commit with a `Session: <id>` trailer; (2) commit a pure
       rename/reparent of the node's directory (basename unchanged); (3) on a side branch edit its spec.md,
-      revert that edit in a second one-parent commit, and merge the net-TREESAME branch; (4) inspect the repo
-      for any persisted derivation state beside `.spec`.
+      revert that edit in a second one-parent commit, and merge the net-TREESAME branch; (4) fork from an old
+      node path, edit that old path on the newer-dated main branch while the older-dated side branch renames
+      and edits it, then merge; (5) inspect the repo for any persisted derivation state beside `.spec`.
     expected: >-
       Version, reason, and session are DERIVED from git on read, never stored: the content commit bumps
       `version` by exactly one and the board row carries that commit's subject as `reason` and its
       `Session:` trailer as `session`; the pure rename bumps NOTHING (a reparent is not a version); both
       reachable side-branch content commits remain versions even though Git's default path simplification
-      can hide them behind the TREESAME merge; and no datastore/hash/index file exists beside the spec tree —
-      delete nothing, recompute everything.
+      can hide them behind the TREESAME merge; the parallel old-path edit, renamed-path edit, and base are all
+      versions of the current node regardless of branch walk order, with the walk-newest edit supplying its
+      reason; and no datastore/hash/index file exists beside the spec tree — delete nothing, recompute everything.
 ---
 
 # measuring source-of-truth

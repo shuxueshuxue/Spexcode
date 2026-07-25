@@ -3,7 +3,7 @@ scenarios:
   - name: plugin-target-emits-self-contained-bundle
     tags: [cli]
     description: >-
-      In a fresh git project carrying a docs/AGENT_GUIDE.md and the spec tree, set spexcode.json `harnesses` to
+      In a fresh git project carrying the spec tree, set spexcode.json `harnesses` to
       [{"plugin":".zcode"}] and run `spex materialize`. Inspect what landed under .zcode and at the repo root.
     expected: >-
       A self-contained Claude-plugin bundle is written at .zcode/plugins/spexcode/ — a .claude-plugin/plugin.json
@@ -19,7 +19,7 @@ scenarios:
       would on SessionStart; parse its stdout.
     expected: >-
       It prints valid JSON whose hookSpecificOutput.hookEventName is SessionStart and whose additionalContext is
-      the assembled contract (the AGENT_GUIDE.md guide followed by the surface:system bodies). This is the
+      the assembled contract (the surface:system plugin bodies). This is the
       harness-neutral contract delivery — no --append-system-prompt, no resident skill.
   - name: deselecting-a-plugin-folder-prunes-its-bundle
     tags: [cli]

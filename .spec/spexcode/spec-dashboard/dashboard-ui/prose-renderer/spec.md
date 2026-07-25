@@ -119,7 +119,10 @@ made this node necessary.
   address content by MEANING — the first non-empty descendant text, a queried role or class — never to
   loosen the assertion until it stops noticing anything; and where a test's own timing assumed a flat
   body (a count taken before history hydrated), it waits for the real data instead. Each surface's
-  migration therefore budgets for its neighbours' fixtures, not only its own.
+  migration therefore budgets for its neighbours' fixtures, not only its own. Semantic addressing LOCATES
+  content; it never SOURCES an expectation. The math-copy proof above stays anchored to author-written
+  literals — a fixture whose expected text is read out of the rendered tree would be checking the engine
+  against the engine's own output, and the triple-copy defect would sail through it.
 - **Each migrated surface re-measures its own scenario.** The body surfaces carry eval scenarios that
   already assert rendered Markdown (headings/tables/lists, no raw `##` or pipes) and, for the thread,
   playing evidence media; every one of them is re-measured through the real browser as it moves, so the

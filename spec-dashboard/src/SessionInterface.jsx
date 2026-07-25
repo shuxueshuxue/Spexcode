@@ -750,15 +750,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
             {/* permanent AND always live — a control that is visible but does nothing reads as broken, and a
-                door you cannot open is worse than an empty room you can walk out of. The count is absent at
-                zero; opening it there shows the empty state rather than swallowing the press. */}
+                door you cannot open is worse than an empty room you can walk out of. Opening it at zero shows
+                the empty state rather than swallowing the press. */}
             <button type="button" className={viewingShelf ? 'si-pill shelf on' : 'si-pill shelf'}
               aria-pressed={viewingShelf}
               data-tip={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
               aria-label={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
               onClick={() => setShowShelf((v) => !v)}>
               <span className="si-pill-glyph"><Icon name={viewingShelf ? 'star-filled' : 'star'} size={15} /></span>
-              {shelved.length > 0 && <span className="si-pill-count">{shelved.length}</span>}
             </button>
             {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}

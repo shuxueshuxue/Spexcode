@@ -61,6 +61,25 @@ The principles, in the maintainer's own framing:
     is where eval evidence producers will plug in. Every seam shares one shape: an interface + an ordered
     registry + per-instance DATA rows (a new harness/language/runner is a row, not a branch), loud degradation
     when a tier is unavailable — and product semantics never learn which adapter sits on the other side.
+16. **Don't invent what the pillar isn't prepared for.** The maintainer's framing: "不要擅自发明 git 没有准备
+    好的东西". Stated when rejecting an explicit node-identity field to make rename tracking provable: git
+    *detects* renames by content similarity rather than *recording* them, so an id field would erect a second
+    identity model beside git's object model — two truths to keep in sync, and no way to know which to believe
+    the first time they disagree. The consequence is accepted deliberately: we live inside git's rename
+    semantics, and therefore the acceptance bar is "agrees with git's rename events across the whole tree",
+    not "provably correct in some model git does not have". This is [[taste]] 14 applied to the seam itself —
+    a pillar's *limits* enter the ecosystem along with its capabilities.
+17. **Where the application-level call is genuinely unclear, let implementation simplicity decide.** The
+    maintainer's framing: "对于这种应用层拿不准的地方，我们就从自己的实现角度考虑，哪种实现最简单就怎么来".
+    Not a tie-breaker to reach for early — it applies precisely when the product argument has been made in
+    good faith and stays balanced. Then the honest question is which option costs less mechanism, and the
+    answer is often that one of them is already the behaviour and costs zero lines.
+18. **Stabilise first, then measure the shape of the cost — not just its size.** The maintainer's framing:
+    "先保证稳定，然后计算一下复杂度，是线性还是平方级，和 git 历史长度是否有关，还是说只和文件数目有关".
+    A wall-clock number tells you a run was slow; the scaling dimension tells you which lever exists. The
+    same 4-second lint means opposite things if it grows with history (nothing local can fix it) versus with
+    source bytes (memoisation applies) versus with node count (the walk is wrong). Measure the dimension
+    before designing the fix, and never buy a cache before knowing whether the work is repeated at all.
 
 ## expanded spec
 

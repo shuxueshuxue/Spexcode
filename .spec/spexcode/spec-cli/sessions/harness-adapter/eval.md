@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: headless-explicit-stop-resume-liveness
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    description: >-
+      Through real governed sessions, repeat the same loop for every registered headless launcher: let the
+      first turn settle with a declaration note, POST stop, verify the tmux home/runtime is gone, sample both
+      `/api/graph` and `spex session ls`, then POST resume and read the same timeline again.
+    expected: >-
+      A sleeping non-stopped conversation remains online between turns. Explicit stop preserves lifecycle,
+      worktree, native conversation, and timeline but changes liveness to offline within seconds even if the
+      ordinary process probe is unavailable; CLI and graph agree and expose relaunch. Resume clears the stop
+      marker, returns the same conversation online, and preserves its pre-stop declaration note. No turn-in-flight
+      state or harness-specific product branch participates.
   - name: headless-turn-exit-error
     tags: [backend-api, cli]
     code: spec-cli/src/harness.ts

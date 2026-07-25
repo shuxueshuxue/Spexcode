@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: headless-stop-relaunch-preserves-history
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Open a real governed headless session's desktop console in Chromium after its timeline contains a unique
+      declaration note. Use Alt+I to run `/stop`, inspect the rendered offline surface and available commands,
+      click relaunch, then inspect the restored conversation and public timeline.
+    expected: >-
+      `/stop` is handled as the real board command and never sent as agent text. The console changes to a visible,
+      clickable `.si-offline` panel with relaunch available and Command Box unavailable. Relaunch returns the
+      session online; the same mounted conversation reappears with the unique pre-stop note and timeline intact.
   - name: native-terminal-default-input
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/terminal-input.e2e.mjs

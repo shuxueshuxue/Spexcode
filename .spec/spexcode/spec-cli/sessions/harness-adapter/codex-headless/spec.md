@@ -44,9 +44,10 @@ When the one-shot first-turn process exits non-zero, the adapter reports that ex
 with the Codex exit code; a zero exit and any declaration already written are left untouched. The shared
 app-server remains the liveness address only when it can accept another delivery.
 
-The session record is the liveness address: while it exists, the adapter reports `online` regardless of the
-empty pane or process probes. `headless: true` keeps it out of the dashboard launcher picker by default and
-the note conversation is the console trunk. Resume is deliberately degraded to
-the no-TUI form: `resumeArg` is empty because the durable thread already lives in the shared server and there
-is no TUI to reattach or restart. Closing remains the terminal operation that
-removes the record, worktree, branch, pane, and shared runtime references owned by the session.
+The session record is the liveness address: while it exists and is not explicitly stopped, the adapter reports
+`online` regardless of the empty pane or process probes. `headless: true` keeps it out of the dashboard launcher
+picker by default and the note conversation is the console trunk. Human `stop` tears down the session runtime
+and marks the retained record stopped, so it reads `offline` until resume clears the marker. Resume is
+deliberately degraded to the no-TUI form: `resumeArg` is empty because the durable thread already lives in the
+shared server and there is no TUI to reattach or restart. Closing remains the terminal operation that removes
+the record, worktree, branch, pane, and shared runtime references owned by the session.

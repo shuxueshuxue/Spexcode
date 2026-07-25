@@ -31,8 +31,11 @@ lists ALL lint rules, always:
 
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block. A SELECTOR
   (`path#symbol` on either relation, [[code-anchor]]) must also resolve: dead (unit deleted/renamed),
-  ambiguous (two same-named units), an unparseable file, or a language whose designated extractor is
-  missing or can't run all error with the repair spelled out — never a silent pass. So do a relation's
+  ambiguous (two same-named units), or an unparseable file all error with the repair spelled out. A
+  language with no designated extractor remains an integrity error. A designated extractor whose
+  dependency cannot run here is different: lint emits an explicit extractor-unavailable **integrity
+  error**, names the repair, skips that language's anchor checks, and continues; the non-zero result
+  records that the anchor is unverified, never a silent or falsely passing result. So do a relation's
   structural defects: a duplicate entry, a base path both bare and selector-scoped, and a selector on
   a glob or directory.
 - **anchor-drift** (error): a commit since the node's version intersected an ANCHORED unit's line

@@ -171,20 +171,66 @@ scenarios:
     code: spec-cli/templates/hooks/prepare-commit-msg
     description: >-
       In an initialized ordinary repo with the session-stamp hook installed, whose environment inherits a
-      NONEMPTY CODEX_THREAD_ID matching no session record in that repo's project store (both store shapes:
-      no sessions dir at all, and a store whose records all carry a different `harness_session_id`), run
-      `git commit` — including `--no-verify`, which does NOT skip prepare-commit-msg. Controls on the same
-      rig: a thread id that IS a record's `harness_session_id`, a Claude commit with CLAUDE_CODE_SESSION_ID,
-      and a message already carrying a Session: trailer.
+      NONEMPTY foreign session id (CODEX_THREAD_ID / SPEXCODE_SESSION_ID / CLAUDE_CODE_SESSION_ID) that
+      resolves to no record in that repo's project store (both store shapes: no sessions dir at all, and a
+      store whose records carry different ids), run `git commit` — including `--no-verify`, which does NOT
+      skip prepare-commit-msg. Controls on the same rig: a claim that DOES resolve and passes its check, and
+      a message already carrying a Session: trailer.
     expected: >-
-      The unmatched lookup is a clean NO-OP: the commit succeeds and its message carries NO Session trailer —
-      not an empty one, not the foreign thread id. The matched control stamps the resolved RECORD id via the
-      alias, the Claude control stamps its exported id, the pre-trailered message is left alone, and a genuine
-      hook error still fails loud. The failure this locks: the alias `grep|head` ran bare under
-      `set -euo pipefail`, so a no-match aborted the hook before its intended no-op exit — EVERY `git commit`
-      in ANY repo with the hook installed exited 1 with no message whenever the shell inherited a foreign
-      codex thread id (e.g. any command a codex session spawns in an unrelated repo), a silent total commit
-      outage.
+      The unresolvable claim is a clean NO-OP: the commit succeeds and its message carries NO Session trailer
+      — not an empty one, not the inherited foreign id. The resolving control stamps that record's id, the
+      pre-trailered message is left alone, and a genuine hook error still fails loud. The failure this locks:
+      the store lookup ran bare under `set -euo pipefail`, so a no-match aborted the hook before its intended
+      no-op exit — EVERY `git commit` in ANY repo with the hook installed exited 1 with no message whenever
+      the shell inherited a foreign codex thread id (e.g. any command a codex session spawns in an unrelated
+      repo), a silent total commit outage.
+  - name: session-identity-is-injected-never-inherited
+    tags: [backend-api, cli]
+    code: spec-cli/templates/hooks/prepare-commit-msg
+    test:
+      path: spec-cli/src/session-stamp.test.ts
+      name: the session id the launch injected becomes the trailer, verbatim
+    description: >-
+      Measure the invariant at every process SpexCode creates, on the live box and through real dispatches.
+      (1) A session launch: read the generated launch line — does it strip inherited session-identity
+      variables before setting its own? (2) The shared codex app-server: start one through the real generated
+      script from a launcher environment carrying a session's ids, and read its `/proc/<pid>/environ`.
+      (3) A codex thread: create one through the real `thread/start` path and ask the agent to print its own
+      shell's identity, reading the answer only from the turn's final message. (4) The whole loop: dispatch a
+      REAL codex worker into a fresh `spex init` project and read the trailer on the commit it actually makes,
+      plus a real claude session's commit in this repo.
+    expected: >-
+      A session-identity variable exists in a process only if that process belongs to that session. The launch
+      strips every inherited id and sets the record id; the shared app-server carries none at all; a codex
+      thread's own tool shell carries exactly the record id the backend injected for THAT thread (and its own
+      CODEX_THREAD_ID), with nothing of the launcher's environment. Because of that, the commit hook reads
+      SPEXCODE_SESSION_ID and stamps it — no store lookup, no per-harness ladder, no ancestry check, nothing
+      derived from the current directory — and both a dispatched codex worker and a claude session land a
+      trailer naming their own record. No id, no trailer, commit still exits 0 (including `--no-verify`, which
+      does not skip prepare-commit-msg). The failure this locks: with the invariant missing, a shared daemon
+      that outlived its session handed that id to every later thread's commit — 48 commits in this repo name a
+      session that no longer exists (github#76) — and any repair downstream of the leak is a guess about which
+      claim to believe.
+  - name: codex-app-server-carries-no-session-identity
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Run the REAL generated codex launch script verbatim under a launcher environment that carries a
+      session's identity (SPEXCODE_SESSION_ID plus adapter session vars, as every launch.sh really does),
+      pointed at a throwaway runtime dir and socket so it starts a FRESH shared app-server. Read that
+      daemon's actual `/proc/<pid>/environ`. Then fire one real turn on it through `spex internal
+      codex-launch` and ask the agent to report its own shell's identity variables, reading the answer ONLY
+      from the turn's tool-call output and final assistant message in codex's rollout — never a grep over
+      the transcript, which would match the prompt's own echo.
+    expected: >-
+      The daemon comes up (exit 0, socket bound) carrying NONE of the planted session-identity variables: a
+      project-scoped process shared by every worktree's threads, and outliving them all, must not hold one
+      session's id. The thread's own tool shell then reports exactly ONE identity — `CODEX_THREAD_ID` equal
+      to the thread id `codex-launch` returned — and neither stale launcher id, proving the strip removed
+      only wrong answers: the acting-thread id every hook, declaration, and alias lookup resolves from is
+      injected per command by codex itself and survives. The failure this locks: daemons here ran for days
+      handing a long-closed session's id to every later thread's tool shell, which is how a stranger's
+      session ended up on other sessions' commits (github#76).
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-

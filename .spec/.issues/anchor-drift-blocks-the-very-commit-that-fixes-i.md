@@ -46,3 +46,20 @@ anchor-drift alone.
 Found jointly by sessions abe9f2bd (archive lane) and 67c463e8 (`Improve new item creation UI
 design`), who caught the drift on `main`, verified its attribution, and deliberately did NOT ack it
 on the author's behalf.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:13:19.479Z -->
+Stays open — the gap is unfixed, and this session hit it a second time.
+
+Repro #2, same shape as the original: fixing the archive star's dead press changed
+`SessionInterface.jsx`, which re-triggered `anchor-drift` on `session-console`. The repairing
+commit was blocked by the very error it was about to resolve, and only landed once the drift was
+answered (an ack, this time — the node's own sentence was still true).
+
+Two commits into the same wall in one session is the argument the original report only predicted.
+
+The proposed fix is unchanged and still decidable: if the drift-reporting node's `spec.md` is in
+THIS commit's staged file set, that drift must not block. Both of my encounters would have passed
+that test — one rewrote the body, one stamped an ack, and both touch the spec.md by construction.
+
+Closing this before the hook changes would only mean the next person rediscovers
+`SPEXCODE_SKIP_LINT=1` on their own.

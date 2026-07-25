@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -79,15 +79,20 @@ function maxActive(): number {
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
 const rvEnv = (id: string, harness = HARNESS) => {
-  // SPEXCODE_SESSION_ID is the governed record id. Claude's harness id is the same value, so hooks and CLI
-  // calls can use it directly. Codex cannot trust this env inside the long-lived shared app-server; codex hooks
-  // start from the payload thread id and alias through harness_session_id, while the short-lived codex-launch
-  // process uses this env only to store the freshly started thread id on the governed record.
+  // SPEXCODE_SESSION_ID is the governed record id, and it is the SESSION'S OWN — so the launch STRIPS every
+  // session-identity variable it may have inherited (the pane inherits the tmux SERVER's env, which may carry
+  // a foreign session's ids from whoever started it) before setting this one. Identity is established HERE,
+  // once, at the boundary; nothing downstream re-verifies it, because after this a session-identity variable
+  // exists in a process only if that process belongs to that session — either set right here, or stamped by
+  // the harness itself for its own acting conversation ([[harness-adapter]]). The same strip runs on the one
+  // other process we own that is NOT a session's own — codex's shared app-server, whose leaked inherited id
+  // was github#76.
+  const scrub = sessionIdentityEnvVars().map((v) => `-u ${v}`)
   const homeVars = ['SPEXCODE_HOME', 'CODEX_HOME'].flatMap((v) => {
     const value = process.env[v]
     return value ? [`${v}=${value}`] : []
   })
-  return [`SPEXCODE_SESSION_ID=${id}`, ...harness.launchEnv(id), ...homeVars].join(' ')
+  return [...scrub, `SPEXCODE_SESSION_ID=${id}`, ...harness.launchEnv(id), ...homeVars].join(' ')
 }
 
 // the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]

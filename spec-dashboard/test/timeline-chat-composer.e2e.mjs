@@ -42,7 +42,9 @@ async function waitForSent(page, token) {
 async function verifyComposerPress(page, input) {
   const highlighted = await page.evaluate(() => {
     const note = document.querySelector('.m-ev-note') || document.querySelector('.m-ev-text')
-    const text = note?.firstChild
+    const walker = note ? document.createTreeWalker(note, NodeFilter.SHOW_TEXT) : null
+    let text = walker?.nextNode()
+    while (text && !text.data.trim()) text = walker.nextNode()
     if (!text || typeof Highlight === 'undefined' || !CSS.highlights) return false
     const range = document.createRange()
     range.setStart(text, 0)
@@ -109,7 +111,14 @@ async function runViewport(name, viewport) {
   const result = { name, viewport }
   try {
     mark('open real headless conversation')
+    const timelineLoaded = page.waitForResponse((response) => {
+      const path = new URL(response.url()).pathname
+      return response.request().method() === 'GET'
+        && path.endsWith(`/api/sessions/${sessionId}/timeline`)
+    })
     await page.goto(`${base}/#/sessions/${encodeURIComponent(sessionId)}`, { waitUntil: 'domcontentloaded' })
+    const timelineResponse = await timelineLoaded
+    assert.equal(timelineResponse.ok(), true, `initial timeline load failed: ${timelineResponse.status()}`)
     await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
     const input = page.locator('.m-input:visible')
     await input.waitFor({ state: 'visible', timeout: 30_000 })

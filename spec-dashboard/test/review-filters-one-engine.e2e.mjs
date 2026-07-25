@@ -38,10 +38,14 @@ page.on('response', async (response) => {
 const hash = () => page.evaluate(() => decodeURIComponent(location.hash))
 const rowTitles = () => page.evaluate(() => [...document.querySelectorAll('.lp-row .rl-row-title')].map((el) => el.textContent.trim()))
 const settle = (ms = 900) => page.waitForTimeout(ms)
+// wait for the response THIS submit caused — a fixed sleep silently reads the previous body when the
+// backend is cold, which turns every downstream assertion into a coin flip.
 const submitQuery = async (text) => {
   await page.locator('.rl-query input[role="combobox"]').fill(text)
   await page.keyboard.press('Enter')
-  await settle(1100)
+  const echoed = await until(() => api.issues?.query === text || api.evals?.query === text, 30_000)
+  if (!echoed) console.log(`  (warn) no /api response echoed "${text}" within 30s`)
+  await settle(500)
 }
 // poll a condition instead of trusting one fixed sleep — a list replay is a real refetch.
 const until = async (predicate, timeout = 15_000) => {
@@ -71,6 +75,8 @@ step('canonical #/issues — query + section + facet + overflow, then Back')
 await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.rl-section')
 await settle(1100)
+// a cold backend builds its snapshot on the first request — wait for the response, don't sample past it.
+await until(() => api.issues?.body?.section?.value != null, 45_000)
 const issuesDefault = await rowTitles()
 check('issues opens on outstanding work', (await hash()).startsWith('#/issues') && api.issues?.body?.section?.value === 'open',
   `section=${api.issues?.body?.section?.value}`)

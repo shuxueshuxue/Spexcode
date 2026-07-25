@@ -9,6 +9,7 @@ related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/session-multi-select.e2e.mjs
 ---
 
 # session-multi-select

@@ -674,6 +674,11 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
 }
 
 function reconcileWorktrees(forceSessionId?: string): Promise<void> {
+  // Blinding a leaf must blind it from EVERY entry point. Reconciliation is reached from the liveness
+  // poller and from registry events as well as from the ensure pass, so gating only the ensure pass left
+  // the per-worktree observers attaching anyway — the injection looked applied while the leaf still saw
+  // everything, which makes the patrol's accountability untestable rather than merely untested.
+  if (isDisabled('worktrees')) return Promise.resolve()
   if (forceSessionId) forcedWorktreeSessions.add(forceSessionId)
   if (worktreeReconcileFlight) return worktreeReconcileFlight
   const era = watcherEra

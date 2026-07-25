@@ -15,6 +15,11 @@ import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, readToken } from '../../spec-d
 export const REVIEW_PER_PAGE = 25
 
 type ReviewItem = Record<string, unknown>
+// A section count is one number, or — when the domain adapter splits that section — its named buckets,
+// which re-add to the same whole population ([[review-filters]] owns the split; Evals splits its measured
+// verdicts into {fresh,stale} so the remeasurement debt travels with the count instead of being recomputed
+// per surface). The fold happens ONCE, here on the server, over the complete filtered population.
+export type ReviewCount = number | Record<string, number>
 type ReviewOption = { value: string; label?: string; count?: number }
 type ReviewFacet = { key: string; label?: string; value: string; meaningful?: boolean; options: ReviewOption[] }
 type EvalNeighbor = { node: string; scenario: string; state: string }
@@ -29,7 +34,7 @@ export type PagedReview<T extends ReviewItem = ReviewItem> = {
   prev: number | null
   next: number | null
   revision: string
-  counts: Record<string, number>
+  counts: Record<string, ReviewCount>
   facets: Record<string, ReviewFacet>
   section: { key: string; value: string; options: ReviewOption[] } | null
 }

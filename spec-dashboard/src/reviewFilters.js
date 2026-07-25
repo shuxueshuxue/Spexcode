@@ -49,6 +49,20 @@ const optionsFor = (items, facet, state, context, t) => {
   }))]
 }
 
+// A SPLIT section reports its count as two named buckets instead of one number. The predicate is BINARY
+// and applied to the section's own matched rows, so the buckets always re-add to that section's whole
+// population — a surface can lead with one half without the count quietly shrinking. The adapter alone
+// decides which sections split and on what axis; the engine invents no bucket.
+const splitCount = (matched, split, context) => {
+  const first = matched.filter((item) => split.is(item, context)).length
+  return { [split.keys[0]]: first, [split.keys[1]]: matched.length - first }
+}
+
+// the one reading rule for a section count, whichever shape the adapter declared.
+export const sectionTotal = (count) => (typeof count === 'number'
+  ? count
+  : Object.values(count ?? {}).reduce((sum, value) => sum + value, 0))
+
 export function filterReviewItems(items, state, config, context = {}) {
   // `q` is one substring or an ARRAY of substrings (the token text's bare words/phrases), conjunctive;
   // an `impossible` state (an unknown qualifier in the canonical text) honestly matches NOTHING.
@@ -71,7 +85,12 @@ export function filterReviewItems(items, state, config, context = {}) {
     ? faceted
     : faceted.filter((item) => sectionMatch(item, sectionValue))
   const sections = config.section
-    ? Object.fromEntries(config.section.options.map((option) => [option.value, faceted.filter((item) => sectionMatch(item, option.value)).length]))
+    ? Object.fromEntries(config.section.options.map((option) => {
+      const matched = faceted.filter((item) => sectionMatch(item, option.value))
+      return [option.value, option.split && config.section.split
+        ? splitCount(matched, config.section.split, context)
+        : matched.length]
+    }))
     : {}
   const facets = Object.fromEntries(config.facets.map((facet) => [facet.key, {
     key: facet.key,
@@ -128,11 +147,11 @@ export function issueFilterModel(items, raw = {}, context = {}) {
   const model = filterReviewItems(items, state, ISSUE_CONFIG, context)
   model.section = {
     key: 'state', label: optionLabel(context.t, 'reviewList.facetState', 'State'), value: state.state,
-    meaningful: Object.values(model.sections).filter((count) => count > 0).length > 1 || !!state.state,
+    meaningful: Object.values(model.sections).filter((count) => sectionTotal(count) > 0).length > 1 || !!state.state,
     options: [allOption(context.t), ...ISSUE_CONFIG.section.options.map((option) => ({
       value: option.value,
       label: optionLabel(context.t, option.label, option.value),
-      count: model.sections[option.value] || 0,
+      count: sectionTotal(model.sections[option.value]),
     }))].filter((option, index, all) => index === 0 || option.count > 0 || option.value === state.state),
   }
   return model
@@ -145,6 +164,10 @@ const verdictOf = (entry) => evalIsResult(entry)
     ? 'unmeasured'
     : 'unscored'
 const reviewStateOf = (entry) => (evalIsResult(entry) && entry.fresh && entry.humanOk ? 'reviewed' : 'current')
+// the ONE freshness axis of the Eval adapter — the facet's option values and the verdict sections' split
+// read it, so a chip and its Freshness menu can never disagree about what "stale" counts.
+const evalFresh = (entry) => entry.fresh === true
+const freshnessOf = (entry) => (evalIsResult(entry) ? (evalFresh(entry) ? 'fresh' : 'stale') : null)
 export const evalReviewState = (reading) => {
   const status = reading?.verdict?.status
   if (status !== 'pass' && status !== 'fail') return 'empty'
@@ -170,9 +193,14 @@ const EVAL_CONFIG = {
   search: (entry) => [entry.scenario, entry.node, entry.by, entry.evaluator],
   section: {
     key: 'verdict', value: verdictOf,
+    // A MEASURED verdict carries a reading, so it also carries freshness: its count splits into the fresh
+    // half and the stale half that still owes a re-measurement. The two halves re-add to the verdict's
+    // whole population — splitting reports the remeasurement debt, it never hides a row. `unmeasured` owns
+    // no reading and therefore no freshness axis, so it stays one honest number.
+    split: { keys: ['fresh', 'stale'], is: evalFresh },
     options: [
-      { value: 'fail', label: 'reviewList.verdict.fail' },
-      { value: 'pass', label: 'reviewList.verdict.pass' },
+      { value: 'fail', label: 'reviewList.verdict.fail', split: true },
+      { value: 'pass', label: 'reviewList.verdict.pass', split: true },
       { value: 'unmeasured', label: 'reviewList.verdict.unmeasured' },
     ],
   },
@@ -184,7 +212,7 @@ const EVAL_CONFIG = {
     },
     {
       key: 'freshness', label: 'reviewList.facetFreshness', minValues: 2,
-      values: (entry) => evalIsResult(entry) ? (entry.fresh === true ? 'fresh' : 'stale') : [],
+      values: (entry) => freshnessOf(entry) ?? [],
       labelValue: (value, { t }) => optionLabel(t, `reviewList.freshness.${value}`, value),
     },
     {
@@ -213,11 +241,13 @@ export function evalFilterModel(items, raw = {}, context = {}) {
   const model = filterReviewItems(items, state, EVAL_CONFIG, context)
   model.section = {
     key: 'verdict', label: optionLabel(context.t, 'reviewList.facetVerdict', 'Verdict'), value: state.verdict,
-    meaningful: Object.values(model.sections).some((count) => count > 0) || !!state.verdict,
+    meaningful: Object.values(model.sections).some((count) => sectionTotal(count) > 0) || !!state.verdict,
+    // the menu/popup face of the same sections keeps the verdict's WHOLE count: a compact radio row has no
+    // room for the split, and it must still agree with the list it filters.
     options: [allOption(context.t), ...EVAL_CONFIG.section.options.map((option) => ({
       value: option.value,
       label: optionLabel(context.t, option.label, option.value),
-      count: model.sections[option.value] || 0,
+      count: sectionTotal(model.sections[option.value]),
     }))].filter((option, index) => index === 0 || option.count > 0 || option.value === state.verdict),
   }
   const kindFacet = model.facets.kind

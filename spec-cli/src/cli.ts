@@ -748,6 +748,11 @@ if (cmd === 'serve') {
       console.log('  gates:')
       console.log(`    conflicts w/ main : ${g.conflictsWithMain ? 'YES' : 'no'}`)
       console.log(`    lint              : ${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)`)
+      // measured loss is REPORTED, never graded — and a projection that isn't ready says so instead of
+      // printing four zeros that would read as a clean session.
+      console.log(`    evals             : ${g.evals.phase === 'ready'
+        ? `${g.evals.freshPass} fresh pass, ${g.evals.freshFail} fresh fail, ${g.evals.needReview} need review, ${g.evals.blind} blind`
+        : `not measured yet (${g.evals.phase})`}`)
       console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
       for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
     }

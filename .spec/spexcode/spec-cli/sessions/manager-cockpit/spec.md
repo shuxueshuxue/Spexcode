@@ -8,6 +8,8 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/git.ts
+  - spec-cli/test/cockpit-eval-readout.mjs
+  - spec-eval/src/sessioneval.ts
 ---
 
 # manager-cockpit
@@ -36,13 +38,24 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   would show the base's post-fork commits as phantom edits, so the fork point is the only honest base.
 - **gates** — `conflictsWithMain` (a dry-run merge computed in the object store via `git merge-tree
   --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
-  [[spec-lint]] module's error / warning counts). conflict/ahead/dirty are session-specific; the lint gate
+  [[spec-lint]] module's error / warning counts); and `evals`, the measured-loss READOUT. conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
   (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens). There is deliberately
   NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
   through the real product ([[session-eval]] shows that evidence) — not by a language-specific automated
   checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct
   for any governed project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
+  The `evals` entry is that same principle turned outward: since soundness is proven by MEASUREMENT, the
+  cockpit hands the manager the measurement beside the git facts — [[session-eval]]'s four mutually exclusive
+  scenario categories, `{freshPass, freshFail, needReview, blind}`. It REPORTS and grades nothing: no
+  threshold, no ok/not-ok, no block, and no unknown-coverage or measured/total aggregate riding along (that
+  decomposition belongs to the toolbar that already renders it). It reads the session-eval projection that
+  ALREADY exists — a cache read, never a build, because `buildSessionEvals` calls this very payload and a
+  build here would recurse — so the readout costs the review nothing. Its `phase` is part of the fact: only
+  `ready` carries numbers; an absent, loading, updating, or failed projection reports that phase and carries
+  NO numbers, because "nothing measured" and "not measured yet" are different facts and four zeros would
+  read as the clean one. Last-known is never dressed up as current, and this readout adds no row to the
+  session gates strip.
 - **proposal** — the session's standing proposal kind + note, read from its global record.
 
 `mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex merge <id>` —

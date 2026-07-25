@@ -5,11 +5,15 @@ scenarios:
     test: spec-cli/src/reviews.test.ts
     code: [spec-cli/src/reviews.test.ts]
     description: >
-      Run the paged-review source/unit contract: full-set counts/facets before a 25-item slice, stable
+      Run the paged-review source/unit contract: full-set counts/facets before a 25-item slice, the measured
+      verdicts' freshness-split counts, stable
       revisions, GitHub overflow semantics, the common trunk/scoped Eval item vocabulary and default
       newest-first order, and the bounded selected-history/detail-neighbor projection.
     expected: >
       Every test passes. A response never exceeds 25 items; totals/counts/facets remain full-population;
+      an Eval response's `counts.pass`/`counts.fail` are `{fresh,stale}` buckets that re-add to what
+      selecting that verdict returns while `counts.unmeasured` stays a number, folded once here before the
+      slice, with `section.options[].count` still carrying the whole totals;
       page 41 and 999999 stay requested with empty items and continuing prev/next; unchanged snapshots keep
       one revision; trunk and scoped Evals produce the same tagged row shape and order every result by filed
       time regardless of source ownership, with no-time blind rows after measured rows. Detail history contains only

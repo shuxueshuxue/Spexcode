@@ -303,6 +303,12 @@ surface:
   on the same worktree/record. The discriminator is sound because a new launch's tail is always ONE
   single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
+  The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that
+  running again cannot fix (claude: a `--resume` id it has no conversation for, a rejected credential; codex: a
+  thread id with no rollout on disk). That declaration is the ONLY place a harness's error wording is ever
+  matched: the launch transport asks the adapter and consumes the verdict, so a settled failure is spent once
+  with the harness's own line left visible instead of retried into silence ([[launch]]), and product code never
+  learns a harness's English. A harness that declares none simply keeps the plain bounded retry.
   sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
@@ -318,7 +324,27 @@ surface:
   honestly. Claude/pi use their live listener, while Codex uses the visible pane's descendant process tree.
   `cleanupRuntime(rec)` is the inverse owned by the same transport: rendezvous adapters unlink their socket,
   claude-headless unlinks its controller socket even when tmux killed the controller before its signal handler
-  ran, and Codex leaves its shared project app-server intact.
+  ran, and Codex leaves its shared project app-server intact. **Their** socket — and the only honest test of
+  "theirs" is that the agent this teardown just killed is GONE, so removal waits for a PROVEN-dead listener
+  (the same tri-state probe liveness uses) and a path still answering is left in place, loudly. The asymmetry
+  is deliberate: a dead-but-unlinked file is harmless residue the next teardown reaps, a wrong unlink strands
+  a working agent forever — still bound to a path nothing can reach, undeliverable, and reading as a corpse to
+  every prober. The ordinary teardown still leaves zero socket residue, because its agent really is dead — and
+  that is the product's job to GUARANTEE before it asks an adapter to sweep: the pane is the agent's home, not
+  its leash, so a teardown that finds its own registered pid outliving the pane escalates (SIGTERM, then
+  SIGKILL, identity-guarded against a recycled pid) rather than leaving an orphan whose still-live listener the
+  adapter would then, correctly, refuse to remove.
+
+  That proof is the second of two defences, and the first is the socket's NAME. A session id alone does not
+  identify a session on a box: `SPEXCODE_HOME` scopes the store and `SPEXCODE_TMUX` scopes the tmux server,
+  so two worlds can hold one id (a fixture, a migration, a record copied for diagnosis) — and a path derived
+  from the id alone made them share the one resource neither scoping covered. An isolated instance's
+  `kill-session` then missed while its unlink landed, and delivery would have crossed the same way. So the
+  path is derived from the runtime the session belongs to (`runtimeRoot()`, the identity that already scopes
+  its store) and is a LAUNCH-TIME FACT: launch stamps it beside the record like `agent.pid`, and every later
+  reader — launch env, liveness probe, delivery, teardown — reads the path the agent actually bound instead of
+  re-deriving one. A session launched before the stamp existed keeps the unscoped path it really bound, so
+  nothing running is disturbed and the fallback retires as sessions turn over.
 
 Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
 outcome of the last ephemeral turn. An intact record normally remains `online` between ephemeral turns because

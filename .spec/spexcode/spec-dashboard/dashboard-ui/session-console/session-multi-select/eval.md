@@ -25,6 +25,18 @@ scenarios:
       in the background, exits multi-select mode, and the closed rows disappear from every surface
       after the board reload. Cancelling the confirm closes nothing.
     tags: [frontend-e2e]
+  - name: nested-count-moves-with-selectable-row
+    test: spec-dashboard/test/session-multi-select.e2e.mjs
+    description: >
+      On the session console, inspect a collapsed parent row whose leading count represents nested
+      sessions, then enter multi-select mode from that row's context menu and compare the checkbox,
+      count pod, and headline geometry before and after the mode change.
+    expected: >
+      Entering multi-select inserts the checkbox at the row's leading edge and shifts the complete
+      existing row face to the right by one consistent offset: the nested-session count pod and the
+      headline move together, preserving their gap and alignment. The count never stays behind while
+      only the headline moves, and no control overlaps at the narrow 204px default sidebar width.
+    tags: [frontend-e2e, desktop]
 ---
 
 Measured by driving the real dashboard (`npm run dev` in spec-dashboard) in a browser against a running

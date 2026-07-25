@@ -1160,6 +1160,9 @@ a.scenario-count:hover { background: var(--panel2); }
   content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
   border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
 }
+/* The real fold pod is an absolute sibling of the row button. Mirror the checkbox's 13px width + the
+   row's 7px column gap so it stays over the hidden slot that moved with the rest of the row face. */
+.si-item:has(> .si-check) + .sess-fold-control { margin-left: 20px; }
 /* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
 .si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
 .si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }

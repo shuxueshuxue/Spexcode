@@ -1,0 +1,23 @@
+{
+  "session_id": "00000000-0000-4000-8000-0000c0debabe",
+  "governed": true,
+  "worktree_path": "/tmp/spexcode-fixture-worktree/corrupt-record-0000",
+  "branch": "node/corrupt-record-fixture-0000",
+  "node": "",
+  "title": "<div class=\"legend fv-new-modal\" role=\"dialog\" ar…",
+  "name": "",
+  "parent": "",
+  "status": "active",
+  "proposal": "",
+  "merges": 0,
+  "note": "")' 说明这是写下来却无人强制的 unenforced invariant，修必须写入侧转义+读取侧区分损坏/不存在并 fail loud 两半都做；②同文件:31 jget 的 naive 值正则使读取也被截断；③core 里碰 session.json 的钩子有四个(idle/fail/stop-gate/mark-active)，仅 mark-active 确认含 sed 写入，issue 范围应写成'凡以 shell 无 JSON 解析器写 session.json 的热路径'。接受它四条纠正，其中我'ls --all==默认 12 可能是第二个 bug'的结论是反的(当前 archived 数为 0，相等才对)。26 条 PATROL-REPAIR 不结，属另一症状(列表陈旧、15s 自愈)。它已开 issue a-note-containing-a-double-quote-silently-corrup(re: state, runtime)。等人类拍：修归 fd9a1f93([[sessions-core]] 记录层，我推荐) 还是它自己接。我这条 lane 已合完提 close。",
+  "sortkey": "",
+  "createdAt": 1784949525494,
+  "harness": "claude",
+  "harness_session_id": "",
+  "stopped": false,
+  "archived": false,
+  "launcher": "reclaude",
+  "launch_cmd": "/usr/bin/false",
+  "launch_owner": ""
+}

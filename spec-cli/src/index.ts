@@ -15,7 +15,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -583,6 +583,12 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
   return c.json(result, result.ok ? 200 : 502)
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
+// shelve / unshelve ([[archive]]) — a record-only write: the agent, its tmux, and the worktree are untouched,
+// so this composes with stop rather than implying it. Body `{on:false}` unshelves. {ok:false} = no such session.
+app.post('/api/sessions/:id/archive', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  return c.json({ ok: await archiveSession(c.req.param('id'), body?.on !== false) })
+})
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly

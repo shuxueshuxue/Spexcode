@@ -116,6 +116,7 @@ export type Session = {
   capabilities: { headless: boolean }   // stable adapter projection; console surfaces consume data, never harness ids
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
+  archived: boolean   // shelved ([[archive]]) — a THIRD, orthogonal axis: it hides the row from the default view without touching what the agent declared or whether the process is up
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
@@ -225,6 +226,7 @@ export type SessRec = {
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
+  archived: boolean      // shelved by the human ([[archive]]) — orthogonal to lifecycle AND liveness (a session may be stopped, archived, both, or neither); false on every old record
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
@@ -282,6 +284,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
     stopped: !!raw.stopped,             // records written before explicit stop tracking were not stopped
+    archived: !!raw.archived,           // records written before archive → absent → not shelved
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     launchOwner: launchOwner || null,
@@ -291,6 +294,14 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
 // present (nulls rendered as "" / the empty value, never an absent key). That stable shape is the contract the
 // pure-shell hot-path hook (mark-active) relies on: it value-replaces `"status"`/`"proposal"`/`"note"` with a
 // single sed and never needs jq on the user's box. So do NOT switch to conditional keys or a compact dump.
+//
+// @@@ the record self-cleans - the object below is a CLOSED key set rebuilt from the typed record on every
+// write, never a merge over what was read. So a field retired from the code is ALSO retired from disk the
+// next time anything touches that record: no migration verb, no GC pass, no accreting graveyard of dead keys.
+// A new field earns its place by being declared HERE and in `fromRaw` — that pairing is what keeps the file a
+// projection of the current type rather than a log of everything it has ever been, and it is also the reason
+// a field MISSING from this object is silently dropped: `stopped` and `archived` are independent axes (an
+// explicit human stop vs. an attention filing), so both must be listed, not one chosen over the other.
 function writeRecord(rec: SessRec): void {
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
@@ -315,6 +326,7 @@ function writeRecord(rec: SessRec): void {
     harness: rec.harness || 'claude',
     harness_session_id: rec.harnessSessionId ?? '',
     stopped: rec.stopped,
+    archived: rec.archived,
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
@@ -328,25 +340,6 @@ function writeRecord(rec: SessRec): void {
     || previous.proposal !== rec.proposal || previous.note !== rec.note)) {
     recordStatus(rec.session, rec.status, rec.proposal, rec.note)
   }
-}
-
-// @@@ fail-loud enumeration - the worktree set is the board's EXISTENCE truth, so a failed enumeration must
-// NEVER masquerade as an empty repo. `gitA` swallows a git error to '' (→ zero rows), which a caller would
-// read as "every worktree was removed" — exactly the false mass-`closed` watchSessions would emit once the
-// flicker debounce is gone. `git worktree list` ALWAYS lists at least the main worktree, so an ok run with
-// zero `worktree ` lines is itself a failure. Both cases THROW; the caller (listSessions) propagates and
-// watchSessions' poll `catch` simply skips the tick with `prev` intact — no fabricated removals.
-async function listWorktrees(): Promise<{ path: string; branch: string | null }[]> {
-  const r = await gitTry(['-C', mainRoot(), 'worktree', 'list', '--porcelain'])
-  if (!r.ok) throw new Error(`git worktree list failed: ${r.stderr.trim() || 'unknown error'}`)
-  const list: { path: string; branch: string | null }[] = []
-  let cur: { path: string; branch: string | null } | null = null
-  for (const line of r.stdout.split('\n')) {
-    if (line.startsWith('worktree ')) { cur = { path: line.slice(9), branch: null }; list.push(cur) }
-    else if (line.startsWith('branch ') && cur) cur.branch = line.slice(7).replace('refs/heads/', '')
-  }
-  if (!list.length) throw new Error('git worktree list returned no worktrees (enumeration failed; the main worktree is always present)')
-  return list
 }
 
 // @@@ reconcile - the shown status. awaiting → the proposal's label (review/done/close-pending),
@@ -621,7 +614,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? promptPreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -1359,7 +1352,7 @@ export async function newSession(prompt: string, parent: string | null = null, l
     // mutated after. A self-parent (a resolver quirk) is dropped so a session can't nest under itself.
     node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
     status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-    harness: h.id, harnessSessionId: null, stopped: false, launcher: chosen.name,
+    harness: h.id, harnessSessionId: null, stopped: false, archived: false, launcher: chosen.name,
     // PIN the resolved launch command NOW ([[launcher-select]] resume-launcher-pin) so every future
     // (re)launch replays THIS exact launcher — the one whose config-dir env holds the conversation — instead of
     // re-resolving against a default that may have flipped (a backend restarted under a different launcher).
@@ -1718,6 +1711,25 @@ export async function stopSession(id: string): Promise<boolean> {
   if (rec) writeRecord({ ...rec, stopped: true })
   void drainQueue()   // a stop frees a slot — start the next queued session if any
   return !!wt
+}
+
+// @@@ archiveSession - SHELVING: "not this week, maybe later". A pure record write and NOTHING else — it does
+// not stop the agent, touch tmux, or go near the worktree/branch. That restraint IS the design: stop is the
+// RESOURCE verb (give the process back) and archive is the ATTENTION verb (give the screen back), so the human
+// composes them freely — archive a still-running session, or stop one and leave it in the normal list. Folding
+// a kill into archive would have made the cheap, reversible act destructive.
+// Retaining the worktree costs a record row and ~13MB; what it BUYS is the uncommitted work no branch ref can
+// carry, which is the whole reason a shelved session is resumable rather than merely re-creatable.
+// The board keeps enumerating archived records (existence truth is never a view concern) — surfaces filter,
+// and the spec-delta is skipped for them ([[archive]], layout's row builder), so an archive costs no git walk.
+// No timeline row is written: shelving is not something the AGENT did, and the append-only status log stays a
+// record of authored lifecycle rather than of the human's filing habits.
+export async function archiveSession(id: string, on = true): Promise<boolean> {
+  const wt = await findWorktree(id)
+  if (!wt) return false
+  if (wt.rec.archived === on) return true   // idempotent — re-archiving is a no-op, not a redundant write
+  writeRecord({ ...wt.rec, archived: on })
+  return true
 }
 
 // @@@ closeSession - the REMOVAL (human-confirmed): stop's soft kill PLUS removing the worktree + branch AND

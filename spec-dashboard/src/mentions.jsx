@@ -322,3 +322,30 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     : null
   return { menu, sync, onKeyDown, close, menuEl }
 }
+
+// The grammar's DISCOVERABILITY DOOR, as ONE mechanism: type the EXACT trigger (`@` / `[[` / `/`) at the
+// caret so the SAME shared autocomplete opens naturally. It only types what the hand would — any selection
+// replaced, the rest of the draft preserved, the caret parked right after the trigger, the surface
+// refocused, and the host's own caret `sync` re-run — so no composer needs its own insertion dialect.
+export function typeTrigger(el, trigger, setValue, sync = null) {
+  if (!el) return
+  const start = el.selectionStart ?? el.value.length
+  const end = el.selectionEnd ?? start
+  setValue(el.value.slice(0, start) + trigger + el.value.slice(end))
+  const caret = start + trigger.length
+  requestAnimationFrame(() => {
+    if (!el.isConnected) return
+    el.focus()
+    el.setSelectionRange(caret, caret)
+    sync?.(el)
+  })
+}
+
+// the door's chrome: a compact symbol button wearing the localized tooltip + accessible name, swallowing
+// mousedown so a click never blurs the surface it types into.
+export function TriggerButton({ label, onClick, disabled = false, children }) {
+  return (
+    <button type="button" className="fv-trigger-btn" data-tip={label} aria-label={label} disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{children}</button>
+  )
+}

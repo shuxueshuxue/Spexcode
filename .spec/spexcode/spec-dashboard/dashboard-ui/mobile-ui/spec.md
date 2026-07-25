@@ -15,11 +15,13 @@ related:
   - spec-dashboard/src/focus.js
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/mobileComposer.test.mjs
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
   - spec-dashboard/test/timeline-chat-clipboard.e2e.mjs
   - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
   - spec-dashboard/test/timeline-chat-focus.e2e.mjs
+  - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/src/useIsMobile.js
 ---
 # mobile-ui
@@ -70,7 +72,11 @@ The two planes, made native to touch:
   liveness are the board row's, present-tense), the timeline — day-separated, each status event a
   colored glyph + word + timestamp with the FULL note text beneath, each sent prompt attributed
   (you / the sending session) — and a docked composer whose input and send action share one stable
-  vertical box (matching top and bottom edges). The composer stops at the tab bar; `.m-tabbar` alone
+  vertical box (matching top and bottom edges). It uses [[composer]]'s `ComposerTextarea` and the one
+  `fitTextarea` measurement path shared by every dashboard-authored composer: two and three lines grow the
+  input without a scrollbar, while content beyond its declared cap scrolls inside. As a **message**
+  composer it sends on plain Enter, inserts a line on Shift+Enter, and lets an IME composition Enter commit
+  text without sending, matching the desktop Command Box. The composer stops at the tab bar; `.m-tabbar` alone
   owns the viewport-bottom safe-area inset. Its retained silent `replyVia:"note"` is redundant for a
   headless target and remains no visible control; the session capability, not this surface, owns the
   default. The note itself is produced when the agent executes the external `spex session <verb>
@@ -140,8 +146,11 @@ The two planes, made native to touch:
   launcher fetch + default resolution + the per-browser remembered launcher choice, so phone and
   desktop agree — and the one `POST /api/sessions`. Launching has one choice — the launcher — and every
   configured profile appears as an ordinary option, with no capability filtering, disabled
-  compatibility row, or placeholder. Only the chrome is phone-shaped — textarea, native launcher
+  compatibility row, or placeholder. Only the chrome is phone-shaped — shared `ComposerTextarea`, native launcher
   `<select>`, one launch button.
+  This is a **launch** composer rather than a message composer: it shares the same auto-growth mechanism,
+  but Enter remains native long-prompt editing and never launches; only the explicit button submits. This
+  matches the desktop New tab and is an intentional boundary, not a missing keyboard handler.
   Where the desktop box fires in the
   background and stays type-ready, the phone AWAITS the create with a busy button: the wait is
   honest (worktree+agent take seconds) and busy-gating doubles as the double-tap guard a touch

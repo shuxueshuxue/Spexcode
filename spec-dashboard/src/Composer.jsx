@@ -13,7 +13,7 @@ export const ComposerTextarea = forwardRef(function ComposerTextarea({ value, cl
     const textarea = innerRef.current
     if (!textarea) return
     const styles = getComputedStyle(textarea)
-    fitTextarea(textarea, parseFloat(styles.maxHeight) || Infinity, parseFloat(styles.minHeight) || 0)
+    fitTextarea(textarea, parseFloat(styles.maxHeight) || Infinity, parseFloat(styles.minHeight) || 0, styles)
   }, [value])
 
   return <textarea ref={innerRef} value={value} className={`composer-textarea ${className}`.trim()} {...props} />

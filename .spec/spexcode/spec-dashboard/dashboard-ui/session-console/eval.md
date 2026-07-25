@@ -10,8 +10,8 @@ scenarios:
       exceed the input cap; press Shift+Enter, dispatch an IME-composing Enter, press the composer after a
       timeline selection, then press plain Enter on a unique token and read the persisted session timeline.
     expected: >-
-      The shared ComposerTextarea grows at two and three lines with overflow hidden, enables scrolling only
-      beyond its CSS cap, and remains the active layer's sole focus sink. Shift+Enter adds a line without
+      The shared ComposerTextarea grows at two and three lines with overflow hidden and
+      `scrollHeight <= clientHeight`, enables scrolling only beyond its CSS cap, and remains the active layer's sole focus sink. Shift+Enter adds a line without
       sending, a composition Enter neither changes nor sends the draft, and plain Enter delivers exactly one
       sent event then clears the draft. Pressing the composer clears the timeline highlight without losing
       focus, and desktop activation focuses the mounted textarea.

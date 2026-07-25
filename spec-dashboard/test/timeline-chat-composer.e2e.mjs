@@ -90,6 +90,7 @@ async function verifyMobileLaunchComposer(page) {
   assert.ok(lines[0].offsetHeight < lines[1].offsetHeight && lines[1].offsetHeight < lines[2].offsetHeight,
     `mobile launch prompt did not grow above its floor: ${JSON.stringify(lines)}`)
   assert.ok(lines.every((entry) => entry.overflowY === 'hidden'), 'mobile launch prompt scrolled before its cap')
+  assert.ok(lines.every((entry) => entry.scrollHeight <= entry.clientHeight), 'mobile launch prompt overflowed its client box')
   assert.equal(result.enterValue, 'long launch prompt\n', 'mobile launch Enter did not remain native editing')
   assert.equal(result.launchRequests, 0, 'mobile launch Enter created a session')
   return result
@@ -185,6 +186,7 @@ async function runViewport(name, viewport) {
     } else {
       assert.ok(heights[0] < heights[1] && heights[1] < heights[2], `${name}: textarea did not grow line by line`)
       assert.ok(result.lines.every((entry) => entry.overflowY === 'hidden'), `${name}: uncapped textarea exposed a scrollbar`)
+      assert.ok(result.lines.every((entry) => entry.scrollHeight <= entry.clientHeight), `${name}: uncapped textarea overflowed its client box`)
       assert.ok(result.capped.scrollHeight > result.capped.clientHeight, `${name}: long textarea never reached its cap`)
       assert.equal(result.capped.overflowY, 'auto', `${name}: capped textarea did not enable scrolling`)
       assert.equal(result.shiftEnter.value, 'shift line\n', `${name}: Shift+Enter did not insert a line`)

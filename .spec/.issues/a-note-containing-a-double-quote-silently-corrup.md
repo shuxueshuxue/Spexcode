@@ -53,3 +53,49 @@ fixed enum and needs no escaping).
 Recovered my own record by hand (blanked the note; its content survives in this issue and the
 session timeline). Filing so the next person is not left staring at a record that exists but
 "cannot be found".
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:14:10.573Z -->
+SEVERITY IS HIGHER THAN I FILED IT — a corrupted record does not merely break declarations. It
+silently REMOVES the session from every list surface, with no error anywhere.
+
+Reported from another lane (67c463e8) as a mystery: this session vanished from `spex session ls`
+and later reappeared. Their measurements: T1 both `ls` and `ls --all` returned 12 rows without it;
+T2 (minutes later) 14 rows with it, status=working. Record healthy at both points as far as they
+could see, worktree and tmux intact — so they suspected a blind-watcher snapshot problem.
+
+It was this bug. The window ended at 02:04:57, when I repaired the file. T1 falls inside it.
+
+## Why it presents as a vanished row rather than an error
+
+    layout.ts:216   readRawRecord()  JSON.parse inside try {} catch { return null }
+                    -> a corrupted record is INDISTINGUISHABLE from "no record exists"
+
+    sessions.ts     listSessions()   if (!rec || !rec.governed) {
+                                       lastKnownSession.delete(id); return null
+                                     }
+                    -> the row is dropped AND its last-known entry is explicitly purged
+
+`guardSession`'s degraded-read fallback — the mechanism specifically designed so a transient
+failure never drops a live session from the board — only engages when the read THROWS. A corrupted
+file takes the caught-null path instead, so it bypasses that protection entirely, and even a
+long-running backend cannot hold the row.
+
+Net effect: one unescaped quote in a note makes the session disappear from the board, the CLI, and
+the API, indefinitely, and nothing reports a problem. A supervisor watching that board would
+reasonably conclude the session had been closed.
+
+## This sharpens the fix
+
+It is not only about escaping the note on write (still the primary fix). There is a second,
+independent defect: **an unparseable record is treated as an absent one.** Those are different
+facts and the difference matters — absent means "nothing here"; unparseable means "something is
+here and I cannot read it", which is precisely the case `guardSession` exists to handle.
+
+Making `readRawRecord` distinguish them — parse failure surfacing as an error rather than null —
+would route corruption into the existing degraded-read path instead of silent deletion, and would
+have turned this incident into a loud one regardless of the note-escaping bug.
+
+Cross-referenced to 67c463e8's separate finding: 25 of 26 `PATROL-REPAIR` log lines carry `sess:`
+units, which is real and suggests a genuinely blind watcher. That produces a STALE list that
+self-heals on the next cold tick — a different symptom from a row that vanishes and stays vanished.
+Both can be true; this issue does not close that one.

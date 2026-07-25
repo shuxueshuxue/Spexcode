@@ -196,6 +196,26 @@ scenarios:
       commits in this repo carry one such ghost, filed as github#76 — and once that session closed and its
       record was swept the trailer pointed at nothing, breaking the version-attribution the dashboard's
       history is built on.
+  - name: codex-app-server-carries-no-session-identity
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Run the REAL generated codex launch script verbatim under a launcher environment that carries a
+      session's identity (SPEXCODE_SESSION_ID plus adapter session vars, as every launch.sh really does),
+      pointed at a throwaway runtime dir and socket so it starts a FRESH shared app-server. Read that
+      daemon's actual `/proc/<pid>/environ`. Then fire one real turn on it through `spex internal
+      codex-launch` and ask the agent to report its own shell's identity variables, reading the answer ONLY
+      from the turn's tool-call output and final assistant message in codex's rollout — never a grep over
+      the transcript, which would match the prompt's own echo.
+    expected: >-
+      The daemon comes up (exit 0, socket bound) carrying NONE of the planted session-identity variables: a
+      project-scoped process shared by every worktree's threads, and outliving them all, must not hold one
+      session's id. The thread's own tool shell then reports exactly ONE identity — `CODEX_THREAD_ID` equal
+      to the thread id `codex-launch` returned — and neither stale launcher id, proving the strip removed
+      only wrong answers: the acting-thread id every hook, declaration, and alias lookup resolves from is
+      injected per command by codex itself and survives. The failure this locks: daemons here ran for days
+      handing a long-closed session's id to every later thread's tool shell, which is how a stranger's
+      session ended up on other sessions' commits (github#76).
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-

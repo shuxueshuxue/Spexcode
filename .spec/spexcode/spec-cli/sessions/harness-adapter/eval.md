@@ -2,7 +2,13 @@
 scenarios:
   - name: headless-explicit-stop-resume-liveness
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    code:
+      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#claudeHeadlessHarness
+      - spec-cli/src/harness.ts#codexHeadlessHarness
+      - spec-cli/src/harness.ts#piHeadlessHarness
+      - spec-cli/src/harness.ts#opencodeHeadlessHarness
+      - spec-cli/src/sessions.ts
     description: >-
       Through real governed sessions, repeat the same loop for every registered headless launcher: let the
       first turn settle with a declaration note, POST stop, verify the tmux home/runtime is gone, sample both
@@ -15,7 +21,13 @@ scenarios:
       state or harness-specific product branch participates.
   - name: foreign-teardown-cannot-strand-a-live-agent
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    code:
+      - spec-cli/src/harness.ts#unlinkSocks
+      - spec-cli/src/harness.ts#listenerAt
+      - spec-cli/src/harness.ts#PROVEN_DEAD
+      - spec-cli/src/harness.ts#rendezvousListening
+      - spec-cli/src/harness.ts#stampRvSock
+      - spec-cli/src/sessions.ts
     description: >-
       A session's rendezvous socket is keyed by session id ALONE, so it is the one per-session resource not
       scoped by the store (SPEXCODE_HOME) or the tmux server (SPEXCODE_TMUX). Stand a REAL agent daemon on
@@ -31,7 +43,13 @@ scenarios:
       unproven, so the relaunch guard stays armed instead of inviting a human to kill a working agent.
   - name: same-id-in-two-worlds-never-shares-a-transport
     tags: [backend-api, cli]
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#rvSock
+      - spec-cli/src/harness.ts#scopedRvSock
+      - spec-cli/src/harness.ts#legacyRvSock
+      - spec-cli/src/harness.ts#rvStamp
+      - spec-cli/src/harness.ts#stampRvSock
+      - spec-cli/src/harness.ts#unlinkSocks
     description: >-
       Two isolated backends on one box, each with its own SPEXCODE_HOME and SPEXCODE_TMUX. World A launches a
       REAL governed session through POST /api/sessions; world B holds a PLANTED record carrying the SAME
@@ -46,7 +64,9 @@ scenarios:
       sweeps its socket, leaving zero residue.
   - name: headless-turn-exit-error
     tags: [backend-api, cli]
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#reportHeadlessTurnExit
+      - spec-cli/src/harness.ts#headlessTurnFailureShell
     description: >-
       Through real `spex session new` launches, give each registered headless adapter a controlled harness
       command whose turn process exits non-zero without calling a lifecycle declaration. Read the session only
@@ -119,7 +139,13 @@ scenarios:
       after the running tool call completes". `reopen` relaunches `codex resume <captured-thread-id>` so the
       prior conversation is present and `harness_session_id` is unchanged — the SAME conversation, matching
       claude's `--resume`, not a fresh thread.
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#sendCodexAppServerTurn
+      - spec-cli/src/harness.ts#deliverViaCodexAppServer
+      - spec-cli/src/harness.ts#activeTurnIdFromThread
+      - spec-cli/src/harness.ts#codexInjectMessage
+      - spec-cli/src/harness.ts#codexHandshakeMessages
+      - spec-cli/src/harness.ts#codexHarness
   - name: claude-delivery-survives-probe-race
     tags: [backend-api]
     description: >-
@@ -141,7 +167,10 @@ scenarios:
       repaint probe go out in ONE atomic chunk (parsed in one synchronous line-loop, so a kick can only lose
       both), `repaint-done` on the delivery connection = parsed-proof, a close before it = proven loss →
       reconnect and resend, wall expiry with the connection still open = optimistic ok (busy ≠ lost).
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#replyViaSocket
+      - spec-cli/src/harness.ts#deliverViaRendezvous
+      - spec-cli/src/harness.ts#DELIVER_ATTEMPTS
   - name: claude-delivery-refuses-sessions-panel
     tags: [backend-api]
     description: >-
@@ -156,7 +185,8 @@ scenarios:
       shows `enqueue`) but NEVER dequeued — no turn, no pane trace, and the daemon emits nothing, so no
       transport-layer confirmation can catch it; only the pane state can. Silent-swallow here is claude's own
       bug, but the adapter must not report a false success into it.
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#claudeHarness
   - name: codex-liveness-reflects-live-tui-not-sock
     tags: [backend-api]
     description: >-
@@ -178,7 +208,11 @@ scenarios:
       a rendering TUI's foreground is the bash wrapper — so the board showed working codex sessions as dead and
       a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
       pane hides the wrapper-shell tree shape).
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#paneTreeRuns
+      - spec-cli/src/harness.ts#paneTreeRunsCodex
+      - spec-cli/src/harness.ts#CODEXISH
+      - spec-cli/src/harness.ts#procSnapshot
   - name: codex-app-server-sock-binds-on-hardened-tmp
     tags: [backend-api]
     description: >-
@@ -196,7 +230,8 @@ scenarios:
       connection failed: connect ENOENT /tmp/spexcode-cx-<hash>.sock` while claude launchers work — yet the same
       codex binds fine in any OWNED subdirectory (the control), so the fix belongs to the path derivation, not
       the host.
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#codexAppServerSock
   - name: session-stamp-unmatched-thread-id-is-clean-noop
     tags: [backend-api]
     code: spec-cli/templates/hooks/prepare-commit-msg
@@ -244,7 +279,10 @@ scenarios:
       claim to believe.
   - name: codex-app-server-carries-no-session-identity
     tags: [backend-api, cli]
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#sessionIdentityEnvVars
+      - spec-cli/src/harness.ts#codexLaunchCommand
+      - spec-cli/src/harness.ts#codexStartThreadParams
     description: >-
       Run the REAL generated codex launch script verbatim under a launcher environment that carries a
       session's identity (SPEXCODE_SESSION_ID plus adapter session vars, as every launch.sh really does),
@@ -287,10 +325,17 @@ scenarios:
       flow auto-trusts — still fires them, so a standalone or exec-only check passes green and the dispatched-worker
       regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
       reading session.json + the commit trailer.
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#writeCodexTrust
+      - spec-cli/src/harness.ts#codexHookHash
+      - spec-cli/src/harness.ts#stripCodexTrustFor
+      - spec-cli/src/harness.ts#buildShim
   - name: codex-launch-ignores-future-dated-rollout-dirs
     tags: [backend-api]
-    code: spec-cli/src/harness.ts
+    code:
+      - spec-cli/src/harness.ts#codexRolloutExists
+      - spec-cli/src/harness.ts#codexSessionsDir
+      - spec-cli/src/harness.ts#waitForCodexRollout
     test:
       path: spec-cli/src/harness.test.ts
       name: codexRolloutExists is immune to future-dated junk day-dirs above the real rollout

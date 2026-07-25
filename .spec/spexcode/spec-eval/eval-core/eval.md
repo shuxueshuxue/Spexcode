@@ -145,6 +145,28 @@ scenarios:
       commit records no block change, and the pre-rename reading reads FRESH — never falsely staled by
       the migration. With a single live-name pathspec the chain truncates at the rename and the reading
       false-stales (the failure the regression test pins).
+  - name: scenario-axis-narrows-to-symbols
+    tags: [cli]
+    code:
+      - spec-eval/src/freshness.ts#anchorProbeFor
+      - spec-eval/src/freshness.ts#entryMoved
+      - spec-eval/src/freshness.ts#anchorProblems
+      - spec-eval/src/scenarios.ts#scenarioCodeAxis
+    description: >-
+      Through the real `spex eval` CLI in a scratch repo holding ONE governed file with two top-level units:
+      give one scenario a `code:` entry carrying a `path#symbol` selector and leave a sibling scenario's entry
+      bare, file a reading for each on the clean tree, then lint after (a) committing a change to the OTHER
+      unit, (b) committing a change to the DECLARED unit, and (c) repointing the selector at a unit that does
+      not exist. Separately, compare the stored `scenarioHash` of every scenario whose `code:` gained a
+      selector against its value before the edit.
+    expected: >-
+      The un-narrowed sibling stales whenever the file moves, exactly as before. The anchored scenario stays
+      FRESH when a different unit of the same file changes, and goes stale as soon as its OWN declared unit is
+      touched — the file question first, the spatial one only for an anchored entry, so an anchor can subtract
+      from the file verdict but never add to it. A dead selector is an `eval-schema` finding naming the
+      selector and its repair, and its reading is STILL reported stale: an unresolvable anchor costs a false
+      stale, never a false fresh. Every scenarioHash is byte-identical before and after — `code` is a file
+      pointer, not a measurement contract, so adopting an anchor re-stales nothing.
   - name: changed-scan-scenario-scope
     tags: [cli]
     test:

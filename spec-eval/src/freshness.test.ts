@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { changedSince, codeDrift, contentProbeFor, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
-import { scenarioHash } from './scenarios.js'
-import { withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { changedSince, codeDrift, contentProbeFor, anchorProbeFor, anchorProblems, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
+import { scenarioCodeAxis, scenarioHash } from './scenarios.js'
+import { driftIndex, withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
 // proven here without git so the critical edge is pinned regardless of a repo's history.
@@ -544,4 +545,132 @@ test('content batch: three rebuilds over the same anchors hold one generation, n
   assert.deepEqual(sizes, [sizes[0], sizes[0], sizes[0]],
     `cardinality grew with rebuild count instead of staying at the corpus: ${sizes.join(' -> ')}`)
   assert.equal(sizes[0], anchors.length, 'one entry per anchor at the current head')
+})
+
+// ---- the scenario code axis narrows to named units ([[eval-core]] / [[code-anchor]]) ----
+
+// A real git repo carrying ONE module with two independently-measured units — the shape of the corpus this
+// exists for: harness.ts holds eight adapters, so an edit to one must not stale the readings of the others.
+// typescript is linked in because ts-ast parses through the GOVERNED repository's own compiler.
+function anchorRepo(): { root: string; base: string } {
+  const root = mkdtempSync(join(tmpdir(), 'freshness-anchor-'))
+  sh(root, ['init', '-q', '-b', 'main'])
+  sh(root, ['config', 'user.email', 't@t'])
+  sh(root, ['config', 'user.name', 't'])
+  writeFileSync(join(root, 'package.json'), '{"name":"fx","private":true}\n')
+  mkdirSync(join(root, 'node_modules'), { recursive: true })
+  symlinkSync(dirname(createRequire(import.meta.url).resolve('typescript/package.json')), join(root, 'node_modules', 'typescript'))
+  const mod = (alpha: string, beta: string) =>
+    `export function alpha(): string {\n  return '${alpha}'\n}\n\nexport const beta = {\n  tag: '${beta}',\n}\n`
+  writeFileSync(join(root, 'm.ts'), mod('a0', 'b0'))
+  sh(root, ['add', '-A'])
+  sh(root, ['commit', '-q', '-m', 'base'])
+  const base = sh(root, ['rev-parse', 'HEAD'])
+  return { root, base }
+}
+const editAlpha = (root: string) => {
+  writeFileSync(join(root, 'm.ts'), `export function alpha(): string {\n  return 'a1'\n}\n\nexport const beta = {\n  tag: 'b0',\n}\n`)
+  sh(root, ['commit', '-qam', 'touch alpha'])
+}
+const editBeta = (root: string) => {
+  writeFileSync(join(root, 'm.ts'), `export function alpha(): string {\n  return 'a0'\n}\n\nexport const beta = {\n  tag: 'b1',\n}\n`)
+  sh(root, ['commit', '-qam', 'touch beta'])
+}
+const readingAt = (sha: string, scenario = 's1') => ({ scenario, codeSha: sha, ts: '2026-07-25T00:00:00Z', scenarioHash: 'H' })
+const CONTRACT = { description: 'd', expected: 'e' }
+// stamped hash equal to the current declaration's, so only the CODE axis can speak
+const scOf = (code: string[]) => ({ name: 's1', ...CONTRACT, code })
+
+test('scenario code axis: an unrelated unit\'s change leaves an anchored reading FRESH; its own unit stales it', async () => {
+  const { root, base } = anchorRepo()
+  editBeta(root)                                  // the neighbour moved; the declared unit did not
+  const idx = await driftIndex(root)
+  const anchors = anchorProbeFor(root, idx)
+  const sc: any = scOf(['m.ts#alpha'])
+  const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(sc) }
+  const axis = scenarioCodeAxis(sc.code, [])
+  await anchors.prime?.(base, axis.entries)
+  assert.equal(changedSince(idx, base, 'm.ts'), true, 'the FILE really moved — the narrowing is what must save it')
+  assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), [],
+    'a sibling unit\'s edit must not stale a reading anchored elsewhere in the same file')
+  // and the same reading, un-narrowed, is exactly the noise this replaces
+  assert.deepEqual(staleAxes(reading, ['m.ts'], 'n/eval.md', idx, new Map(), [], undefined, sc), ['code'])
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('scenario code axis: changing the DECLARED unit still stales it', async () => {
+  const { root, base } = anchorRepo()
+  editAlpha(root)
+  const idx = await driftIndex(root)
+  const anchors = anchorProbeFor(root, idx)
+  const sc: any = scOf(['m.ts#alpha'])
+  const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(sc) }
+  await anchors.prime?.(base, scenarioCodeAxis(sc.code, []).entries)
+  assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), ['code'])
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('scenario code axis: two scenarios anchoring DIFFERENT units of one file get their own verdicts', async () => {
+  // the regression: keying a verdict by (sha, path) alone handed the first scenario's answer to every other
+  // scenario on that file — silently, and in the FRESH direction, which is the unsafe one.
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const idx = await driftIndex(root)
+  const anchors = anchorProbeFor(root, idx)
+  const onAlpha: any = scOf(['m.ts#alpha'])
+  const onBeta: any = { ...scOf(['m.ts#beta']), name: 's2' }
+  for (const sc of [onAlpha, onBeta]) await anchors.prime?.(base, scenarioCodeAxis(sc.code, []).entries)
+  const judge = (sc: any) => staleAxes({ ...readingAt(base, sc.name), scenarioHash: scenarioHash(sc) } as any,
+    sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors)
+  assert.deepEqual(judge(onAlpha), [], 'alpha did not move')
+  assert.deepEqual(judge(onBeta), ['code'], 'beta did move — and must not inherit alpha\'s verdict')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('scenario code axis: a bare entry keeps whole-file semantics, and no `code` inherits the node list', async () => {
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const idx = await driftIndex(root)
+  const anchors = anchorProbeFor(root, idx)
+  const bare: any = scOf(['m.ts'])
+  const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(bare) }
+  assert.deepEqual(staleAxes(reading, bare.code, 'n/eval.md', idx, new Map(), [], undefined, bare, anchors), ['code'],
+    'an unanchored entry is unchanged by this feature')
+  // a scenario declaring no code at all still inherits its node's whole list
+  const inherited: any = { name: 's1', ...CONTRACT }
+  assert.deepEqual(scenarioCodeAxis(inherited.code, ['m.ts']).paths, ['m.ts'])
+  assert.deepEqual(staleAxes({ ...reading, scenarioHash: scenarioHash(inherited) } as any,
+    ['m.ts'], 'n/eval.md', idx, new Map(), [], undefined, inherited, anchors), ['code'])
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('scenario code axis: a dead selector is LOUD and leaves the reading conservatively stale', async () => {
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const idx = await driftIndex(root)
+  const anchors = anchorProbeFor(root, idx)
+  const sc: any = scOf(['m.ts#gone'])
+  const axis = scenarioCodeAxis(sc.code, [])
+  const problems = anchorProblems(root, axis.entries)
+  assert.equal(problems.length, 1)
+  assert.match(problems[0], /m\.ts#gone.*names no unit/)
+  await anchors.prime?.(base, axis.entries)
+  assert.deepEqual(staleAxes({ ...readingAt(base), scenarioHash: scenarioHash(sc) } as any,
+    sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), ['code'],
+    'an unresolvable selector must cost a false stale, never a false fresh')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('scenario code axis: structural misuse is reported, never silently narrowed', () => {
+  assert.match(scenarioCodeAxis(['m.ts', 'm.ts#alpha'], []).problems[0], /mixes bare/)
+  assert.match(scenarioCodeAxis(['src/*.ts#alpha'], []).problems[0], /selector on a glob/)
+  assert.deepEqual(scenarioCodeAxis(['m.ts#alpha', 'm.ts#beta'], []).entries, [{ path: 'm.ts', selectors: ['alpha', 'beta'] }])
+})
+
+test('scenario code axis: a selector never moves the scenario contract hash', () => {
+  const bare = { name: 's1', ...CONTRACT, code: ['m.ts'] }
+  const anchored = { name: 's1', ...CONTRACT, code: ['m.ts#alpha', 'm.ts#beta'] }
+  const none = { name: 's1', ...CONTRACT }
+  assert.equal(scenarioHash(anchored), scenarioHash(bare))
+  assert.equal(scenarioHash(none), scenarioHash(bare))
 })

@@ -475,6 +475,13 @@ export async function reportHeadlessTurnExit(id: string, harness: string, code: 
 export function headlessTurnFailureShell(harness: string, swallow = true): string {
   return `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote(harness)} "$__spex_rc"${swallow ? ' || true' : ''}`
 }
+// @@@ sessionIdentityEnvVars - every environment variable that names ONE session: the launch-injected record
+// id plus each adapter's own `sessionEnvVar`. Adapter-derived, so a new harness needs no edit here. A
+// per-session process is entitled to carry them; a SHARED, project-scoped daemon must not — see the app-server
+// spawn below.
+export function sessionIdentityEnvVars(): string[] {
+  return [...new Set(['SPEXCODE_SESSION_ID', ...HARNESSES.map((h) => h.sessionEnvVar)])].filter(Boolean)
+}
 export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
@@ -528,8 +535,15 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: 
     // removed, the daemon's cwd becomes a DELETED dir, and codex then fails EVERY new thread's config load with
     // `failed to load configuration: No such file or directory` — bricking codex launch for the whole project
     // until the daemon is killed. Running it from "$dir" (which never gets deleted) makes it deletion-proof.
+    // For the SAME reason it must carry no session IDENTITY: it is started by whichever session happened to
+    // launch first and then serves every later thread, whose tool shells inherit its env — so a baked
+    // SPEXCODE_SESSION_ID (or any adapter's `sessionEnvVar`) is a stale lie for every session but one, and
+    // still a lie after that session closes and its record is swept (measured: daemons here running for days
+    // under a long-gone session's id). Everything downstream that resolves identity from the env then
+    // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
+    // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
     // exec so $! is the daemon itself; </dev/null detaches its stdin from the pane so it can't fight the TUI.
-    `  ( cd "$dir" && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
+    `  ( cd "$dir" && unset ${sessionIdentityEnvVars().join(' ')} && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',

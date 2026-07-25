@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -74,7 +74,13 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
   // the shared per-project daemon runs in the STABLE runtime dir "$dir", NOT the transient worktree — else a
   // later worktree deletion dead-cwds the daemon and every future thread's config load fails with ENOENT.
-  assert.match(cmd, /\(\s*cd "\$dir" && exec [^\n]*app-server --listen unix:\/\/"\$sock"/)
+  assert.match(cmd, /\(\s*cd "\$dir" && unset [^\n]*&& exec [^\n]*app-server --listen unix:\/\/"\$sock"/)
+  // ...and it carries NO session identity: it is started by whichever session launched first, serves every
+  // later thread, and outlives them all — so an inherited SPEXCODE_SESSION_ID / adapter sessionEnvVar in its
+  // env is a stale lie every consumer downstream reads as the acting session (github#76).
+  for (const v of sessionIdentityEnvVars()) assert.match(cmd, new RegExp(`unset [^\\n]*\\b${v}\\b[^\\n]*&& exec`))
+  assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
+  assert.ok(sessionIdentityEnvVars().includes('CODEX_THREAD_ID'))
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)

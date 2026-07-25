@@ -1467,6 +1467,23 @@ export async function createSession(prompt: string, launcher?: string): Promise<
   return await res.json() as Session
 }
 
+// @@@ spawnerClause - where the SPAWNER works, told to the child ([[spawner-pointer]]). A child's worktree is
+// branched off the BASE branch, never off its spawner, so everything that session has in flight — a spec node
+// it just created, an edit it hasn't landed — is absent from the child's tree AND from the spec index the
+// pointer above resolves against (that index reads the backend's own checkout). Teaching the fork or the
+// landing about nesting would cost a second base per session and would carry the spawner's unreviewed commits
+// into whatever the child merges into; naming the spawner's worktree costs one line and lets the agent decide.
+// A POINTER, never a body — same family rule as [[spec-pointer]] — and fail-quiet by absence: no parent, or a
+// parent record without a worktree, appends nothing.
+export function spawnerClause(p: SessRec | null): string {
+  if (!p?.worktreePath) return ''
+  const who = p.name || p.title
+  return `\n\nYou were created by session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''}, whose worktree is ${p.worktreePath}` +
+    `${p.branch ? ` on branch \`${p.branch}\`` : ''}. Your own worktree is branched from \`${mainBranch()}\`, so it does NOT contain that ` +
+    `session's uncommitted or unmerged work — a spec node it just created, an edit it hasn't landed. If your task needs anything of theirs, ` +
+    `read it there directly. Read only: never write into another session's worktree.`
+}
+
 // @@@ newSession - durable worktree (branch node/<slug> off main) + a global session.json record. The agent does NOT
 // launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
@@ -1493,14 +1510,13 @@ export async function newSession(prompt: string, parent: string | null = null, l
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   // Compose the FINAL launch text before making the worktree, preserving fail-before-side-effects if live
-  // preset resolution breaks. The optional spec pointer is a seam input; the note insert remains last.
+  // preset resolution breaks. The optional spec + spawner pointers are seam inputs; the note insert remains last.
   const spec = ref ? launchSpecs?.find((n) => n.id === ref) : undefined
-  const suffix = spec
-    ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
-    : undefined
+  const suffix = (spec ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.` : '')
+    + spawnerClause(parent ? readRecord(parent) : null)
   const launchPrompt = (await composeSessionPrompt(rawPrompt, { session: id, harness: h.id }, {
     loadedSpecs: launchSpecs ?? undefined,
-    suffix,
+    suffix: suffix || undefined,
   })).text
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // the checkout delivers the tracked spec sources and the materialize below delivers the materialized

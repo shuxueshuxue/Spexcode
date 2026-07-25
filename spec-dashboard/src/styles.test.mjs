@@ -91,7 +91,13 @@ test('browser page visibility reuses the terminal viewer lifecycle', () => {
   assert.match(terminal, /document\.addEventListener\('visibilitychange', onDocumentVisibility\)/)
   assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)
   assert.match(terminal, /lastSizeRef\.current\s*=\s*\{ cols: 0, rows: 0 \}\s*measureAndRequest\(\)/)
-  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && id === active\}/)
+  // the pane's `active` follows whether its layer is actually SHOWN, not merely selected — a shelved session
+  // ([[archive]]) is selected yet yields the surface to the shelf card, and a pane hidden behind that card must
+  // stand down exactly like an unselected one rather than keep driving a viewer nobody can see.
+  assert.match(sessionInterface, /const shown = id === active && !shelvedSel/)
+  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && shown\}/)
+  // and it must be hidden AND pointer-inert, or a live xterm silently swallows the card's own button
+  assert.match(sessionInterface, /visibility: shown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: shown \? 'auto' : 'none',/)
 })
 
 test('document pages share one inset page-scroll geometry', () => {

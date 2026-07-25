@@ -52,9 +52,12 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
-the `＋` New Session button and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
+**morphs** by what's focused. The list's **top button row** holds compact pills above the session rows, kept out of the `↑/↓` path down to a
+session. It is **segmented by kind**, because two different kinds of control live there: a segmented group of
+*view* controls that can read "on" — the `＋` New Session button and the **shelf** star ([[archive]], present
+only when something is shelved, carrying the shelf count) — and, set apart, the momentary **Search** button,
+the click twin of the ⌥+/ palette ([[session-search]] owns that contract). The spacing states that difference
+structurally, so a destination and an action never read as one undifferentiated row of buttons.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Nothing is prefilled; typing **`[[`** opens the
@@ -193,7 +196,9 @@ atomically even in tmux copy-mode. Success clears the draft and closes; failure 
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
-worktree; `/close` removes the worktree; `/merge` merges; `/eval` opens the canonical session-scoped Evals page.
+worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
+one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` merges;
+`/eval` opens the canonical session-scoped Evals page.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and

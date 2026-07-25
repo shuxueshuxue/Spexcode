@@ -264,7 +264,8 @@ async function main(): Promise<void> {
   if (runs('notes')) await notesRoundTrip(home!)
   if (runs('corrupt')) await corruptRecordIsDiagnosable(home!, project)
   if (runs('retired')) await retiredSessionNeverRevives(home!, project)
-  if (PHASE === 'all') console.log('PASS: session record integrity — notes round-trip, corrupt is diagnosable, retired never revives')
+  // one summary line whatever ran, so a single-phase measurement is as self-contained as the whole regression.
+  console.log(`PASS: session record integrity — ${PHASE === 'all' ? 'notes round-trip, corrupt is diagnosable, retired never revives' : PHASE}`)
 }
 
 main().catch((error) => { console.error('FAIL:', error); process.exit(1) })

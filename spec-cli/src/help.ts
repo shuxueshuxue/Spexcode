@@ -181,7 +181,8 @@ edit the spec instead — same commit as the code.`,
       reaches it through the materialized system prompt. The prompt's first [[id]] mention binds
       the session to that node. --prompt-file <path>|- carries a long prompt
       without shell quoting (exclusive with the inline prompt). Then MONITOR it (wait/watch below).
-  spex session ls [SEL…] [--status a,b] [--json]        one-shot table of living sessions
+  spex session ls [SEL…] [--status a,b] [--all] [--json]  one-shot table of living sessions
+      Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.
   spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]
       Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream. An
       agent must background it or use wait; blocking a turn on watch freezes you.
@@ -213,6 +214,8 @@ Control another session (all take SEL):
       --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
   spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
   spex session stop <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
+  spex session archive <SEL>             shelve it: out of the default list, nothing stopped or removed
+  spex session unarchive <SEL>           bring a shelved session back into the list
   spex session close <SEL>               retire the session and its worktree
 
 Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on):

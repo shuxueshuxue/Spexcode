@@ -11,7 +11,7 @@ const sess = (over: Partial<Session> = {}): Session => ({
   id: 'abcdef1234', node: 'x', branch: 'node/x', path: '/wt/x',
   label: 'x', headline: 'x', raw: { name: null, title: null }, parent: null,
   harness: 'claude', capabilities: { headless: false }, launcher: null,
-  lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null,
+  lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null, archived: false,
   prompt: null, promptPreview: null, created: 1, activity: null, sortKey: null,
   ...over,
 })

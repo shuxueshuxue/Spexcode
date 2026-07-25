@@ -40,6 +40,12 @@ schemes do not become active content. It adds no sanitizer, image allowlist, rem
 content filter. Generated HTML has one audited insertion point inside `RichText`; callers never use
 `dangerouslySetInnerHTML` themselves.
 
+Rendered mathematics remains ordinary selectable conversation content. KaTeX's accessibility and visual DOM
+representations identify one owning math token; when a TimelineChat range fully contains that token, copy emits
+its authored TeX source exactly once rather than concatenating MathML, annotation, and visual fallback text.
+All non-math portions keep the browser Range's native text serialization, so this does not become a second prose
+parser or change the conversation's focus-preserving custom-highlight selection model.
+
 Layout remains chat-dense. Markdown blocks remove browser-default outer margins, images shrink to the message
 width while retaining their aspect ratio, code preserves whitespace and scrolls horizontally, tables and display
 equations scroll within the message instead of widening the session pane, and long unbroken prose still wraps.

@@ -26,7 +26,10 @@ const findInlineClose = (source, start, close) => {
 const renderMath = (source, displayMode, escapeHtml) => {
   try {
     const rendered = katex.renderToString(source, { ...MATH_OPTIONS, displayMode })
-    return displayMode ? `<div class="katex-block">${rendered}</div>` : rendered
+    const sourceAttr = escapeHtml(source)
+    return displayMode
+      ? `<div class="katex-block" data-math-source="${sourceAttr}">${rendered}</div>`
+      : `<span data-math-source="${sourceAttr}">${rendered}</span>`
   } catch (error) {
     console.error('[rich-text] math render failed; showing source text', error)
     return `<span class="katex-error">${escapeHtml(source)}</span>`
@@ -107,6 +110,40 @@ const markdown = new MarkdownIt({
   breaks: true,
   linkify: true,
 }).use(mathPlugin)
+
+const fullyContains = (range, node) => {
+  const nodeRange = document.createRange()
+  nodeRange.selectNode(node)
+  return range.compareBoundaryPoints(Range.START_TO_START, nodeRange) <= 0
+    && range.compareBoundaryPoints(Range.END_TO_END, nodeRange) >= 0
+}
+
+export function richTextFromRange(range, root) {
+  if (!range || range.collapsed || !root) return ''
+  const math = [...root.querySelectorAll('[data-math-source]')]
+    .filter((node) => fullyContains(range, node))
+  if (!math.length) return range.toString()
+
+  const parts = []
+  let startContainer = range.startContainer
+  let startOffset = range.startOffset
+  for (const node of math) {
+    const before = document.createRange()
+    before.setStart(startContainer, startOffset)
+    before.setEndBefore(node)
+    parts.push(before.toString(), node.getAttribute('data-math-source') || '')
+    const after = document.createRange()
+    after.setStartAfter(node)
+    after.collapse(true)
+    startContainer = after.startContainer
+    startOffset = after.startOffset
+  }
+  const tail = document.createRange()
+  tail.setStart(startContainer, startOffset)
+  tail.setEnd(range.endContainer, range.endOffset)
+  parts.push(tail.toString())
+  return parts.join('')
+}
 
 export function renderRichText(value) {
   const source = value == null ? '' : String(value)

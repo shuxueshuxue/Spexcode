@@ -61,11 +61,25 @@ made this node necessary.
   Because the marks survive as tokens, the thread stops pre-stripping its own prose: the regex
   extraction and the sibling anchor/media rendering are DELETED, and a mark renders in place, wherever
   the text is read.
+- **The supported language is a measured contract, and it is BEHAVIOUR, not shape.** The parser runs
+  with soft line breaks and link autodetection on (`breaks` + `linkify`), and renders standard Markdown:
+  real heading levels, emphasis and italics, links, remote images, blockquotes, ordered and unordered
+  lists, inline and fenced code, GFM tables, strikethrough. Mathematics is written `$…$`, `$$…$$`,
+  `\(…\)`, or `\[…\]`. Images go through the standard image renderer — no allowlist and no
+  remote-content policy is added on top of the parser's own untrusted-source defaults. What is
+  explicitly NOT contract is the current implementation's *shape*: no options object, CSS class name, or
+  HTML-injection strategy is protected — only the visible and behavioural result is, so the renderer may
+  be rewritten wholesale into the token→React form above without renegotiating this list.
+- **The math delimiter guards are the contract's sharp edge.** An inline marker ignores escapes, refuses
+  whitespace immediately inside either end, and fails its scan on a newline or a backtick; a closing
+  dollar may be neither half of a `$$` nor followed by a digit. Together those guards are what keep
+  currency, shell variables, escaped dollars, and code spans from being eaten as mathematics. A display
+  marker opens only at a block start, allows only whitespace after its close, may span lines, must be
+  non-empty, and stays ordinary prose while unclosed. Math is never parsed inside inline or fenced code.
 - **Mathematics is the one audited HTML insertion.** KaTeX renders inside the math token and only there;
   every other node in the tree is React elements. An invalid expression stays visibly readable — it
-  never blanks a message and never throws through React. Math inside code stays code, and inline math
-  never crosses a code span or a line break, so shell variables, currency, and escaped dollars remain
-  prose.
+  never blanks a message and never throws through React — and an unexpected parser failure degrades to
+  the escaped source rather than an empty or broken surface.
 - **The style contract rides the renderer's entry, not a consumer's chunk.** KaTeX's stylesheet and the
   prose CSS load with the one renderer, so every route that can show prose can show mathematics by
   construction. No surface may inherit math styling from another surface's lazy chunk — that coupling is
@@ -74,10 +88,21 @@ made this node necessary.
   renderer, passing the resolver and handlers its callers already have; it is DELETED once the four
   body surfaces are through. `NodeView`'s first-heading suppression stays a CALLER concern — the caller
   chooses which source text it hands over — and never becomes a renderer option.
+- **The existing regressions MIGRATE; they are not re-derived.** The console's renderer already ships a
+  unit suite over these guards and a browser suite that locks real text-node selection, composer focus,
+  desktop and phone overflow, and a remote image actually decoding. Those tests move onto the unified
+  renderer — a rewritten implementation that cannot satisfy them is wrong by definition, and re-deriving
+  a second set of rules for the same behaviour is how the two dialects were born in the first place.
 - **Each migrated surface re-measures its own scenario.** The body surfaces carry eval scenarios that
   already assert rendered Markdown (headings/tables/lists, no raw `##` or pipes) and, for the thread,
   playing evidence media; every one of them is re-measured through the real browser as it moves, so the
   unification is proven surface by surface instead of claimed once.
+- **The renderer boundary is reviewed by the engine's own node, per surface.** The console node that
+  brought the parser holds review over the BOUNDARY and its invariants — not over any page's UX — and at
+  minimum sees three commits: the core token tree with the first body surface, the thread's semantic
+  tokens (where the pre-strip dies), and the timeline's final migration with the old path's deletion.
+  Ownership of the migration and of each page's surface stays with this node; the boundary review is what
+  keeps one renderer from quietly re-growing two dialects.
 - **What this node deliberately does not add**: no HTML sanitizer, image allowlist, or remote-content
   policy beyond the parser's and KaTeX's own untrusted-source defaults; no syntax highlighter; no
   Markdown editor; no second message model; and no page-local escape hatch back into a private dialect.

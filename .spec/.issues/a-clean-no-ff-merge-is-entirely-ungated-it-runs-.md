@@ -26,3 +26,27 @@ Remedy is small: ship `pre-merge-commit` as a shim over the same check pre-commi
 the templates dir, so init's receipt, materialize, and CI's byte-parity check move with it.
 
 Not acting on this in my lane — recording it so it does not evaporate.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:43:11.485Z -->
+CORRECTION — the title and the original body overstate this. Measured (git 2.43.0, probe repo):
+
+A clean `git merge --no-ff` runs:
+
+    pre-merge-commit    yes  (SpexCode ships none -> nothing happens)
+    pre-commit          NO
+    commit-msg          YES  — with MERGE_HEAD present and the staged tree readable
+
+So a clean merge is NOT "entirely ungated". It skips `pre-commit` — which is where spec-lint,
+main-guard, and the eval backstop live today — but `commit-msg` does fire. Today SpexCode's
+`commit-msg`... it ships none either, so in PRACTICE nothing gates a clean merge. The defect is
+real; my description of the mechanism was wrong.
+
+This matters beyond bookkeeping: it means the gate a clean merge is missing can be restored EITHER
+by adding `pre-merge-commit` (as I originally suggested) OR by putting the check in `commit-msg`,
+which fires for both ordinary commits and clean merges through one path instead of two.
+
+Also verified while checking this: `commit-msg` receives `GIT_INDEX_FILE` pointing at the temp
+index under `git commit -a` (`.git/index.lock`) and `--only` (`.git/next-index-NNN.lock`), and
+`git diff --cached` under it reports the correct file set (`--only b.txt` reported only b.txt).
+So a commit-msg-hosted check sees the true pending content in every commit mode — provided it does
+not strip GIT_INDEX_FILE, which is the sibling issue.

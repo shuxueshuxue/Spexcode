@@ -1439,3 +1439,96 @@ P35 升级(判决随目录字母序在 0↔2 跳,正确恒为 1)之后,我提了
 - first-error / 资源失败不得被当成普通 green verdict
 
 **可复用的教训:**要断言"结果不该依赖 X",必须先精确说清 X 之外的**全部**输入是什么;少列一项,断言就会把合法变化误报成缺陷。我第一版少列了 capability fingerprint,又把一个携带语义的标识符(node id)当成了可自由置换的坐标。**不变量写得太宽和写得太窄一样有害:太窄漏抓,太宽自伤。**
+
+<!-- reply: 2310966c-954a-45d5-abf1-e85420574242 @ 2026-07-25T18:54:40.285Z -->
+## 第二阶段 marker 身份边界：三个公开可观测面都不足以证明“这是刚才那次本地提交”
+
+第一阶段已落 main。第二阶段冻结一条前提：强制验收 #6 的覆盖面不变，fetch / reset / branch / sequencer / `--no-verify` 不能因为“简化 marker”开始付 lint 或被拒。以下是否定证据，不是 living product contract。
+
+### 1. ref 命名空间只能描述“更新哪里”，不能证明“对象由本地 commit-msg 创作”
+
+复现：
+
+```bash
+bash /tmp/msg-hash-stale-fetch-probe-2310.sh
+NO_HASH=1 bash /tmp/msg-hash-stale-fetch-probe-2310.sh
+```
+
+夹具先让 GPG signing 失败，留下真实 canonical `commit-msg` arm；远端随后生成一个与 arm **同 parent、同 tree、不同 message** 的 fresh commit，再 fetch 到本地已有 `refs/heads/incoming`。该对象在 prepared 时对本地 ref/reflog 均不可达，所以现行“fresh object”闩完整通过。
+
+实测：
+
+```text
+保留 msg_hash: fetch rc=128, lost message identity, ref 原地
+删除 msg_hash: fetch rc=0, 但 reference-transaction 真跑完整 spec lint --pending
+```
+
+两者都违反 #6：一个硬拒 fetch，一个让 fetch 付完整 lint。把 ref 限到“当前 branch”也不是总解：`/tmp/msg-hash-stale-reset-probe-2310.sh` 用 fresh dangling commit 做 `reset --hard`，它与普通 branch commit 的 transaction 都是同一组 `HEAD + refs/heads/current` 更新。
+
+结论：`refs/heads/*`、当前分支、对象“本地新见”都不能表达 provenance。fetch 收到的新对象与本地刚写出的新对象在这些维度上可完全相同。
+
+### 2. reference hook 的公开环境没有 operation identity
+
+复现：
+
+```bash
+bash /tmp/reference-env-probe-2310.sh
+```
+
+ordinary commit、fresh fetch、reset 三条路径在 reference hook 内逐项记录：
+
+```text
+GIT_REFLOG_ACTION=unset
+GIT_QUARANTINE_PATH=unset
+GIT_INDEX_FILE=unset
+GIT_DIR=unset
+GIT_WORK_TREE=unset
+```
+
+参数只给 `(old,new,ref)`；没有“由 commit-msg 进入”或“这是 fetch/reset”的稳定字段。给 fetch/reset 加命令名特判在这里没有输入可依赖，只能改成进程探测或其他旁路。
+
+### 3. 同一父 Git PID 在本机成立，但不是 Git hook 契约
+
+复现：
+
+```bash
+bash /tmp/hook-parent-identity-probe-2310.sh
+bash /tmp/hook-parent-matrix-2310.sh
+```
+
+Git 2.43 本机实测 ordinary、`commit -a`、`commit --only`、amend、detached、clean merge、冲突后的 `merge --continue` 中，`commit-msg` 与 prepared/committed `reference-transaction` 的 `$PPID` 与父进程启动时间一致；fetch/reset 则来自另一 Git 进程。
+
+但本机 `githooks(5)` 只承诺每个 hook 的参数、环境与 cwd。`commit-msg` 条目只说由 `git-commit`/`git-merge` 调用；`reference-transaction` 条目只说由执行 ref update 的 Git 命令调用。没有跨 hook 共用同一 OS 进程的保证。
+
+结论：PPID 是当前 Git 2.43 的实现事实，不是稳定接口。依赖它会把 message-cleanup 脆弱性换成进程拓扑、PID 复用和跨 Git 版本/平台脆弱性；在这些边界被独立证明前，不能称为确定性身份。
+
+### 同一问题的产品化见证：message mismatch 是二义观测
+
+```bash
+bash /tmp/msg-hash-scissors-probe-2310.sh
+```
+
+正常 canonical `git commit --cleanup=scissors` 确实运行了 `commit-msg`，真实 candidate 也已创建；现行 arm 只存 raw / whitespace / strip 三种投影，没有 scissors，故同样报：
+
+```text
+rc=128
+lost message identity
+```
+
+临时只补正确 scissors 投影后，同一提交 rc=0、真跑 pending lint，最终 message 正确截断；stale fetch 的行为完全不变。故 scissors 是可独立修的纯 bug，但它也证明 `message mismatch` 同时可能表示：
+
+- stale fetch：应 ALLOW 且零 lint；
+- ordinary scissors commit：应进入 candidate lint。
+
+简单 `reject` 与简单 `skip` 各错一边。公开写进 commit object 的 marker 也不解决：实测 cherry-pick 与 `--amend --no-verify` 均不跑 `commit-msg`，却原样复制 marker；公开字节证明不了 hook provenance。nonce/HMAC 若要恢复证明力，又必须让 reference 端持外部秘密或状态，旁路仍在。
+
+### 后续方案的最低验收
+
+覆盖面完全不变，且同一实现同时满足：
+
+1. GPG stale arm + fresh fetch：fetch 成功，零 pending lint；
+2. ordinary `--cleanup=scissors`：candidate 真正被 pending lint 判断；
+3. reset/branch/fetch/#6 全表不新增拒绝或 lint；
+4. ordinary/amend/`-a`/`--only`/detached/clean merge/conflict `merge --continue` 不得因身份机制失配而静默 bypass。
+
+这三条否定结果划定的是现有公开可观测量的边界，不证明问题永远无解；但任何新提案若只是 ref 特判、环境变量或 PPID，必须先跨过对应反例，不能再以“简化 marker”名义改变覆盖契约。

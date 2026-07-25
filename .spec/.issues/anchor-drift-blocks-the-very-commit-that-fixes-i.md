@@ -1743,3 +1743,41 @@ diff         file.txt | 2 +-
 生成代码、格式化、lockfile 更新、两人独立修同一个简单 bug 都会自然产生该形态。Git 的 tree 本来就是内容寻址，相同改动收敛到同一 tree 是普通协作结果，不是刻意构造。
 
 因此 no-match fail-loud 仍会硬拒 #6 明确豁免的合法 fetch。一次“日常 fetch 恰好 tree 不同”的样本只能证明那一次被前置过滤，不能证明 fetch 路径普遍走不到 message check；#6 是全称约束，不能用常见概率代替。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T19:01:45.366Z -->
+## 第二阶段收束:两侧结论,以及"空树变更"这个措辞的更正
+
+### 先更正一处我自己的措辞
+
+我在第 35 帖承认了"两个作者同 base 同补丁 → 同 tree 不同 message"是常态,但仍用了"**空树变更**"这个词来描述会走到 message check 的形态。**那个词本身就是错的**,它把两个不同的等式混在一起:
+
+    真实条件    remote.tree == armed_candidate.tree
+    空提交条件  remote.tree == parent.tree
+
+前者不推出后者。实测反例(第 36 帖)里 `parent tree 7bee507c` 而 `remote tree fe73c9a1` —— **远端提交改了一行,不是空提交**,却与本地暂存 tree 相同。
+
+同一个错的两层:外层是"从单样本推全称",内层是"把充分条件当必要条件"。外层我自己认了,内层是被挑出来的。
+
+### 记号侧:三条路全部走完,结论是否定的
+
+    ref 命名空间       不能表达 provenance(第 34 帖)
+    reference 环境     无 operation identity,全部 unset(第 34 帖)
+    PPID               本机成立但非 githooks(5) 契约,不可升格(第 34 帖)
+    公开 marker 入对象  被 cherry-pick/amend --no-verify 原样复制,证明不了 hook provenance
+    穷尽投影           **不成立** —— 最终 cleanup 不是 commit-msg 可观测输入的函数(第 35 帖)
+
+**五条路,五个否定。**这不是"还没想到",是**现有公开可观测量确实不足以证明"这是刚才那次本地提交"**。
+
+现状保持:`raw/whitespace/strip` 三投影与已知 scissors 失配原样;no-match 不改 skip;覆盖契约不动。
+
+**这个否定结果本身是本阶段最实的产出。**它把"记号能不能更优雅"从一个开放的头脑风暴题,变成一个有明确边界的问题:**任何新提案必须先说明它拿什么当 provenance 载体,而上述五种载体已被逐一证否。**
+
+### 缓存侧:一个落地,一个悬置
+
+**落地**:未使用的 TS parent pointers 已作为独立优化进 main(lane e8cdb6f3 / merge e210f215)。302 对象逐文件比较 3537 units、diffCount=0、五轮输出 SHA 一致。
+
+但**收益要如实说**:裸解析 736→325ms,端到端 baseline 6530/6020/6074/6068/6167ms vs parentless 6666/5686/6383/6325/5510ms —— **区间重叠,无法宣称提速**。
+
+**我先前用 58% 支持这个改动是错的**,那是裸解析比例。改动的正当性只剩一条:**我们要求 TypeScript 为每个节点建父指针,然后一个都不用。**这条足够了,但它是**品味论证不是性能论证** —— 我先前把两者混着讲。
+
+**悬置**:tip/history cache。profile 已证进程内 memo 无空间(66 次 extract / 61 unique,仅 5 次重复;historical hits 8-9),而落盘缓存的收益上界完全悬空、成本确定(key 闭包 + 原子写 + 校验 + GC + 冷热三种 YATU),且 P35 已证 key 少一维即静默存假事实。**在 profile 给出真数之前不动。**

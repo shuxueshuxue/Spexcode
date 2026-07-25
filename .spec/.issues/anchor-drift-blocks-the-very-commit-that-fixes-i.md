@@ -136,3 +136,46 @@ discovering an environment-variable bypass, the ratio is not a measure of dilige
 Fix is unchanged and now better motivated: let the gate ask whether the drift-reporting node's
 spec.md is in this commit's staged set. That equalizes the two remedies instead of taxing the
 honest one.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:40:49.697Z -->
+SECOND, DISTINCT FINDING — the rule is always one commit late, and the cost lands on the wrong
+person. (Raised by the human asking the obvious question: if drift is counted from commits, and
+my code edit is also merely staged, why does anything block at all?)
+
+The answer is that both sides of the comparison read committed history, symmetrically:
+
+    the drift-CAUSING side   must be committed to count
+    the drift-FIXING side    must be committed to count
+
+Nothing staged is visible on either side. So the block was never "my staged edit was misjudged"
+— it was "the drift was already in history, and my fix is not history yet".
+
+The consequence follows directly, and is verified on this session's own commits:
+
+  847ee8c4 changed SessionInterface.jsx — the unit session-console anchors — and did NOT touch
+  session-console/spec.md. It passed its own pre-commit cleanly, no bypass. The NEXT commit was
+  blocked.
+
+At its own pre-commit moment, the offending commit does not exist yet, so history looks clean to
+it. The rule therefore NEVER stops the commit that creates the drift; it stops whatever comes
+next. And because lint scans the whole tree, "whatever comes next" is not necessarily the same
+worktree or the same person.
+
+That is not hypothetical either. Merge 53451009 carried this drift onto main, and every worker's
+next commit was blocked repo-wide until it was answered — a neighbouring session (67c463e8)
+noticed and came to tell me.
+
+So cause and cost are SEPARATED:
+
+    the author who creates the drift    passes, learns nothing
+    the next person to commit anywhere  is blocked, often with no context
+
+This compounds the incentive problem in the previous post. Someone blocked by a drift they did
+not create has no basis for judging whether the contract genuinely moved — they cannot honestly
+rewrite a body they did not touch. The only defensible action left to them is an ack. The 69:2
+ratio is not merely convenience winning; it is partly the mechanism handing the decision to the
+one person least equipped to make it.
+
+Worth considering alongside the staged-set fix: whether the gate should also evaluate the
+CURRENT commit's own staged content, so the commit that moves an anchored unit answers for it
+at the moment it moves it, instead of billing the next passer-by.

@@ -69,9 +69,10 @@ export class PiHeadlessController {
       if (!this.server) return resolve()
       this.server.close(() => resolve())
     })
-    try { rmSync(this.socketPath, { force: true }) } catch { /* best-effort cleanup after close */ }
-    const { rvSock } = await import('./harness.js')
-    try { rmSync(rvSock(this.id), { force: true }) } catch { /* pi may already have removed it */ }
+    // same proof-before-removal rule as every other teardown (harness.ts unlinkSocks): a socket path is keyed
+    // by session id alone, so only a listener PROVEN dead is ours to unlink.
+    const { rvSock, unlinkSocks } = await import('./harness.js')
+    await unlinkSocks(this.socketPath, rvSock(this.id))
   }
 
   private accept(socket: Socket): void {

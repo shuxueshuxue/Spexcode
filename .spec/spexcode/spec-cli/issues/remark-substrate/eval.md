@@ -21,8 +21,8 @@ scenarios:
       succeeds (200, the reply removed from the thread).
   - name: external-write-freshness
     tags: [frontend-e2e]
-    code: spec-cli/src/index.ts
-    related: [spec-cli/src/graph.ts, spec-dashboard/src/App.jsx]
+    code: spec-dashboard/src/IssuesPage.jsx
+    related: [spec-cli/src/graph.ts, spec-cli/src/issues.ts, spec-cli/src/index.ts, spec-dashboard/src/App.jsx]
     description: >-
       A real browser sits on the dashboard's Issues page with a local thread's detail open (an on-page
       wall clock burned into the recording). A remark then lands on that thread through POST /api/remarks
@@ -31,6 +31,20 @@ scenarios:
       The write is push-visible: persistence atomically invalidates the board cache and the viewer's
       thread shows the new remark within a couple of seconds (one debounce + rebuild + refetch), never
       waiting for the ~15s cold/fallback lane.
+  - name: reading-remark-freshness
+    tags: [frontend-e2e]
+    code: spec-cli/src/issues.ts
+    related: [spec-cli/src/graph.ts, spec-dashboard/src/EvalsPage.jsx]
+    description: >-
+      The SAME external-write window on the substrate's OTHER host. A real browser sits on an open READING
+      detail (#/evals/<node>/<scenario>, reached warm through the board — a cold Evals address is the
+      deliberately boardless light entry and is out of scope). A scenario-hosted remark then lands on that
+      reading through POST /api/remarks from outside the tab. Record the window as video.
+    expected: >-
+      The reading's remark track shows it within a couple of seconds, exactly as an issue-hosted remark
+      reaches an open thread: the board's one freshness stamp folds the WHOLE thread store, so a write on
+      an eval track moves board bytes like any other. A stamp folded over the issue population alone moves
+      nothing here, no delta is broadcast at all, and the viewer stays blind past 30s — not late, blind.
 ---
 # measuring remark-substrate
 

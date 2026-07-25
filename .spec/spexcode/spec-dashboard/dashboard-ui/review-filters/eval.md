@@ -2,6 +2,7 @@
 scenarios:
   - name: canonical-and-embedded-filters-are-one
     tags: [frontend-e2e, desktop, mobile]
+    test: spec-dashboard/test/review-filters-one-engine.e2e.mjs
     code: spec-dashboard/src/reviewFilters.js
     description: >-
       Record a real Chromium run against the live dashboard at desktop and 390px. On #/issues and #/evals,

@@ -79,8 +79,12 @@ test('every control is a token BUILDER over the committed text — no private fi
   assert.match(serverReviews, /tokenFilterState\(text, 'issue'\)/)
   assert.match(serverReviews, /paginateReview\(issues, model\.shown/)
   assert.match(serverReviews, /paginateReview\(items, filtered\.shown/)
-  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| 0/)
-  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| 0/)
+  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| \{\}/)
+  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| \{\}/)
+  // the measured verdicts' freshness split is READ from the server fold, never re-derived from the slice.
+  assert.match(evals, /count: failCount\.fresh \|\| 0, countSuffix: staleSuffix\(failCount\.stale \|\| 0\)/)
+  assert.match(evals, /count: passCount\.fresh \|\| 0, countSuffix: staleSuffix\(passCount\.stale \|\| 0\)/)
+  assert.doesNotMatch(evals, /items\.(?:filter|reduce)\([^)]*fresh/)
   assert.match(issues, /const openCount = data\?\.counts\?\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
@@ -270,9 +274,12 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.BLIND/)
   assert.doesNotMatch(evals, /reading: (?:true|false)/)
-  assert.match(evals, /count: failCount/)
-  assert.match(evals, /count: passCount/)
+  assert.match(evals, /count: failCount\.fresh/)
+  assert.match(evals, /count: passCount\.fresh/)
   assert.match(evals, /count: unmeasuredCount/)
+  // the split's second number is the shared chip's own quiet suffix, part of the button, not a control.
+  assert.match(shell, /\{section\.countSuffix && <span className="rl-section-suffix">\{section\.countSuffix\}<\/span>\}/)
+  assert.match(evals, /const staleSuffix = \(n\) => \(n > 0 \? `\+\$\{n\} \$\{t\('reviewList\.freshness\.stale'\)\}` : null\)/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)

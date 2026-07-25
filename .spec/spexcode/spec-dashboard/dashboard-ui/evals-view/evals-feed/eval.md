@@ -15,6 +15,26 @@ scenarios:
       Unmeasured with stable full-population counts and no pressed default. Clicking Unmeasured pushes
       `verdict:unmeasured`, returns only inert declared-without-reading rows, and clicking it again restores
       the bare default.
+  - name: measured-chips-lead-fresh-and-name-stale
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/eval-verdict-freshness.e2e.mjs
+    code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]
+    related: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Against a branch-local backend carrying a real remeasurement backlog, open the default #/evals in a
+      real Chromium served from the PREBUILT dashboard dist (never a dev server). Read the Fail, Pass, and
+      Unmeasured chips' rendered text and the `/api/evals` counts behind them. Then submit
+      `is:eval freshness:fresh`, re-read the same chips, and submit `is:eval freshness:stale`. For each of
+      the three views compare the chip numbers against that view's own response and against the row total a
+      verdict click returns.
+    expected: >
+      Each measured chip renders TWO numbers: the fresh count, then one quieter suffix naming the stale
+      count with the same localized stale word the freshness facet uses. Those two are the verdict's whole
+      population — they re-add to `counts.<verdict>.fresh + counts.<verdict>.stale` and to the total that
+      selecting that verdict returns, so the split never shrinks a count. Unmeasured renders one number and
+      no suffix. Under `freshness:fresh` every stale half is zero and no chip renders a suffix at all; under
+      `freshness:stale` the fresh halves are zero and the suffixes carry the whole population. The page reads
+      those numbers from the server response only — no chip is derived from the 25 rows it holds.
   - name: unmeasured-filter-mobile-header
     tags: [frontend-e2e, mobile]
     code: [spec-dashboard/src/EvalsFeed.jsx]

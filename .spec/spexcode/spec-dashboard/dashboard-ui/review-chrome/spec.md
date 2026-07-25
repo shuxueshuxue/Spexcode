@@ -57,7 +57,11 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   ellipsis, or "More actions" affordance. A stable badge counts ACTIVE filter GROUPS currently housed in
   that menu (not matching rows): desktop excludes a facet still visible beside the trigger, while 390px
   includes every displaced group; zero has no badge. Its accessible name includes the same active count.
-  Tab counts are computed under the REST of the query. When no secondary group has real options and none
+  Tab counts are computed under the REST of the query. A section may also carry ONE quieter count SUFFIX
+  beside its number when its domain splits that section ([[review-filters]]; Evals' stale remeasurement
+  debt): it is part of the same button — its label, its accessible name, never a second control or a second
+  pill of equal weight — supplied as text by the page and dropped at 390px, where the header is already
+  width-bound. When no secondary group has real options and none
   is active, the trigger is absent: no real options means no fake control. An ACTIVE value whose menu
   option vanished keeps a cheap All off-switch (the visible text is the canonical release).
   Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm

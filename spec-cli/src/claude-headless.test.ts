@@ -18,7 +18,7 @@ const processAlive = (pid: number) => {
   try { process.kill(pid, 0); return true } catch { return false }
 }
 
-test('claude-headless is a fifth adapter with Claude materialization and a replaced runtime half', () => {
+test('claude-headless is a fifth adapter with Claude materialization and a replaced runtime half', async () => {
   assert.deepEqual(HARNESSES.map((h) => h.id), ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless'])
   const proj = '/tmp/project'
   assert.equal(claudeHeadlessHarness.shimFile(proj), claudeHarness.shimFile(proj))
@@ -35,7 +35,7 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)
   const cleanupId = `cleanup-${process.pid}`
   writeFileSync(claudeHeadlessSock(cleanupId), 'stale')
-  claudeHeadlessHarness.cleanupRuntime({ session: cleanupId })
+  await claudeHeadlessHarness.cleanupRuntime({ session: cleanupId })   // removal awaits its proof-of-death probe
   assert.equal(existsSync(claudeHeadlessSock(cleanupId)), false, 'adapter teardown removes a stale control socket')
 })
 

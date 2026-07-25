@@ -63,3 +63,38 @@ that test — one rewrote the body, one stamped an ack, and both touch the spec.
 
 Closing this before the hook changes would only mean the next person rediscovers
 `SPEXCODE_SKIP_LINT=1` on their own.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:31:47.943Z -->
+CORRECTION — I overstated this. The deadlock is real but NARROWER than reported, and the
+mechanism already contains the right idea.
+
+The pre-commit hook opens with a tree-unchanged escape:
+
+    if [ "$(git write-tree)" = "$(git rev-parse 'HEAD^{tree}')" ]; then exit 0; fi
+
+Its own comment names this exact deadlock and solves it for one remedy: "...the lint shim below
+reads the real index, which would otherwise block the stamp on the very drift it acknowledges."
+
+So of the two remedies the error message recommends:
+
+  spex spec ack       tree unchanged (empty stamp)  -> passes today, by design
+  rewrite the body    tree changed (spec.md edited) -> BLOCKED
+
+Verified on this session's own commits: 1cc12602 (rewrite) needed SPEXCODE_SKIP_LINT=1;
+4be2ab67 (ack) went straight through, tree == parent tree.
+
+I had claimed both encounters needed the bypass. Only the first did. The second I answered with
+an ack, which has a front door.
+
+This makes the report SMALLER and the fix cleaner. It is no longer "invent an escape" — it is
+"the existing escape asks the right question with too narrow a test":
+
+    today:     did this commit change the tree at all?
+    proposed:  ...or is the drift-reporting node's spec.md in this commit's staged set?
+
+Both are decidable at pre-commit time, and the second is the same reasoning the first already
+encodes: a commit touching that spec.md is by construction one of the two honest remedies.
+
+What stands unchanged: rewriting the body is the FIRST remedy the error text recommends, and it
+is the only one that cannot be performed through the gate. An escape hatch should not be
+load-bearing for the primary repair path.

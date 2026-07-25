@@ -103,6 +103,12 @@ async function corruptRecordIsDiagnosable(home: string, worktree: string): Promi
   // drift into a shape that is merely convenient to detect.
   const sample = readFileSync(join(packageRoot, 'test', 'fixtures', 'corrupt-session-record.json'), 'utf8')
   const cid = JSON.parse(sample.split('\n')[1].replace(/^\s*"session_id":\s*/, '').replace(/,$/, ''))
+  // HARD GUARD. This fixture closes the id it plants, and `close` reaps runtime keyed on the BARE uuid in a
+  // SHARED /tmp (rvSock) — so an id belonging to a real session would have its rendezvous socket deleted out
+  // from under a LIVE agent, no matter how isolated this backend's store and tmux socket are. That happened:
+  // the sample was landed with the reporting session's own id still in it. The corruption SHAPE is what this
+  // measures; the identity must be synthetic, and this refuses to run if it ever stops being.
+  assert.match(cid, /^0{8}-0{4}-4000-8000-/, `the corrupt fixture must carry a SYNTHETIC session id, got ${cid}`)
   const rec = await recordPath(home, worktree, cid)
   mkdirSync(dirname(rec), { recursive: true })
   writeFileSync(rec, sample)

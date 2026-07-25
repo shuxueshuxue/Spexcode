@@ -179,3 +179,53 @@ one person least equipped to make it.
 Worth considering alongside the staged-set fix: whether the gate should also evaluate the
 CURRENT commit's own staged content, so the commit that moves an anchored unit answers for it
 at the moment it moves it, instead of billing the next passer-by.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:43:17.257Z -->
+PROPOSED FIX — and a retraction of my own earlier one.
+
+Withdrawing the staged-set exemption I proposed in post 1. Checked against [[taste]] #2 (one
+unified mechanism, not special cases) and #3 (spend complexity only to buy it back), it is the
+wrong shape: it bolts a SECOND escape hatch beside the existing `tree == HEAD^{tree}` one, two
+special cases guarding the same concern. It treats the symptom.
+
+The root cause is one sentence: THE GATE ASKS THE WRONG QUESTION.
+
+    asks today:  does history contain drift?              <- unanswerable at pre-commit
+    should ask:  will the commit I am about to make leave drift?
+
+A pre-commit hook exists to judge the commit about to happen. This one inspects history instead —
+where the damage has already occurred and blocking anyone is pointless — and is structurally
+blind to the thing it is actually gating. Both pathologies (one-commit-late, inverted incentive)
+are two faces of that single misalignment.
+
+The fix changes the INPUT, not the rule. Evaluate the anchor comparison against the STAGED tree,
+as though it were the next commit:
+
+    moves an anchored unit AND updates that node's spec.md  -> version advances in the same
+                                                              commit, no drift, passes
+    moves an anchored unit, spec.md untouched               -> blocked HERE, with the author
+                                                              present and holding the context
+    empty ack stamp (tree == parent tree)                   -> introduces nothing, passes
+    drift already in history                                -> reported by spex spec lint (and
+                                                              CI), no longer a booby trap for
+                                                              the next unrelated committer
+
+Why this BUYS complexity back rather than spending it:
+
+  - the `tree == HEAD^{tree}` escape can be DELETED — an empty stamp introduces no drift under
+    the new input, so it needs no special case
+  - the staged-set exemption never gets built
+  - it is CHEAPER: one staged diff, instead of walking the commit chain
+  - the language-adapter seam is untouched. It already extracts symbols from a file blob at some
+    point in time; this feeds it the staged blob instead of a committed one. Same operation, no
+    new seam, no new row.
+
+And it finally lets the rule see this project's own ritual. CLAUDE.md fuses the code change and
+the spec change into ONE commit. At pre-commit time neither is committed, so the current judge is
+blind to exactly the shape it is supposed to reward. Judging the staged tree makes ritual-shaped
+commits pass naturally, and stops the ones that quietly move an anchored unit without saying so.
+
+OPEN QUESTION I am not going to hand-wave: how should a MERGE commit be judged? Its staged
+content carries everyone else's changes, so the merger would answer for them. Defensible — the
+merger is the human deliberately landing them on the trunk, and merges are a human act here — but
+potentially noisy. That is a judgment call for whoever implements this, not a detail to wave past.

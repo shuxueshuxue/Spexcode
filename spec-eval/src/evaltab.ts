@@ -1,5 +1,5 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex, historyIndex, primeLazyPathWindows, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
+import { repoRoot, driftIndex, historyIndex, primeLazyPathWindows, commitReachable, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { evalNodes, type EvalNode, type ScenarioTestReference } from './scenarios.js'
@@ -184,8 +184,11 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
-    const reachable = await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
-    if (!reachable) await probe.prime?.(r.codeSha, cf, ynode.evalPath)
+    // Reachability is the content-fallback boundary. primeLazyPathWindows answers a different question:
+    // whether an already-reachable lazy index has its path windows primed; on a non-lazy index it is a
+    // deliberate no-op and therefore cannot decide whether an off-history anchor needs the content probe.
+    if (commitReachable(idx, r.codeSha)) await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
+    else await probe.prime?.(r.codeSha, cf, ynode.evalPath)
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.

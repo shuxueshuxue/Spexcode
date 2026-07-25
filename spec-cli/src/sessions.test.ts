@@ -142,7 +142,9 @@ test('a launch failure the harness itself called settled is attempted exactly on
   // failure to STDOUT, the stream real reclaude uses. An earlier version of this test printed to stderr and
   // passed against a stderr-only implementation that could not classify a real harness at all.
   const sock = `spex-launch-class-${process.pid}`
-  const run = (name: string, stubBody: string): { attempts: number; pane: string } => {
+  // `stale` pre-seeds the pane with a settled-failure line from an EARLIER run before the launch line is
+  // typed — the scrollback condition that must not condemn the current attempt.
+  const run = (name: string, stubBody: string, stale = false): { attempts: number; pane: string } => {
     const counter = join(home, `${name}.attempts`)
     const stub = join(home, `${name}.sh`)
     writeFileSync(stub, `echo x >> ${JSON.stringify(counter)}\n${stubBody}\nexit 1\n`)
@@ -150,6 +152,11 @@ test('a launch failure the harness itself called settled is attempted exactly on
     // exactly how the product starts a worker: an idle shell window, then the launch line typed into it. The
     // shell outlives the script, so the pane keeps everything the run printed — no remain-on-exit race.
     execFileSync('tmux', ['-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80'])
+    if (stale) {
+      execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, '-l', '--', 'echo "No conversation found with session ID: an-earlier-run"'])
+      execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, 'Enter'])
+      spawnSync('sleep', ['0.5'])
+    }
     execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, '-l', '--', `bash ${script}`])
     execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, 'Enter'])
     const deadline = Date.now() + 60_000
@@ -173,6 +180,18 @@ test('a launch failure the harness itself called settled is attempted exactly on
     const unclassifiable = run('unclassifiable', 'echo "the wrapper fell over"')
     assert.equal(unclassifiable.attempts, 3, `an unclassifiable fast exit keeps the bounded readiness retry\n${unclassifiable.pane}`)
     assert.match(unclassifiable.pane, /fast launcher exit before readiness; retrying/)
+
+    // the scrollback trap: an OLD settled-failure line is already on the pane, but this run's failure is not
+    // one — it must still get all three attempts, or a stale line would cut a recoverable launch.
+    const stale = run('stale', 'echo "the wrapper fell over"', true)
+    assert.match(stale.pane, /No conversation found with session ID: an-earlier-run/, 'the stale line really was on the pane')
+    assert.equal(stale.attempts, 3, `a stale settled line must not condemn an unrelated fast exit\n${stale.pane}`)
+    assert.doesNotMatch(stale.pane, /retrying cannot fix/, 'nothing was misclassified as settled')
+
+    // and with the same stale line present, a genuine settled failure this run is STILL caught once
+    const staleAndSettled = run('stale-settled', 'echo "No conversation found with session ID: this-run"', true)
+    assert.equal(staleAndSettled.attempts, 1, `a real settled failure is still spent once\n${staleAndSettled.pane}`)
+    assert.match(staleAndSettled.pane, /retrying cannot fix/)
   } finally {
     spawnSync('tmux', ['-L', sock, 'kill-server'], { stdio: 'ignore' })
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME

@@ -1216,14 +1216,22 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   const launchBody = harness.launchOneShot ? [born, ''] : [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
+    // @@@ classify THIS attempt only - the pane is a scrollback, so it also holds every earlier attempt and
+    // every earlier launch that ever ran in this window. Matching the whole capture would let a stale
+    // settled-failure line from minutes ago condemn an unrelated fast exit and cut a launch that retrying
+    // WOULD have recovered — the exact mirror of the miss this classifier exists to fix. So each attempt
+    // stamps a line unique to (this run, this attempt) and the match starts after it. The run's pid is what
+    // makes it unique across relaunches, which reuse the session id.
+    `  __spex_mark="attempt $__spex_try start $$"`,
+    `  printf '[spex launch] %s\\n' "$__spex_mark"`,
     `  ${born}`,
     `  __spex_rc=$?`,
     `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
     ...(fatal ? [
-      // no -L and no -t: the script runs INSIDE the pane, so tmux resolves its own server and pane from $TMUX.
-      // Baking a socket name in would make the launch line depend on which socket the backend happened to use;
-      // run outside tmux the call simply fails, the grep matches nothing, and the plain bounded retry stands.
-      `  if tmux capture-pane -p -S -400 2>/dev/null | grep -Eq ${shq1(fatal)}; then`,
+      // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
+      // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
+      // bounded retry stands.
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shq1(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,

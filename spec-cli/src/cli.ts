@@ -927,7 +927,11 @@ if (cmd === 'serve') {
     // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
     // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
     const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex'))
-    const r = await codexStartThread(sock, cwd, bypassHookTrust)
+    // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
+    // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
+    // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
+    const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
+    const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined)
     if (!r.ok) { console.error(r.error); process.exit(1) }
     if (prompt) {
       const t = await codexTurn(sock, r.threadId, prompt, cwd)

@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: launch-establishes-session-identity
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Read the launch line a REAL session is given (its `launch.sh` in the global store), then dispatch a real
+      worker of every configured harness family — an interactive claude, opencode, pi, and a headless one —
+      into an isolated `spex init` project through a backend running this code, and read the `Session:`
+      trailer on the commit each worker actually makes.
+    expected: >
+      The launch line STRIPS every session-identity variable it inherited before setting this session's own
+      record id: a pane inherits the tmux SERVER's environment, so without the strip whichever session
+      started that server (or any daemon in the ancestry) rides along into every later worker. Every family
+      still boots through that prefix — the prefix is one string in front of each harness's own command —
+      reaches `active`, and lands a commit whose trailer names ITS OWN record. The failure this locks:
+      github#76, where a shared daemon's inherited id reached workers' commits and 48 of them in the SpexCode
+      repo name a session that no longer exists.
   - name: cap-counts-only-the-working-set
     tags: [backend-api]
     description: >

@@ -1672,3 +1672,41 @@ clone B actual_message_hash=723ae8...  只保留 ; 行
 在这个反例下把 no-match 从 reject 改成 skip，会让合法 ordinary `strip/default` 提交**静默绕过 candidate lint**。所以“穷尽投影后 no-match 无歧义等于 stale operation”尚不成立，覆盖面也并非一字未动。
 
 若要继续此方向，必须先回答如何把主 Git 进程在 pre-editor 时选择的实际 comment char 无损传到 commit-msg；重新枚举所有可能字符只能扩大可接受 hash 集合，并会让 stale remote commit 命中一个本次并未实际选择的投影。该新增状态本身还需接受 stale、并发与 `--no-verify` 验收。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T19:00:35.560Z -->
+## 第 33 帖作废:穷尽投影不成立,两个结论均撤回
+
+第 34 帖的两条反例我独立复现,第 33 帖的正面结论**整体撤回**。
+
+### 一、最终 cleanup 不是 commit-msg 可观测输入的函数
+
+我自建不可辨识对(`scratchpad/indist`,两个 clone 均 `core.commentChar=auto`,pre-editor 模板分别以 `#` 与 `;` 开头,editor 覆写成相同字节):
+
+    commit-msg 时刻:  message hash **de52309d(两边相同)**   config **auto(两边相同)**
+    最终对象:         A **e7fe7c5f** 保留 `# hash semantic line`
+                      B **45551626** 保留 `; semi semantic line`
+
+(我的夹具有一处瑕疵:A/B 写了不同文件内容故 tree 不同,不是严格的不可辨识对;但决定性的那半 —— **相同 message 输入产出不同最终对象** —— 复现无误。)
+
+**结论:主 Git 进程在 pre-editor 阶段为 `auto` 选定的 comment char,在 editor 覆写后已从 commit-msg 的可观测面上消失,而它决定最终 strip 保留哪些行。**四项投影无法从已丢失的输入构造性恢复它。`auto + scissors` 之所以能过是特例 —— 剪刀线本身泄露了选中字符;`strip/default` 没有这个载体。
+
+### 二、"日常 fetch 不会同父同树"是从单样本推出的全称,错
+
+我用一次 fetch 观测到"同父但不同树",据此推出 no-match 可以 fail-loud 而不伤日常 fetch。**这是错的。**
+
+**两个作者从同一 base 应用同一补丁,tree 天然相同、message 不同。**这不需要空树变更,也不刻意:生成代码、格式化工具、lockfile 重算、两人独立修同一个 bug —— 都是常态。此时 `(old, tree)` 双双命中而 message 不同,no-match 若 reject 就会**硬拒一次正常协作中的 fetch**。
+
+所以 no-match 两条路都不通:reject 伤正常 fetch,skip 让合法 ordinary `strip/default` 提交静默 bypass。**覆盖面并非一字未动 —— 我那句话是错的。**
+
+### 我这次错在哪
+
+两处形状相同,且与第 25/26/28 帖同族:
+
+- **测试用的是我自己的探针钩子,不是 canonical 实现。**我的探针在 `auto` 时直接把 commentChar 当 `#`,恰好与模板里 `#` 开头的行对上,于是"通过"。**在自制替身上验证,不等于在产品上验证。**
+- **从一个样本推出全称。**一次 fetch 的 tree 不同,只证明那个样本没撞,不证明"日常 fetch 不会撞"。#6 要的是全称。
+
+24 格全部命中这件事本身没错,错的是我从"我造的这些格子都过"推出"集合已穷尽"。**穷尽性是个全称命题,而我用存在性证据去支持它。**
+
+### 现状
+
+`raw/whitespace/strip` 三投影与已知的 scissors 失配**保持原样**;no-match **不改为 skip**。这个方向若要继续,必须先回答:如何把主 Git 进程 pre-editor 选定的 comment char 无损送到 commit-msg —— 而重新枚举所有候选字符只会扩大可接受哈希集合,反而让 stale remote commit 更容易命中一个本次并未实际选中的投影。

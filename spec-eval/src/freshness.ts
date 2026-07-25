@@ -1,4 +1,5 @@
-import { git, gitA, gitTry, headSha, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
+import { resolve } from 'node:path'
+import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { scenarioHash, type Scenario } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -32,36 +33,128 @@ export type ContentProbe = {
 // back, re-forking one git child per key forever — scenariofresh's oidMemo sizing rule).
 const diffMemo = new Map<string, Set<string> | null>()
 const behindMemo = new Map<string, number>()
-function memo<V>(m: Map<string, V>, k: string, build: () => V): V {
-  if (m.has(k)) { const v = m.get(k)!; m.delete(k); m.set(k, v); return v }
-  const v = build()
-  m.set(k, v)
-  if (m.size > 4096) m.delete(m.keys().next().value!)
-  return v
+function readMemo<V>(m: Map<string, V>, k: string): V | undefined {
+  if (!m.has(k)) return undefined
+  const value = m.get(k)!
+  m.delete(k)
+  m.set(k, value)
+  return value
 }
 function putMemo<V>(m: Map<string, V>, k: string, value: V): void {
+  m.delete(k)
   m.set(k, value)
   if (m.size > 4096) m.delete(m.keys().next().value!)
 }
 
+type HeavyDiffWaiter = {
+  signal?: AbortSignal
+  resolve: (release: () => void) => void
+  reject: (error: Error) => void
+  onAbort: () => void
+}
+type HeavyDiffScope = { active: boolean; waiting: HeavyDiffWaiter[] }
+const heavyDiffScopes = new Map<string, HeavyDiffScope>()
+const diffFlights = new Map<string, Promise<Set<string> | null>>()
+
+// One large tree walk is enough to saturate a production repo's pack/index memory. The graph-wide git
+// permits still bound every child; this narrower domain scheduler keeps only these heavy, immutable-tree
+// comparisons serial per (repo, HEAD), without teaching the git transport what a content fallback is.
+function acquireHeavyDiff(scopeKey: string, signal?: AbortSignal): Promise<() => void> {
+  if (signal?.aborted) return Promise.reject(gitAbortError())
+  let scope = heavyDiffScopes.get(scopeKey)
+  if (!scope) {
+    scope = { active: false, waiting: [] }
+    heavyDiffScopes.set(scopeKey, scope)
+  }
+
+  const releaseFor = (): (() => void) => {
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      scope!.active = false
+      while (scope!.waiting.length) {
+        const waiter = scope!.waiting.shift()!
+        waiter.signal?.removeEventListener('abort', waiter.onAbort)
+        if (waiter.signal?.aborted) {
+          waiter.reject(gitAbortError())
+          continue
+        }
+        scope!.active = true
+        waiter.resolve(releaseFor())
+        return
+      }
+      if (heavyDiffScopes.get(scopeKey) === scope) heavyDiffScopes.delete(scopeKey)
+    }
+  }
+
+  if (!scope.active) {
+    scope.active = true
+    return Promise.resolve(releaseFor())
+  }
+  return new Promise((resolvePermit, reject) => {
+    const waiter: HeavyDiffWaiter = {
+      signal,
+      resolve: resolvePermit,
+      reject,
+      onAbort: () => {
+        const index = scope!.waiting.indexOf(waiter)
+        if (index < 0) return
+        scope!.waiting.splice(index, 1)
+        signal?.removeEventListener('abort', waiter.onAbort)
+        reject(gitAbortError())
+        if (!scope!.active && scope!.waiting.length === 0 && heavyDiffScopes.get(scopeKey) === scope)
+          heavyDiffScopes.delete(scopeKey)
+      },
+    }
+    scope!.waiting.push(waiter)
+    signal?.addEventListener('abort', waiter.onAbort, { once: true })
+  })
+}
+
+async function primeChangedPaths(root: string, rootKey: string, sha: string, current: string): Promise<Set<string> | null> {
+  const diffKey = `${rootKey}\x1f${sha}\x1f${current}`
+  const cached = readMemo(diffMemo, diffKey)
+  if (cached !== undefined) return cached
+  const existing = diffFlights.get(diffKey)
+  if (existing) return existing
+
+  const scopeKey = `${rootKey}\x1f${current}`
+  const flight = (async () => {
+    const release = await acquireHeavyDiff(scopeKey, currentGitBuildAbortSignal())
+    try {
+      const result = await gitTry(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, current])
+      if (!result.ok && result.failure !== 'exit')
+        throw new Error(`git content diff failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
+      const value = result.ok
+        ? new Set(result.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
+        : null
+      putMemo(diffMemo, diffKey, value)
+      return value
+    } finally {
+      release()
+    }
+  })()
+  diffFlights.set(diffKey, flight)
+  try {
+    return await flight
+  } finally {
+    if (diffFlights.get(diffKey) === flight) diffFlights.delete(diffKey)
+  }
+}
+
 export function contentProbeFor(root: string): ContentProbe {
+  const rootKey = resolve(root)
   let head: string | undefined
   const headOf = () => (head ??= headSha(root))
   return {
     async prime(sha, paths, evalPath) {
       const current = headOf()
-      const diffKey = `${root}\x1f${sha}\x1f${current}`
-      if (!diffMemo.has(diffKey)) {
-        const result = await gitTry(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, current])
-        putMemo(diffMemo, diffKey, result.ok
-          ? new Set(result.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
-          : null)
-      }
-      const diff = diffMemo.get(diffKey)
+      const diff = await primeChangedPaths(root, rootKey, sha, current)
       if (!diff) return
       for (const path of new Set(paths)) {
         if (!diff.has(path)) continue
-        const behindKey = `${root}\x1f${sha}\x1f${current}\x1f${path}`
+        const behindKey = `${rootKey}\x1f${sha}\x1f${current}\x1f${path}`
         if (behindMemo.has(behindKey)) continue
         const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
         putMemo(behindMemo, behindKey, Number.isFinite(n) && n > 0 ? n : 1)
@@ -69,12 +162,9 @@ export function contentProbeFor(root: string): ContentProbe {
       if (diff.has(evalPath)) await primeScenarioBlocksAt(root, [sha, current], evalPath)
     },
     changedPaths(sha) {
-      return memo(diffMemo, `${root}\x1f${sha}\x1f${headOf()}`, () => {
-        try {
-          return new Set(git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, headOf()])
-            .split('\n').map((s) => s.trim()).filter(Boolean))
-        } catch { return null }   // the anchor commit object is gone — content can't testify
-      })
+      // The async prime owns all I/O. A miss is conservative and never starts an unbounded sync fallback
+      // after an abort/transient failure; callers must prime before asking an off-history question.
+      return readMemo(diffMemo, `${rootKey}\x1f${sha}\x1f${headOf()}`) ?? null
     },
     scenarioDiffers(sha, evalPath, scenario) {
       const a = scenarioBlocksAt(root, sha, evalPath)
@@ -82,12 +172,7 @@ export function contentProbeFor(root: string): ContentProbe {
       return a.get(scenario) !== scenarioBlocksAt(root, headOf(), evalPath)?.get(scenario)
     },
     behind(sha, path) {
-      return memo(behindMemo, `${root}\x1f${sha}\x1f${headOf()}\x1f${path}`, () => {
-        try {
-          const n = Number(git(['-C', root, 'rev-list', '--count', `${sha}..${headOf()}`, '--', path]).trim())
-          return Number.isFinite(n) && n > 0 ? n : 1
-        } catch { return 1 }
-      })
+      return readMemo(behindMemo, `${rootKey}\x1f${sha}\x1f${headOf()}\x1f${path}`) ?? 1
     },
   }
 }

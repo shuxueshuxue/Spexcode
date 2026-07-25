@@ -1,8 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { changedSince, codeDrift, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { changedSince, codeDrift, contentProbeFor, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
 import { scenarioHash } from './scenarios.js'
-import type { DriftIndex } from '../../spec-cli/src/git.js'
+import { withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
 // proven here without git so the critical edge is pinned regardless of a repo's history.
@@ -173,4 +177,204 @@ test('hash axis: the stored hash testifies even when the anchor commit is pruned
   // anchor object gone (probe null): code axis can only say "anchor", but the hash still decides scenario
   assert.deepEqual(staleAxes(gone, ['f.ts'], 'y/eval.md', i, new Map(), [], probeOf(null), SC('measure it', 'it behaves')), ['anchor'])
   assert.deepEqual(staleAxes(gone, ['f.ts'], 'y/eval.md', i, new Map(), [], probeOf(null), SC('changed', 'contract')), ['anchor', 'scenario'])
+})
+
+// ---- the off-history heavy-diff scheduler: actual child starts, queueing, and abort recovery ----
+
+const REAL_GIT = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+function sh(root: string, args: string[]): string {
+  return execFileSync(REAL_GIT, args, { cwd: root, encoding: 'utf8' }).trim()
+}
+function schedulerRepo(commits: number): { root: string; hashes: string[] } {
+  const root = mkdtempSync(join(tmpdir(), 'freshness-scheduler-'))
+  sh(root, ['init', '-q', '-b', 'main'])
+  sh(root, ['config', 'user.email', 't@t'])
+  sh(root, ['config', 'user.name', 't'])
+  const hashes: string[] = []
+  for (let i = 0; i < commits; i++) {
+    writeFileSync(join(root, 'tracked.txt'), `${i}\n`)
+    sh(root, ['add', 'tracked.txt'])
+    sh(root, ['commit', '-q', '-m', `c${i}`])
+    hashes.push(sh(root, ['rev-parse', 'HEAD']))
+  }
+  return { root, hashes }
+}
+type TraceEvent = { event: 'start' | 'end'; pid: string; argv: string }
+function diffTrace(delay = '0.03') {
+  const bin = mkdtempSync(join(tmpdir(), 'freshness-git-bin-'))
+  const log = join(bin, 'events.log')
+  const hang = join(bin, 'hang')
+  const shim = join(bin, 'git')
+  writeFileSync(log, '')
+  writeFileSync(shim, `#!/bin/sh
+case " $* " in
+  *" diff --name-only --no-renames "*)
+    printf 'start\\t%s\\t%s\\n' "$$" "$*" >> "$SPEX_TEST_DIFF_LOG"
+    if [ -n "$SPEX_TEST_DIFF_HANG" ] && [ -e "$SPEX_TEST_DIFF_HANG" ]; then sleep 60; fi
+    if [ -n "$SPEX_TEST_DIFF_DELAY" ]; then sleep "$SPEX_TEST_DIFF_DELAY"; fi
+    "$SPEX_TEST_REAL_GIT" "$@"
+    code=$?
+    printf 'end\\t%s\\t%s\\n' "$$" "$*" >> "$SPEX_TEST_DIFF_LOG"
+    exit $code
+    ;;
+  *) exec "$SPEX_TEST_REAL_GIT" "$@" ;;
+esac
+`)
+  chmodSync(shim, 0o755)
+  const previous = {
+    PATH: process.env.PATH,
+    log: process.env.SPEX_TEST_DIFF_LOG,
+    hang: process.env.SPEX_TEST_DIFF_HANG,
+    delay: process.env.SPEX_TEST_DIFF_DELAY,
+    real: process.env.SPEX_TEST_REAL_GIT,
+  }
+  process.env.PATH = `${bin}:${process.env.PATH ?? ''}`
+  process.env.SPEX_TEST_DIFF_LOG = log
+  process.env.SPEX_TEST_DIFF_HANG = hang
+  process.env.SPEX_TEST_DIFF_DELAY = delay
+  process.env.SPEX_TEST_REAL_GIT = REAL_GIT
+  const restore = () => {
+    for (const [key, value] of Object.entries({
+      PATH: previous.PATH,
+      SPEX_TEST_DIFF_LOG: previous.log,
+      SPEX_TEST_DIFF_HANG: previous.hang,
+      SPEX_TEST_DIFF_DELAY: previous.delay,
+      SPEX_TEST_REAL_GIT: previous.real,
+    })) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+  const events = (): TraceEvent[] => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((line) => {
+    const [event, pid, ...argv] = line.split('\t')
+    return { event: event as TraceEvent['event'], pid, argv: argv.join('\t') }
+  })
+  return { bin, log, hang, shim, events, restore }
+}
+function peakActive(events: TraceEvent[]): { peak: number; final: number } {
+  let active = 0, peak = 0
+  for (const event of events) {
+    active += event.event === 'start' ? 1 : -1
+    peak = Math.max(peak, active)
+  }
+  return { peak, final: active }
+}
+async function waitFor(check: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error(`condition not reached within ${timeoutMs}ms`)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+test('content scheduler: 9 concurrent probes for one diffKey spawn exactly one heavy diff', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace()
+  try {
+    const probes = Array.from({ length: 9 }, () => contentProbeFor(root))
+    await Promise.all(probes.map((probe) => probe.prime!(hashes[0], [], 'absent-eval.md')))
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1)
+    assert.ok(probes.every((probe) => probe.changedPaths(hashes[0])?.has('tracked.txt')))
+    await probes[0].prime!(hashes[0], [], 'absent-eval.md')
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1, 'settled LRU serves the repeat')
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content scheduler: 14 unique anchors under one root+HEAD run with maxHeavy=1', async () => {
+  const { root, hashes } = schedulerRepo(15)
+  const trace = diffTrace()
+  try {
+    await Promise.all(hashes.slice(0, 14).map((sha) => contentProbeFor(root).prime!(sha, [], 'absent-eval.md')))
+    const events = trace.events()
+    assert.equal(events.filter((event) => event.event === 'start').length, 14)
+    assert.deepEqual(peakActive(events), { peak: 1, final: 0 })
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content scheduler: abort removes active and queued flights, then both retry without a ghost spawn', async () => {
+  const { root, hashes } = schedulerRepo(3)
+  const trace = diffTrace('0')
+  writeFileSync(trace.hang, '')
+  try {
+    const controller = new AbortController()
+    const results = await withGitAbortSignal(controller.signal, async () => {
+      const active = contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md')
+      await waitFor(() => trace.events().some((event) => event.event === 'start'))
+      const queued = contentProbeFor(root).prime!(hashes[1], [], 'absent-eval.md')
+      controller.abort()
+      return Promise.allSettled([active, queued])
+    })
+    assert.ok(results.every((result) => result.status === 'rejected' && result.reason?.name === 'AbortError'))
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1, 'queued abort never spawns')
+
+    rmSync(trace.hang)
+    await Promise.all([
+      contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md'),
+      contentProbeFor(root).prime!(hashes[1], [], 'absent-eval.md'),
+    ])
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 3,
+      'active and queued failures both leave retryable flights and no ghost waiter')
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content scheduler: equal SHA keys in two roots neither coalesce nor serialize each other', async () => {
+  const first = schedulerRepo(2)
+  const secondRoot = mkdtempSync(join(tmpdir(), 'freshness-scheduler-clone-'))
+  execFileSync(REAL_GIT, ['clone', '-q', first.root, secondRoot])
+  const trace = diffTrace('0.1')
+  try {
+    await Promise.all([
+      contentProbeFor(first.root).prime!(first.hashes[0], [], 'absent-eval.md'),
+      contentProbeFor(secondRoot).prime!(first.hashes[0], [], 'absent-eval.md'),
+    ])
+    const events = trace.events()
+    assert.equal(events.filter((event) => event.event === 'start').length, 2)
+    assert.equal(events.filter((event) => event.event === 'start' && event.argv.includes(`-C ${first.root} `)).length, 1)
+    assert.equal(events.filter((event) => event.event === 'start' && event.argv.includes(`-C ${secondRoot} `)).length, 1)
+    assert.equal(peakActive(events).peak, 2, 'independent roots own independent heavy-diff scopes')
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content scheduler: moving HEAD creates a new scope and query while the old result stays bounded in LRU', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace()
+  try {
+    const before = contentProbeFor(root)
+    await before.prime!(hashes[0], [], 'absent-eval.md')
+    writeFileSync(join(root, 'after-head-move.txt'), 'new\n')
+    sh(root, ['add', 'after-head-move.txt'])
+    sh(root, ['commit', '-q', '-m', 'move head'])
+    const after = contentProbeFor(root)
+    await after.prime!(hashes[0], [], 'absent-eval.md')
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 2)
+    assert.equal(before.changedPaths(hashes[0])?.has('after-head-move.txt'), false)
+    assert.equal(after.changedPaths(hashes[0])?.has('after-head-move.txt'), true)
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content scheduler: spawn failure is loud, not memoized, and a repaired child path retries', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace()
+  try {
+    process.env.PATH = trace.bin
+    chmodSync(trace.shim, 0o644)
+    await assert.rejects(contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md'), /git content diff failed \(spawn\)/)
+    chmodSync(trace.shim, 0o755)
+    const retry = contentProbeFor(root)
+    await retry.prime!(hashes[0], [], 'absent-eval.md')
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1)
+    assert.ok(retry.changedPaths(hashes[0])?.has('tracked.txt'))
+  } finally {
+    trace.restore()
+  }
 })

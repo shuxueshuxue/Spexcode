@@ -6,6 +6,7 @@ desc: The graph is BUILT once per change, not once per poll — a single-flight,
 code:
   - spec-cli/src/graphCache.ts
 related:
+  - spec-cli/src/git.ts
   - spec-cli/src/graphScope.test.ts
   - spec-cli/src/graphCache.test.ts
 ---
@@ -73,6 +74,25 @@ the projection runner drains that work through a bounded queue, so one board cha
 git/history build per session. When the last delta subscriber leaves, new warmup is disabled (in-flight work
 is allowed to settle and is never overlapped by a second batch); scoped Evals demand remains the explicit
 way to build an individual session's full model.
+
+**A single board build also has a bounded git process budget.** Graph assembly may need to inspect every
+linked worktree and governed session, but corpus width must lengthen the queue rather than widen the process
+tree: every per-worktree/session git operation owned by one build passes through one abort-aware scheduler
+with a fixed capacity of **four** children, independent of worktree and session counts. Ordinary CLI/API git
+calls outside a graph build do not enter this pool. Waiting work observes the
+build's abort before it starts, active children keep the existing kill-on-abort contract, and a settled build
+leaves no queued or live descendants. Scheduling changes only cost, never graph meaning: cold graph content,
+serialization/ETag, session overlays, delta units, and selected-demand behavior remain identical. Across
+repeated successful full invalidations, RSS must naturally return to a stable platform below the old
+unbounded-fanout peak; no forced collection, larger timeout/memory budget, history deletion, or deployment
+special case is part of the mechanism.
+
+The queue bounds unavoidable child work; graph assembly also removes avoidable child work. On the
+large-history path, all reading anchors ask the same question against the same HEAD. The HEAD-keyed drift
+index therefore loads reachable commit ids in one single-flight batch and every per-reading reachability
+verdict is a memory lookup — never one `merge-base --is-ancestor` process per reading. A failed or aborted
+batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
+same current-root cache ownership. Path-specific history remains lazy and bounded.
 
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the

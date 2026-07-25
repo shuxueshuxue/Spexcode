@@ -100,6 +100,26 @@ scenarios:
       queued jobs while an in-flight job settles; one reconnect does not enqueue the same generation twice; the
       explicit scoped Evals demand still builds its selected session without requiring a delta subscriber. Any
       unbounded history preheat or monotonic post-settle RSS/child count fails this scenario.
+  - name: plain-cold-board-bounds-git-fanout
+    tags: [backend-api]
+    description: >-
+      A/B the real plain cold `/api/graph` surface on the same production-shaped local corpus (about 440 nodes,
+      53 linked worktrees, and 30 governed session records) with zero delta subscribers. A is the unmodified
+      parent commit; B is the candidate commit. Launch each through the default Node supervisor on its own free
+      port with isolated runtime state and no inherited `SPEXCODE_API_URL`. From process start until board settle,
+      sample `/health`, backend RSS, and every descendant often enough to count concurrently active git children;
+      save the graph response, status, timing, ETag, projection phases, and sanitized process metrics. Run B for
+      three cold/full-invalidated rounds and wait for descendants to settle after each. Never call a deployed
+      endpoint, reduce the corpus, force GC, increase a timeout or memory budget, or delete history.
+    expected: >-
+      B's cold graph is content-equivalent to A and preserves its serialization/ETag and session overlay meaning;
+      `/health` remains 200 throughout. Peak active git children never exceeds one documented constant independent
+      of the 53-worktree/30-session corpus, all children and queued work reach zero after every build, and RSS is
+      substantially below A's unbounded-fanout peak then naturally plateaus across three rounds. With zero delta
+      subscribers the build starts no session-eval projection warmup. Opening a delta era afterward still drains
+      projection work through its own bounded queue, and one selected Evals demand still completes. A graph timeout,
+      changed graph units/ETag semantics, any per-reading `merge-base --is-ancestor` fanout, a corpus-sized
+      process peak, unreaped descendants, or monotonic RSS is loss.
 ---
 # eval.md — board-cache
 

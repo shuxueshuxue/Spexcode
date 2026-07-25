@@ -5,27 +5,94 @@ import { join, isAbsolute, resolve } from 'node:path'
 
 const US = '\x1f', RS = '\x1e'
 
-// @@@ bounded git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead network
-// mount) must not pin its awaiter forever: [[graph-cache]]'s settle guarantee starts at this seam. Every
-// shared helper passes a generous timeout (an order of magnitude above the slowest legitimate full-history
-// walk) with SIGKILL — same pattern sessions.ts's tmux/ps probes already use — so a hung child dies and the
-// call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
-// gitA maps failure to '', which would otherwise hide the pathology as an innocently-empty result.
+// @@@ bounded graph git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead
+// network mount) must not pin its awaiter forever: [[graph-cache]]'s settle guarantee starts at this seam.
+// Every shared helper passes a generous timeout with SIGKILL. A graph build additionally carries one fixed
+// permit pool through AsyncLocalStorage, so corpus-wide Promise.all fanout queues here before spawn rather
+// than materializing one process per worktree/eval. Calls outside that build context remain unconstrained.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+export const BOARD_GIT_CONCURRENCY = 4
 // A complete commit/parent/file map is useful for ordinary repositories, but its JS object overhead is
 // unbounded in a production monorepo. Large histories use the path-scoped rev-list representation below;
 // this is a size policy, never a product/path exception.
 const DRIFT_LAZY_COMMIT_THRESHOLD = Math.max(10_000, Number(process.env.SPEXCODE_DRIFT_LAZY_THRESHOLD || 100_000))
 const DRIFT_LAZY_OUTPUT_BYTES = Math.max(1_000_000, Number(process.env.SPEXCODE_DRIFT_LAZY_OUTPUT_BYTES || 1_000_000))
-const gitAbort = new AsyncLocalStorage<AbortSignal>()
+type GitPermitPool = { acquire: (signal: AbortSignal) => Promise<() => void> }
+type GitBuildContext = { signal: AbortSignal; permits: GitPermitPool }
+const gitBuild = new AsyncLocalStorage<GitBuildContext>()
 
-// A board build owns one abort signal. Async git calls inherit it without every graph layer growing a
-// cancellation parameter; aborting the build therefore reaches every child spawned below the graph seam.
-export function withGitAbortSignal<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
-  return gitAbort.run(signal, run)
+export function gitAbortError(): Error {
+  return Object.assign(new Error('The operation was aborted'), { name: 'AbortError', code: 'ABORT_ERR' })
 }
 
-const inheritedSignal = (): AbortSignal | undefined => gitAbort.getStore()
+function gitPermitPool(limit: number): GitPermitPool {
+  type Waiter = {
+    signal: AbortSignal
+    resolve: (release: () => void) => void
+    reject: (error: Error) => void
+    onAbort: () => void
+  }
+  let active = 0
+  const waiting: Waiter[] = []
+
+  const releasePermit = (): (() => void) => {
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      active--
+      drain()
+    }
+  }
+  const drain = () => {
+    while (active < limit && waiting.length) {
+      const waiter = waiting.shift()!
+      waiter.signal.removeEventListener('abort', waiter.onAbort)
+      if (waiter.signal.aborted) {
+        waiter.reject(gitAbortError())
+        continue
+      }
+      active++
+      waiter.resolve(releasePermit())
+    }
+  }
+
+  return {
+    acquire(signal) {
+      if (signal.aborted) return Promise.reject(gitAbortError())
+      if (active < limit) {
+        active++
+        return Promise.resolve(releasePermit())
+      }
+      return new Promise((resolve, reject) => {
+        const waiter: Waiter = {
+          signal,
+          resolve,
+          reject,
+          onAbort: () => {
+            const index = waiting.indexOf(waiter)
+            if (index >= 0) waiting.splice(index, 1)
+            reject(gitAbortError())
+          },
+        }
+        waiting.push(waiter)
+        signal.addEventListener('abort', waiter.onAbort, { once: true })
+      })
+    },
+  }
+}
+
+// A board build owns one abort signal. Async git calls inherit it without every graph layer growing a
+// cancellation parameter; aborting the build therefore reaches every active child and queued permit below
+// the graph seam. The pool is created here, so ordinary CLI/API git calls never share or wait on it.
+export function withGitAbortSignal<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+  return gitBuild.run({ signal, permits: gitPermitPool(BOARD_GIT_CONCURRENCY) }, run)
+}
+
+const inheritedContext = (): GitBuildContext | undefined => gitBuild.getStore()
+export function currentGitBuildAbortSignal(): AbortSignal | undefined {
+  return inheritedContext()?.signal
+}
 function warnIfTimedOut(e: any, args: string[]): void {
   if (e?.signal === 'SIGKILL') console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
 }
@@ -49,6 +116,7 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): 
     let child: ReturnType<typeof execFile> | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     let aborted = false
+    let timedOut = false
     const killTree = () => {
       if (!child?.pid) return
       try { process.kill(-child.pid, 'SIGKILL') } catch { /* group may already be gone */ }
@@ -65,39 +133,53 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): 
         error.stdout = stdout ?? ''
         error.stderr = stderr ?? ''
         if (aborted) error.name = 'AbortError'
+        if (timedOut) error.spexcodeGitTimeout = true
         reject(error)
       } else resolve({ stdout, stderr })
     })
     signal?.addEventListener('abort', onAbort, { once: true })
-    timer = setTimeout(() => killTree(), GIT_TIMEOUT_MS)
+    timer = setTimeout(() => { timedOut = true; killTree() }, GIT_TIMEOUT_MS)
     timer.unref?.()
   })
+}
+
+async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv): Promise<GitExec> {
+  const context = inheritedContext()
+  if (!context) return execGit(args, env)
+  const release = await context.permits.acquire(context.signal)
+  try {
+    return await execGit(args, env, context.signal)
+  } finally {
+    release()
+  }
 }
 
 export async function gitA(args: string[]): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  const signal = inheritedSignal()
+  const context = inheritedContext()
   try {
-    const { stdout } = await execGit(args, env, signal)
+    const { stdout } = await execGitForCaller(args, env)
     return stdout
   } catch (e: any) {
-    if (signal?.aborted || e?.name === 'AbortError') throw e
+    if (context?.signal.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args); return ''
   }
 }
 
-export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
+export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  const signal = inheritedSignal()
+  const context = inheritedContext()
   try {
-    const { stdout, stderr } = await execGit(args, env, signal)
+    const { stdout, stderr } = await execGitForCaller(args, env)
     return { ok: true, stdout, stderr }
   } catch (e: any) {
-    if (signal?.aborted || e?.name === 'AbortError') throw e
+    if (context?.signal.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args)
-    return { ok: false, stdout: e?.stdout ?? '', stderr: e?.stderr ?? String(e?.message ?? e) }
+    const failure: GitTryFailure = e?.spexcodeGitTimeout ? 'timeout' : typeof e?.code === 'number' ? 'exit' : 'spawn'
+    return { ok: false, stdout: e?.stdout ?? '', stderr: e?.stderr ?? String(e?.message ?? e), failure }
   }
 }
 
@@ -374,7 +456,7 @@ type LazyDriftIndex = {
   counts: Map<string, number>
   windows: Map<string, string[]>
   rawWindows: Map<string, string[]>
-  reachable: Map<string, boolean>
+  reachable: Set<string>
 }
 
 function lazySpecNode(path: string): string | null {
@@ -405,10 +487,16 @@ async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
   // Version commits are the only source of node ownership; ack stamps are empty commits whose subject is
   // stable (`ack: Spec-OK …`). Both walks are tiny compared with the all-files commit graph and retain only
   // the hashes needed to form rev-list exclusions later.
-  const [specOut, ackOut] = await Promise.all([
-    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, 'HEAD', '--', '.spec']),
-    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=' + RS + '%H' + US + '%s', '--grep=^ack: Spec-OK', 'HEAD']),
-  ])
+  // Every reading anchor asks reachability against this same immutable HEAD. Read that commit set once as
+  // part of the HEAD-keyed drift-index flight; per-reading membership is then a Set lookup, not one
+  // merge-base child per anchor. Run the three large-history walks sequentially so index construction itself
+  // cannot stack several pack-heavy git processes inside the broader board child budget.
+  const reachableResult = await gitTry(['-C', root, 'rev-list', 'HEAD'])
+  if (!reachableResult.ok)
+    throw new Error(`git rev-list HEAD failed while building lazy reachability: ${reachableResult.stderr.trim() || 'unknown git error'}`)
+  const reachable = new Set(reachableResult.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
+  const specOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, 'HEAD', '--', '.spec'])
+  const ackOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=' + RS + '%H' + US + '%s', '--grep=^ack: Spec-OK', 'HEAD'])
   const specNodes = parseLazySpecNodes(specOut)
   const ackByNode = new Map<string, string[]>()
   for (const rec of ackOut.split(RS)) {
@@ -425,7 +513,7 @@ async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
   }
   return {
     ord: new Map(), parents: new Map(), fileCommits: new Map(), acks: new Map(), specNodes, anc: new Map(),
-    lazy: { root, specNodes, ackByNode, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable: new Map() },
+    lazy: { root, specNodes, ackByNode, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable },
   }
 }
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
@@ -518,18 +606,12 @@ export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boo
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
 }
 
-// The large-history representation delegates reachability and path windows to Git's compact commit graph
-// instead of materializing every commit/file edge as JS Maps. `null` means the anchor is off HEAD history;
-// callers retain their existing content-based conservative fallback for that case.
+// The large-history representation keeps one compact HEAD commit-id set and delegates path windows to Git's
+// commit graph instead of materializing every commit/file edge as JS Maps. `null` means the anchor is off
+// HEAD history; callers retain their existing content-based conservative fallback for that case.
 export function commitReachable(idx: DriftIndex, sha: string): boolean {
   if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
-  const hit = idx.lazy.reachable.get(sha)
-  if (hit !== undefined) return hit
-  let reachable = false
-  try { git(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD']); reachable = true }
-  catch { reachable = false }
-  idx.lazy.reachable.set(sha, reachable)
-  return reachable
+  return idx.lazy.reachable.has(sha)
 }
 
 export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: string): string[] | null {
@@ -552,11 +634,7 @@ export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: strin
 
 async function commitReachableAsync(idx: DriftIndex, sha: string): Promise<boolean> {
   if (!idx.lazy) return ancestorsOf(idx, sha) !== undefined
-  const hit = idx.lazy.reachable.get(sha)
-  if (hit !== undefined) return hit
-  const reachable = (await gitTry(['-C', idx.lazy.root, 'merge-base', '--is-ancestor', sha, 'HEAD'])).ok
-  idx.lazy.reachable.set(sha, reachable)
-  return reachable
+  return idx.lazy.reachable.has(sha)
 }
 
 async function pathCommitsSinceAsync(idx: DriftIndex, sinceHash: string, path: string): Promise<string[] | null> {

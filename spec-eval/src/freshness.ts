@@ -1,7 +1,9 @@
-import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
+import { anchorHitCommits, extOf, extractorFor, extractors, resolveAnchor, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
-import { scenarioHash, type Scenario } from './scenarios.js'
+import { scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
@@ -245,6 +247,95 @@ export function contentProbeFor(root: string): ContentProbe {
   }
 }
 
+// @@@ the code axis's SPATIAL narrowing ([[code-anchor]]'s path#symbol, reused whole) - a shared FILE is not a
+// shared BEHAVIOUR: harness.ts carries eight adapters, so a one-adapter edit re-flagged every other adapter's
+// reading, and those refresh only through a real dispatched session of that harness. An anchored entry
+// therefore asks the spatial question instead of the file question — did a commit in codeSha..HEAD intersect
+// one of the named units? — through the SAME parse/extract/resolve/hunk∩range engine spec drift runs. Two
+// deliberate differences from that engine: the window carries NO ack filter (an ack vindicates a spec, not a
+// reading), and it never widens — the file question runs FIRST and the anchor can only subtract from it.
+// Fed at the call sites like the ContentProbe, so the decision functions stay pure over their inputs.
+export type AnchorProbe = {
+  // did any commit in sinceSha..HEAD touch one of THESE anchored units?
+  // null = cannot testify (unprimed, off-history, no usable extractor) — callers stay conservatively stale.
+  hit(sinceSha: string, path: string, selectors: readonly string[]): boolean | null
+  prime?(sinceSha: string, entries: readonly RelationEntry[]): Promise<void>
+}
+
+// a verdict answers ONE selector set, so the set is part of its identity: several scenarios anchoring
+// DIFFERENT units of one shared file is the whole point of narrowing, and keying only by (sha, path) would
+// hand the first one's answer to all the others — silently, and in the fresh direction.
+const anchorKey = (sinceSha: string, path: string, selectors: readonly string[]) =>
+  `${sinceSha}\x1f${path}\x1f${[...selectors].sort().join('\x1e')}`
+
+// the eval code window: commits touching `path` in sinceSha..HEAD by the same true ancestry `changedSince`
+// uses, from the same index source — so the anchor check can only narrow the very set the file question just
+// answered `true` for. null = ancestry cannot testify (off-history anchor) → the caller stays conservative.
+function evalWindowCommits(idx: DriftIndex, sinceSha: string, path: string): string[] | null {
+  if (idx.lazy) return pathCommitsSince(idx, sinceSha, path)
+  const anc = ancestorsOf(idx, sinceSha)
+  if (!anc) return null
+  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, anc, h))
+}
+
+// every selector of one entry resolves to exactly one unit in the CURRENT tree, or the entry cannot testify.
+// This gate is what stops a DEAD selector from reading fresh: the hit engine answers "no commit touched a
+// unit of that name", which for a name that exists nowhere is a vacuous no — true of spec drift, where the
+// dead anchor is a separate blocking error, and dangerously false here, where the same silence would retire
+// a reading's whole code axis. `problem` names the repair for lint; null means the entry is verifiable.
+function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry): string | null {
+  const x = extractorFor(regs, extOf(entry.path))
+  if (!x) return `\`code\` selector \`${entry.path}#${entry.selectors[0]}\` — no designated extractor for that language; drop the #anchor or add a language row`
+  const ready = x.ready()
+  if (ready !== true) return `\`code\` anchors on ${entry.path} are unverified: ${ready}`
+  let units
+  try { units = x.extract(readFileSync(join(root, entry.path), 'utf8'), entry.path) }
+  catch (err: any) { return `\`code\` anchors on ${entry.path} are unverified: ${err?.message ?? String(err)}` }
+  for (const sym of entry.selectors) {
+    const r = resolveAnchor(units, sym)
+    if ('dead' in r) return `\`code\` selector \`${entry.path}#${sym}\` names no unit in that file — follow the rename or drop the selector (readings stay stale until then)`
+    if ('ambiguous' in r) return `\`code\` selector \`${entry.path}#${sym}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
+  }
+  return null
+}
+
+export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
+  const regs = extractors(root)
+  const verdicts = new Map<string, boolean>()
+  return {
+    async prime(sinceSha, entries) {
+      for (const e of entries) {
+        if (!e.selectors.length) continue
+        const key = anchorKey(sinceSha, e.path, e.selectors)
+        if (verdicts.has(key)) continue
+        if (entryUnverifiable(root, regs, e)) continue  // no verdict → conservative stale (lint says why)
+        const win = evalWindowCommits(idx, sinceSha, e.path)
+        if (win === null) continue
+        if (!win.length) { verdicts.set(key, false); continue }
+        const hits = await anchorHitCommits(root, win, e.path, [...e.selectors], extractorFor(regs, extOf(e.path))!)
+        verdicts.set(key, hits.length > 0)
+      }
+    },
+    hit(sinceSha, path, selectors) {
+      return verdicts.get(anchorKey(sinceSha, path, selectors)) ?? null
+    },
+  }
+}
+
+// the LOUD half: a selector is a claim that a named unit EXISTS, held to the same standard as a ghost path.
+// Dead, ambiguous, unparseable, or no designated extractor — each names itself and its repair, and until
+// repaired the probe issues no verdict, so the reading stays stale. Over-warn, never a silent pass.
+export function anchorProblems(root: string, entries: readonly RelationEntry[]): string[] {
+  const regs = extractors(root)
+  const out: string[] = []
+  for (const e of entries) {
+    if (!e.selectors.length) continue
+    const problem = entryUnverifiable(root, regs, e)
+    if (problem) out.push(problem)
+  }
+  return out
+}
+
 // the REMARK axis's input ([[remark-teeth]]): the teeth read only the resolvable bit + when it was resolved,
 // not the whole remark — so freshness stays a PURE function, fed the scenario's remark track at the call
 // sites (never reaching into the issue store). One signal per remark on the (node, scenario).
@@ -281,7 +372,10 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 // an off-history sinceSha reports through the same content fallback (only files whose content differs, counted
 // by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
-export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[], probe?: ContentProbe): { file: string; behind: number }[] {
+export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: string[], probe?: ContentProbe): { file: string; behind: number }[] {
+  // an entry may be anchored (`path#symbol`); drift is reported per BASE FILE — a raw selector string names
+  // no real path, so counting commits against it would silently report nothing.
+  const codeFiles = scenarioCodeAxis(codeAxis).paths
   if (idx.lazy) {
     const reachable = commitReachable(idx, sinceSha)
     const out: { file: string; behind: number }[] = []
@@ -354,15 +448,25 @@ function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string,
   return probe!.scenarioDiffers(sinceSha, evalPath, scenario)
 }
 
+// one declared entry's contribution to the code axis. The FILE question runs first and is unchanged; only an
+// ANCHORED entry whose file really moved asks the narrower spatial one, so an anchor can subtract from the
+// file verdict but never add to it. No verdict (unprimed, off-history, unverifiable selector) → conservative.
+function entryMoved(idx: DriftIndex, sinceSha: string, entry: RelationEntry, probe?: ContentProbe, anchors?: AnchorProbe): boolean {
+  if (!changedSince(idx, sinceSha, entry.path, probe)) return false
+  if (!entry.selectors.length) return true
+  return anchors?.hit(sinceSha, entry.path, entry.selectors) ?? true
+}
+
 export function staleAxes(
   reading: Reading,
-  codeFiles: string[],
+  codeAxis: string[],
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
   probe?: ContentProbe,
   current?: Scenario,   // the scenario's CURRENT declaration (undefined = gone from eval.md) — the hash compare's other side
+  anchors?: AnchorProbe,
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
   const byHash = scenarioStaleByHash(reading, current)
@@ -372,7 +476,7 @@ export function staleAxes(
     axes.push('anchor')
     if (byHash) axes.push('scenario')
   } else {
-    if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f, probe))) axes.push('code')
+    if (scenarioCodeAxis(codeAxis).entries.some((e) => entryMoved(didx, reading.codeSha, e, probe, anchors))) axes.push('code')
     if (byHash ?? scenarioMoved(scIdx, didx, reading.codeSha, evalPath, reading.scenario, probe)) axes.push('scenario')
   }
   if (remarkStale(reading, remarks)) axes.push('remark')
@@ -381,13 +485,14 @@ export function staleAxes(
 
 export function isStale(
   reading: Reading,
-  codeFiles: string[],
+  codeAxis: string[],
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
   probe?: ContentProbe,
   current?: Scenario,
+  anchors?: AnchorProbe,
 ): boolean {
-  return staleAxes(reading, codeFiles, evalPath, didx, scIdx, remarks, probe, current).length > 0
+  return staleAxes(reading, codeAxis, evalPath, didx, scIdx, remarks, probe, current, anchors).length > 0
 }

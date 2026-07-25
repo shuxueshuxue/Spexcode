@@ -54,7 +54,47 @@ A scenario is the unit of measurement, so its **freshness is its own**: its opti
 code freshness axis (a `code`/`related` path that doesn't exist is flagged, never silently immortal); absent,
 it inherits the node's whole `code:` list. So two scenarios on one node, tracking different files, go stale
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
-is the `eval-owners` smell (split it). Measurements live apart in a flat
+is the `eval-owners` smell (split it).
+
+**A scenario's code axis narrows to named units, in the ONE anchor grammar the project already speaks.** A
+`code:` entry may carry [[code-anchor]]'s `path#symbol` selectors — any number, all on the same base file,
+OR'd — and the axis then asks the spatial question instead of the file question: a commit in `codeSha..HEAD`
+stales the reading only when its hunks intersect an anchored unit's line range, extracted from the file AS IT
+EXISTED AT THAT COMMIT. That is the same parse→resolve→intersect engine spec drift already runs, reused whole
+(the structured relation parser, the designated per-extension extractor, anchor resolution, hunk∩range); eval
+adds no second selector vocabulary, no second extractor registry, and no eval-local anchor syntax. What eval
+deliberately does NOT reuse is the ACK: an ack vindicates a *spec*, not a reading, so the eval window stays
+the plain ancestry window ([[drift-by-ancestry]]) and never subtracts `Spec-OK` commits. The narrowing is a
+question asked at the axis, not a new verdict: freshness's decision functions stay pure over their inputs and
+the anchor answer is fed in at the call sites, exactly like the content probe and the remark track.
+
+The narrowing exists because **a shared file is not a shared behaviour**, and on this corpus that gap is
+expensive. `harness.ts` is ONE file carrying eight adapters, and its scenarios measure liveness, delivery,
+wake and teardown per adapter — each refreshed only by a REAL dispatched session of that harness
+([[harness-adapter]]'s live matrix), the costliest measurement class here. A single +17/-0 edit adding the
+`Harness` interface's settled-launch-failure field and the claude/codex adapter rows moved none of those
+behaviours, yet file-level staling re-flagged the whole harness/headless cohort — billing the most expensive
+readings in the corpus for an edit that could not have changed what they measured. Symbol narrowing makes the
+bill follow the behaviour, and the same shape covers the headless adapter files, whose controllers and
+one-turn spawners are separately-measured units inside one file.
+
+An anchor is a claim that a named unit exists, so it is held to the same LOUD standard as a ghost path and
+never resolves into a quiet pass. A selector that is **dead** (no unit of that name in the current file),
+**ambiguous** (two units share the name), on a revision the extractor cannot parse, or on an extension with
+no designated extractor is an `eval-schema` finding naming the selector and its repair — and until repaired
+its reading stays conservatively STALE. A missing symbol therefore costs a false stale, never a false fresh:
+this axis may over-report, it may never silently stop testifying. Anchors are OPTIONAL and additive — a bare
+`code:` entry keeps whole-file semantics unchanged, and a scenario declaring no `code:` at all still inherits
+its node's whole `code:` list, unnarrowed — so a behaviour with no trustworthy unit to name stays honestly
+file-level rather than being pinned to a guessed symbol.
+
+Narrowing the code axis moves NOTHING on the scenario axis. `scenarioHash` projects description + expected
+alone, and `code` is a file POINTER, not a measurement contract — so adding, changing or removing a selector
+leaves every stored hash equal and re-stales no reading. That is the same metadata-only rule that already
+keeps tags and `test` out of the projection, and it is what makes adopting an anchor free: it narrows future
+judgments without invalidating past measurements.
+
+Measurements live apart in a flat
 **evals.ndjson** sidecar — **append-only, one JSON line per EVENT**. A filing appends a *reading*
 (scenario, codeSha, the **`scenarioHash`** contract stamp (see freshness below), an **evidence LIST** (each entry
 a typed `{hash, kind ∈ image|video|transcript|data}` — the render taxonomy ([[evidence-kind-taxonomy]])),
@@ -191,7 +231,8 @@ The surface mirrors the code-drift report:
 - **lint [--changed]** — the measurement layer's findings, PURE ADVISORY and always exit 0 (`spex spec
   lint`'s errors block commits; a measurement gap never blocks anyone — one lint per layer, same word):
   a malformed eval.md (`eval-schema` — missing field,
-  unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`eval-drift`), a scenario never
+  unknown key, dup name, ghost `code`/`related` path, a dead/ambiguous/unextractable `code:` selector,
+  out-of-library tag), a stale reading (`eval-drift`), a scenario never
   measured (`eval-missing`), a node governing **source code** with **no eval.md** (`eval-coverage` — the same
   NAME and shape as [[spec-lint]]'s coverage, keyed off the SAME [[adopt-nonweb-ergonomics]] tracked-text
   include-minus-exclude/test algebra (with `sourceExtensions` lowered to include globs), so a

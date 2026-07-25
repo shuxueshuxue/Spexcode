@@ -8,7 +8,10 @@ scenarios:
   - name: codex-headless-explicit-stop-resume
     description: Let a real governed codex-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
     expected: Stop preserves the owned thread, record, and timeline but reads offline; resume returns the same Codex conversation online with the pre-stop declaration note intact.
-    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    code:
+      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#codexHeadlessHarness
+      - spec-cli/src/sessions.ts
     tags: [backend-api, cli]
   - name: codex-headless-live-steer
     description: While a real codex-headless app-server turn is in progress, send a second prompt through the public session command.

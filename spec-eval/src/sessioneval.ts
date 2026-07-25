@@ -8,7 +8,7 @@ import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
-import { parseScenarios, scenarioHash, type Scenario } from './scenarios.js'
+import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
 
 // ---- the model ----
 
@@ -31,7 +31,10 @@ export function selectImpactedScenarios(
   const baseByName = new Map(base.map((scenario) => [scenario.name, scenario]))
   return current.flatMap((scenario) => {
     const impact: ScenarioImpactReason[] = []
-    const codeAxis = scenario.code?.length ? scenario.code : nodeCode
+    // base paths: a scenario entry may be anchored (`path#symbol` — [[eval-core]]), and a raw selector
+    // string matches no changed path, so reading it unnormalized would silently drop the scenario out of
+    // session scope instead of narrowing its freshness.
+    const codeAxis = scenarioCodeAxis(scenario.code, nodeCode).paths
     if ([...changedPaths].some((path) => codeClaims(codeAxis, path))) impact.push('code')
     const prior = baseByName.get(scenario.name)
     if (evalFileChanged && (!prior || scenarioHash(prior) !== scenarioHash(scenario))) impact.push('contract')
@@ -60,7 +63,7 @@ export function sessionEvalNodeCandidate(
 ): boolean {
   if (changedPaths.has(evalPath) || changedPaths.has(sidecarPath) || dirtyPaths.has(sidecarPath)) return true
   return current.some((scenario) => {
-    const codeAxis = scenario.code?.length ? scenario.code : nodeCode
+    const codeAxis = scenarioCodeAxis(scenario.code, nodeCode).paths
     return [...changedPaths].some((path) => codeClaims(codeAxis, path))
   })
 }

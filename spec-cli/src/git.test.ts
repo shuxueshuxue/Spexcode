@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -16,6 +16,34 @@ function idx(parents: Record<string, string[]>, parts: Partial<DriftIndex> = {})
   return { ord, parents: p, fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(), ...parts }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
+
+test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {
+  const parsed = combinedDiffOwnedRanges([
+    'diff --cc src/consts.ts',
+    '@@@ -1,2 -1,2 +1,2 @@@',
+    '- export const governed = 1',
+    '- export const neighbor = 3',
+    '+ export const governed = 2',
+    ' -export const neighbor = 1',
+    '++export const neighbor = 777',
+    'diff --cc spec.md',
+    '@@@ -1 -1 +1 @@@',
+    '- old parent one',
+    '+ inherited parent two',
+    'diff --cc deleted.ts',
+    '@@@ -1,2 -1,2 +1 @@@',
+    '  export const kept = 1',
+    '--export const removed = 1',
+    'diff --cc octopus.ts',
+    '@@@@ -1 -1 -1 +1 @@@@',
+    '+++export const authored = 1',
+  ].join('\n'))
+
+  assert.deepEqual(parsed.get('src/consts.ts'), [[2, 2]], 'mixed +space must not inherit an adjacent ++ range')
+  assert.equal(parsed.has('spec.md'), false, 'a mixed-only file has no merge-owned line')
+  assert.deepEqual(parsed.get('deleted.ts'), [[2, 2]], 'all-parent deletion maps to its result point')
+  assert.deepEqual(parsed.get('octopus.ts'), [[1, 1]], 'all parent columns participate in octopus ownership')
+})
 
 test('drift counts code commits not reachable from the spec version', () => {
   const i = idx(LINEAR, {

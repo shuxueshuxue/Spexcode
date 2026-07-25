@@ -383,7 +383,7 @@ export type DiffStat = { additions: number; deletions: number; files: number }
 export type HistoryIndex = {
   versions: Map<string, Version[]>          // headPath -> rows newest-first (incl. pure-rename rows)
   stats: Map<string, Map<string, DiffStat>> // headPath -> (commit hash -> this file's diffstat there)
-  mergeVersions?: Set<string>               // path\0hash pairs authored by a combined-diff merge hunk
+  mergeVersions?: Set<string>               // path\0hash pairs with an all-parent combined-diff line
 }
 
 // git numstat encodes a rename as `dir/{old => new}/file` (either side may be empty) or `old => new`;
@@ -588,7 +588,7 @@ export type DriftIndex = {
   ord: Map<string, number>            // hash -> dense id from the walk: a bitset slot, NEVER an order to compare
   parents: Map<string, string[]>      // hash -> parent hashes (the DAG edges, from the same walk)
   fileCommits: Map<string, string[]>
-  resolutionCommits?: Map<string, string[]> // merge commits whose dense-combined diff authored this path
+  resolutionCommits?: Map<string, string[]> // merge commits with an all-parent line on this path
   acks: Map<string, Set<string>>      // tree-unchanged checkpoint hash -> node ids acknowledged via `Spec-OK:`
   selfAcks?: Map<string, Set<string>> // content commit hash -> node ids acknowledged for that commit only
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
@@ -608,13 +608,60 @@ type LazyDriftIndex = {
   reachable: Set<string>
 }
 
+export type DiffLineRange = [number, number]
+
+// Dense combined diff prefixes have one column per parent. Ownership is a LINE fact, not a hunk fact:
+// every `+` means the result has that line where one parent does not, while every `-` means every parent
+// had a line the result deleted. Mixed columns inherit the line from at least one parent. Track the result
+// cursor through all displayed lines so adjacent mixed/owned rows never widen one another.
+export function combinedDiffOwnedRanges(patch: string): Map<string, DiffLineRange[]> {
+  const byPath = new Map<string, DiffLineRange[]>()
+  let path: string | null = null
+  let parents = 0
+  let resultLine = 0
+  let inHunk = false
+
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('diff --cc ')) {
+      path = line.slice('diff --cc '.length)
+      parents = 0
+      inHunk = false
+      continue
+    }
+    const header = line.match(/^(@{3,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @+/)
+    if (header) {
+      parents = header[1].length - 1
+      resultLine = Number(header[2])
+      inHunk = path !== null && parents >= 2
+      continue
+    }
+    if (!inHunk || path === null || line.startsWith('\\ No newline at end of file')) continue
+    const prefix = line.slice(0, parents)
+    if (prefix.length !== parents || !/^[ +\-]+$/.test(prefix)) {
+      inHunk = false
+      continue
+    }
+
+    const point = Math.max(1, resultLine)
+    if ([...prefix].every((c) => c === '+') || [...prefix].every((c) => c === '-')) {
+      const ranges = byPath.get(path) ?? []
+      ranges.push([point, point])
+      byPath.set(path, ranges)
+    }
+    if (prefix.includes('+') || [...prefix].every((c) => c === ' ')) resultLine++
+  }
+  return byPath
+}
+
 function parseResolutionCommits(out: string): Map<string, string[]> {
   const byPath = new Map<string, string[]>()
   for (const rec of out.split(RS)) {
-    const lines = rec.replace(/^\n/, '').split('\n')
-    const hash = lines[0]?.trim()
+    const normalized = rec.replace(/^\n/, '')
+    const newline = normalized.indexOf('\n')
+    const hash = (newline < 0 ? normalized : normalized.slice(0, newline)).trim()
     if (!hash) continue
-    for (const path of lines.slice(1).map((line) => line.trim()).filter(Boolean)) {
+    const patch = newline < 0 ? '' : normalized.slice(newline + 1)
+    for (const path of combinedDiffOwnedRanges(patch).keys()) {
       const commits = byPath.get(path) ?? []
       commits.push(hash)
       byPath.set(path, commits)
@@ -633,7 +680,7 @@ async function mergeResolutionCommits(root: string, tip: string, transient: bool
   const hit = cache.get(key)
   if (hit) return hit
   const promise = (async () => parseResolutionCommits(await gitA(['-C', root, '-c', 'core.quotePath=false',
-    'log', '--merges', '--cc', '--name-only', `--format=${RS}%H`, tip])))()
+    'log', '--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip])))()
   cache.set(key, promise)
   const limit = transient ? PENDING_RESOLUTION_CACHE_SLOTS : RESOLUTION_CACHE_SLOTS
   while (cache.size > limit) cache.delete(cache.keys().next().value!)

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+import { git, gitA, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -376,9 +376,9 @@ async function unitsAtFileRevision(root: string, commit: string, path: string, x
   return result
 }
 
-// post-image line ranges of one commit's diff to one file (`@@ -a,b +c,d @@`, --unified=0). d>0 → lines
-// c..c+d-1 changed; d==0 (pure deletion) → the point line after which content vanished. Immutable per
-// (commit, file), memoized.
+// Post-image line ranges of one commit's diff to one file. Ordinary commits use the `@@` result range.
+// Merges use the combined parser's exact all-parent result lines/deletion points; an owned line never
+// widens to adjacent side-inherited lines merely because Git placed both in one `@@@` hunk.
 const hunkMemo = new Map<string, [number, number][]>()
 async function hunksAt(root: string, commit: string, path: string): Promise<[number, number][]> {
   const key = `${commit}\0${path}`
@@ -386,9 +386,13 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
   if (hit) return hit
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
   const ranges: [number, number][] = []
-  for (const m of out.matchAll(/^@@+ (?:-\d+(?:,\d+)? )+\+(\d+)(?:,(\d+))? @@+/gm)) {
-    const c = +m[1], d = m[2] === undefined ? 1 : +m[2]
-    ranges.push(d > 0 ? [c, c + d - 1] : [Math.max(1, c), Math.max(1, c)])
+  if (/^@@@/m.test(out)) {
+    for (const owned of combinedDiffOwnedRanges(out).values()) ranges.push(...owned)
+  } else {
+    for (const m of out.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const c = +m[1], d = m[2] === undefined ? 1 : +m[2]
+      ranges.push(d > 0 ? [c, c + d - 1] : [Math.max(1, c), Math.max(1, c)])
+    }
   }
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)

@@ -495,6 +495,43 @@ test('a mixed combined hunk does not charge an adjacent side-inherited anchor li
   assert.equal(fx.lint().status, 0)
 })
 
+test('an octopus mixed hunk requires every parent column before charging an anchor line', () => {
+  const fx = fixture()
+  const source = join(fx.root, 'src', 'calc.py')
+  const spec = join(fx.root, '.spec', 'project', 'calc', 'spec.md')
+  const code = (governed: number, neighbor: number, other: number) =>
+    `def apply_rate(): return ${governed}\ndef neighbor(): return ${neighbor}\ndef other(): return ${other}\n`
+  writeFileSync(source, code(1, 1, 1))
+  fx.git('add', source)
+  const seeded = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '--amend', '--no-edit')
+  assert.equal(seeded.status, 0, `${seeded.stdout}${seeded.stderr}`)
+
+  fx.git('switch', '-qc', 'answered-source')
+  writeFileSync(source, code(2, 1, 1))
+  writeFileSync(spec, NODE.replace('The calculation contract.', 'The calculation contract now returns two.'))
+  fx.git('add', source, spec)
+  const answered = fx.commit('-m', 'answer source anchor change')
+  assert.equal(answered.status, 0, `${answered.stdout}${answered.stderr}`)
+
+  fx.git('switch', '-qc', 'other-source', 'node/calc')
+  writeFileSync(source, code(1, 1, 2))
+  fx.git('add', source)
+  const other = fx.commit('-m', 'change other ungoverned unit')
+  assert.equal(other.status, 0, `${other.stdout}${other.stderr}`)
+
+  fx.git('switch', '-q', 'node/calc')
+  const staged = fx.runGit({}, 'merge', '--no-ff', '--no-commit', 'answered-source', 'other-source')
+  assert.equal(staged.status, 0, `octopus fixture did not merge its independent sides:\n${staged.stdout}${staged.stderr}`)
+  assert.equal(readFileSync(join(fx.root, '.git', 'MERGE_HEAD'), 'utf8').trim().split('\n').length, 2)
+  writeFileSync(source, code(2, 777, 2))
+  fx.git('add', source)
+
+  const merged = fx.commit('-m', 'author only the ungoverned neighbor in octopus merge')
+  assert.equal(merged.status, 0, `non-all-parent anchor line was charged in octopus merge:\n${merged.stdout}${merged.stderr}`)
+  assert.equal(fx.git('rev-list', '--parents', '-n', '1', 'HEAD').split(' ').length, 4)
+  assert.equal(fx.lint().status, 0)
+})
+
 test('pending lint handles more than 16 MiB of governed tracked text without aggregate buffering', () => {
   const fx = fixture()
   writeFileSync(join(fx.root, 'src', 'large.txt'), 'x'.repeat(17 * 1024 * 1024))

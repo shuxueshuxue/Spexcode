@@ -121,9 +121,8 @@ No file hashes are stored — git is the hash database, so drift is derived live
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
 **One predicate at two real tips:** the retired count gate (`lint.driftErrorThreshold`) stays gone; an
-anchor hit is an ordinary lint ERROR. `spex spec lint` and CI judge committed `HEAD`. `commit-msg` arms an
-ordinary candidate; because Git skips that hook for automatic replay, `prepare-commit-msg` also arms only an
-active cherry-pick/rebase sequencer candidate. `reference-transaction` invokes the same lint over the real
+anchor hit is an ordinary lint ERROR. `spex spec lint` and CI judge committed `HEAD`. On commit paths that
+invoke it, `commit-msg` arms one candidate and `reference-transaction` invokes the same lint over the real
 new oid before its ref advances,
 so history, raw specs, config and current anchored source all come from the candidate tree — never from an
 unrelated worktree/index state. Pending indices are transient and shared only inside that lint run; they
@@ -134,12 +133,11 @@ decision rather than pretending that decision was an oversight. At that time `Sp
 later `spex spec ack` `--allow-empty` stamp; there was no content-bearing ack, so rejecting before the
 implementation commit existed would close the only honest mechanics-only route. Native in-commit trailers
 now supply that route, while the narrowly-armed ref transaction lets the existing ancestry engine judge the
-real exact commit without applying a gate to unrelated ref operations. Local is therefore stricter than CI
-on ordinary and sequencer paths that reach this protocol: `P1` changing anchored code and
+real exact commit without applying a gate to unrelated ref operations. Local is therefore stricter than CI on paths that
+reach this hook: `P1` changing anchored code and
 `P2` updating the spec is accepted at CI's final tree but local rejects `P1`, deliberately requiring the
-code/spec checkpoint to be one commit. Bypass the local protocol explicitly with `SPEXCODE_SKIP_LINT=1`;
-`--no-verify` and a clone with no installed hook also remain local escape/deployment boundaries, so
-[[ci-gate]] remains authoritative.
+code/spec checkpoint to be one commit. Bypass the local hook explicitly with `SPEXCODE_SKIP_LINT=1`; no
+installed hook means no local enforcement, so [[ci-gate]] remains authoritative.
 
 ### Spec-OK — acknowledging an implementation-only change
 

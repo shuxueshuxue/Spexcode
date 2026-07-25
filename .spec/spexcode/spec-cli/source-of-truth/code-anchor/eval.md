@@ -107,17 +107,15 @@ scenarios:
       no declaration; then try the same candidate with either the node's spec.md changed in that commit or
       a `Spec-OK: <node>` trailer.
     expected: >
-      On installed ordinary and sequencer paths (ordinary commit, merge, squash, a conflict's manual commit,
-      cherry-pick, and rebase), each new commit is judged against its own final tree, message, parents, and ancestry before
+      On paths where Git invokes the installed gate (ordinary commit, merge, squash, and a conflict's manual
+      commit), each new commit is judged against its own final tree, message, parents, and ancestry before
       its ref advances. The undeclared anchor hit is rejected and leaves the original branch ref in place;
       changing code and spec together passes because the candidate spec version closes the window; an
       in-commit Spec-OK trailer also passes without pardoning older debt. A --only verdict sees only paths
       actually present in that candidate; conflicting unstaged worktree content cannot affect it. On paths
-      A replay of an undeclared anchor hit is rejected with its sequencer state and staged change intact;
-      after staging the governing spec repair, the corresponding `cherry-pick --continue` or
-      `rebase --continue` succeeds. `--no-verify`, `SPEXCODE_SKIP_LINT=1`, and a clone without hooks remain
-      explicit or deployment bypasses; once such a commit lands, the ordinary HEAD predicate used by CI
-      still reports its unanswered drift.
+      that do not invoke the gate (cherry-pick, rebase, --no-verify, and a clone without hooks), local
+      coverage remains equal to today's rather than promising an impossible immediate rejection; once such
+      a commit lands, the ordinary HEAD predicate used by CI still reports its unanswered drift.
 ---
 # code-anchor — measurement
 

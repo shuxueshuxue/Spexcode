@@ -29,9 +29,8 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   in the dogfood `.plugins`, never in the template, so they are never seeded. [[init-preset]] owns which
   sets exist; this command owns the copy.
 - **The git hooks** — `templates/hooks/*` (the main-guard + footprint-surgery pre-commit, the
-  footprint-refresh post-checkout/post-merge anchors ([[commit-surgery]]), the session-stamp plus
-  sequencer-arm prepare-commit-msg, and the commit-msg/reference-transaction candidate gate) copied into
-  the target's resolved common hooks dir. This is the **one canonical
+  footprint-refresh post-checkout/post-merge anchors ([[commit-surgery]]), and the session-stamp
+  prepare-commit-msg) copied into the target's resolved common hooks dir. This is the **one canonical
   hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
   files, so the two paths can't drift (see [[main-guard]]). They ship inside the package so a relocated
   install still carries them.

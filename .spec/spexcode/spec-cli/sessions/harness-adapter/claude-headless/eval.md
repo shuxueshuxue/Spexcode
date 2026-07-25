@@ -21,10 +21,15 @@ scenarios:
     tags: [backend-api, cli]
     code: [spec-cli/src/claude-headless.ts]
   - name: record-liveness
-    description: Read the public session state with and without a resident turn child, after deliberately making the controller transport unreachable, after explicit stop, and after resume while retaining the same session record.
-    expected: A non-stopped intact record reads online between turns; an unreachable controller is reported only as a loud deliver failure. Explicit stop reads offline while preserving the record and timeline, and resume returns the same conversation online. Removing the record removes the session rather than producing an offline row.
+    description: Read the public session state with and without a resident turn child, and after deliberately making the controller transport unreachable while leaving session.json intact.
+    expected: The intact record always reads online; the unreachable controller is reported only as a loud deliver failure, and removing the session record removes the session rather than producing an offline row.
     tags: [backend-api, cli]
     code: [spec-cli/src/claude-headless.ts]
+  - name: claude-headless-explicit-stop-resume
+    description: Let a real governed claude-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
+    expected: Stop preserves the record and timeline but reads offline; resume returns the same Claude conversation online with the pre-stop declaration note intact.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
   - name: hooks-and-close
     description: Exercise a real Claude lifecycle hook and then close the governed headless session through the public session API.
     expected: The Claude-identical shim fires against the governed record, and close leaves no tmux window, child/controller process, control socket, worktree, branch, or session record residue.

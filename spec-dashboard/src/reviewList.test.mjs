@@ -433,11 +433,35 @@ test('the continue-reviewing queue: two positional groups of shared-state anchor
 })
 
 test('Issue detail is one addressed object and never reconstructs from graph or a list page', () => {
-  assert.match(issues, /const detail = useIssueDetail\(param\)/)
+  // the one non-issue word in the family is the compose address: `#/issues/new` is a PAGE, so the detail
+  // loader is never asked for an issue called 'new' ([[issues-view]]).
+  assert.match(issues, /const detail = useIssueDetail\(composing \? null : param\)/)
+  assert.match(issues, /export const NEW_PARAM = 'new'/)
   assert.match(issues, /const value = await loadIssue\(id\)/)
   assert.match(data, /apiFetch\(`\/api\/issues\/\$\{encodeURIComponent\(id\)\}`\)/)
   assert.match(serverIndex, /app\.get\('\/api\/issues\/:id'/)
   assert.doesNotMatch(issues, /specs\.(?:issues|openIssues)|sessions\.(?:issues|openIssues)|\.find\([^\n]*issue\.id/)
+})
+
+test('New is a routed compose PAGE reusing the shared shells, never a pop-out over the list', () => {
+  // the door is a real anchor into the family's third address — no click handler re-implements routing
+  assert.match(issues, /className="rl-new" href=\{routeHash\('issues', NEW_PARAM\)\}/)
+  // the page wears the SAME DetailShell (back anchor + main + rail) and the SAME composer surface every
+  // other writing box uses ([[review-chrome]] / [[composer]]) — no page-local layout or textarea dialect
+  assert.match(issues, /function NewIssuePage\([\s\S]*<DetailShell[\s\S]*backHref=\{detailBackHash\('issues'\)\}/)
+  assert.match(issues, /function NewIssuePage\([\s\S]*<ComposerSurface[\s\S]*className="fv-new-compose"/)
+  assert.match(issues, /function NewIssuePage\([\s\S]*<TriggerButton[\s\S]*typeTrigger\(taRef\.current, '@'/)
+  // Cancel returns by the SAME derived list address the back anchor uses, never history.back
+  assert.match(issues, /<a className="fv-cancel" href=\{detailBackHash\('issues'\)\}>/)
+  assert.doesNotMatch(issues, /Modal|fv-new-modal|useEscLayer/)
+  // one insertion mechanism for the grammar's doors — Thread's composer types through the same helper
+  assert.match(read('Thread.jsx'), /typeTrigger\(taRef\.current, trigger, setBody/)
+  assert.match(read('mentions.jsx'), /export function typeTrigger\(/)
+  for (const dict of [en, zh]) {
+    for (const key of ['issuesNewTitle:', 'issuesTitleLabel:', 'issuesBodyLabel:', 'issuesWrite:', 'issuesPreview:', 'issuesNodesHint:']) {
+      assert.match(dict, new RegExp(key))
+    }
+  }
 })
 
 test('the detail side rail is sticky on desktop, plain flow at phone width', () => {

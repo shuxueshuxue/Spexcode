@@ -98,6 +98,11 @@ if (gitOk) {
   writeSessionRecord({ status: 'active', note: 'first' })   // one governed record in the isolated store
 }
 
+// Production graph-cache always lives behind a referenced server socket. Keep the fixture at that same
+// lifecycle altitude so its deliberately-unref'ed background-start timer can run before test teardown.
+const backendLifetime = setInterval(() => {}, 60_000)
+test.after(() => clearInterval(backendLifetime))
+
 // ---------------------------------------------------------------------------------------------------------
 // 1. EQUIVALENCE — spliceSessions(prev) == a fresh buildBoard() when only SESSION state changed.
 // ---------------------------------------------------------------------------------------------------------

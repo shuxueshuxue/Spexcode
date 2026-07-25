@@ -229,3 +229,30 @@ OPEN QUESTION I am not going to hand-wave: how should a MERGE commit be judged? 
 content carries everyone else's changes, so the merger would answer for them. Defensible — the
 merger is the human deliberately landing them on the trunk, and merges are a human act here — but
 potentially noisy. That is a judgment call for whoever implements this, not a detail to wave past.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:45:17.123Z -->
+NARROWING MY OWN OPEN QUESTION — the merge concern in post 5 is smaller than I made it sound.
+
+I flagged "how should a merge commit be judged" as an unresolved judgment call. Thinking it
+through against how this project actually merges, most of it dissolves.
+
+1. If every ordinary commit answers for its own anchored-unit moves AT CREATION — which is the
+   whole point of the proposed input change — then a branch reaching a merge carries NO
+   outstanding drift. The merge transports work that has already been answered for. Merges stop
+   accumulating debt instead of inheriting it.
+
+2. The "merger answers for someone else's changes" worry does not hold here anyway. Per the
+   dogfood ritual, a merge to main is itself a DISPATCH: the manager hands it back to the
+   session, and that session's OWN agent runs the git merge. The one answering IS the author.
+
+3. The reverse direction — merging main INTO a node branch, which I did several times this
+   session — is the same story: if each lane answered at its own source, there is no unanswered
+   drift to inherit.
+
+What genuinely remains is a ONE-TIME migration question, not a standing design flaw: the drift
+already sitting in history from before such a fix ships. That needs a decision (grandfather it to
+advisory? sweep it with acks once? re-anchor?), but it is bounded and it expires.
+
+Recording this because I would rather shrink my own open question than leave it looking larger
+than it is — an overstated caveat is as unhelpful as an overstated claim, and post 2 of this
+thread was already one of those.

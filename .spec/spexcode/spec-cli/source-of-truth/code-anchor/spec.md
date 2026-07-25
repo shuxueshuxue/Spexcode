@@ -65,27 +65,23 @@ merge changed `spec.md` and therefore created a version. A historical file versi
 parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
 
-The local errors-block gate is one narrowly-armed transaction. `commit-msg` arms ordinary authoring paths;
-`prepare-commit-msg` arms a sequencer replay only while `CHERRY_PICK_HEAD` is active, because Git skips
-`commit-msg` for automatic cherry-pick and rebase commits. Either arming point records the candidate's
-current HEAD + index tree in that worktree's private git-dir. Git then creates the real commit object. At
+The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
+it proves this is a commit path Git actually sends through the gate and records the candidate's current
+HEAD + index tree in that worktree's private git-dir. Git then creates the real commit object. At
 `reference-transaction` **prepared**, before its ref advances, the hook consumes that one arm only when the
 transaction's old oid and the real commit's tree match it, then runs ordinary lint with the real new oid as
-the explicit pending tip. Thus ordinary commit, amend, squash, merge, cherry-pick and rebase are judged with
-their actual final message/tree/parents — no synthetic `commit-tree` parent guess. A failed signing or
-aborted commit leaves at most one stale arm: the next `prepare-commit-msg` clears it, and
-head/tree/message/age/reachability checks prevent an unrelated ref update from consuming it. The arm lives
-in the per-worktree git-dir, so linked worktrees cannot collide.
+the explicit pending tip. Thus ordinary commit, amend, squash and merge are judged with their actual final
+message/tree/parents — no synthetic `commit-tree` parent guess. A failed signing or aborted commit leaves at
+most one stale arm: the next `prepare-commit-msg` clears it, and head/tree/age checks prevent an unrelated
+ref update from consuming it. The arm lives in the per-worktree git-dir, so linked worktrees cannot collide.
 
-Information availability is not hook coverage. Git skips `commit-msg` for sequencer replay, so treating that
-single hook as the whole gate silently admitted ordinary cherry-pick/rebase even though the landed `HEAD`
-predicate immediately found debt. The replay arm closes that unintentional path. `--no-verify`,
-`SPEXCODE_SKIP_LINT=1`, and a clone with no installed hook remain explicit or deployment bypasses whose
-landed `HEAD` is judged by [[ci-gate]]. The reference hook does no Git walk or lint without a matching arm,
-so reset/checkout/branch/tag/fetch and programmatic no-verify data commits remain unchanged. Canonical
-pre-commit defers anchor errors only when the canonical arm/consume protocol is installed; if `spex init`
-preserves a user hook, pre-commit retains the old HEAD gate, so a hook collision never reduces ordinary
-local coverage. `SPEXCODE_SKIP_LINT=1` is the unambiguous bypass across every commit and sequencer form.
+Information availability is not hook coverage. `commit-msg` is skipped by cherry-pick/rebase on supported
+Git, by `--no-verify`, and in a clone with no installed hook; those paths create no arm, remain at today's
+local coverage, and [[ci-gate]] judges their landed `HEAD`. The reference hook does no Git walk or lint at
+all without a matching arm, so reset/checkout/branch/tag/fetch and programmatic `--no-verify` data commits
+are unchanged. Canonical pre-commit defers anchor errors only when both canonical arm/consume hooks are
+actually installed; if `spex init` preserves either user hook, pre-commit retains the old HEAD gate, so a
+hook collision never reduces local coverage. `SPEXCODE_SKIP_LINT=1` remains the explicit local bypass.
 
 This **reverses** the earlier recorded choice to have no separate candidate-tree gate. That choice was
 sound under the capability available then: `Spec-OK` could only be a later `--allow-empty` stamp, so a

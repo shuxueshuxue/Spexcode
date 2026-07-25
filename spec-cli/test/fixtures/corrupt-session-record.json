@@ -1,8 +1,8 @@
 {
-  "session_id": "67c463e8-748c-459e-b5e5-7ca4591022e9",
+  "session_id": "00000000-0000-4000-8000-0000c0debabe",
   "governed": true,
-  "worktree_path": "/home/jeffry/spexcode/.worktrees/div-class-legend-fv-new-modal-role-dialog-ar-67c4",
-  "branch": "node/div-class-legend-fv-new-modal-role-dialog-ar-67c4",
+  "worktree_path": "/tmp/spexcode-fixture-worktree/corrupt-record-0000",
+  "branch": "node/corrupt-record-fixture-0000",
   "node": "",
   "title": "<div class=\"legend fv-new-modal\" role=\"dialog\" ar…",
   "name": "",
@@ -18,6 +18,6 @@
   "stopped": false,
   "archived": false,
   "launcher": "reclaude",
-  "launch_cmd": "/home/jeffry/.local/bin/reclaude --dangerously-skip-permissions",
+  "launch_cmd": "/usr/bin/false",
   "launch_owner": ""
 }

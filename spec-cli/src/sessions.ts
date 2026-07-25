@@ -1200,31 +1200,30 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // app-server stays alive. Retrying that successful fast exit would mint a duplicate thread/prompt, so the
   // retry loop is a runtime capability rather than a harness-id branch.
   // @@@ retry only what retrying can fix - a fast exit says the launcher stopped before readiness, which is
-  // reason enough to try again but never a diagnosis. So each attempt's stderr is ALSO copied to a file and
-  // matched against the ADAPTER's own settled-failure patterns ([[harness-adapter]] fatalLaunchOutput). A match
-  // means this command cannot succeed however many times we run it: stop at one attempt and let the harness's
-  // own line be the last thing on the pane, instead of spending a certain failure three times and burying the
-  // reason. No match keeps the plain bounded retry.
-  // The copy goes through a FIFO + `tee` rather than a plain redirect so the pane keeps seeing stderr LIVE —
-  // a launch that captured its agent's diagnostics into a file nobody is watching would trade one blindness
-  // for another. Each attempt resets the file, the FIFO is removed once the agent is past the boot window, and
-  // both die with the session's store dir on close. A harness declaring no patterns gets neither.
+  // reason enough to try again but never a diagnosis. So after a fast exit the script reads what the harness
+  // actually SAID and matches it against the ADAPTER's own settled-failure patterns ([[harness-adapter]]
+  // fatalLaunchOutput). A match means this command cannot succeed however many times we run it: stop at one
+  // attempt and let the harness's own line be the last thing on the pane, instead of spending a certain failure
+  // three times and burying the reason. No match keeps the plain bounded retry.
+  //
+  // It reads the PANE, not the agent's streams. Capturing stderr through a pipe missed the answer entirely —
+  // measured against real reclaude, "No conversation found with session ID" arrives on STDOUT, so a
+  // stderr-only capture classified nothing and retried a certain failure three times (the unit test passed
+  // only because its stub printed to the stream the implementation happened to watch). Redirecting stdout too
+  // would be worse: a TUI that finds stdout is not a terminal stops being a TUI. The pane already holds both
+  // streams exactly as the human sees them, and the script runs inside that pane — so it just asks tmux.
   const fatal = (harness.fatalLaunchOutput ?? []).join('|')
-  const errPath = join(storeDir(id), 'launch.err')
-  const attempt = fatal
-    ? [
-      `  rm -f ${shq1(errPath)} ${shq1(errPath + '.fifo')}`,
-      `  mkfifo ${shq1(errPath + '.fifo')} 2>/dev/null && { tee -a ${shq1(errPath)} < ${shq1(errPath + '.fifo')} >&2 & __spex_tee=$!; }`,
-      `  if [ -n "\${__spex_tee:-}" ]; then ${born} 2>${shq1(errPath + '.fifo')}; __spex_rc=$?; wait $__spex_tee; unset __spex_tee; else ${born}; __spex_rc=$?; fi`,
-    ]
-    : [`  ${born}`, `  __spex_rc=$?`]
   const launchBody = harness.launchOneShot ? [born, ''] : [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
-    ...attempt,
-    `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && { rm -f ${shq1(errPath + '.fifo')}; exit $__spex_rc; }`,
+    `  ${born}`,
+    `  __spex_rc=$?`,
+    `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
     ...(fatal ? [
-      `  if grep -Eq ${shq1(fatal)} ${shq1(errPath)} 2>/dev/null; then`,
+      // no -L and no -t: the script runs INSIDE the pane, so tmux resolves its own server and pane from $TMUX.
+      // Baking a socket name in would make the launch line depend on which socket the backend happened to use;
+      // run outside tmux the call simply fails, the grep matches nothing, and the plain bounded retry stands.
+      `  if tmux capture-pane -p -S -400 2>/dev/null | grep -Eq ${shq1(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,

@@ -138,27 +138,41 @@ test('a launch failure the harness itself called settled is attempted exactly on
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-launch-class-'))
   process.env.SPEXCODE_HOME = home
-  const run = (name: string, stubBody: string): { attempts: number; stderr: string } => {
+  // The classifier reads the tmux PANE, so the stub must run inside one — and the stub prints its settled
+  // failure to STDOUT, the stream real reclaude uses. An earlier version of this test printed to stderr and
+  // passed against a stderr-only implementation that could not classify a real harness at all.
+  const sock = `spex-launch-class-${process.pid}`
+  const run = (name: string, stubBody: string): { attempts: number; pane: string } => {
     const counter = join(home, `${name}.attempts`)
     const stub = join(home, `${name}.sh`)
     writeFileSync(stub, `echo x >> ${JSON.stringify(counter)}\n${stubBody}\nexit 1\n`)
-    const script = launchScript(`${name}-test`, '', claudeHarness, `bash ${stub}`)
-    let stderr = ''
-    try { execFileSync('bash', [script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }
-    catch (e) { stderr = String((e as { stderr?: string | Buffer }).stderr ?? '') }
-    return { attempts: readFileSync(counter, 'utf8').split('\n').filter(Boolean).length, stderr }
+    const script = launchScript(name, '', claudeHarness, `bash ${stub}`)
+    // remain-on-exit keeps the dead pane readable so the assertions can see what the window showed.
+    execFileSync('tmux', ['-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80', 'bash', script])
+    execFileSync('tmux', ['-L', sock, 'set-option', '-t', name, 'remain-on-exit', 'on'])
+    const deadline = Date.now() + 60_000
+    for (;;) {
+      const dead = spawnSync('tmux', ['-L', sock, 'list-panes', '-t', name, '-F', '#{pane_dead}'], { encoding: 'utf8' }).stdout?.trim()
+      if (dead === '1' || Date.now() > deadline) break
+      spawnSync('sleep', ['0.5'])
+    }
+    const pane = spawnSync('tmux', ['-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name], { encoding: 'utf8' }).stdout ?? ''
+    execFileSync('tmux', ['-L', sock, 'kill-session', '-t', name])
+    return { attempts: readFileSync(counter, 'utf8').split('\n').filter(Boolean).length, pane }
   }
   try {
-    const settled = run('settled', 'echo "No conversation found with session ID: deadbeef" >&2')
-    assert.equal(settled.attempts, 1, 'a settled failure is spent ONCE, not three times')
-    assert.match(settled.stderr, /No conversation found with session ID/, "the harness's own reason stays visible on the pane")
-    assert.match(settled.stderr, /retrying cannot fix \(see above\); not retrying/)
-    assert.doesNotMatch(settled.stderr, /attempt 2/)
+    // stdout on purpose: that is where real reclaude prints this line.
+    const settled = run('settled', 'echo "No conversation found with session ID: deadbeef"')
+    assert.equal(settled.attempts, 1, `a settled failure is spent ONCE, not three times\n${settled.pane}`)
+    assert.match(settled.pane, /No conversation found with session ID/, "the harness's own reason stays visible on the pane")
+    assert.match(settled.pane, /retrying cannot fix \(see above\); not retrying/)
+    assert.doesNotMatch(settled.pane, /attempt 2/)
 
-    const unclassifiable = run('unclassifiable', 'echo "the wrapper fell over" >&2')
-    assert.equal(unclassifiable.attempts, 3, 'an unclassifiable fast exit keeps the bounded readiness retry')
-    assert.match(unclassifiable.stderr, /fast launcher exit before readiness; retrying/)
+    const unclassifiable = run('unclassifiable', 'echo "the wrapper fell over"')
+    assert.equal(unclassifiable.attempts, 3, `an unclassifiable fast exit keeps the bounded readiness retry\n${unclassifiable.pane}`)
+    assert.match(unclassifiable.pane, /fast launcher exit before readiness; retrying/)
   } finally {
+    spawnSync('tmux', ['-L', sock, 'kill-server'], { stdio: 'ignore' })
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })

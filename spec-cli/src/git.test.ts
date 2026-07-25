@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -269,8 +269,9 @@ exec "${realGit}" "$@"
   chmodSync(shim, 0o755)
   const oldPath = process.env.PATH
   process.env.PATH = `${bin}:${oldPath || ''}`
+  // match by the call itself, not the whole argv: a build context legitimately prefixes resource flags
   const reachSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
-    .filter((line) => line === `-C ${root} rev-list HEAD`).length
+    .filter((line) => line.endsWith(`-C ${root} rev-list HEAD`)).length
   const ancestorSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
     .filter((line) => line.includes('merge-base --is-ancestor')).length
   const waitFor = async (want: number) => {
@@ -396,5 +397,70 @@ test('the large-history switch reads a bounded prefix, and a stream past the old
     process.env.PATH = oldPath
     rmSync(root, { recursive: true, force: true })
     rmSync(bin, { recursive: true, force: true })
+  }
+})
+
+// ---- the build context's pack-footprint boundary: bounded inside, git's defaults outside ----
+
+test('a graph build bounds its git children\'s pack footprint, and calls outside the build do not', async () => {
+  const { root } = prefixRepo(3, 20)
+  const bin = mkdtempSync(join(tmpdir(), 'spex-limits-bin-'))
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const argvLog = join(bin, 'argv.log')
+  const shim = join(bin, 'git')
+  writeFileSync(argvLog, '')
+  writeFileSync(shim, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argvLog}"\nexec "${realGit}" "$@"\n`)
+  chmodSync(shim, 0o755)
+  const oldPath = process.env.PATH
+  process.env.PATH = `${bin}:${oldPath || ''}`
+  const lines = () => readFileSync(argvLog, 'utf8').split('\n').filter(Boolean)
+  const LIMITS = ['core.packedGitWindowSize=1m', 'core.packedGitLimit=32m', 'core.deltaBaseCacheLimit=1m']
+  try {
+    // outside any build: git's own defaults, untouched
+    await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+    assert.equal(lines().length, 1)
+    assert.ok(LIMITS.every((flag) => !lines()[0].includes(flag)), 'an ordinary call must not be re-tuned')
+
+    // inside a build: every child carries the same bound, async and sync alike
+    writeFileSync(argvLog, '')
+    const controller = new AbortController()
+    await withGitAbortSignal(controller.signal, async () => {
+      await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+      git(['-C', root, 'rev-parse', 'HEAD'])
+    })
+    const inside = lines()
+    assert.equal(inside.length, 2)
+    for (const line of inside) for (const flag of LIMITS)
+      assert.ok(line.includes(`-c ${flag}`), `build child missing ${flag}: ${line}`)
+    // the bound rides in front of the caller's own arguments, never replacing them
+    assert.ok(inside.every((line) => line.includes(`-C ${root}`)))
+
+    // and the boundary does not outlive the build
+    writeFileSync(argvLog, '')
+    await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+    assert.ok(LIMITS.every((flag) => !lines()[0].includes(flag)), 'the bound leaked past the build context')
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(root, { recursive: true, force: true })
+    rmSync(bin, { recursive: true, force: true })
+  }
+})
+
+test('the pack-footprint bound does not change what a build reads, and an abort still kills the child', async () => {
+  const { root } = prefixRepo(40, 60)
+  try {
+    const plain = await driftIndex(root)
+    const controller = new AbortController()
+    const bounded = await withGitAbortSignal(controller.signal, () => driftIndex(root))
+    assert.equal(bounded, plain, 'same HEAD shares one index whether or not the build bound applies')
+
+    // an aborted build still rejects rather than running to completion under the new flags
+    const aborted = new AbortController()
+    aborted.abort()
+    await assert.rejects(
+      withGitAbortSignal(aborted.signal, () => gitA(['-C', root, 'log', '--format=%H', 'HEAD'])),
+      (error: unknown) => (error as Error)?.name === 'AbortError')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })

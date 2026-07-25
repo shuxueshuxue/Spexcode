@@ -21,6 +21,21 @@ type GitPermitPool = { acquire: (signal: AbortSignal) => Promise<() => void> }
 type GitBuildContext = { signal: AbortSignal; permits: GitPermitPool }
 const gitBuild = new AsyncLocalStorage<GitBuildContext>()
 
+// @@@ a build's git children run on a bounded pack footprint - git sizes its mmap window, its mmap ceiling
+// and its delta-base cache for a process that owns the machine. A graph build's heaviest walks each mapped
+// well over a hundred megabytes of pack for output measured in kilobytes, and those children land inside the
+// build's own memory platform. Capping the three makes the same walks run in a fraction of the resident set
+// for a fraction of a second more. This is a RESOURCE boundary, never a semantic one — output, exit status
+// and stderr are byte-identical under every setting — and it is scoped to the build context, so ordinary
+// CLI/API git keeps git's defaults. It is also content-blind: the transport knows pack sizing, never which
+// walk a caller is doing.
+const BUILD_GIT_LIMITS = [
+  '-c', 'core.packedGitWindowSize=1m',
+  '-c', 'core.packedGitLimit=32m',
+  '-c', 'core.deltaBaseCacheLimit=1m',
+]
+const withBuildLimits = (args: string[]): string[] => (gitBuild.getStore() ? [...BUILD_GIT_LIMITS, ...args] : args)
+
 export function gitAbortError(): Error {
   return Object.assign(new Error('The operation was aborted'), { name: 'AbortError', code: 'ABORT_ERR' })
 }
@@ -102,7 +117,7 @@ export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    return execFileSync('git', withBuildLimits(args), { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
@@ -149,7 +164,7 @@ async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffe
   if (!context) return execGit(args, env, undefined, maxBuffer)
   const release = await context.permits.acquire(context.signal)
   try {
-    return await execGit(args, env, context.signal, maxBuffer)
+    return await execGit(withBuildLimits(args), env, context.signal, maxBuffer)
   } finally {
     release()
   }

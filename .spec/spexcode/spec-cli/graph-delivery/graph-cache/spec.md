@@ -94,6 +94,14 @@ verdict is a memory lookup — never one `merge-base --is-ancestor` process per 
 batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
 same current-root cache ownership. Path-specific history remains lazy and bounded.
 
+The budget covers how much memory a build's children may hold, not only how many may run. Git sizes its
+mmap window, its mmap ceiling and its delta-base cache for a process that owns the machine, so a build's
+heaviest history walks each mapped well over a hundred megabytes of pack to produce kilobytes of output —
+inside the build's own platform. Every git call made under the build context therefore runs with those three
+bounded, uniformly and blind to which walk it is; a call outside the context keeps git's defaults. It is a
+resource boundary only: output, exit status and stderr are byte-identical under every setting, which is the
+standing obligation whenever the bound is retuned.
+
 Bounding processes is not enough on its own, because what a build RETAINS scales too. A fold over an
 adopted corpus reads many off-history anchors, and asking each of them a repository-wide question made the
 build's own heap — not its child processes — the binding term. So the off-history content fallback asks

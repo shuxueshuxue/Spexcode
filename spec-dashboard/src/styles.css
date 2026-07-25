@@ -1229,6 +1229,7 @@ a.scenario-count:hover { background: var(--panel2); }
 /* the split section's quieter second count — subordinate to the fresh count it trails, never a pill of
    its own weight, so the chip still reads as ONE number plus its remeasurement debt. */
 .rl-section-suffix { margin-left: -2px; color: var(--ink2); opacity: .72; font-size: var(--type-caption); white-space: nowrap; }
+.rl-section-suffix-compact { display: none; }
 .rl-facets { margin-left: auto; justify-content: flex-end; }
 .rl-facet-wrap, .rl-secondary-filters { position: relative; flex: none; }
 .rl-facet { max-width: 190px; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--muted); background: transparent; border: 0; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
@@ -1362,13 +1363,20 @@ a.scenario-count:hover { background: var(--panel2); }
   .rl-content { width: calc(100% - 32px); padding-top: 16px; }
   .rl-titlebar { margin-bottom: 8px; }
   .rl-query { margin-bottom: 16px; }
-  .lp-head { height: 49px; padding: 0 7px; }
-  .rl-section { gap: 2px; padding: 0; }
+  /* The phone header WRAPS only when its own content needs a second line, and never clips: Issues still
+     measures one 49px row, while a split-count Evals header takes exactly two contained lines rather than
+     pushing the Filters trigger outside its own box. Growing downward is the honest trade — a count this
+     header was given is never hidden, and the list below simply starts lower. */
+  .lp-head { height: auto; min-height: 49px; padding: 0 7px; flex-wrap: wrap; align-content: center; row-gap: 2px; }
+  .rl-sections { align-self: auto; }
+  .rl-facets { flex: 1 1 auto; justify-content: flex-end; }
+  .rl-section { gap: 2px; padding: 0; align-self: auto; min-height: 44px; }
   .rl-section .review-state { gap: 3px; }
   .rl-section .review-state-label { font-size: var(--type-meta); }
-  /* the phone header is already width-bound to four controls inside 49px; the split's second count is a
-     desktop readout, and its axis stays reachable through the Freshness group in the Filters menu. */
-  .rl-section-suffix { display: none; }
+  /* the split's second count condenses to its NUMBER at phone width — the debt stays visible in the
+     default view; only the WORD moves to the accessible name and tooltip. */
+  .rl-section-suffix-full { display: none; }
+  .rl-section-suffix-compact { display: inline; }
   .rl-facets { flex: none; }
   .rl-facet-wrap:not(.mobile-stay) { display: none; }
   .rl-facet { max-width: 112px; padding: 0 7px; }

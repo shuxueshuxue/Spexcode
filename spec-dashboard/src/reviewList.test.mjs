@@ -277,9 +277,17 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(evals, /count: failCount\.fresh/)
   assert.match(evals, /count: passCount\.fresh/)
   assert.match(evals, /count: unmeasuredCount/)
-  // the split's second number is the shared chip's own quiet suffix, part of the button, not a control.
-  assert.match(shell, /\{section\.countSuffix && <span className="rl-section-suffix">\{section\.countSuffix\}<\/span>\}/)
-  assert.match(evals, /const staleSuffix = \(n\) => \(n > 0 \? `\+\$\{n\} \$\{t\('reviewList\.freshness\.stale'\)\}` : null\)/)
+  // the split's second number is the shared chip's own quiet suffix, part of the button, not a control —
+  // and it has TWO visible faces over ONE accessible name, so the phone condenses the word, never the count.
+  assert.match(shell, /<span className="rl-section-suffix" data-tip=\{section\.countSuffix\.text\}>/)
+  assert.match(shell, /<span className="sr-only">\{section\.countSuffix\.text\}<\/span>/)
+  assert.match(shell, /className="rl-section-suffix-full" aria-hidden="true">\{section\.countSuffix\.text\}/)
+  assert.match(shell, /className="rl-section-suffix-compact" aria-hidden="true">\{section\.countSuffix\.compact\}/)
+  assert.match(evals, /text: `\+\$\{n\} \$\{t\('reviewList\.freshness\.stale'\)\}`, compact: `\+\$\{n\}`/)
+  // the phone swaps the FACE; nothing ever hides the suffix element or its number.
+  assert.match(css, /\.rl-section-suffix-compact \{ display: none; \}/)
+  assert.match(css, /\.rl-section-suffix-full \{ display: none; \}\n\s*\.rl-section-suffix-compact \{ display: inline; \}/)
+  assert.doesNotMatch(css, /\.rl-section-suffix \{ display: none; \}/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
@@ -342,8 +350,12 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /\.rl-query\s*\{[^}]*height:\s*32px;/s)
   assert.match(css, /\.lp-head\s*\{[^}]*height:\s*48px;/s)
   assert.match(css, /\.rl-row-grid\s*\{[^}]*min-height:\s*64px;/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*height:\s*49px;/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}[\s\S]*\.rl-facets\s*\{\s*flex:\s*none;/s)
+  // 49px is now the phone header's FLOOR, not its cap: it grows downward only when its own content needs a
+  // second line (a split count does; Issues does not), and a control is never clipped or dropped for width.
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*min-height:\s*49px;[^}]*flex-wrap:\s*wrap;/s)
+  assert.doesNotMatch(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*[^-]height:\s*49px;/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;[^}]*min-height:\s*44px;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-facets\s*\{\s*flex:\s*1 1 auto;\s*justify-content:\s*flex-end;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
   assert.match(shell, /const buttonLabel = selectedLabel \? `\$\{label\}: \$\{selectedLabel\}` : label/)
   assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)

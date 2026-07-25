@@ -43,6 +43,15 @@ const submitQuery = async (text) => {
   await page.keyboard.press('Enter')
   await settle(1100)
 }
+// poll a condition instead of trusting one fixed sleep — a list replay is a real refetch.
+const until = async (predicate, timeout = 15_000) => {
+  const deadline = Date.now() + timeout
+  for (;;) {
+    if (await predicate()) return true
+    if (Date.now() > deadline) return false
+    await page.waitForTimeout(250)
+  }
+}
 const facetNames = () => page.evaluate(() => [...document.querySelectorAll('.rl-facet')].map((el) => el.textContent.replace(/\s+/g, ' ').trim()))
 const overflowGroups = () => page.evaluate(() => [...document.querySelectorAll('.rl-secondary-filters-menu [role="group"]')].map((group) => ({
   label: group.querySelector('.rl-menu-label')?.textContent.trim(),
@@ -80,9 +89,11 @@ check('a facet dimension conjoins with the section', storeRows.length <= closedR
 await page.screenshot({ path: join(OUT, '01-issues-filtered.png') })
 
 await page.goBack()
-await settle(1100)
+// a replay is a REFETCH: poll for the restored row set rather than sampling one fixed instant.
+const restored = await until(async () => (await rowTitles()).join('|') === closedRows.join('|'))
 check('Back restores the previous canonical view exactly',
-  (await hash()).includes('state:closed') && !(await hash()).includes('store:') && (await rowTitles()).join('|') === closedRows.join('|'))
+  restored && (await hash()).includes('state:closed') && !(await hash()).includes('store:'),
+  `${await hash()} · ${(await rowTitles()).length} rows vs ${closedRows.length}`)
 
 step('an ACTIVE value survives its own data going to zero')
 await submitQuery(`is:issue store:${storeOption.value} nonexistentsubstringzzz`)
@@ -149,7 +160,11 @@ const hashAtOpen = await hash()
 await page.locator('.ov-tab', { hasText: /issue/i }).click()
 await settle(1400)
 const paneIssueRows = () => page.evaluate(() => [...document.querySelectorAll('.pane-issues .issue-card-title, .pane-issues .rl-row-title, .pane-issues .ic-title')].map((el) => el.textContent.trim()))
-check('the embedded Issues pane wears ONE shallow search row', await page.locator('.pane-issues .rf-compact, .rf-compact').count() >= 1)
+// wait for the pane's own fetch to settle — sampling the count immediately races the loading state.
+const issuesCompact = await page.locator('.pane-issues .rf-compact').first()
+  .waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false)
+check('the embedded Issues pane wears ONE shallow search row',
+  issuesCompact && await page.locator('.pane-issues .rf-compact').count() === 1)
 await page.locator('.rf-compact input').first().fill('zzzznomatch')
 await settle(1800)
 const emptyPane = await page.evaluate(() => ({

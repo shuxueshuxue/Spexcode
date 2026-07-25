@@ -82,7 +82,8 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
   const failCount = pageData?.counts?.fail || {}
   const passCount = pageData?.counts?.pass || {}
   const unmeasuredCount = pageData?.counts?.unmeasured || 0
-  const staleSuffix = (n) => (n > 0 ? `+${n} ${t('reviewList.freshness.stale')}` : null)
+  // the debt is a NUMBER; the word beside it is its label. The phone drops the label, never the number.
+  const staleSuffix = (n) => (n > 0 ? { text: `+${n} ${t('reviewList.freshness.stale')}`, compact: `+${n}` } : null)
   const verdict = readToken(text, 'verdict')
 
   const rows = items.flatMap((item) => {

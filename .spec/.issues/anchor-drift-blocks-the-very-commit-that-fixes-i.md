@@ -605,3 +605,51 @@ SPEXCODE_SKIP_LINT=1 on the drift-CREATING commit out of habit. It was unnecessa
 started at 0 errors, so that commit would have passed on its own) and it means that experiment did
 NOT demonstrate "the creator sails through". That claim rests on real history instead: 847ee8c4's
 commit body carries no bypass marker — it passed clean.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:48:48.609Z -->
+DESIGN, cut down by the maintainer. Two pieces, not three.
+
+I had proposed a third piece — "block only on findings THIS commit introduces" — to stop
+historical debt from ambushing an unrelated committer. The maintainer rejected it as an
+over-complicated condition. He is right, and the reason is stronger than "too complex":
+
+    if the first two pieces hold, debt cannot ACCRUE. Every commit answers at its source or does
+    not land. So the only debt piece 3 protects anyone from is the BACKLOG that exists the moment
+    the fix ships — a one-time migration, not a standing condition.
+
+I had encoded a migration as a permanent special case.
+
+Cutting it also restores something worth keeping: if someone forces debt in with
+SPEXCODE_SKIP_LINT / --no-verify / a hookless clone, the next committer IS blocked. That is the
+ratchet, and it is the notification channel the adversary defended in post 8. My piece 3 would
+have switched that off too.
+
+## The design, entire
+
+    1. `Spec-OK:` trailer becomes ack's staging-time form
+    2. judge at commit-msg: "assuming this commit lands, is the rule violated?" — block normally
+       + clear the existing backlog once, at adoption
+
+## On (1) not being a new idea
+
+Worth stating plainly, because it looked like I was inventing a mechanism. "Git is the database"
+is this project's existing core: nothing stores spec metadata, it is all computed from git.
+
+    node version   = the number of content commits to its spec.md
+    version reason = that commit's subject
+    version author = the `Session:` trailer in that commit's body
+    history tab    = a git log walk over that path
+
+Concretely, the archive node reads v4 on the board because `git log -- .spec/…/archive/spec.md`
+returns exactly four commits; the number lives nowhere else. And the `Session:` trailer is written
+automatically by the shipped `prepare-commit-msg` hook.
+
+So structured facts in a commit message, read back later, is the established pattern here — not a
+new one. And `Spec-OK:` is not even a new trailer: `ackCoverFor` reads exactly this trailer today,
+just out of committed history. Piece 1 is therefore not "add a trailer"; it is "let the existing
+trailer be seen one moment earlier".
+
+The hook symmetry that makes it possible:
+
+    prepare-commit-msg   before the message is final   SHIPPED   writes `Session:`
+    commit-msg           after it is final             empty     could read/validate, can still block

@@ -21,8 +21,13 @@ scenarios:
     code: spec-cli/src/graph.ts
     related: [spec-eval/src/evaltab.ts, spec-cli/src/issues.ts]
     description: >-
-      With an unresolved remark on a scenario, hit `GET /api/graph` on a running backend and read the
-      node's `evals` entry for that scenario.
+      With an unresolved remark on a scenario, read the TWO surfaces one graph build publishes on a
+      running backend: `GET /api/graph`, whose node fold carries the per-state COUNT projection
+      (`reviewSummary.evals`), and the row-shaped reading with its remarks join, served from that same
+      build on `GET /api/evals/detail` and `GET /api/specs/:id/evals`. Write the remark through the real
+      remark API pinned to the reading's codeSha, then read with no sleep and no retry: the write's own
+      atomic invalidation must carry it, never the cold-tick patrol. Read a sibling scenario too — it
+      must not move.
     expected: >-
       The reading carries `fresh: false` and `staleAxes: ["remark"]`, and the trunk remark track is
       overlaid onto it as `remarks: [{ rid, ref, by, body, targetCodeSha, resolved:false, dangling }]` —

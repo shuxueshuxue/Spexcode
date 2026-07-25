@@ -98,6 +98,18 @@ scenarios:
     expected: >
       Lint exits 1 with a `dead anchor` integrity error for the missing qualified name and an
       `ambiguous anchor` integrity error reporting both duplicate qualified declarations.
+  - name: historical-memo-key
+    tags: [cli]
+    test:
+      path: spec-cli/src/anchors.test.ts
+      name: historical unit memo keys filename semantics when same bytes share one blob
+    description: >
+      In a fixture repository, two anchored files with identical bytes and blob ids use `.ts` and `.tsx`
+      script kinds. Run historical anchor queries in both orders and repeat both queries in the same process.
+    expected: >
+      The `.tsx` historical parse remains conservative-unparseable and the `.ts` parse remains valid in
+      either order and on repeat; normalized results do not depend on directory or query order. A key must
+      cover the complete extractor input, not only the Git blob oid and extractor label.
   - name: candidate-tip-gate
     tags: [cli]
     description: >

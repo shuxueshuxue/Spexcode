@@ -115,14 +115,29 @@ fall through to allow, so legit cross-machine dispatch and the viewer-points-any
 is the same FAIL-LOUD-never-silent-fallback rule [[remote-client]] states, applied to launch: a mutating verb
 must never silently act on the wrong project.
 
-**Resilient bring-up.** A launcher can fail before the agent becomes addressable — for example a wrapper or
-daemon exits within seconds, before the rendezvous socket ever appears. That fast exit is enough evidence to
-retry, but not enough evidence to name the cause. The launch script therefore **retries a bounded number of
-times on a fast exit** and reports the observed fact (fast launcher exit before readiness), without calling it
-a daemon race. It stops the instant the agent has run past the boot window, so a normal long-lived session is
-never relaunched on its eventual exit. The boot grace and the ready-wait both span this retry window, so
-liveness reads `starting` and the concurrency slot stays held until the worker is genuinely online — or truly
-dead. This only closes startup unready failures; it adds no fallback and never masks a dead agent.
+**Resilient bring-up — but only where retrying can help.** A launcher can fail before the agent becomes
+addressable — for example a wrapper or daemon exits within seconds, before the rendezvous socket ever appears.
+That fast exit is enough evidence to retry, but not enough to name the cause, so the launch script **retries a
+bounded number of times on a fast exit** and reports only the observed fact, without calling it a daemon race.
+It stops the instant the agent has run past the boot window, so a normal long-lived session is never relaunched
+on its eventual exit. The boot grace and the ready-wait both span this retry window, so liveness reads
+`starting` and the concurrency slot stays held until the worker is genuinely online — or truly dead.
+
+**A failure that is already settled is spent ONCE.** Retrying it three times buries the one line that explains
+it and burns a slot, so a settled failure never enters that loop, and the retry stops being a wall-clock rule.
+Which failures are settled is decided in exactly two places, never by product code matching a harness's
+English. The **launch transport** answers what it can before a window is ever opened — no worktree, no branch,
+no resolvable launcher command — each a fact about this machine that no attempt can change, refused once with
+its own structured code, which the record's note, the API, and the CLI all consume as data
+([[sessions-core]]). The **harness adapter** owns what only its harness can recognize: it declares the patterns
+of its own settled output ([[harness-adapter]]), and an attempt matching one stops immediately with the
+harness's own reason left visible. What it matches against is the **pane**, not the agent's streams: a harness
+picks its own stream (measured — real claude reports a missing conversation on stdout, so watching stderr
+classified nothing and spent the certain failure three times), and redirecting stdout to read it would take the
+terminal away from a TUI. The pane already holds both streams exactly as the human sees them, and the launch
+runs inside it. A missing conversation on a still-valid worktree is a settled failure too —
+it routes to the explicit repair/force entry, never to an implicit fresh-conversation fallback. Everything
+genuinely unclassifiable keeps the bounded retry. This adds no fallback and never masks a dead agent.
 
 ### Concurrency cap (bounded working set)
 

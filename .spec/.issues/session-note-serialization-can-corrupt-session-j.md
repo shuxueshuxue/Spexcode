@@ -1,7 +1,7 @@
 ---
 concern: session note serialization can corrupt session.json when a note contains a double quote
 by: 58195f32-61b8-4e69-9b91-b41fc2594501
-status: open
+status: landed
 nodes: sessions-core
 created: 2026-07-25T07:33:13.424Z
 ---

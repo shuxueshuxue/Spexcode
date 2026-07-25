@@ -132,9 +132,10 @@ check('Escape returns focus to the overflow trigger',
   await page.evaluate(() => document.activeElement?.classList.contains('rl-secondary-filters-trigger')))
 
 step('canonical #/evals — the SAME engine over eval fields')
+api.evals = null
 await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.rl-section')
-await settle(1100)
+if (!(await until(() => api.evals?.query === 'is:eval', 30_000))) throw new Error('cold #/evals never answered')
 const evalFacets = await facetNames()
 check('evals opens on its complete bound record', (await hash()) === '#/evals' && api.evals.body.total === api.evals.body.sourceTotal)
 check('the low-cardinality eval facets are direct on desktop', evalFacets.length >= 2, evalFacets.join(' | '))
@@ -213,16 +214,21 @@ step('the embedded pick agrees with the canonical adapter, and survives a tab sw
 await page.locator('.rf-compact .rl-secondary-filters-trigger').first().click()
 await settle(400)
 await page.locator('.rl-secondary-filters-menu [role="menuitemradio"]').filter({ hasText: /fail|未通过/i }).first().click()
-await settle(1400)
+// the pane refetches on the pick — wait for the request it caused, not for the clock.
+await until(() => /verdict:fail/.test(api.evals?.query || ''), 30_000)
+await settle(400)
 const paneVerdictQuery = api.evals?.query
 check('the embedded pick travels through the SAME token grammar the canonical page uses',
   /verdict:fail/.test(paneVerdictQuery || '') && /node:/.test(paneVerdictQuery || ''), paneVerdictQuery)
 check('the embedded pick still leaves the address alone', (await hash()) === hashAtOpen)
 await page.locator('.ov-tab', { hasText: /spec|规格/i }).first().click()
 await settle(600)
+api.evals = null
 await page.locator('.ov-tab', { hasText: /eval/i }).click()
-await settle(1400)
-check('the embedded state survives a Spec Information tab switch', /verdict:fail/.test(api.evals?.query || ''), api.evals?.query)
+const returned = await until(() => api.evals?.query != null, 30_000)
+await settle(400)
+check('the embedded state survives a Spec Information tab switch',
+  returned && /verdict:fail/.test(api.evals?.query || ''), api.evals?.query)
 await page.screenshot({ path: join(OUT, '06-pane-eval-survives-tabswitch.png') })
 
 step('History discloses one row at a time — no expand-all control or replacement')
@@ -265,9 +271,11 @@ await page.screenshot({ path: join(OUT, '07-history-one-at-a-time.png') })
 step('390px — the same compact interactions, second theme, no horizontal overflow')
 await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'dracula') })
 await page.setViewportSize({ width: 390, height: 780 })
+api.evals = null
 await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
 await page.reload({ waitUntil: 'domcontentloaded' })   // the theme is applied before first paint, so re-enter
-await settle(1600)
+if (!(await until(() => api.evals?.query === 'is:eval', 30_000))) throw new Error('390px #/evals never answered')
+await settle(500)
 check('the phone theme applied', await page.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dracula')
 const phoneOverflow = await noHorizontalOverflow()
 check('the phone canonical list never widens the page', phoneOverflow.doc <= 390 && phoneOverflow.body <= 390, JSON.stringify(phoneOverflow))
@@ -279,8 +287,10 @@ check('displaced facets are all reachable in the ONE secondary menu at 390px',
 await page.screenshot({ path: join(OUT, '08-phone-evals-overflow.png') })
 await page.keyboard.press('Escape')
 await settle(300)
+api.issues = null
 await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
-await settle(1400)
+if (!(await until(() => api.issues?.query != null, 30_000))) throw new Error('390px #/issues never answered')
+await settle(500)
 const phoneIssuesOverflow = await noHorizontalOverflow()
 check('the phone Issues list never widens the page either', phoneIssuesOverflow.doc <= 390 && phoneIssuesOverflow.body <= 390, JSON.stringify(phoneIssuesOverflow))
 await page.screenshot({ path: join(OUT, '09-phone-issues.png') })
@@ -288,9 +298,14 @@ await page.screenshot({ path: join(OUT, '09-phone-issues.png') })
 step('back to the first theme at desktop width, one last canonical comparison')
 await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'minimal') })
 await page.setViewportSize({ width: 1440, height: 900 })
-await page.goto(`${BASE}/#/evals?q=${encodeURIComponent(`is:eval node:${node.value}`)}`, { waitUntil: 'domcontentloaded' })
+const scopedQuery = `is:eval node:${node.value}`
+api.evals = null
+await page.goto(`${BASE}/#/evals?q=${encodeURIComponent(scopedQuery)}`, { waitUntil: 'domcontentloaded' })
 await page.reload({ waitUntil: 'domcontentloaded' })
-await settle(1400)
+// wait for the response for THIS query, not for the clock.
+const scopedArrived = await until(() => api.evals?.query === scopedQuery, 30_000)
+check('the scoped canonical view actually loaded', scopedArrived, `last query ${api.evals?.query}`)
+await settle(400)
 check('the first theme is back', await page.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'minimal')
 check('the canonical list reproduces the node-scoped population the pane filtered',
   api.evals.body.total === nodeScopedTotal, `${api.evals.body.total} vs ${nodeScopedTotal}`)

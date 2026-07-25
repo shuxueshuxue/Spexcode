@@ -454,12 +454,35 @@ test('the continue-reviewing queue: two positional groups of shared-state anchor
 test('Issue detail is one addressed object and never reconstructs from graph or a list page', () => {
   // the one non-issue word in the family is the compose address: `#/issues/new` is a PAGE, so the detail
   // loader is never asked for an issue called 'new' ([[issues-view]]).
-  assert.match(issues, /const detail = useIssueDetail\(composing \? null : param\)/)
+  assert.match(issues, /const detail = useIssueDetail\(composing \? null : param, issuesStamp\)/)
   assert.match(issues, /export const NEW_PARAM = 'new'/)
   assert.match(issues, /const value = await loadIssue\(id\)/)
   assert.match(data, /apiFetch\(`\/api\/issues\/\$\{encodeURIComponent\(id\)\}`\)/)
   assert.match(serverIndex, /app\.get\('\/api\/issues\/:id'/)
   assert.doesNotMatch(issues, /specs\.(?:issues|openIssues)|sessions\.(?:issues|openIssues)|\.find\([^\n]*issue\.id/)
+})
+
+test('an open review surface follows the board issue-freshness stamp, never board-frame churn', () => {
+  // [[remark-substrate]] write-visibility, the CLIENT leg. The server moves ONE board stamp on every thread
+  // write; a surface that watches something else is only accidentally fresh. Measured regression: the issue
+  // DETAIL watched nothing at all and an externally-written remark never appeared (>30s, twice the cold
+  // lane), while the list survived on the sessions ARRAY's per-frame identity — a key that reads as
+  // freshness while being blind to the data, and that a memoized board reconstruction would silence.
+  const app = read('App.jsx')
+  // the board's own field reaches both shells — the stamp is the signal, not a derived proxy
+  assert.match(app, /<MobileApp[^\n]*issuesStamp=\{board\.issuesStamp\}/)
+  assert.match(app, /<Dashboard[^\n]*issuesStamp=\{board\.issuesStamp\}/)
+  assert.match(dashboard, /<IssuesPage[^\n]*issuesStamp=\{issuesStamp\}/)
+  // the list keys on what its ANSWER depends on: the issue population + the presence join, nothing else
+  assert.match(issues, /refreshKey: `\$\{issuesStamp \?\? ''\}\|\$\{presenceKey\}`/)
+  assert.doesNotMatch(issues, /refreshKey: sessions\b/)
+  // the open thread re-reads on a stamp tick, and only a NEW ADDRESS may wipe it to the loading face
+  assert.match(issues, /useIssueDetail\(id, freshness\)/)
+  assert.match(issues, /\}, \[id, freshness, reload\]\)/)
+  assert.match(issues, /if \(id !== shownId\.current\) \{ shownId\.current = id; setIssue\(null\); setError\(null\) \}/)
+  // the reading detail hosts the substrate's OTHER remark host and follows the same one stamp
+  assert.match(page, /function useEvalDetail\(param, sessionId, projection, enabled = true, freshness = null\)/)
+  assert.match(page, /\[enabled, node, scenario, sessionId, freshness,/)
 })
 
 test('New is a routed compose PAGE reusing the shared shells, never a pop-out over the list', () => {

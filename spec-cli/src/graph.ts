@@ -4,7 +4,7 @@ import { listSessions } from './sessions.js'
 import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { mergedIssues } from './issues.js'
+import { boardThreads } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
@@ -121,20 +121,16 @@ export async function buildBoard() {
   // Reconcile Issues once. Full rows stay in the server-only review snapshot; graph nodes get counts and
   // open identity only, enough for tile/stat/tree glances without reconstructing the list.
   const isOpen = (i: { status: string }) => i.status === 'open'
-  const merged = mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id))
-  // ONE board-level freshness stamp over EVERY issue thread (noded or nodeless, both stores):
-  // open-count : thread-count : reply-count : latest-activity. Every thread write — open, reply, remark,
-  // resolve, retract, close — moves at least one component, so a store write ALWAYS moves board bytes:
-  // [[graph-delta]] suppresses no-change broadcasts, and without a moving byte an external write would
-  // stay invisible to viewers until the fallback poll ([[remark-substrate]] write-visibility). The per-node
-  // fold below stays [[graph-lean]]-slim (no reply payloads); this stamp is the freshness carrier.
-  const issuesStamp = [
-    merged.filter(isOpen).length,
-    merged.length,
-    merged.reduce((n, i) => n + i.replies.length, 0),
-    merged.flatMap((i) => [i.created, ...i.replies.flatMap((r) => [r.at, r.resolvedAt ?? ''])]).reduce((a, b) => (b > a ? b : a), ''),
-  ].join(':')
-  const issuesByNode: Record<string, ReturnType<typeof mergedIssues>> = {}
+  // ONE store walk yielding both halves ([[issues]] boardThreads): the ISSUE surfaces get the split
+  // population, the freshness carrier gets the whole store.
+  const { issues: merged, stamp: issuesStamp } = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id))
+  // `issuesStamp` above is that ONE board-level freshness stamp, over EVERY thread — noded or nodeless,
+  // both stores, BOTH remark hosts. It is folded from the whole store and NOT from the split `merged`: a
+  // scenario-hosted remark lands on an eval track the issue read splits out ([[eval-issue-split]]), so a
+  // carrier folded over the issue half alone left an open READING blind to every remark on it — the write
+  // moved no board byte, [[graph-delta]] correctly suppressed the no-change broadcast, and the push never
+  // fired at all. The per-node fold below stays [[graph-lean]]-slim (no reply payloads).
+  const issuesByNode: Record<string, ReturnType<typeof boardThreads>['issues']> = {}
   for (const issue of merged)
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
   for (const n of nodes) {

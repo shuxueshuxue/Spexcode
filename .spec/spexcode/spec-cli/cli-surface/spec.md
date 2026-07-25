@@ -7,7 +7,6 @@ code:
   - spec-cli/src/cli.ts
 related:
   - spec-cli/src/guide.ts
-  - docs/AGENT_GUIDE.md
   - spec-cli/src/help.ts
 ---
 # cli-surface

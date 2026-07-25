@@ -155,9 +155,12 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   const env: NodeJS.ProcessEnv = {
     // a private tmux socket name, or the fixture backend probes the BOX's real sessions and their moving
     // pane titles push a 'sessions' change every warm tick — the quiet window would be measuring the
-    // machine, not the fixture.
-    ...process.env, PORT: String(port), SPEXCODE_HOME: spexHome, SPEXCODE_BOARD_DEBUG: '1',
-    SPEXCODE_TMUX: `spex-fixture-${port}`,
+    // machine, not the fixture. Keyed by port so two runs on one box cannot share a socket either.
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_TMUX: `spex-graph-stream-api-test-${port}`,
   }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_DISABLE_WATCHERS
@@ -172,6 +175,8 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   const base = `http://127.0.0.1:${port}`
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
+  const events: string[] = []
+  const eventTimeline: string[] = []
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -180,7 +185,6 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
     assert.equal(initial.status, 200)
     await initial.arrayBuffer()
 
-    const events: string[] = []
     const response = await fetch(`${base}/api/graph/stream`, { signal: abort.signal })
     assert.equal(response.status, 200)
     assert.ok(response.body)
@@ -197,7 +201,10 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
           const block = buffered.slice(0, boundary)
           buffered = buffered.slice(boundary + 2)
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
-          if (event) events.push(event)
+          if (event) {
+            events.push(event)
+            eventTimeline.push(`${Date.now()}: ${event}`)
+          }
         }
       }
     })().catch((error) => {
@@ -385,6 +392,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
   const base = `http://127.0.0.1:${port}`
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
+  const frames: string[] = []
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -392,7 +400,6 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     // the patrol is delta-gated: it only runs while a delta subscriber holds the chain
     const response = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: abort.signal })
     assert.equal(response.status, 200)
-    const frames: string[] = []
     streamRead = (async () => {
       const reader = response.body!.getReader()
       const decoder = new TextDecoder()
@@ -428,7 +435,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     assert.match(serverLog, /PATROL-REPAIR .*changed units: \[[^\]]+\]/, 'the repair must name the diverged units')
     assert.ok(frames.length > framesBefore, 'the blinded change still reached the subscriber')
   } catch (error) {
-    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nserver log:\n${serverLog}`)
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)
   } finally {
     abort.abort()
     await streamRead?.catch(() => {})

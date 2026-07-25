@@ -53,6 +53,9 @@ const cache = await import('./graphCache.js')
 const graph = await import('./graph.js')
 const git = await import('./git.js')
 
+// Production graph-cache always lives behind a referenced server socket. Keep the fixture at that same
+// lifecycle altitude so its deliberately-unref'ed background-start timer can run before test teardown.
+const backendLifetime = setInterval(() => {}, 60_000)
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 function descendants(root: number): number[] {
   const out: number[] = []
@@ -146,6 +149,7 @@ test('one graph build bounds git spawn fanout and abort removes queued work', { 
 })
 
 test.after(() => {
+  clearInterval(backendLifetime)
   rmSync(project, { recursive: true, force: true })
   rmSync(home, { recursive: true, force: true })
   rmSync(bin, { recursive: true, force: true })

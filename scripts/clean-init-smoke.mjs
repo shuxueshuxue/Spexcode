@@ -68,16 +68,59 @@ function run(file, args, { cwd = ROOT, env = process.env, label = `${file} ${arg
     timeout: 120_000,
   })
   if (result.error) throw new Error(`${label} failed to start: ${result.error.message}`)
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  const stdout = result.stdout ?? ''
+  const stderr = result.stderr ?? ''
   if (result.status !== 0) {
-    throw new Error(`${label} exited ${result.status}${result.signal ? ` (${result.signal})` : ''}\n${output}`)
+    throw new Error([
+      `${label} exited ${result.status}${result.signal ? ` (${result.signal})` : ''}`,
+      `stdout:\n${stdout || '(empty)'}`,
+      `stderr:\n${stderr || '(empty)'}`,
+    ].join('\n'))
   }
-  return output
+  return `${stdout}${stderr}`
 }
 
 function write(path, content) {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
+}
+
+function writeOfflineConsumerPlan(consumer, tarball) {
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+  const sourceLock = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8'))
+  const sourceRoot = sourceLock.packages?.['']
+  assert.ok(sourceRoot, 'root package-lock has a root package entry')
+  assert.equal(sourceRoot.name, manifest.name, 'root package-lock name matches the packed manifest')
+  assert.equal(sourceRoot.version, manifest.version, 'root package-lock version matches the packed manifest')
+  assert.deepEqual(sourceRoot.dependencies, manifest.dependencies,
+    'root package-lock production dependencies match the packed manifest')
+
+  const consumerManifestPath = join(consumer, 'package.json')
+  const consumerManifest = JSON.parse(readFileSync(consumerManifestPath, 'utf8'))
+  const tarballSpec = `file:${relative(consumer, tarball).replaceAll('\\', '/')}`
+  consumerManifest.dependencies = { [manifest.name]: tarballSpec }
+  writeFileSync(consumerManifestPath, `${JSON.stringify(consumerManifest, null, 2)}\n`)
+
+  const packedEntry = { ...sourceRoot, resolved: tarballSpec }
+  delete packedEntry.name
+  delete packedEntry.devDependencies
+  const consumerRoot = {
+    name: consumerManifest.name,
+    version: consumerManifest.version,
+    ...(consumerManifest.license ? { license: consumerManifest.license } : {}),
+    dependencies: consumerManifest.dependencies,
+  }
+  const consumerLock = {
+    ...sourceLock,
+    name: consumerManifest.name,
+    version: consumerManifest.version,
+    packages: {
+      ...sourceLock.packages,
+      '': consumerRoot,
+      [`node_modules/${manifest.name}`]: packedEntry,
+    },
+  }
+  writeFileSync(join(consumer, 'package-lock.json'), `${JSON.stringify(consumerLock, null, 2)}\n`)
 }
 
 function walkFiles(dir) {
@@ -257,10 +300,13 @@ function main() {
     const tarball = join(packDir, tarballs[0])
 
     run(NPM, ['init', '-y', '--silent'], { cwd: consumer, label: 'npm init consumer' })
-    run(NPM, ['install', '--offline', '--no-audit', '--no-fund', '--silent', tarball], {
+    writeOfflineConsumerPlan(consumer, tarball)
+    run(NPM, ['ci', '--offline', '--omit=dev', '--no-audit', '--no-fund'], {
       cwd: consumer,
       label: 'offline install of packed spexcode',
     })
+    assert.ok(!existsSync(join(consumer, 'node_modules', 'typescript')),
+      'packed production install does not make adopters carry the TypeScript compiler')
 
     const spex = join(consumer, 'node_modules', '.bin', process.platform === 'win32' ? 'spex.cmd' : 'spex')
     assert.ok(existsSync(spex), 'packed install exposes the spex executable')

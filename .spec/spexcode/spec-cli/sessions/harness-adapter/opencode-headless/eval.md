@@ -25,6 +25,11 @@ scenarios:
     expected: The intact session record remains online and its terminal-free conversation stays available while the native conversation sleeps.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
+  - name: opencode-headless-explicit-stop-resume
+    description: Let a real governed opencode-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
+    expected: Stop preserves the record, native conversation, and timeline but reads offline; resume returns the same OpenCode conversation online with the pre-stop declaration note intact.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
   - name: opencode-headless-idle-wake
     description: Send a note-backed prompt to the real governed session after its first turn exits and capture the public send/result plus the model reply.
     expected: Delivery starts exactly one `opencode run --session <captured-id> <prompt>` turn in the session tmux home and the real model answers in the same conversation.

@@ -99,3 +99,59 @@ Cross-referenced to 67c463e8's separate finding: 25 of 26 `PATROL-REPAIR` log li
 units, which is real and suggests a genuinely blind watcher. That produces a STALE list that
 self-heals on the next cold tick — a different symptom from a row that vanishes and stays vanished.
 Both can be true; this issue does not close that one.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:19:42.376Z -->
+RECHARACTERISED — this is an UNENFORCED INVARIANT, not an accident. Supplements from 67c463e8,
+each verified here before filing.
+
+## The invariant is written down, and nothing enforces it
+
+    .plugins/core/mark-active/mark-active.sh:46
+    # …no JSON parser. Escape \ / & in the note for the sed REPLACEMENT (the note never contains ").
+    note_esc=$(printf '%s' "$note" | sed 's/[\\/&]/\\&/g')
+
+The escape set is `\ / &`, deliberately excluding `"`, and the parenthetical states the assumption
+it rests on. A note is arbitrary agent prose; nothing anywhere prevents a quote. Mine contained
+one.
+
+So "I broke it" is the wrong framing. The right one: a documented precondition with no mechanism
+holding it up. That also names the fix shape — and it needs BOTH halves:
+
+  - WRITE side: escape (or reject) `"` too. Without this, the next shell writer reintroduces it.
+  - READ side: distinguish "unparseable" from "absent" and fail loud. Without this, records still
+    corrupt — the failure merely becomes audible instead of silent.
+
+Fixing one half alone leaves the defect alive in a different form.
+
+## The READ path steps on the same rock
+
+    mark-active.sh:31
+    jget() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$rec" ...; }
+
+A naive `"…"` value regex. A quote inside a note does not only corrupt the file on write — it also
+makes the hook's own subsequent reads return a TRUNCATED value. Write and read share one wrong
+assumption.
+
+## Scope, measured
+
+Core hooks touching `session.json`:
+
+    mark-active.sh   3 touches   WRITES (sed value replacement)
+    stop-gate.sh     3 touches   read-only
+    idle.sh          2 touches   read-only
+    fail.sh          1 touch     read-only
+
+`mark-active` is the only writer, so the write-side fix is one place. But all four share `jget`, so
+the truncating-read defect is FOUR places, not one.
+
+Stating the scope the way 67c463e8 suggested, so a fix cannot be scoped too narrowly: *any hot
+path that writes or reads `session.json` from shell with no JSON parser.* The performance reason
+for that design ([[state]]: mark-active must stay jq-free) is sound; what is missing is that the
+VALUE contract — must be a JSON string literal, and must be read as one — is nowhere enforced.
+
+## Withdrawn, for the record
+
+A companion suspicion from the same investigation — that `spex session ls --all` returning the same
+12 rows as the default indicated a second gap — is NOT a defect. Zero sessions are currently
+archived, so the two are correctly equal; a difference should appear only when something is
+actually shelved. Recording it here so it does not get filed later as a phantom issue.

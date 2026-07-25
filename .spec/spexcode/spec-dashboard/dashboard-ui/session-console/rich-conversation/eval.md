@@ -8,7 +8,9 @@ scenarios:
     expected: |
       Markdown, the remote image, and valid mathematics render legibly; code and tables retain their structure;
       malformed math remains readable; raw HTML and unsafe links cannot execute; and no image, prose, table, code
-      block, or display equation widens or overlaps the desktop or mobile conversation pane.
+      block, or display equation widens or overlaps the desktop or mobile conversation pane. Selecting a complete
+      rendered formula and copying the timeline range yields its authored TeX once, with no duplicated KaTeX DOM
+      representation and no composer focus handoff.
     tags: [frontend-e2e, desktop, mobile]
     code:
       - spec-dashboard/src/RichText.js
@@ -21,4 +23,5 @@ scenarios:
 ---
 
 Measure through the running dashboard in real desktop and phone-sized browsers. Use screenshots for the settled
-rendered states; automated DOM/security assertions and production bundle measurements are supporting evidence.
+rendered states; automated DOM/security, exact formula-copy, and production bundle measurements are supporting
+evidence.

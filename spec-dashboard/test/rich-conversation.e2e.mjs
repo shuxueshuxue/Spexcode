@@ -45,6 +45,7 @@ const timeline = {
   events: [
     { kind: 'sent', ts: Date.now() - 2000, text: rich, from: null, replyVia: 'note' },
     { kind: 'status', ts: Date.now() - 1000, status: 'asking', display: 'asking', proposal: null, note: rich },
+    { kind: 'status', ts: Date.now(), status: 'asking', display: 'asking', proposal: null, note: 'Copy $E = mc^2$ and \\(a+b\\) once.' },
   ],
 }
 
@@ -54,7 +55,10 @@ const results = []
 
 try {
   for (const [name, viewport] of [['desktop', { width: 1280, height: 800 }], ['mobile', { width: 390, height: 844 }]]) {
-    const context = await browser.newContext({ viewport })
+    const context = await browser.newContext({
+      viewport,
+      permissions: ['clipboard-read', 'clipboard-write'],
+    })
     await context.addInitScript(() => {
       window.__richPwned = 0
       window.EventSource = class FixtureEventSource {
@@ -175,8 +179,30 @@ try {
     assert.ok(probe.fontRequests.length > 0)
     assert.ok(probe.fontRequests.every((url) => url.endsWith('.woff2')), `${name}: browser should choose only WOFF2 fonts`)
 
+    const formulaNote = page.locator('.m-ev-note:visible').filter({ hasText: 'Copy' }).last()
+    await formulaNote.scrollIntoViewIfNeeded()
+    await composer.focus()
+    const formulaBox = await formulaNote.boundingBox()
+    assert.ok(formulaBox, `${name}: formula copy note is visible`)
+    await page.mouse.click(formulaBox.x + 18, formulaBox.y + Math.min(14, formulaBox.height / 2), { clickCount: 3 })
+    await page.keyboard.press('Control+c')
+    const formulaCopy = await page.evaluate(async () => {
+      const highlight = CSS.highlights?.get('timeline-sel')
+      const range = highlight ? [...highlight][0] : null
+      return {
+        clipboard: await navigator.clipboard.readText(),
+        range: range?.toString() || '',
+        native: getSelection()?.toString() || '',
+        composerFocused: document.activeElement?.classList.contains('m-input'),
+      }
+    })
+    assert.equal(formulaCopy.clipboard, 'Copy E = mc^2 and a+b once.\n', `${name}: copied formulas use their authored source once`)
+    assert.equal(formulaCopy.native, '')
+    assert.equal(formulaCopy.composerFocused, true)
+    await page.keyboard.press('Escape')
+
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true })
-    results.push({ name, viewport, remoteImageRequests, ...probe })
+    results.push({ name, viewport, remoteImageRequests, formulaCopy, ...probe })
     await context.close()
   }
 } finally {

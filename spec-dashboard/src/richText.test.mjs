@@ -26,6 +26,7 @@ test('renders compact agent Markdown and both inline and display math', () => {
   assert.match(html, /<s>old<\/s>/)
   assert.match(html, /<table>/)
   assert.match(html, /class="katex"/)
+  assert.match(html, /data-math-source="E = mc\^2"/)
   assert.match(html, /class="katex-block"/)
   assert.match(html, /<pre><code class="language-js">const price = '\$5'/)
 })
@@ -108,6 +109,7 @@ test('requires display math to close and leaves malformed blocks readable', () =
   ].join('\n'))
 
   assert.equal((html.match(/class="katex-block"/g) || []).length, 2)
+  assert.match(html, /data-math-source="\\sum_\{i=1\}\^n i"/)
   assert.match(html, /\$\$<br>\nnever closed/)
 })
 

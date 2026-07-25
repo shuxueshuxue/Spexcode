@@ -4,7 +4,7 @@ import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.
 import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
-import RichText from './RichText.js'
+import RichText, { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
@@ -262,7 +262,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       if (primary && key === 'c') {
         if (document.activeElement !== input || input.selectionStart !== input.selectionEnd) return
         e.preventDefault(); e.stopPropagation()
-        copyText(range.toString())
+        copyText(richTextFromRange(range, scrollRef.current))
         return
       }
       if (document.activeElement !== input) return

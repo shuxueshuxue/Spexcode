@@ -1137,3 +1137,93 @@ cross-commit iteration. This is the one real cost and it must not be glossed.
 Unity is NOT broken: judge(tip) is one predicate; CI passes H, the gate passes H'. Parameterisation,
 not a second implementation. My earlier claim that this forks the rule into two semantics was wrong
 and is retracted in post 20.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:58:53.405Z -->
+CONSOLIDATED ACCEPTANCE LIST — three lanes are implementing/attacking against criteria scattered
+across dozens of messages. This is the single authoritative list, so nobody reconstructs it from
+chat. Everything below was MEASURED in this thread unless marked otherwise.
+
+## The bar
+
+    NOT "perfect coverage". The bar is NO WORSE THAN TODAY on every path, better on some.
+    A cell that is worse AND unrecoverable        -> the candidate is out.
+    A cell that is worse but recoverably so       -> a cost; write it in the spec body.
+    Recovery counts only if it is HONEST and bounded — an action that requires the author to
+    state something untrue is not a recovery path.
+
+## Architecture both lanes converged on (independently, under adversarial pressure)
+
+commit-msg ARMS a marker; `reference-transaction` at `prepared` reads the REAL new oid and lints
+with it. Rationale: amend is undecidable at commit-msg, so any design that PREDICTS the pending
+commit's parents has an unacceptable cell. Reading the real object removes the guess entirely.
+Fallback: no marker / no canonical ref hook -> pre-commit keeps today's old-HEAD gate.
+
+## Discriminator for ack kind (corrected twice)
+
+    stamp ack  <=>  |parents(c)| == 1  AND  tree(c) == tree(parent(c))     covers reach(a)
+    self ack   <=>  everything else                                        covers {a} only
+
+The parent-count clause is NOT decoration. Measured: `git merge -s ours` produces tree ==
+first-parent tree while making commits newly reachable; without the clause such a merge carrying
+`Spec-OK:` would checkpoint the whole side branch's debt. Root cause of the earlier miss: we were
+testing "did content change" while an ack's authority is over REACHABILITY. The criterion must be
+the same dimension as what it authorises.
+
+Backward compatible: every existing ack is `commit --allow-empty --only`, i.e. one parent and an
+unchanged tree, so all of history lands in the stamp branch unchanged.
+
+## Mandatory cases (highest priority first)
+
+ 1. SELF-ACK MUST NOT WASH HISTORY. C1 = old unanswered debt; P = content commit carrying
+    `Spec-OK: n`. Both land (bypassing the gate). HEAD lint MUST still report C1.
+    Mechanism it guards: git.ts:706 `cover.push(ancestorsOf(h))` — an ack covers ALL its
+    ancestors, which is right for a stamp and wrong for a self-declaration.
+ 2. NO CROSS-NODE WASHING. Shared file; C1 self-acks only A, C2 self-acks only B. HEAD must report
+    C2 for A and C1 for B. (Already caught one lane using a global boolean here.)
+ 3. `-s ours` MERGE MUST NOT CHECKPOINT. Side branch holds unanswered C1; trunk merges with
+    `-s ours` and a `Spec-OK: n` trailer. HEAD lint MUST still report C1.
+ 4. AMEND MUST NOT BE FALSELY REJECTED. HEAD = C, a spec-only commit, lint green. Author runs
+    `git commit --amend -m` adding code. MEASURED: today's pre-commit passes it (0 errors), and
+    the real replacement contains spec.md + code together. A fixed `-p HEAD` design rejects it —
+    confirmed a false rejection, not par. Recovery via `Spec-OK` is NOT honest here: the spec body
+    scopes that trailer to implementation-only changes, and this replacement changes both.
+ 5. RECOVERABILITY AFTER A REF REJECTION (five conditions): branch ref unchanged; staged and
+    sequencer state intact; error text names both continue and abort; after adding spec or trailer,
+    continue actually succeeds; abort actually restores. Rationale: auto-abort would destroy the
+    author's completed conflict resolution, which violates this repo's "break then recover is
+    acceptable when the recovery path is explicit and bounded".
+ 6. ARM FILTERING. `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch must
+    never arm, hence never pay for a lint.
+ 7. CONCURRENCY. Two concurrent commits in one repo (routine here: workers commit while the issue
+    store writes ~328 times/month). A marker overwritten by the second must not cause the first to
+    be SILENTLY skipped.
+
+## Hook facts, all measured here
+
+    ordinary       pre-commit Y  prepare Y  commit-msg Y  reference-transaction Y
+    --no-verify    pre-commit N  prepare Y  commit-msg N  reference-transaction Y
+    clean --no-ff merge          runs pre-merge-commit + commit-msg, NOT pre-commit
+    cherry-pick / rebase         prepare/post only
+
+`--no-verify` still running `prepare-commit-msg` is what lets "prepare unconditionally deletes any
+stale marker" work: the marker's meaning tightens to "this commit just passed through commit-msg",
+which is stronger than a TTL.
+
+prepare-commit-msg's `$2` distinguishes only amends that REUSE the message (`--no-edit`, editor,
+`-c`, `-C` -> `source=commit`). `git commit --amend -m` is byte-identical to an ordinary commit
+(`source=message`). So amend is PARTIALLY decidable at prepare, not decidable at commit-msg.
+
+## A rejected reference-transaction leaves nothing that pollutes the gate
+
+MEASURED: HEAD unmoved, staged files intact, the aborted commit does NOT appear in the reflog and
+is NOT visible to `rev-list --all`. It exists only as a dangling object visible to `git fsck`, and
+is gc-collectable. So window computation cannot see it. This removes one worry about the shared
+architecture.
+
+## Standing warning
+
+Two lanes converging on one architecture is NOT evidence that the architecture is correct,
+especially after they have seen each other's reasoning. The remaining value of running two
+implementations is that independent implementations of the same design cross-check each other —
+so they must not merge into one, and must not cite each other's measurements as their own
+verification.

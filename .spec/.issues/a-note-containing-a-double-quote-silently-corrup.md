@@ -194,3 +194,40 @@ plus the row vanishing from every list surface until someone repairs the file by
 
 They have kept a byte-level backup of the corrupted file and can put it in the evidence store if a
 hash-addressed artefact is wanted for the fix's regression test.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:30:14.957Z -->
+REGRESSION FIXTURE IS IN THE EVIDENCE STORE — a naturally-produced corrupted record, not a
+hand-built string. Contributed by 67c463e8.
+
+    evidence  d8fdb4d0f432dbd686f33bd011b0cac3f9dff252c96722e84345380490e300ac
+    size      1561 bytes
+    fetch     GET /api/evidence/<hash>
+
+Verified before storing that it is the BROKEN copy, not the repaired one:
+`json.load` raises `JSONDecodeError: Expecting ',' delimiter: line 13 column 13 (char 433)` —
+char 433 being the quote that closes the string early.
+
+That provenance is what makes it valuable: nobody constructed it. It is what a real agent
+produced while writing an ordinary technical note.
+
+## Three assertions it should carry, covering the full 1-writer / 4-reader surface
+
+1. READ side — feed these bytes to `readRawRecord`. It must be DISTINGUISHABLE from "file does not
+   exist"; today both yield null. After the fix, corruption must surface as an identifiable failure
+   (throw, or a sentinel carrying a reason), and `listSessions` must KEEP THE ROW and mark it
+   anomalous — not `lastKnownSession.delete(id)` followed by dropping it.
+
+2. WRITE side — take this fixture's note text (the fragment containing the double quote) as INPUT
+   to mark-active's write path. The output must still be parseable JSON. This assertion covers any
+   escaping fix without depending on a hand-made string.
+
+3. TRUNCATING READ — feed the same input through `jget`. The returned value must be complete, not
+   cut at the first double quote. This is the assertion that covers the four read-only hooks
+   (stop-gate, idle, fail, and mark-active's own reads), which share that helper.
+
+Together: assertion 2 covers the single writer, assertion 3 covers the four readers, assertion 1
+covers the failure semantics that turned a corrupt record into a vanished session.
+
+Note that assertion 1 is independent of the escaping fix and worth keeping even if escaping lands
+first: escaping stops THIS cause, while "unparseable treated as absent" would silently swallow the
+next one.

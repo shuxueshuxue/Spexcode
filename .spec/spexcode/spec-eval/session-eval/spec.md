@@ -85,7 +85,11 @@ the last-known value; a stable build publishes `ready` only when both its genera
 match. A changed generation or revision discards the result and the runner follows the newest generation. An
 error is explicit and also preserves last-known. Burst events may coalesce into one build/publication for the
 latest generation, but no older compute can overwrite it. The graph snapshot only batch-reads these cached lean
-projections; it never runs `buildSessionEvals` once per session row. Initial cache misses for live sessions may
+projections; it never runs `buildSessionEvals` once per session row. A single-session READ of that same
+cache exists beside the batch one — it mints no entry, schedules no build, and moves no generation — so a
+consumer that must NOT build can report the existing projection with its phase. [[manager-cockpit]]'s review
+payload is exactly that consumer: this engine calls that payload, so the dependency runs one way only, and
+the cockpit reports `loading`/`updating`/`error`/absent as itself rather than as a computed result. Initial cache misses for live sessions may
 start one batch, and completion nudges the existing graph mechanism once. Dormant offline history is intentionally
 demand-only: the graph emits its loading/last-known projection without scheduling a summary build for every
 retained session, while opening that session's scoped Evals route builds only the requested worktree model. This

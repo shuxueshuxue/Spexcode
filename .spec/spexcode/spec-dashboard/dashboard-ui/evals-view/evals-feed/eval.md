@@ -15,17 +15,61 @@ scenarios:
       Unmeasured with stable full-population counts and no pressed default. Clicking Unmeasured pushes
       `verdict:unmeasured`, returns only inert declared-without-reading rows, and clicking it again restores
       the bare default.
+  - name: measured-chips-lead-fresh-and-name-stale
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/eval-verdict-freshness.e2e.mjs
+    code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]
+    related: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Against a branch-local backend carrying a real remeasurement backlog, open the default #/evals in a
+      real Chromium served from the PREBUILT dashboard dist (never a dev server). Read the Fail, Pass, and
+      Unmeasured chips' rendered text and the `/api/evals` counts behind them. Then submit
+      `is:eval freshness:fresh`, re-read the same chips, and submit `is:eval freshness:stale`. For each of
+      the three views compare the chip numbers against that view's own response and against the row total a
+      verdict click returns.
+    expected: >
+      Each measured chip renders TWO numbers: the fresh count, then one quieter suffix naming the stale
+      count with the same localized stale word the freshness facet uses. Those two are the verdict's whole
+      population — they re-add to `counts.<verdict>.fresh + counts.<verdict>.stale` and to the total that
+      selecting that verdict returns, so the split never shrinks a count. Unmeasured renders one number and
+      no suffix. Under `freshness:fresh` every stale half is zero and no chip renders a suffix at all; under
+      `freshness:stale` the fresh halves are zero and the suffixes carry the whole population. The page reads
+      those numbers from the server response only — no chip is derived from the 25 rows it holds.
+  - name: stale-debt-survives-the-phone-header
+    tags: [frontend-e2e, mobile]
+    test: spec-dashboard/test/eval-verdict-freshness.e2e.mjs
+    code: [spec-dashboard/src/ReviewShell.jsx]
+    related: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/styles.css]
+    description: >
+      Open the default #/evals at a 390px viewport in a real Chromium served from the PREBUILT dashboard
+      dist. Read every chip's VISIBLE text and its accessible name, the header height, each status button's
+      hit target, and the document/body scroll widths. Compare the visible numbers against the same view's
+      `/api/evals` counts, then submit `is:eval freshness:fresh` and read the chips again.
+    expected: >
+      Each measured chip still shows BOTH numbers — the fresh count and the stale count as a bare `+N` —
+      with no reliance on the Filters menu to discover the debt; the numbers equal
+      `counts.<verdict>.fresh` and `counts.<verdict>.stale` exactly, as at desktop width. Only the WORDING
+      condenses: the localized stale word leaves the visible face and stays in the button's accessible name
+      and tooltip, so the phone hides no count. Fail, Pass, Unmeasured and the Filters trigger are ALL fully
+      rendered inside the header's own box — its scroll width equals its client width, so nothing is clipped
+      by it — across exactly two contained lines, each status button keeping at least a 44px hit target;
+      neither document nor body scrolls horizontally past 390px and the header does not cover the first row.
+      Under `freshness:fresh` the stale halves are zero and no chip renders a suffix at all.
   - name: unmeasured-filter-mobile-header
     tags: [frontend-e2e, mobile]
     code: [spec-dashboard/src/EvalsFeed.jsx]
     related: [spec-dashboard/src/styles.css]
     description: >
       Open #/evals directly in a fresh real Chromium context at 390px. Read the three status buttons, the
-      secondary Filters trigger, the list header, and document/body scroll width; capture the settled page.
+      secondary Filters trigger, the list header's own box and rendered height, and document/body scroll
+      width; capture the settled page. Read the same geometry on #/issues, whose header carries less.
     expected: >
       Fail, Pass, and Unmeasured retain their icons, complete labels, and counts beside the complete Filters
-      trigger. All four controls stay inside the 49px header without overlap or horizontal overflow; each
-      status button retains at least a 44px hit target.
+      trigger. All four controls render fully INSIDE the header's own box — its scroll width equals its
+      client width — with no overlap and no document or body horizontal overflow; each status button retains
+      at least a 44px hit target. The header takes only the lines its own content needs: the Evals header,
+      which also carries the freshness split, settles on exactly two contained lines and still clears the
+      first row, while the lighter Issues header stays one 49px row. No control is dropped to buy the width.
   - name: feed-current-loss-listview
     tags: [frontend-e2e]
     description: >

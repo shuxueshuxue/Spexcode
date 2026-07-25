@@ -30,9 +30,23 @@ loader itself takes the **checkout root as a parameter** (default: the backend's
 surface rooted at a session's worktree loads the spec tree from that same root, so a branch-ADDED node
 exists for it — the pending-proposal principle applied to node existence, not only to readings. Nothing
 is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is
-netted against **acknowledgement**: a `Spec-OK: <node>` trailer checkpoints that node's spec valid at its
-commit, quieting every drift commit at or below it back to the version — so one `spex ack` at the tip
-clears a node's pending drift, not just on the exact commit that moved a file.
+netted against **acknowledgement**: a one-parent `spex ack` commit whose tree equals its sole parent's tree
+checkpoints the named node valid at its tip, quieting drift reachable from that checkpoint back to the
+version. Every other `Spec-OK` commit acknowledges only itself, never older debt; a merge is therefore
+self-only even when an `ours` strategy leaves its first-parent tree unchanged, because it introduces new
+reachable history.
+
+An explicit local commit candidate is the one exception to the filesystem content source: lint reads raw
+specs and governed current content from that candidate's immutable tree and derives both indices at the
+same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an
+unstaged working-tree edit cannot change the verdict for bytes absent from the candidate.
+
+Git's default history presentation suppresses merge diffs, but a merge can author real content while
+resolving conflicts. The loader therefore treats a merge's dense combined (`--cc`) paths — content different
+from every parent — as that merge's own writes. A cc change to `spec.md` is a real version and history row;
+a cc change to governed code enters drift/anchor judgment. A clean merge has no combined path and remains
+only transport. First-parent diff is not a substitute: it would duplicate every side-branch write at the
+project's normal `--no-ff` landing step.
 
 Two principles keep that derivation cheap on a long-running server:
 
@@ -50,6 +64,16 @@ Two principles keep that derivation cheap on a long-running server:
   Resolving any node is a pure lookup in the small-index mode, while the large-index path memoizes bounded
   path windows. The recent/history tab for a single node is served off
   that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
+  The `.spec` timeline is the **full reachable history**, not Git's default path-simplified presentation:
+  every reachable one-parent content commit remains a version even when a later TREESAME merge would hide
+  that side of a directory-scoped walk. Merge rows are then admitted separately by the all-parent authored-line
+  predicate above, so restoring hidden ordinary commits never turns inherited merge content into a duplicate
+  version. Single-parent rename aliases are coalesced independent of encounter order: if parallel branches
+  edit the old and new paths, both histories join the current node, and the complete row set is ordered by
+  one full-history date-order walk only after alias resolution. Date order retains walk-newest choice among
+  parallel versions while forbidding an ancestor from displacing its own descendant merely because both
+  commits share a timestamp. Alias continuity is event-scoped: reusing the vacated old path after the rename
+  starts a separate node history. A pure rename remains a zero-content move.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
   in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When
@@ -57,6 +81,10 @@ Two principles keep that derivation cheap on a long-running server:
   references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
   retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
   in-flight build.
+- **Keep candidates transient.** An explicit pending commit is not a checkout's current HEAD and may remain
+  dangling after rejection. Its history/drift indices are shared only within the invoking lint call and are
+  never registered in the root-owned HEAD cache, so it neither evicts that root's hot board index nor leaks
+  one cache entry per rejected commit.
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable
@@ -97,6 +125,7 @@ child: a git process that never exits (a wedged filesystem, a hijacked PATH git)
 generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
 the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
 disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
-[[graph-cache]]'s settle guarantee leans on this. It also scopes the pre-commit drift gate to the commit's own staged
-paths. All three strip an inherited `GIT_DIR`/work-tree env so a hook can't misdirect the op. The HTTP
+[[graph-cache]]'s settle guarantee leans on this. All three strip an inherited `GIT_DIR`/work-tree env so a
+hook can't misdirect repository discovery; the local commit gate avoids the hook index entirely by judging
+the real pending commit oid. The HTTP
 entrypoint that serves the results belongs to [[spec-cli]].

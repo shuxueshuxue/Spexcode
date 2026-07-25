@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftForAsync, fileDiffAt } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftForAsync, fileDiffAt,
+  treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
 import { parseCodeEntry, parseRelation } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
@@ -12,7 +13,7 @@ type FmValue = string | string[]
 type Raw = { id: string; parent: string | null; relPath: string; fm: Record<string, FmValue>; body: string }
 
 // line-based frontmatter: scalars are `key: value`; an empty key followed by `- item` lines is a list (e.g. `code:`).
-function parseFrontmatter(src: string) {
+export function parseFrontmatter(src: string) {
   const fm: Record<string, FmValue> = {}
   let body = src
   const m = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
@@ -153,7 +154,18 @@ async function walkAsync(dir: string, parent: string | null, acc: Raw[], root: s
     if (e.isDirectory()) await walkAsync(join(dir, e.name), myId, acc, root)
   }
 }
-async function rawsAsync(root: string): Promise<Raw[]> {
+async function rawsAsync(root: string, tip = 'HEAD'): Promise<Raw[]> {
+  if (tip !== 'HEAD') {
+    const acc: Raw[] = []
+    for (const [relPath, source] of [...treeTextFiles(root, tip, '.spec')].sort(([a], [b]) => a.localeCompare(b))) {
+      if (!relPath.endsWith('/spec.md')) continue
+      const segs = relPath.split('/')
+      const { fm, body } = parseFrontmatter(source)
+      acc.push({ id: segs[segs.length - 2], parent: null, relPath, fm, body })
+    }
+    reId(acc)
+    return acc
+  }
   const acc: Raw[] = []
   const specDir = join(root, '.spec')
   if (existsSync(specDir)) await walkAsync(specDir, null, acc, root)
@@ -227,12 +239,18 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 // instead ([[source-of-truth]]'s several-checkouts principle at the loader level): its .spec is the
 // branch's pending proposal, so eval surfaces rooted at a session must load the spec tree from the SAME
 // root as their readings/indexes, or a branch-NEW node simply does not exist for them.
-export async function loadSpecs(root: string = ROOT) {
+export type LoadSpecsOptions = { tip?: string; history?: HistoryIndex; drift?: DriftIndex }
+export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions = {}) {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
   // the event loop). The ordinary DAG representation makes every node below a pure lookup; the large-history
   // representation delegates path windows to synchronous Git, so yield between nodes rather than joining
   // hundreds of short probes into one liveness-blocking event-loop wall.
-  const [idx, didx, allRaws] = await Promise.all([historyIndex(root), driftIndex(root), rawsAsync(root)])
+  const tip = options.tip ?? 'HEAD'
+  const [idx, didx, allRaws] = await Promise.all([
+    options.history ?? historyIndex(root, tip),
+    options.drift ?? driftIndex(root, tip),
+    rawsAsync(root, tip),
+  ])
   const loaded = []
   for (const r of allRaws) {
     if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
@@ -256,7 +274,7 @@ export async function loadSpecs(root: string = ROOT) {
     const driftFiles = []
     for (const f of code) {
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: f, behind: await driftForAsync(didx, S, f) }
+      const d = { file: f, behind: await driftForAsync(didx, S, f, r.id) }
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -268,7 +286,7 @@ export async function loadSpecs(root: string = ROOT) {
     for (const e of relatedRel.entries) {
       if (e.selectors.length) continue
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path) }
+      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path, r.id) }
       if (d.behind > 0) relatedDriftFiles.push(d)
     }
     const fmStatus = str(r.fm.status, '') || null

@@ -102,6 +102,9 @@ scenarios:
   - name: off-history-anchor-content-fallback
     tags: [cli]
     code: [spec-eval/src/freshness.ts]
+    test:
+      path: spec-eval/src/evaltab.test.ts
+      name: evalTimeline primes off-history content fallback on a non-lazy index
     description: >-
       Through the real `spex eval lint` in a scratch repo: file a reading, commit the sidecar, then
       squash the history so the reading's codeSha is orphaned (off-history) while the governed code

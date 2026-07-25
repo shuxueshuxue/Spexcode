@@ -98,6 +98,47 @@ scenarios:
     expected: >
       Lint exits 1 with a `dead anchor` integrity error for the missing qualified name and an
       `ambiguous anchor` integrity error reporting both duplicate qualified declarations.
+  - name: historical-memo-key
+    tags: [cli]
+    test:
+      path: spec-cli/src/anchors.test.ts
+      name: historical extractor memo stays stable across order and same-process repetition
+    description: >
+      In a fixture repository, two anchored files with identical bytes and blob ids use `.ts` and `.tsx`
+      script kinds. Run historical anchor queries in both orders and repeat both queries in the same process.
+    expected: >
+      The `.tsx` historical parse remains conservative-unparseable and the `.ts` parse remains valid in
+      either order and on repeat; normalized results do not depend on directory or query order. A key must
+      cover the complete extractor input, not only the Git blob oid and extractor label.
+  - name: candidate-tip-gate
+    tags: [cli]
+    description: >
+      In a real temporary Git repository with an anchored node, exercise the installed local gate through
+      ordinary commit, merge, squash, commit --only with conflicting unstaged worktree content, cherry-pick,
+      rebase, --no-verify, and a clone with no hooks. First try an anchored implementation-only commit with
+      no declaration; then try the same candidate with either the node's spec.md changed in that commit or
+      a `Spec-OK: <node>` trailer.
+    expected: >
+      On paths where Git invokes the installed gate (ordinary commit, merge, squash, and a conflict's manual
+      commit), each new commit is judged against its own final tree, message, parents, and ancestry before
+      its ref advances. The undeclared anchor hit is rejected and leaves the original branch ref in place;
+      changing code and spec together passes because the candidate spec version closes the window; an
+      in-commit Spec-OK trailer also passes without pardoning older debt. A --only verdict sees only paths
+      actually present in that candidate; conflicting unstaged worktree content cannot affect it. On paths
+      that do not invoke the gate (cherry-pick, rebase, --no-verify, and a clone without hooks), local
+      coverage remains equal to today's rather than promising an impossible immediate rejection; once such
+      a commit lands, the ordinary HEAD predicate used by CI still reports its unanswered drift.
+      A combined merge hunk containing both a side-inherited anchored line (`+ `) and an adjacent
+      merge-authored ungoverned line (`++`) does not charge the inherited line or reject the merge; combined
+      ownership is decided per result line, never by widening one owned line to its enclosing hunk. Its
+      mirror, with `++` on the anchored line and the inherited line ungoverned, is rejected and names that
+      selector.
+      Likewise, a `spec.md` whose merge result only combines different parent-authored lines has no
+      all-parent line and does not become a merge version; it cannot wash out an anchored line genuinely
+      authored by that same merge.
+      Candidate lint additionally rejects deleting a governor while its former governed subject survives
+      without a new `code:` owner; deleting that implementation or transferring it in the same candidate
+      passes. This transition-only integrity check is not claimed to be a HEAD-reconstructible anchor rule.
 ---
 # code-anchor — measurement
 

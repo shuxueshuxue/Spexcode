@@ -1,13 +1,13 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './git.js'
+import { git, gitA, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
 // Everything below the entry parse splits into two layers:
 //   - the LANGUAGE SEAM: pure extractors (content, filename) -> Unit[] — no git, no cache, no fs.
 //     Each extension maps to exactly ONE designated extractor; there is NO cross-tier fallback.
-//   - the LANGUAGE-AGNOSTIC ENGINE: file-revision memo (keyed by Git object id), anchor resolution
+//   - the LANGUAGE-AGNOSTIC ENGINE: file-revision memo (keyed by the complete immutable parse input), anchor resolution
 //     (dead/ambiguous), diff-hunk ∩ unit-range intersection over the drift window. It never knows
 //     which language it is measuring.
 
@@ -22,6 +22,8 @@ export type Extractor = {
   // PURE function of its arguments (importable by an external benchmark/scorer as-is). Throws when the
   // content cannot be parsed — the caller maps that to a conservative verdict, never a silent skip.
   extract(content: string, filename: string): Unit[]
+  // Every input that can affect extract() must be represented here before its result enters the memo.
+  memoKey: (filename: string) => string
 }
 
 export type CodeEntry = { path: string; anchor: string | null }
@@ -72,13 +74,19 @@ export function parseRelation(raws: string[], relation: 'code' | 'related'): Rel
 // with. If it cannot resolve, ready() returns a loud unverified verdict and lint skips these anchors
 // without crashing (no bundled compiler, regex fallback, or fake pass for JS).
 const JS_EXTS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'])
+const TS_AST_MEMO_SCHEMA = 'ts-ast-memo-v1'
 
 export function tsAstExtractor(root: string): Extractor {
   let ts: any | null | undefined // undefined = unprobed; null = unresolvable
+  let tsModulePath = ''
   let readiness: true | string | undefined
   const probe = () => {
     if (ts !== undefined) return
-    try { ts = createRequire(join(root, 'package.json'))('typescript') } catch { ts = null }
+    try {
+      const require = createRequire(join(root, 'package.json'))
+      tsModulePath = require.resolve('typescript')
+      ts = require('typescript')
+    } catch { ts = null }
   }
   return {
     id: 'ts-ast',
@@ -137,6 +145,11 @@ export function tsAstExtractor(root: string): Extractor {
         else if (ts.isTypeAliasDeclaration(st)) push(st.name.text, 'type', st, true)
       }
       return units
+    },
+    memoKey(filename) {
+      probe()
+      const host = ts ? `${tsModulePath}\0${ts.version ?? 'unknown'}` : `unresolved\0${root}`
+      return `${TS_AST_MEMO_SCHEMA}\0${host}\0target:Latest\0parents:true\0${filename}`
     },
   }
 }
@@ -283,6 +296,19 @@ export function heuristicExtractor(spec: LangSpec): Extractor {
       }
       return units
     },
+    memoKey(filename) {
+      const regex = (r: RegExp | undefined) => r ? `${r.source}/${r.flags}` : null
+      return JSON.stringify({
+        schema: 'heuristic-memo-v1', filename, id: spec.id, extensions: spec.extensions,
+        decls: spec.decls.map((d) => ({
+          re: regex(d.re), kind: d.kind, typeOnly: !!d.typeOnly, classOpener: !!d.classOpener,
+          declList: !!d.declList, scopeOpener: !!d.scopeOpener, memberOf: d.memberOf ?? null,
+        })),
+        member: spec.member ? { re: regex(spec.member.re), blacklist: regex(spec.member.blacklist) } : null,
+        indentScopes: spec.indentScopes ? { decorator: regex(spec.indentScopes.decorator) } : null,
+        boundary: regex(spec.boundary),
+      })
+    },
   }
 }
 
@@ -356,16 +382,26 @@ export function resolveAnchor(units: Unit[], symbol: string): AnchorResolution {
 
 // ---- the historical hit engine (language-agnostic; batch short-lived git, no resident process) ----
 
-// units of a file AS OF a commit, memoized by (Git object id, extractor id). File content identified by
-// an object id is immutable, so the memo never invalidates; distinct file revisions in a window are few.
+// units of a file AS OF a commit, memoized by the complete immutable parse identity. File content identified
+// by an object id is immutable, but the extractor also consumes filename and host/config identity; distinct
+// file revisions in a window are few.
 // 'absent' = no file at that commit; 'unparseable' = the extractor rejected that revision's content.
 type FileRevisionUnits = { units: Unit[] } | { absent: true } | { unparseable: string }
 const fileRevisionUnitMemo = new Map<string, FileRevisionUnits>()
+const objectFormatMemo = new Map<string, Promise<string>>()
 const MEMO_MAX = 4096
-async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor): Promise<FileRevisionUnits> {
+async function objectFormatFor(root: string): Promise<string> {
+  let format = objectFormatMemo.get(root)
+  if (!format) {
+    format = gitA(['-C', root, 'rev-parse', '--show-object-format=storage']).then((value) => value.trim() || `unknown\0${root}`)
+    objectFormatMemo.set(root, format)
+  }
+  return format
+}
+async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string): Promise<FileRevisionUnits> {
   const oid = (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
   if (!oid) return { absent: true }
-  const key = `${oid}\0${x.id}`
+  const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
   const text = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
@@ -376,19 +412,23 @@ async function unitsAtFileRevision(root: string, commit: string, path: string, x
   return result
 }
 
-// post-image line ranges of one commit's diff to one file (`@@ -a,b +c,d @@`, --unified=0). d>0 → lines
-// c..c+d-1 changed; d==0 (pure deletion) → the point line after which content vanished. Immutable per
-// (commit, file), memoized.
+// Post-image line ranges of one commit's diff to one file. Ordinary commits use the `@@` result range.
+// Merges use the combined parser's exact all-parent result lines/deletion points; an owned line never
+// widens to adjacent side-inherited lines merely because Git placed both in one `@@@` hunk.
 const hunkMemo = new Map<string, [number, number][]>()
 async function hunksAt(root: string, commit: string, path: string): Promise<[number, number][]> {
   const key = `${commit}\0${path}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--unified=0', '--format=', commit, '--', path])
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
   const ranges: [number, number][] = []
-  for (const m of out.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
-    const c = +m[1], d = m[2] === undefined ? 1 : +m[2]
-    ranges.push(d > 0 ? [c, c + d - 1] : [Math.max(1, c), Math.max(1, c)])
+  if (/^@@@/m.test(out)) {
+    for (const owned of combinedDiffOwnedRanges(out).values()) ranges.push(...owned)
+  } else {
+    for (const m of out.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const c = +m[1], d = m[2] === undefined ? 1 : +m[2]
+      ranges.push(d > 0 ? [c, c + d - 1] : [Math.max(1, c), Math.max(1, c)])
+    }
   }
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)
@@ -397,26 +437,36 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
 
 // the drift window of an anchored file: every commit to `path` not reachable from the spec's version
 // and not covered by a valid Spec-OK ack — the SAME set driftFor counts, exposed as commits so the
-// anchor engine can probe each one. (fileCommits comes from a --name-only walk, which lists no files
-// for merge commits — the window is non-merge by construction.)
-export function windowCommits(idx: DriftIndex, sinceHash: string, path: string): string[] {
+// anchor engine can probe each one. Ordinary file commits and merge-authored dense-combined paths are
+// indexed separately so clean merge transport is never charged twice.
+export function windowCommits(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): string[] {
   if (!sinceHash) return []
   if (idx.lazy) {
-    const key = `${sinceHash}\0${path}`
+    const key = `${nodeId ?? ''}\0${sinceHash}\0${path}`
     const hit = idx.lazy.windows.get(key)
     if (hit) return hit
-    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+    const targets = nodeId ? new Set([nodeId]) : idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
     const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
-    const args = ['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    const args = ['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`), '--', path]
     let commits: string[] = []
-    try { commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean) } catch { commits = [] }
+    try {
+      commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean)
+      const pathResolutions = idx.lazy.resolutionCommits?.get(path) ?? []
+      if (pathResolutions.length) {
+        const mergeArgs = ['-C', idx.lazy.root, 'rev-list', '--merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`)]
+        const reachableMerges = new Set(git(mergeArgs).split('\n').map((s) => s.trim()).filter(Boolean))
+        commits.push(...pathResolutions.filter((hash) => reachableMerges.has(hash)))
+      }
+    } catch { commits = [] }
+    commits = commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash, nodeId))
     idx.lazy.windows.set(key, commits)
     return commits
   }
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return []
-  const cover = ackCoverFor(idx, sinceHash)
-  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, base, h) && !cover.some((a) => inAncestors(idx, a, h)))
+  const cover = ackCoverFor(idx, sinceHash, nodeId)
+  return [...(idx.fileCommits.get(path) ?? []), ...(idx.resolutionCommits?.get(path) ?? [])].filter((h) => !inAncestors(idx, base, h)
+    && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h, nodeId))
 }
 
 // which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a
@@ -428,8 +478,9 @@ export function windowCommits(idx: DriftIndex, sinceHash: string, path: string):
 export type AnchorHit = { commit: string; selectors: string[]; unparseable?: string }
 export async function anchorHitCommits(root: string, win: string[], path: string, symbols: string[], x: Extractor): Promise<AnchorHit[]> {
   const hits: AnchorHit[] = []
+  const objectFormat = await objectFormatFor(root)
   for (const c of win) {
-    const at = await unitsAtFileRevision(root, c, path, x)
+    const at = await unitsAtFileRevision(root, c, path, x, objectFormat)
     if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
     if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
     const bySym = symbols

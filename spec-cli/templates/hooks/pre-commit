@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ shared spex runner - resolve the `spex` CLI ONCE, into spex_cli(), so BOTH the main-guard trunk
 # lookup and the spec-lint shim shim through the same mechanism (no duplicated, drift-prone resolution).
 # This must work for BOTH ways this hook ships: a real project that installed @spexcode/spec-cli, and the
@@ -74,14 +75,25 @@ if [ -n "$spex_kind" ]; then
   spex_cli internal commit-surgery || echo "• SpexCode: footprint surgery skipped (error above) — a generated artifact may be staged; CI still enforces." >&2
 fi
 
-# @@@ spec-lint - the hook is just a thin shim over `spex spec lint`. It blocks on errors only (broken
-# spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1. It shims through the
-# shared spex_cli() resolved above (repoRoot() discovers the cwd's toplevel via git.ts, which strips the
-# hook's GIT_DIR, so lint validates THIS worktree's `.spec`).
+# @@@ spec-lint - the real-commit gate runs the full lint once when BOTH canonical executable hooks have
+# their exact static identity. A custom/missing/non-executable hook keeps the old full HEAD lint, so
+# `spex init` preserving user hooks can never silently reduce local coverage. Static identity matters:
+# never execute a user-owned hook with made-up probe arguments merely to ask whether it belongs to us.
+# Bypass with SPEXCODE_SKIP_LINT=1. It shims through shared spex_cli() resolved above.
 if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
   if [ -n "$spex_kind" ]; then
-    spex_cli spec lint >&2
-    lint_rc=$?
+    arm_hook=$(git rev-parse --git-path hooks/commit-msg 2>/dev/null)
+    consume_hook=$(git rev-parse --git-path hooks/reference-transaction 2>/dev/null)
+    arm_identity=$(cksum < "$arm_hook" 2>/dev/null || true)
+    consume_identity=$(cksum < "$consume_hook" 2>/dev/null || true)
+    if [ -x "$arm_hook" ] && [ -x "$consume_hook" ] \
+      && [ "$arm_identity" = "3244319701 1816" ] \
+      && [ "$consume_identity" = "858258218 4120" ]; then
+      lint_rc=0
+    else
+      spex_cli spec lint >&2
+      lint_rc=$?
+    fi
     # exit 75 = the launcher's mid-merge guard (spex's own source holds conflict markers — transient).
     # Degrade to advisory rather than walling every commit behind a merge someone else is resolving.
     if [ "$lint_rc" -eq 75 ]; then

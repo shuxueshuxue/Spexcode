@@ -9,6 +9,8 @@ code:
   - spec-cli/src/lint.ts#loadConfig
 related:
   - spexcode.json
+  - spec-cli/templates/hooks/commit-msg
+  - spec-cli/templates/hooks/reference-transaction
 ---
 # spec-lint
 
@@ -37,11 +39,14 @@ lists ALL lint rules, always:
   error**, names the repair, skips that language's anchor checks, and continues; the non-zero result
   records that the anchor is unverified, never a silent or falsely passing result. So do a relation's
   structural defects: a duplicate entry, a base path both bare and selector-scoped, and a selector on
-  a glob or directory.
+  a glob or directory. Candidate lint also rejects deleting a governor while its governed subject remains
+  present without transfer to another node; deleting the implementation with the node is valid retirement.
 - **anchor-drift** (error): a commit since the node's version intersected an ANCHORED unit's line
   range (measured from the file as it existed at each commit) with no covering Spec-OK ack — the
   blocking tier of drift, replacing the retired count-based `driftErrorThreshold` gate. Same-file
-  selectors are OR'd: one error per entry, hit selectors named, each commit counted once. See
+  selectors are OR'd: one error per entry, hit selectors named, each commit counted once. Ordinary commits
+  use their normal hunk; a merge uses only dense combined hunks different from every parent, so conflict
+  resolution is visible while clean `--no-ff` transport is not charged twice. See
   [[code-anchor]].
 - **one-govern** (error): a node governs (`code:`) at most ONE file — DISTINCT base paths, so several
   selectors on one file are one subject — and drift/eval/ack have one unambiguous subject; keep the
@@ -115,16 +120,40 @@ very coverage or structural warnings they meant to enforce is a config error the
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
-**One gate, no staged-index machinery:** the retired count-based commit-local gate
-(`lint.driftErrorThreshold`) is replaced by the anchor tier ([[code-anchor]]) — an anchor hit is an
-ordinary lint ERROR, so the same errors-block rule (pre-commit shim and CI alike, see [[ci-gate]])
-carries it, while unanchored drift stays advisory everywhere. Bypass with `SPEXCODE_SKIP_LINT=1`.
+**One anchor predicate at two real tips, plus candidate transition integrity:** the retired count gate
+(`lint.driftErrorThreshold`) stays gone; an anchor hit is an ordinary lint ERROR. `spex spec lint` and CI
+judge committed `HEAD`. On commit paths that
+invoke it, `commit-msg` arms one candidate and `reference-transaction` invokes the same lint over the real
+new oid before its ref advances,
+so history, raw specs, config and current anchored source all come from the candidate tree — never from an
+unrelated worktree/index state. Pending indices are transient and shared only inside that lint run; they
+never occupy or evict the server's persistent HEAD-keyed cache. Unanchored drift remains advisory. The
+candidate-only integrity rule above is intentionally not this shared anchor predicate: it compares deleted
+governor blobs from old `HEAD` with ownership in the candidate tree and rejects an orphaned surviving
+subject. Once that transition has landed, current `HEAD` no longer contains the deleted claim, so default
+lint reports only current-tree coverage; this local transition guard preserves the information while both
+sides are available. It is satisfied by deleting the implementation or transferring ownership, never by a
+`Spec-OK` trailer.
+
+This candidate gate intentionally supersedes the earlier **"One gate, no staged-index machinery"**
+decision rather than pretending that decision was an oversight. At that time `Spec-OK` existed only as a
+later `spex spec ack` `--allow-empty` stamp; there was no content-bearing ack, so rejecting before the
+implementation commit existed would close the only honest mechanics-only route. Native in-commit trailers
+now supply that route, while the narrowly-armed ref transaction lets the existing ancestry engine judge the
+real exact commit without applying a gate to unrelated ref operations. Local is therefore stricter than CI on paths that
+reach this hook: `P1` changing anchored code and
+`P2` updating the spec is accepted at CI's final tree but local rejects `P1`, deliberately requiring the
+code/spec checkpoint to be one commit. Bypass the local hook explicitly with `SPEXCODE_SKIP_LINT=1`; no
+installed hook means no local enforcement, so [[ci-gate]] remains authoritative.
 
 ### Spec-OK — acknowledging an implementation-only change
 
 A commit ahead of a spec isn't always staleness — a refactor can change a governed file while the spec
-stays true. Such a commit carries a **`Spec-OK: <node-id>`** trailer; drift skips the node it acknowledges
-(`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps the trailer on an **empty commit
+stays true. Its **`Spec-OK: <node-id>`** trailer names the node it acknowledges (`Spec-OK: A` quiets only
+A). An ack covers reachable ancestors only when it has exactly one parent and the same tree as that sole
+parent. Every other ack is self-only, including a merge with an unchanged first-parent tree: the merge
+still introduces newly reachable history. `spex ack <node>… --reason "<why>"`
+stamps the trailer on an **empty commit
 above HEAD** (`--allow-empty --only`, so a dirty index never rides along) — never an amend: drift's read
 side quiets every drift commit *reachable* from an ack, so a child stamp covers exactly what amending
 would, and it works on a trunk merge commit, where an amend re-authors the merge after `MERGE_HEAD` is
@@ -136,3 +165,18 @@ The reason is **required and recorded in the ack commit's message body** — it 
 articulate why the spec still holds before quieting it, and an ack that quiets an anchor hit
 ([[code-anchor]]) is a strong claim whose why must be durable. A shared file drifts every governor, so
 `Spec-OK:` accepts several ids — one ack per co-owner.
+
+This split is also a correction to the old reader, not only support for a new writer. Before the split, a
+content trailer was fed through the checkpoint reachability cover and could silently erase older or
+cross-node debt; a tree-identical `ours` merge could do the same for a whole newly reachable side branch.
+Both pending and HEAD lint now retain those debts, and report each affected node separately so the author
+can name exactly the required nodes in repeated `--trailer` flags.
+
+For the implementation commit currently being authored, Git's own
+`git commit --trailer "Spec-OK: <node-id>"` is the in-commit route. The final message is already present on
+the real candidate oid the armed gate judges, and a trailer on a content-bearing commit acknowledges
+**only that commit** — older unacknowledged drift remains. The commit body is the durable explanation. A
+prior ack cannot cover a descendant, and a later empty ack cannot be created through a non-bypassed gate
+until the rejected commit lands; this makes the in-commit form necessary for a complete honest workflow.
+Hook absence, the explicit bypass, or a meaningless spec edit remain operational ways around truth that
+Git cannot prevent.

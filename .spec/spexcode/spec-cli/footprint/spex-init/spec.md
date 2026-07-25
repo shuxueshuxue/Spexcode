@@ -80,6 +80,13 @@ with one actionable error pointing at `git init`. It deliberately does **not** r
 creating a repo is a side effect beyond init's remit (a subdir, a dir not meant as a repo root), and the
 repair is one command.
 
-**Adoption is additive, never destructive.** No existing file is overwritten: an existing `<dir>/.spec`
-aborts the spec phase with a warning, and an existing hook is left untouched. On success it prints the
-next steps — install the packages, edit `project/spec.md`, run the backend, confirm `spex lint` is clean.
+**Adoption is additive and preserves user ownership.** An existing `<dir>/.spec` aborts the spec phase with
+a warning. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook
+snapshots are different: a managed header, or an exact digest from a known shipped pre-header template,
+proves ownership, so re-init atomically refreshes that snapshot to the current protocol. This is necessary
+when a protocol moves work between hooks: leaving an old SpexCode pre-commit beside new arm/consume hooks
+would keep judging `HEAD` first and block the repair before the candidate gate can see it. A modified or
+unknown hook remains the user's and is left byte-for-byte untouched; the canonical pre-commit detects that
+collision statically and retains the old HEAD lint rather than silently removing local coverage. On success
+init prints what it installed, refreshed, and preserved, then the next steps — install the packages, edit
+`project/spec.md`, run the backend, confirm `spex lint` is clean.

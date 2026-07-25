@@ -114,7 +114,13 @@ label**: a session whose process is gone reads `offline` whatever its authored l
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
 conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
-frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+frees. Liveness is not the only thing that can claim the surface: an **archived** session ([[archive]]) shows
+its archive card instead, keyed on the human's filing rather than on liveness, and that card OUTRANKS both —
+opening a session you filed away should answer "want it back?" in one button, not drop you into a terminal you
+deliberately put out of sight, so relaunch stands down and folds its button into the card. Whichever panel
+owns the surface, **the pane behind it must be hidden AND pointer-inert**, never merely covered: an
+absolutely-positioned live xterm otherwise sits on top and swallows the panel's own button while the panel
+looks perfectly correct. That was found twice, independently, once per panel. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one

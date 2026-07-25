@@ -209,7 +209,14 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   })
   const slashColors = Object.fromEntries(slashLead.filter((row) => row.ui).map((row) => [row.name, row.color]))
   const toolColors = Object.fromEntries(result.wide.actionDetails.map((tool) => [tool.name, tool.color]))
-  const slashParity = JSON.stringify(slashLead.filter((row) => row.ui).slice(0, 4).map((row) => row.name)) === JSON.stringify(['/eval', '/merge', '/stop', '/close'])
+  // the WHOLE board vocabulary, in registry order — not a prefix. A prefix pin silently stops covering
+  // whatever gets appended after it; the archive pair ([[archive]]) landed between /stop and /close and a
+  // 4-name slice would have kept passing while saying nothing about it.
+  const boardNames = slashLead.filter((row) => row.ui).map((row) => row.name)
+  const archiveRows = slashLead.filter((row) => row.name === '/archive' || row.name === '/unarchive')
+  const slashParity = JSON.stringify(boardNames) === JSON.stringify(['/eval', '/merge', '/stop', '/archive', '/close'])
+    // exactly ONE direction of the archive pair is ever offered, keyed on `archived` alone ([[archive]])
+    && archiveRows.length === 1 && archiveRows[0].ui
     && stopRows.length === 1 && stopRows[0].ui && exitRows.length === 1 && !exitRows[0].ui
     && renameRows.length === 1 && renameRows[0].source === '[preset]'
     && toolColors.command === tokenColors.blue && toolColors.merge === tokenColors.green
@@ -217,7 +224,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     && slashColors['/eval'] === result.wide.door.iconColor && slashColors['/eval'] === tokenColors.cyan
     && slashColors['/stop'] === tokenColors.muted && slashColors['/close'] === tokenColors.red
   const activeProbe = await toolbarProbe(page)
-  check('slash registry parity and resident Command Box share one registry', slashParity && await page.locator('.si-tool.command.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { slashLead, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
+  check('slash registry parity and resident Command Box share one registry', slashParity && await page.locator('.si-tool.command.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { boardNames, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
   await page.locator('.si-tool.command').click()
   await input.waitFor({ state: 'hidden' })
   check('click twin closes Command Box', await page.locator('.si-tool.command[aria-pressed="false"]').count() === 1)

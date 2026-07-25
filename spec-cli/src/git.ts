@@ -478,7 +478,7 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
   const mergeVersions = new Set<string>()
   const commitVersions = new Map<string, Version>()
   const commitOrder = new Map<string, number>()
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '-M', '--numstat',
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '-M', '--numstat',
     `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec'])
   if (!out) return { versions, stats, mergeVersions }
   // Walk newest -> oldest (git log default). `alias` maps a path as it exists at the current walk

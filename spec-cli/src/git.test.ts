@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -184,6 +184,37 @@ test('mergeBaseDiff preserves the old path of a pure rename for merge-base reade
     additions: 0,
     deletions: 0,
   }])
+})
+
+test('history keeps reachable one-parent spec versions hidden by a TREESAME merge', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-full-history-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const path = '.spec/product/n/spec.md'
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), 'base\n')
+    run('add', '.'); run('commit', '-qm', 'base')
+    const base = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    writeFileSync(join(root, path), 'changed\n')
+    run('commit', '-qam', 'changed')
+    const changed = run('rev-parse', 'HEAD')
+    run('revert', '--no-edit', changed)
+    const reverted = run('rev-parse', 'HEAD')
+    run('switch', '-q', 'main')
+    run('merge', '--no-ff', '-m', 'merge side', 'side')
+
+    assert.equal(run('log', '--format=%H', '--', '.spec'), base, 'fixture must exercise default path simplification')
+    const rows = rowsFor(await historyIndex(root), path)
+    assert.equal(rows.length, 3)
+    assert.deepEqual(new Set(rows.map((row) => row.hash)), new Set([base, changed, reverted]))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 // ---- worktreeSpecDelta ([[worktree-linker]]): an op = differs-from-main-tip AND branch-touched-since-fork ----

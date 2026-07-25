@@ -99,7 +99,7 @@ export function tsAstExtractor(root: string): Extractor {
       // compiler API this extractor drives. Probe the ACTUAL surface with a tiny parse. Once a candidate
       // resolves, incompatibility is loud rather than silently changing parser versions.
       try {
-        const sf = ts.createSourceFile('probe.ts', 'const x = 1', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+        const sf = ts.createSourceFile('probe.ts', 'const x = 1', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
         if (!sf?.statements?.length || sf.parseDiagnostics?.length) throw new Error('probe parse failed')
         readiness = true
       } catch {
@@ -114,7 +114,7 @@ export function tsAstExtractor(root: string): Extractor {
         : /\.(jsx)$/.test(filename) ? ts.ScriptKind.JSX
         : /\.(ts|mts|cts)$/.test(filename) ? ts.ScriptKind.TS
         : ts.ScriptKind.JS
-      const sf = ts.createSourceFile(filename, content, ts.ScriptTarget.Latest, true, kind)
+      const sf = ts.createSourceFile(filename, content, ts.ScriptTarget.Latest, false, kind)
       // parse-only gate: a file that does not parse yields GARBAGE units (a shell script's `x=$(...)`
       // parses as a const) — throw so the caller renders an honest "cannot parse" verdict instead.
       if (sf.parseDiagnostics?.length) throw new Error(`${filename} does not parse as ${ts.ScriptKind[kind]} (${sf.parseDiagnostics.length} syntax error(s))`)
@@ -149,7 +149,7 @@ export function tsAstExtractor(root: string): Extractor {
     memoKey(filename) {
       probe()
       const host = ts ? `${tsModulePath}\0${ts.version ?? 'unknown'}` : `unresolved\0${root}`
-      return `${TS_AST_MEMO_SCHEMA}\0${host}\0target:Latest\0parents:true\0${filename}`
+      return `${TS_AST_MEMO_SCHEMA}\0${host}\0target:Latest\0parents:false\0${filename}`
     },
   }
 }

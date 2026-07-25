@@ -41,6 +41,12 @@ Two principles keep that derivation cheap on a long-running server:
   all files (the drift index), each cached on HEAD. For a large name-stream, the drift/anchor index switches
   to one batched HEAD commit-id set plus governed path-scoped `rev-list` windows, retaining the same DAG
   semantics without retaining every commit/file edge in JS or spawning one reachability child per reading.
+  **Deciding which mode to use must not itself cost the walk it avoids.** The switch asks only whether the
+  raw name stream reaches a byte budget, and that question is settled by the first budget-worth of bytes: the
+  probe reads a bounded prefix and treats truncation as the verdict, which is exactly the answer the whole
+  stream would give at every boundary. So the biggest histories — the ones the large-index mode exists for —
+  pay the smallest probe, and a stream too wide to buffer can no longer come back empty and be mistaken for a
+  small one.
   Resolving any node is a pure lookup in the small-index mode, while the large-index path memoizes bounded
   path windows. The recent/history tab for a single node is served off
   that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
@@ -78,10 +84,14 @@ is derived, never narrated (see [[three-part-body]]).
 This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its git-access layer
 (`git.ts`). The loader also assigns each node a unique-by-construction id: its leaf dir name, or the minimal
 parent-qualified suffix when that name collides — always a single URL-safe token, never a `/`-path
-([[id-url-safe]]). The git layer exposes three call shapes by how
+([[id-url-safe]]). The git layer exposes four call shapes by how
 failure should behave: a sync read that throws (`git`, stderr piped so
-a fail-soft probe stays quiet from a non-repo dir); an async read that hides failure as `''` (`gitA`); and a
-fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stderr). All three BOUND their
+a fail-soft probe stays quiet from a non-repo dir); an async read that hides failure as `''` (`gitA`); a
+fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and a bounded-prefix
+read for a caller that needs only the first N bytes (`gitPrefixA`), which stops the child at the caller's
+byte budget and reports the truncation as its own answer — never as an empty result, which would invert the
+size question it exists to answer. The budget is a byte count, so the transport stays blind to what the
+bytes mean. All of them BOUND their
 child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
 generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
 the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise

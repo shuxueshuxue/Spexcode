@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process'
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const HOOK_TEMPLATES = join(SRC, '..', 'templates', 'hooks')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(join(SRC, '..', 'templates', 'spexcode.json'), 'utf8')).lint.governedRoots)
 const SEEDED_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
@@ -165,4 +166,36 @@ test('a pre-existing retired render field is ignored with a loud notice — init
   assert.match(all, /retired/i, 'the retired-field notice is loud')
   assert.ok(existsSync(join(proj, '.spec')), 'adoption proceeded — the field is inert, never fatal')
   assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'one residence behavior regardless of the field')
+})
+
+test('real init refreshes exact legacy Spex hooks, preserves a custom commit-msg, and never probes it', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex } = freshRepo()
+  const hooks = join(proj, '.git', 'hooks')
+  const legacy = (name: string) => execFileSync('git', ['-C', SRC, 'show', `56d93f68^:spec-cli/templates/hooks/${name}`], { encoding: 'utf8' })
+  writeFileSync(join(hooks, 'pre-commit'), legacy('pre-commit'))
+  writeFileSync(join(hooks, 'prepare-commit-msg'), legacy('prepare-commit-msg'))
+  chmodSync(join(hooks, 'pre-commit'), 0o755)
+  chmodSync(join(hooks, 'prepare-commit-msg'), 0o755)
+  const calls = join(proj, 'custom-commit-msg.calls')
+  const custom = `#!/bin/sh\nprintf '%s\\n' "$1" >> ${JSON.stringify(calls)}\n`
+  writeFileSync(join(hooks, 'commit-msg'), custom)
+  chmodSync(join(hooks, 'commit-msg'), 0o755)
+
+  spex('init', '.', '--harness', 'claude')
+  assert.equal(readFileSync(join(hooks, 'pre-commit'), 'utf8'), readFileSync(join(HOOK_TEMPLATES, 'pre-commit'), 'utf8'))
+  assert.equal(readFileSync(join(hooks, 'prepare-commit-msg'), 'utf8'), readFileSync(join(HOOK_TEMPLATES, 'prepare-commit-msg'), 'utf8'))
+  assert.equal(readFileSync(join(hooks, 'commit-msg'), 'utf8'), custom, 'custom commit-msg was overwritten')
+  assert.equal(readFileSync(join(hooks, 'reference-transaction'), 'utf8'), readFileSync(join(HOOK_TEMPLATES, 'reference-transaction'), 'utf8'))
+  assert.ok(!existsSync(calls), 'init executed the custom hook as an identity probe')
+
+  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  cfg.mainBranch = 'main'
+  writeFileSync(join(proj, 'spexcode.json'), JSON.stringify(cfg, null, 2) + '\n')
+  g('switch', '-qc', 'node/init-hook')
+  writeFileSync(join(proj, 'README.md'), '# changed\n')
+  g('add', 'README.md')
+  g('commit', '-qm', 'exercise preserved hook')
+  const argv = readFileSync(calls, 'utf8').trim().split('\n')
+  assert.equal(argv.length, 1, `custom hook should run once at Git commit, got: ${argv.join(', ')}`)
+  assert.doesNotMatch(argv[0], /spexcode-probe/)
 })

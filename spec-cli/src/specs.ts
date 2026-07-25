@@ -13,7 +13,7 @@ type FmValue = string | string[]
 type Raw = { id: string; parent: string | null; relPath: string; fm: Record<string, FmValue>; body: string }
 
 // line-based frontmatter: scalars are `key: value`; an empty key followed by `- item` lines is a list (e.g. `code:`).
-function parseFrontmatter(src: string) {
+export function parseFrontmatter(src: string) {
   const fm: Record<string, FmValue> = {}
   let body = src
   const m = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
@@ -274,7 +274,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const driftFiles = []
     for (const f of code) {
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: f, behind: await driftForAsync(didx, S, f) }
+      const d = { file: f, behind: await driftForAsync(didx, S, f, r.id) }
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -286,7 +286,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     for (const e of relatedRel.entries) {
       if (e.selectors.length) continue
       if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path) }
+      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path, r.id) }
       if (d.behind > 0) relatedDriftFiles.push(d)
     }
     const fmStatus = str(r.fm.status, '') || null

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ session-stamp - auto-attribute a commit to the SESSION that authored it, ACROSS HARNESSES. SpexCode
 # reads the `Session:` trailer as a version's attribution (git is the database), keyed by the SpexCode record
 # id so the dashboard's session window links to it.

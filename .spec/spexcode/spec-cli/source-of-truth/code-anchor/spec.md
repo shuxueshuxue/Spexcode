@@ -53,13 +53,16 @@ hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval fres
 the selector, a miss is silent; related stays never-block, never-ack, no eval freshness.
 
 **Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
-report/CI run, and a pending commit for a locally-authored candidate. It is the same non-merge,
-ack-filtered set [[drift-by-ancestry]]'s walk already derives. Per window commit, the file's
+report/CI run, and a pending commit for a locally-authored candidate. It is the same ack-filtered set
+[[drift-by-ancestry]]'s walk already derives. Per ordinary window commit, the file's
 `--unified=0` hunks are intersected with the unit's line range extracted from the file **as it existed
 at that commit** — never from the later working tree, so renames/moves and partial staging attribute
-correctly. Both large-history path windows and the ordinary in-memory walk explicitly exclude merge
-commits; a merge commit itself is neutral, while unacknowledged non-merge commits it makes reachable
-remain in the window. A historical file version the extractor cannot parse counts as a
+correctly. A merge contributes only its dense combined (`--cc`) hunks: bytes different from **every**
+parent, hence authored by conflict resolution or an explicit edit in the merge itself. A clean transport
+merge has no such hunk and stays neutral; a first-parent diff is deliberately forbidden because it would
+charge the merge again for already-attributed side-branch work. The same cc path set decides whether a
+merge changed `spec.md` and therefore created a version. A historical file version the extractor cannot
+parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
 
 The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
@@ -98,7 +101,9 @@ another node; treating tree equality alone as emptiness let an `ours` merge chec
 from its newly reachable side branch. Neither is an acceptable acknowledgement. Candidate and later HEAD
 lint now classify the immutable commit object the same way and retain each node's independent debt. When a
 candidate owes several nodes, lint emits one node-scoped error per debt, naming every node the author must
-answer without combining their acknowledgement sets.
+answer without combining their acknowledgement sets. Git's default merge diff had additionally hidden
+both merge-authored anchor movement and merge-authored spec versions; cc makes those writes visible without
+re-billing ordinary branch content transported by the project's normal `--no-ff` merges.
 
 The cost is intentional and stated plainly: local acceptance is **strictly narrower** than CI acceptance.
 For example, code-only `P1` followed by spec-only `P2` is green when CI judges the final branch tip, but

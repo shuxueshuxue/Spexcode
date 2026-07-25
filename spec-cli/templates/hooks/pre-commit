@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ shared spex runner - resolve the `spex` CLI ONCE, into spex_cli(), so BOTH the main-guard trunk
 # lookup and the spec-lint shim shim through the same mechanism (no duplicated, drift-prone resolution).
 # This must work for BOTH ways this hook ships: a real project that installed @spexcode/spec-cli, and the
@@ -86,8 +87,8 @@ if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
     arm_identity=$(cksum < "$arm_hook" 2>/dev/null || true)
     consume_identity=$(cksum < "$consume_hook" 2>/dev/null || true)
     if [ -x "$arm_hook" ] && [ -x "$consume_hook" ] \
-      && [ "$arm_identity" = "1741954583 1300" ] \
-      && [ "$consume_identity" = "31276137 3864" ]; then
+      && [ "$arm_identity" = "3244319701 1816" ] \
+      && [ "$consume_identity" = "858258218 4120" ]; then
       lint_rc=0
     else
       spex_cli spec lint >&2

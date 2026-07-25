@@ -213,11 +213,32 @@ export function envSessionId(): string | null {
   for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
   return null
 }
+// @@@ RecordEntry - a record read has THREE outcomes, and collapsing them is what let a live session read as
+// "no session record". ABSENT (no file) is the legitimate nothing — a self-launched agent that only ever wrote
+// spec-discipline sentinels has a store dir and no record. CORRUPT (present but unparseable, or parseable but
+// not a record) is a FACT about a session that exists, so it must reach the surfaces as itself instead of
+// masquerading as absence: sessions-core refuses every writer on it and the board gives it its own row. Any
+// OTHER read failure (permissions, I/O) still THROWS — a transient fault must not read as either.
+export type RecordEntry =
+  | { kind: 'ok'; raw: RawRecord }
+  | { kind: 'absent' }
+  | { kind: 'corrupt'; path: string; error: string }
+
+export function readRecordEntry(id: string): RecordEntry {
+  const path = sessionRecordPath(id)
+  let text: string
+  try { text = readFileSync(path, 'utf8') }
+  catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'absent' }; throw e }
+  let raw: unknown
+  try { raw = JSON.parse(text) }
+  catch (e) { return { kind: 'corrupt', path, error: e instanceof Error ? e.message : String(e) } }
+  if (!raw || typeof raw !== 'object' || !(raw as RawRecord).session_id)
+    return { kind: 'corrupt', path, error: 'parsed, but carries no session_id — not a session record' }
+  return { kind: 'ok', raw: raw as RawRecord }
+}
 export function readRawRecord(id: string): RawRecord | null {
-  try {
-    const raw = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-    return raw && typeof raw === 'object' && raw.session_id ? raw as RawRecord : null
-  } catch { return null }
+  try { const e = readRecordEntry(id); return e.kind === 'ok' ? e.raw : null }
+  catch { return null }
 }
 // resolve a possibly-ALIASED session id to its raw record. A codex hook or spawned command can carry the codex
 // THREAD id — payload session_id / CODEX_THREAD_ID — not the SpexCode record id the store is keyed by. Direct id
@@ -225,13 +246,20 @@ export function readRawRecord(id: string): RawRecord | null {
 // before any tool turn).
 // Null when neither resolves. Mirrors the shell `hp_store_dir` alias grep — one resolution rule, both layers.
 export function readAliasedRawRecord(id: string): RawRecord | null {
-  const direct = readRawRecord(id)
-  if (direct) return direct
+  const e = readAliasedRecordEntry(id)
+  return e.kind === 'ok' ? e.raw : null
+}
+// the same alias resolution, keeping the three-way outcome. A CORRUPT record at the direct id settles the
+// question — we found this session and cannot read it; walking on to the alias would report a corrupt record
+// as absent, the exact collapse this type exists to prevent.
+export function readAliasedRecordEntry(id: string): RecordEntry {
+  const direct = readRecordEntry(id)
+  if (direct.kind !== 'absent') return direct
   for (const sid of listSessionIds()) {
     const r = readRawRecord(sid)
-    if (r && r.harness_session_id && r.harness_session_id === id) return r
+    if (r && r.harness_session_id && r.harness_session_id === id) return { kind: 'ok', raw: r }
   }
-  return null
+  return { kind: 'absent' }
 }
 // every session_id this project has a record for (the board's enumeration source — replaces `git worktree
 // list`). A MISSING store dir means no session ever launched → []. But any OTHER readdir failure THROWS

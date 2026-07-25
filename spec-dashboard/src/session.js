@@ -6,6 +6,8 @@ export const STATUS_COLOR = {
   idle: 'var(--muted)', starting: 'var(--muted)', queued: 'var(--muted)',
   'close-pending': 'var(--muted)', offline: 'var(--muted)',
   unknown: 'var(--yellow)',   // liveness probe FAILED (box overloaded) — death unproven, so warn, never read as dead
+  corrupt: 'var(--red)',      // the RECORD itself is unreadable — a broken thing to look at, not a dead agent
+  retired: 'var(--muted)',    // the work merged and its worktree is gone: terminal, only `close` remains
 }
 
 // compact one-line surfaces (the console's terminal-styled sidebar) render the status as a SINGLE glyph
@@ -16,6 +18,7 @@ export const STATUS_GLYPH = {
   asking: '?', review: '◑', done: '✓',
   error: '✕',
   idle: '·', starting: '◌', queued: '⋯', 'close-pending': '⊘', offline: '○', unknown: '⁇',
+  corrupt: '⚠', retired: '⚑',
 }
 
 // the three triage zones the session list groups into — "whose turn is it?". `offline` = the process is
@@ -25,7 +28,11 @@ export const STATUS_GLYPH = {
 // close, fix); `run` = self-driving, the agent's turn (working / parked / starting / queued / idle — booting
 // counts as running, not dead). Closed sessions aren't on the board at all. Same partition drives every
 // session-list surface.
-const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error'])
+// `corrupt` joins them: an unreadable record cannot resolve itself and no agent can act on it, so it is
+// squarely the human's — and it carries liveness `unknown` (never probed), so the offline check above does not
+// claim it first. `retired` is deliberately NOT here: its agent really is down, so it sorts with the offline
+// rows and its badge, not its zone, is what says the worktree is gone.
+const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error', 'corrupt'])
 export const sessionZone = (s) => {
   if (s?.liveness === 'offline' || s?.status === 'offline') return 'offline'
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'

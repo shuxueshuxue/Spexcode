@@ -128,7 +128,9 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   alignment patch. Small overview surfaces may add counts beside the primitive, but never mint another
   state mapping.
 - **`DetailShell` follows GitHub's issue grammar:** title/meta HEADER, STATUS band, MAIN content with an
-  optional docked composer, and a metadata SIDE rail. The header row leads with a compact **back anchor**
+  optional docked composer, and a metadata SIDE rail. It is the shell for every STANDALONE page in these
+  families, not only the details: Issues' compose page ([[issues-view]]) is the same header + main + rail
+  with no status band, so writing an issue and reading one cannot drift into two skeletons. The header row leads with a compact **back anchor**
   when the page supplies one (`backHref`/`backLabel`): a REAL `<a href>` wearing the [[icon-system]]
   left-arrow glyph with its localized tooltip + accessible name — Enter follows the href natively, and it
   never calls `history.back` (the page derives the href from the detail's canonical address,
@@ -156,7 +158,9 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   layer OVER the primitive, never beside it as a parallel span/anchor/tooltip variant. Information type
   is explicit: an issue's own id wears a localized Issue label, a spec-node reference wears the
   localized spec-node label and its real focus/navigate behavior — no bare `#slug` left to be guessed
-  at. List rows keep their own one compact meta grammar — two densities, each a single implementation.
+  at. A rail row that takes INPUT — the compose page's store picker ([[issues-view]]) — is a control, not a
+  value, and stays outside the primitive; every value the rails SHOW still goes through it.
+  List rows keep their own one compact meta grammar — two densities, each a single implementation.
 - Both components read only the shared theme/typography tokens (the `styles.css` vars) — the pages contribute
   content, never layout forks. A change to list rhythm or detail geometry lands HERE once and both pages
   move together; that is the component boundary this node exists to hold. ListPage and DetailShell consume

@@ -13,7 +13,7 @@ import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
-import { boardStream, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
+import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
@@ -631,10 +631,19 @@ superviseQueue()     // launch queued sessions as slots free (catches agent-auth
 superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
+let graphWatchersClosed = false
+const closeGraphWatchers = (): void => {
+  if (graphWatchersClosed) return
+  graphWatchersClosed = true
+  closeBoardFileWatchers()
+}
+process.once('exit', closeGraphWatchers)
+
 // graceful drain (the other half of zero-downtime reload, supervise.ts): on SIGTERM stop accepting new
 // connections, let in-flight requests finish, and sweep now-idle keep-alive sockets so close() fires the
 // instant the last request drains. A hard cap still forces exit if a connection won't close.
 process.on('SIGTERM', () => {
+  closeGraphWatchers()
   const srv = server as unknown as { close(cb?: () => void): void; closeIdleConnections?(): void }
   const sweep = setInterval(() => srv.closeIdleConnections?.(), 200)
   srv.close(() => { clearInterval(sweep); process.exit(0) })

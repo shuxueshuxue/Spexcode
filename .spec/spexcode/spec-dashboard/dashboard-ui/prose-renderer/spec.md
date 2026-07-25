@@ -110,6 +110,16 @@ made this node necessary.
   desktop and phone overflow, and a remote image actually decoding. Those tests move onto the unified
   renderer — a rewritten implementation that cannot satisfy them is wrong by definition, and re-deriving
   a second set of rules for the same behaviour is how the two dialects were born in the first place.
+- **Expect OTHER nodes' fixtures to break on depth, and fix them semantically.** Rendering real Markdown
+  makes a prose surface's DOM deeper: text that used to be the container's first child now sits inside a
+  paragraph, an emphasis, a list item. Any existing test — in any node — that reaches into one of the four
+  body surfaces by structural position (`firstChild` is a Text node, a fixed child index, a flat
+  `textContent` shape) will break the moment that surface migrates, and it will break for the RIGHT
+  reason. This already happened once to a neighbouring lane's composer suite. The honest repair is to
+  address content by MEANING — the first non-empty descendant text, a queried role or class — never to
+  loosen the assertion until it stops noticing anything; and where a test's own timing assumed a flat
+  body (a count taken before history hydrated), it waits for the real data instead. Each surface's
+  migration therefore budgets for its neighbours' fixtures, not only its own.
 - **Each migrated surface re-measures its own scenario.** The body surfaces carry eval scenarios that
   already assert rendered Markdown (headings/tables/lists, no raw `##` or pipes) and, for the thread,
   playing evidence media; every one of them is re-measured through the real browser as it moves, so the

@@ -23,6 +23,10 @@ const SESSION_PROMPT = `record integrity fixture ${process.pid}-${Date.now()}`
 // other JSON escape), a real newline (which a one-field-per-line record must encode, not split), and non-ASCII
 // (which must survive byte-for-byte). Anything that assembles JSON by string substitution dies on this.
 const NASTY = 'he said "strict" — path C:\\tmp\\x\nsecond line 中文 ✅'
+// The string that actually caused the incident: mark-active.sh's own comment, quoted verbatim in a note by a
+// session discussing the bug. Measuring the write path against the real trigger — not only a constructed one —
+// is what proves the class is closed rather than one convenient example of it.
+const REAL_TRIGGER = 'Escape \\ / & in the note for the sed REPLACEMENT (the note never contains ").'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -93,20 +97,18 @@ async function readSession(id: string): Promise<any> {
 // "no session record"), it must never be silently repaired into a valid empty record by a hook, and it
 // must stay closable with its original bytes kept as evidence.
 async function corruptRecordIsDiagnosable(home: string, worktree: string): Promise<void> {
-  const cid = '11111111-1111-1111-1111-111111111111'
+  // NOT a hand-built string: these are the real bytes the old shell writer produced during the incident
+  // (session 67c463e8 quoted mark-active.sh's own "the note never contains \"" comment in a note, and the sed
+  // write path closed the JSON string on that quote). Measuring against the artifact means the fixture cannot
+  // drift into a shape that is merely convenient to detect.
+  const sample = readFileSync(join(packageRoot, 'test', 'fixtures', 'corrupt-session-record.json'), 'utf8')
+  const cid = JSON.parse(sample.split('\n')[1].replace(/^\s*"session_id":\s*/, '').replace(/,$/, ''))
   const rec = await recordPath(home, worktree, cid)
   mkdirSync(dirname(rec), { recursive: true })
-  // the exact shape shell value-substitution produced: a note whose escaped quote was cut mid-string
-  writeFileSync(rec, [
-    '{', `  "session_id": "${cid}",`, '  "governed": true,', `  "worktree_path": "${worktree}",`,
-    '  "branch": "node/corrupt-1111",', '  "node": "",', '  "title": "corrupt fixture",', '  "name": "",',
-    '  "parent": "",', '  "status": "asking",', '  "proposal": "",', '  "merges": 0,',
-    '  "note": ""hi" and \\ then",', '  "sortkey": "",', '  "createdAt": 1784900000000,',
-    '  "harness": "claude",', '  "harness_session_id": "",', '  "stopped": false,', '  "archived": false,',
-    '  "launcher": "fake",', '  "launch_cmd": "/bin/true",', '  "launch_owner": ""', '}', '',
-  ].join('\n'))
+  writeFileSync(rec, sample)
   const original = readFileSync(rec, 'utf8')
-  assert.throws(() => JSON.parse(original), 'the planted record really is unparseable')
+  assert.equal(original, sample, 'the incident bytes are planted verbatim')
+  assert.throws(() => JSON.parse(original), 'the incident record really is unparseable')
 
   const rows = (await jsonRequest('/api/sessions')).body as any[]
   const row = rows.find((s) => s.id === cid)
@@ -244,6 +246,11 @@ async function notesRoundTrip(home: string): Promise<void> {
     const row = listed.find((s: any) => s.id === id)
     assert.ok(row, 'a fresh CLI process still lists the session (the record survives a reader restart)')
     assert.equal(row.note, NASTY, 'the note is verbatim to a fresh reader process too')
+
+    // ---- the REAL trigger text, straight through the write path --------------------------------------
+    await spex(created.path, 'session', 'park', '--note', REAL_TRIGGER, '--session', id)
+    assert.ok(parses(), `the incident's own trigger string leaves a parseable record:\n${readRaw()}`)
+    assert.equal((await readSession(id)).note, REAL_TRIGGER, 'the trigger string round-trips verbatim')
 
     // ---- the review payload (the manager's read surface) also survives --------------------------------
     const review = await jsonRequest(`/api/sessions/${id}/review`)

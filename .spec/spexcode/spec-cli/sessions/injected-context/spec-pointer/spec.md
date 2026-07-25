@@ -37,3 +37,8 @@ prompts (see [[dispatch]]).
 
 It is **fail-quiet by absence**: a prompt with no `[[id]]` and an unknown id both resolve to nothing, so no
 pointer is appended and the agent launches with the human's prompt unchanged.
+
+"Unknown" includes a node that exists only on the branch of the session that spawned this one: the index is
+loaded from the backend's own checkout, and the new worktree is branched off the base, so such a node is in
+neither. That case is covered by the sibling injection [[spawner-pointer]], which points the child at the
+spawner's worktree — not the spec path it wanted, but the tree that has it.

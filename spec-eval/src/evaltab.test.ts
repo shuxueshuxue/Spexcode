@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { putBlob, MISS_BLOB } from './cache.js'
-import { readBlobByHash } from './evaltab.js'
+import { evalTimeline, readBlobByHash } from './evaltab.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'evaltab-test-'))
 
@@ -58,5 +59,52 @@ test('readBlobByHash: a malformed hash is rejected as invalid (never a miss)', (
     const r = readBlobByHash(bad, tmp())
     assert.equal(r.ok, false)
     if (!r.ok) assert.equal(r.reason, 'invalid')
+  }
+})
+
+test('evalTimeline primes off-history content fallback on a non-lazy index', async () => {
+  const root = tmp()
+  const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const commit = (message: string) => { git('add', '-A'); git('commit', '-qm', message); return git('rev-parse', 'HEAD') }
+  try {
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.email', 'eval@example.test')
+    git('config', 'user.name', 'Eval')
+    mkdirSync(join(root, '.spec/n'), { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, '.spec/n/spec.md'), '---\ntitle: n\ncode: src/x.ts\n---\n# n\n')
+    writeFileSync(join(root, '.spec/n/eval.md'), '---\nscenarios:\n  - name: s\n    description: measure\n    expected: stable\n    tags: [cli]\n---\n')
+    writeFileSync(join(root, 'src/x.ts'), 'export const value = 0\n')
+    const base = commit('base')
+    git('branch', 'anchor')
+    git('checkout', '-q', 'anchor')
+    writeFileSync(join(root, 'src/x.ts'), 'export const value = 1\n')
+    const anchor = commit('anchor measurement')
+    git('checkout', '-q', '-b', 'current', base)
+    writeFileSync(join(root, 'src/x.ts'), 'export const value = 2\n')
+    commit('current change')
+
+    const sidecarPath = join(root, '.spec/n/evals.ndjson')
+    writeFileSync(sidecarPath, JSON.stringify({ scenario: 's', codeSha: anchor, blob: null, ts: '2026-07-26T00:00:00Z' }) + '\n')
+    const idx = {
+      ord: new Map([['current', 0]]), parents: new Map([['current', []]]),
+      fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(),
+    }
+    const node = {
+      id: 'n', dir: join(root, '.spec/n'), evalPath: '.spec/n/eval.md', sidecarPath,
+      scenarios: [{ name: 's', description: 'measure', expected: 'stable', tags: ['cli'] }],
+    }
+    const timeline = await evalTimeline('n', {
+      root,
+      specs: [{ path: '.spec/n/spec.md', code: ['src/x.ts'] }],
+      idx,
+      hidx: {} as any,
+      scidx: new Map(),
+      ynodes: [node],
+      remarks: new Map(),
+    } as any)
+    assert.deepEqual(timeline.readings[0].staleAxes, ['code'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })

@@ -53,8 +53,10 @@ of one node (two branches each re-versioning it), the base stays the walk-newest
 only a merge resolves.
 
 The local [[code-anchor]] gate asks this same walk about one explicit candidate commit. Both ordinary and
-large-history builds parameterize every range by that tip and exclude merge commits from governed path
-windows. Candidate builds are transient — shared inside one lint call but never inserted into the
+large-history builds parameterize every range by that tip. Ordinary commits use their normal path diff;
+merges enter a governed path window only through dense combined (`--cc`) hunks whose result differs from
+every parent. Thus clean transport stays neutral while content authored during conflict resolution retains
+the merge's identity and responsibility. Candidate builds are transient — shared inside one lint call but never inserted into the
 persistent per-root HEAD cache — so a rejected dangling oid cannot evict or contaminate board state.
 
 Correcting the under-report legitimately surfaces previously-hidden drift on existing boards — a

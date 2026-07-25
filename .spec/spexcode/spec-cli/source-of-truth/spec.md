@@ -41,6 +41,13 @@ specs and governed current content from that candidate's immutable tree and deri
 same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an
 unstaged working-tree edit cannot change the verdict for bytes absent from the candidate.
 
+Git's default history presentation suppresses merge diffs, but a merge can author real content while
+resolving conflicts. The loader therefore treats a merge's dense combined (`--cc`) paths — content different
+from every parent — as that merge's own writes. A cc change to `spec.md` is a real version and history row;
+a cc change to governed code enters drift/anchor judgment. A clean merge has no combined path and remains
+only transport. First-parent diff is not a substitute: it would duplicate every side-branch write at the
+project's normal `--no-ff` landing step.
+
 Two principles keep that derivation cheap on a long-running server:
 
 - **Scale with history, not node count.** Ordinary repositories use two single git walks back the whole board:

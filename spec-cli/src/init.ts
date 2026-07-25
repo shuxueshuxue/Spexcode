@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameSync, rmSync, statSync, chmodSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -9,6 +10,32 @@ import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './h
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const TEMPLATES = join(pkgRoot, 'templates')
+const MANAGED_HOOK_HEADER = '# spexcode-managed-hook-v1'
+const LEGACY_MANAGED_HOOKS: Record<string, Set<string>> = {
+  'pre-commit': new Set(['fc33a6ff2b444fa47210a2594b6a714613d9c62fd8ec77a9a13aec81143de8a7']),
+  'prepare-commit-msg': new Set(['08b26ad8ffb305a64b7cddc868231854c84d539b8e5e9324702bd2c293044183']),
+}
+
+function hookDigest(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+function isManagedHook(path: string, name: string): boolean {
+  const source = readFileSync(path, 'utf8')
+  return source.split('\n').slice(0, 4).includes(MANAGED_HOOK_HEADER)
+    || LEGACY_MANAGED_HOOKS[name]?.has(createHash('sha256').update(source).digest('hex')) === true
+}
+
+function replaceHook(source: string, dest: string): void {
+  const temp = `${dest}.spexcode-${process.pid}`
+  try {
+    copyFileSync(source, temp)
+    chmodSync(temp, 0o755)
+    renameSync(temp, dest)
+  } finally {
+    rmSync(temp, { force: true })
+  }
+}
 
 // the cumulative preset chain, lean → cautious (see [[init-preset]]). `default` is the live `.plugins`
 // instance set (planted from templates/spec); a higher tier would be a SEPARATE package under
@@ -149,7 +176,8 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.log(`✓ planted spexcode.json — harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
   }
 
-  // 2. install the git hooks: templates/hooks/* -> <repo>/<common-git-dir>/hooks/* (skip any that exist).
+  // 2. install the git hooks. Unknown existing hooks are user-owned and stay byte-identical. An exact
+  // SpexCode snapshot is refreshed because a multi-hook protocol cannot mix old and new generations.
   const hooksDir = resolveHooksDir(targetDir)
   if (!hooksDir) {
     console.warn(`• ${targetDir} is not a git repository — skipped hook install. Run \`git init\` there, then \`spex init\` again (or \`npm run hooks\`).`)
@@ -157,18 +185,27 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     mkdirSync(hooksDir, { recursive: true })
     const hooksSrc = join(TEMPLATES, 'hooks')
     const installed: string[] = []
+    const refreshed: string[] = []
     for (const e of readdirSync(hooksSrc, { withFileTypes: true })) {
       if (!e.isFile()) continue
+      const source = join(hooksSrc, e.name)
       const dest = join(hooksDir, e.name)
       if (existsSync(dest)) {
-        console.warn(`• hook ${e.name} already exists in ${hooksDir} — left untouched.`)
+        if (hookDigest(dest) === hookDigest(source)) continue
+        if (isManagedHook(dest, e.name)) {
+          replaceHook(source, dest)
+          refreshed.push(e.name)
+        } else {
+          console.warn(`• user hook ${e.name} already exists in ${hooksDir} — left untouched.`)
+        }
         continue
       }
-      copyFileSync(join(hooksSrc, e.name), dest)
+      copyFileSync(source, dest)
       chmodSync(dest, 0o755)
       installed.push(e.name)
     }
     if (installed.length) console.log(`✓ installed git hooks (${installed.join(', ')}) → ${hooksDir}`)
+    if (refreshed.length) console.log(`✓ refreshed SpexCode hook snapshots (${refreshed.join(', ')}) → ${hooksDir}`)
   }
 
   // 2c. MATERIALIZE the harness-discovered artifacts so a USER-self-launched harness works with zero further

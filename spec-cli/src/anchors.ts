@@ -384,9 +384,9 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
   const key = `${commit}\0${path}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--unified=0', '--format=', commit, '--', path])
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
   const ranges: [number, number][] = []
-  for (const m of out.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+  for (const m of out.matchAll(/^@@+ (?:-\d+(?:,\d+)? )+\+(\d+)(?:,(\d+))? @@+/gm)) {
     const c = +m[1], d = m[2] === undefined ? 1 : +m[2]
     ranges.push(d > 0 ? [c, c + d - 1] : [Math.max(1, c), Math.max(1, c)])
   }
@@ -397,28 +397,36 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
 
 // the drift window of an anchored file: every commit to `path` not reachable from the spec's version
 // and not covered by a valid Spec-OK ack — the SAME set driftFor counts, exposed as commits so the
-// anchor engine can probe each one. (fileCommits comes from a --name-only walk, which lists no files
-// for merge commits — the window is non-merge by construction.)
-export function windowCommits(idx: DriftIndex, sinceHash: string, path: string): string[] {
+// anchor engine can probe each one. Ordinary file commits and merge-authored dense-combined paths are
+// indexed separately so clean merge transport is never charged twice.
+export function windowCommits(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): string[] {
   if (!sinceHash) return []
   if (idx.lazy) {
-    const key = `${sinceHash}\0${path}`
+    const key = `${nodeId ?? ''}\0${sinceHash}\0${path}`
     const hit = idx.lazy.windows.get(key)
     if (hit) return hit
-    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
+    const targets = nodeId ? new Set([nodeId]) : idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
     const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
     const args = ['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`), '--', path]
     let commits: string[] = []
-    try { commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean) } catch { commits = [] }
-    commits = commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash))
+    try {
+      commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean)
+      const pathResolutions = idx.lazy.resolutionCommits?.get(path) ?? []
+      if (pathResolutions.length) {
+        const mergeArgs = ['-C', idx.lazy.root, 'rev-list', '--merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`)]
+        const reachableMerges = new Set(git(mergeArgs).split('\n').map((s) => s.trim()).filter(Boolean))
+        commits.push(...pathResolutions.filter((hash) => reachableMerges.has(hash)))
+      }
+    } catch { commits = [] }
+    commits = commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash, nodeId))
     idx.lazy.windows.set(key, commits)
     return commits
   }
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return []
-  const cover = ackCoverFor(idx, sinceHash)
-  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, base, h)
-    && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h))
+  const cover = ackCoverFor(idx, sinceHash, nodeId)
+  return [...(idx.fileCommits.get(path) ?? []), ...(idx.resolutionCommits?.get(path) ?? [])].filter((h) => !inAncestors(idx, base, h)
+    && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h, nodeId))
 }
 
 // which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a

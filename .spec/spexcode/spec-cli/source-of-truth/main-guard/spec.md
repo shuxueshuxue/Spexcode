@@ -33,8 +33,11 @@ pre-commit time). Escape hatch for seeding / eager topology: `SPEXCODE_ALLOW_MAI
 
 (The [[local-issues]] store also lands its data commits on the trunk, but it does NOT need a guard exception:
 its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.issues/` data
-path, so the hook is pure overhead — so it simply never runs this guard. An earlier `.spec/.forum/**`
-exception here was removed as a redundant special-case once the writer moved to `--no-verify`.)
+path, so the seconds-long pre-commit and commit-msg gates are pure overhead and Git skips them.
+`prepare-commit-msg` still runs and clears any stale candidate arm; `reference-transaction` still observes
+the ref update, but with no arm it returns before any history walk or lint. Thus the hot data path remains
+fast without a path exception. An earlier `.spec/.forum/**` exception here was removed as redundant once
+the writer moved to `--no-verify`.)
 
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode
@@ -53,7 +56,10 @@ this monorepo dogfooding itself, and [[spex-init]] for a project adopting SpexCo
 is the point: a new hook template installs from both paths automatically, and a second hand-maintained list
 could never drift out of sync because there is none. Because `.git/hooks/` is never committed,
 installing is a per-clone onboarding step, re-run whenever the source changes (the installed copy is a
-snapshot, not a symlink). The hook is advisory and bypassable; the non-bypassable backstop is [[ci-gate]].
+snapshot, not a symlink). Re-installation refreshes only snapshots whose SpexCode ownership is proven by
+their managed header or a known exact legacy digest; custom hooks remain untouched, and protocol identity
+is checked by static bytes rather than executing a hook with probe arguments. The hook is advisory and
+bypassable; the non-bypassable backstop is [[ci-gate]].
 
 This node owns **only** the main-authoring guard. The same `pre-commit` file also carries the
 [[commit-surgery]] footprint station (unconditional materialize + staged-index repair, after this gate)

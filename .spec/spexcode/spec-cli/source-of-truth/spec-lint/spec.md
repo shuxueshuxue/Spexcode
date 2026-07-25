@@ -39,11 +39,14 @@ lists ALL lint rules, always:
   error**, names the repair, skips that language's anchor checks, and continues; the non-zero result
   records that the anchor is unverified, never a silent or falsely passing result. So do a relation's
   structural defects: a duplicate entry, a base path both bare and selector-scoped, and a selector on
-  a glob or directory.
+  a glob or directory. Candidate lint also rejects deleting a governor while its governed subject remains
+  present without transfer to another node; deleting the implementation with the node is valid retirement.
 - **anchor-drift** (error): a commit since the node's version intersected an ANCHORED unit's line
   range (measured from the file as it existed at each commit) with no covering Spec-OK ack — the
   blocking tier of drift, replacing the retired count-based `driftErrorThreshold` gate. Same-file
-  selectors are OR'd: one error per entry, hit selectors named, each commit counted once. See
+  selectors are OR'd: one error per entry, hit selectors named, each commit counted once. Ordinary commits
+  use their normal hunk; a merge uses only dense combined hunks different from every parent, so conflict
+  resolution is visible while clean `--no-ff` transport is not charged twice. See
   [[code-anchor]].
 - **one-govern** (error): a node governs (`code:`) at most ONE file — DISTINCT base paths, so several
   selectors on one file are one subject — and drift/eval/ack have one unambiguous subject; keep the

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ candidate lint consume ([[code-anchor]]) - inert for every ref transaction except the one exact commit
 # attempt armed by canonical commit-msg. The real new oid supplies final tree/message/parents; prepared is
 # still reversible, so a lint error leaves the branch ref unchanged and the user's staged work intact.
@@ -48,11 +49,11 @@ if [ -n "$(git for-each-ref --contains "$candidate" --format='%(refname)' 2>/dev
   exit 0
 fi
 actual_message=$(git cat-file commit "$candidate" | sed '1,/^$/d' | git hash-object --stdin)
-if [ "$actual_message" != "$expected_message" ]; then
+case " $expected_message " in *" $actual_message "*) ;; *)
   rm -f "$marker"
   echo "✗ SpexCode: candidate gate lost message identity; commit stopped before the ref advanced." >&2
   exit 1
-fi
+esac
 rm -f "$marker" # consume before invoking any child Git process
 
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
@@ -87,7 +88,9 @@ if [ "$lint_rc" -eq 75 ]; then
 fi
 if [ "$lint_rc" -ne 0 ]; then
   echo "✗ SpexCode: candidate spec-lint failed; the ref is unchanged and staged work is intact." >&2
-  echo "  Fix the spec/code or add an honest Spec-OK trailer, then retry/continue; abort the Git operation to discard it." >&2
+  echo "  Retry an ordinary/amend commit with: git commit [--amend] --trailer \"Spec-OK: <node>\" …" >&2
+  echo "  Continue after staging a repair: git merge --continue | git cherry-pick --continue | git rebase --continue" >&2
+  echo "  Abort the active operation:       git merge --abort    | git cherry-pick --abort    | git rebase --abort" >&2
   exit 1
 fi
 exit 0

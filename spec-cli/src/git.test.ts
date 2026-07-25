@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -234,6 +234,17 @@ test('ops already LANDED on main dissolve from the overlay', async () => {
   assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])       // …gone once main contains it
 })
 
+test('an explicit pending tip never occupies or evicts the root-owned HEAD index caches', async () => {
+  const { root, run } = specRepo()
+  const [headHistory, headDrift] = await Promise.all([historyIndex(root), driftIndex(root)])
+  const before = historyCacheStats()
+  const pending = run('commit-tree', run('write-tree'), '-p', run('rev-parse', 'HEAD'), '-m', 'pending cache probe')
+  await Promise.all([historyIndex(root, pending), driftIndex(root, pending)])
+  assert.deepEqual(historyCacheStats(), before, 'pending tip changed HEAD cache ownership or occupancy')
+  assert.equal(await historyIndex(root), headHistory, 'pending history evicted the warm HEAD object')
+  assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
+})
+
 test('large-history HEAD reachability is one recoverable flight, never per-reading git fanout', { concurrency: false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-'))
   const bin = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-bin-'))
@@ -261,7 +272,7 @@ test('large-history HEAD reachability is one recoverable flight, never per-readi
 printf '%s\n' "$*" >> "${argvLog}"
 if [ -e "${trigger}" ]; then
   case "$*" in
-    *" rev-list HEAD") while :; do sleep 1; done ;;
+    *" -C ${root} rev-list "*) while :; do sleep 1; done ;;
   esac
 fi
 exec "${realGit}" "$@"
@@ -271,7 +282,7 @@ exec "${realGit}" "$@"
   process.env.PATH = `${bin}:${oldPath || ''}`
   // match by the call itself, not the whole argv: a build context legitimately prefixes resource flags
   const reachSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
-    .filter((line) => line.endsWith(`-C ${root} rev-list HEAD`)).length
+    .filter((line) => new RegExp(`-C ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} rev-list [0-9a-f]{40}$`).test(line)).length
   const ancestorSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
     .filter((line) => line.includes('merge-base --is-ancestor')).length
   const waitFor = async (want: number) => {
@@ -391,7 +402,7 @@ test('the large-history switch reads a bounded prefix, and a stream past the old
     assert.equal(index.fileCommits.size, 0, 'the large-history path retains no commit/file edge map')
     // the prefix read is the only whole-repo name-stream child the switch spawns
     const nameStreamSpawns = readFileSync(argvLog, 'utf8').split('\n')
-      .filter((line) => line.includes("log --name-only --format= HEAD")).length
+      .filter((line) => /log --name-only --format= [0-9a-f]{40}$/.test(line)).length
     assert.equal(nameStreamSpawns, 1)
   } finally {
     process.env.PATH = oldPath

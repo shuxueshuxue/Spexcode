@@ -218,7 +218,7 @@ async function evalExport(id: string): Promise<never> {
 
 // appended to a done/ask/block declaration: the note is durable conversation history even though the
 // CURRENT board projection correctly flips back to active on the next tool call.
-const DECLARED = ' — recorded; the human sees it in the dashboard. This declaration remains in the session timeline; your next tool call flips only the current board state back to active (the mark-active hook, by design).'
+const DECLARED = ' — recorded; the human sees it in the dashboard. This declaration remains in the session timeline; your next tool call flips only the current graph state back to active (the mark-active hook, by design).'
 // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
 const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
 

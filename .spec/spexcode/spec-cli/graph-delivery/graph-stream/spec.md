@@ -21,6 +21,8 @@ the backend pushes and the dashboard follows, so status flips as fast as the cha
 campaign measured the push itself: a one-field lifecycle write cost a flat 150ms wait plus a full ~250ms
 graph rebuild before its 1KB patch went out. The signal must carry its DOMAIN, so a session change pays a
 sessions-only splice — and every leaf that can be watched IS watched, so the patrol stops being load-bearing.
+Then an adopter at 53 live worktrees showed the other half of that bill: watching a leaf is not free, and a
+registration scheme that multiplies per spec file buys blindness rather than freshness.
 
 ## expanded spec
 
@@ -47,8 +49,8 @@ TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms
 — pure-syscall death detection over launch-registered pids) and a ~1s WARM tier (`warmSignature` — one
 merged tmux call for window/title state plus the rendezvous tri-state), both → 'sessions'. (4) the
 `.git/worktrees` REGISTRY watcher — git's own birth-ledger for every worktree, hand-made or dispatched —
-which attaches one recursive root watch plus one non-recursive gitdir watch to each live worktree and detaches
-both on removal. Root events cover dirty governed source, renames, draft scenario declarations and reading
+which attaches one whole-tree observation of each live worktree's root plus one non-recursive gitdir watch,
+and detaches both on removal. Root events cover dirty governed source, renames, draft scenario declarations and reading
 sidecars; the gitdir watch covers `index` changes from stage/reset that do not rewrite the working file. Both
 fire 'full'. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
 are ignored; generated project paths are not guessed away, because an adopter may govern them. A
@@ -67,34 +69,80 @@ funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED 
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
 is the coalescer for anything wider, so the old flat 150ms was pure added latency.
 
-**One exact-directory registry owns filesystem observation.** Linux/Node's built-in recursive `fs.watch`
-looks like one `FSWatcher` in JavaScript but expands into an inotify watch for every file and directory.
-On the production-shaped tree one live worktree took the process from 91 to 1,369 exact watches and the
-next reconciliation to 16,592; after ref files were atomically replaced, a later commit could then move the
-ref without any event or registration error. Recursive `fs.watch` is therefore not a valid primitive here.
-Each `(root, scope)` instead has one reusable registry which enumerates directories and installs one
-**non-recursive** watch per directory. A rename schedules one refresh of that registry's desired directory
-set; refresh is a set reconciliation, so an unchanged path is never registered twice, a disappeared path's
-old handle is closed, and a new path is installed exactly once. Worktree `.git` transport metadata and
-`node_modules` are excluded from traversal at registration time, not merely ignored after consuming watches.
-Atomic file replacement remains visible through the containing directory's stable handle.
+**One registry owns filesystem observation, and its cardinality follows the canonical roots.** Every source
+is one reusable `(root, scope)` registry which is the sole owner of every handle taken for it. What this
+module registers is the set of roots the graph actually has to observe: the session store, the git common
+dir's `refs` and its metadata files, the worktree registry, and — per LIVE worktree — its working tree plus
+git's metadata dir for it. That count grows with roots and worktrees and with nothing else; 444 spec nodes
+inside a worktree are the same one registration as an empty one. Registration that instead multiplied per
+spec file is precisely what took an adopter down: 53 live worktrees × 444 node directories asked the
+platform for 23,532 registrations.
+
+**The transport is where the platform may differ, and the only place it may.** Observing a tree is ONE
+registration to this module; how many the OS holds underneath is the transport's business, and the two
+transports satisfy one contract — idempotent refresh, atomic reclaim, root-relative delivery, exclusion,
+loud failure:
+
+- Where the OS observes a whole subtree from a single registration (Darwin's FSEvents, Windows'
+  `ReadDirectoryChangesW`), a root registers exactly once and the kernel covers the rest. It reports by
+  PATH, so atomic replacement inside the tree stays visible and no rename can make the desired set drift —
+  there is nothing to re-walk. Exclusions filter on delivery, because nothing was consumed per directory to
+  exclude at registration.
+- Where it does not (Linux), Node's `recursive` option is a USERSPACE fan-out: measured, 201 directories
+  became 801 inotify watches — one per file as well as per directory — and a file watched by inode goes
+  blind the moment it is atomically replaced, after which a later commit could move a ref with no event and
+  no registration error. So that transport enumerates directories once and installs one **non-recursive**
+  watch each, all multiplexed onto the event loop's single shared inotify descriptor, excluding worktree
+  `.git` transport metadata and `node_modules` at traversal time. A rename schedules one refresh of the
+  desired set; refresh is a set reconciliation, so an unchanged path is never registered twice, a
+  disappeared path's handle is closed, and a new path is installed exactly once. Atomic replacement stays
+  visible through the containing directory's stable handle.
+
+Which transport a platform gets is a capability question, never a corpus one: no adopter, worktree count or
+repository is special-cased anywhere.
+
+**Refusal is fatal, silent and process-wide — which is why the budget is not negotiable.** Asking a
+consolidated platform for per-directory registrations does not merely waste them: at 8,920 registrations
+macOS answered `EMFILE` on every single one, with the process holding twelve descriptors and its soft limit
+at 1,048,575 — the ceiling is the platform's own registration budget, not a descriptor table, and no
+`ulimit` raise addresses it. Because that event source is process-wide, one over-budget root takes every
+other source down with it: the same run held 3.0 GiB resident with no git child alive while every watcher
+had already gone deaf and delivered nothing. The identical corpus at one registration per root attaches in
+3 ms and holds 53 registrations. The live census — how many roots were asked for, how many registrations
+the platform is holding for them — is observable, so a plateau is a fact on every platform rather than only
+where `/proc` exposes inotify descriptors.
+
+**An exhausted source is one loud failure and one bounded repair, never a storm.** A registry that cannot
+attach closes every handle it had already taken BEFORE it reports, so no half-attached set and no leaked
+handle survives a partial failure. The report names the source, the path and the errno, and is loud once
+per episode — the sources felled by the same process-wide budget are counted, not re-printed. The failed
+source is then HELD: an ordinary graph build, an HTTP read, a poller tick or a registry event may not
+re-attempt it, because a refused registration re-tried by whatever noticed it is exactly how one failure
+became a per-read re-walk of every worktree. Reattachment belongs to ONE repair schedule with exponential
+backoff, shared across sources because the exhausted resource is shared; it states how many sources it
+holds and when it will try again. A source that comes back clears its own hold, and an episode with nothing
+left held resets the backoff. While a source is held its eval projection stays observer-held and visibly
+non-current, and the changes it would have seen are found by the cold-tick patrol and reported as the
+repairs they are. Coverage degrades to the patrol's cadence; it never degrades to silence.
 
 Registry ownership follows the source lifetime, not a graph build. Repeated `/api/graph`, invalidation, and
 scoped Eval reads reuse the same `(root, scope)` registry. A worktree path changing under one git registry
 entry closes the old root and index handles before installing the replacement; worktree removal closes both.
 Changing the resolved session-store/git root closes every registry from the old source set, and an explicit
-`closeBoardFileWatchers()` drains all file handles and pending repair timers when the backend child/server
-ends, while a later ensure can open a clean era. Registration and runtime errors are loud and name the source
-and path; they close the failed registry before observer hold/retry, never leave a half-attached set or hide
-behind the patrol. Source failure does not crash the HTTP server, but it is never silent. Successful
-replacement is live before its hold is released and its authoritative rescan is triggered.
+`closeBoardFileWatchers()` drains all file handles, holds and the pending repair timer when the backend
+child/server ends, while a later ensure can open a clean era. Source failure does not crash the HTTP
+server, but it is never silent. Successful replacement is live before its hold is released and its
+authoritative rescan is triggered.
 
 **The patrol is a self-heal authority, not a crutch — and it is accountable.** The delta-gated ~15s cold
 tick now `invalidateBoard('full')`s before it rebuilds (it once read the still-valid cache back — a no-op
 patrol, found by measurement: an uncommitted worktree edit stayed invisible through five ticks while a
 control write propagated in 231ms). A patrol rebuild whose diff is non-empty when NO leaf watcher signalled
 logs a loud `PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target
-state is repairs/hour = 0. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds a
+state is repairs/hour = 0. The trigger set is what caused ONE rebuild, so the rebuild consumes it whether or
+not content moved — a fire that changed nothing (every poller's first sample is one) must not leave its tag
+behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
+exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds a
 leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and build cost.
 

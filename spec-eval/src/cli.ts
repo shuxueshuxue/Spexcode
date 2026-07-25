@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
-import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
+import { repoRoot, headSha, driftIndex, stagedFiles, git, commitReachable } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
@@ -158,6 +158,7 @@ async function scan(args: string[] = []): Promise<number> {
         }
         if (!driftSelected) continue
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
+        if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
         const axes = staleAxes(r, codeFiles, y.evalPath, idx, scidx, remSignals, probe, sc)
         if (axes.length) {
           staleScores++

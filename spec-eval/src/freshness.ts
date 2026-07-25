@@ -1,4 +1,5 @@
-import { git, gitA, gitTry, headSha, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
+import { resolve } from 'node:path'
+import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { scenarioHash, type Scenario } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -9,15 +10,22 @@ export type StaleAxis = 'code' | 'scenario' | 'remark' | 'anchor'
 
 // @@@ off-history content fallback - ancestry can't testify for a codeSha that isn't reachable from HEAD
 // (fold/rebase/squash-merge/cherry-pick all orphan the anchor), but the TREES still can: while the anchor
-// commit object exists locally, `git diff <anchor> HEAD` names exactly the paths whose content differs, so
-// a history rewrite that left governed content byte-identical reads FRESH instead of false-positive stale.
-// The probe is fed at the call sites (like the remark track) so the decision functions stay pure over their
-// inputs and the in-history fast path pays no extra git call; only when the commit object is truly gone
-// (gc'd orphan) does the conservative rule remain — surfaced as the 'anchor' axis, so "anchor lost" reads
-// differently from "content moved". No probe fed → the old always-conservative rule.
+// commit object exists locally, a pathspec-scoped `git diff <anchor> HEAD -- :(literal)<path>…` answers,
+// for exactly the governed paths a caller asks about, whether content differs — so a history rewrite that
+// left governed content byte-identical reads FRESH instead of false-positive stale. The question is per
+// REQUESTED path on purpose: one whole-repo changed-path set per anchor is what melted a production fold
+// (522 anchors × ~6k retained paths ≈ 520MB of Node heap), while the verdicts actually consumed are a
+// handful of governed files plus the eval.md. The probe is fed at the call sites (like the remark track) so
+// the decision functions stay pure over their inputs and the in-history fast path pays no extra git call;
+// only when the commit object is truly gone (gc'd orphan) does the conservative rule remain — surfaced as
+// the 'anchor' axis, so "anchor lost" reads differently from "content moved". No probe fed → the old
+// always-conservative rule.
 export type ContentProbe = {
-  // paths whose content differs between the anchor commit's tree and HEAD's; null = anchor object gone
-  changedPaths(anchorSha: string): Set<string> | null
+  // did THIS path's content change between the anchor tree and HEAD's? null = can't testify (anchor gone,
+  // or the path never primed) — callers stay conservative. Only primed paths are ever retained.
+  changed(anchorSha: string, path: string): boolean | null
+  // content CAN testify for this anchor: the object is readable and at least one verdict has settled
+  canTestify(anchorSha: string): boolean
   // did THIS scenario's semantic block (description+expected) move between anchor and HEAD ([[scenariofresh]])
   scenarioDiffers(anchorSha: string, evalPath: string, scenario: string): boolean
   // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
@@ -25,56 +33,206 @@ export type ContentProbe = {
   prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
 }
 
-// (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory,
-// sized above the largest adopter reading corpus — one entry per (reading, path) worst case — so a
-// repeat board build never thrashes back into forking (a bound below the corpus's distinct key count
-// turns a fixed-order rebuild into sequential thrash: every pass evicts the whole memo before cycling
-// back, re-forking one git child per key forever — scenariofresh's oidMemo sizing rule).
-const diffMemo = new Map<string, Set<string> | null>()
-const behindMemo = new Map<string, number>()
-function memo<V>(m: Map<string, V>, k: string, build: () => V): V {
-  if (m.has(k)) { const v = m.get(k)!; m.delete(k); m.set(k, v); return v }
-  const v = build()
-  m.set(k, v)
-  if (m.size > 4096) m.delete(m.keys().next().value!)
-  return v
+// (anchor, HEAD) name two immutable trees, so a settled verdict never invalidates — but "never invalidates"
+// is not "keep forever". A checkout answers freshness questions at ONE head at a time, so a root owns
+// exactly one head's verdicts ([[source-of-truth]]'s current-root rule, the same one the history and drift
+// indices follow). Keying the head into a shared memo instead made every rebuild ADD a generation: three
+// full invalidations left three heads' worth of anchors resident, and the cache grew with rebuild count
+// rather than with corpus size. A head move therefore swaps the root's scope atomically. An in-flight batch
+// keeps the entry object its caller already holds, so that caller still settles, but a detached entry can
+// never be read back through the root's current scope — an old flight cannot backfill the new head.
+// An anchor entry holds only PER-REQUESTED-PATH verdicts (plus the gone bit and the batch bookkeeping),
+// never a whole-repo path set.
+type AnchorVerdicts = {
+  verdicts: Map<string, boolean>   // requested path → content differs between the two immutable trees
+  gone: boolean                    // the anchor commit object is locally unreadable — content can't testify
+  pending: Set<string>             // paths awaiting the next batch child
+  flight: Promise<void> | null     // the single in-flight batch for this anchor
 }
-function putMemo<V>(m: Map<string, V>, k: string, value: V): void {
-  m.set(k, value)
-  if (m.size > 4096) m.delete(m.keys().next().value!)
+type RootScope = { head: string; anchors: Map<string, AnchorVerdicts>; behind: Map<string, number> }
+const rootScopes = new Map<string, RootScope>()
+// Roots come and go (a closed worktree never asks again), so cap how many stay warm — the same bounded-slot
+// guard the index caches use, and the only bound needed once per-root cardinality is the corpus, not history.
+const ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_FRESHNESS_ROOT_SLOTS || 64))
+
+function scopeFor(rootKey: string, head: string): RootScope {
+  const current = rootScopes.get(rootKey)
+  if (current?.head === head) {
+    rootScopes.delete(rootKey)
+    rootScopes.set(rootKey, current)
+    return current
+  }
+  const scope: RootScope = { head, anchors: new Map(), behind: new Map() }
+  rootScopes.set(rootKey, scope)
+  while (rootScopes.size > ROOT_SLOTS) {
+    const oldest = rootScopes.keys().next().value
+    if (oldest === undefined || oldest === rootKey) break
+    rootScopes.delete(oldest)
+  }
+  return scope
+}
+// a read only ever sees the root's CURRENT head — a probe pinned to a superseded head can't testify
+function currentScope(rootKey: string, head: string): RootScope | undefined {
+  const scope = rootScopes.get(rootKey)
+  return scope?.head === head ? scope : undefined
+}
+
+// the cardinality invariant, made observable: how many anchor entries are resident at a root's CURRENT head
+// (every root when none is named). It must track the corpus's anchors, never how many times the board has
+// been rebuilt — one retained generation, not one per rebuild.
+export function freshnessCacheSize(root?: string): number {
+  if (root !== undefined) return rootScopes.get(resolve(root))?.anchors.size ?? 0
+  let total = 0
+  for (const scope of rootScopes.values()) total += scope.anchors.size
+  return total
+}
+
+function touchAnchor(scope: RootScope, sha: string): AnchorVerdicts {
+  const hit = scope.anchors.get(sha)
+  if (hit) return hit
+  const entry: AnchorVerdicts = { verdicts: new Map(), gone: false, pending: new Set(), flight: null }
+  scope.anchors.set(sha, entry)
+  return entry
+}
+
+type HeavyDiffWaiter = {
+  signal?: AbortSignal
+  resolve: (release: () => void) => void
+  reject: (error: Error) => void
+  onAbort: () => void
+}
+type HeavyDiffScope = { active: boolean; waiting: HeavyDiffWaiter[] }
+const heavyDiffScopes = new Map<string, HeavyDiffScope>()
+
+// One tree comparison at a time is enough for a production repo's pack/index memory. The graph-wide git
+// permits still bound every child; this narrower domain scheduler keeps these immutable-tree
+// comparisons serial per (repo, HEAD), without teaching the git transport what a content fallback is.
+function acquireHeavyDiff(scopeKey: string, signal?: AbortSignal): Promise<() => void> {
+  if (signal?.aborted) return Promise.reject(gitAbortError())
+  let scope = heavyDiffScopes.get(scopeKey)
+  if (!scope) {
+    scope = { active: false, waiting: [] }
+    heavyDiffScopes.set(scopeKey, scope)
+  }
+
+  const releaseFor = (): (() => void) => {
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      scope!.active = false
+      while (scope!.waiting.length) {
+        const waiter = scope!.waiting.shift()!
+        waiter.signal?.removeEventListener('abort', waiter.onAbort)
+        if (waiter.signal?.aborted) {
+          waiter.reject(gitAbortError())
+          continue
+        }
+        scope!.active = true
+        waiter.resolve(releaseFor())
+        return
+      }
+      if (heavyDiffScopes.get(scopeKey) === scope) heavyDiffScopes.delete(scopeKey)
+    }
+  }
+
+  if (!scope.active) {
+    scope.active = true
+    return Promise.resolve(releaseFor())
+  }
+  return new Promise((resolvePermit, reject) => {
+    const waiter: HeavyDiffWaiter = {
+      signal,
+      resolve: resolvePermit,
+      reject,
+      onAbort: () => {
+        const index = scope!.waiting.indexOf(waiter)
+        if (index < 0) return
+        scope!.waiting.splice(index, 1)
+        signal?.removeEventListener('abort', waiter.onAbort)
+        reject(gitAbortError())
+        if (!scope!.active && scope!.waiting.length === 0 && heavyDiffScopes.get(scopeKey) === scope)
+          heavyDiffScopes.delete(scopeKey)
+      },
+    }
+    scope!.waiting.push(waiter)
+    signal?.addEventListener('abort', waiter.onAbort, { once: true })
+  })
+}
+
+// @@@ one batch per anchor, only the paths actually asked about - the tree comparison is pathspec-scoped
+// (`:(literal)` so a path holding a glob char, a space or a leading colon is matched verbatim, `-z` so the
+// answer needs no unquoting), and the answer retained is one boolean per REQUESTED path. Concurrent primes
+// on the same anchor therefore union their paths BEFORE the child starts: a caller records what it needs in
+// `pending`, then either starts the batch that drains pending or joins the running one and re-checks after —
+// so a path requested mid-flight rides the NEXT batch instead of racing this one, and a settled path is
+// never asked again. Different anchors stay serial through the same scope permit.
+function startAnchorBatch(root: string, rootKey: string, sha: string, current: string, entry: AnchorVerdicts): Promise<void> {
+  const run = async (): Promise<void> => {
+    const release = await acquireHeavyDiff(`${rootKey}\x1f${current}`, currentGitBuildAbortSignal())
+    // drain AFTER the permit, so every caller that registered while this batch was waiting rides THIS
+    // child instead of paying for another one; anything registered after this line is the next batch.
+    const batch = [...entry.pending]
+    entry.pending.clear()
+    try {
+      if (!batch.length) return
+      const result = await gitTry(['-C', root, 'diff', '--name-only', '-z', '--no-renames', sha, current,
+        '--', ...batch.map((path) => `:(literal)${path}`)])
+      if (!result.ok && result.failure !== 'exit')
+        throw new Error(`git content diff failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
+      if (!result.ok) { entry.gone = true; return }   // the anchor commit object is unreadable — content can't testify
+      const changed = new Set(result.stdout.split('\0').filter(Boolean))
+      for (const path of batch) entry.verdicts.set(path, changed.has(path))
+    } finally {
+      release()
+    }
+  }
+  const flight = run().finally(() => { if (entry.flight === flight) entry.flight = null })
+  entry.flight = flight
+  return flight
 }
 
 export function contentProbeFor(root: string): ContentProbe {
+  const rootKey = resolve(root)
   let head: string | undefined
   const headOf = () => (head ??= headSha(root))
   return {
     async prime(sha, paths, evalPath) {
       const current = headOf()
-      const diffKey = `${root}\x1f${sha}\x1f${current}`
-      if (!diffMemo.has(diffKey)) {
-        const result = await gitTry(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, current])
-        putMemo(diffMemo, diffKey, result.ok
-          ? new Set(result.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
-          : null)
+      const wanted = [...new Set([...paths, evalPath])].filter(Boolean)
+      // one scope resolve per prime: the entry stays this call's to settle even if the root's head moves
+      // under it, but the swap means nothing it writes afterwards can be read back at the new head.
+      const scope = scopeFor(rootKey, current)
+      const entry = touchAnchor(scope, sha)
+      while (!entry.gone) {
+        const missing = wanted.filter((path) => !entry.verdicts.has(path))
+        if (!missing.length) break
+        for (const path of missing) entry.pending.add(path)
+        // record first, then join: whoever starts the next batch drains everything pending by now.
+        if (entry.flight) await entry.flight
+        else await startAnchorBatch(root, rootKey, sha, current, entry)
       }
-      const diff = diffMemo.get(diffKey)
-      if (!diff) return
+      if (entry.gone) return
       for (const path of new Set(paths)) {
-        if (!diff.has(path)) continue
-        const behindKey = `${root}\x1f${sha}\x1f${current}\x1f${path}`
-        if (behindMemo.has(behindKey)) continue
+        if (entry.verdicts.get(path) !== true) continue
+        const behindKey = `${sha}\x1f${path}`
+        if (scope.behind.has(behindKey)) continue
         const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
-        putMemo(behindMemo, behindKey, Number.isFinite(n) && n > 0 ? n : 1)
+        scope.behind.set(behindKey, Number.isFinite(n) && n > 0 ? n : 1)
       }
-      if (diff.has(evalPath)) await primeScenarioBlocksAt(root, [sha, current], evalPath)
+      if (entry.verdicts.get(evalPath) === true) await primeScenarioBlocksAt(root, [sha, current], evalPath)
     },
-    changedPaths(sha) {
-      return memo(diffMemo, `${root}\x1f${sha}\x1f${headOf()}`, () => {
-        try {
-          return new Set(git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, headOf()])
-            .split('\n').map((s) => s.trim()).filter(Boolean))
-        } catch { return null }   // the anchor commit object is gone — content can't testify
-      })
+    changed(sha, path) {
+      // The async prime owns all I/O. An unprimed path is 'can't testify', never a fresh sync diff: a miss
+      // stays conservative and no abort/transient failure can turn into an unbounded synchronous fallback.
+      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
+      if (!entry || entry.gone) return null
+      return entry.verdicts.get(path) ?? null
+    },
+    canTestify(sha) {
+      // a settled verdict — of either polarity — is the proof the anchor's tree was readable
+      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
+      return !!entry && !entry.gone && entry.verdicts.size > 0
     },
     scenarioDiffers(sha, evalPath, scenario) {
       const a = scenarioBlocksAt(root, sha, evalPath)
@@ -82,12 +240,7 @@ export function contentProbeFor(root: string): ContentProbe {
       return a.get(scenario) !== scenarioBlocksAt(root, headOf(), evalPath)?.get(scenario)
     },
     behind(sha, path) {
-      return memo(behindMemo, `${root}\x1f${sha}\x1f${headOf()}\x1f${path}`, () => {
-        try {
-          const n = Number(git(['-C', root, 'rev-list', '--count', `${sha}..${headOf()}`, '--', path]).trim())
-          return Number.isFinite(n) && n > 0 ? n : 1
-        } catch { return 1 }
-      })
+      return currentScope(rootKey, headOf())?.behind.get(`${sha}\x1f${path}`) ?? 1
     },
   }
 }
@@ -115,13 +268,11 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
   if (idx.lazy) {
     const commits = pathCommitsSince(idx, sinceSha, path)
     if (commits) return commits.length > 0
-    const diff = probe?.changedPaths(sinceSha)
-    return diff ? diff.has(path) : true
+    return probe?.changed(sinceSha, path) ?? true
   }
   const anc = ancestorsOf(idx, sinceSha)
   if (anc) return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
-  const diff = probe?.changedPaths(sinceSha)
-  return diff ? diff.has(path) : true
+  return probe?.changed(sinceSha, path) ?? true
 }
 
 // the code axis's DISPLAY detail: which governed files drifted since a reading, and by HOW MANY commits — so
@@ -133,24 +284,26 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[], probe?: ContentProbe): { file: string; behind: number }[] {
   if (idx.lazy) {
     const reachable = commitReachable(idx, sinceSha)
-    const diff = reachable ? undefined : probe?.changedPaths(sinceSha)
     const out: { file: string; behind: number }[] = []
     for (const file of codeFiles) {
       const commits = reachable ? pathCommitsSince(idx, sinceSha, file) ?? [] : []
+      const differs = reachable ? undefined : probe?.changed(sinceSha, file)
       const behind = reachable ? commits.length
-        : diff ? (diff.has(file) ? probe!.behind(sinceSha, file) : 0)
+        : differs === true ? probe!.behind(sinceSha, file)
+        : differs === false ? 0
         : 1
       if (behind > 0) out.push({ file, behind })
     }
     return out
   }
   const anc = ancestorsOf(idx, sinceSha)
-  const diff = anc ? undefined : probe?.changedPaths(sinceSha)
   const out: { file: string; behind: number }[] = []
   for (const f of codeFiles) {
     const commits = idx.fileCommits.get(f) ?? []
+    const differs = anc ? undefined : probe?.changed(sinceSha, f)
     const behind = anc ? commits.filter((h) => !inAncestors(idx, anc, h)).length
-      : diff ? (diff.has(f) ? probe!.behind(sinceSha, f) : 0)
+      : differs === true ? probe!.behind(sinceSha, f)
+      : differs === false ? 0
       : commits.length
     if (behind > 0) out.push({ file: f, behind })
   }
@@ -188,16 +341,16 @@ function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string,
       const after = new Set(commits)
       return scenarioChangeCommits(scIdx, evalPath, scenario).some((hash) => after.has(hash))
     }
-    const diff = probe?.changedPaths(sinceSha)
-    if (!diff) return true
-    if (!diff.has(evalPath)) return false
+    const differs = probe?.changed(sinceSha, evalPath)
+    if (differs == null) return true
+    if (!differs) return false
     return probe!.scenarioDiffers(sinceSha, evalPath, scenario)
   }
   const anc = ancestorsOf(didx, sinceSha)
   if (anc) return scenarioChangeCommits(scIdx, evalPath, scenario).some((h) => !inAncestors(didx, anc, h))
-  const diff = probe?.changedPaths(sinceSha)
-  if (!diff) return true
-  if (!diff.has(evalPath)) return false   // whole file byte-identical → this block too
+  const differs = probe?.changed(sinceSha, evalPath)
+  if (differs == null) return true
+  if (!differs) return false   // whole file byte-identical → this block too
   return probe!.scenarioDiffers(sinceSha, evalPath, scenario)
 }
 
@@ -213,7 +366,7 @@ export function staleAxes(
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
   const byHash = scenarioStaleByHash(reading, current)
-  if (probe && !commitReachable(didx, reading.codeSha) && probe.changedPaths(reading.codeSha) === null) {
+  if (probe && !commitReachable(didx, reading.codeSha) && !probe.canTestify(reading.codeSha)) {
     // the anchor commit object is GONE — neither git axis can testify; say that, not "content changed".
     // The stored contract hash needs no anchor, so it still decides the scenario axis when present.
     axes.push('anchor')

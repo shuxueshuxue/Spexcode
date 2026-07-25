@@ -80,6 +80,14 @@ made this node necessary.
   every other node in the tree is React elements. An invalid expression stays visibly readable — it
   never blanks a message and never throws through React — and an unexpected parser failure degrades to
   the escaped source rather than an empty or broken surface.
+- **A rendered formula is ONE copyable thing.** The math engine emits two DOM branches for one formula
+  (accessible markup beside the visual layout), so a selection Range across a message will happily copy
+  the same expression several times unless the token's output hides every branch but one from text
+  extraction. A copy of prose containing mathematics yields each formula exactly once, in its source
+  form. This is a real measured defect on the console surface, not a hypothetical: whatever the math
+  token's markup becomes in the token→React rewrite, it inherits the browser-level copy proof (a real
+  Range over the rendered message, compared against hardcoded expected literals) — a rewrite that
+  re-grows the duplicate is wrong even if every formula still LOOKS right.
 - **Math weight is real, and the TOKEN is the only loading fact.** Measured on the console's own landing:
   adding the parser plus KaTeX took that surface's JS from ~3.5 kB to ~128 kB gzip and added ~8 kB gzip of
   lazy CSS, while the shared index CSS moved ~0.4 kB and the other bundles did not move; KaTeX's

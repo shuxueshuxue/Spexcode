@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { changedSince, codeDrift, contentProbeFor, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
@@ -75,17 +75,19 @@ test('changedSince: an off-history codeSha (rebased away or never merged) is con
 
 // ---- the off-history CONTENT fallback: trees testify when ancestry can't ----
 
-// a hand-built probe: `diff` = the changed-paths set (null = anchor commit object gone), `blocks` answers
-// scenarioDiffers. Also asserts the in-history fast path NEVER consults the probe.
+// a hand-built probe: `diff` = the paths a settled batch found changed (null = anchor commit object gone),
+// `blocks` answers scenarioDiffers. Also asserts the in-history fast path NEVER consults the probe.
 function probeOf(diff: Set<string> | null, scenarioDiffers = false): ContentProbe {
   return {
-    changedPaths: () => diff,
+    changed: (_sha, path) => (diff ? diff.has(path) : null),
+    canTestify: () => diff !== null,
     scenarioDiffers: () => scenarioDiffers,
     behind: () => 7,
   }
 }
 const throwingProbe: ContentProbe = {
-  changedPaths: () => { throw new Error('probe consulted on the in-history fast path') },
+  changed: () => { throw new Error('probe consulted on the in-history fast path') },
+  canTestify: () => { throw new Error('probe consulted on the in-history fast path') },
   scenarioDiffers: () => { throw new Error('probe consulted on the in-history fast path') },
   behind: () => { throw new Error('probe consulted on the in-history fast path') },
 }
@@ -179,7 +181,7 @@ test('hash axis: the stored hash testifies even when the anchor commit is pruned
   assert.deepEqual(staleAxes(gone, ['f.ts'], 'y/eval.md', i, new Map(), [], probeOf(null), SC('changed', 'contract')), ['anchor', 'scenario'])
 })
 
-// ---- the off-history heavy-diff scheduler: actual child starts, queueing, and abort recovery ----
+// ---- the off-history pathspec batch: real children, union-before-spawn, and per-path retention ----
 
 const REAL_GIT = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
 function sh(root: string, args: string[]): string {
@@ -193,11 +195,40 @@ function schedulerRepo(commits: number): { root: string; hashes: string[] } {
   const hashes: string[] = []
   for (let i = 0; i < commits; i++) {
     writeFileSync(join(root, 'tracked.txt'), `${i}\n`)
-    sh(root, ['add', 'tracked.txt'])
+    writeFileSync(join(root, 'stable.txt'), 'never moves\n')
+    sh(root, ['add', '-A'])
     sh(root, ['commit', '-q', '-m', `c${i}`])
     hashes.push(sh(root, ['rev-parse', 'HEAD']))
   }
   return { root, hashes }
+}
+// every shape a governed path can take at an off-history anchor: ordinary edit, glob metacharacters, a
+// space, a deletion, a mode-only change, an untouched file — plus one changed file nobody asks about.
+const FIXTURE_CHANGED = ['tracked.txt', 'weird [x]*.md', 'dir with space/a b.txt', 'gone.txt', 'script.sh']
+const FIXTURE_REQUESTED = [...FIXTURE_CHANGED, 'stable.txt']
+function fixtureRepo(): { root: string; anchor: string; head: string } {
+  const root = mkdtempSync(join(tmpdir(), 'freshness-fixture-'))
+  sh(root, ['init', '-q', '-b', 'main'])
+  sh(root, ['config', 'user.email', 't@t'])
+  sh(root, ['config', 'user.name', 't'])
+  const write = (rel: string, body: string) => {
+    mkdirSync(join(root, rel, '..'), { recursive: true })
+    writeFileSync(join(root, rel), body)
+  }
+  for (const rel of [...FIXTURE_REQUESTED, 'unrequested.txt']) write(rel, 'base\n')
+  sh(root, ['add', '-A'])
+  sh(root, ['commit', '-q', '-m', 'base'])
+  const anchor = sh(root, ['rev-parse', 'HEAD'])
+  for (const rel of ['tracked.txt', 'weird [x]*.md', 'dir with space/a b.txt', 'unrequested.txt']) write(rel, 'moved\n')
+  rmSync(join(root, 'gone.txt'))
+  chmodSync(join(root, 'script.sh'), 0o755)
+  sh(root, ['add', '-A'])
+  sh(root, ['commit', '-q', '-m', 'head'])
+  return { root, anchor, head: sh(root, ['rev-parse', 'HEAD']) }
+}
+// the reference answer: an UNSCOPED tree diff, the exact question the probe used to ask repo-wide
+function fullDiff(root: string, anchor: string, head: string): Set<string> {
+  return new Set(sh(root, ['diff', '--name-only', '-z', '--no-renames', anchor, head]).split('\0').filter(Boolean))
 }
 type TraceEvent = { event: 'start' | 'end'; pid: string; argv: string }
 function diffTrace(delay = '0.03') {
@@ -208,7 +239,7 @@ function diffTrace(delay = '0.03') {
   writeFileSync(log, '')
   writeFileSync(shim, `#!/bin/sh
 case " $* " in
-  *" diff --name-only --no-renames "*)
+  *" diff --name-only -z --no-renames "*)
     printf 'start\\t%s\\t%s\\n' "$$" "$*" >> "$SPEX_TEST_DIFF_LOG"
     if [ -n "$SPEX_TEST_DIFF_HANG" ] && [ -e "$SPEX_TEST_DIFF_HANG" ]; then sleep 60; fi
     if [ -n "$SPEX_TEST_DIFF_DELAY" ]; then sleep "$SPEX_TEST_DIFF_DELAY"; fi
@@ -267,26 +298,88 @@ async function waitFor(check: () => boolean, timeoutMs = 2000): Promise<void> {
   }
 }
 
-test('content scheduler: 9 concurrent probes for one diffKey spawn exactly one heavy diff', async () => {
+test('content batch: 9 concurrent probes for one anchor spawn exactly one child, and a settled path is never re-asked', async () => {
   const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace()
   try {
     const probes = Array.from({ length: 9 }, () => contentProbeFor(root))
-    await Promise.all(probes.map((probe) => probe.prime!(hashes[0], [], 'absent-eval.md')))
+    await Promise.all(probes.map((probe) => probe.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')))
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 1)
-    assert.ok(probes.every((probe) => probe.changedPaths(hashes[0])?.has('tracked.txt')))
-    await probes[0].prime!(hashes[0], [], 'absent-eval.md')
-    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1, 'settled LRU serves the repeat')
+    assert.ok(probes.every((probe) => probe.changed(hashes[0], 'tracked.txt') === true))
+    await probes[0].prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 1, 'settled verdicts serve the repeat')
   } finally {
     trace.restore()
   }
 })
 
-test('content scheduler: 14 unique anchors under one root+HEAD run with maxHeavy=1', async () => {
+test('content batch: concurrent probes asking DISJOINT paths union into one child that answers both', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace('0.05')
+  try {
+    const first = contentProbeFor(root)
+    const second = contentProbeFor(root)
+    await Promise.all([
+      first.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      second.prime!(hashes[0], ['stable.txt'], 'other-eval.md'),
+    ])
+    const starts = trace.events().filter((event) => event.event === 'start')
+    assert.equal(starts.length, 1, 'both callers registered before the permit landed, so one child covers both')
+    for (const path of ['tracked.txt', 'stable.txt', 'absent-eval.md', 'other-eval.md'])
+      assert.ok(starts[0].argv.includes(`:(literal)${path}`), `${path} rode the union batch`)
+    assert.equal(first.changed(hashes[0], 'tracked.txt'), true)
+    assert.equal(second.changed(hashes[0], 'stable.txt'), false)
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content batch: a path requested mid-flight rides the NEXT batch, never the running child', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace('0.3')
+  try {
+    const probe = contentProbeFor(root)
+    const running = probe.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
+    await waitFor(() => trace.events().some((event) => event.event === 'start'))
+    const late = contentProbeFor(root).prime!(hashes[0], ['stable.txt'], 'absent-eval.md')
+    await Promise.all([running, late])
+    const starts = trace.events().filter((event) => event.event === 'start')
+    assert.equal(starts.length, 2, 'the late path could not join a child already spawned')
+    assert.ok(!starts[0].argv.includes(':(literal)stable.txt'))
+    assert.ok(starts[1].argv.includes(':(literal)stable.txt'))
+    assert.ok(!starts[1].argv.includes(':(literal)tracked.txt'), 'the settled path is not re-asked in the next batch')
+    assert.equal(probe.changed(hashes[0], 'stable.txt'), false)
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content batch: verdicts equal an unscoped tree diff for every requested path — globs, spaces, deletion, mode-only', async () => {
+  const { root, anchor, head } = fixtureRepo()
+  const expected = fullDiff(root, anchor, head)
+  const probe = contentProbeFor(root)
+  await probe.prime!(anchor, FIXTURE_REQUESTED, 'absent-eval.md')
+  for (const path of FIXTURE_REQUESTED)
+    assert.equal(probe.changed(anchor, path), expected.has(path), `${path} matches the full diff`)
+  assert.deepEqual(FIXTURE_CHANGED.filter((p) => expected.has(p)), FIXTURE_CHANGED, 'the fixture really moved all five shapes')
+  assert.equal(expected.has('stable.txt'), false)
+  assert.equal(probe.canTestify(anchor), true)
+})
+
+test('content batch: a path nobody requested stays unprovable — no whole-repo path set is retained', async () => {
+  const { root, anchor, head } = fixtureRepo()
+  const probe = contentProbeFor(root)
+  await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+  assert.equal(fullDiff(root, anchor, head).has('unrequested.txt'), true, 'it really did change repo-wide')
+  assert.equal(probe.changed(anchor, 'unrequested.txt'), null, 'yet the probe holds no verdict for it')
+  assert.equal(probe.changed(anchor, 'tracked.txt'), true)
+})
+
+test('content batch: 14 unique anchors under one root+HEAD run one child at a time', async () => {
   const { root, hashes } = schedulerRepo(15)
   const trace = diffTrace()
   try {
-    await Promise.all(hashes.slice(0, 14).map((sha) => contentProbeFor(root).prime!(sha, [], 'absent-eval.md')))
+    await Promise.all(hashes.slice(0, 14).map((sha) => contentProbeFor(root).prime!(sha, ['tracked.txt'], 'absent-eval.md')))
     const events = trace.events()
     assert.equal(events.filter((event) => event.event === 'start').length, 14)
     assert.deepEqual(peakActive(events), { peak: 1, final: 0 })
@@ -295,16 +388,16 @@ test('content scheduler: 14 unique anchors under one root+HEAD run with maxHeavy
   }
 })
 
-test('content scheduler: abort removes active and queued flights, then both retry without a ghost spawn', async () => {
+test('content batch: abort removes active and queued flights, then both retry without a ghost spawn', async () => {
   const { root, hashes } = schedulerRepo(3)
   const trace = diffTrace('0')
   writeFileSync(trace.hang, '')
   try {
     const controller = new AbortController()
     const results = await withGitAbortSignal(controller.signal, async () => {
-      const active = contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md')
+      const active = contentProbeFor(root).prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
       await waitFor(() => trace.events().some((event) => event.event === 'start'))
-      const queued = contentProbeFor(root).prime!(hashes[1], [], 'absent-eval.md')
+      const queued = contentProbeFor(root).prime!(hashes[1], ['tracked.txt'], 'absent-eval.md')
       controller.abort()
       return Promise.allSettled([active, queued])
     })
@@ -312,69 +405,82 @@ test('content scheduler: abort removes active and queued flights, then both retr
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 1, 'queued abort never spawns')
 
     rmSync(trace.hang)
+    const retried = [contentProbeFor(root), contentProbeFor(root)]
     await Promise.all([
-      contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md'),
-      contentProbeFor(root).prime!(hashes[1], [], 'absent-eval.md'),
+      retried[0].prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      retried[1].prime!(hashes[1], ['tracked.txt'], 'absent-eval.md'),
     ])
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 3,
       'active and queued failures both leave retryable flights and no ghost waiter')
+    assert.equal(retried[0].changed(hashes[0], 'tracked.txt'), true, 'the aborted verdict was never cached, so the retry settles it')
   } finally {
     trace.restore()
   }
 })
 
-test('content scheduler: equal SHA keys in two roots neither coalesce nor serialize each other', async () => {
+test('content batch: equal SHA keys in two roots neither coalesce nor serialize each other', async () => {
   const first = schedulerRepo(2)
   const secondRoot = mkdtempSync(join(tmpdir(), 'freshness-scheduler-clone-'))
   execFileSync(REAL_GIT, ['clone', '-q', first.root, secondRoot])
   const trace = diffTrace('0.1')
   try {
+    const probes = [contentProbeFor(first.root), contentProbeFor(secondRoot)]
     await Promise.all([
-      contentProbeFor(first.root).prime!(first.hashes[0], [], 'absent-eval.md'),
-      contentProbeFor(secondRoot).prime!(first.hashes[0], [], 'absent-eval.md'),
+      probes[0].prime!(first.hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      probes[1].prime!(first.hashes[0], ['tracked.txt'], 'absent-eval.md'),
     ])
     const events = trace.events()
     assert.equal(events.filter((event) => event.event === 'start').length, 2)
     assert.equal(events.filter((event) => event.event === 'start' && event.argv.includes(`-C ${first.root} `)).length, 1)
     assert.equal(events.filter((event) => event.event === 'start' && event.argv.includes(`-C ${secondRoot} `)).length, 1)
-    assert.equal(peakActive(events).peak, 2, 'independent roots own independent heavy-diff scopes')
+    assert.equal(peakActive(events).peak, 2, 'independent roots own independent batch scopes')
+    assert.ok(probes.every((probe) => probe.changed(first.hashes[0], 'tracked.txt') === true), 'each root answered from its own verdicts')
   } finally {
     trace.restore()
   }
 })
 
-test('content scheduler: moving HEAD creates a new scope and query while the old result stays bounded in LRU', async () => {
+test('content batch: moving HEAD creates a new scope and query while the old verdicts stay bounded in LRU', async () => {
   const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace()
   try {
     const before = contentProbeFor(root)
-    await before.prime!(hashes[0], [], 'absent-eval.md')
+    await before.prime!(hashes[0], ['after-head-move.txt'], 'absent-eval.md')
     writeFileSync(join(root, 'after-head-move.txt'), 'new\n')
     sh(root, ['add', 'after-head-move.txt'])
     sh(root, ['commit', '-q', '-m', 'move head'])
     const after = contentProbeFor(root)
-    await after.prime!(hashes[0], [], 'absent-eval.md')
+    await after.prime!(hashes[0], ['after-head-move.txt'], 'absent-eval.md')
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 2)
-    assert.equal(before.changedPaths(hashes[0])?.has('after-head-move.txt'), false)
-    assert.equal(after.changedPaths(hashes[0])?.has('after-head-move.txt'), true)
+    assert.equal(before.changed(hashes[0], 'after-head-move.txt'), false)
+    assert.equal(after.changed(hashes[0], 'after-head-move.txt'), true)
   } finally {
     trace.restore()
   }
 })
 
-test('content scheduler: spawn failure is loud, not memoized, and a repaired child path retries', async () => {
+test('content batch: spawn failure is loud, not memoized, and a repaired child path retries', async () => {
   const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace()
   try {
     process.env.PATH = trace.bin
     chmodSync(trace.shim, 0o644)
-    await assert.rejects(contentProbeFor(root).prime!(hashes[0], [], 'absent-eval.md'), /git content diff failed \(spawn\)/)
+    await assert.rejects(contentProbeFor(root).prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'), /git content diff failed \(spawn\)/)
+    assert.equal(contentProbeFor(root).canTestify(hashes[0]), false, 'a failed batch settles nothing')
     chmodSync(trace.shim, 0o755)
     const retry = contentProbeFor(root)
-    await retry.prime!(hashes[0], [], 'absent-eval.md')
+    await retry.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 1)
-    assert.ok(retry.changedPaths(hashes[0])?.has('tracked.txt'))
+    assert.equal(retry.changed(hashes[0], 'tracked.txt'), true)
   } finally {
     trace.restore()
   }
+})
+
+test('content batch: an unreadable anchor object is the anchor axis, not a content verdict', async () => {
+  const { root } = schedulerRepo(2)
+  const probe = contentProbeFor(root)
+  await probe.prime!('d'.repeat(40), ['tracked.txt'], 'absent-eval.md')
+  assert.equal(probe.canTestify('d'.repeat(40)), false, 'content cannot testify for a gone anchor')
+  assert.equal(probe.changed('d'.repeat(40), 'tracked.txt'), null)
 })

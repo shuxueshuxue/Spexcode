@@ -94,6 +94,13 @@ verdict is a memory lookup — never one `merge-base --is-ancestor` process per 
 batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
 same current-root cache ownership. Path-specific history remains lazy and bounded.
 
+Bounding processes is not enough on its own, because what a build RETAINS scales too. A fold over an
+adopted corpus reads many off-history anchors, and asking each of them a repository-wide question made the
+build's own heap — not its child processes — the binding term. So the off-history content fallback asks
+only about the governed paths each reading claims and keeps only those verdicts ([[eval-core]]); retention
+scales with governed breadth, not repository width, and the same three-round platform obligation covers the
+builder's own memory, not merely its descendants.
+
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the
 object — it decomposes it into delta units ([[graph-delta]]).

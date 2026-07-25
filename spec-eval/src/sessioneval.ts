@@ -1314,6 +1314,12 @@ export function setSessionEvalProjectionWarmup(enabled: boolean): void { project
 export function sessionEvalProjections(sessions: { id: string; path: string; liveness?: string }[]): Map<string, SessionEvalProjection> {
   return projectionCache.snapshot(sessions)
 }
+// The single-session READ of the same projection: no entry is minted, no build is scheduled, no generation
+// moves. `null` means this cache has never held that session — a caller that must distinguish "not computed"
+// from "computed and empty" gets to; one that builds instead goes through buildSessionEvals.
+export function sessionEvalProjection(id: string): SessionEvalProjection | null {
+  return projectionCache.get(id)
+}
 export function invalidateSessionEvalProjections(target: 'all' | { id?: string; path?: string } = 'all'): number {
   return projectionCache.invalidate(target)
 }

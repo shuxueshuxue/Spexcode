@@ -29,12 +29,18 @@ scenarios:
     description: Let a real governed opencode-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
     expected: Stop preserves the record, native conversation, and timeline but reads offline; resume returns the same OpenCode conversation online with the pre-stop declaration note intact.
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    code:
+      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#opencodeHeadlessHarness
+      - spec-cli/src/sessions.ts
   - name: opencode-headless-idle-wake
     description: Send a note-backed prompt to the real governed session after its first turn exits and capture the public send/result plus the model reply.
     expected: Delivery starts exactly one `opencode run --session <captured-id> <prompt>` turn in the session tmux home and the real model answers in the same conversation.
     tags: [backend-api, cli]
-    code: [spec-cli/src/opencode-headless.ts]
+    code:
+      - spec-cli/src/opencode-headless.ts#opencodeHeadlessWakeCommand
+      - spec-cli/src/opencode-headless.ts#spawnOpenCodeHeadlessTurn
+      - spec-cli/src/opencode-headless.ts#turnHome
   - name: opencode-headless-live-steer
     description: While a real opencode-headless turn is running with its plugin rendezvous socket bound, send a second prompt through the public session send surface.
     expected: The existing parse-confirmed rendezvous transport accepts the prompt exactly once through `client.session.prompt`; no second turn process or PTY input bridge is used.
@@ -44,12 +50,18 @@ scenarios:
     description: Remove the session's turn home, then send a prompt through the public session send surface.
     expected: Delivery returns a non-success result naming the failed wake; it never records a sent message or silently falls back to terminal typing.
     tags: [backend-api, cli]
-    code: [spec-cli/src/opencode-headless.ts]
+    code:
+      - spec-cli/src/opencode-headless.ts#spawnOpenCodeHeadlessTurn
+      - spec-cli/src/opencode-headless.ts#turnHome
   - name: opencode-headless-wake-turn-fail-loud
     description: Through the public session send surface, cold-wake a real governed session with an OpenCode launcher whose turn process exits non-zero immediately after spawn.
     expected: Delivery returns non-success with the observed turn exit, the active-only turn-outcome CAS records lifecycle error, and no sent-success event is recorded merely because tmux accepted the respawn.
     tags: [backend-api, cli]
-    code: [spec-cli/src/opencode-headless.ts]
+    code:
+      - spec-cli/src/opencode-headless.ts#spawnOpenCodeHeadlessTurn
+      - spec-cli/src/opencode-headless.ts#readTurnOutcome
+      - spec-cli/src/opencode-headless.ts#turnExited
+      - spec-cli/src/opencode-headless.ts#pidAlive
   # harness-delivery-campaign:start
   - name: delivery-combo-opencode-headless-launch-idle
     tags: [backend-api, cli]

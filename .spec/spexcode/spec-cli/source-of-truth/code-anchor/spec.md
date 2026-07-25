@@ -48,9 +48,18 @@ the rest of lint continues, but the non-zero result cannot be reported as a pass
 of the too-many-owners bound ([[governed-related]]) though `spex spec owner` still shows it as
 scoped. A scoped file's **miss** keeps the ordinary advisory drift warn by default; the
 committed `lint.scopedCodeMiss: "ignore"` (`spex guide settings`) silences only that advisory — never
-hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval freshness, which stays
-**file-level** in this version. A `related:` row may carry selectors too: a hit is a soft warn naming
-the selector, a miss is silent; related stays never-block, never-ack, no eval freshness.
+hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval freshness. A `related:` row
+may carry selectors too: a hit is a soft warn naming the selector, a miss is silent; related stays
+never-block, never-ack, no eval freshness.
+
+This vocabulary is READ by a second consumer with its own window: an eval scenario's `code:` axis
+([[eval-core]]), which narrows a reading's staleness to the units it actually measures. The parse,
+extractor registry, resolution and hunk∩range engine are shared verbatim — there is no second anchor
+syntax — but the two windows are deliberately different, because they answer to different subjects. Spec
+drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks about a READING, which an ack
+never vindicates, so it takes the plain ancestry window. A selector verdict this side is never a block
+either: eval's whole lint layer is advisory, and a dead or ambiguous selector there stales its reading
+rather than stopping a commit.
 
 **Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
 report/CI run, and a pending commit for a locally-authored candidate. It is the same ack-filtered set

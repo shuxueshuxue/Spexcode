@@ -1044,3 +1044,96 @@ objections have already been withdrawn.
 I would rather record that this reverses my recommendation than leave a tidy plan standing on a
 number nobody had measured. Three lenses agreed on that check; none of us measured the
 distribution first.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:13:03.178Z -->
+THE ARGUMENT, FORMALLY. Written at the maintainer's request ("problem / solution / proof"), and now
+the basis three codex lanes are implementing and attacking against.
+
+## Setup
+
+History is a DAG. H = current HEAD, P = the commit about to be made, H' = H concat P.
+For a node n with anchored unit u(n) in file f(n):
+
+    v(n,T) = the latest commit reachable from tip T that touched n's spec.md      (the version)
+    W(n,T) = { c in (v(n,T), T] : c non-merge, and c's hunks in f(n) intersect
+               u(n)'s line range AS OF c }                                        (hit window)
+    A(n,T) = { c in W : exists ack a naming n with c in reach(a) }                 (acked)
+    D(n,T) = W(n,T) \ A(n,T)                                                       (open drift)
+
+Today's gate:  G  =  not exists n. D(n, H) != empty
+
+## Problem
+
+PROPOSITION 1 (the gate's verdict is independent of what it judges).
+G's argument is H, and H does not contain P. Hence for any two candidate commits P1, P2, G returns
+the same answer. QED.
+
+One line, but it is the whole defect: a gate deciding whether P may land evaluates a predicate that
+does not mention P. Two corollaries, both measured in this thread:
+
+  (a) a P that INTRODUCES drift is admitted   — P's hit is not in W(n,H), since P is not in H
+  (b) a P that REPAIRS drift is rejected      — P touching spec.md cannot move v(n,H)
+
+PROPOSITION 2 (liability transfers). A hit introduced by P first appears in the window of some
+H'' superset of H'. The first commit judged after P pays for it, and that commit's author need not
+be P's author. Measured: merge 53451009 carried drift onto main and blocked every worker.
+
+## Solution
+
+    G' = not exists n. D(n, H') != empty          same predicate, different tip
+
+and A must be able to contain P, which requires the in-commit declaration:
+
+    A'(n,T) = { c in W : exists ack a naming n with c in reach(a) }
+            union { c in W : c's own message declares Spec-OK: n }
+
+## Proof
+
+THEOREM 1 (the ritual shape passes by construction).
+If P touches both u(n) and n's spec.md: P touches spec.md so v(n,H') = P; hence
+W(n,H') = (P, H'] = empty since H' has tip P; hence D(n,H') = empty. QED.
+Note it passes because the WINDOW IS EMPTY, not by an exemption clause. This is the formal content
+of "derived, not bolted on" — and it is why the staged-set exemption I proposed and retracted twice
+was the wrong shape both times.
+
+THEOREM 2 (the offender is caught at its source).
+If P intersects u(n) and touches neither n's spec.md nor declares Spec-OK: n, then
+v(n,H') = v(n,H), so P is in (v, H']; P intersects, so P is in W(n,H'); no ack reaches P (prior acks
+cannot, P declares nothing), so P is not in A'; hence D(n,H') contains P. QED.
+
+THEOREM 3 (the trailer is NECESSARY, not a convenience).
+Claim: without an in-commit declaration there exists a correct commit that is unconditionally
+rejected. Let P intersect u(n) where n's contract genuinely still holds and P's author does not own
+n. Three moves exist and all are closed:
+  - amend n's spec.md — a false statement about a contract the author did not change;
+  - a PRIOR ack a — A is defined by reach(a), and P is a DESCENDANT of a, so P not in reach(a)
+    (measured: ack-then-hit still errors);
+  - a LATER ack — requires P to land first, and G' rejects P.
+Hence P is rejected under every available move. QED.
+This is the formal version of the measured 76-commit case, and it is why the trailer cannot be
+deferred to a follow-up: without it G' is incomplete.
+
+THEOREM 4 (completeness with the trailer).
+For any P intersecting u(n), at least one move makes G' hold: P touches n's spec.md (Theorem 1), or
+P declares Spec-OK: n (P in A', so P not in D). Every commit has an available path. QED.
+
+COROLLARY (merges are neutral for free).
+W excludes merge commits by definition, and a merge's --unified=0 diff yields no hunks, so a merge P
+contributes W = empty for every n and G' is vacuously true. No special case needed.
+
+## The cost, also formally
+
+    local admits B = P1..Pk  iff  for all i,n. D(n, H concat P1..Pi) = empty     per-commit
+    CI    admits B           iff  for all n.   D(n, H concat B)      = empty     per-tree
+
+STRICT INCLUSION: { B : local admits all Pi } is a proper subset of { B : CI admits B }.
+Witness: P1 moves u(n), P2 updates n's spec.md. CI sees v = P2 so W = empty and passes; local
+already rejected P1.
+
+So local becomes strictly stricter than CI: it forces code and spec to land atomically — which the
+ritual already mandates, so the restriction coincides with a stated discipline — but it does remove
+cross-commit iteration. This is the one real cost and it must not be glossed.
+
+Unity is NOT broken: judge(tip) is one predicate; CI passes H, the gate passes H'. Parameterisation,
+not a second implementation. My earlier claim that this forks the rule into two semantics was wrong
+and is retracted in post 20.

@@ -1528,9 +1528,13 @@ export function markIdle(sessionId?: string): boolean {
 // way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
 
 // @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
-// done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
-// states block a declaration: (1) any uncommitted working-tree change, or (2) 0 commits ahead of main
-// (nothing committed to merge). Since the global-store refactor, SpexCode writes NO per-session files into
+// done. The dogfood ritual lands every change as a COMMIT on the node branch first, so an uncommitted
+// working tree blocks EITHER proposal: the declaration claims the work is committed, and a dirty tree makes
+// that false. The second condition — 0 commits ahead of main — is checked ONLY for `merge`, because it is
+// the only one the claim contradicts: `--propose merge` asserts there is committed work to land, while
+// `--propose nothing` asserts the opposite ("committed, but I am NOT proposing a merge; paused for the human
+// to look"), which a lane whose work ALREADY landed states truthfully. Gating `nothing` on ahead-of-main
+// left such a lane one way through: an empty commit — a lie in git history to satisfy a check about honesty. Since the global-store refactor, SpexCode writes NO per-session files into
 // the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are exclude-
 // hidden materialized artifacts or filter-covered contract blocks ([[residence]]), so
 // neither shows as an uncommitted change — the worktree is pristine and EVERY dirty path is genuine spec/code
@@ -1538,7 +1542,7 @@ export function markIdle(sessionId?: string): boolean {
 // Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE
 // can't misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared
 // refs, so `main..HEAD` works from any linked worktree regardless of where main is checked out.
-export function mergeReadiness(): { ready: boolean; reason?: string } {
+export function mergeReadiness(proposal: 'merge' | 'nothing' = 'merge'): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
     dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean).map(porcelainPath)
@@ -1547,10 +1551,12 @@ export function mergeReadiness(): { ready: boolean; reason?: string } {
     const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
     return { ready: false, reason: `uncommitted changes on your node branch (${shown}) — commit your spec+code first` }
   }
+  // a `nothing` proposal makes no claim about having something to land, so the clean tree is the whole gate.
+  if (proposal === 'nothing') return { ready: true }
   let ahead = 0
   const base = mainBranch()
   try { ahead = Number(git(['rev-list', '--count', `${base}..HEAD`]).trim()) || 0 } catch { ahead = 0 }
-  if (ahead === 0) return { ready: false, reason: `your node branch is 0 commits ahead of ${base} — nothing is committed to merge` }
+  if (ahead === 0) return { ready: false, reason: `your node branch is 0 commits ahead of ${base} — nothing is committed to merge (declaring \`done --propose nothing\` needs no commits ahead; use it to pause for the human)` }
   return { ready: true }
 }
 

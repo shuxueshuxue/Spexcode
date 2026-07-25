@@ -1034,10 +1034,12 @@ if (cmd === 'serve') {
     console.log(s.markIdle(sess) ? 'idle' : 'noop (no session record, or not active)')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
-    // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses
+    // ready to declare done, else print the reason and exit 1. Takes the PROPOSAL being judged — `merge`
+    // additionally requires commits ahead of main, `nothing` only a clean tree (see mergeReadiness). Uses
     // git() so the hook's exported GIT_DIR/GIT_INDEX_FILE don't misdirect repo discovery (see git.ts).
     const { s } = await stateKit()
-    const r = s.mergeReadiness()
+    const kind = positionals(4)[0] === 'nothing' ? 'nothing' : 'merge'
+    const r = s.mergeReadiness(kind)
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)

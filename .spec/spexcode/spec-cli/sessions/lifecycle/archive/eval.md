@@ -1,17 +1,18 @@
 ---
 scenarios:
   - name: shelve-and-restore-round-trip
+    test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >
       Drive the real dashboard console in a browser against a live backend. Starting from the session
       list, archive the SELECTED session through the product's own Command Box (`/archive`), then read the
-      rendered DOM at each step: the header's three pills, the star door's count, the row leaving the list,
+      rendered DOM at each step: the header's three pills, the star door without a numeric count, the row leaving the list,
       the archive view holding it, and the archive card on selecting it. Restore with the card's one
       button. Read the record over `GET /api/sessions` to confirm what archiving did and did not change.
     expected: >
       The round trip returns the board to exactly its starting state. Archiving flips only `archived` —
       `lifecycle` is untouched, no process is stopped, no worktree removed. The header always shows three
-      equal pills including the star, whose count appears only when something is archived and which is inert
-      at zero; the archived row is in exactly one of the two lists at a time; the archive card is the ONLY
+      equal pills including the star, which never shows a numeric count and remains live even at zero; the
+      archived row is in exactly one of the two lists at a time; the archive card is the ONLY
       thing visible and clickable for an archived session (no live terminal layer over it); the row's
       right-click menu offers exactly one direction and acts with no confirm; and the view never strands in an
       emptied archive — not when restoring from the card, and not when the archive is emptied from outside the

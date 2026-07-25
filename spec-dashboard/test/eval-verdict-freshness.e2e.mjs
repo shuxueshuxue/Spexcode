@@ -25,11 +25,13 @@ const context = await browser.newContext({
 })
 const page = await context.newPage()
 
-// the LAST /api/evals payload the page actually consumed — the chips must be a pure read of this.
-let lastEvals = null
+// the LAST /api/evals payload the page consumed, TAGGED with the query that produced it — the chips must
+// be a pure read of this, and a probe that cannot tell which view a body belongs to cannot testify.
+let last = null
 page.on('response', async (response) => {
-  if (!response.url().includes('/api/evals')) return
-  try { lastEvals = await response.json() } catch { /* non-JSON error bodies are not this probe's subject */ }
+  const url = new URL(response.url())
+  if (!url.pathname.endsWith('/api/evals')) return
+  try { last = { q: url.searchParams.get('q'), body: await response.json() } } catch { /* error bodies aren't this probe's subject */ }
 })
 
 // each chip as the human sees it: the label, the count pill, and the quieter split suffix (or null).
@@ -57,16 +59,36 @@ const chips = () => page.evaluate(() => [...document.querySelectorAll('.rl-secti
   }
 }))
 
+const until = async (predicate, timeout = 30_000) => {
+  const deadline = Date.now() + timeout
+  for (;;) {
+    if (await predicate()) return true
+    if (Date.now() > deadline) return false
+    await page.waitForTimeout(250)
+  }
+}
+// ARRIVE at a view: the response for THIS EXACT query has landed AND the header and list have rendered
+// from it. Waiting on a bare "some response arrived" is what let earlier runs read the previous view;
+// the readiness signals here are structural (controls exist, rows or an empty note exist), never the
+// numbers the checks go on to assert.
+const arrive = async (expectedQ, what) => {
+  if (!(await until(() => last?.q === expectedQ))) throw new Error(`no /api/evals response for "${expectedQ}" (${what}); last was "${last?.q}"`)
+  await page.waitForSelector('.rl-section', { timeout: 20_000 })
+  await page.waitForSelector('.rl-secondary-filters-trigger', { timeout: 20_000 })
+  if (!(await until(async () => (await page.locator('.lp-row').count()) > 0 || (await page.locator('.lp-empty').count()) > 0)))
+    throw new Error(`list never rendered after ${what}`)
+  await page.waitForTimeout(400)
+}
 const submit = async (text) => {
-  lastEvals = null
+  last = null
   await page.locator('.rl-query input[role="combobox"]').fill(text)
   await page.keyboard.press('Enter')
-  await page.waitForTimeout(1200)
+  await arrive(text, `submit ${text}`)
 }
 
 const view = async (label) => {
   const seen = chips()
-  const [rendered, data] = [await seen, lastEvals]
+  const [rendered, data] = [await seen, last?.body]
   console.log(`\n--- ${label}\n    hash   ${await page.evaluate(() => location.hash || '(bare)')}\n` +
     `    chips  ${rendered.map((c) => c.text).join('  |  ')}\n` +
     `    counts ${JSON.stringify(data?.counts)}  total=${data?.total} sourceTotal=${data?.sourceTotal}`)
@@ -75,8 +97,7 @@ const view = async (label) => {
 
 // ---- 1. the DEFAULT view: fresh leads, stale trails, unmeasured owns neither -------------------------
 await page.goto(`${BASE}/#/evals`, { waitUntil: 'networkidle' })
-await page.waitForSelector('.rl-section')
-await page.waitForTimeout(1200)
+await arrive('is:eval', 'the cold #/evals entry')
 const base = await view('default #/evals (bare address)')
 const [failChip, passChip, unmeasuredChip] = base.rendered
 // the localized stale word, read off the chip's own accessible name — the probe never hardcodes copy.
@@ -99,9 +120,9 @@ await page.screenshot({ path: join(OUT, '01-default-chips.png') })
 await page.locator('.lp-head').screenshot({ path: join(OUT, '01-default-header.png') })
 
 // ---- 2. clicking a verdict returns the WHOLE split, fresh + stale --------------------------------
-lastEvals = null
+last = null
 await page.locator('.rl-section').nth(1).click()
-await page.waitForTimeout(1400)
+await arrive('is:eval verdict:pass', 'the Pass chip click')
 const passOnly = await view('verdict:pass selected')
 check('verdict:pass is in the visible query', (await page.evaluate(() => decodeURIComponent(location.hash))).includes('verdict:pass'))
 check('selecting pass returns fresh + stale rows', passOnly.data.total === base.data.counts.pass.fresh + base.data.counts.pass.stale,
@@ -137,19 +158,24 @@ check('the stale view total is exactly the stale halves',
 await page.screenshot({ path: join(OUT, '04-freshness-stale.png') })
 
 // ---- 5. the page never re-derives the split from the 25 rows it holds -----------------------------
+// leaving a filtered hash refetches — clear the last body first so this cannot read the PREVIOUS view.
+last = null
 await page.goto(`${BASE}/#/evals`, { waitUntil: 'networkidle' })
-await page.waitForTimeout(1200)
+await arrive('is:eval', 'the return to the default view')
 const rows = await page.locator('.lp-row').count()
 const again = await view('back on the default view')
-check('the page holds one 25-row slice', rows <= 25, `${rows} rows`)
-check('yet the chips still show the full population', Number(again.rendered[1].count) + Number(again.rendered[1].suffix.match(/\d+/)[0]) > rows,
+const passChipTotal = again.data.counts.pass.fresh + again.data.counts.pass.stale
+check('the page holds one 25-row slice', rows > 0 && rows <= 25, `${rows} rows`)
+check('yet the chips still show the full population',
+  again.rendered[1].count === String(again.data.counts.pass.fresh)
+  && again.rendered[1].suffix === `+${again.data.counts.pass.stale} ${staleWord}`
+  && passChipTotal > rows,
   `${again.rendered[1].text} over ${rows} rows`)
 
 // ---- 6. 390px: the DEBT survives the phone header — only the wording condenses ---------------------
 await page.setViewportSize({ width: 390, height: 780 })
 await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('.rl-section')
-await page.waitForTimeout(1400)
+await arrive('is:eval', 'the 390px entry')
 const phone = await view('390px default #/evals')
 // the honest overflow question is whether the header clips its OWN content, not whether the page scrolls:
 // a control pushed past the header's client box is invisible even while document.scrollWidth stays 390.
@@ -204,8 +230,9 @@ await page.locator('.lp-head').screenshot({ path: join(OUT, '06-phone-header-fre
 
 // the lighter Issues header shares this chrome and must NOT pay for the Evals split.
 await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('.rl-section')
-await page.waitForTimeout(1400)
+await page.waitForSelector('.rl-row, .lp-empty:not(:empty)')
+await until(async () => (await headGeometry()).headClient > 0)
+await page.waitForTimeout(400)
 const issuesPhone = await headGeometry()
 check('the Issues phone header still measures ONE 49px unclipped row',
   issuesPhone.head === 49 && issuesPhone.lines === 1 && issuesPhone.headScroll === issuesPhone.headClient && issuesPhone.doc <= 390,

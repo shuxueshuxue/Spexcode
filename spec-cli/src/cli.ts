@@ -655,7 +655,13 @@ if (cmd === 'serve') {
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
     const { selectSessions, formatTable } = await import('./sessions.js')
     const { clientListSessions } = await import('./client.js')
-    const picked = selectSessions(await clientListSessions(), positionals(4), flag('status')?.split(','))
+    // shelved sessions ([[archive]]) are OUT of the default table — that is the whole point of shelving — but
+    // the backend still enumerated them, so `--all` shows them without a second query. Naming a shelved session
+    // explicitly also wins: an explicit selector is the human already saying which row they mean.
+    const selectors = positionals(4)
+    const all = await clientListSessions()
+    const visible = has('all') || selectors.length ? all : all.filter((s) => !s.archived)
+    const picked = selectSessions(visible, selectors, flag('status')?.split(','))
     console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
   } else if (sub === 'watch') {
     const { watchSessions } = await import('./sessions.js')
@@ -792,6 +798,15 @@ if (cmd === 'serve') {
       const r = await c.clientInterrupt(full)
       console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
+    } else if (sub === 'archive' || sub === 'unarchive') {
+      // SHELVING ([[archive]]) — the attention verb, not a resource verb: it writes one record field and stops
+      // nothing. Say so in the echo, so nobody reads "archived" as "the worker was killed".
+      const on = sub === 'archive'
+      const full = await resolveSelectorOrExit(id)
+      const ok = await c.clientArchive(full, on)
+      console.log(!ok ? `no such session ${full}`
+        : on ? `archived ${full} (still running — \`spex session stop\` to free the process)`
+        : `unarchived ${full}`)
     } else if (sub === 'close') {
       const full = await resolveSelectorOrExit(id)
       console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)

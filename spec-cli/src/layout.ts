@@ -178,6 +178,7 @@ export type RawRecord = {
   node: string | null; title: string | null; name: string | null; parent?: string | null
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
+  archived?: boolean  // the human SHELVED this session ([[archive]]) — a view property orthogonal to both lifecycle and liveness; absent → false on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
 }
@@ -296,6 +297,11 @@ export async function resolveLayout(): Promise<Layout> {
   const rows = await Promise.all(records.map((r) => {
     const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
     const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ops: [] }
+    // @@@ archived rows cost nothing - a shelved session ([[archive]]) keeps its row (the record is the
+    // existence truth) but skips the per-worktree spec-delta entirely: that git-history probe is the board's
+    // dominant per-row cost, and shelving is exactly the human saying "stop spending attention here". So the
+    // price of a retained archive is one enumerated record, NOT a git walk per poll.
+    if (r.archived) return Promise.resolve(base)
     return guardWorktree<Worktree>(r.worktree_path,
       async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef, mainSha) }),
       (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
@@ -304,8 +310,10 @@ export async function resolveLayout(): Promise<Layout> {
   // the main checkout row (isMain) — always present, carries no overlay; it anchors the merged tree the board draws.
   const mainRow: Worktree = { path: main, branch: base, node: null, session: null, status: null, isMain: true, ops: [] }
   const worktrees = [mainRow, ...sessionWorktrees]
-  // drop cache entries for worktrees no longer in the store (closed sessions), so the map stays bounded.
-  const live = new Set(sessionWorktrees.map((w) => w.path))
+  // drop cache entries for worktrees that may no longer hold one — closed sessions (gone from the store) AND
+  // newly-archived ones (which no longer compute a delta), so archiving SELF-EVICTS its cached ops instead of
+  // stranding them in a map nothing prunes.
+  const live = new Set(records.filter((r) => !r.archived).map((r) => r.worktree_path))
   for (const k of [...deltaCache.keys()]) if (!live.has(k)) deltaCache.delete(k)
   return { main: convention.main || main || root, convention, worktrees }
 }

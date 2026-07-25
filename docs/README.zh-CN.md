@@ -199,7 +199,7 @@ eval 存在 spec 旁边一个 git 跟踪的 ndjson 里,所以测量和 spec 版�
 ## 参与开发
 
 [`docs/CONTRIBUTING.md`](./CONTRIBUTING.md) 带你从 clone 到第一个合入的改动。
-[`docs/AGENT_GUIDE.md`](./AGENT_GUIDE.md) 有节点模型和反身插件系统的完整机制。
+[spexcode.net](https://spexcode.net) 有节点模型和反身插件系统的完整机制。
 
 ## 致谢
 

@@ -358,6 +358,8 @@ export default {
     rename: 'rename',
     attach: 'open in terminal…',
     select: 'select…',
+    archive: 'archive',
+    unarchive: 'unarchive',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
@@ -588,7 +590,6 @@ export default {
     // the archive ([[archive]]) — same shape as the offline panel above: a status line and one short sub
     shelfShow: 'Archived',
     shelfHide: 'Back to sessions',
-    shelfEmpty: 'nothing archived',
     shelfMsg: '★ archived',
     shelfSubLive: 'still running. restore it whenever you want it back.',
     shelfSubOffline: 'offline. restore it, then relaunch to resume.',

@@ -10,10 +10,12 @@ scenarios:
     expected: >
       The round trip returns the board to exactly its starting state. Archiving flips only `archived` —
       `lifecycle` is untouched, no process is stopped, no worktree removed. The header always shows three
-      equal pills including the star, whose count appears only when something is archived; the archived row
-      is in exactly one of the two lists at a time; the archive card is the ONLY thing visible and clickable
-      for an archived session (no live terminal layer over it); and restoring from the card returns both the
-      row and the view to the list — never stranding the human on the archive they just emptied.
+      equal pills including the star, whose count appears only when something is archived and which is inert
+      at zero; the archived row is in exactly one of the two lists at a time; the archive card is the ONLY
+      thing visible and clickable for an archived session (no live terminal layer over it); the row's
+      right-click menu offers exactly one direction and acts with no confirm; and the view never strands in an
+      emptied archive — not when restoring from the card, and not when the archive is emptied from outside the
+      browser while it is open.
     tags: [frontend-e2e]
   - name: shelving-costs-no-git-walk
     description: >

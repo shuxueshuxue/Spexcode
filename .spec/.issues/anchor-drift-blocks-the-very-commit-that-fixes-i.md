@@ -351,3 +351,61 @@ falsifies the premise. Personal friction is a poor proxy for systemic importance
 
 Leaving this issue OPEN, but its subject has changed: the anchor-span blind spot and the error
 string are real and cheap; the gate redesign is not recommended.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:22:00.065Z -->
+MEASURED — the simultaneous commit, which this project's own ritual mandates, is ALSO blocked.
+This is the one thing neither the adversary nor I checked, and it partially reopens the question
+on much narrower grounds than my original claim.
+
+Experiment (scratch worktree off HEAD, since removed; repo untouched):
+
+  1. clean start                                       lint: 0 errors
+  2. commit that moves session-console's anchored unit
+     WITHOUT touching its spec.md                      lint: 1 anchor-drift error
+  3. commit staging BOTH more code AND
+     session-console/spec.md — the ritual shape        BLOCKED, commit did not land
+
+The block is not caused by the commit being made. It is caused by the PRIOR drift: the window
+starts at the spec.md's last commit IN HISTORY, and a staged spec.md does not move it. So:
+
+    once a node carries unanswered drift, EVERY commit is blocked — including a perfectly
+    correct one that restates that node's contract alongside the code.
+
+## What this does to the "ack first, then rewrite" front door
+
+It is not a remedy path. It is DEBT CLEARANCE: the ack answers for the EARLIER commits, not for
+what you are about to do. Clear the debt, then your correct commit can land.
+
+That is honest when the earlier commits genuinely did not break the contract — someone touched an
+unrelated part of the same file. Two statements about two different things; nothing ugly.
+
+It is NOT honest when they did break it. My own incident 1 is exactly that: my archive commits
+had made session-console's body wrong (it still claimed liveness alone decides the console
+surface). Acking there asserts "the contract still holds" as a precondition for admitting that it
+does not. The adversary conceded this as a labelling problem and priced it as "a string". This
+measurement says otherwise: in that case the front door requires either a false statement or a
+bypass. There is no third option.
+
+## Narrowed proposal
+
+Not the gate redesign I proposed and withdrew, and not "nothing":
+
+    if THIS commit changes a node's spec.md, that node's historical drift must not block it
+
+Same shape as the staged-set exemption I retracted in post 5 — but the justification is different
+and, I think, sound this time. It is not to break a deadlock (there is no deadlock; ack works).
+It is because:
+
+  - the project's ritual REQUIRES code and spec to land together, and the gate currently punishes
+    that shape whenever prior debt exists — the most correct author is blocked exactly like the
+    least correct one;
+  - the answer to the historical drift is literally present in the commit being judged: the
+    contract is being restated. Blocking it demands the author first assert the opposite.
+
+Scope check against the adversary's strongest objection: this does NOT create the 76-bypass
+problem, because it never blocks anything that is not blocked today — it only unblocks. A commit
+touching a foreign anchor without touching that node's spec.md is unaffected, so the ack path
+that answered those 76 cases remains exactly as it is.
+
+I am not proposing to touch the tree-unchanged escape, the window semantics, or the gate's input.
+One condition, and it only ever opens.

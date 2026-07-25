@@ -5,9 +5,10 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { evalNodes, validateScenarios, resolveEvalNode, scenarioHash, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
+import { evalNodes, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes, contentProbeFor } from './freshness.js'
+import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems } from './freshness.js'
+import { parseRelation } from '../../spec-cli/src/anchors.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
@@ -102,6 +103,10 @@ async function scan(args: string[] = []): Promise<number> {
   // the off-history content fallback ([[eval-core]]): a rebased/folded-away anchor with byte-identical
   // governed content reads fresh instead of false-positive stale. Lazy — in-history readings never probe.
   const probe = contentProbeFor(root)
+  // the code axis's spatial narrowing ([[eval-core]]): an anchored `code:` entry stales a reading only when a
+  // window commit touched one of its named units. Same lazy shape as the content probe — a bare entry never
+  // reaches it, so an unanchored corpus pays nothing.
+  const anchors = anchorProbeFor(root, idx)
   const scidx = await scenarioIndex(root, evalNodes(root).map((n) => n.evalPath))
   const specs = await loadSpecs()
   // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
@@ -133,16 +138,26 @@ async function scan(args: string[] = []): Promise<number> {
         // a scenario's own `code` narrows its freshness CODE axis to a subset; a path that does not exist
         // would make that axis silently immortal (changedSince finds no commits for it), so flag it LOUD as a
         // malformed declaration — the same loud-fail spirit as a bad node `code:`.
+        // ONE resolution of the axis: base paths for every path consumer (existence, changed-scan selection,
+        // drift display), folded selectors for the narrowing. A raw `path#symbol` matches no real file, so
+        // reading it as a path would report a ghost and drop the scenario out of --changed selection.
+        const axis = scenarioCodeAxis(sc.code, s.code)
         if (nodeSelected) {
-          for (const [field, paths] of [['code', sc.code], ['related', sc.related]] as const) {
-            const ghosts = (paths ?? []).filter((p) => !existsSync(join(root, p)))
+          for (const [field, paths] of [['code', axis.paths], ['related', parseRelation(sc.related ?? [], 'related').entries.map((e) => e.path)]] as const) {
+            const ghosts = paths.filter((p) => !existsSync(join(root, p)))
             if (ghosts.length) {
               malformed++
               findings.push(`  • eval-schema: '${s.id}' scenario '${sc.name}' \`${field}\` path(s) not found: ${ghosts.join(', ')} — fix ${y.evalPath}`)
             }
           }
+          // an anchor is a claim a named unit exists — dead/ambiguous/unextractable is LOUD, and until it is
+          // repaired the probe issues no verdict, so the reading stays conservatively stale.
+          for (const p of [...axis.problems, ...anchorProblems(root, axis.entries)]) {
+            malformed++
+            findings.push(`  • eval-schema: '${s.id}' scenario '${sc.name}' ${p} — fix ${y.evalPath}`)
+          }
         }
-        const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
+        const codeFiles = axis.paths   // scenario's own subset, else the node's list
         const driftSelected = !changed || nodeChanged(dirRel, codeFiles, changed, nodeDirs)
         // carry the scenario's tags on the finding line — its SURFACE (e.g. frontend-e2e = browser-measured)
         // is what routes a drift/missing gap to the right measuring hand, so the proactive nudge and a human
@@ -159,7 +174,8 @@ async function scan(args: string[] = []): Promise<number> {
         if (!driftSelected) continue
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
         if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
-        const axes = staleAxes(r, codeFiles, y.evalPath, idx, scidx, remSignals, probe, sc)
+        await anchors.prime?.(r.codeSha, axis.entries)
+        const axes = staleAxes(r, sc.code?.length ? sc.code : s.code, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes
@@ -197,7 +213,11 @@ async function scan(args: string[] = []): Promise<number> {
   if (!changedOnly) {
     const maxOwners = cfg.maxOwners
     const govCount = new Map<string, number>()
-    for (const n of yByDir.values()) for (const sc of n.scenarios) for (const f of sc.code ?? []) govCount.set(f, (govCount.get(f) ?? 0) + 1)
+    // scoped entries stay OUT of the bound ([[code-anchor]]): a scenario claiming named units does NOT claim
+    // the file, so narrowing an axis can never manufacture an eval-owners smell — the count stays a fact
+    // about how many scenarios measure the WHOLE file.
+    for (const n of yByDir.values()) for (const sc of n.scenarios)
+      for (const e of scenarioCodeAxis(sc.code).entries) if (!e.selectors.length) govCount.set(e.path, (govCount.get(e.path) ?? 0) + 1)
     const over = [...govCount].filter(([, c]) => c > maxOwners).sort((a, b) => b[1] - a[1])
     if (over.length) {
       overOwned = over.length

@@ -318,7 +318,16 @@ surface:
   honestly. Claude/pi use their live listener, while Codex uses the visible pane's descendant process tree.
   `cleanupRuntime(rec)` is the inverse owned by the same transport: rendezvous adapters unlink their socket,
   claude-headless unlinks its controller socket even when tmux killed the controller before its signal handler
-  ran, and Codex leaves its shared project app-server intact.
+  ran, and Codex leaves its shared project app-server intact. **Their** socket — and the only honest test of
+  "theirs" is that the agent this teardown just killed is GONE, so removal waits for a PROVEN-dead listener
+  (the same tri-state probe liveness uses) and a path still answering is left in place, loudly. That proof is
+  not ceremony: a socket path is derived from the session id ALONE, making it the one per-session resource
+  scoped by NEITHER the store (`SPEXCODE_HOME`) nor the tmux server (`SPEXCODE_TMUX`). So an isolated
+  instance closing an id that also names a live session elsewhere has its `kill-session` miss (namespaced)
+  while an unconditional unlink lands (not namespaced) — stranding a working agent forever: still bound to a
+  path nothing can reach, undeliverable, and reading as a corpse to every prober. The asymmetry of the rule is
+  deliberate — a dead-but-unlinked file is harmless residue the next teardown reaps, a wrong unlink is not —
+  and the ordinary teardown still leaves zero socket residue, because its agent really is dead.
 
 Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
 outcome of the last ephemeral turn. An intact record normally remains `online` between ephemeral turns because

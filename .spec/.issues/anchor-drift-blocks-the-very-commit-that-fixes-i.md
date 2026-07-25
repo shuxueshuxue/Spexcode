@@ -509,3 +509,60 @@ window semantics — but it is not adoptable as-is. It first needs one of:
 Without that, adopting it trades a real problem for a different real problem, and converts the 69
 recorded acks into bypasses. With it, it is a complete design. That is the whole remaining
 decision, and it is not a detail.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:34:16.264Z -->
+THE ACTUAL GAP, named by the maintainer, and a measurement that shows the missing piece exists.
+
+The maintainer's restatement is sharper than anything above it in this thread:
+
+    ack cannot act at STAGING time.
+
+That inverts the causation the whole thread had backwards. It is not "the gate asks the wrong
+question". It is: the gate wants to move earlier than the commit, but its RELIEF VALVE cannot.
+`spex spec ack` IS a commit (an empty stamp), so it can only speak about commits that already
+exist. Any criterion evaluated before the commit exists automatically leaves ack behind.
+
+So the ordering is fixed: THE VALVE MUST MOVE FIRST. Only then can the gate.
+
+## Measured: which hook holds both halves
+
+Probe repo, hooks printing what they can see (git 2.43.0):
+
+    pre-commit   staged content: YES    message: NO — COMMIT_EDITMSG still holds the PREVIOUS
+                                        commit's subject
+    commit-msg   staged content: YES    message: YES (passed as $1)
+                 trailers parse: YES — `git interpret-trailers --parse` returned
+                                 `Spec-OK: session-console`
+                 HEAD: still the OLD commit, so the object does not exist yet and a non-zero exit
+                 still blocks
+
+This bounds the adversary's "the pending commit's message does not exist at gate time" — true for
+pre-commit, FALSE for commit-msg. `commit-msg` is the only moment holding BOTH what changed and
+what the author declared.
+
+## What that buys
+
+The staging-time form of an ack is a `Spec-OK:` trailer on the commit being made. Not a new
+vocabulary: `ackCoverFor` already reads exactly that trailer — just out of committed history. Same
+word, read at a different moment.
+
+    today          commit passes -> post-hoc ack          ack has something to point at
+    hypothetical   commit blocked -> nothing to ack       BROKEN
+    + trailer      declare in the commit -> gate accepts   author present, reason lands with the change
+
+And it is arguably STRICTER than today: a post-hoc ack is a separate commit, detached from the
+change that provoked it. A trailer is welded to that change — who moved the unit, and why the
+contract still holds, in one commit.
+
+## Not claiming this is ready
+
+Two things I did NOT verify, and will not pretend around:
+
+  1. Does `commit-msg` see the TEMP index under `git commit -a` / `--only`? My probe used plain
+     staging. The implementer measured that pre-commit gets `GIT_INDEX_FILE` pointing at a temp
+     index, and that git.ts's env-strip blinds `stagedFiles()` there (filed separately). Whether
+     commit-msg behaves the same is untested.
+  2. Merges. A clean `--no-ff` merge does not run pre-commit at all (filed separately); whether it
+     runs commit-msg is untested. If it does not, the merge path stays ungated regardless.
+
+Neither affects whether the maintainer's diagnosis is right. Both affect whether the fix ships.

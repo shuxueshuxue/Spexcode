@@ -14,6 +14,7 @@ related:
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/archive-shelf.e2e.mjs
 ---
 
 # archive
@@ -80,7 +81,7 @@ restore. So the list splits first and runs **both** populations through the same
 zones, nesting, folding, and row faces on either side. The door is a star, the third of three equal pills in
 the list header beside New and Search, and it is **permanent**: a control that appears only when it has
 contents cannot be found when you want it, and its absence would be the only thing telling you the archive
-exists at all. The count rides the star when there is one and is simply absent at zero — but the star stays **live**:
+exists at all. The star carries **no numeric count** — the archive is a destination, not a backlog meter — and stays **live**:
 a permanently-visible control that silently does nothing reads as broken, so pressing it at zero opens the
 archive and says `nothing archived` rather than swallowing the press. Reaching an archived session from outside the list
 (URL, search, an originator chip) lands the view on the side that holds it, the same promise the

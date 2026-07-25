@@ -409,3 +409,55 @@ that answered those 76 cases remains exactly as it is.
 
 I am not proposing to touch the tree-unchanged escape, the window semantics, or the gate's input.
 One condition, and it only ever opens.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:25:41.951Z -->
+RETRACTING POST 9. The maintainer caught a hole in it, and it is worse than I described.
+
+My narrowed proposal — "if this commit changes a node's spec.md, that node's historical drift
+must not block it" — keys on WHETHER THE FILE WAS TOUCHED, not on whether anything was answered.
+
+  - move an anchored unit, add a typo fix to that node's spec.md in the same commit, and the
+    node's entire historical drift is waived;
+  - and not only for that commit. Once it lands, the spec.md content commit advances the node's
+    version, the window resets, and the debt is PERMANENTLY gone with no one having answered it.
+
+Today, prior debt forces you through `spex spec ack`, whose `--reason` is mandatory and recorded
+in the ack commit body. My proposal deletes that step. I had been treating those acks as friction;
+they are the ledger. That is precisely the adversary's defence of the current design — "the acks
+are reasoned, not blind... a specific, checkable claim about its own contract" — and my post 9
+would have removed it.
+
+## The hypothetical-commit framing is the correct one, and for a stronger reason than I gave
+
+Both approaches make the ritual-shaped commit pass. The difference is where the behaviour comes
+from:
+
+    post 9            a hardcoded exemption: touching spec.md skips the check
+    hypothetical      no exemption at all. `since` = the node's latest spec.md commit; evaluated
+                      as-if-committed that IS this commit, so the window (since, tip] is empty
+                      and the node self-clears through the EXISTING semantics
+
+The implementer's report already said this and I under-weighted it when the adversary's rebuttal
+landed: "lint.ts:253-256 needs no edit at all... the staged-set exemption the issue author
+proposed and then retracted is DERIVED, not bolted on."
+
+A derived behaviour and a hardcoded one can agree on every case observed so far and still diverge
+on the case nobody thought of. That is the whole argument for preferring the derivation, and it is
+the argument I made in post 5, then abandoned in post 9 by re-proposing the bolted-on version with
+a different justification.
+
+## What remains genuinely unsolved — not a detail
+
+The adversary's 76-case survives the hypothetical framing: a commit that moves a unit anchored by
+a node whose contract genuinely still holds (28% of anchor-touching commits). Under as-if-committed
+judging the hit IS the pending commit, and `ackCoverFor` quiets only reachable ancestors, so an ack
+made beforehand cannot cover it. No front door.
+
+Closing that needs "the contract still holds" to be sayable INSIDE the offending commit — the
+commit-msg trailer the taste lens proposed — or ack made forward-covering. This is the one thing
+none of the three agents converged on, and it is load-bearing: without it, the hypothetical framing
+converts those 76 recorded acks into bypasses, which is the objection that sank my original
+proposal and it sinks this one too until answered.
+
+So: the framing is right, the mechanism is incomplete, and post 9 was a step backwards dressed as
+a step forwards.

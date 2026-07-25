@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
@@ -16,9 +17,8 @@ export type Unit = { name: string; kind: string; start: number; end: number; typ
 export type Extractor = {
   id: string
   claims(ext: string): boolean
-  // true = usable here. A string is WHY it cannot run — lint turns that into an ERROR with the repair
-  // entrypoint (never a silent or degraded pass): the designated extractor either runs or the anchor
-  // is unverifiable.
+  // true = usable here. A string is WHY it cannot run — lint turns that into a visible error and
+  // skips the affected anchors as unverified while continuing the other checks (never a crash or fake pass).
   ready(): true | string
   // PURE function of its arguments (importable by an external benchmark/scorer as-is). Throws when the
   // content cannot be parsed — the caller maps that to a conservative verdict, never a silent skip.
@@ -69,17 +69,27 @@ export function parseRelation(raws: string[], relation: 'code' | 'related'): Rel
 }
 
 // ---- extractor: ts-ast (the designated extractor for the JS family) ----
-// Parse-only via the HOST project's own typescript (resolved from the repo root, walking up like any
-// require) — never a bundled copy, so the parse matches what the project itself compiles with. Not
-// resolvable => ready() returns the repair entrypoint and lint ERRORS (no regex fallback for JS).
+// Parse-only via the HOST project's own typescript when it has one, so the parse matches what the
+// project itself compiles with. An adopter need not install typescript for SpexCode, though: resolution
+// falls back to spec-cli's own dependency. If neither can resolve it, ready() returns a loud unverified
+// verdict and lint skips these anchors without crashing (no regex fallback or fake pass for JS).
 const JS_EXTS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'])
+const SPEC_CLI_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 
-export function tsAstExtractor(root: string): Extractor {
+export function tsAstExtractor(root: string, specCliRoot = SPEC_CLI_ROOT): Extractor {
   let ts: any | null | undefined // undefined = unprobed; null = unresolvable
+  let tsSource: 'host' | 'spec-cli' | null = null
   let readiness: true | string | undefined
   const probe = () => {
     if (ts !== undefined) return
-    try { ts = createRequire(join(root, 'package.json'))('typescript') } catch { ts = null }
+    for (const [source, base] of [['host', root], ['spec-cli', specCliRoot]] as const) {
+      try {
+        ts = createRequire(join(base, 'package.json'))('typescript')
+        tsSource = source
+        return
+      } catch { /* try the next owned resolution base */ }
+    }
+    ts = null
   }
   return {
     id: 'ts-ast',
@@ -87,16 +97,17 @@ export function tsAstExtractor(root: string): Extractor {
     ready() {
       if (readiness !== undefined) return readiness
       probe()
-      if (!ts) return (readiness = `typescript is not resolvable from ${root} — anchors on JS-family files need the host project's typescript: run 'npm i -D typescript', or remove the #anchor`)
+      if (!ts) return (readiness = `typescript is not resolvable from either the governed repository (${root}) or spec-cli (${specCliRoot}) — JS-family anchors were skipped and remain unverified; reinstall SpexCode with its dependencies, or remove the #anchor`)
       // resolvability is not usability: typescript@7 (the Go rewrite) may resolve yet not expose the JS
-      // compiler API this extractor drives. Probe the ACTUAL surface with a tiny parse — an incompatible
-      // host typescript is a loud error, never a silent pass or downgrade.
+      // compiler API this extractor drives. Probe the ACTUAL surface with a tiny parse. Once a candidate
+      // resolves, incompatibility is loud rather than silently changing parser versions.
       try {
         const sf = ts.createSourceFile('probe.ts', 'const x = 1', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
         if (!sf?.statements?.length || sf.parseDiagnostics?.length) throw new Error('probe parse failed')
         readiness = true
       } catch {
-        readiness = `host typescript (v${ts?.version ?? 'unknown'}) resolves but its createSourceFile API is unusable (a TS7/Go build?) — pin 'npm i -D typescript@5', or remove the #anchor`
+        const owner = tsSource === 'host' ? 'host' : 'spec-cli fallback'
+        readiness = `${owner} typescript (v${ts?.version ?? 'unknown'}) resolves but its createSourceFile API is unusable (a TS7/Go build?) — ${tsSource === 'host' ? "pin 'npm i -D typescript@5'" : 'reinstall SpexCode with a compatible typescript'}, or remove the #anchor`
       }
       return readiness
     },
@@ -332,8 +343,8 @@ export const PYTHON_LANG: LangSpec = {
 // The registry's shape is the Extractor INTERFACE, not any engine: a future language row may be a
 // heuristicExtractor(LangSpec) or a web-tree-sitter extractor carrying its own wasm-grammar/query
 // config — whatever the implementation needs rides inside its own factory, never in the registry.
-export function extractors(root: string): Extractor[] {
-  return [tsAstExtractor(root), ...[PYTHON_LANG].map(heuristicExtractor)]
+export function extractors(root: string, specCliRoot = SPEC_CLI_ROOT): Extractor[] {
+  return [tsAstExtractor(root, specCliRoot), ...[PYTHON_LANG].map(heuristicExtractor)]
 }
 // first claiming extractor IS the designation (the registry order defines it); null = no anchor support
 // for this language yet (lint ERRORS — the remedy is a LangSpec data row, or dropping the anchor).

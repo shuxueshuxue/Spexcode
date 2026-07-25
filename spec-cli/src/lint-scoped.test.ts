@@ -5,12 +5,14 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { extractors } from './anchors.js'
+import { specLint } from './lint.js'
 
 // [[code-anchor]] YATU CLI cases — the runtime semantics of measured multi-selectors and scoped
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
 // engine internals): multi-hit dedupe, cross-file one-govern, duplicate/mix integrity, owners
 // exclusion, the scopedCodeMiss setting (default warn / ignore), related selector hit vs miss, bare
-// compatibility, Python's LangSpec row, and the unsupported-extractor error.
+// compatibility, Python's LangSpec row, and loud unsupported/unavailable-extractor degradation.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
@@ -33,12 +35,12 @@ type Fx = {
 }
 // a governed fixture repo: src/calc.ts + a .spec tree; each node's spec.md and the source land in ONE
 // seed commit (the node's v1), so follow-up commits shape each scenario's drift window.
-function fixture(): Fx {
+function fixture(hostTypescript = true): Fx {
   const proj = mkdtempSync(join(tmpdir(), 'spex-scoped-'))
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
-  // the ts-ast extractor resolves the HOST project's typescript by walking up from the repo root
-  symlinkSync(join(SRC, '..', 'node_modules'), join(proj, 'node_modules'))
+  // Most cases exercise host-first resolution; readiness degradation cases deliberately omit it.
+  if (hostTypescript) symlinkSync(join(SRC, '..', 'node_modules'), join(proj, 'node_modules'))
   writeFileSync(join(proj, '.gitignore'), 'node_modules\n')
   writeFileSync(join(proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
   mkdirSync(join(proj, 'src'))
@@ -243,12 +245,26 @@ test('Python dead and duplicate qualified symbols keep the generic loud integrit
   assert.match(out, /ambiguous anchor: src\/tool\.py#Service\.repeat \('duplicate'\) names 2 same-named units/)
 })
 
-test('a selector on a language with no designated extractor is an integrity error with the repair', { skip }, () => {
+test('a selector on a language with no designated extractor errors and stays explicitly unverified', { skip }, () => {
   const fx = fixture()
   writeFileSync(join(fx.proj, 'src/tool.rb'), 'def f\nend\n')
   fx.node('ruby', 'code:\n  - src/tool.rb#f')
   fx.commit('v1')
   const { code, out } = fx.lint()
   assert.equal(code, 1)
-  assert.match(out, /integrity: 'ruby' anchors src\/tool\.rb#f.*no extractor is designated/)
+  assert.match(out, /integrity: 'ruby' anchors src\/tool\.rb#f.*no extractor is designated.*skipped and remains unverified/)
+})
+
+test('when neither TypeScript base resolves, lint reports the skipped anchor and continues other checks', { skip }, async () => {
+  const fx = fixture(false)
+  fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
+  fx.node('broken', 'related:\n  - src/missing.ts')
+  fx.commit('v1')
+  const cliWithoutDependencies = mkdtempSync(join(tmpdir(), 'spex-cli-no-ts-'))
+
+  const findings = await specLint(fx.proj, extractors(fx.proj, cliWithoutDependencies))
+  const unavailable = findings.find((f) => f.msg.includes("anchor extractor 'ts-ast' cannot run"))
+  assert.equal(unavailable?.level, 'error')
+  assert.match(unavailable?.msg ?? '', /JS-family anchors were skipped and remain unverified/)
+  assert.ok(findings.some((f) => f.msg.includes("spec 'broken' lists a missing related file")), 'lint must continue after skipping unavailable anchors')
 })

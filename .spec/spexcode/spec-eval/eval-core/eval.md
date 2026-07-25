@@ -101,7 +101,7 @@ scenarios:
       edit still flags eval-drift on the scenario axis — the semantic fields keep their teeth.
   - name: off-history-anchor-content-fallback
     tags: [cli]
-    code: [spec-eval/src/freshness.ts]
+    code: [spec-eval/src/freshness.ts, spec-eval/src/evaltab.ts]
     test:
       path: spec-eval/src/evaltab.test.ts
       name: evalTimeline primes off-history content fallback on a non-lazy index

@@ -60,8 +60,10 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   Tab counts are computed under the REST of the query. A section may also carry ONE quieter count SUFFIX
   beside its number when its domain splits that section ([[review-filters]]; Evals' stale remeasurement
   debt): it is part of the same button — its label, its accessible name, never a second control or a second
-  pill of equal weight — supplied as text by the page and dropped at 390px, where the header is already
-  width-bound. When no secondary group has real options and none
+  pill of equal weight. The page supplies it as a full text plus its COMPACT face, and the phone width shows
+  the compact one while the accessible name and tooltip keep the full text — the same condense-the-face rule
+  a direct facet follows. What condenses is wording; a count this chrome was given is never hidden at any
+  width. When no secondary group has real options and none
   is active, the trigger is absent: no real options means no fake control. An ACTIVE value whose menu
   option vanished keeps a cheap All off-switch (the visible text is the canonical release).
   Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
@@ -79,6 +81,11 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   join the one secondary Filters menu without widening the page. A low-cardinality facet deliberately kept
   direct may condense its visible face to the selected value while its accessible name stays fully qualified;
   section, direct-facet, and secondary-filter controls never overlap even when both filters are active.
+  The header there takes only the lines its OWN content needs — one 49px row when everything fits, exactly
+  two contained lines when it does not (a split count pushes Evals over; Issues stays at one) — and its
+  rendered content always fits inside its own box. It never clips a control against that box, drops one, or
+  lets the page scroll sideways: when the width budget runs out the header grows DOWNWARD, the list starts
+  lower, and every control keeps its ≥44px target.
 - **ONE paged-review data contract sits below both pages.** A review request carries the committed token
   query, positive integer page, and fixed product page size (25, matching the live GitHub Issues
   observation). The server applies source selection, query/filter semantics, stable merge/sort, and count

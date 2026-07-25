@@ -33,13 +33,29 @@ page.on('response', async (response) => {
 })
 
 // each chip as the human sees it: the label, the count pill, and the quieter split suffix (or null).
-const chips = () => page.evaluate(() => [...document.querySelectorAll('.rl-section')].map((el) => ({
-  label: el.querySelector('.review-state-label')?.textContent.trim() ?? '',
-  count: el.querySelector('.rl-section-count')?.textContent.trim() ?? '',
-  suffix: el.querySelector('.rl-section-suffix')?.textContent.trim() ?? null,
-  text: el.textContent.replace(/\s+/g, ' ').trim(),
-  pressed: el.getAttribute('aria-pressed') === 'true',
-})))
+// `suffix` is what a SIGHTED reader sees at this width (offsetParent-visible spans only); `suffixName` is
+// what a screen reader hears. The two may differ in wording — never in the number.
+const chips = () => page.evaluate(() => [...document.querySelectorAll('.rl-section')].map((el) => {
+  const suffix = el.querySelector('.rl-section-suffix')
+  const visible = suffix
+    ? [...suffix.querySelectorAll('span')].filter((span) => span.offsetParent !== null && !span.classList.contains('sr-only'))
+      .map((span) => span.textContent.trim()).join(' ')
+    : ''
+  const rect = el.getBoundingClientRect()
+  const label = el.querySelector('.review-state-label')?.textContent.trim() ?? ''
+  const count = el.querySelector('.rl-section-count')?.textContent.trim() ?? ''
+  return {
+    label,
+    count,
+    suffix: visible || null,
+    suffixName: suffix?.querySelector('.sr-only')?.textContent.trim() ?? null,
+    suffixTip: suffix?.getAttribute('data-tip') ?? null,
+    text: `${label}${count}${visible ? ` ${visible}` : ''}`,
+    w: Math.round(rect.width),
+    h: Math.round(rect.height),
+    pressed: el.getAttribute('aria-pressed') === 'true',
+  }
+}))
 
 const submit = async (text) => {
   lastEvals = null
@@ -63,7 +79,8 @@ await page.waitForSelector('.rl-section')
 await page.waitForTimeout(1200)
 const base = await view('default #/evals (bare address)')
 const [failChip, passChip, unmeasuredChip] = base.rendered
-const staleWord = (await page.evaluate(() => document.querySelector('.rl-section-suffix')?.textContent.trim() ?? ''))
+// the localized stale word, read off the chip's own accessible name — the probe never hardcodes copy.
+const staleWord = (await page.evaluate(() => document.querySelector('.rl-section-suffix .sr-only')?.textContent.trim() ?? ''))
   .replace(/^\+\d+\s*/, '')
 
 check('default address is bare', await page.evaluate(() => location.hash) === '#/evals')
@@ -127,6 +144,74 @@ const again = await view('back on the default view')
 check('the page holds one 25-row slice', rows <= 25, `${rows} rows`)
 check('yet the chips still show the full population', Number(again.rendered[1].count) + Number(again.rendered[1].suffix.match(/\d+/)[0]) > rows,
   `${again.rendered[1].text} over ${rows} rows`)
+
+// ---- 6. 390px: the DEBT survives the phone header — only the wording condenses ---------------------
+await page.setViewportSize({ width: 390, height: 780 })
+await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.rl-section')
+await page.waitForTimeout(1400)
+const phone = await view('390px default #/evals')
+// the honest overflow question is whether the header clips its OWN content, not whether the page scrolls:
+// a control pushed past the header's client box is invisible even while document.scrollWidth stays 390.
+// Lines are clustered by vertical CENTER, not by `top` — controls of different heights share one row.
+const headGeometry = () => page.evaluate(() => {
+  const head = document.querySelector('.lp-head')
+  const rect = head.getBoundingClientRect()
+  const firstRow = document.querySelector('.lp-rows .lp-row')?.getBoundingClientRect()
+  const centers = [...head.querySelectorAll('.rl-section, .rl-secondary-filters-trigger')]
+    .map((el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 }).sort((a, b) => a - b)
+  const lines = centers.reduce((rows, y) => (rows.length && y - rows[rows.length - 1] < 20 ? rows : [...rows, y]), []).length
+  return {
+    head: Math.round(rect.height),
+    headScroll: head.scrollWidth,
+    headClient: head.clientWidth,
+    lines,
+    doc: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+    filters: !!document.querySelector('.rl-secondary-filters-trigger'),
+    coversFirstRow: firstRow ? Math.round(rect.bottom) > Math.round(firstRow.top) + 1 : null,
+  }
+})
+const geometry = await headGeometry()
+for (const [name, chip] of [['fail', phone.rendered[0]], ['pass', phone.rendered[1]]]) {
+  const split = phone.data.counts[name]
+  check(`390px ${name} still shows the fresh count`, chip.count === String(split.fresh), `${chip.text}`)
+  check(`390px ${name} still shows the stale count — visibly, not via a menu`,
+    chip.suffix === `+${split.stale}`, `visible "${chip.suffix}" for stale ${split.stale}`)
+  check(`390px ${name} keeps the full wording in its accessible name`,
+    chip.suffixName === `+${split.stale} ${staleWord}` && chip.suffixTip === chip.suffixName,
+    `name "${chip.suffixName}" tip "${chip.suffixTip}"`)
+}
+check('390px chips carry the same numbers desktop showed',
+  JSON.stringify(phone.data.counts) === JSON.stringify(base.data.counts),
+  `${JSON.stringify(phone.data.counts)} vs ${JSON.stringify(base.data.counts)}`)
+check('the header clips NOTHING against its own box — every control is really rendered',
+  geometry.headScroll === geometry.headClient && geometry.filters, JSON.stringify(geometry))
+check('it buys that width with exactly two contained lines, not by hiding a control',
+  geometry.lines === 2 && geometry.coversFirstRow === false, JSON.stringify(geometry))
+check('nothing scrolls horizontally past 390px',
+  geometry.doc <= 390 && geometry.body <= 390, JSON.stringify(geometry))
+check('each status button keeps a 44px hit target', phone.rendered.every((chip) => chip.h >= 44),
+  phone.rendered.map((chip) => `${chip.label}:${chip.w}x${chip.h}`).join(' '))
+await page.screenshot({ path: join(OUT, '05-phone-default.png') })
+await page.locator('.lp-head').screenshot({ path: join(OUT, '05-phone-header.png') })
+
+await submit('is:eval freshness:fresh')
+const phoneFresh = await view('390px is:eval freshness:fresh')
+check('390px freshness:fresh renders no suffix at all', phoneFresh.rendered.every((chip) => chip.suffix === null),
+  phoneFresh.rendered.map((chip) => chip.text).join(' | '))
+await page.locator('.lp-head').screenshot({ path: join(OUT, '06-phone-header-fresh.png') })
+
+// the lighter Issues header shares this chrome and must NOT pay for the Evals split.
+await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.rl-section')
+await page.waitForTimeout(1400)
+const issuesPhone = await headGeometry()
+check('the Issues phone header still measures ONE 49px unclipped row',
+  issuesPhone.head === 49 && issuesPhone.lines === 1 && issuesPhone.headScroll === issuesPhone.headClient && issuesPhone.doc <= 390,
+  JSON.stringify(issuesPhone))
+await page.locator('.lp-head').screenshot({ path: join(OUT, '07-phone-issues-header.png') })
+await page.setViewportSize({ width: 1440, height: 900 })
 
 console.log(`\nfresh=${base.data.counts.pass.fresh + base.data.counts.fail.fresh} stale=${base.data.counts.pass.stale + base.data.counts.fail.stale} unmeasured=${base.data.counts.unmeasured} population=${base.data.total}`)
 console.log(`${pass} passed, ${fail} failed`)

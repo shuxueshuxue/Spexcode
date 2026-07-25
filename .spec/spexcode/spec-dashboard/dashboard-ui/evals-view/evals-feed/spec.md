@@ -45,9 +45,13 @@ clears it back to the honest whole list.
 campaign reads its backlog off the header instead of a second query. The two numbers are the verdict's whole
 population and clicking the chip still selects all of it; Unmeasured has no reading and shows one number.
 The feed only READS that fold — a 25-row page could never re-derive it — so under `freshness:fresh` the
-stale half is already zero and the suffix simply does not render, no token special-case. At 390px the header
-stays the measured four-control row and the suffix drops; its axis remains reachable through the Freshness
-group in the secondary Filters menu. A fresh human-ok'd result is `state:reviewed`; everything else is
+stale half is already zero and the suffix simply does not render, no token special-case. **The debt is
+visible at every width.** The phone condenses the WORDING, never the number — the suffix shows its bare
+`+N` while the full `+N stale` stays the accessible name and tooltip — and where even that does not fit,
+the header takes a second contained line rather than clipping or dropping a control ([[review-chrome]] owns
+that geometry). Reaching the count through the Filters menu is not a substitute: a default view that cannot
+distinguish fresh current work from stale work awaiting re-measurement has lost the thing this split
+exists to show. A fresh human-ok'd result is `state:reviewed`; everything else is
 `state:current`. That lifecycle remains transparent in the query and editable through the secondary
 **Human review** builder (Needs review / Reviewed), but no longer occupies the top visual hierarchy.
 When the worktree scope contributes its terminal/gates strip, the feed hands it to ListPage as leading

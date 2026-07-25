@@ -15,7 +15,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -37,6 +37,10 @@ const app = new Hono()
 app.use('/api/*', cors())
 app.onError((error, c) => {
   if (error instanceof SessionEvalUnavailableError) return c.json({ error: error.message }, 503)
+  // a record that cannot carry state is a CONFLICT with the caller's request, not a server fault: the refusal
+  // is deliberate and already carries its own diagnosis + repair ([[sessions-core]]). Answering 500 with a
+  // stack would hide exactly the sentence the human needs.
+  if (error instanceof SessionRecordUnusable) return c.json({ error: error.message, code: error.code }, 409)
   console.error(error)
   return c.text('Internal Server Error', 500)
 })

@@ -301,7 +301,7 @@ surface:
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
   JSON-RPC turn delivery live in the Codex adapter. [[claude-headless]] composes the materialize half from
-  `claudeHarness` but replaces this whole runtime half: its intact record is always online, active delivery
+  `claudeHarness` but replaces this whole runtime half: its intact, non-stopped record is online, active delivery
   writes a native stream-json user event into the resident turn child, idle delivery spawns a
   `claude -p --resume` turn, and hard interrupt writes Claude's native `control_request/interrupt`. Every
   complete native stdout event is forwarded unchanged through the controller's stdout; it is not persisted as
@@ -314,7 +314,12 @@ surface:
   ran, and Codex leaves its shared project app-server intact.
 
 Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
-outcome of the last ephemeral turn. Every headless adapter reports a turn process that exits non-zero through
+outcome of the last ephemeral turn. An intact record normally remains `online` between ephemeral turns because
+the adapter can accept another delivery without a resident turn process. The one explicit boundary is the
+human `stop`: after the runtime has been torn down, the retained record carries `stopped` and every headless
+adapter's shared record-backed liveness reads it `offline`. `resume` clears that marker as it relaunches the
+same conversation; close needs no marker handling because it removes the whole record. Every headless adapter
+reports a turn process that exits non-zero through
 one shared adapter-side outcome mechanism. That mechanism changes the lifecycle from `active` to `error` and
 records the harness plus exit code, so a turn that died before declaring can never remain visibly
 `working`/`online` forever. The write is compare-and-set: a zero exit changes nothing, and a declaration that

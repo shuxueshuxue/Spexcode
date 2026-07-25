@@ -97,9 +97,10 @@ background fire) and never expands a plugin body itself.
 An existing session's adapter chooses one real console surface. A pane-backed adapter shows its **live
 interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
 its **liveness** ([[state]]) is live (`online`/`starting`). A headless adapter has no pane at any liveness;
-its main console is the shared `TimelineChat` conversation over [[session-timeline]], readable after the process
-goes offline. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
-drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+its main console is the shared `TimelineChat` conversation over [[session-timeline]]. The conversation stays
+mounted while an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved
+history immediately. That conversation is the whole terminal-free console, with no [[message-stream]]
+native-event drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same

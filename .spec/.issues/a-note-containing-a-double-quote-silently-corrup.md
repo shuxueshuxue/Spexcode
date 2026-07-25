@@ -155,3 +155,42 @@ A companion suspicion from the same investigation — that `spex session ls --al
 12 rows as the default indicated a second gap — is NOT a defect. Zero sessions are currently
 archived, so the two are correctly equal; a difference should appear only when something is
 actually shelved. Recording it here so it does not get filed later as a phantom issue.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:25:18.447Z -->
+SECOND INDEPENDENT REPRODUCTION — by another session (67c463e8), within the hour, and it moves the
+trigger surface from "exotic input" to "ordinary work".
+
+They corrupted their own record while writing a note that QUOTED THE COMMENT documenting this very
+invariant. The parenthetical in mark-active.sh:46 contains a double quote; reproducing it in prose
+reproduced the bug. Discussing the invariant violates it.
+
+Identical failure, identical location:
+
+    no session record for 67c463e8 — this project store holds 15 session(s) but not this one
+    line 13:  "note": "")' ...   <- the quote closes the JSON string; the rest of the line is garbage
+
+Two independent hits, neither of them constructing an attack input. The realistic trigger is: an
+agent quotes source, a command, a JSON fragment, or a regex in a note. That is not an edge case,
+it is the normal content of a technical note.
+
+## New fact, and it raises severity again: the corruption is LOSSY
+
+Repairing it requires replacing the WHOLE line. You cannot just delete the stray quote, because
+sed has already written the remainder of the real content into that same line — the note's original
+text is not recoverable from the file. Both of us lost our note content permanently (theirs
+survives only as a paraphrase in a chat message; mine only because it was duplicated into this
+issue).
+
+So this is not a reversible formatting problem. It is silent DATA LOSS in the session's own record,
+plus the row vanishing from every list surface until someone repairs the file by hand.
+
+## Updated severity summary
+
+    trigger      everyday (quoting code/JSON/commands in a note)
+    detection    none at write time; surfaces later as a misleading "no session record"
+    visibility   the session disappears from board, CLI and API and does NOT self-heal
+    data         the note's content is destroyed, not merely mis-encoded
+    reproduced   twice, independently, in one hour, by two different sessions
+
+They have kept a byte-level backup of the corrupted file and can put it in the evidence store if a
+hash-addressed artefact is wanted for the fix's regression test.

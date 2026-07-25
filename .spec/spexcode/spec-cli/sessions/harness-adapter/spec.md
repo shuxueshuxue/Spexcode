@@ -303,6 +303,12 @@ surface:
   on the same worktree/record. The discriminator is sound because a new launch's tail is always ONE
   single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
+  The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that
+  running again cannot fix (claude: a `--resume` id it has no conversation for, a rejected credential; codex: a
+  thread id with no rollout on disk). That declaration is the ONLY place a harness's error wording is ever
+  matched: the launch transport asks the adapter and consumes the verdict, so a settled failure is spent once
+  with the harness's own line left visible instead of retried into silence ([[launch]]), and product code never
+  learns a harness's English. A harness that declares none simply keeps the plain bounded retry.
   sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into

@@ -52,6 +52,14 @@ export interface Harness {
   // whether the launch command intentionally exits after its first turn instead of owning a resident process.
   // One-shot adapters must not be mistaken for a failed fast boot and retried with a duplicate prompt.
   readonly launchOneShot?: boolean
+  // @@@ fatalLaunchOutput - extended regexes matching THIS harness's own report of a launch failure that
+  // RUNNING IT AGAIN CANNOT FIX: a conversation that does not exist, a rejected credential, a broken config.
+  // A launcher that exits within the boot window tells us only that it exited fast, which is why the transport
+  // retries — but when the harness itself named a settled cause, retrying spends a certain failure two more
+  // times and buries the one line that explains it. So the transport asks the ADAPTER, and the adapter is the
+  // only place a harness's wording is ever matched: product code consumes the verdict (retry / fatal), never
+  // the text. A harness that declares none keeps the plain bounded retry.
+  readonly fatalLaunchOutput?: readonly string[]
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
   // Codex's canonical hook event set (its `HookEventName` enum, codex 0.142.3) has no failed-stop and no
   // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
@@ -1286,6 +1294,11 @@ export const claudeHarness: Harness = {
       ? 'the claude TUI is focused on its sessions panel ("← for agents"), which silently swallows injected prompts — press Enter in the session terminal to return to the composer, then resend'
       : null,
   resumeArg: (rec) => `--resume ${rec.session}`,
+  // claude's settled launch failures, in its own words: a `--resume` id it has no conversation for (the id was
+  // never claude's, or its transcript is gone), and a rejected credential. Both are the same command failing
+  // the same way every time — the human must repair the conversation or the login, so the transport stops at
+  // one attempt and shows this line instead of burying it under two more identical failures.
+  fatalLaunchOutput: ['No conversation found with session ID', 'Invalid API key', 'Please run /login'],
 }
 
 // Claude headless is a separate harness, not a claude mode. Its materialize half is exactly Claude's and is
@@ -1378,6 +1391,10 @@ export const codexHarness: Harness = {
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
+  // codex's own settled failure: a thread id whose rollout is not on disk can never be resumed, so the launch
+  // that says so has already decided. (Its transient sibling — the rollout still being written — is handled
+  // BEFORE launch by waitForCodexRollout, so what reaches here is the permanent case.)
+  fatalLaunchOutput: ['no rollout found for thread id'],
 }
 
 // Codex headless is an independent adapter: its materialization and app-server delivery are exactly Codex's,

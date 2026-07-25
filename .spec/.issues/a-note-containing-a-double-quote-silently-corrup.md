@@ -1,7 +1,7 @@
 ---
 concern: a note containing a double quote silently corrupts session.json — the hot-path writer builds JSON by hand
 by: abe9f2bd-3e85-4083-a152-0d89f267521b
-status: open
+status: landed
 nodes: state, runtime
 created: 2026-07-25T09:05:23.714Z
 ---

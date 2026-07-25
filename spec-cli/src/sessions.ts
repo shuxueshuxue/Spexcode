@@ -9,7 +9,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
 import { defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 
@@ -102,7 +102,10 @@ export type { DispatchResult }
 
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown'
+// `corrupt` and `retired` are the two RECORD-INTEGRITY readings — neither a lifecycle the agent authored nor a
+// liveness the runtime probed, but the honest answer when the record itself can no longer carry either: its
+// bytes don't parse, or the worktree it names is gone. They exist so such a row can never silently vanish.
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
 // liveness — the orthogonal axis to Lifecycle: whether the agent process is actually up, derived (never
 // authored) for EVERY session regardless of its lifecycle. See [[state]]: lifecycle and liveness never
 // override each other; the UI keys the terminal-mount / relaunch panel on this, the badge on lifecycle.
@@ -268,9 +271,41 @@ export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner'>, aut
 // readAliasedRawRecord (the seam that owns the path + the codex-thread-id alias), then validates the loose
 // on-disk fields into the typed shape — so a codex hook resolving by its thread id reaches the real record.
 function readRecord(id: string): SessRec | null {
-  const raw = readAliasedRawRecord(id)
-  if (!raw) return null
-  return fromRaw(raw)
+  const entry = readAliasedRecordEntry(id)
+  if (entry.kind === 'absent') return null
+  if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
+  return fromRaw(entry.raw)
+}
+// @@@ SessionRecordUnusable - the record exists but cannot carry state, for one of two reasons, and BOTH must
+// stop a writer rather than let it invent one. `corrupt`: the bytes don't parse, so writing would DESTROY the
+// evidence of what broke and resurrect the session as a plausible-looking empty shell (the reported failure —
+// a damaged record came back as a valid `idle` record and even had a launch script regenerated for it).
+// `retired`: the work merged and the worktree the record names is gone, so there is nothing left to be active
+// IN. Readers that enumerate (the board) catch this and render the row; writers let it out, loud.
+export class SessionRecordUnusable extends Error {
+  constructor(readonly code: 'corrupt' | 'retired', readonly session: string, message: string) {
+    super(message)
+    this.name = 'SessionRecordUnusable'
+  }
+}
+const corruptReason = (e: { path: string; error: string }): string =>
+  `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. Close the session (\`spex session close <id>\`) to retire it — the original bytes are preserved as evidence.`
+// a record whose worktree is gone names work that no longer exists on disk. That is the manual-retirement end
+// state (merged, worktree and branch removed, record left behind), and it is terminal: no lifecycle writer may
+// put such a session back to work, and no launch may be assembled for a directory that isn't there.
+function retirementReason(rec: SessRec): string | null {
+  if (!rec.worktreePath || existsSync(rec.worktreePath)) return null
+  return `session ${rec.session.slice(0, 8)} is retired: its worktree ${rec.worktreePath} no longer exists, so it cannot work, be marked active/idle, or be relaunched. Close it (\`spex session close <id>\`) to drop the record.`
+}
+// the read every LIFECYCLE writer uses: it additionally refuses a retired record. Metadata verbs (rename,
+// sort, archive) and `close` deliberately keep using readRecord — filing and removal stay available on a row
+// whose work is gone.
+function readLiveRecord(id: string): SessRec | null {
+  const rec = readRecord(id)
+  if (!rec) return null
+  const retired = retirementReason(rec)
+  if (retired) throw new SessionRecordUnusable('retired', rec.session, retired)
+  return rec
 }
 // the loose on-disk fields validated into the typed shape. Exported so the old-record defaults (harness →
 // claude, absent pin → null) are unit-auditable without a store on disk.
@@ -295,10 +330,18 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launchOwner: launchOwner || null,
   }
 }
+// @@@ the ONE record writer - every field of session.json is produced HERE, by serializing the typed record,
+// and lands by atomic replace (temp file in the same dir, then rename). Nothing else — no hook, no shell, no
+// route — may compose or edit the file's text: a note is arbitrary human/agent prose, so any writer that
+// substitutes it into existing JSON eventually meets a quote, a backslash, or a newline and leaves a record
+// nothing can parse (the reported corruption came from exactly that: a hot-path hook editing the value with
+// sed). The shell hooks READ this file cheaply and delegate every WRITE back through the CLI to this function.
+// The rename is what makes a reader between two writes see one whole record instead of a truncated one.
+//
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
-// present (nulls rendered as "" / the empty value, never an absent key). That stable shape is the contract the
-// pure-shell hot-path hook (mark-active) relies on: it value-replaces `"status"`/`"proposal"`/`"note"` with a
-// single sed and never needs jq on the user's box. So do NOT switch to conditional keys or a compact dump.
+// present (nulls rendered as "" / the empty value, never an absent key). The stable shape is what lets the
+// pure-shell hooks answer "is this record already active, with nothing stale to clear?" with three exact-line
+// greps and no jq — a READ fast path, never an edit. So do NOT switch to conditional keys or a compact dump.
 //
 // @@@ the record self-cleans - the object below is a CLOSED key set rebuilt from the typed record on every
 // write, never a merge over what was read. So a field retired from the code is ALSO retired from disk the
@@ -336,8 +379,12 @@ function writeRecord(rec: SessRec): void {
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
   }
-  mkdirSync(sessionStoreDir(rec.session), { recursive: true })
-  writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
+  const dir = sessionStoreDir(rec.session)
+  mkdirSync(dir, { recursive: true })
+  const path = sessionRecordPath(rec.session)
+  const tmp = join(dir, `.session.json.${process.pid}.tmp`)
+  writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
+  renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
   // session.json is only the CURRENT projection. Persist each moved lifecycle value before this writer
   // returns, so a later write cannot erase a declaration note between observer samples. New-record genesis
   // stays with superviseTimeline; metadata-only writes do not manufacture status events.
@@ -602,6 +649,9 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
 // idle → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
 // terminal-mount and the relaunch panel on; this label is for badges and `spex session ls`.
 function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
+  // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
+  // about. It reads `retired` — a terminal, human-closable row, never a lifecycle a hook can write back over.
+  if (retirementReason(rec)) return 'retired'
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
   const lv = liveness(rec, snap)
@@ -616,6 +666,21 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   const rec = readRecord(id)
   if (!rec) return null
   return { path: rec.worktreePath, branch: rec.branch, rec }
+}
+
+// @@@ corruptSession - the row for a record we cannot parse. Every display field the surfaces read is filled
+// from the ONE thing we still know (the id) plus the diagnosis, so the row renders everywhere without any
+// surface having to special-case a half-record. Liveness is `unknown`, not `offline`: we never probed, so we
+// have not proven anything about the agent — the same honesty rule a failed probe follows.
+function corruptSession(id: string, entry: { path: string; error: string }): Session {
+  const label = `${id.slice(0, 8)} (unreadable record)`
+  return {
+    id, node: null, branch: null, path: '', label, headline: label, raw: { name: null, title: null },
+    parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
+    lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
+    note: corruptReason(entry), archived: false, prompt: null, promptPreview: null, created: 0,
+    activity: null, sortKey: null,
+  }
 }
 
 export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
@@ -654,9 +719,12 @@ export async function setSessionSort(id: string, key: number | null): Promise<bo
   return true
 }
 
-// the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded.
+// the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded. A record we
+// cannot read simply has no prompt to report — a READ accessor must not turn an unreadable record into an
+// error for the surface asking about it; the row itself already carries the diagnosis.
 export async function sessionPrompt(id: string): Promise<string | null> {
-  return readRecord(id) ? readPromptFile(id) : null
+  try { return readRecord(id) ? readPromptFile(id) : null }
+  catch (e) { if (e instanceof SessionRecordUnusable) return null; throw e }
 }
 
 // @@@ lastKnownSession - the last successfully-read Session row per session_id. The record's EXISTENCE in
@@ -677,6 +745,14 @@ export async function listSessions(): Promise<Session[]> {
     Promise.resolve(listSessionIds()), liveSnapshot(),
   ])
   const rows = ids.map((id) => guardSession(id, () => {
+    // a record we cannot READ still has a row: it is a session that exists and whose state is unknowable, which
+    // is a thing to act on, not a thing to hide. It carries its own status and names the file, so the human can
+    // see the file and close it — the alternative (dropping it) is what made a live session read as gone.
+    const entry = readRecordEntry(id)
+    // The corrupt row becomes the LAST-KNOWN row, never a deletion. Dropping it would mean the next poll that
+    // hits a transient read failure has nothing to fall back on and the row vanishes — re-opening the exact
+    // hole this branch closes, one poll later. `corrupt` is a true reading, so it is worth remembering.
+    if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
     const rec = readRecord(id)
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
@@ -1068,6 +1144,38 @@ export function launcherCmd(rec: SessRec): string | undefined {
   if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
 }
+// @@@ launch preflight - the launch transport's OWN settled failures, checked before a tmux window is ever
+// opened. Each is a fact about this machine right now that no number of attempts can change: the worktree the
+// agent would run in, the branch it would commit to, the command that would start it. Answering them here is
+// what turns a certain failure into ONE loud, named refusal instead of a launch that fast-exits and is retried
+// on a wall clock. Everything the transport CANNOT settle (a launcher that races its own daemon) still reaches
+// the bounded retry, and the harness's own settled failures are the adapter's to name (fatalLaunchOutput).
+export type LaunchBlock = { code: 'no-worktree' | 'no-branch' | 'no-launcher'; message: string }
+// does this ref resolve to a commit? Through git.ts's git() so a hook's exported GIT_DIR can't misdirect
+// discovery. `--verify --quiet` answers a MISSING ref with a bare non-zero exit and no stderr, while a broken
+// repo/timeout writes stderr — so only the silent failure is read as absence. A probe that could not answer
+// reads as "exists": the preflight refuses on a PROVEN absence, never on a failed probe ([[state]]'s board
+// honesty rule applied to launch).
+function refExists(cwd: string, ref: string): boolean {
+  try { return !!git(['-C', cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).trim() }
+  catch (e) { return String((e as { stderr?: string })?.stderr ?? '').trim() !== '' }
+}
+export function launchPreflight(rec: SessRec): LaunchBlock | null {
+  if (!rec.worktreePath || !existsSync(rec.worktreePath))
+    return { code: 'no-worktree', message: `session ${rec.session.slice(0, 8)}: its worktree ${rec.worktreePath || '(unrecorded)'} does not exist — there is nothing to launch in. If the work merged and the worktree was removed, close the session; otherwise restore the worktree first.` }
+  if (rec.branch && !refExists(rec.worktreePath, rec.branch))
+    return { code: 'no-branch', message: `session ${rec.session.slice(0, 8)}: its branch ${rec.branch} no longer exists — a relaunch would put the agent on a detached or wrong ref. Restore the branch, or close the session.` }
+  let cmd: string | undefined
+  try { cmd = launcherCmd(rec) }
+  catch (e) { return { code: 'no-launcher', message: `session ${rec.session.slice(0, 8)}: its launcher cannot be resolved — ${e instanceof Error ? e.message : e}` } }
+  // only an ABSOLUTE command is checkable here; a bare name is the shell's PATH lookup at launch time, and
+  // guessing at it would refuse launches that work. Certainty is the whole point of a preflight.
+  const bin = (cmd ?? '').trim().split(/\s+/)[0]
+  if (bin && isAbsolute(bin) && !existsSync(bin))
+    return { code: 'no-launcher', message: `session ${rec.session.slice(0, 8)}: its pinned launcher command ${bin} is not on this machine — every launch of it will fail until the path is restored or the session is re-dispatched under a launcher that exists.` }
+  return null
+}
+
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
 const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
@@ -1099,12 +1207,43 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // A one-shot adapter (currently codex-headless) deliberately exits after its first turn while the shared
   // app-server stays alive. Retrying that successful fast exit would mint a duplicate thread/prompt, so the
   // retry loop is a runtime capability rather than a harness-id branch.
+  // @@@ retry only what retrying can fix - a fast exit says the launcher stopped before readiness, which is
+  // reason enough to try again but never a diagnosis. So after a fast exit the script reads what the harness
+  // actually SAID and matches it against the ADAPTER's own settled-failure patterns ([[harness-adapter]]
+  // fatalLaunchOutput). A match means this command cannot succeed however many times we run it: stop at one
+  // attempt and let the harness's own line be the last thing on the pane, instead of spending a certain failure
+  // three times and burying the reason. No match keeps the plain bounded retry.
+  //
+  // It reads the PANE, not the agent's streams. Capturing stderr through a pipe missed the answer entirely —
+  // measured against real reclaude, "No conversation found with session ID" arrives on STDOUT, so a
+  // stderr-only capture classified nothing and retried a certain failure three times (the unit test passed
+  // only because its stub printed to the stream the implementation happened to watch). Redirecting stdout too
+  // would be worse: a TUI that finds stdout is not a terminal stops being a TUI. The pane already holds both
+  // streams exactly as the human sees them, and the script runs inside that pane — so it just asks tmux.
+  const fatal = (harness.fatalLaunchOutput ?? []).join('|')
   const launchBody = harness.launchOneShot ? [born, ''] : [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
+    // @@@ classify THIS attempt only - the pane is a scrollback, so it also holds every earlier attempt and
+    // every earlier launch that ever ran in this window. Matching the whole capture would let a stale
+    // settled-failure line from minutes ago condemn an unrelated fast exit and cut a launch that retrying
+    // WOULD have recovered — the exact mirror of the miss this classifier exists to fix. So each attempt
+    // stamps a line unique to (this run, this attempt) and the match starts after it. The run's pid is what
+    // makes it unique across relaunches, which reuse the session id.
+    `  __spex_mark="attempt $__spex_try start $$"`,
+    `  printf '[spex launch] %s\\n' "$__spex_mark"`,
     `  ${born}`,
     `  __spex_rc=$?`,
     `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
+    ...(fatal ? [
+      // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
+      // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
+      // bounded retry stands.
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shq1(fatal)}; then`,
+      `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
+      `    exit $__spex_rc`,
+      `  fi`,
+    ] : []),
     `  printf '[spex launch] attempt %s exited in %ss (rc=%s) - fast launcher exit before readiness; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
     `  sleep 2`,
     `done`,
@@ -1159,6 +1298,17 @@ async function startQueued(id: string): Promise<boolean> {
   if (!canDrainQueued(wt.rec)) return false
   const launchPrompt = readLaunchFile(id)
   if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
+  // a queued worktree can go missing while it waits (a human cleaned up, a disk moved). Draining it would open
+  // a window that fast-exits and burn the retry budget every tick, so refuse ONCE, loudly, and stamp the reason
+  // on the record — the drainer then leaves it alone instead of spinning on a launch that cannot work.
+  const blocked = launchPreflight(wt.rec)
+  if (blocked) {
+    if (wt.rec.note !== blocked.message) {
+      console.error(`spex: not launching queued session ${id}: ${blocked.message}`)
+      writeRecord({ ...wt.rec, note: blocked.message })
+    }
+    return false
+  }
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
@@ -1460,8 +1610,18 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 // Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
 export async function resumeSession(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   const { force = false, guard = true } = opts
-  const wt = await findWorktree(id)
+  let wt: { path: string; branch: string | null; rec: SessRec } | null
+  try { wt = await findWorktree(id) }
+  catch (e) { if (e instanceof SessionRecordUnusable) return { ok: false, refused: true, error: e.message }; throw e }
   if (!wt) return { ok: false, error: `no such session ${id}` }
+  // a retired session (its worktree gone) is terminal, not offline: say so in its own words rather than in the
+  // preflight's, since `close` — not a repair — is what it needs.
+  const retired = retirementReason(wt.rec)
+  if (retired) return { ok: false, refused: true, error: retired }
+  // everything else the transport can settle before opening a window: no branch, no launcher. A launch that
+  // cannot succeed must not be attempted, retried, or given a regenerated launch script.
+  const blocked = launchPreflight(wt.rec)
+  if (blocked) return { ok: false, refused: true, error: blocked.message }
   const h = harnessById(wt.rec.harness || defaultHarness.id)
   const lv = liveness(wt.rec, await liveSnapshot())   // FRESH, honest liveness (listener-verified) — the guard must not trust a stale board reading
   if (guard && !force && lv === 'online')
@@ -1490,7 +1650,7 @@ export async function resumeSession(id: string, opts: { force?: boolean; guard?:
 export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
-  const rec = readRecord(id)
+  const rec = readLiveRecord(id)
   if (!rec) return false
   writeRecord({
     ...rec, status,
@@ -1506,7 +1666,7 @@ export const markError = (sessionId?: string) => markState('error', { sessionId 
 // a zero exit is never routed here, and a declaration that landed before teardown is authoritative.
 export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
   if (exitCode === '0') return false
-  const rec = readRecord(sessionId)
+  const rec = readLiveRecord(sessionId)
   if (!rec || rec.status !== 'active') return false
   const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
   writeRecord({ ...rec, status: 'error', proposal: null, note: `${harness} turn exited with ${outcome}` })
@@ -1515,7 +1675,7 @@ export function markHeadlessTurnFailure(sessionId: string, harness: string, exit
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false
-  const rec = readRecord(id)
+  const rec = readLiveRecord(id)
   if (!rec) return false
   writeRecord({ ...rec, harnessSessionId })
   return true
@@ -1528,7 +1688,7 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
 export function markIdle(sessionId?: string): boolean {
   const id = sessionId || ownSessionId()
   if (!id) return false
-  const rec = readRecord(id)
+  const rec = readLiveRecord(id)
   if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
   writeRecord({ ...rec, status: 'idle' })
   return true
@@ -1750,7 +1910,12 @@ async function killAgentProcess(id: string): Promise<void> {
 // removes a transport whose listener is PROVEN dead.
 // Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
 async function stopAgentProcess(id: string): Promise<void> {
-  const rec = readRecord(id)
+  // tearing a process down never needs a readable record — the tmux window is keyed by the id alone. So an
+  // unreadable record degrades to "no adapter-specific cleanup", never to a refusal: `close` must stay
+  // available on exactly the session whose record is broken.
+  let rec: SessRec | null = null
+  try { rec = readRecord(id) }
+  catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
   await tmuxOk(['kill-session', '-t', id])
   await killAgentProcess(id)
   launchedAt.delete(id)
@@ -1796,19 +1961,45 @@ export async function archiveSession(id: string, on = true): Promise<boolean> {
 // then the store sweep (stop KEEPS the record so the session stays on the board offline; close discards it).
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
+// close is also the ONE verb that must survive a record it cannot read: an unreadable record is precisely the
+// thing a human needs to be able to retire, and refusing here is what forced the reported manual cleanup. So it
+// quarantines the original bytes first (below), then sweeps as usual — the teardown that needs a readable
+// record is simply skipped when there isn't one.
 export async function closeSession(id: string): Promise<boolean> {
-  const wt = await findWorktree(id)
+  let wt: { path: string; branch: string | null; rec: SessRec } | null = null
+  let unreadable = false
+  try { wt = await findWorktree(id) }
+  catch (e) { if (e instanceof SessionRecordUnusable && e.code === 'corrupt') unreadable = true; else throw e }
+  quarantineRecord(id)
   await stopAgentProcess(id)
   if (wt) {
     let slot: string | null = null
     try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
-    await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
-    if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])
+    // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
+    if (existsSync(wt.path)) await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
+    if (wt.branch) await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
     if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   }
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* best-effort sweep of the global record */ }
   void drainQueue()   // a close frees a slot — start the next queued session if any
-  return !!wt
+  return !!wt || unreadable
+}
+
+// @@@ quarantine - closing sweeps the session's whole store dir, so an UNREADABLE record would take the only
+// evidence of what corrupted it with it. Copy those bytes to the per-project `corrupt/` shelf first, named by
+// session id and close time. Only unreadable records are shelved (a healthy one's contents are already known
+// and reproducible); the shelf is never read by the product, it is there for the human who asks "what broke?".
+function quarantineRecord(id: string): void {
+  let entry
+  try { entry = readRecordEntry(id) } catch { return }   // unreadable for another reason (permissions) — leave it
+  if (entry.kind !== 'corrupt') return
+  try {
+    const shelf = join(runtimeRoot(), 'corrupt')
+    mkdirSync(shelf, { recursive: true })
+    const dest = join(shelf, `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+    writeFileSync(dest, readFileSync(entry.path))
+    console.error(`spex: session ${id.slice(0, 8)} had an unreadable record; its original bytes are preserved at ${dest}`)
+  } catch (e) { console.error(`spex: could not quarantine the unreadable record for ${id}: ${e instanceof Error ? e.message : e}`) }
 }
 
 // @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
@@ -1841,9 +2032,11 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
   'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc', unknown: '\u2047',
+  corrupt: '\u26a0', retired: '\u2691',
 }
 const ANSI: Record<DisplayStatus, string> = {
   working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90', unknown: '93',
+  corrupt: '31', retired: '90',
 }
 
 // @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A

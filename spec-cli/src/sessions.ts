@@ -1652,16 +1652,21 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
 // server git script: the agent knows the work, so IT runs the merge, resolves any conflicts, and VERIFIES the
 // outcome — the guarantee lives in that verification, never a server-side gate. This is also the ONE place the
 // merge STYLE is stated (no other mechanism carries it): a --no-ff merge commit `merge <branch>: <reason>`
-// into main. The agent runs git from the MAIN checkout (`-C <mainPath>`; its own cwd is the node worktree).
+// into main. The agent runs git from the MAIN checkout (`-C <mainPath>`; its own cwd is the node worktree) —
+// and that checkout is the fleet's ONE landing door, so the prompt orders the landing to be TRIVIAL by the
+// time it gets there: sync + resolve in the agent's own worktree, land only when `merge-base --is-ancestor`
+// says the branch already contains the base, wait (never abort) on someone else's in-progress merge. The
+// always-on half of that contract is the `atomic-landing` system plugin; this prompt is the per-merge half.
 // After a clean merge the branch is 0 ahead of main, so the agent proposes CLOSE — not merge (the commit gate
 // would block a merge proposal; propose-close is exempt) — and the human confirms the close.
 function mergePrompt(mainPath: string, branch: string, reason: string): string {
   const base = mainBranch()
-  return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself.\n\n` +
-    `1. Merge from the main checkout with a no-ff merge commit:\n   git -C ${mainPath} merge --no-ff -m "merge ${branch}: ${reason}" ${branch}\n` +
-    `2. If it conflicts, resolve the conflicts (you know the intent) and complete the merge commit. ` +
-    `3. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if anything went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
-    `4. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
+  return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
+    `1. Sync first, where you work: \`git merge ${base}\` INTO your branch, resolve every conflict here, and re-run what proves your work. The ${base} checkout is the fleet's ONE landing door — a merge that stops to ask about conflicts holds it for everyone.\n` +
+    `2. Land only a TRIVIAL merge: \`git -C ${mainPath} merge-base --is-ancestor ${base} ${branch}\` must exit 0 (your branch already contains ${base}) — then\n   git -C ${mainPath} merge --no-ff -m "merge ${branch}: ${reason}" ${branch}\n   If that check fails, ${base} moved while you tested: go back to step 1 instead of landing.\n` +
+    `3. A busy door is a wait, not a race: if the ${base} checkout is already mid-merge (an unresolved index), retry with a bounded wait — never abort or resolve someone else's in-progress merge. ` +
+    `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
+    `5. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
 }
 
 // @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the

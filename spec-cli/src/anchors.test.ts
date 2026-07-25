@@ -68,6 +68,30 @@ test('a selector on a glob is a loud problem (a selector scopes ONE real file)',
   assert.match(r.problems[0], /glob/)
 })
 
+// ---- ts-ast readiness: adopter root -> spec-cli fallback -> loud unverified skip ----
+
+test('ts-ast falls back to spec-cli typescript when the governed root has no typescript', () => {
+  const adopter = mkdtempSync(join(tmpdir(), 'spex-adopter-no-ts-'))
+  const x = tsAstExtractor(adopter)
+
+  assert.equal(x.ready(), true)
+  assert.deepEqual(x.extract('export function applyRate() {\n  return 1\n}\n', 'src/calc.ts'), [
+    { name: 'applyRate', kind: 'function', start: 1, end: 3 },
+  ])
+})
+
+test('ts-ast reports a loud unverified skip without throwing when neither resolution base has typescript', () => {
+  const adopter = mkdtempSync(join(tmpdir(), 'spex-adopter-no-ts-'))
+  const cliWithoutDependencies = mkdtempSync(join(tmpdir(), 'spex-cli-no-ts-'))
+  const x = tsAstExtractor(adopter, cliWithoutDependencies)
+
+  let ready: ReturnType<typeof x.ready>
+  assert.doesNotThrow(() => { ready = x.ready() })
+  assert.notEqual(ready!, true, 'missing extractors must never be reported as ready')
+  assert.match(ready! as string, /JS-family anchors were skipped and remain unverified/)
+  assert.match(ready! as string, /reinstall SpexCode/)
+})
+
 // ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----
 
 function gitAvailable(): boolean {

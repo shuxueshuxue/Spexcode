@@ -37,7 +37,9 @@ multiple specs pinning one file stay ordinary. One structured parser reads both 
 loud: duplicates, bare+scoped mixing, a selector on a glob/directory. Anchor verdicts
 are equally **loud, never silent**: dead (deleted/renamed — follow the rename or fix the spec),
 ambiguous (two same-named units), an unparseable current file, a language with no designated
-extractor, or an extractor that cannot run here — each a lint **error** naming its repair.
+extractor, or an extractor that cannot run here — each a lint **error** naming its repair. When an
+extractor cannot run, the error also records that those anchors were skipped and remain unverified;
+the rest of lint continues, but the non-zero result cannot be reported as a pass.
 
 **Scoped govern vs the file.** A scoped governor claims named units, not the whole file: it stays out
 of the too-many-owners bound ([[governed-related]]) though `spex spec owner` still shows it as
@@ -60,10 +62,17 @@ a **conservative hit**, flagged as such — over-warn beats silently missing a r
 
 **Extraction is a language seam.** Extractors are pure `(content, filename) → units` functions (no
 git, no cache, no fs — importable by an external scorer as-is), and every extension maps to exactly
-ONE designated extractor — no cross-tier fallback. The JS family's designated extractor is the host
-project's own typescript (parse-only AST; readiness probes the actual parse API, not mere
-resolvability — an unresolvable OR incompatible typescript is an error with the repair, not a
-downgrade). Other languages arrive as DATA rows to a generic engine (the heuristic
+ONE designated extractor — no cross-language or cross-engine fallback. The JS family's designated
+extractor is `ts-ast`. Its TypeScript module is resolved in a deliberate order: first from the governed
+repository root (respecting the target project's own TypeScript version), then from SpexCode's
+`spec-cli` package when the adopter does not provide one. This is dependency resolution fallback, not
+a second extractor. The selected candidate is probed through the actual parse API, not mere
+resolvability; once the governed repository resolves a TypeScript module, an incompatible API is an
+error rather than a silent switch to a different parser version.
+When neither candidate provides a usable TypeScript, lint emits an explicit `integrity` error (with a
+diagnostic naming the extractor and repair), skips JS-family anchor extraction, and continues the
+remaining checks; the non-zero result is a non-verification signal (never a silent or falsely passing
+anchor result), and the process does not throw. Other languages arrive as DATA rows to a generic engine (the heuristic
 declaration/boundary patterns today; a row may carry whatever config its engine needs — e.g. a
 tree-sitter grammar — so adding a language never adds a branch). Everything language-agnostic — blob-oid
 memoization, dead/ambiguous resolution, hunk∩range — lives outside the seam. Git access stays

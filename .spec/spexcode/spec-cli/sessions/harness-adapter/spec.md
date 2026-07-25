@@ -186,7 +186,14 @@ surface:
   harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
   worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient
   worktree: a daemon that inherited a worktree cwd is bricked when that worktree is later removed (its cwd goes
-  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`). `launchEnv(id)`
+  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`). For the SAME
+  reason it inherits no session IDENTITY: the spawn strips `SPEXCODE_SESSION_ID` and every adapter's
+  `sessionEnvVar` (the list is adapter-derived, so a new harness needs no edit), because a project-scoped daemon
+  started by whichever session launched first, serving every later thread, would otherwise hand that one
+  session's id to every thread's tool shell — a stale lie for everyone else, and for nobody at all once that
+  session closes and its record is swept (measured: daemons here still running for days under a long-gone
+  session's id). The id a thread actually needs — its OWN — codex injects per command, so stripping the
+  inherited ones removes a wrong answer without removing a right one. `launchEnv(id)`
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
   with the governed session id and configured home variables.
@@ -381,23 +388,29 @@ codex runs them in the shared app-server shell (NOT a per-session pane), so they
 baked `SPEXCODE_SESSION_ID` — `envSessionId` ([[portable-layout]]) therefore resolves codex's per-command
 `CODEX_THREAD_ID` (the acting thread's `sessionEnvVar`) through the same `harness_session_id` alias BEFORE that
 contaminated `SPEXCODE_SESSION_ID`, so each thread's declaration lands on its own record; the hook path and the
-interactive-CLI path share one precedence rule. The **commit-attribution** hook (`prepare-commit-msg`, the
-`Session:` trailer) is a THIRD consumer of this same rule: a codex worker's `git commit` runs in the shared
-app-server shell (contaminated `SPEXCODE_SESSION_ID`) but carries the acting `CODEX_THREAD_ID`, so the hook
-resolves the RECORD id through the SAME `harness_session_id` alias grep AT COMMIT TIME (the record is swept on
-close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. An
-UNMATCHED thread id is the ordinary case, not an error — every repo on the box inherits a foreign
-`CODEX_THREAD_ID` from a codex session's shell — so a lookup that finds no record (or no store at all) is a
-clean no-op: the commit proceeds unstamped, with no empty and no foreign `Session:` trailer, and the hook's
-fail-loud stance is reserved for genuine errors past the lookup. Per-session-process harnesses (opencode; pi)
-export NO harness var to tool subprocesses at all — their tier is the launch-injected `SPEXCODE_SESSION_ID`
-itself, trusted LAST and only when the record it names exists and is not codex's, so the uncontaminated
-per-process case stamps while a codex shell that somehow lost its thread id still cannot mis-attribute. The stamp
-lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an
-appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
-ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead. Claude is
-unaffected on all paths: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
+interactive-CLI path share one precedence rule. Claude is
+unaffected on both: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
 the direct hit always wins and the alias step never runs.
+
+**Commit attribution reads the TREE, not the environment.** `prepare-commit-msg` (the `Session:` trailer) is
+NOT a third consumer of that precedence rule, because unlike a hook payload or a live CLI call it can VERIFY
+its answer: a session OWNS its worktree, so the record whose `worktree_path` IS the tree being committed in is
+the author — one harness-agnostic lookup in the same project store the board reads, with no adapter tiers to
+keep in sync. An environment read cannot be verified, and the environment lies: the shared per-project
+app-server (below) outlives the session that started it, so its baked `SPEXCODE_SESSION_ID` reaches every later
+thread's tool shell and an env-trusting hook stamped a STRANGER's session id onto other sessions' commits —
+untraceable once that session closed and its record was swept (measured: 48 such commits in this repo,
+github#76). Verified attribution can only be right or absent: no owning record → NO trailer, so a commit from
+the main checkout, a hand-made integration worktree, or any repo this store knows nothing about is left
+unstamped rather than attributed to a guess (that costs nothing downstream — merge commits are not versions,
+`git log --numstat` skips them). An unowned tree is the ORDINARY case, not an error, so the scan is pure shell
+with no `grep` whose no-match exit would abort the hook (and the commit) under `set -euo pipefail`; the
+fail-loud stance is reserved for genuine errors past the lookup. Ownership is compared by INODE (`-ef`), not by
+string: the record stores the path the backend created while git reports the resolved one, so a symlinked
+project root or macOS `/tmp` → `/private/tmp` must not make two spellings of one tree look like two trees. The
+stamp lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so
+an appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
+ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

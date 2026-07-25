@@ -64,6 +64,11 @@ Two principles keep that derivation cheap on a long-running server:
   Resolving any node is a pure lookup in the small-index mode, while the large-index path memoizes bounded
   path windows. The recent/history tab for a single node is served off
   that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
+  The `.spec` timeline is the **full reachable history**, not Git's default path-simplified presentation:
+  every reachable one-parent content commit remains a version even when a later TREESAME merge would hide
+  that side of a directory-scoped walk. Merge rows are then admitted separately by the all-parent authored-line
+  predicate above, so restoring hidden ordinary commits never turns inherited merge content into a duplicate
+  version.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
   in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When

@@ -713,3 +713,79 @@ stops seeing the ack, and nothing complains.
 If piece 1 ships, this must be made explicit — validate that the trailer block is contiguous, or
 write via `git interpret-trailers --if-exists addIfDifferent` rather than a bare append. A silent
 failure mode in the escape valve is worse than no escape valve.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:55:27.426Z -->
+REPLACING MY PATCH WITH THE INVARIANT — the maintainer's correction: solve this formally, not with
+an engineering guard.
+
+In post 15 I proposed "validate that the trailer block is contiguous". That is a sentry posted
+downstream of a broken abstraction. It can be forgotten, and it needs someone to keep remembering
+why it exists.
+
+## The structure
+
+A commit message is a STRING. Trailers are a structure DERIVED from it:
+
+    trailers : String -> Set<Key x Value>
+
+That derivation is context-sensitive — only the final contiguous paragraph qualifies — so it is
+NOT a homomorphism:
+
+    trailers(m1 ++ m2)  !=  trailers(m1) U trailers(m2)
+
+Stamping is a transformation `stamp : String -> String`, and the property we actually need is
+
+    INVARIANT:  for all m,  trailers(stamp(m)) SUPERSET-OF trailers(m)
+
+i.e. stamping may add, but must never make an existing declaration disappear.
+
+## The root cause is a level confusion
+
+Today `stamp` is defined at the STRING level (`m ++ "\n\nSession: X"`), while the property it must
+preserve lives at the TRAILER level. An operation at the lower level owes the higher level
+nothing — so it violates the invariant, silently. My contiguity check did not remove the level
+mismatch; it stationed an observer downstream of it.
+
+## The fix is to move the operation to its own level
+
+    today:  stamp(m) = m ++ "\n\nSession: X"                  string-level
+    should: stamp(m) = interpret-trailers(m, +Session)        trailer-level
+
+Measured, same author message either way:
+
+    string append          trailers = { Session }                   <- Spec-OK swallowed
+    interpret-trailers     trailers = { Spec-OK, Session }          <- preserved, adjacent
+
+`git interpret-trailers --trailer` is DEFINED as "add into the trailer block". It preserves
+trailers not because we were careful but because that is its semantics. The invariant then holds
+BY CONSTRUCTION — no sentry, no pinning test, no comment for posterity.
+
+It is also complexity-negative: the patch adds a check to maintain; the level change deletes the
+string concatenation and gets the property for free.
+
+## How "parse it earlier" actually works — no magic
+
+`ackCoverFor` reads `idx.acks`, a map `commit sha -> node ids that commit declares`, built by
+walking history and parsing each message's trailers. Earlier means the same parser on a different
+input:
+
+    today       acks : Map<Sha, Set<NodeId>>   built from committed messages
+    commit-msg  the same map, plus  PENDING |-> trailers($1),  with the window tip = PENDING
+
+`$1` is the message file git hands `commit-msg`, byte-for-byte what will be committed. So
+
+    parse(pending file)  ==  parse(the message later read from history)
+
+holds by construction, given the same parser on both sides. No approximation — one function, one
+byte sequence, obtained one step sooner.
+
+## The two are one thing
+
+Once `trailers(stamp(m)) SUPERSET-OF trailers(m)` holds by construction, `parse(pending) ==
+parse(committed)` holds by construction too.
+
+Whether the gate can move earlier depends on the declaration surviving transport intact — and the
+declaration gets corrupted precisely because the stamping operation sits at the wrong level. So
+fixing `stamp` is not an incidental cleanup discovered along the way. It is the PRECONDITION for
+moving the gate at all. Treating them as two separate items was itself the engineering reflex the
+maintainer is calling out.

@@ -80,10 +80,19 @@ made this node necessary.
   every other node in the tree is React elements. An invalid expression stays visibly readable — it
   never blanks a message and never throws through React — and an unexpected parser failure degrades to
   the escaped source rather than an empty or broken surface.
-- **The style contract rides the renderer's entry, not a consumer's chunk.** KaTeX's stylesheet and the
-  prose CSS load with the one renderer, so every route that can show prose can show mathematics by
-  construction. No surface may inherit math styling from another surface's lazy chunk — that coupling is
-  how a body silently renders unstyled formulas.
+- **Math weight is real, and the TOKEN is the only loading fact.** Measured on the console's own landing:
+  adding the parser plus KaTeX took that surface's JS from ~3.5 kB to ~128 kB gzip and added ~8 kB gzip of
+  lazy CSS, while the shared index CSS moved ~0.4 kB and the other bundles did not move; KaTeX's
+  stylesheet also copies 59 font fallbacks into `dist` (~1 MB on disk) of which a real browser fetches
+  three WOFF2 (~48 kB). Today that weight is isolated behind the console's lazy chunk — and that isolation
+  CANNOT be reused once the same renderer serves spec bodies, issues, and review pages: no surface may
+  inherit math styling or math code from another surface's chunk, which is how a body silently renders
+  unstyled formulas. The honest seam is the token tree itself: when the tree yields a math token, that
+  token's own component may lazily import the math engine and its styles, so **presence of a math token —
+  never a source-text `$` sniff — decides loading**. A second grammar pass over raw source to guess
+  whether math is present is forbidden: it is a second parser, and a second parser is this node's whole
+  disease. Whether the split is eager-with-the-renderer or lazy-per-token is decided by the MEASURED
+  route bundles after migration, not pre-committed here as policy.
 - **`SpecBody` is a compatibility shell, then it is gone.** During the migration it forwards to the one
   renderer, passing the resolver and handlers its callers already have; it is DELETED once the four
   body surfaces are through. `NodeView`'s first-heading suppression stays a CALLER concern — the caller

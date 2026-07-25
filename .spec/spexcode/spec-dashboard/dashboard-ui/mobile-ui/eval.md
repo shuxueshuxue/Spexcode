@@ -29,6 +29,21 @@ scenarios:
       against the tab bar's top edge. Its input and send action remain aligned, enabled after typing,
       non-overlapping, and horizontally usable at every phone width. The tab bar keeps ownership of
       `safe-area-inset-bottom`, so navigation and home-bar clearance never move into the composer.
+  - name: authored-composer-input-contract
+    tags: [frontend-e2e, mobile, backend-api]
+    test: spec-dashboard/test/timeline-chat-composer.e2e.mjs
+    code: spec-dashboard/src/MobileApp.jsx
+    related: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/Composer.jsx, spec-dashboard/src/textarea.js, spec-dashboard/src/styles.css]
+    description: >-
+      At 390x844, open a real headless TimelineChat and type one, two, three, and enough lines to exceed its
+      cap; exercise Shift+Enter, an IME-composing Enter, and plain Enter against the real timeline. Then open
+      phone Create, type enough lines to grow beyond its floor, and press Enter while observing create requests.
+    expected: >-
+      Both inputs are shared ComposerTextarea instances on the one fitTextarea path. TimelineChat grows through
+      two and three lines without a scrollbar, scrolls only beyond its cap, sends on plain Enter, inserts a line
+      on Shift+Enter, and ignores composition Enter for sending. It remains the sole declared sink but is not
+      auto-focused on phone entry. Create grows beyond its larger floor without a scrollbar and Enter edits the
+      long prompt without issuing a session-create request; only its launch button submits.
   - name: node-panes-one-axis
     tags: [frontend-e2e, mobile]
     description: >

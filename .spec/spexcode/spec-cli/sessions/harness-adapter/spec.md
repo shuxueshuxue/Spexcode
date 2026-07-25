@@ -383,41 +383,41 @@ step: when no record sits at the id directly, find the one record that captured 
 `readAliasedRawRecord`). This is what lets the pure-shell `mark-active` re-flip and the ask-capture, plus every
 shell hook lifecycle write, reach the right record from a thread id even when the app-server env is contaminated.
 The alias needs no cleanup artifact — it lives in the record's own `harness_session_id`, swept with the record on
-close. The agent's own interactive `spex session done/park/ask` calls take the SAME path for the SAME reason:
-codex runs them in the shared app-server shell (NOT a per-session pane), so they inherit the FIRST session's
-baked `SPEXCODE_SESSION_ID` — `envSessionId` ([[portable-layout]]) therefore resolves codex's per-command
-`CODEX_THREAD_ID` (the acting thread's `sessionEnvVar`) through the same `harness_session_id` alias BEFORE that
-contaminated `SPEXCODE_SESSION_ID`, so each thread's declaration lands on its own record; the hook path and the
-interactive-CLI path share one precedence rule. Claude is
-unaffected on both: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
-the direct hit always wins and the alias step never runs.
+close. Claude is unaffected on this path: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and
+the record key, so the direct hit always wins and the alias step never runs.
 
-The **commit-attribution** hook (`prepare-commit-msg`, the `Session:` trailer) is a THIRD consumer of the same
-rule, and it makes explicit what the other two assume: an id in the environment is worth only the REASON it is
-there, and each reason is CHECKABLE. That is the whole content of the rule — identity, never location. A
-commit's tree is where a process happens to be standing, so answering "who authored this" with "who owns this
-directory" is a proxy that is merely usually right; the check below is deterministic instead.
+**Identity is INJECTED where it is known, never inferred later.** `SPEXCODE_SESSION_ID` names the governed
+record of the context it sits in, and it earns that meaning from ONE invariant: every process we create is
+given its own identity, and a process that belongs to no single session is given none.
 
-- **PER-COMMAND ids** — codex stamps the ACTING thread onto every command it spawns (`CODEX_THREAD_ID`;
-  measured: the shared app-server carries none of its own, each thread's tool shell carries exactly its own).
-  Such a value cannot be a leftover, so resolving it — through the record that captured it as
-  `harness_session_id`, the mapping the BACKEND wrote at thread creation — is the entire check.
-- **INHERITED ids** — `SPEXCODE_SESSION_ID` is injected at launch, claude/pi export their own; every
-  descendant inherits them, which is exactly how they go stale. A process that OUTLIVES its session keeps
-  handing that id to strangers: codex's shared per-project app-server is the measured case (github#76 — 48
-  commits in this repo carry one closed session's id), but any long-lived child qualifies, so hardening the
-  daemon alone would not close the class. Inheritance is the disease and DESCENT is the cure: an inherited id
-  is trusted only when the claiming process is genuinely a descendant of that session's own registered agent
-  process (`agent.pid`, written at launch — [[launch]]'s birth registration). A leaked id fails, since the
-  leaking daemon is not in our ancestry; every real worker passes, INCLUDING one committing outside its own
-  worktree (a dispatched merge in the main checkout, an external lane), because who you are does not change
-  with where you stand. The platform difference in reading a parent pid (procfs vs `ps`) lives at that one
-  seam, never in the trust rule.
+- A **session launch** bakes `SPEXCODE_SESSION_ID=<record id>` into the agent — after STRIPPING every
+  session-identity variable it inherited (`sessionIdentityEnvVars()`, adapter-derived: the launch-injected id
+  plus each adapter's `sessionEnvVar`). The strip is not decoration: a session's pane inherits the tmux
+  SERVER's environment, so without it whichever session started that server rides along into every later
+  worker.
+- A **codex thread** cannot be handed identity that way — its tool shells are children of the SHARED
+  app-server, not of its own agent — so the backend injects the same variable per THREAD, through codex's own
+  `shell_environment_policy.set` in `thread/start`'s config override map (`codexStartThreadParams`), and the
+  visible `--remote … resume` TUI re-establishes it with the same `-c` override, because that client is the
+  other entry point creating a context for this session. Verified live: the thread's own tool shell reports
+  exactly the injected record id and nothing of the launcher's environment.
+- The **shared app-server** — and any other process we own that serves every session rather than one — is
+  spawned with those variables stripped. This is the same invariant read from the other side, and it is where
+  github#76 came from: a daemon started by one session outlived it and kept handing that session's id to every
+  later thread's `git commit`, so commits carried a stranger's session and, once it closed and its record was
+  swept, an id that named nothing.
 
-Unresolvable, or resolvable but not ours to claim → NO trailer: an untraceable or borrowed id must never reach
-a commit message, while an absent one costs nothing. A miss is the ORDINARY case — every repo on the box
-inherits foreign ids from some agent's shell — so the lookup never aborts the hook (and the commit) under `set
--euo pipefail`; the fail-loud stance is reserved for genuine errors past it. The stamp lands via `git
+So identity is not something later code re-derives, checks, or guesses at. `prepare-commit-msg` READS
+`SPEXCODE_SESSION_ID` and stamps it: no store lookup, no per-harness ladder, no ancestry test, and nothing
+taken from the current directory — where a process stands says nothing about who it is, and a trailer written
+from a guess is worse than an absent one. No id → no trailer. The same invariant is what lets `envSessionId`
+([[portable-layout]]) and `hp_session_id` keep the alias step as a NARROW concern (a hook payload carries the
+acting codex THREAD id, which is a harness identifier rather than a record key) instead of a defence against a
+contaminated environment.
+
+A missing id is the ORDINARY case — most repos on the box are nobody's session — so the hook no-ops cleanly
+under `set -euo pipefail` rather than aborting the hook and the commit with it; the fail-loud stance is
+reserved for genuine errors past that point. The stamp lands via `git
 interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an appended
 `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex ack`'s
 `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.

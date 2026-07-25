@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -84,7 +84,7 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
-  assert.match(cmd, /exec codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(cmd, /exec codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
   // the app-server socket lives on a SHORT sun_path-safe path (spexcode-cx-<hash>.sock off tmpdir), NOT the old
   // `<runtimeDir>/codex-app-server.sock` that blew past macOS's ~104-byte sun_path cap on a deep project path.
   assert.match(cmd, /spexcode-cx-[0-9a-f]+\.sock/)
@@ -114,7 +114,7 @@ test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not o
   process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '1'
   try {
     const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
-    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust --remote/)  // on the resume TUI (forwarded to thread config)
+    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--remote/)  // on the resume TUI (forwarded to thread config)
     assert.match(cmd, /(?:^|\s)codex app-server --listen/m)                          // app-server carries NO bypass flag
     assert.doesNotMatch(cmd, /--dangerously-bypass-hook-trust app-server/)           // never on the inert app-server invocation
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
@@ -167,7 +167,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
   // With no explicit serverCmd, the app-server line uses the launcher's OWN binary — never bare `codex`.
   const derived = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
   assert.match(derived, /\/opt\/foo\/codex app-server --listen unix:\/\/"\$sock"/)
-  assert.match(derived, /exec \/opt\/foo\/codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(derived, /exec \/opt\/foo\/codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
   // the app-server token and the resume token are the SAME install — no bare `codex app-server`.
   assert.doesNotMatch(derived, /(?:^|\s)codex app-server/m)
   // SPEXCODE_CODEX_SERVER_CMD remains the explicit escape hatch (highest precedence, overrides the derivation).
@@ -177,7 +177,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
     const overridden = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
     assert.match(overridden, /\/custom\/codex-server app-server --listen unix:\/\/"\$sock"/)
     // resume still tracks the launcher binary — the override targets ONLY the app-server.
-    assert.match(overridden, /exec \/opt\/foo\/codex --yolo --remote/)
+    assert.match(overridden, /exec \/opt\/foo\/codex --yolo [^\n]*--remote/)
   } finally {
     if (prevEnv === undefined) delete process.env.SPEXCODE_CODEX_SERVER_CMD
     else process.env.SPEXCODE_CODEX_SERVER_CMD = prevEnv
@@ -231,7 +231,7 @@ test('launchCmd cmd override wins over the ambient default (claude + codex) — 
   // same auth. claude returns the base command verbatim; codex embeds it as the TUI command in its launch script.
   assert.equal(claudeHarness.launchCmd('id', undefined, '/opt/reclaude --dangerously-skip-permissions'), '/opt/reclaude --dangerously-skip-permissions')
   const codexCmd = codexHarness.launchCmd('id', '/tmp/spex-proj', 'codex-glm --yolo')
-  assert.match(codexCmd, /exec codex-glm --yolo --remote/)
+  assert.match(codexCmd, /exec codex-glm --yolo [^\n]*--remote/)
 })
 
 test('launcherList + resolveLauncher read the named profiles from spexcode.json, fail loud on an unknown name', () => {
@@ -604,4 +604,22 @@ test('claude deliveryBlockedBy: the sessions panel refuses with the recovery nam
   assert.equal(guard('❯ draft text here\n  -- INSERT -- ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents'), null)
   // a footer hint ALONE (one string, not the pair) is not enough to refuse
   assert.equal(guard('some prose that says enter to return somewhere'), null)
+})
+
+test('a codex thread is created carrying its session identity, and the visible TUI re-establishes it', () => {
+  // A codex tool shell is a child of the SHARED app-server, so it can inherit no session id — and must not,
+  // that leak was github#76. codex's own `shell_environment_policy.set` gives the thread its identity instead,
+  // through the ONE channel that reaches a thread: thread/start's config override map (verified live — the
+  // thread's shell reports exactly the injected record id, with nothing of the launcher's env).
+  const params = codexStartThreadParams('/wt', true, { SPEXCODE_SESSION_ID: 'rec-42' }) as {
+    cwd: string; config: { bypass_hook_trust: boolean; shell_environment_policy: { set: Record<string, string> } }
+  }
+  assert.equal(params.cwd, '/wt')
+  assert.equal(params.config.bypass_hook_trust, true)
+  assert.deepEqual(params.config.shell_environment_policy.set, { SPEXCODE_SESSION_ID: 'rec-42' })
+  // no identity to inject → no policy key at all (an override map we do not need is one we do not send)
+  assert.deepEqual(codexStartThreadParams('/wt', false), { cwd: '/wt' })
+  // the TUI is the other entry point that creates a context for this session — same rule, same knob
+  const cmd = codexLaunchCommand('rec-42', 'codex --yolo', 'codex', '/tmp/spex-project')
+  assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --remote unix:\/\/"\$sock" resume "\$tid"/)
 })

@@ -171,35 +171,33 @@ scenarios:
       no-op exit — EVERY `git commit` in ANY repo with the hook installed exited 1 with no message whenever
       the shell inherited a foreign codex thread id (e.g. any command a codex session spawns in an unrelated
       repo), a silent total commit outage.
-  - name: session-stamp-attributes-the-acting-session
+  - name: session-identity-is-injected-never-inherited
     tags: [backend-api, cli]
     code: spec-cli/templates/hooks/prepare-commit-msg
     test:
       path: spec-cli/src/session-stamp.test.ts
-      name: the same id LEAKED into a stranger's process is refused — descent, not possession, is the proof
+      name: the session id the launch injected becomes the trailer, verbatim
     description: >-
-      Run the installed session-stamp hook the way git runs it (`prepare-commit-msg <msg-file>`), and real
-      `git commit`s, under the environment a SHARED harness daemon actually leaks — measured on the live box:
-      each per-project `codex app-server` still carries the `SPEXCODE_SESSION_ID` of whichever session
-      happened to start it, days later, several naming sessions whose records are already swept. Cover all
-      four claims a commit can carry: an inherited id belonging to ANOTHER live session (possession without
-      descent); the SAME shape of id when the committing process really is a descendant of that session's
-      registered agent; an id naming no record at all (a swept session's ghost); and the acting codex thread
-      id, whose shell descends from the shared daemon rather than from its own session. Include a REAL
-      dispatched codex worker committing in its own session, and a real agent committing OUTSIDE its worktree.
+      Measure the invariant at every process SpexCode creates, on the live box and through real dispatches.
+      (1) A session launch: read the generated launch line — does it strip inherited session-identity
+      variables before setting its own? (2) The shared codex app-server: start one through the real generated
+      script from a launcher environment carrying a session's ids, and read its `/proc/<pid>/environ`.
+      (3) A codex thread: create one through the real `thread/start` path and ask the agent to print its own
+      shell's identity, reading the answer only from the turn's final message. (4) The whole loop: dispatch a
+      REAL codex worker into a fresh `spex init` project and read the trailer on the commit it actually makes,
+      plus a real claude session's commit in this repo.
     expected: >-
-      The trailer names the session that actually authored the commit, decided by WHO — never by where the
-      commit happens. An inherited id (`SPEXCODE_SESSION_ID`, claude/pi's exported ids) is stamped only when
-      this process descends from that session's `agent.pid`, so the identical id leaked into an unrelated
-      process is refused; the acting `CODEX_THREAD_ID` is stamped without any descent test, resolved through
-      the record that captured it as `harness_session_id`, and outranks a leaked inherited id in the same
-      shell; an id resolving to no record is never stamped. Attribution is unchanged by location: a real
-      agent committing in the main checkout or another tree is still attributed. Every miss stays a clean
-      no-op (commit exits 0, no empty and no foreign trailer). The failure this locks: attribution took the
-      environment at face value, so a codex worker whose commit inherited a shared app-server's baked id
-      silently stamped a STRANGER's session — 48 commits in this repo carry one such ghost, filed as
-      github#76 — and once that session closed and its record was swept the trailer pointed at nothing,
-      breaking the version attribution the dashboard's history is built on.
+      A session-identity variable exists in a process only if that process belongs to that session. The launch
+      strips every inherited id and sets the record id; the shared app-server carries none at all; a codex
+      thread's own tool shell carries exactly the record id the backend injected for THAT thread (and its own
+      CODEX_THREAD_ID), with nothing of the launcher's environment. Because of that, the commit hook reads
+      SPEXCODE_SESSION_ID and stamps it — no store lookup, no per-harness ladder, no ancestry check, nothing
+      derived from the current directory — and both a dispatched codex worker and a claude session land a
+      trailer naming their own record. No id, no trailer, commit still exits 0 (including `--no-verify`, which
+      does not skip prepare-commit-msg). The failure this locks: with the invariant missing, a shared daemon
+      that outlived its session handed that id to every later thread's commit — 48 commits in this repo name a
+      session that no longer exists (github#76) — and any repair downstream of the leak is a guess about which
+      claim to believe.
   - name: codex-app-server-carries-no-session-identity
     tags: [backend-api, cli]
     code: spec-cli/src/harness.ts

@@ -1,87 +1,27 @@
 #!/usr/bin/env bash
 # @@@ session-stamp - auto-attribute a commit to the SESSION that authored it, ACROSS HARNESSES. SpexCode
 # reads the `Session:` trailer as a version's attribution (git is the database), keyed by the SpexCode record
-# id so the dashboard's session window links to it. So the question this hook answers is WHO is committing —
-# never WHERE the commit happens: a tree is where a process is standing, an accident of `cd`, and answering an
-# identity question with a location is a proxy that is merely usually right.
+# id so the dashboard's session window links to it.
 #
-# The identity is in the environment, but an environment variable is only worth as much as the reason it is
-# there. Two reasons exist, and each is CHECKABLE — that is what makes the answer deterministic rather than
-# assumed:
-#   1. PER-COMMAND — the harness stamps the ACTING conversation onto every command it spawns (codex's
-#      CODEX_THREAD_ID; measured: the shared app-server itself carries none, each thread's tool shell carries
-#      its own). Such a value cannot be a leftover, so RESOLVING it against the store is the whole check. It is
-#      a thread id, not a record key, so it resolves through the record that captured it as `harness_session_id`
-#      — the mapping the backend wrote when it created the thread.
-#   2. INHERITED — the launch injects `SPEXCODE_SESSION_ID` (and claude/pi export their own id) into the agent's
-#      process, and every descendant inherits it. That is exactly how it goes stale: a process that OUTLIVES the
-#      session — codex's shared per-project app-server is the measured case, but any long-lived child qualifies —
-#      keeps handing that id to strangers (github#76: 48 commits in this repo stamped with one closed session's
-#      id). Inheritance is the disease; DESCENT is the cure: an inherited id is trusted only when this process is
-#      genuinely a descendant of that session's own registered agent process (`agent.pid`, written at launch).
-#      A leaked id fails that test — the leaking daemon is not in our ancestry — while every real worker passes,
-#      including one committing outside its own worktree (a dispatched merge in the main checkout).
-# Unresolvable, or resolvable but not ours to claim → NO trailer. An untraceable or borrowed id must never
-# reach a commit message; an absent one costs nothing (a commit without a trailer is simply unattributed).
-# An existing Session: trailer is left alone, so the dogfood ritual / a human can still set one explicitly.
+# The id is simply READ here, because it was established where it is KNOWN: whoever creates an agent's
+# execution context injects that context's own record id, and nothing else may carry one.
+#   - a session launch bakes `SPEXCODE_SESSION_ID=<record id>` into the agent's process — and STRIPS every
+#     session-identity variable it inherited first, so the pane's ancestry (a tmux server started long ago by
+#     someone else) cannot smuggle one in;
+#   - a codex thread gets the same variable injected into every command it spawns, at `thread/start`, via
+#     codex's own `shell_environment_policy.set` — the tool shell is a child of the SHARED app-server and must
+#     therefore inherit nothing, so the backend hands it its identity per thread instead;
+#   - that shared app-server, and any other process we own that belongs to no single session, is spawned with
+#     those variables stripped. A process that outlived its session handing its id to strangers is exactly how
+#     this trailer once named a session that no longer existed (github#76).
+# So there is nothing to resolve, alias, or verify at commit time: the variable is present only in processes
+# that genuinely belong to that session, and it already IS the record id. No store lookup, no per-harness
+# tiers, and nothing derived from the current directory — where a process stands says nothing about who it is.
+# No id → no trailer. An existing Session: trailer is left alone, so the ritual / a human can set one by hand.
 set -euo pipefail
 msg_file="$1"
 grep -qiE '^Session:[[:space:]]' "$msg_file" && exit 0
-
-# the per-project store (mirrors layout.ts runtimeRoot / harness.sh hp_runtime_dir): keyed by the project
-# (dirname of the ABSOLUTE git-common-dir), '/' and '.' → '-'. This picks WHICH project's records to read —
-# the repo whose history the trailer lands in — it is not part of deciding WHO the author is.
-gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-  || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null) || gcd=""
-[ -n "$gcd" ] || exit 0
-rd="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
-
-# an id → the record it names: the record keyed by it, else the one that captured it as `harness_session_id`
-# (the codex thread-id alias). Echoes the RECORD id, or nothing. A miss is the ORDINARY case — every repo on
-# the box inherits foreign ids from some agent's shell — so it must never abort the hook (and the commit)
-# under `set -euo pipefail`: grep's no-match (exit 1) and an absent sessions glob (exit 2) are swallowed here.
-resolve_record() {
-  [ -n "${1:-}" ] || return 0
-  [ -e "$rd/sessions/$1/session.json" ] && { printf '%s' "$1"; return 0; }
-  local hit
-  hit=$(grep -lF "\"harness_session_id\": \"$1\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1) || hit=""
-  [ -n "$hit" ] || return 0
-  hit=${hit%/session.json}
-  printf '%s' "${hit##*/}"
-}
-
-# is $1 an ancestor of this hook process? The platform difference (procfs vs ps) sits HERE, at the one seam
-# that reads a parent pid — never in the trust rule above it. Bounded walk: a pid chain is short, and pid 1
-# ends it.
-parent_of() {
-  if [ -r "/proc/$1/status" ]; then awk '/^PPid:/ { print $2; exit }' "/proc/$1/status"
-  else ps -o ppid= -p "$1" 2>/dev/null | tr -d '[:space:]'; fi
-}
-descends_from() {
-  [ -n "${1:-}" ] && [ "$1" != "0" ] && [ "$1" != "1" ] || return 1
-  local p=$$ n=0
-  while [ -n "$p" ] && [ "$p" != "0" ] && [ "$p" != "1" ] && [ "$n" -lt 64 ]; do
-    [ "$p" = "$1" ] && return 0
-    p=$(parent_of "$p") || p=""
-    n=$((n + 1))
-  done
-  return 1
-}
-
-sid=""
-# 1. per-command: the acting codex thread, stamped by codex onto this very command
-[ -n "${CODEX_THREAD_ID:-}" ] && sid=$(resolve_record "$CODEX_THREAD_ID")
-# 2. inherited: a launch-injected / harness-exported id, trusted only under descent from its own agent process
-if [ -z "$sid" ]; then
-  for claimed in "${SPEXCODE_SESSION_ID:-}" "${CLAUDE_CODE_SESSION_ID:-}" "${PI_SESSION_ID:-}" "${OPENCODE_SESSION_ID:-}"; do
-    [ -n "$claimed" ] || continue
-    cand=$(resolve_record "$claimed")
-    [ -n "$cand" ] || continue
-    agent=$(cat "$rd/sessions/$cand/agent.pid" 2>/dev/null) || agent=""
-    if descends_from "$agent"; then sid=$cand; break; fi
-  done
-fi
-[ -n "$sid" ] || exit 0
+[ -n "${SPEXCODE_SESSION_ID:-}" ] || exit 0
 
 # Stamp via interpret-trailers (git's own sample-hook mechanism), NOT a raw printf append: appending after a
 # message that already carries a trailer block (e.g. `spex spec ack`'s Spec-OK) opens a new paragraph, and git then
@@ -90,5 +30,5 @@ fi
 # on an unterminated message (git merge -m writes MERGE_MSG without one) it folds the trailer into the subject
 # paragraph, where git's trailer parser never looks — the reason merge commits' Session: never parsed.
 [ -n "$(tail -c1 "$msg_file")" ] && echo >> "$msg_file"
-git interpret-trailers --in-place --trailer "Session: $sid" "$msg_file"
+git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$msg_file"
 exit 0

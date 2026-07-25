@@ -4,7 +4,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { claudeHarness, codexHeadlessHarness } from './harness.js'
+import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars } from './harness.js'
 import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
@@ -245,4 +245,20 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   assert.equal(canDrainQueued(reread, publicAuthority), true, 'a replacement child at the same public authority takes over')
   assert.equal(canDrainQueued(reread, 'http://127.0.0.1:8956'), false, 'a different backend authority cannot claim it')
   assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')
+})
+
+test('a launch establishes identity: inherited session ids are stripped, this session\'s is set', () => {
+  const prevHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-identity-'))
+  process.env.SPEXCODE_HOME = home
+  try {
+    const script = readFileSync(launchScript('identity-launch-test', "'hi'", claudeHarness, 'true'), 'utf8')
+    // the pane inherits the tmux SERVER's env, so whatever session started that server would otherwise ride
+    // along into every worker — the leak class behind github#76. The launch strips them all, then sets its own.
+    for (const v of sessionIdentityEnvVars()) assert.match(script, new RegExp(`env[^\\n]*-u ${v}\\b`), v)
+    assert.match(script, /SPEXCODE_SESSION_ID=identity-launch-test/)
+    assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
+  } finally {
+    if (prevHome === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prevHome
+  }
 })

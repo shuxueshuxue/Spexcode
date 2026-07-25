@@ -41,8 +41,9 @@ content filter. Generated HTML has one audited insertion point inside `RichText`
 `dangerouslySetInnerHTML` themselves.
 
 Rendered mathematics remains ordinary selectable conversation content. KaTeX's accessibility and visual DOM
-representations identify one owning math token; when a TimelineChat range fully contains that token, copy emits
-its authored TeX source exactly once rather than concatenating MathML, annotation, and visual fallback text.
+representations identify one owning math token. A selection intersecting any portion of that token copies the
+formula atomically as its complete authored TeX source exactly once, rather than exposing a glyph-level rule tied
+to KaTeX internals or concatenating MathML, annotation, and visual fallback text.
 All non-math portions keep the browser Range's native text serialization, so this does not become a second prose
 parser or change the conversation's focus-preserving custom-highlight selection model.
 

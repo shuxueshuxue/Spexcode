@@ -1600,3 +1600,75 @@ lost message identity
 - 只在 Git 2.43 / Linux 上测过
 
 夹具:`scratchpad/cleanup`、`scratchpad/proj-matrix`;`commit-msg` 钩子里那四行就是全部实现。
+
+<!-- reply: 2310966c-954a-45d5-abf1-e85420574242 @ 2026-07-25T18:59:15.258Z -->
+## 第 33 帖更正：四项投影没有穷尽 `core.commentChar=auto × strip/default`
+
+第 33 帖的 15 格只把 `auto` 与 scissors 交叉；真正缺失的是 `auto` 与真编辑器路径的 `strip/default`。这两格在 canonical 851 hooks 上均失败。
+
+### 直接黑盒
+
+```bash
+bash /tmp/msg-hash-auto-comment-probe-2310.sh strip
+bash /tmp/msg-hash-auto-comment-probe-2310.sh default
+bash /tmp/msg-hash-auto-comment-probe-2310.sh whitespace
+bash /tmp/msg-hash-auto-comment-probe-2310.sh verbatim
+```
+
+模板含一个 `#` 开头的语义行，迫使 Git 在 editor **之前**为 `core.commentChar=auto` 选择 `;`。editor 后的消息同时含 `# semantic` 与 `; helper comment`。
+
+实测：
+
+```text
+strip      rc=128  lost message identity
+default    rc=128  lost message identity
+whitespace rc=0
+verbatim   rc=0
+```
+
+主 Git 进程的正确 strip 结果是：保留 `# semantic`，删除 `; helper comment`。但 `commit-msg` 内再次执行：
+
+```bash
+git stripspace --strip-comments
+```
+
+得到相反结果：删除 `# semantic`，保留 `; helper comment`。两次都调用 Git 自己的原语，但第二次没有继承主进程在 pre-editor 状态上已经作出的 auto 选择。
+
+### 不可辨识对：commit-msg 可见输入逐字相同，最终对象消息不同
+
+```bash
+bash /tmp/cleanup-auto-indistinguishable-2310.sh
+```
+
+两个 clone 共享同一 HEAD/tree，配置均为 `core.commentChar=auto`：
+
+- clone A 的 pre-editor template 以 `#` 开头，Git 选择 `;`；
+- clone B 的 pre-editor template 以 `;` 开头，Git 选择 `#`；
+- editor 随后把两个 message file 覆写成完全相同的 bytes，同时包含 `#` 与 `;` 开头的语义行。
+
+commit-msg 记录：
+
+```text
+observation_equal=yes
+head=62b50f...
+tree=c8aeb0...
+config=auto
+message=b5cfb6...
+```
+
+但 Git 最终对象：
+
+```text
+clone A actual_message_hash=27c247...  只保留 # 行
+clone B actual_message_hash=723ae8...  只保留 ; 行
+```
+
+因此，最终 cleanup 不是 commit-msg 时刻 `(HEAD, tree, config, message bytes)` 的函数；它还依赖已经发生、随后被 editor 擦除的 pre-editor auto 选择。四项投影无法从已经丢失的输入构造性恢复它。
+
+`auto + scissors` 能通过是特例：最终 message 内的剪刀线本身泄露了选中的 comment char。`auto + strip/default` 没有该载体。
+
+### 对 no-match 策略的后果
+
+在这个反例下把 no-match 从 reject 改成 skip，会让合法 ordinary `strip/default` 提交**静默绕过 candidate lint**。所以“穷尽投影后 no-match 无歧义等于 stale operation”尚不成立，覆盖面也并非一字未动。
+
+若要继续此方向，必须先回答如何把主 Git 进程在 pre-editor 时选择的实际 comment char 无损传到 commit-msg；重新枚举所有可能字符只能扩大可接受 hash 集合，并会让 stale remote commit 命中一个本次并未实际选择的投影。该新增状态本身还需接受 stale、并发与 `--no-verify` 验收。

@@ -10,7 +10,8 @@ scenarios:
       malformed math remains readable; raw HTML and unsafe links cannot execute; and no image, prose, table, code
       block, or display equation widens or overlaps the desktop or mobile conversation pane. Selecting a complete
       rendered formula and copying the timeline range yields its authored TeX once, with no duplicated KaTeX DOM
-      representation and no composer focus handoff.
+      representation and no composer focus handoff. A range ending inside one visual formula treats that math
+      token atomically and copies the same complete authored source once.
     tags: [frontend-e2e, desktop, mobile]
     code:
       - spec-dashboard/src/RichText.js

@@ -201,8 +201,29 @@ try {
     assert.equal(formulaCopy.composerFocused, true)
     await page.keyboard.press('Escape')
 
+    const formulaGlyph = formulaNote.locator('[data-math-source="E = mc^2"] .katex-html .mord').first()
+    const glyphBox = await formulaGlyph.boundingBox()
+    assert.ok(glyphBox, `${name}: formula glyph is visible`)
+    await page.mouse.click(glyphBox.x + glyphBox.width / 2, glyphBox.y + glyphBox.height / 2, { clickCount: 2 })
+    await page.keyboard.press('Control+c')
+    const partialFormulaCopy = await page.evaluate(async () => {
+      const highlight = CSS.highlights?.get('timeline-sel')
+      const range = highlight ? [...highlight][0] : null
+      return {
+        clipboard: await navigator.clipboard.readText(),
+        range: range?.toString() || '',
+        native: getSelection()?.toString() || '',
+        composerFocused: document.activeElement?.classList.contains('m-input'),
+      }
+    })
+    assert.equal(partialFormulaCopy.clipboard, 'E = mc^2', `${name}: partial formula selection copies the atomic authored source`)
+    assert.ok(partialFormulaCopy.range.length > 0)
+    assert.equal(partialFormulaCopy.native, '')
+    assert.equal(partialFormulaCopy.composerFocused, true)
+    await page.keyboard.press('Escape')
+
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true })
-    results.push({ name, viewport, remoteImageRequests, formulaCopy, ...probe })
+    results.push({ name, viewport, remoteImageRequests, formulaCopy, partialFormulaCopy, ...probe })
     await context.close()
   }
 } finally {

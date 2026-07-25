@@ -26,9 +26,10 @@ Doer (in the `node/<id>` worktree):
 
 Manager (the human reviewer, after reviewing the proposal):
 
-5. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`. The merge is itself a **dispatch** —
-   the manager dispatches the merge back to the session and the session's *own* agent runs the `git merge` (it knows the
-   work's intent and can resolve conflicts); the server never touches `main`'s tree.
+5. Merge — a **dispatch**, not a server script: the manager hands the merge back to the session and that
+   session's *own* agent lands it (it knows the intent, and it syncs the base into its own worktree first so
+   what reaches the shared checkout cannot conflict). The merge prompt states the style and the steps; the
+   server never touches `main`'s tree.
 6. Delete the node branch; retire the worktree.
 
 **Why you don't restate the ritual when dispatching.** A dispatched worker gets a **task-focused**
@@ -51,96 +52,6 @@ Convention for live work: worktrees in `.worktrees/`, branch `node/<id>`. Sessio
 global per-project store (`session.json` under `~/.spexcode/projects/<enc>/sessions/<id>/`), never as
 a file inside the worktree.
 
-## Supervising — the manager loop
-
-If you're the **managing session** (you read this file), you're a **manager**, not a worker. Don't
-write feature code and don't deep-read source — that's what workers are for. Read the goal node and
-this loop, then **dispatch immediately**: decompose the goal into worker-sized tasks and delegate
-each. There is no discovery phase.
-
-- **DISPATCH** — `spex session new "<task>"` launches one worker. A session is bound to no node by default;
-  the worker finds and reads its governing spec itself. The prompt's first `[[<id>]]` binds the session to
-  that node: the branch is named
-  `node/<slug(id)>-<shortid>`, the board attributes the session to the exact id, and if the node exists one line
-  with its `spec.md` path is appended to the launch prompt. The first `[[…]]` binds even when the
-  id is a passing mention or doesn't exist; a nonexistent id still becomes the branch name. Which
-  nodes a session is actually linked to is read from its edit overlay and its commits' `Session:`
-  trailers. Give the worker **only its task**; the dev-flow contract reaches it through its own
-  system prompt — don't restate it.
-- **PARALLELIZE** — dispatch independent tasks **concurrently**. That parallelism is the core payoff
-  of spec-driven dev, so reach for it; don't serialize out of caution. Contention on `main` is fine —
-  git serializes the merges, and a conflict just means you re-merge. Never throttle parallel work to
-  avoid conflicts.
-- **MONITOR** — `spex session watch` streams the session lifecycle: `launched` → actionable transitions
-  (`review` / `done` / `close-pending` / `offline` / `error` / `asking`) → `closed`. A booting worker reads
-  `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
-  genuinely gone — so each event is trustworthy and needs no cross-checking against git.
-- **WAIT WITH `spex session wait <id>`** — to wait on a dispatched worker, background `spex session wait <id>`: it prints
-  the worker's current status on arrival, then blocks until it **observes the worker transition from a
-  non-actionable into an actionable status** (edge-triggered — an already-actionable arrival state does not
-  return it; to just READ the current state, use the snapshot verbs below), prints the observed status path
-  (`working→review`, last token = the reached status), and **exits** (the exit is your wake-up — the
-  harness re-invokes you when the backgrounded command finishes). This is also how you wait for a dispatched
-  MERGE to actually land: the merge agent's activity presses the status to `working`, and the post-merge
-  declaration edges it back to actionable — no `git merge-base` polling. It **draws the watcher→worker edge on the
-  session graph** for the whole wait (so your supervision is visible, not an invisible spin) and is
-  **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker that never produces
-  an edge can't hang you; the timeout message carries the observed path). Background one wait per worker; N waits draw N edges. One trap:
-  **never block on `spex session watch`** — that's the human's *forever* stream: it never exits, and it freezes your turn.
-  (`spex session review <id>` / `spex session ls` still return a one-shot snapshot; `spex graph --json` dumps the board JSON for a glance.)
-- **REVIEW** — `spex session review <id>` prints the one review payload: commits ahead of `main`, the
-  merge-base diff (the worker's real changes), and the merge-conflict/lint gates (there is deliberately no
-  typecheck/test gate — soundness is proven by eval scenarios, not a language-specific checker). Decide from
-  that — you don't hand-run git or read the source.
-- **MERGE** — `git -C <root> merge --no-ff <branch>`. Then **confirm the merge landed**: `git -C <root>
-  log -1` must show `HEAD` advanced to the new merge commit **before** you go any further. Never close
-  an unmerged branch — closing discards the work.
-- **CLOSE** — only **after** the merge is confirmed: `spex session close <id>`.
-- **GUIDE** — `spex session send <id> "<msg>"` corrects or steers a live worker. Keep `spex spec lint` at
-  **0 errors** across the tree.
-- **HELP** — lost? `spex help` is the command map, `spex help <cmd>` one command's usage, and
-  `spex guide <topic>` the workflows/formats those commands assume. A `--help` probe is always safe:
-  it prints and exits before the verb runs.
-
-## What a spec node is
-
-- A node = a directory under `.spec/` containing a `spec.md`. `id` = directory basename; `parent` =
-  the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
-  (the project). Its children are the package nodes — `spec-cli` (Hono backend + source-of-truth
-  guards), `spec-dashboard` (UI), `spec-eval` (the measurement system), and `spec-forge` (a built,
-  read-only forge **link tracer**) — plus `extensions` (satellite features living in their own repos)
-  and the **reflexive plugin system** (`.plugins` and `plugin-system`, next bullet). A node is a
-  *directory*, not a file — that's what lets it both nest (children = subdirs) and co-locate assets;
-  the id lives in the dir name, so the file is always `spec.md` (never `<id>.md` — that would
-  duplicate the id).
-- **The plugin system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
-  by the same dogfood ritual. Two roots sit under `spexcode`: **`.plugins`** holds the concrete
-  *instance* plugins (`core` + `deploy-runbook` + `forge-link` + `memory-hygiene` + `reproduce-before-fix`
-  are `surface: system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`;
-  `e2e-review` + `taste` are `surface: skill` (`distill` is both skill and command). Each plugin carries a `surface`
-  frontmatter **field** — `surface: system` materializes its body (in name order) into the
-  `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness
-  **auto-discovers** it as always-on context (not a launch-time `--append-system-prompt`); `surface:
-  command` exposes it as a `/`-dropdown preset for new sessions; `skill`/`agent`/`hook` materialize
-  into the harness's skill/agent dirs and the hook manifest.
-  There are no `system/`/`command/` bucket dirs and no path-driven surface — the surface *is* the field
-  (discovered recursively, so a plugin may nest under a grouping plugin), and every plugin is a real
-  graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` (plus the hook/skill/agent loaders in
-  `specs.ts`) gather the surfaces; only built/active plugins gather (a `status: pending` plugin renders
-  on the board but reaches no surface).
-- `spec.md` = frontmatter (`title`, `status` ∈ pending|active|merged|drift — mostly backend-derived,
-  rarely hand-set, `session`, `hue`, `desc`, optional `code:` and `related:` lists; plugin nodes also
-  carry a `surface` field) + a markdown body. `spex guide spec` prints the full format.
-- **The body is a living current-state document, never a changelog.** It always describes the node's
-  *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
-  `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
-  `## vN …`.) `spex spec lint`'s **living** rule enforces this. Version evolution is read from git and
-  shown in the dashboard's **history** tab (each commit's reason, session, and line-diff).
-- **Git is the database.** A node's `version` is the number of **content commits** to its `spec.md`
-  (*excluding pure renames* — moving a file in a reparent isn't a version); the
-  history rows are those same commits, each attributed via the `Session:` commit trailer.
-  There is no separate datastore — the dashboard is a read-time aggregator over git.
-
 ## Kinds of commit (not every commit is a spec commit)
 
 Git knows nothing about specs. A commit becomes a node's *version* **only because it changed that
@@ -151,7 +62,7 @@ Three kinds of commit coexist in history:
 
 - **Spec commit** — touches a `.spec/**/spec.md` (in the ritual, bundled with the code change it
   justifies). Becomes a version row: subject = the "reason", `Session:` trailer = attribution.
-- **Merge commit** — `merge node/<id>: …`, the `--no-ff` gate onto `main`. Not a version itself.
+- **Merge commit** — the gate onto `main` (shape stated by the merge prompt). Not a version itself.
 - **Plain code/docs commit** — touches code or docs but no `spec.md` (e.g. the early `spec-cli:` /
   `spec-dashboard:` build commits, or this guide). **Invisible to the spec timeline** — just
   ordinary git.
@@ -218,9 +129,8 @@ together — that is a project choice, not a git requirement.
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.
-- `spex session watch` — the **canonical session monitor**: streams actionable session transitions as they
-  happen (`spex session ls` for a one-shot table). The dashboard's live Sessions console is the GUI
-  equivalent.
+- Session monitoring lives in the CLI's own help (`spex help session`); the dashboard's live Sessions
+  console is its GUI equivalent.
 - `spex spec lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph.
   Errors: **integrity** (a `code:`/`related:` path doesn't exist), **one-govern** (a node governs more than
   one file), **living** (a body contains a `## vN` changelog heading instead of staying current-state; see

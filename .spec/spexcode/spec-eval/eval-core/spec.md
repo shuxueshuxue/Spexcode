@@ -156,6 +156,15 @@ remark track) and the in-history fast path pays no extra git call. An ack vindic
 reading. `freshness.ts` stays a pure computation — the remark track is fed in at the call sites, never
 read from the issue store here.
 
+The content fallback is also a bounded resource boundary. Heavy tree diffs are scheduled per repository
+root and resolved HEAD: callers for the same anchor share one in-flight query, while different anchors in
+that scope run one at a time. Successful settled results enter the existing 4096-entry LRU; an idle scope
+retains no queue, waiter, or closure. A graph abort or timeout rejects both its active and queued work with
+the existing `AbortError`, removes the in-flight entry, and never caches the failed result, so a later call
+can retry. A moved HEAD naturally creates a new scope while old settled results age out through the same
+bounded LRU. Synchronous freshness decisions consume only a successfully primed memo entry — they never
+bypass a failed asynchronous prime by starting another synchronous diff.
+
 The code axis also **reports its drift for display**, not just decides it: `codeDrift` counts, per governed
 file, how many commits in `codeSha..HEAD` touched it (the same ancestry reachability, reused — not a second
 freshness path), so a surface can say `EvalsFeed.jsx +3` instead of a bare "code moved" ([[event-detail]]'s

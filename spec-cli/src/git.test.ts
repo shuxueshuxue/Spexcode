@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -121,7 +121,7 @@ test('large-history representation delegates reachable path windows to git witho
     specNodes: new Map([[version, new Set(['X'])]]),
     ackByNode: new Map<string, string[]>(),
     counts: new Map<string, number>(), windows: new Map<string, string[]>(),
-    rawWindows: new Map<string, string[]>(), reachable: new Map<string, boolean>(),
+    rawWindows: new Map<string, string[]>(), reachable: new Set([version, changed]),
   }
   const i = { ...idx({}), lazy } as DriftIndex
 
@@ -232,4 +232,87 @@ test('ops already LANDED on main dissolve from the overlay', async () => {
   assert.equal((await worktreeSpecDelta(w, 'main')).length, 1)   // pending before the merge…
   execFileSync('git', ['-C', root, 'merge', '-q', '--no-ff', '-m', 'merge node/landed', 'node/landed'])
   assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])       // …gone once main contains it
+})
+
+test('large-history HEAD reachability is one recoverable flight, never per-reading git fanout', { concurrency: false }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-'))
+  const bin = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-bin-'))
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const run = (...args: string[]) => execFileSync(realGit, ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  run('init', '-q', '-b', 'main')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'test')
+
+  let stream = 'blob\nmark :1\ndata 2\nx\n'
+  stream += 'commit refs/heads/main\nmark :2\ncommitter Test <test@example.com> 1700000000 +0000\ndata 4\nbase\n'
+  for (let i = 0; i < 12_000; i++) stream += `M 100644 :1 .fixture/path-${String(i).padStart(5, '0')}-${'x'.repeat(80)}\n`
+  stream += '\n'
+  for (let i = 2; i <= 10_138; i++) {
+    stream += `commit refs/heads/main\nmark :${i + 1}\ncommitter Test <test@example.com> ${1700000000 + i} +0000\ndata 0\nfrom :${i}\n\n`
+  }
+  execFileSync(realGit, ['-C', root, 'fast-import', '--quiet'], { input: stream })
+  run('read-tree', 'HEAD')
+
+  const argvLog = join(bin, 'argv.log')
+  const trigger = join(bin, 'hang-reachable')
+  const shim = join(bin, 'git')
+  writeFileSync(argvLog, '')
+  writeFileSync(shim, `#!/bin/sh
+printf '%s\n' "$*" >> "${argvLog}"
+if [ -e "${trigger}" ]; then
+  case "$*" in
+    *" rev-list HEAD") while :; do sleep 1; done ;;
+  esac
+fi
+exec "${realGit}" "$@"
+`)
+  chmodSync(shim, 0o755)
+  const oldPath = process.env.PATH
+  process.env.PATH = `${bin}:${oldPath || ''}`
+  const reachSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
+    .filter((line) => line === `-C ${root} rev-list HEAD`).length
+  const ancestorSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
+    .filter((line) => line.includes('merge-base --is-ancestor')).length
+  const waitFor = async (want: number) => {
+    const deadline = Date.now() + 2000
+    while (reachSpawns() < want && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+
+  try {
+    const first = await Promise.all(Array.from({ length: 100 }, () => driftIndex(root)))
+    assert.ok(first.every((idx) => idx === first[0]), 'same HEAD did not share one drift-index flight')
+    assert.equal(reachSpawns(), 1)
+    assert.equal(ancestorSpawns(), 0)
+    const head1 = run('rev-parse', 'HEAD')
+    assert.equal(commitReachable(first[0], head1), true)
+    assert.equal(commitReachable(first[0], '0'.repeat(40)), false)
+    await Promise.all(Array.from({ length: 100 }, () => primeLazyPathWindows(first[0], head1, [])))
+    assert.equal(reachSpawns(), 1, 'same-SHA readers spawned reachability work')
+
+    run('commit', '--allow-empty', '-qm', 'move head')
+    const second = await Promise.all(Array.from({ length: 100 }, () => driftIndex(root)))
+    assert.notEqual(second[0], first[0])
+    assert.equal(reachSpawns(), 2, 'new HEAD did not build exactly one replacement set')
+    assert.equal(ancestorSpawns(), 0)
+
+    run('commit', '--allow-empty', '-qm', 'abort head')
+    writeFileSync(trigger, 'hang\n')
+    const controller = new AbortController()
+    const aborted = withGitAbortSignal(controller.signal, () => driftIndex(root))
+    await waitFor(3)
+    assert.equal(reachSpawns(), 3, 'abort fixture never started the reachable-set child')
+    controller.abort()
+    await assert.rejects(aborted, (error: unknown) => (error as Error)?.name === 'AbortError')
+    rmSync(trigger, { force: true })
+
+    const recovered = await driftIndex(root)
+    assert.equal(reachSpawns(), 4, 'failed reachable-set promise was cached instead of retried')
+    assert.equal(ancestorSpawns(), 0)
+    assert.equal(commitReachable(recovered, run('rev-parse', 'HEAD')), true)
+    assert.equal(commitReachable(recovered, 'f'.repeat(40)), false)
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(root, { recursive: true, force: true })
+    rmSync(bin, { recursive: true, force: true })
+  }
 })

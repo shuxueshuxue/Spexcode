@@ -39,9 +39,10 @@ Two principles keep that derivation cheap on a long-running server:
 - **Scale with history, not node count.** Ordinary repositories use two single git walks back the whole board:
   one over the `.spec` timeline (every node's version + history rows) and one `git log --name-only HEAD` over
   all files (the drift index), each cached on HEAD. For a large name-stream, the drift/anchor index switches
-  to governed path-scoped `rev-list` windows plus Git reachability, retaining the same DAG semantics without
-  retaining every commit/file edge in JS. Resolving any node is a pure lookup in the small-index mode, while
-  the large-index path memoizes bounded path windows. The recent/history tab for a single node is served off
+  to one batched HEAD commit-id set plus governed path-scoped `rev-list` windows, retaining the same DAG
+  semantics without retaining every commit/file edge in JS or spawning one reachability child per reading.
+  Resolving any node is a pure lookup in the small-index mode, while the large-index path memoizes bounded
+  path windows. The recent/history tab for a single node is served off
   that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an

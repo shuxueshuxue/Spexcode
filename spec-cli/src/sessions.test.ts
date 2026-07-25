@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -131,6 +131,113 @@ test('launch retry log names the fast exit without guessing a daemon race', () =
   }
 })
 
+// @@@ the retry only covers what retrying can fix. Two launcher stubs, both exiting instantly: one printing
+// the harness's OWN settled failure (a `--resume` id claude has no conversation for), one printing nothing a
+// harness would recognise. Count the attempts each actually produces by having the stub append to a file.
+test('a launch failure the harness itself called settled is attempted exactly once', () => {
+  const prevHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-launch-class-'))
+  process.env.SPEXCODE_HOME = home
+  // The classifier reads the tmux PANE, so the stub must run inside one — and the stub prints its settled
+  // failure to STDOUT, the stream real reclaude uses. An earlier version of this test printed to stderr and
+  // passed against a stderr-only implementation that could not classify a real harness at all.
+  // `stale` pre-seeds the pane with a settled-failure line from an EARLIER run before the launch line is
+  // typed — the scrollback condition that must not condemn the current attempt.
+  // ONE SOCKET PER CASE: sharing one made the last case's kill end the server while the next case's
+  // new-session was still starting ("server exited unexpectedly") — a flake in this test, not the product.
+  // Each case owns its socket and reaps that exact server itself; nothing waits on a guessed interval.
+  // TMUX_TMPDIR puts every socket inside this test's own temp dir, so the servers it starts leave nothing in
+  // the shared /tmp/tmux-<uid> (kill-server reaps the server but leaves the socket FILE) — rmSync(home) below
+  // takes them with it.
+  const tmuxEnv = { ...process.env, TMUX_TMPDIR: home }
+  const tmux = (...args: string[]) => execFileSync('tmux', args, { env: tmuxEnv })
+  const tmuxTry = (...args: string[]) => spawnSync('tmux', args, { env: tmuxEnv, encoding: 'utf8' })
+  const run = (name: string, stubBody: string, stale = false): { attempts: number; pane: string } => {
+    const sock = `spex-launch-class-${process.pid}-${name}`
+    const counter = join(home, `${name}.attempts`)
+    const stub = join(home, `${name}.sh`)
+    writeFileSync(stub, `echo x >> ${JSON.stringify(counter)}\n${stubBody}\nexit 1\n`)
+    const script = launchScript(name, '', claudeHarness, `bash ${stub}`)
+    // exactly how the product starts a worker: an idle shell window, then the launch line typed into it. The
+    // shell outlives the script, so the pane keeps everything the run printed — no remain-on-exit race.
+    tmux('-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80')
+    if (stale) {
+      tmux('-L', sock, 'send-keys', '-t', name, '-l', '--', 'echo "No conversation found with session ID: an-earlier-run"')
+      tmux('-L', sock, 'send-keys', '-t', name, 'Enter')
+      spawnSync('sleep', ['0.5'])
+    }
+    tmux('-L', sock, 'send-keys', '-t', name, '-l', '--', `bash ${script}`)
+    tmux('-L', sock, 'send-keys', '-t', name, 'Enter')
+    const deadline = Date.now() + 60_000
+    let pane = ''
+    for (;;) {
+      pane = tmuxTry('-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name).stdout ?? ''
+      if (/not retrying/.test(pane) || /attempt 3/.test(pane) || Date.now() > deadline) break
+      spawnSync('sleep', ['0.5'])
+    }
+    const attempts = readFileSync(counter, 'utf8').split('\n').filter(Boolean).length
+    tmuxTry('-L', sock, 'kill-server')   // this case's server, by its exact socket
+    return { attempts, pane }
+  }
+  try {
+    // stdout on purpose: that is where real reclaude prints this line.
+    const settled = run('settled', 'echo "No conversation found with session ID: deadbeef"')
+    assert.equal(settled.attempts, 1, `a settled failure is spent ONCE, not three times\n${settled.pane}`)
+    assert.match(settled.pane, /No conversation found with session ID/, "the harness's own reason stays visible on the pane")
+    assert.match(settled.pane, /retrying cannot fix \(see above\); not retrying/)
+    assert.doesNotMatch(settled.pane, /attempt 2/)
+
+    const unclassifiable = run('unclassifiable', 'echo "the wrapper fell over"')
+    assert.equal(unclassifiable.attempts, 3, `an unclassifiable fast exit keeps the bounded readiness retry\n${unclassifiable.pane}`)
+    assert.match(unclassifiable.pane, /fast launcher exit before readiness; retrying/)
+
+    // the scrollback trap: an OLD settled-failure line is already on the pane, but this run's failure is not
+    // one — it must still get all three attempts, or a stale line would cut a recoverable launch.
+    const stale = run('stale', 'echo "the wrapper fell over"', true)
+    assert.match(stale.pane, /No conversation found with session ID: an-earlier-run/, 'the stale line really was on the pane')
+    assert.equal(stale.attempts, 3, `a stale settled line must not condemn an unrelated fast exit\n${stale.pane}`)
+    assert.doesNotMatch(stale.pane, /retrying cannot fix/, 'nothing was misclassified as settled')
+
+    // and with the same stale line present, a genuine settled failure this run is STILL caught once
+    const staleAndSettled = run('stale-settled', 'echo "No conversation found with session ID: this-run"', true)
+    assert.equal(staleAndSettled.attempts, 1, `a real settled failure is still spent once\n${staleAndSettled.pane}`)
+    assert.match(staleAndSettled.pane, /retrying cannot fix/)
+  } finally {
+    if (prevHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = prevHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+// the transport's own settled failures, answered BEFORE a window is opened: a launch that cannot succeed is
+// refused once with its own code, never attempted and retried on a wall clock.
+test('launchPreflight refuses a launch that cannot succeed, naming which fact settled it', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-preflight-'))
+  const base: SessRec = {
+    session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
+    title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
+    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+    launcher: null, launchCmd: '/bin/true', launchOwner: null,
+  }
+  try {
+    assert.equal(launchPreflight(base)?.code, 'no-worktree', 'a worktree that is gone settles the launch')
+    execFileSync('git', ['init', '-q', '-b', 'main', home])
+    execFileSync('git', ['-C', home, 'config', 'user.email', 'p@e.test'])
+    execFileSync('git', ['-C', home, 'config', 'user.name', 'p'])
+    writeFileSync(join(home, 'f'), 'x')
+    execFileSync('git', ['-C', home, 'add', '-A'])
+    execFileSync('git', ['-C', home, 'commit', '-qm', 'seed'])
+    const live = { ...base, worktreePath: home }
+    assert.equal(launchPreflight(live), null, 'a live worktree with no branch pinned passes')
+    assert.equal(launchPreflight({ ...live, branch: 'node/never-existed' })?.code, 'no-branch')
+    assert.equal(launchPreflight({ ...live, branch: 'main' }), null, 'an existing branch passes')
+    assert.equal(launchPreflight({ ...live, launchCmd: '/nope/not-here --flag' })?.code, 'no-launcher')
+    assert.equal(launchPreflight({ ...live, launchCmd: 'bare-name-on-path' }), null, 'a bare name is left to PATH, never guessed at')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('one-shot headless launch does not retry a successful fast exit', () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-one-shot-launch-'))
@@ -184,14 +291,18 @@ test('headless turn failure is an active-only error projection', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
   process.env.SPEXCODE_HOME = home
   const id = `headless-turn-state-${process.pid}`
+  // a REAL worktree dir: a record naming a directory that does not exist is a retired session, which no
+  // lifecycle writer may touch — this test is about the turn-failure CAS on a LIVE one.
+  const worktree = join(home, 'headless-turn-state')
   const raw = {
-    session_id: id, governed: true, worktree_path: '/tmp/headless-turn-state', branch: 'node/headless-turn-state',
+    session_id: id, governed: true, worktree_path: worktree, branch: 'node/headless-turn-state',
     node: 'harness-adapter', title: null, name: null, parent: null, status: 'active', proposal: null,
     merges: 0, note: null, sortkey: null, createdAt: 1, harness: 'opencode-headless',
     harness_session_id: null, launcher: 'turn-dead', launch_cmd: '/bin/false', launch_owner: null,
   }
   try {
     mkdirSync(sessionStoreDir(id), { recursive: true })
+    mkdirSync(worktree, { recursive: true })
     writeFileSync(sessionRecordPath(id), JSON.stringify(raw, null, 2) + '\n')
     assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '1'), true)
     let stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))

@@ -35,6 +35,12 @@ test('a headless console has one TimelineChat conversation surface', () => {
   assert.equal((timelineChat.match(/className="tl-chat"/g) || []).length, 1)
 })
 
+test('archive door stays icon-only regardless of archived session count', () => {
+  assert.match(source, /className=\{viewingShelf \? 'si-pill shelf on' : 'si-pill shelf'\}/)
+  assert.match(source, /name=\{viewingShelf \? 'star-filled' : 'star'\}/)
+  assert.doesNotMatch(source, /si-pill-count/)
+})
+
 test('session eval glance reuses the graph summary projection and review-state visual', () => {
   assert.match(source, /sessionEvalDisplay\(active !== 'new' \? selSession\?\.evalSummary : null, boardLive\)/)
   assert.match(source, /projection\.lastKnown\?\.value/)

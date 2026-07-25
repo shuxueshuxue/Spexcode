@@ -24,9 +24,13 @@ sid=$(hp_session_id "$input"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"
 # non-governed (or no record) → silently let the stop through. THIS is the self-launch fix.
-grep -q '"governed"[[:space:]]*:[[:space:]]*true' "$rec" 2>/dev/null || exit 0
+grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
 
-jget() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$rec" 2>/dev/null | head -1; }
+# read a CLOSED-VOCABULARY field (status / proposal) off its OWN line. The record is one-field-per-line from
+# the single writer ([[sessions-core]]), so anchoring to the line start is what keeps a neighbouring note's
+# escaped quote from being read as this field's value — the read half of the same rule that stops shell from
+# ever composing the record.
+jget() { sed -n "s/^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\",\?$/\1/p" "$rec" 2>/dev/null | head -1; }
 status=$(jget status)
 proposal=$(jget proposal)
 

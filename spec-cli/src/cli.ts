@@ -250,9 +250,16 @@ async function stateKit() {
   }
   // a state writer from a non-repo cwd throws git's not-a-repo before it can return false — map exactly
   // that throw to the no-record path (noRecord re-probes and names the cwd); anything else stays loud.
-  const mark = (fn: () => boolean): boolean => {
-    try { return fn() }
-    catch (e) { if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return false; throw e }
+  // A record that exists but CANNOT carry state (unreadable bytes, or a worktree that is gone) is its own
+  // answer: the writer refused on purpose and already knows why, so that reason is what the caller prints —
+  // never the no-record diagnosis, which would send the author chasing a wrong cwd ([[sessions-core]]).
+  const mark = (fn: () => boolean): { ok: boolean; reason?: string } => {
+    try { return { ok: fn() } }
+    catch (e) {
+      if (e instanceof s.SessionRecordUnusable) return { ok: false, reason: e.message }
+      if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return { ok: false }
+      throw e
+    }
   }
   // truncation transparency ([[state]]): the session table shows only the first NOTE_BOARD_LIMIT chars of a
   // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
@@ -777,17 +784,20 @@ if (cmd === 'serve') {
         try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
         catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
       }
-      console.log(mark(() => s.markDone(p, sess, flag('note'))) ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : noRecord())
+      const done = mark(() => s.markDone(p, sess, flag('note')))
+      console.log(done.ok ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : done.reason ?? noRecord())
     } else if (sub === 'park') {
       // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
       const { s, sess, mark, noRecord, noteEcho } = await stateKit()
-      console.log(mark(() => s.markState('parked', { note: flag('note'), sessionId: sess })) ? `parked${DECLARED}${noteEcho(flag('note'))}` : noRecord())
+      const parked = mark(() => s.markState('parked', { note: flag('note'), sessionId: sess }))
+      console.log(parked.ok ? `parked${DECLARED}${noteEcho(flag('note'))}` : parked.reason ?? noRecord())
     } else if (sub === 'ask') {
       // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
       // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
       // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
       const { s, sess, mark, noRecord, noteEcho } = await stateKit()
-      console.log(mark(() => s.markState('asking', { note: flag('note'), sessionId: sess })) ? `asking${DECLARED}${noteEcho(flag('note'))}` : noRecord())
+      const asked = mark(() => s.markState('asking', { note: flag('note'), sessionId: sess }))
+      console.log(asked.ok ? `asking${DECLARED}${noteEcho(flag('note'))}` : asked.reason ?? noRecord())
     } else if (sub === 'stop') {
       // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
       // can be resumed (`session resume`). Distinct from `close`, which removes the worktree.
@@ -1010,11 +1020,12 @@ if (cmd === 'serve') {
     const { s, sess, mark, noRecord, noteEcho } = await stateKit()
     const st = process.argv[4] as any
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
-    console.log(ok ? `state -> ${st}${noteEcho(flag('note'))}` : noRecord())
+    console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
   } else if (sub === 'session-fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     const { s, sess, mark, noRecord } = await stateKit()
-    console.log(mark(() => s.markError(sess)) ? 'marked error' : noRecord())
+    const failed = mark(() => s.markError(sess))
+    console.log(failed.ok ? 'marked error' : failed.reason ?? noRecord())
   } else if (sub === 'session-turn-fail') {
     // Headless adapters report an ephemeral turn's non-zero exit through this one shared CAS. A declaration
     // that landed before teardown wins, so a late child close can never erase an agent-authored state.
@@ -1030,8 +1041,9 @@ if (cmd === 'serve') {
     // at its prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,
     // never clobbering a deliberate awaiting/asking/parked/error declaration. Distinct from `session ask`
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
-    const { s, sess } = await stateKit()
-    console.log(s.markIdle(sess) ? 'idle' : 'noop (no session record, or not active)')
+    const { s, sess, mark } = await stateKit()
+    const idled = mark(() => s.markIdle(sess))
+    console.log(idled.ok ? 'idle' : idled.reason ?? 'noop (no session record, or not active)')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done, else print the reason and exit 1. Takes the PROPOSAL being judged — `merge`

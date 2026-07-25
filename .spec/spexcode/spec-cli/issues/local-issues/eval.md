@@ -13,6 +13,19 @@ scenarios:
       `--no-verify` commit keeps each fast. (b) The forged sentinel does NOT become a phantom reply and does
       NOT truncate the body (user content is neutralized on write); a genuine `reply` still parses. `spex spec lint`
       stays 0-error throughout.
+  - name: reserved-address-ids
+    tags: [cli]
+    code: spec-cli/src/localIssues.ts
+    description: >-
+      Against a disposable local store, open an issue whose concern slugifies to exactly a RESERVED address
+      word (`New`), then open a second one with the same concern, and read the ids the store minted plus the
+      files on disk. Read back each issue by its minted id.
+    expected: >-
+      No local issue is ever born with the id `new` — the reserved word (the dashboard's compose page,
+      [[issues-view]]) is stepped over with the same numeric suffix a taken id gets, so the first such issue
+      lands as `new-2` and the next as `new-3`. Each minted id reads back its own issue, and the store holds
+      one file per id: the collision is spent visibly at birth, never discovered later as a thread whose own
+      address opens something else.
   - name: issue-round-trip
     tags: [cli]
     code: spec-cli/src/localIssues.ts

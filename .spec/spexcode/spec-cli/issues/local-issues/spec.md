@@ -104,7 +104,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
   structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the
   seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
-  minted under the lock too, so two racing posts can't claim it. And a **no-change write is idempotent
+  minted under the lock too, so two racing posts can't claim it. Minting also steps around the **reserved
+  address words** — `new`, the dashboard's compose page ([[issues-view]]) — with the same numeric suffix a
+  taken id gets: an id that a reader's own address grammar answers differently would be a thread nobody can
+  open, so the collision is spent visibly at birth rather than discovered as a dead link. And a **no-change write is idempotent
   success**: when the requested state already IS the stored state (a duplicate close), the
   write detects the no-op after staging and skips the commit — the verb reports success and exits
   0, never surfacing git's nothing-to-commit failure as an error for a store that is exactly as asked.

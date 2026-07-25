@@ -34,21 +34,22 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
       On the running issues page, select a LOCAL issue and type into its reply composer, then open the
-      New form and type into its body textarea. In each: type `@`, read the dropdown, pick the `@new` row
+      New compose page and type into its description. In each: type `@`, read the dropdown, pick the `@new` row
       with ↓/Enter, read the launcher rows that replace it, pick a non-default launcher, and read the
       inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
-      the session console and re-check its `@`/`[[` menus still open (the shared-module regression).
+      the session console's authored composer and re-check its `@`/`[[` menus still open (the shared-module
+      regression).
     expected: >-
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
       fork): `@` lists the live sessions plus `@new`; accepting `@new` opens one row per configured
       launcher, and accepting a launcher inserts `@new:<launcher> ` (trailing space), while a live-session
       pick still inserts `@<id> `. `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
-      composer's menu opens UPWARD (visible above the docked textarea), and the New form's menu also opens
-      UPWARD outside the New pop-out itself, never inserted into or clipped by the modal body and never
-      covering the store/concern controls. Esc closes the menu, keeps the draft, and stays on #/issues. Plain text never opens a menu. The
-      console's `@`/`[[` menus are unchanged. No page errors.
+      composer's menu opens UPWARD (visible above the docked textarea); the compose PAGE's menu opens
+      DOWNWARD under the caret line — no pop-out boundary to clear — fully on screen and clipped by nothing.
+      Esc closes the menu, keeps the draft, and does not leave the page it was typed on. Plain text never
+      opens a menu. The console's authored composer keeps its own `@`/`[[` menus. No page errors.
   - name: composer-trigger-buttons
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
@@ -135,7 +136,7 @@ scenarios:
       On the running issues page (#/issues), read the query + bordered ListView skeleton, row tag/hrefs,
       Open/Closed section tabs, direct menu buttons, and overflow menu. Select Closed and read the hash
       and the visible query text; reload at that address. Submit a query text, pick a menu value, and
-      drive Back through each state. Drive j/k and Enter; then type 'j' inside the New-form input. Record
+      drive Back through each state. Drive j/k and Enter; then type 'j' inside the query input. Record
       history.length across a row click and drive browser Back.
     expected: >-
       The page is a GitHub-style full-width ListView: 32px query, 48px metadata header, ~64px desktop
@@ -167,20 +168,50 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      On the running issues page, open the New form and count its text surfaces and read every store
-      picker's option text; then post an issue whose
+      On the running issues page, open the New compose page and count its text surfaces, read every store
+      picker's option text, and read the side rail while typing; then post an issue whose
       concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
-      open the new thread's detail page and read its side rail.
+      read the address it landed on and open the new thread's detail page side rail.
     expected: >-
-      The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
-      The form carries exactly TWO text surfaces — the concern input and the body textarea — plus one compact
+      The compose page carries exactly TWO text surfaces — the title input and the description textarea —
+      plus one compact
       store picker for local/configured forge stores. Each option names its canonical store label exactly
       once (`local`, `github`, `gitlab` as configured), with no redundant initial/prefix such as `L · local`
       or `GH · github`; NO node-ids field exists (nothing placeholder-labelled
-      "node ids"). Posted local threads show the linked node as a clickable chip in the detail's side rail — the store inferred
+      "node ids"). Instead the SIDE rail shows the spec nodes the prose already links, appearing as the
+      `[[<id>]]` is typed and gone when it is deleted. Create lands on the created issue's OWN detail address
+      (`#/issues/<id>`, a REPLACE — Back returns to the list, never to an emptied form), and that detail
+      shows the linked node as a clickable chip in its side rail — the store inferred
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.
+  - name: new-issue-page
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    description: >-
+      On the running dashboard read the Issues list's New action DOM (tag + href), then open the compose
+      address COLD (navigate straight to #/issues/new, no list visit): read the page for any
+      `role="dialog"`/`aria-modal` node, its shell classes against the issue DETAIL page's
+      (.ds-page/.ds-head/.ds-back/.ds-cols/.ds-side), the labeled title/description fields, the composer
+      box (computed border-style of the container vs the textarea inside it, idle height before any focus),
+      the action row's `@`/`[[` doors, and the rail's store control + spec-node section. Type a markdown
+      draft (heading + list + a `[[<id>]]`), flip Write→Preview and read the rendered DOM, flip back and
+      confirm the draft survives. Reload at the address; read the back anchor's and Cancel's href; drive
+      browser Back. Re-measure at 390px for document/body horizontal overflow.
+    expected: >-
+      New is a REAL `<a href="#/issues/new">` (never a button with a click handler), and that address opens
+      the compose page COLD — bookmarkable, reloadable, no list visit needed. NOTHING on the page carries
+      `role="dialog"` or `aria-modal`: the old centered pop-out is gone, not restyled. The page renders the
+      SAME [[review-chrome]] DetailShell classes the issue detail renders (.ds-page > .ds-head with .ds-back,
+      .ds-cols > .ds-main + .ds-side) — one skeleton for reading and writing. Both fields are
+      LABELLED (title, description), and the description is the app's shared [[composer]] surface: ONE quiet
+      bordered container (1px computed border) holding a BORDERLESS textarea (computed border-style none)
+      already usable at idle without focus, with the persistent action row carrying the localized `@` and
+      `[[` doors. Preview renders the draft through the SAME SpecBody markup the detail body uses (real
+      heading/list elements, no raw `##` or `[[` left visible), Write restores the exact draft, and the rail
+      lists the `[[<id>]]` node the prose links beside the store picker. The back arrow and Cancel are both
+      real anchors to `#/issues`; browser Back leaves the page normally. At 390px the rail reflows above the
+      form with no horizontal overflow. No page errors.
   - name: shared-listview-facets
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]

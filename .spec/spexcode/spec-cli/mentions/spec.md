@@ -60,10 +60,12 @@ grammar is uniform, the logic is tiny.
   by every dashboard input that takes the grammar (the console's New prompt and ❯ inbox, the issue
   composers), never re-implemented per surface. An agent `@`-ing another agent under an issue post is the
   identical path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
-  Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns — and the shared thread
-  composer's action row carries two compact symbol buttons (`@` and `[[`) that insert the EXACT trigger at
-  the caret (selection replaced, draft preserved, caret after the trigger, textarea refocused) so the SAME
-  shared autocomplete opens naturally — a door to the grammar, never a second menu or dispatch path; the
+  Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns — and every composer that
+  takes the grammar (the shared thread composer, the Issues compose page) carries two compact symbol buttons
+  (`@` and `[[`) that insert the EXACT trigger at the caret through ONE shared insertion helper (selection
+  replaced, draft preserved, caret after the trigger, textarea refocused, the host's caret sync re-run) so
+  the SAME shared autocomplete opens naturally — a door to the grammar, never a second menu, insertion
+  dialect, or dispatch path; the
   CLI hints via a
   mention line in `spex help session` and `spex help issues` — a CLI user must not have to find the
   grammar by reading the dashboard.

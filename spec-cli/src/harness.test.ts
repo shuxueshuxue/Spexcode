@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -436,6 +436,55 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
   }
   // after close the socket FILE lingers but nothing listens → 'dead' (the exact stale-file case: ECONNREFUSED)
   if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), 'dead')
+})
+
+test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for whatever launched before it', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-rv-stamp-'))
+  const prev = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try {
+    const id = `unit-stamp-${process.pid}-${Date.now()}`
+    // nothing stamped → the UNSCOPED path a pre-stamp launch really bound. A running agent must never be
+    // re-addressed by a formula it never heard of; that is what keeps the change from stranding the fleet.
+    assert.equal(rvSock(id), legacyRvSock(id))
+    // launch records the path THIS runtime hands the agent, and every later reader gets exactly that one
+    const stamped = stampRvSock(id)
+    assert.equal(rvSock(id), stamped)
+    assert.notEqual(stamped, legacyRvSock(id))
+    // the same id in ANOTHER runtime is a DIFFERENT socket: two worlds (a fixture, a copied record) hold one
+    // id all the time — they must never share one transport, which is what let a foreign teardown reach in.
+    assert.notEqual(scopedRvSock(id, '/runtime/a'), scopedRvSock(id, '/runtime/b'))
+    assert.ok(stamped.length < 104, `sun_path-safe on macOS too (${stamped.length})`)
+  } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prev
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('cleanupRuntime sweeps a transport it PROVED dead, and never one still answering', async () => {
+  // (a) the ordinary teardown: the agent is killed and does NOT unlink its own path, so the file lingers with
+  // nothing behind it. THAT residue is ours — close must leave zero socket behind (the acceptance matrix's
+  // close row).
+  const dead = `unit-cleanup-dead-${process.pid}-${Date.now()}`
+  writeFileSync(rvSock(dead), '')                  // a path nothing listens on → connect ECONNREFUSED = proven dead
+  await claudeHarness.cleanupRuntime({ session: dead })
+  assert.equal(existsSync(rvSock(dead)), false, 'a proven-dead socket is swept')
+
+  // (b) the FOREIGN teardown: the same id names a LIVE agent (an isolated instance — its own SPEXCODE_HOME and
+  // SPEXCODE_TMUX — closing an id that is running here; its kill-session misses because tmux IS namespaced,
+  // while this unlink would land because the socket path is not). Unlinking strands that agent permanently:
+  // still bound, unreachable by any connect, undeliverable, and reading `offline` to every prober.
+  const live = `unit-cleanup-live-${process.pid}-${Date.now()}`
+  const srv = createServer(() => {})
+  await new Promise<void>((res) => srv.listen(rvSock(live), () => res()))
+  try {
+    await claudeHarness.cleanupRuntime({ session: live })
+    assert.ok(existsSync(rvSock(live)), 'a socket with a live listener is not ours to unlink')
+    assert.equal(await rendezvousListening(live, 500), 'live', 'and the agent behind it stays reachable')
+  } finally {
+    await new Promise<void>((res) => srv.close(() => res()))
+    rmSync(rvSock(live), { force: true })
+  }
 })
 
 test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree does not', () => {

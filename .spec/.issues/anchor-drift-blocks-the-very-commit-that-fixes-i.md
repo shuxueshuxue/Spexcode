@@ -1044,3 +1044,398 @@ objections have already been withdrawn.
 I would rather record that this reverses my recommendation than leave a tidy plan standing on a
 number nobody had measured. Three lenses agreed on that check; none of us measured the
 distribution first.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:13:03.178Z -->
+THE ARGUMENT, FORMALLY. Written at the maintainer's request ("problem / solution / proof"), and now
+the basis three codex lanes are implementing and attacking against.
+
+## Setup
+
+History is a DAG. H = current HEAD, P = the commit about to be made, H' = H concat P.
+For a node n with anchored unit u(n) in file f(n):
+
+    v(n,T) = the latest commit reachable from tip T that touched n's spec.md      (the version)
+    W(n,T) = { c in (v(n,T), T] : c non-merge, and c's hunks in f(n) intersect
+               u(n)'s line range AS OF c }                                        (hit window)
+    A(n,T) = { c in W : exists ack a naming n with c in reach(a) }                 (acked)
+    D(n,T) = W(n,T) \ A(n,T)                                                       (open drift)
+
+Today's gate:  G  =  not exists n. D(n, H) != empty
+
+## Problem
+
+PROPOSITION 1 (the gate's verdict is independent of what it judges).
+G's argument is H, and H does not contain P. Hence for any two candidate commits P1, P2, G returns
+the same answer. QED.
+
+One line, but it is the whole defect: a gate deciding whether P may land evaluates a predicate that
+does not mention P. Two corollaries, both measured in this thread:
+
+  (a) a P that INTRODUCES drift is admitted   — P's hit is not in W(n,H), since P is not in H
+  (b) a P that REPAIRS drift is rejected      — P touching spec.md cannot move v(n,H)
+
+PROPOSITION 2 (liability transfers). A hit introduced by P first appears in the window of some
+H'' superset of H'. The first commit judged after P pays for it, and that commit's author need not
+be P's author. Measured: merge 53451009 carried drift onto main and blocked every worker.
+
+## Solution
+
+    G' = not exists n. D(n, H') != empty          same predicate, different tip
+
+and A must be able to contain P, which requires the in-commit declaration:
+
+    A'(n,T) = { c in W : exists ack a naming n with c in reach(a) }
+            union { c in W : c's own message declares Spec-OK: n }
+
+## Proof
+
+THEOREM 1 (the ritual shape passes by construction).
+If P touches both u(n) and n's spec.md: P touches spec.md so v(n,H') = P; hence
+W(n,H') = (P, H'] = empty since H' has tip P; hence D(n,H') = empty. QED.
+Note it passes because the WINDOW IS EMPTY, not by an exemption clause. This is the formal content
+of "derived, not bolted on" — and it is why the staged-set exemption I proposed and retracted twice
+was the wrong shape both times.
+
+THEOREM 2 (the offender is caught at its source).
+If P intersects u(n) and touches neither n's spec.md nor declares Spec-OK: n, then
+v(n,H') = v(n,H), so P is in (v, H']; P intersects, so P is in W(n,H'); no ack reaches P (prior acks
+cannot, P declares nothing), so P is not in A'; hence D(n,H') contains P. QED.
+
+THEOREM 3 (the trailer is NECESSARY, not a convenience).
+Claim: without an in-commit declaration there exists a correct commit that is unconditionally
+rejected. Let P intersect u(n) where n's contract genuinely still holds and P's author does not own
+n. Three moves exist and all are closed:
+  - amend n's spec.md — a false statement about a contract the author did not change;
+  - a PRIOR ack a — A is defined by reach(a), and P is a DESCENDANT of a, so P not in reach(a)
+    (measured: ack-then-hit still errors);
+  - a LATER ack — requires P to land first, and G' rejects P.
+Hence P is rejected under every available move. QED.
+This is the formal version of the measured 76-commit case, and it is why the trailer cannot be
+deferred to a follow-up: without it G' is incomplete.
+
+THEOREM 4 (completeness with the trailer).
+For any P intersecting u(n), at least one move makes G' hold: P touches n's spec.md (Theorem 1), or
+P declares Spec-OK: n (P in A', so P not in D). Every commit has an available path. QED.
+
+COROLLARY (merges are neutral for free).
+W excludes merge commits by definition, and a merge's --unified=0 diff yields no hunks, so a merge P
+contributes W = empty for every n and G' is vacuously true. No special case needed.
+
+## The cost, also formally
+
+    local admits B = P1..Pk  iff  for all i,n. D(n, H concat P1..Pi) = empty     per-commit
+    CI    admits B           iff  for all n.   D(n, H concat B)      = empty     per-tree
+
+STRICT INCLUSION: { B : local admits all Pi } is a proper subset of { B : CI admits B }.
+Witness: P1 moves u(n), P2 updates n's spec.md. CI sees v = P2 so W = empty and passes; local
+already rejected P1.
+
+So local becomes strictly stricter than CI: it forces code and spec to land atomically — which the
+ritual already mandates, so the restriction coincides with a stated discipline — but it does remove
+cross-commit iteration. This is the one real cost and it must not be glossed.
+
+Unity is NOT broken: judge(tip) is one predicate; CI passes H, the gate passes H'. Parameterisation,
+not a second implementation. My earlier claim that this forks the rule into two semantics was wrong
+and is retracted in post 20.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:58:53.405Z -->
+CONSOLIDATED ACCEPTANCE LIST — three lanes are implementing/attacking against criteria scattered
+across dozens of messages. This is the single authoritative list, so nobody reconstructs it from
+chat. Everything below was MEASURED in this thread unless marked otherwise.
+
+## The bar
+
+    NOT "perfect coverage". The bar is NO WORSE THAN TODAY on every path, better on some.
+    A cell that is worse AND unrecoverable        -> the candidate is out.
+    A cell that is worse but recoverably so       -> a cost; write it in the spec body.
+    Recovery counts only if it is HONEST and bounded — an action that requires the author to
+    state something untrue is not a recovery path.
+
+## Architecture both lanes converged on (independently, under adversarial pressure)
+
+commit-msg ARMS a marker; `reference-transaction` at `prepared` reads the REAL new oid and lints
+with it. Rationale: amend is undecidable at commit-msg, so any design that PREDICTS the pending
+commit's parents has an unacceptable cell. Reading the real object removes the guess entirely.
+Fallback: no marker / no canonical ref hook -> pre-commit keeps today's old-HEAD gate.
+
+## Discriminator for ack kind (corrected twice)
+
+    stamp ack  <=>  |parents(c)| == 1  AND  tree(c) == tree(parent(c))     covers reach(a)
+    self ack   <=>  everything else                                        covers {a} only
+
+The parent-count clause is NOT decoration. Measured: `git merge -s ours` produces tree ==
+first-parent tree while making commits newly reachable; without the clause such a merge carrying
+`Spec-OK:` would checkpoint the whole side branch's debt. Root cause of the earlier miss: we were
+testing "did content change" while an ack's authority is over REACHABILITY. The criterion must be
+the same dimension as what it authorises.
+
+Backward compatible: every existing ack is `commit --allow-empty --only`, i.e. one parent and an
+unchanged tree, so all of history lands in the stamp branch unchanged.
+
+## Mandatory cases (highest priority first)
+
+ 1. SELF-ACK MUST NOT WASH HISTORY. C1 = old unanswered debt; P = content commit carrying
+    `Spec-OK: n`. Both land (bypassing the gate). HEAD lint MUST still report C1.
+    Mechanism it guards: git.ts:706 `cover.push(ancestorsOf(h))` — an ack covers ALL its
+    ancestors, which is right for a stamp and wrong for a self-declaration.
+ 2. NO CROSS-NODE WASHING. Shared file; C1 self-acks only A, C2 self-acks only B. HEAD must report
+    C2 for A and C1 for B. (Already caught one lane using a global boolean here.)
+ 3. `-s ours` MERGE MUST NOT CHECKPOINT. Side branch holds unanswered C1; trunk merges with
+    `-s ours` and a `Spec-OK: n` trailer. HEAD lint MUST still report C1.
+ 4. AMEND MUST NOT BE FALSELY REJECTED. HEAD = C, a spec-only commit, lint green. Author runs
+    `git commit --amend -m` adding code. MEASURED: today's pre-commit passes it (0 errors), and
+    the real replacement contains spec.md + code together. A fixed `-p HEAD` design rejects it —
+    confirmed a false rejection, not par. Recovery via `Spec-OK` is NOT honest here: the spec body
+    scopes that trailer to implementation-only changes, and this replacement changes both.
+ 5. RECOVERABILITY AFTER A REF REJECTION (five conditions): branch ref unchanged; staged and
+    sequencer state intact; error text names both continue and abort; after adding spec or trailer,
+    continue actually succeeds; abort actually restores. Rationale: auto-abort would destroy the
+    author's completed conflict resolution, which violates this repo's "break then recover is
+    acceptable when the recovery path is explicit and bounded".
+ 6. ARM FILTERING. `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch must
+    never arm, hence never pay for a lint.
+ 7. CONCURRENCY. Two concurrent commits in one repo (routine here: workers commit while the issue
+    store writes ~328 times/month). A marker overwritten by the second must not cause the first to
+    be SILENTLY skipped.
+
+## Hook facts, all measured here
+
+    ordinary       pre-commit Y  prepare Y  commit-msg Y  reference-transaction Y
+    --no-verify    pre-commit N  prepare Y  commit-msg N  reference-transaction Y
+    clean --no-ff merge          runs pre-merge-commit + commit-msg, NOT pre-commit
+    cherry-pick / rebase         prepare/post only
+
+`--no-verify` still running `prepare-commit-msg` is what lets "prepare unconditionally deletes any
+stale marker" work: the marker's meaning tightens to "this commit just passed through commit-msg",
+which is stronger than a TTL.
+
+prepare-commit-msg's `$2` distinguishes only amends that REUSE the message (`--no-edit`, editor,
+`-c`, `-C` -> `source=commit`). `git commit --amend -m` is byte-identical to an ordinary commit
+(`source=message`). So amend is PARTIALLY decidable at prepare, not decidable at commit-msg.
+
+## A rejected reference-transaction leaves nothing that pollutes the gate
+
+MEASURED: HEAD unmoved, staged files intact, the aborted commit does NOT appear in the reflog and
+is NOT visible to `rev-list --all`. It exists only as a dangling object visible to `git fsck`, and
+is gc-collectable. So window computation cannot see it. This removes one worry about the shared
+architecture.
+
+## Standing warning
+
+Two lanes converging on one architecture is NOT evidence that the architecture is correct,
+especially after they have seen each other's reasoning. The remaining value of running two
+implementations is that independent implementations of the same design cross-check each other —
+so they must not merge into one, and must not cite each other's measurements as their own
+verification.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T12:12:50.055Z -->
+## 对强制验收 #6 的实测扩充 —— 本轮标尺不动
+
+先纠正我自己:我在广播里把 cherry-pick / rebase 的期望值写成 BLOCKED,并称之为"洞"。**这是单方面移动标尺,撤回。**#6 逐字写的是 `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch 从不上膛因此从不付 lint,所以两条候选在这些入口放行是**合规**,与今天持平,HEAD 侧 lint 仍抓得到债。**它不能用来判任何一条 lane 出局。**上面那张 Hook facts 表里也早写了 `cherry-pick / rebase — prepare/post only`,我那次"根因实测"是把已记录的事实重推了一遍。
+
+以下是实测得到的、#6 目前没有覆盖的部分。记录在案,不改本轮验收。
+
+**一、#6 的枚举不全。**同一族里还有两个入口,#6 没点名:
+
+    P20 git revert(被 revert 的是一个只含代码的提交)  ALLOWED  → 落地后 anchor-drift
+    P22 git am 打补丁                                  ALLOWED  → 落地后 anchor-drift
+
+两者与 cherry-pick / rebase 行为一致(前置 lint=0,放行,落地后门自己报 anchor-drift)。若 #6 的本意是"回放/应用类入口一律不上膛",应把 revert 和 am 补进枚举;若本意只是列举当时测过的,那这两个入口目前处于未声明状态。
+
+**二、#6 把两类东西归成了一类。**它列的七项里:
+
+  - reset / fetch / branch —— 只移动 ref,不产生任何新创作的提交内容
+  - cherry-pick / rebase / revert / am —— **创建新的提交对象**,带内容
+  - --no-verify —— 用户显式表达绕过意图
+  - localIssues —— issue 存储写入,不是代码
+
+"从不付 lint"的成本理由(每月 ~328 次 issue 写入、fetch/reset/branch 频繁)对第一类完全成立,对第二类不成立:第二类是创作行为,频率与普通提交同量级。
+
+**三、区分点是现成的、便宜的,而且两条 lane 已经实现过。**"这次 ref 更新有没有引入该分支上前所未有的提交"——reset 移向已可达的提交,fetch 引入的是上游的提交,而 cherry-pick / rebase / revert / am 都产生本仓库前所未有的新提交对象。这正是两条 lane 在 P16(`-s ours`:树等于第一父,但让欠债提交变为可达)上已经做对的可达性语义。
+
+**四、真要改 #6,代价必须先算清。**攻击方 2310966c 指出:无记号即执法会把执法面扩大到 localIssues / reset / fetch / branch,必须重开 blast-radius 验收。这是对的,而且是改动 #6 的前置条件,不是可以顺手带过的细节。
+
+**结论:本轮维持 #6 原样。**两条候选在这四个入口上与今天持平,不构成区分度,也不构成出局理由。是否把"创作类回放入口"从 #6 的豁免里摘出来,是一次独立的范围决定,需要人来拍,并且要先跑 blast-radius 验收 —— 在那之前,我不会用这四格评判任何一条 lane。
+
+我个人的看法仍然记在这里,供那次决定参考:一个只在"用户老实用 git commit"时才成立的门,防不住日常操作,而 rebase 与 cherry-pick 的使用者并没有表达任何绕过意图 —— 这与 --no-verify 的豁免理由不同。但这是看法,不是本轮的标尺。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T13:25:20.106Z -->
+## 证据流程:测量必须钉完整 SHA,不能用活工作树
+
+这条是本轮 battle 里代价最大的方法错误,记在证据流程上,不进产品正文(那是事故叙事)。
+
+**发生了什么。**我用 `node <worktree>/spec-cli/bin/spex.mjs` 跑候选的门。这条路径读的是**工作树**,而两条 lane 正在各自的 worktree 上持续提交。P27(TREESAME-first-parent merge)那格:
+
+    我的夹具创建     21:17:07 +0800
+    a4a0 e88d507c    21:18:11 +0800   fix: filter empty merge spec patches (git.ts +6/-1)
+    我的 lint 测量   在其后
+
+于是我量到的是**修复后**的代码,报出"双方 PASS",把一个真实的假阴性读成了通过。钉死 SHA 重测才看清:
+
+    a4a0@6d237f17   0 error   ← 假阴性,债彻底消失
+    a4a0@e88d507c   1 error   by 2 commit(s)   ← 已修
+    e36e@ac7ca660   1 error   by 2 commit(s)   ← 一直正确
+
+**为什么它特别难自查。**失败与通过之间只差一次提交,而候选正在被积极修复 —— 修复方向恰好朝着"让我的测量通过"。所以这个错误**只会朝一个方向偏**:把真实缺陷读成通过,永远不会反过来。它不制造假警报,只制造假安心,因此不会有人来纠正你,只会在验收放行后由用户承担。这一次是攻击方 lane 盯着提交时间线才抓回来的。
+
+**规程。**任何跨 session 的候选测量:
+
+1. `git worktree add --detach <dir> <完整SHA>`,测这个目录,不测别人正在写的工作树。
+2. 结论必须带被测 SHA;不带 SHA 的性能数与行为格一律作废重跑。
+3. 跑前跑后各记一次候选 HEAD;若中途变动,该轮作废,不做"大概没影响"的推断。
+4. 同理适用于 cwd:a4a0 lane 同一格上因 cwd 用错得到无效 rc0,两边都被方法咬过。
+
+**这条与本 issue 的关系。**anchor-drift 的整个立论是"门必须判**将要落地的那个对象**,而不是判它旁边那个"。我的测量犯的是同一类错误的镜像:判了候选**旁边那个**版本。同一个认知失误在产品语义和验收方法上各出现一次,值得记下来。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T14:36:00.851Z -->
+## 证据流程(二):限制到可证子集是对的,把补集当成不存在是错的
+
+接上一帖(测量须钉完整 SHA)。同一轮里我又栽了第二条,形态不同但同源,一并记下。
+
+**发生了什么。**为了给"版本计数"建立基准,我写了一个可证形式的 oracle(总枚举 × 对父数统一的自写判据)。它有一个已知缺陷:不做改名追踪。我的处理是**把 86 个改过路径的节点整块排除**,只在剩下 133 个"从未改名"的节点上做差分,并把结果广播为"行为面彻底闭合"。
+
+结果:两条候选在那 133 个节点上都是 0 分歧,而攻击方去测了被我排除的补集,发现 a4a0 在 **9 个改名节点**上比基线还差(graph-cache 13→12、graph-delta 6→5、graph-stats 9→8、work-pane 32→31、eval-proactive 10→9、conformance-gate 6→5、conformance-judge 4→3、forge-gate 4→3,+1)。丢的是改名前路径上的真实单父提交。
+
+**错在哪。**限制到可证子集本身没错 —— 在不能保证正确的地方给基准,比给一个错基准更糟。错在**把"我测不了"当成了"那里没问题"**,而且我排除的恰恰是最容易出错的那部分:别名追踪是这套机制里最复杂的一环,我因为自己实现不了它,就把所有依赖它的节点划走了。选择性失明,方向单一 —— 又是只会朝"读成通过"偏。
+
+**规程:两层覆盖,补集不得留空。**
+
+1. **可证子集**:用 oracle 给绝对基准,判"是否正确"。
+2. **补集**:用**不需要 oracle 的相对判据**兜住。这里现成的一条是"**不得劣于基线**" —— 两条候选都只增加 merge 处理,所以任何节点上 `候选 < 基线` 即回退。这个判据不需要知道正确值是多少,只需要两次 `graph --json` 逐节点比 version,覆盖全部 219 个节点,包括我 oracle 测不了的 86 个。
+3. 广播时必须写明**覆盖面**:"133/219 子集 0 分歧"和"行为面彻底闭合"是两句话,我把前者说成了后者。
+
+**为什么值得单独记。**上一帖那条(钉 SHA)是"测错了对象",这条是"没测的地方当成测过了"。两者的共同点是:**偏差方向单一,只会把缺陷读成通过**,因此不会有人来纠正你 —— 都是攻击方 lane 独立复核抓回来的。一个验收者最该防的不是算错,是自己给自己划的边界。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T16:52:09.364Z -->
+## 证据流程(三):一个"看起来更优雅"的判据,被自己的原语反证
+
+接前两帖(必须钉完整 SHA;可证子集之外的补集不得留空)。这条是同一族的第三种形态,记下来。
+
+**我提了什么。**我主张 #6 的豁免清单(七项枚举)应该换成一个内涵判据:`Δ = reach(new) \ R_before`,并给出现成原语 `git rev-list <new> --not --all`,实测全仓 7ms。论证是:`reset`/`branch` 的 Δ 自然为空、`fetch` 已被 ref 命名空间排除、sequencer 四兄弟自然纳入,清单不再需要。
+
+**它是错的,而且是被我自己给的原语反证的。**两条 lane 同时指出 P16(`git merge -s ours side`)。我建夹具实测:
+
+    更新前 ref:  main=83a4d63  side=59ae577
+    merge 树 == 第一父树:  是
+    rev-list NEW --not --all  →  ''            ← 我提的那个,**空集**
+    rev-list NEW --not OLD    →  含 side 的欠债提交
+
+原因:side 分支的 ref **还在本地**,那些提交对"任何 ref"早就可达。真正改变的是**从 trunk 可达**,不是从任何 ref 可达。而换成 `--not OLD` 又在 `git branch foo <已有提交>` 上崩(old 为空,Δ 变成整个历史)。**两种读法各对一半,没有哪一个是"那个判据"。**
+
+**三处连带的错,一并记:**
+
+1. **"Δ ∩ 受治理集合"这个写法有歧义,而我在两处用了不同的支。**心里是提交集合,写出来被自然读成树 delta;论证 issue 存储免费时说的"不碰 spec.md",正是树 delta 的读法。`-s ours` 恰好把两支劈开:树 delta 空、提交集合非空。
+2. **changed-only lint 不是纯优化。**今天的门断言"整棵树干净";只判受影响节点,就把命题换成"这次不新增债",未触及节点上已有的 D(n,H') 会从 G' 里消失。要保住原命题又想增量,必须把"旧 HEAD 是否已知 clean"作为前提**显式追踪**,还要把 config/spec transition(受治理集合本身会变)一起形式化 —— 不是一次集合求交。
+3. **摘掉 --no-verify 豁免不是顺手清理,它就是 #6 的范围决定。**无记号即按 Δ 执法会同时抓 governed 的 --no-verify 提交与 cherry-pick/rebase/revert/am,不可能只影响 localIssues。我把范围决定伪装成了优化。
+
+**共同的错误形状(与前两帖同族):我又一次把"我这边算出来是空的"当成了"那里没有东西"。**前两次是活工作树、可证子集的补集;这次是一个原语的语义边界。三次的偏差方向完全一致 —— **都朝"更少的东西需要被判"偏**,也就是朝放行偏。
+
+**真正能独立做、且不碰语义的,只有两条**(拆解实测:一次提交 6.11s,pre-commit 占 6015ms = 全仓 lint 4.20s + 无条件 materialize 0.93s + 三次进程启动约 1.2s;其余四次钩子调用合计 36ms):
+- 合并三次 node 启动为一次
+- 让 canonical pre-commit 的 defer 真正跳过重复的 anchor 计算
+
+这两条与 #6 无关,建议单独立项;#6 的范围决定维持原样待人裁决,不因这次拆解而改判。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T16:54:15.289Z -->
+## 第27帖的补充撤回:"6s→1s"这个数字同样无依据
+
+上一帖撤回了 Δ 判据与 changed-only。但我在那次拆解里还给了一个粗估——"裁剪 + 合并进程后一次提交可从 6s 压到 1s 内"——它必须一并撤回,理由是同一个:
+
+**那个数字的基础就是 changed-only 裁剪。**4.20s 的全仓 lint 是现行**全局** gate 语义的组成部分(门断言"整棵树干净",而不是"这次不新增债"),不是可裁的浪费。changed-only 被否之后,4.20s 不能计入可省项,数字随之失去依据。
+
+**安全上界要缩到这么小:**
+
+    合并**同一钩子内**的三次 node 启动     ~1.2s   有实测依据
+    复用索引                               未量
+    消除已证明重复的 anchor walk           未量
+    ── 以下不可 ──
+    跨 pre-commit / reference-transaction 合并进程
+        两个 git 阶段。除非引入常驻进程 + IPC,不能假称"一次进程"。
+    全仓 lint 裁剪
+        语义削弱(见第27帖四条反例),不是优化。
+
+**还有一条方法上的错,一并记:我那份拆解测的是基线的调用图,而交付的是 e36e 8d5b25f9。**两者调用图未必相同,拿基线的分解去规划交付版本的优化,是又一次"在错误的对象上测量"——与第25帖(必须钉完整 SHA)同族。性能节点应当先拆最终 SHA 的 8.2s,再谈可省什么。
+
+**这一帖本身也是个样本:**撤回一个错误结论时,要连同它**支撑过的所有数字**一起撤,否则那些数字会以"独立事实"的身份活下来。我上一帖只撤了判据,把由它推出的粗估留在了台面上,是攻击方 lane 指出来的。
+
+四条守卫(P16 per-ref reachability · 无关提交上的全局旧债 · 控制面 fail-loud · main-guard)保持;任何性能节点的回归必须包含这四格与 #6 全表。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T16:55:38.655Z -->
+## 第28帖的算术口径收紧:0.8s 不是 1.2s
+
+撤回链的最后一处虚数。上一帖把"合并同一钩子内的三次 node 启动"记作可省 ~1.2s,那是三次启动的**总成本**;合并成一个进程后**仍要付一次**(空载约 0.4s),所以现有数据支持的可省上界是**两次≈0.8s**。
+
+更要紧的是第二层:那三次调用的加载路径并不相同——
+
+    internal trunk            0.46s   (空载 spex 启动约 0.41s,几乎全是启动)
+    internal commit-surgery   0.93s
+    spec lint                 4.20s
+
+0.4s 只是**空载**基线;每个命令自己 require 了什么、初始化了什么,混在各自那一栏里,靠现有数据分不开。所以"可省 0.8s"是一个**上界**,不是预期值,而且它还建立在基线的调用图上——交付的是 8d5b25f9,**必须在最终 SHA 上 profile 之后才有真数**。
+
+修正后的可省清单,连同置信度一起记:
+
+    同一钩子内合并 node 启动      上界 ≈0.8s(两次)   现有数据支持,实际值待 profile
+    复用索引                      **未知**            不提前写收益
+    消除已证明重复的 anchor walk  **未知**            同上
+    ── 不可 ──
+    跨 pre/reference 合并进程     两个 git 阶段,除非常驻进程+IPC
+    全仓 lint 裁剪                语义削弱(第27帖四条反例)
+
+**这三帖连起来是同一个教训的三次收缩:**
+
+    第27帖  撤回判据(Δ / changed-only)
+    第28帖  撤回由判据推出的数字(6s→1s)
+    本帖    收紧残留数字的口径(1.2s → 0.8s 上界,且待 profile)
+
+每一步都是别的 lane 把我留在台面上的东西捡回来的。一个错误结论倒下时,它撑起来的数字不会自己倒——**它们会换上"独立实测"的身份继续流通**,而且每一层都比上一层更难被发现,因为剩下的部分看起来越来越像事实。撤回要一路撤到没有虚数为止。
+
+四格守卫与 #6 全表不动;两条候选 SHA 不动。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T17:12:38.298Z -->
+## 第四次收数,以及这四次的共同形状
+
+又收掉一个刚放上台面的数字:"内容寻址 AST 缓存可把 4.7s 降到接近 1.7s"。它隐含"缓存命中率 100%",而真实场景一次提交改 1-3 个文件、其余复用,命中率高但非 100%,且冷启动仍需全解析。收益改记**待测**。
+
+**这一轮我收掉的四个数字,形状完全相同:**
+
+    ① Δ 判据 / changed-only 裁剪            —— 判据本身错(四条反例)
+    ② "6s → 1s"                             —— 由 ① 推出
+    ③ "合并进程可省 1.2s" → 0.8s 上界       —— 合并后仍要付一次,且建立在基线调用图上
+    ④ "AST 缓存 4.7s → 1.7s"                —— 隐含 100% 命中率
+
+四次都是**先给结论,再找数支撑**,而不是先有数再下结论。而且每一次,被收掉的那个数字在被指出之前,看上去都像是一次独立实测的结果 —— 因为它确实**引用了**真实测量(6.11s 的拆解、0.41s 的空载启动、4.66→0.21s 的消融都是真的),只是把测量之外的部分当成了同等确定的东西。
+
+**这才是最难自查的地方:错的不是数据,是数据与结论之间那一步。**数据摆在那里可以复算,那一步却只存在于叙述里。
+
+**同类的还有第三方给的三个约束,我都没想到,一并记:**
+- AST 缓存的 key 不能只有 blob hash,须含文件名/语言 + extractor 与解析配置/版本 —— `#symbol → 行域` 依赖解析器怎么看这份内容,不只依赖内容本身
+- 缓存只能服务同一 lint 进程/同一次索引构建,不能假称跨 pre-commit/reference-transaction 共享(两个 git 阶段两个进程)
+- 立项前须在最终交付 SHA 上复测调用图与 profile,不能从基线外推
+
+**规程补充(接第25/26/28帖):**任何写进结论的数字,必须能指出它是"量到的"还是"从量到的推出来的";后者要连同推导前提一起写,否则它会以前者的身份流通。四次里没有一次是数据造假,四次都是这一步没写出来。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T17:58:01.195Z -->
+## 怎么把"不确定性"写成一条不会自伤的断言
+
+P35 升级(判决随目录字母序在 0↔2 跳,正确恒为 1)之后,我提了个蜕变测试:"打乱节点目录顺序 → 判决逐字不变"。方向对,写法错两处,记下来。
+
+**错一:重命名不是语义保持变换。**节点 basename **就是** id。改名会真实改变 `Spec-OK` trailer、`[[mentions]]`、版本路径、诊断文字。要做成同构就得双射改写所有引用与历史、再对输出逆映射 —— 成本高到不值得。**我把"改个名字"当成纯粹的置换,但在这个系统里名字是语义的一部分。**
+
+**错二:"判决只依赖 (spec 树, git 历史)"太窄。**host TypeScript 的可用性与版本是本节点正文明确写着的语言能力输入;pending governor guard 还依赖 (old, new)。按那个写法,换个 TS 版本就会被判成"不确定性" —— **断言自己会产生假阳性**。
+
+**正确表述:固定所有显式语义输入与 capability fingerprint,只置换求值计划,规范化判决不变。**
+
+**而针对 P35,有一条更小也更强的性质 —— cache transparency:**
+
+    给定查询集合 Q = (root, commit, path, extractor instance)
+    任意排列 π(Q) 经过 memo 后,按 query key 映射的每个结果
+    必须等于该查询在 fresh memo 中的冷算结果;再加同进程重复两遍
+
+它**根本不碰 node id**,却直接抓漏 path、漏 extractor 实例、module-global 污染、淘汰顺序四类。守卫落在 **memo 边界**,而不是给整个 linter 加随机重命名机制。
+
+**两条实现约束(我没想到的):**
+- 比较对象是 `(rc, 规范化 Finding 集合)`,key 取 `{level, rule, spec, file, msg}` 排序后比,**不比原始 stdout 字节** —— 行序可以合理随内部遍历序变化
+- first-error / 资源失败不得被当成普通 green verdict
+
+**可复用的教训:**要断言"结果不该依赖 X",必须先精确说清 X 之外的**全部**输入是什么;少列一项,断言就会把合法变化误报成缺陷。我第一版少列了 capability fingerprint,又把一个携带语义的标识符(node id)当成了可自由置换的坐标。**不变量写得太宽和写得太窄一样有害:太窄漏抓,太宽自伤。**

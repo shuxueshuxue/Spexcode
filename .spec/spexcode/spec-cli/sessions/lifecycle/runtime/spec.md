@@ -41,6 +41,7 @@ a file in that dir:
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the deferred launch prompt of a still-queued session ([[launch]]) |
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
+| `rv.path` | the rendezvous socket THIS runtime handed the agent at launch ([[harness-adapter]]) — a launch-time fact like the pid, so every later reader reaches the agent by the path it actually bound rather than re-deriving one, and two worlds holding the same id never share a transport |
 | `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |
 | `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
 
@@ -63,8 +64,12 @@ AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `
 mirror — a change to the seam must update both, noted at the layout.ts helpers). Because the only in-tree
 SpexCode artifacts are gitignored (the materialize shims/skills) or tracked-and-committed (the contract block
 in CLAUDE.md/AGENTS.md), none shows as an uncommitted change, so the Stop-gate's dirty count needs no runtime
-filtering, and `session.json` is written one-field-per-line with every key present so the hot-path hook edits
-it with sed, not jq ([[state]]).
+filtering, and `session.json` is written one-field-per-line with every key present so the hot-path hook can
+READ it with a grep instead of jq ([[state]]) — it never writes the file itself, since the single structured
+writer ([[sessions-core]]) is the only thing that may compose a record. That writer lands each version by
+atomic replace, so a reader landing between two writes sees one whole record, never a half-written one. A
+record that is nonetheless unreadable is quarantined (its bytes copied to the per-project `corrupt/` shelf)
+when its session is closed, so the sweep of the session dir never takes the only evidence of what broke.
 
 `session.json` writes are by canonical governed `session_id`, never by cwd. Claude's harness id equals that
 record id. Codex hook payloads and spawned commands carry the acting thread id, while the shared app-server env

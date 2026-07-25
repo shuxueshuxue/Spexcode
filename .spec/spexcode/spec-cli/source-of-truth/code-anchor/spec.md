@@ -92,6 +92,14 @@ reachable history. Changing the node's `spec.md` in the candidate instead makes 
 candidate the latest version, closing its window by construction. Without either route, an anchored
 intersection is rejected before attribution can slide to a successor commit.
 
+The partition also repairs two silent losses in the earlier read side. Treating every trailer commit as a
+reachability checkpoint let a content self-declaration for one node pardon older debt, including debt of
+another node; treating tree equality alone as emptiness let an `ours` merge checkpoint unanswered commits
+from its newly reachable side branch. Neither is an acceptable acknowledgement. Candidate and later HEAD
+lint now classify the immutable commit object the same way and retain each node's independent debt. When a
+candidate owes several nodes, lint emits one node-scoped error per debt, naming every node the author must
+answer without combining their acknowledgement sets.
+
 The cost is intentional and stated plainly: local acceptance is **strictly narrower** than CI acceptance.
 For example, code-only `P1` followed by spec-only `P2` is green when CI judges the final branch tip, but
 local authoring rejects `P1`; code and governing spec must land atomically, removing cross-commit iteration.

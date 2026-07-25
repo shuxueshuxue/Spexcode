@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, spawnerClause, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -263,4 +263,31 @@ test('a launch establishes identity: inherited session ids are stripped, this se
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prevHome
   }
+})
+
+test('the spawner pointer names the parent worktree and stays quiet without one', () => {
+  const parent = fromRaw({
+    session_id: 'aaaaaaaa-1111-2222-3333-444444444444', governed: true,
+    worktree_path: '/repo/.worktrees/parent-node-aaaa', branch: 'node/parent-node-aaaa',
+    node: 'spawner-pointer', title: 'teach the child where I work', name: null, parent: null,
+    status: 'active', proposal: null, merges: 0, note: null, sortkey: null, createdAt: 1,
+    harness: 'claude', launcher: 'reclaude', launch_cmd: 'claude',
+  })
+
+  const clause = spawnerClause(parent)
+  assert.ok(clause.startsWith('\n\n'), 'appends after the spec pointer rather than running into it')
+  assert.match(clause, /session `aaaaaaaa`/, 'names the spawner by short id')
+  assert.match(clause, /\(teach the child where I work\)/, 'carries the spawner label when it has one')
+  assert.match(clause, /\/repo\/\.worktrees\/parent-node-aaaa/, 'points at the spawner worktree')
+  assert.match(clause, /on branch `node\/parent-node-aaaa`/)
+  assert.match(clause, /branched from `[^`]+`, so it does NOT contain/, 'states why the child cannot see that work')
+  assert.match(clause, /Read only: never write into another session's worktree/)
+  assert.doesNotMatch(clause, /## |raw source/, 'a pointer, never a spec body')
+
+  assert.equal(spawnerClause(null), '', 'a top-level launch gets no clause')
+  assert.equal(
+    spawnerClause({ ...parent, worktreePath: '' }),
+    '',
+    'fail-quiet by absence: a parent record with no worktree appends nothing',
+  )
 })

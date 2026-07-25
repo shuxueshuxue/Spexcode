@@ -10,6 +10,7 @@ import { navigate, useRoute } from './route.js'
 import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
+import { ComposerTextarea } from './Composer.jsx'
 
 // the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
 // reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
@@ -168,7 +169,7 @@ function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
         </div>
       </div>
       <div className="m-new-body">
-        <textarea
+        <ComposerTextarea
           className="m-input m-new-input"
           rows={5}
           placeholder={t('mobile.newPlaceholder')}

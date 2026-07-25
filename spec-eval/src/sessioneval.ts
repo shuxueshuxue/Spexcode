@@ -585,7 +585,7 @@ export function renderExportHtml(m: ExportModel): string {
   const idShort = m.id.slice(0, 8)
   const ribbon = [
     ...m.gates.map((g) => `<span class="chip ${g.ok ? 'ok' : 'bad'}" title="${esc(g.detail)}">${g.ok ? '✓' : '✗'} ${esc(g.label)}</span>`),
-    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="affected scenarios fresh-passing; ${m.score.fresh}/${m.score.total} have a fresh reading">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no scenario is affected by this worktree">★ no affected scenarios</span>`,
+    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="affected scenarios fresh-passing; ${m.score.fresh}/${m.score.total} have a fresh measurement">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no scenario is affected by this worktree">★ no affected scenarios</span>`,
   ].join('')
   const gates = m.gates.map((g) => `<li class="${g.ok ? 'ok' : 'bad'}"><span class="gmark">${g.ok ? '✓' : '✗'}</span><span class="glabel">${esc(g.label)}</span><span class="gdetail">${esc(g.detail)}</span></li>`).join('')
   const otherBlock = m.otherFiles.length

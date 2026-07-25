@@ -1,5 +1,5 @@
 ---
-title: pagination-proof
+title: pagination-evidence
 status: active
 hue: 205
 desc: The real-Chromium closure for paged review — a whole-app graph-plus-list network ledger beside history, overflow, scroll, mobile, keyboard, and accessibility evidence.
@@ -11,10 +11,10 @@ related:
   - spec-cli/src/reviews.ts
 ---
 
-# pagination-proof
+# pagination-evidence
 
-The product proof starts before either review page opens. It records the first `/api/graph` response and
-rejects any Issues/Evals row, scenario, or reading arrays that could reconstruct a main list; it then opens
+The product evidence starts before either review page opens. It records the first `/api/graph` response and
+rejects any Issues/Evals row, scenario, or measurement arrays that could reconstruct a main list; it then opens
 Issues, trunk Evals, and scoped Evals and records every response's status, bytes, current-page item count,
 total, navigation fields, and revision beside the rendered row count. Thus a bounded page endpoint cannot
 hide a simultaneous full-list bootstrap.

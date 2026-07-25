@@ -77,6 +77,22 @@ scenarios:
       sessions' panes and then leans entirely on recovery lanes that can themselves latch (issue #70 —
       dashboard-shell's poll-corrects scenario is the client half). Zero loss = the anchor era dies with
       its last subscriber; a new era's first frame is a fresh build, never an heirloom.
+  - name: watcher-registry-lifecycle
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    related: [spec-cli/src/index.ts]
+    description: >-
+      In an isolated production-shaped git fixture, start the real backend and plain graph SSE, repeatedly
+      invalidate/build while live worktrees are added and removed from the observed set, then make three
+      consecutive commits. Count this backend process's inotify watch descriptors after every reconciliation,
+      observe each commit through SSE plus the `/api/graph` freshness header, close/reopen the watcher era,
+      and finally terminate the backend by its exact port.
+    expected: >-
+      Watch cardinality is proportional to the unique directory set and plateaus across unchanged refreshes;
+      removed paths and close return their handles, reopen starts one clean registry per root/scope, and process
+      exit returns the count to zero. Each of the three commits causes exactly one
+      `stale, refreshing` -> `fresh` cycle and one non-overlapping build. Registration/runtime failures are
+      visible with their source path and never leave a half-attached or silently-deaf registry.
 ---
 
 # measuring board-stream

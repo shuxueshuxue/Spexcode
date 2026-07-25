@@ -7,6 +7,7 @@ code:
   - spec-cli/src/graphStream.ts
 related:
   - spec-cli/src/graphStream.test.ts
+  - spec-cli/src/graphStream.api.test.ts
 ---
 
 # graph-stream
@@ -39,8 +40,8 @@ from before the gap, whose missing sessions would empty the client's warm-termin
 [[graph-cache]]'s scoped invalidation, so a session-only change is answered by the sessions SPLICE (fresh
 `listSessions`, every other unit reused) instead of a full assembly: measured, the store-write→push path
 dropped from ~420ms median to ~56ms on the dogfood corpus. The sources and their scopes: (1) recursive
-`fs.watch` on the per-user session store ([[runtime]]) → 'sessions'. (2) the git dir's refs (loose refs
-recursively, `packed-refs`/`HEAD`) → 'full' — a commit legitimately reshapes nodes, drift, overlays and
+filesystem observation on the per-user session store ([[runtime]]) → 'sessions'. (2) the git dir's refs
+(loose refs recursively, `packed-refs`/`HEAD`) → 'full' — a commit legitimately reshapes nodes, drift, overlays and
 eval anchors at once, which is why refs stay full-scope rather than pretending to a narrower domain. (3)
 TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms HOT tier (`hotSignature`
 — pure-syscall death detection over launch-registered pids) and a ~1s WARM tier (`warmSignature` — one
@@ -66,6 +67,28 @@ funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED 
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
 is the coalescer for anything wider, so the old flat 150ms was pure added latency.
 
+**One exact-directory registry owns filesystem observation.** Linux/Node's built-in recursive `fs.watch`
+looks like one `FSWatcher` in JavaScript but expands into an inotify watch for every file and directory.
+On the production-shaped tree one live worktree took the process from 91 to 1,369 exact watches and the
+next reconciliation to 16,592; after ref files were atomically replaced, a later commit could then move the
+ref without any event or registration error. Recursive `fs.watch` is therefore not a valid primitive here.
+Each `(root, scope)` instead has one reusable registry which enumerates directories and installs one
+**non-recursive** watch per directory. A rename schedules one refresh of that registry's desired directory
+set; refresh is a set reconciliation, so an unchanged path is never registered twice, a disappeared path's
+old handle is closed, and a new path is installed exactly once. Worktree `.git` transport metadata and
+`node_modules` are excluded from traversal at registration time, not merely ignored after consuming watches.
+Atomic file replacement remains visible through the containing directory's stable handle.
+
+Registry ownership follows the source lifetime, not a graph build. Repeated `/api/graph`, invalidation, and
+scoped Eval reads reuse the same `(root, scope)` registry. A worktree path changing under one git registry
+entry closes the old root and index handles before installing the replacement; worktree removal closes both.
+Changing the resolved session-store/git root closes every registry from the old source set, and an explicit
+`closeBoardFileWatchers()` drains all file handles and pending repair timers when the backend child/server
+ends, while a later ensure can open a clean era. Registration and runtime errors are loud and name the source
+and path; they close the failed registry before observer hold/retry, never leave a half-attached set or hide
+behind the patrol. Source failure does not crash the HTTP server, but it is never silent. Successful
+replacement is live before its hold is released and its authoritative rescan is triggered.
+
 **The patrol is a self-heal authority, not a crutch — and it is accountable.** The delta-gated ~15s cold
 tick now `invalidateBoard('full')`s before it rebuilds (it once read the still-valid cache back — a no-op
 patrol, found by measurement: an uncommitted worktree edit stayed invisible through five ticks while a
@@ -87,9 +110,10 @@ timer exists.
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last
 subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[graph-cache]]'s single-flight
 `getBoard()` (the SSE rebuild and a concurrent `/api/graph` poll share one assembly), broadcasts the patch,
-and notifies plain streams only when the content tag actually moved. Every source is best-effort and never
-throws. The patrol can still repair ordinary graph units and reports that repair; an eval input source that
-cannot start instead leaves its projection observer-held and visibly non-current until the source is restored.
+and notifies plain streams only when the content tag actually moved. A failed source keeps the server serving
+but fails loudly, closes its partial registry, and retries under its observer hold. The patrol can still repair
+ordinary graph units and reports that repair; an eval input source that cannot start instead leaves its
+projection observer-held and visibly non-current until the source is restored.
 
 **Reconnect is free, and the ping is a contract.** A backend hot-reload drops the stream; `EventSource`
 auto-reconnects and the fresh `graph-full` re-anchors the patch chain with no client-side repair logic. The

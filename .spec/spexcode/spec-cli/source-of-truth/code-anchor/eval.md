@@ -98,6 +98,19 @@ scenarios:
     expected: >
       Lint exits 1 with a `dead anchor` integrity error for the missing qualified name and an
       `ambiguous anchor` integrity error reporting both duplicate qualified declarations.
+  - name: candidate-tip-gate
+    tags: [cli]
+    description: >
+      In a real temporary Git repository with an anchored node, exercise the installed local gate through
+      ordinary commit, commit --only with conflicting unstaged worktree content, cherry-pick, and rebase.
+      First try an anchored implementation-only commit with no declaration; then try the same candidate
+      with either the node's spec.md changed in that commit or a `Spec-OK: <node>` trailer.
+    expected: >
+      Every newly-created commit is judged against its own final tree, message, and ancestry before its ref
+      advances. The undeclared anchor hit is rejected and leaves the original branch ref in place; changing
+      code and spec together passes because the candidate spec version closes the window; an in-commit
+      Spec-OK trailer also passes. Unstaged worktree decoys never affect a --only candidate, and replayed
+      commits are subject to the same verdict rather than bypassing it through a hook Git does not invoke.
 ---
 # code-anchor — measurement
 

@@ -91,7 +91,8 @@ fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stde
 read for a caller that needs only the first N bytes (`gitPrefixA`), which stops the child at the caller's
 byte budget and reports the truncation as its own answer — never as an empty result, which would invert the
 size question it exists to answer. The budget is a byte count, so the transport stays blind to what the
-bytes mean. All of them BOUND their
+bytes mean. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
+one place decides it, every shape obeys it, and the transport never learns which walk it is running. All of them BOUND their
 child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
 generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
 the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise

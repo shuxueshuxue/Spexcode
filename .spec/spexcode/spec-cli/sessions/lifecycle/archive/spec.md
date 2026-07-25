@@ -47,9 +47,14 @@ nothing reads `archived` as a status, and shelving never rewrites one.
 - `close` is the **terminal** verb — give the disk back, destroying the work. Not reversible.
 
 So archiving does not kill tmux, does not touch the worktree or branch, and writes no timeline row. The human
-composes the two freely: shelve a session that is still running, or stop one and leave it in the ordinary
-list. Folding a kill into archive would make a cheap reversible act destructive, and every surface's wording
-therefore states that nothing was stopped — a human who reads "archived" as "killed" has been lied to.
+composes the two freely: archive a session that is still running, or stop one and leave it in the ordinary
+list. Folding a kill into archive would make a cheap reversible act destructive.
+
+The copy does NOT argue this. "Archive" already means *set aside, not destroyed* in every product a human has
+used, so a card that insists nothing was stopped or removed is defending a design choice nobody questioned —
+it reads as strange precisely because the reassurance implies a danger that isn't there. Surfaces state the
+state and the way out, in the house voice the offline panel already set: one status line, one short sub. What
+keeps the meaning honest is that the verb genuinely does nothing else, not that every screen says so.
 
 **The record stays a projection, never a log.** `archived` is a declared field in `session.json`'s closed key
 set, written like every other. That key set is rebuilt from the typed record on each write and never merged
@@ -69,22 +74,23 @@ the existence truth ([[state]]) and a view preference must never decide what exi
   an explicit selector is the human already saying which row they mean.
 - the console's list shows one population at a time.
 
-**The console gives the shelf a door, not a zone.** A shelved session still *has* a triage zone (needs-you,
+**The console gives the archive a door, not a zone.** An archived session still *has* a triage zone (needs-you,
 running, offline); folding it into the zone vocabulary would destroy the very information you want back on
 restore. So the list splits first and runs **both** populations through the same forest machinery — identical
-zones, nesting, folding, and row faces on either side. The door is a star in the list header's segmented
-group, carrying the shelf count, and it appears only when something is actually shelved. Reaching a shelved
+zones, nesting, folding, and row faces on either side. The door is a star, the third of three equal pills in
+the list header beside New and Search, and it is **permanent**: a control that appears only when it has
+contents cannot be found when you want it, and its absence would be the only thing telling you the archive
+exists at all. The count rides the star when there is one and is simply absent at zero. Reaching an archived
 session from outside the list (URL, search, an originator chip) lands the view on the side that holds it, the
 same promise the ancestor-unfold makes within a list.
 
-Selecting a shelved session shows the **shelf card**, which outranks both console surfaces and wears the
+Selecting an archived session shows the **archive card**, which outranks both console surfaces and wears the
 offline panel's face — the two are one family of "this session is in a state" cards, each with one way out.
-Restore is always the primary action; a shelved session whose process also died gets relaunch as the
+Restore is always the primary action; an archived session whose process also died gets relaunch as the
 secondary, so one card answers both questions instead of stacking two panels.
 
 **One vocabulary everywhere.** `/archive` and `/unarchive` are board commands in the shared registry
 ([[session-console]]), so the typed command, the menu row, and its availability come from one definition;
 exactly one of the pair is ever offered, keyed on `archived` alone and never on lifecycle or liveness. The CLI
 verbs `spex session archive|unarchive <SEL>` and the `POST /api/sessions/:id/archive` route are the same act
-through the other two doors, and the CLI echo names what did *not* happen — the agent keeps running — so the
-word cannot be misread as a stop.
+through the other two doors.

@@ -52,12 +52,10 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds compact pills above the session rows, kept out of the `↑/↓` path down to a
-session. It is **segmented by kind**, because two different kinds of control live there: a segmented group of
-*view* controls that can read "on" — the `＋` New Session button and the **shelf** star ([[archive]], present
-only when something is shelved, carrying the shelf count) — and, set apart, the momentary **Search** button,
-the click twin of the ⌥+/ palette ([[session-search]] owns that contract). The spacing states that difference
-structurally, so a destination and an action never read as one undifferentiated row of buttons.
+**morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
+path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
+carrying the archived count when there is one), and a **Search** button, the click twin of the ⌥+/ palette
+([[session-search]] owns that contract).
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Nothing is prefilled; typing **`[[`** opens the

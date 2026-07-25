@@ -730,34 +730,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
         <aside className="si-list" ref={listRef} style={{ flex: `0 0 ${listW}px` }}>
-          {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
-              a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs.
-              @@@ the list header is one SEGMENTED bar, not loose buttons. Three controls of two different
-              kinds live here — a destination (New), a momentary palette (Search), and a view toggle (Shelf) —
-              so the bar states that difference structurally: New and Shelf are the segmented group that can
-              read "on", Search sits apart as the momentary action. A shelf with nothing in it is not rendered
-              at all, so the ordinary case stays the same two controls it has always been. */}
+          {/* while multi-selecting ([[session-multi-select]]) the pills give way to the select bar — a pick
+              count + bulk delete + cancel; the rows below toggle picks instead of switching tabs.
+              Three equal pills: New, the archive door ([[archive]]), and Search. The door is PERMANENT — a
+              control that comes and goes with its own contents can't be found when you need it, and its
+              absence would be the only thing telling you the archive exists. */}
           {selecting ? (
             <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
           ) : (
           <div className="si-toprow">
-            <div className="si-seg" role="group" aria-label={t('session.viewGroup')}>
-              <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
-                <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
-              </button>
-              {/* the shelf door ([[archive]]) — a filled star while you are looking at it. The count IS the
-                  affordance: it is the only thing telling you shelved work exists, so it is text, not a dot. */}
-              {shelved.length > 0 && (
-                <button type="button" className={showShelf ? 'si-pill shelf on' : 'si-pill shelf'}
-                  aria-pressed={showShelf}
-                  data-tip={showShelf ? t('session.shelfHide') : t('session.shelfShow')}
-                  aria-label={showShelf ? t('session.shelfHide') : t('session.shelfShow')}
-                  onClick={() => setShowShelf((v) => !v)}>
-                  <span className="si-pill-glyph"><Icon name={showShelf ? 'star-filled' : 'star'} size={15} /></span>
-                  <span className="si-pill-count">{shelved.length}</span>
-                </button>
-              )}
-            </div>
+            <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
+              <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
+            </button>
+            <button type="button" className={showShelf ? 'si-pill shelf on' : 'si-pill shelf'}
+              aria-pressed={showShelf}
+              data-tip={showShelf ? t('session.shelfHide') : t('session.shelfShow')}
+              aria-label={showShelf ? t('session.shelfHide') : t('session.shelfShow')}
+              onClick={() => setShowShelf((v) => !v)}>
+              <span className="si-pill-glyph"><Icon name={showShelf ? 'star-filled' : 'star'} size={15} /></span>
+              {shelved.length > 0 && <span className="si-pill-count">{shelved.length}</span>}
+            </button>
             {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
             <button type="button" className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
@@ -765,7 +757,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
-          {/* An empty shelf VIEW says so, rather than reading as a broken list. */}
           {showShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
@@ -968,10 +959,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
                   </div>
                 )}
-                {/* the shelf card ([[archive]]) — the offline panel's twin, wearing the same centred face so a
-                    filed session and a dead one read as the same KIND of thing: a state with one way out.
-                    Unshelve is always the primary; a shelved session whose process also died gets the restore
-                    as the secondary, so one card answers both questions without stacking two panels. */}
+                {/* the archive card ([[archive]]) — the offline panel's twin, so a filed session and a dead
+                    one read as the same kind of thing: a state with one way out. Restore is the primary; an
+                    archived session whose process also died gets relaunch beside it rather than a second panel. */}
                 {shelvedSel && (
                   <div className="si-offline si-shelf-card">
                     <div className="si-shelf-mark" aria-hidden="true"><Icon name="star-filled" size={22} /></div>

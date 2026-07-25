@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -310,6 +310,88 @@ exec "${realGit}" "$@"
     assert.equal(ancestorSpawns(), 0)
     assert.equal(commitReachable(recovered, run('rev-parse', 'HEAD')), true)
     assert.equal(commitReachable(recovered, 'f'.repeat(40)), false)
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(root, { recursive: true, force: true })
+    rmSync(bin, { recursive: true, force: true })
+  }
+})
+
+// ---- the byte-budget read: measure a stream by its prefix, never by walking all of it ----
+
+// A name stream of a chosen size, built from few long paths rather than many short ones — the switch reads
+// BYTES, so width per path is as good as path count and a hundredth of the fast-import cost.
+function prefixRepo(paths: number, pathLength: number): { root: string; streamBytes: number } {
+  const root = mkdtempSync(join(tmpdir(), 'spex-prefix-'))
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const run = (...args: string[]) => execFileSync(realGit, ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  run('init', '-q', '-b', 'main')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'test')
+  let stream = 'blob\nmark :1\ndata 2\nx\n'
+  stream += 'commit refs/heads/main\nmark :2\ncommitter Test <test@example.com> 1700000000 +0000\ndata 4\nbase\n'
+  for (let i = 0; i < paths; i++) stream += `M 100644 :1 .fixture/p${String(i).padStart(6, '0')}-${'x'.repeat(pathLength)}\n`
+  stream += '\n'
+  execFileSync(realGit, ['-C', root, 'fast-import', '--quiet'], { input: stream })
+  const full = execFileSync(realGit, ['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'],
+    { encoding: 'utf8', maxBuffer: 1 << 28 })
+  return { root, streamBytes: full.length }
+}
+
+test('a byte-budget read stops the stream at the budget and reports the truncation', async () => {
+  const { root, streamBytes } = prefixRepo(1_000, 90)
+  try {
+    const budget = 100_000
+    assert.ok(streamBytes > budget, 'fixture must overflow the budget for this to mean anything')
+    const capped = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], budget)
+    assert.equal(capped.truncated, true)
+    assert.ok(capped.text.length <= budget, 'the transport retained more than the budget')
+    // the verdict a caller forms from the prefix is the verdict the whole stream would have given
+    assert.equal(capped.truncated || capped.text.length >= budget, streamBytes >= budget)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a byte-budget read under budget returns the whole stream, untruncated, and a failure stays fail-soft', async () => {
+  const { root, streamBytes } = prefixRepo(3, 20)
+  try {
+    const budget = 100_000
+    assert.ok(streamBytes < budget)
+    const whole = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], budget)
+    assert.equal(whole.truncated, false)
+    assert.equal(whole.text.length, streamBytes)
+    assert.equal(whole.truncated || whole.text.length >= budget, streamBytes >= budget)
+    // a genuine git failure is neither truncation nor a lie about size
+    const failed = await gitPrefixA(['-C', root, 'log', '--name-only', '--format=', 'no-such-ref'], budget)
+    assert.deepEqual(failed, { text: '', truncated: false })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('the large-history switch reads a bounded prefix, and a stream past the old buffer still switches', { concurrency: false }, async () => {
+  // a name stream far past the transport's 16MB read buffer, which used to come back empty and read as a
+  // SMALL history — the switch failing exactly on the corpus that needs it most.
+  const { root, streamBytes } = prefixRepo(18_000, 1_000)
+  const bin = mkdtempSync(join(tmpdir(), 'spex-prefix-bin-'))
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const argvLog = join(bin, 'argv.log')
+  const shim = join(bin, 'git')
+  writeFileSync(argvLog, '')
+  writeFileSync(shim, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argvLog}"\nexec "${realGit}" "$@"\n`)
+  chmodSync(shim, 0o755)
+  const oldPath = process.env.PATH
+  process.env.PATH = `${bin}:${oldPath || ''}`
+  try {
+    assert.ok(streamBytes > (1 << 24), 'fixture must exceed the old 16MB read buffer')
+    const index = await driftIndex(root)
+    assert.ok(index.lazy, 'an oversized name stream must take the large-history representation')
+    assert.equal(index.fileCommits.size, 0, 'the large-history path retains no commit/file edge map')
+    // the prefix read is the only whole-repo name-stream child the switch spawns
+    const nameStreamSpawns = readFileSync(argvLog, 'utf8').split('\n')
+      .filter((line) => line.includes("log --name-only --format= HEAD")).length
+    assert.equal(nameStreamSpawns, 1)
   } finally {
     process.env.PATH = oldPath
     rmSync(root, { recursive: true, force: true })

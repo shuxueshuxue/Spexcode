@@ -111,7 +111,8 @@ type GitExec = { stdout: string; stderr: string }
 // execFile's AbortSignal kills only its direct child. A wedged adapter may have descendants (the
 // deterministic tests use a shell + sleep), so async git runs in their own process group and abort/timeout
 // kills the whole group. The callback still carries the same stdout/stderr/error shape to gitA/gitTry.
-function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<GitExec> {
+const GIT_MAX_BUFFER = 1 << 24
+function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof execFile> | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -124,7 +125,7 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): 
     }
     const onAbort = () => { aborted = true; killTree() }
     child = execFile('git', args, {
-      encoding: 'utf8', env, maxBuffer: 1 << 24, detached: true,
+      encoding: 'utf8', env, maxBuffer, detached: true,
       ...(signal ? { signal, killSignal: 'SIGKILL' } : {}),
     } as any, (error: any, stdout: string, stderr: string) => {
       if (timer) clearTimeout(timer)
@@ -143,12 +144,12 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): 
   })
 }
 
-async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv): Promise<GitExec> {
+async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffer?: number): Promise<GitExec> {
   const context = inheritedContext()
-  if (!context) return execGit(args, env)
+  if (!context) return execGit(args, env, undefined, maxBuffer)
   const release = await context.permits.acquire(context.signal)
   try {
-    return await execGit(args, env, context.signal)
+    return await execGit(args, env, context.signal, maxBuffer)
   } finally {
     release()
   }
@@ -164,6 +165,27 @@ export async function gitA(args: string[]): Promise<string> {
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args); return ''
+  }
+}
+
+// @@@ a read with a byte budget - the fourth call shape, for a caller that needs only a bounded PREFIX of
+// a stream. The transport stops the child the moment the budget is exceeded and SAYS SO, so measuring "is
+// this stream at least N bytes" costs N bytes instead of the whole walk. Truncation must be its own answer:
+// a fail-soft read would report an overflowing stream as EMPTY, which reads as 'small' — the exact
+// inversion of the truth. Content-blind by construction: it counts bytes and knows nothing about them.
+export type GitPrefix = { text: string; truncated: boolean }
+export async function gitPrefixA(args: string[], maxBytes: number): Promise<GitPrefix> {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  const context = inheritedContext()
+  try {
+    const { stdout } = await execGitForCaller(args, env, maxBytes)
+    return { text: stdout, truncated: false }
+  } catch (e: any) {
+    if (context?.signal.aborted || e?.name === 'AbortError') throw e
+    if (e?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return { text: e.stdout ?? '', truncated: true }
+    warnIfTimedOut(e, args)
+    return { text: '', truncated: false }
   }
 }
 
@@ -518,13 +540,15 @@ async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
 }
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
   // File fan-out, not just commit count, determines the object-graph size: a ten-thousand-commit fixture can
-  // still touch millions of paths. Probe the raw name stream once and use its byte budget as the generic
-  // large-history switch. Drop the probe before the richer parser so its bytes cannot overlap the retained maps.
-  let probe = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'])
-  if (probe.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root)
+  // still touch millions of paths. The switch asks whether the raw name stream REACHES the byte budget, and
+  // that question is settled by the first budget-worth of bytes — so read exactly that prefix and let
+  // truncation be the verdict (a stream that overflows the budget is by definition at least that big).
+  // Reading the whole stream to measure it made every index build pay a full-history walk, and a stream past
+  // the transport's buffer came back EMPTY, flipping the large-history switch off exactly where it matters.
+  const probe = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], DRIFT_LAZY_OUTPUT_BYTES)
+  if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root)
   const count = Number((await gitA(['-C', root, 'rev-list', '--count', 'HEAD'])).trim())
   if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root)
-  probe = ''
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileCommits = new Map<string, string[]>()
   const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()

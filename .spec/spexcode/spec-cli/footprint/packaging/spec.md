@@ -23,6 +23,9 @@ command on PATH — `spex` — and nothing else the user must wire. The package 
 needs on a machine that has never seen the source: the CLI, its `spex init` templates, the git/harness
 hooks, and the **prebuilt** dashboard. There is no build step on the user's machine — the launcher runs
 the TypeScript directly through tsx (a real dependency, not a dev-only tool), the dogfood's no-build stance.
+The full TypeScript compiler is deliberately not runtime cargo: it remains a development dependency for
+SpexCode's own typecheck and JS anchors, while an adopter's optional JS-anchor extractor resolves that
+adopter's TypeScript and fails loud when it is absent ([[code-anchor]]).
 
 The published unit is the **monorepo root**, shipping the runtime subset with the **layout preserved**: an
 explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-eval/src` and

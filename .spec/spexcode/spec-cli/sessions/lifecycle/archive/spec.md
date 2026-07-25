@@ -80,9 +80,17 @@ restore. So the list splits first and runs **both** populations through the same
 zones, nesting, folding, and row faces on either side. The door is a star, the third of three equal pills in
 the list header beside New and Search, and it is **permanent**: a control that appears only when it has
 contents cannot be found when you want it, and its absence would be the only thing telling you the archive
-exists at all. The count rides the star when there is one and is simply absent at zero. Reaching an archived
-session from outside the list (URL, search, an originator chip) lands the view on the side that holds it, the
-same promise the ancestor-unfold makes within a list.
+exists at all. The count rides the star when there is one and is simply absent at zero, where the star is also
+**inert** — an empty archive is not a room to walk into. Reaching an archived session from outside the list
+(URL, search, an originator chip) lands the view on the side that holds it, the same promise the
+ancestor-unfold makes within a list.
+
+**The archive view cannot outlive its contents.** Everything that can turn it on reads a board snapshot, and a
+snapshot can be stale: the board serves the pre-write value for close to a second after a record flips, and a
+session can be restored from the CLI or another tab while you are looking at it. Left as a stored flag the view
+LATCHES — the star lit over an empty list while the session sits back in the working set, with nothing in the
+UI able to correct it. So the view is DERIVED (`showShelf && archived.length > 0`) rather than trusted, which
+makes that state unreachable instead of merely unlikely, and removes the empty-archive message along with it.
 
 Selecting an archived session shows the **archive card**, which outranks both console surfaces and wears the
 offline panel's face — the two are one family of "this session is in a state" cards, each with one way out.
@@ -94,3 +102,9 @@ secondary, so one card answers both questions instead of stacking two panels.
 exactly one of the pair is ever offered, keyed on `archived` alone and never on lifecycle or liveness. The CLI
 verbs `spex session archive|unarchive <SEL>` and the `POST /api/sessions/:id/archive` route are the same act
 through the other two doors.
+
+Filing is a **row** decision as much as a console one, so it is also on the session row's right-click menu —
+one item that names the move OUT of the row's current state rather than a pair where one is always inert. It
+acts immediately, with no confirm: `close` earns its prompt by destroying work, while a prompt guarding a
+reversible act is friction pretending to be care. It sits with the row's other non-destructive actions, never
+grouped with close, so a mis-aimed right-click can cost you a moment's confusion but never the work.

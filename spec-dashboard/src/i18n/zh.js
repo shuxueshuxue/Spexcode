@@ -357,6 +357,8 @@ export default {
     rename: '重命名',
     attach: '在终端中打开…',
     select: '多选…',
+    archive: '归档',
+    unarchive: '取消归档',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
@@ -580,7 +582,6 @@ export default {
     // 归档面（[[archive]]）——与上面的离线面板同形：一行状态 + 一句短说明
     shelfShow: '已归档',
     shelfHide: '返回会话列表',
-    shelfEmpty: '没有已归档的会话',
     shelfMsg: '★ 已归档',
     shelfSubLive: '仍在运行。想用的时候取回。',
     shelfSubOffline: '已离线。取回后可重新启动。',

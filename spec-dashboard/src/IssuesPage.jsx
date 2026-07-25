@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState, useRef } from 'react'
 import { loadIssue, postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
-import { useMentionAutocomplete } from './mentions.jsx'
+import { MENTION_RE, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
-import { ComposerTextarea, composingKey } from './Composer.jsx'
+import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import Modal from './Modal.jsx'
 import { DetailShell, FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters, SideSection, SideValue } from './ReviewShell.jsx'
 import { ISSUE_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery, setToken } from './reviewQuery.js'
 import { reviewActorName } from './reviewFilters.js'
@@ -14,15 +13,18 @@ import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { navigate, routeHash, useRoute } from './route.js'
 import { detailBackHash } from './address.js'
 import { Icon } from './icons.jsx'
-import { useEscLayer } from './escStack.js'
 
-// The Issues surface ([[issues-view]]): GitHub-style TWO pages over one route family, both wearing the
-// shared [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
+// The Issues surface ([[issues-view]]): GitHub-style pages over ONE route family, all wearing the shared
+// [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
 // order, no re-sort), structured rows that are REAL anchors, query/sections/facets in the URL; `#/issues/<id>` is
 // the standalone DETAIL page — the markdown body + reply thread as the main column with the composer
-// docked at its foot, the status/store/originator/node metadata in the side rail. A row click PUSHES;
-// browser Back restores the exact filtered list; both pages are directly openable. Writes post as
-// 'human' and route by store ([[issues]]).
+// docked at its foot, the status/store/originator/node metadata in the side rail; `#/issues/new` is the
+// standalone COMPOSE page. A row click PUSHES; browser Back restores the exact filtered list; every page is
+// directly openable. Writes post as 'human' and route by store ([[issues]]).
+
+// the compose address' one path word ([[issues-view]]): `#/issues/new` is the compose PAGE, never an issue
+// detail — the local store reserves the same word at id minting ([[local-issues]]), so no issue can own it.
+export const NEW_PARAM = 'new'
 
 const concluded = (i) => i.status !== 'open'
 
@@ -54,10 +56,8 @@ const facetOptions = (data, key, allLabel, labelValue = (value) => value) => (da
   label: option.value === '' ? allLabel : labelValue(option.value),
 }))
 
-export function IssuesListPage({ data, loading, error, reload, specs, sessions, query, notice, flash }) {
+export function IssuesListPage({ data, loading, error, query, notice }) {
   const t = useT()
-  const [composing, setComposing] = useState(false)
-  useEscLayer(composing, () => setComposing(false))
   if (data && !data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
   const all = Array.isArray(data?.items) ? data.items : []
@@ -69,7 +69,6 @@ export function IssuesListPage({ data, loading, error, reload, specs, sessions, 
 
   // Store options come from DATA, not a hardcoded list — a new adapter appears without new chrome.
   const stores = (data?.facets?.store?.options ?? []).map((option) => option.value).filter(Boolean)
-  const writeStores = Array.isArray(data?.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
   const issues = all
   const openCount = data?.counts?.open || 0
   const closedCount = data?.counts?.closed || 0
@@ -107,6 +106,10 @@ export function IssuesListPage({ data, loading, error, reload, specs, sessions, 
     }
   })
 
+  // New is a DOOR to its own page ([[issues-view]]'s compose address), so it is a REAL anchor — a click is
+  // the same transaction the address bar produces, and middle-click/new-tab/copy-address come free.
+  const newAction = <a className="rl-new" href={routeHash('issues', NEW_PARAM)}><Icon name="plus" size={14} />{t('session.issuesNew')}</a>
+
   // menus are pure query builders over the ADAPTER's data-derived options — zero private state.
   const storeFacet = { label: t('reviewList.facetStore'), value: readToken(text, 'store'), options: facetOptions(data, 'store', t('reviewList.all')) }
   const sessionFacet = {
@@ -120,7 +123,7 @@ export function IssuesListPage({ data, loading, error, reload, specs, sessions, 
       loading={loading}
       error={error}
       title={t('reviewList.issuesTitle')}
-      action={<button type="button" className="rl-new" onClick={() => setComposing(true)}><Icon name="plus" size={14} />{t('session.issuesNew')}</button>}
+      action={newAction}
       search={{
         value: String(query.q ?? '').trim() ? query.q : ISSUE_QUERY_DEFAULT,
         onSubmit: push,
@@ -156,14 +159,7 @@ export function IssuesListPage({ data, loading, error, reload, specs, sessions, 
         dataset: t('session.issuesEmpty'),
         filtered: t('session.issuesNoMatch'),
       }}
-    >
-      {composing && (
-        <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">
-          <NewThreadForm specs={specs} sessions={sessions} stores={writeStores} onCancel={() => setComposing(false)}
-            onDone={async (outcomes) => { setComposing(false); flash(outcomes); await reload?.() }} />
-        </Modal>
-      )}
-    </ListPage>
+    />
   )
 }
 
@@ -291,13 +287,25 @@ function useIssueDetail(id) {
 export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [] }) {
   const t = useT()
   const { param, query } = useRoute()
+  const composing = param === NEW_PARAM
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
-  const list = useReviewPage('issues', text, page, { enabled: !param, refreshKey: sessions })
-  const detail = useIssueDetail(param)
+  // the compose page reads the SAME one review request the list reads ([[paged-review]]) — the writable
+  // stores are that contract's own facts, so a direct open of #/issues/new needs no second endpoint.
+  const list = useReviewPage('issues', text, page, { enabled: !param || composing, refreshKey: sessions })
+  const detail = useIssueDetail(composing ? null : param)
   const [notice, setNotice] = useState('')
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }
+
+  if (composing) {
+    if (list.data && !list.data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
+    const writeStores = Array.isArray(list.data?.stores) && list.data.stores.length ? list.data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
+    return <NewIssuePage specs={specs} sessions={sessions} stores={writeStores}
+      // the created issue is where the writer belongs; the spent compose address REPLACES ([[side-nav]]:
+      // automatic state-naming replaces, so Back returns to the list, not to an emptied form).
+      onCreated={(id, outcomes) => { flash(outcomes); navigate('issues', id, { replace: true }) }} />
+  }
 
   if (param) {
     if (detail.issue == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
@@ -309,8 +317,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
     return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
       onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
   }
-  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} reload={list.reload} specs={specs} sessions={sessions}
-    query={query} notice={notice} flash={flash} />
+  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} notice={notice} />
 }
 
 // canonical store display names — the permalink label derives from the issue's OWN `store` identity
@@ -320,24 +327,35 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
 const STORE_DISPLAY_NAMES = { github: 'GitHub', gitlab: 'GitLab' }
 const storeDisplayName = (id) => STORE_DISPLAY_NAMES[id] || id
 
-// the "New" affordance — a concern line, a body, and one compact store picker. Local posts to the
-// git-native local store; a configured forge store posts a REAL forge issue through the same issue port.
-// A `[[node]]` link in the text IS the node link — local infers `nodes:`, forge writes the `Spec:` marker
-// from the same prose. No separate node-ids field exists. The shared `[[node]]`/`@session` autocomplete
-// opens above the pop-out, not as inserted modal content.
-function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
+// The COMPOSE page (`#/issues/new`) — the third address of the issues route family, GitHub's own
+// new-issue grammar: a real PLACE (bookmarkable, reloadable, Back-restorable), never a pop-out over the
+// list. It wears the SAME [[review-chrome]] `DetailShell` the detail page wears — the compact back anchor
+// leading a title header, one main column, one metadata rail — and writes through the SAME [[composer]]
+// surface every other writing box in the app uses (a quiet bordered box, a borderless auto-growing
+// textarea, a persistent action row carrying the [[mentions]] `@`/`[[` doors), so New is not a second
+// dialect of "an input". A `[[node]]` link in the prose IS the node link — local infers `nodes:`, a forge
+// post writes the `Spec:` marker from the same prose — and the rail SHOWS the links it will make, so no
+// separate node-ids field exists. Write/Preview renders the draft through the one SpecBody the detail page
+// renders it with, so what the writer proofreads is what the issue will look like.
+function NewIssuePage({ specs, sessions, stores, onCreated }) {
   const t = useT()
   const [store, setStore] = useState(stores[0]?.id || 'local')
   const [concern, setConcern] = useState('')
   const [body, setBody] = useState('')
+  const [preview, setPreview] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const taRef = useRef(null)
   const { launchers } = useLaunchers()
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, up: true, fixedAbove: '.fv-new-modal' })
+  // on a PAGE the menu opens downward under the caret line — no pop-out boundary to clear, so no `up`/
+  // `fixedAbove` overlay geometry ([[mentions]]).
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers })
   useEffect(() => {
     if (!stores.some((s) => s.id === store)) setStore(stores[0]?.id || 'local')
   }, [stores, store])
+  // the node links the prose ALREADY carries — the same `[[id]]` grammar the store derives `nodes:` from,
+  // shown while writing instead of stated as a rule nobody can verify.
+  const nodes = [...new Set([...body.matchAll(MENTION_RE)].map((m) => m[1]))]
   const submit = async () => {
     const c = concern.trim()
     if (!c || busy) return
@@ -345,34 +363,88 @@ function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
     setErr('')
     try {
       const res = await postIssueThread({ concern: c, body: body.trim() || undefined, store })
-      if (res?.ok) { setConcern(''); setBody(''); await onDone?.(res.outcomes || '') }
+      if (res?.ok && res.id) onCreated?.(res.id, res.outcomes || '')
       else setErr(res?.error || t('session.issuesPostFailed'))
     } finally { setBusy(false) }
   }
+  const tab = (on, label) => (
+    <button type="button" role="tab" aria-selected={preview === on} className={`fv-tab ${preview === on ? 'on' : ''}`}
+      onClick={() => setPreview(on)}>{label}</button>
+  )
   return (
-    <div className="fv-new-form">
-      <label className="fv-store-pick">
-        <span>{t('session.issuesStoreLabel')}</span>
-        <select value={store} disabled={busy} onChange={(e) => setStore(e.target.value)}>
-          {stores.map((s) => <option key={s.id} value={s.id}>{s.label || s.id}</option>)}
-        </select>
-      </label>
-      <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
-        disabled={busy} onChange={(e) => setConcern(e.target.value)} />
-      <div className="fv-tawrap">
-        <ComposerTextarea ref={taRef} className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
-          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
-          onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
-          onKeyDown={(e) => { if (composingKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
-        {ac.menuEl}
+    <DetailShell
+      title={t('session.issuesNewTitle')}
+      backHref={detailBackHash('issues')}
+      backLabel={t('detail.backToIssues')}
+      side={
+        <>
+          <SideSection label={t('session.issuesStoreLabel')}>
+            <label className="fv-store-pick">
+              <span className="sr-only">{t('session.issuesStoreLabel')}</span>
+              <select value={store} disabled={busy} onChange={(e) => setStore(e.target.value)}>
+                {stores.map((s) => <option key={s.id} value={s.id}>{s.label || s.id}</option>)}
+              </select>
+            </label>
+          </SideSection>
+          <SideSection label={t('detail.sideNodes')}>
+            {nodes.length > 0
+              ? nodes.map((id) => <SideValue key={id} text={id} mono />)
+              : <SideValue text={t('session.issuesNodesHint')} dim />}
+          </SideSection>
+        </>
+      }
+    >
+      <div className="fv-new-page">
+        <label className="fv-field">
+          <span className="fv-field-label">{t('session.issuesTitleLabel')}</span>
+          <input className="fv-input fv-new-title" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
+            disabled={busy} autoFocus onChange={(e) => setConcern(e.target.value)}
+            onKeyDown={(e) => { if (composingKey(e)) return; if (e.key === 'Enter') { e.preventDefault(); submit() } }} />
+        </label>
+        <div className="fv-field">
+          <div className="fv-field-head">
+            <span className="fv-field-label">{t('session.issuesBodyLabel')}</span>
+            <div className="fv-tabs" role="tablist" aria-label={t('session.issuesBodyLabel')}>
+              {tab(false, t('session.issuesWrite'))}
+              {tab(true, t('session.issuesPreview'))}
+            </div>
+          </div>
+          <ComposerSurface
+            className="fv-new-compose"
+            editor={preview
+              ? (
+                <div className="fv-new-preview" role="tabpanel">
+                  {body.trim() ? <SpecBody body={body} /> : <span className="fv-new-hint">{t('session.issuesPreviewEmpty')}</span>}
+                </div>
+              )
+              : (
+                <div className="fv-tawrap" role="tabpanel">
+                  <ComposerTextarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesBodyPlaceholder')}
+                    disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
+                    onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
+                    onKeyDown={(e) => { if (composingKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
+                  {ac.menuEl}
+                </div>
+              )}
+            footer={
+              <div className="fv-actions">
+                <TriggerButton label={t('thread.mentionActor')} disabled={busy || preview}
+                  onClick={() => typeTrigger(taRef.current, '@', setBody, ac.sync)}>@</TriggerButton>
+                <TriggerButton label={t('thread.mentionNode')} disabled={busy || preview}
+                  onClick={() => typeTrigger(taRef.current, '[[', setBody, ac.sync)}>[[</TriggerButton>
+              </div>
+            }
+          />
+        </div>
+        <div className="fv-new-actions">
+          {err && <span className="fv-error">{err}</span>}
+          {/* Cancel is the same return the back anchor is — a REAL list anchor, never history.back. */}
+          <a className="fv-cancel" href={detailBackHash('issues')}>{t('session.issuesCancel')}</a>
+          <button type="button" className="fv-post" disabled={busy || !concern.trim()} onClick={submit}>
+            {busy ? t('session.issuesSending') : t('session.issuesPost')}
+          </button>
+        </div>
       </div>
-      <div className="fv-actions">
-        {err && <span className="fv-error">{err}</span>}
-        <button type="button" className="fv-cancel" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
-        <button type="button" className="fv-post" disabled={busy || !concern.trim()} onClick={submit}>
-          {busy ? t('session.issuesSending') : t('session.issuesPost')}
-        </button>
-      </div>
-    </div>
+    </DetailShell>
   )
 }

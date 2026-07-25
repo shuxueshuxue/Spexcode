@@ -178,11 +178,15 @@ export function loadOne(id: string): Issue {
 }
 
 // a filesystem-safe, readable, collision-free id from the concern (slug + numeric suffix if taken).
+// RESERVED_IDS are the words an issue address gives its own meaning — `new` is the compose PAGE
+// ([[issues-view]]), so an issue owning that id would be unreachable at its own detail address. The slug
+// steps around them with the same numeric suffix a taken id gets: a collision, not a silent shadow.
+const RESERVED_IDS = new Set(['new'])
 function uniqueId(concern: string): string {
   const base = concern.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'issue'
   const dir = localStoreDir()
   let id = base
-  for (let n = 2; existsSync(join(dir, `${id}.md`)); n++) id = `${base}-${n}`
+  for (let n = 2; RESERVED_IDS.has(id) || existsSync(join(dir, `${id}.md`)); n++) id = `${base}-${n}`
   return id
 }
 

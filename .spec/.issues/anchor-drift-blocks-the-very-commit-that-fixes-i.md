@@ -887,3 +887,39 @@ An agent writing a long message via heredoc must put the trailer at the end of t
 switch to the `--trailer` flag. Minor, and it is not new for `Session:` (the hook handles that one
 invisibly) — but `Spec-OK:` must be written deliberately by the author. That is correct: it is a
 claim, and a claim should not be automated.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:20:45.760Z -->
+CORRECTION — I said the ack source is the commit SUBJECT and that trailers are merely decorative.
+Wrong. I read one of two code paths and generalised. The maintainer asked whether the subject was
+chosen for a reason; checking that question is what surfaced this.
+
+There are TWO index builders, with DIFFERENT criteria:
+
+    git.ts:536  buildLazyDriftIndex   --grep='^ack: Spec-OK'  +  %s          <- subject
+    git.ts:575  buildDriftIndex       %(trailers:key=Spec-OK,valueonly,…)    <- TRAILER, git-native
+
+So the trailer is already the source on the eager path, using git's own trailer extractor. And the
+subject IS there for a reason: `--grep` prunes the walk inside git, so the lazy path never has to
+fetch a full body per commit. That is a sound optimisation, not an oversight.
+
+## What this changes
+
+    path                          a content commit carrying a `Spec-OK:` trailer
+    eager  buildDriftIndex        RECOGNISED
+    lazy   buildLazyDriftIndex    NOT recognised
+
+One concept, two criteria. Invisible today because `spex spec ack` guarantees the subject format,
+so both paths agree on every ack that exists. But the moment `Spec-OK:` may ride a commit with
+content — which is exactly what this design requires — the two paths DISAGREE: eager honours the
+declaration, lazy does not.
+
+So piece 1 is not "change the source of truth from subject to trailer" (which sounded like
+inventing something). It is: **make the lazy path's criterion agree with the eager one.** The
+payload, the carrier, the parser and one of the two readers are all already correct; a
+performance-motivated prune quietly narrowed the semantics on the other.
+
+That also drops piece 1's cost from "change a mechanism" to "reconcile an inconsistency" — and it
+is worth fixing on its own merits, since two readers of one concept disagreeing is a latent defect
+regardless of whether the gate ever moves.
+
+Retracting the corresponding claim in my previous post and in the summary I gave the maintainer.

@@ -12,7 +12,7 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   session: 'sess-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1', node: 'x',
   title: 'seven word prompt truncation title here', name: null, parent: null,
   status: 'active', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-  harness: 'claude', harnessSessionId: null, stopped: false, launcher: null, launchCmd: null, launchOwner: null,
+  harness: 'claude', harnessSessionId: null, stopped: false, archived: false, launcher: null, launchCmd: null, launchOwner: null,
   ...over,
 })
 

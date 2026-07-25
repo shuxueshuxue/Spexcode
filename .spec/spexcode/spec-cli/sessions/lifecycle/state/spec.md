@@ -54,7 +54,8 @@ They carry distinct faces, so the board never reads "stuck, needs me" as "fine, 
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
-independent facts, computed independently:
+independent facts, computed independently (a third, the human's `archived` filing decision, is orthogonal to
+BOTH and owned by [[archive]] — it never reads as a status and never rewrites one):
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `status` value above.
@@ -134,7 +135,9 @@ alive process (the one case where a deliberate kill is the repair). Only a **con
 send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
 confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
-are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. A stopped
+are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
+human-only verb, **`archive`** ([[archive]]), is deliberately neither: it writes one record field and stops
+nothing, so stop remains the RESOURCE verb and archive the ATTENTION verb, freely composed. A stopped
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
 one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the

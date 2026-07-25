@@ -3,7 +3,7 @@ import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
-import { sessionAncestorIds, sessionForest } from './session.js'
+import { sessionAncestorIds, sessionForest, splitArchived } from './session.js'
 import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
@@ -213,10 +213,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // by the header's leading count pod, and the selected session stays visible while the zone is folded.
   const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
-  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
+  // @@@ the shelf is a VIEW, not a zone ([[archive]]). The list shows one of two populations — the working set
+  // or the shelf — and both run through the SAME forest machinery, so zones, nesting, folding, and row faces
+  // are identical on either side. A shelved session keeps its real zone; it is simply filed elsewhere.
+  const [showShelf, setShowShelf] = useState(false)
+  const { live: liveSessions, archived: shelved } = useMemo(() => splitArchived(sessions), [sessions])
+  // @@@ the archive view cannot outlive its contents ([[archive]]). Anything that can TURN IT ON — the human's
+  // star, or the effect below following a selection — reads a board snapshot, and a snapshot can be stale: the
+  // board serves the pre-write value for a beat after a record flips, and a session can also be restored from
+  // the CLI or another tab while you are looking at it. Without this the view LATCHES: the star stays lit over
+  // an empty list while the session sits in the working set, and nothing in the UI ever corrects it. Deriving
+  // the view instead of trusting the flag makes that state unreachable rather than merely unlikely.
+  const viewingShelf = showShelf && shelved.length > 0
+  const listed = viewingShelf ? shelved : liveSessions
+  const forest = useMemo(() => sessionForest(listed, (id) => expanded.has(id), {
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
     keepVisible: (s) => s.id === sel,
-  }), [sessions, expanded, offlineOpen, sel])
+  }), [listed, expanded, offlineOpen, sel])
   const foldableIds = useMemo(() => new Set(forest.filter((item) => item.type === 'row' && item.expandable)
     .map((item) => item.s.id)), [forest])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
@@ -230,6 +243,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useLayoutEffect(() => {
     if (open && active !== 'new') expandFolds(sessionAncestorIds(sessions, active))
   }, [open, active, expandFolds]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Reaching a session from OUTSIDE the list (URL, search, an originator chip) must reveal its row wherever it
+  // lives — the same promise the ancestor-unfold above makes, extended across the shelf boundary: land the view
+  // on the side that actually holds it. Keyed on the SELECTION only. Shelving and restoring do not belong here:
+  // where the view goes afterwards is a property of those two acts, so each says it at its own call site rather
+  // than being re-derived by a reactive rule that would have to guess the direction.
+  useLayoutEffect(() => {
+    if (open && active !== 'new') setShowShelf(!!sessions.find((s) => s.id === active)?.archived)
+  }, [open, active]) // eslint-disable-line react-hooks/exhaustive-deps
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
   // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep
@@ -250,7 +271,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
-  const showRelaunch = noLivePane && selSession?.status !== 'queued'
+  // @@@ the archive card OUTRANKS both console surfaces ([[archive]]). Opening an archived session should
+  // answer "this is filed away — want it back?" in one button, not drop you into a terminal you deliberately
+  // put out of sight. It is the only panel shown, so relaunch stands down and folds its button into the card:
+  // one card, one decision, and an archived session whose process died still gets its restore, no second panel.
+  const shelvedSel = !!selSession?.archived
+  const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -548,10 +574,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // lifecycle actions — thin POSTs to the session state machine, then reload the board. A non-2xx carrying an
   // `error` is surfaced LOUD via actErr (the resume guard refuses a relaunch on a live agent with 409 — the
   // human must SEE that, never a silent no-op that reads as "it didn't work").
-  const act = async (verb) => {
+  const act = async (verb, body) => {
     setActErr(null)
     try {
-      const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), { method: 'POST' })
+      const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), body
+        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+        : { method: 'POST' })
       if (!res.ok) { const j = await res.json().catch(() => null); if (j?.error) setActErr(j.error) }
     } catch { /* network hiccup — the reload below re-reads truth */ }
     await reload?.()
@@ -581,9 +609,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     merge: () => act('merge'),
     relaunch: () => act('resume'),
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
+    // shelving ([[archive]]): a record write only — the agent keeps running and the worktree stays put, so this
+    // is deliberately NOT a quiet alias for stop. Same endpoint both ways, the direction carried in the body.
+    // The two acts differ in where they leave you, and each says so HERE rather than through a reactive rule:
+    // shelving means "put it away", so you stay in the working list you were using and the row simply leaves;
+    // restoring means "bring it back to me", so the view returns with it instead of stranding you on a shelf
+    // you just emptied.
+    archive: () => act('archive', { on: true }),
+    unarchive: async () => { await act('archive', { on: false }); setShowShelf(false) },
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
-  const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness)
+  const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness, selSession?.archived)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false)
   const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
   const evalDoorTitle = evalSummary.phase === 'ready'
@@ -701,18 +737,33 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
         <aside className="si-list" ref={listRef} style={{ flex: `0 0 ${listW}px` }}>
-          {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
-              a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
+          {/* while multi-selecting ([[session-multi-select]]) the pills give way to the select bar — a pick
+              count + bulk delete + cancel; the rows below toggle picks instead of switching tabs.
+              Three equal pills: New, the archive door ([[archive]]), and Search. The door is PERMANENT — a
+              control that comes and goes with its own contents can't be found when you need it, and its
+              absence would be the only thing telling you the archive exists. */}
           {selecting ? (
             <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
           ) : (
           <div className="si-toprow">
-            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
+            <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
+            </button>
+            {/* permanent, so the archive is discoverable before you have put anything in it — but inert while
+                it is empty: an empty room is not a place to walk into, and that is the state the human got
+                stranded in. The absent count already says there is nothing behind it. */}
+            <button type="button" className={viewingShelf ? 'si-pill shelf on' : 'si-pill shelf'}
+              aria-pressed={viewingShelf}
+              disabled={!shelved.length}
+              data-tip={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
+              aria-label={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
+              onClick={() => setShowShelf((v) => !v)}>
+              <span className="si-pill-glyph"><Icon name={viewingShelf ? 'star-filled' : 'star'} size={15} /></span>
+              {shelved.length > 0 && <span className="si-pill-count">{shelved.length}</span>}
             </button>
             {/* the click twin of ⌥+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
-            <button className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
+            <button type="button" className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
               <span className="si-pill-glyph"><Icon name="search" size={15} /></span>
             </button>
           </div>
@@ -886,21 +937,29 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 aria-labelledby={surfaceTabId}
                 style={{ position: 'relative' }}
               >
-                {/* every opened session's pane stays mounted; only the active one is shown. */}
+                {/* every opened session's pane stays mounted; only the active one is shown. A SHELVED session
+                    is deliberately not "shown" even while selected ([[archive]]): its pane keeps its socket and
+                    scroll warm, but yields the surface to the shelf card. This is a visibility question, not an
+                    unmount — the card must be the only thing you can see AND the only thing you can click, and
+                    an absolutely-positioned live xterm would otherwise sit on top and swallow the card's own
+                    button while looking perfectly fine. */}
                 {[...opened].map((id) => {
                   const session = sessions.find((candidate) => candidate.id === id)
                   const headless = isHeadlessSession(session)
-                  const visible = id === active && !showRelaunch
+                  // the pane yields to WHICHEVER panel owns the surface — the relaunch panel or the archive
+                  // card. Both were found the same way: an absolutely-positioned live xterm sits on top and
+                  // eats the panel's own button while the panel looks perfectly correct in a screenshot.
+                  const shown = id === active && !showRelaunch && !shelvedSel
                   return (
                     <div key={id} className="si-term-layer" style={{
                       position: 'absolute', inset: 0,
-                      visibility: visible ? 'visible' : 'hidden',
-                      pointerEvents: visible ? 'auto' : 'none',
+                      visibility: shown ? 'visible' : 'hidden',
+                      pointerEvents: shown ? 'auto' : 'none',
                     }}>
                       {headless
-                        ? <TimelineChat s={session} sessions={sessions} active={open && id === active} />
-                        : <SessionTerm sessionId={id} active={open && id === active}
-                            focused={open && id === active && !commandOpen && !showRelaunch}
+                        ? <TimelineChat s={session} sessions={sessions} active={open && shown} />
+                        : <SessionTerm sessionId={id} active={open && shown}
+                            focused={open && shown && !commandOpen && !showRelaunch}
                             focusRequest={id === active ? terminalFocusRequest : 0} />}
                     </div>
                   )
@@ -910,6 +969,25 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
                     <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
                     <button className="si-act go big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
+                    {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
+                  </div>
+                )}
+                {/* the archive card ([[archive]]) — the offline panel's twin, so a filed session and a dead
+                    one read as the same kind of thing: a state with one way out. Restore is the primary; an
+                    archived session whose process also died gets relaunch beside it rather than a second panel. */}
+                {shelvedSel && (
+                  <div className="si-offline si-shelf-card">
+                    <div className="si-shelf-mark" aria-hidden="true"><Icon name="star-filled" size={22} /></div>
+                    <div className="si-offline-msg">{t('session.shelfMsg')}</div>
+                    <div className="si-offline-sub">{noLivePane ? t('session.shelfSubOffline') : t('session.shelfSubLive')}</div>
+                    <div className="si-shelf-acts">
+                      {/* the SAME runner the typed /unarchive uses — one act, so the card and the command
+                          cannot drift apart in what they do or where they leave you */}
+                      <button className="si-act go big" onClick={runners.unarchive}>{t('session.shelfRestore')}</button>
+                      {noLivePane && selSession?.status !== 'queued' && (
+                        <button className="si-act big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
+                      )}
+                    </div>
                     {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
                   </div>
                 )}

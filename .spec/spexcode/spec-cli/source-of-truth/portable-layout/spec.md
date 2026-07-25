@@ -67,7 +67,10 @@ which the branch slug's `-<id4>` suffix can't give), falling back to the branch 
 absent. Beyond resolution, the seam produces the board's raw
 material: for each governed record it computes that worktree's pending spec-node changes vs main (`ops`,
 consumed by [[sessions]]' `buildBoard`) — the board ENUMERATES the global store (filtered to `governed:true`),
-NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appears.
+NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appears. A **shelved** record
+([[archive]]) is the one governed row that still enumerates but computes NO `ops`: that git-history probe is
+the seam's dominant per-row cost and shelving is the human declining to spend it, so its row is served bare
+and its cached delta is evicted rather than kept alive by a row nobody is watching.
 
 Because the record left the worktree, an agent's `spex session done/park/ask` finds its OWN session in the
 ENVIRONMENT (`envSessionId()`), with a harness-aware precedence: a harness's per-thread env var

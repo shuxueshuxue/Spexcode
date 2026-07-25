@@ -2075,7 +2075,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
 .m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {
-  flex: 1; min-width: 0; resize: none; padding: 9px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
+  flex: 1; min-width: 0; min-height: 38px; max-height: min(28cqh, 240px); resize: none; padding: 9px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;
 }
 .m-input:focus { border-color: var(--blue); }
@@ -2098,7 +2098,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-new-btn:active { background: var(--panel); }
 .m-new-btn-plus { flex: none; font-size: var(--type-icon-sm); line-height: var(--leading-none); }
 .m-new-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
-.m-new-input { min-height: 120px; }
+.m-new-input { flex: none; min-height: 120px; }
 .m-new-launcher { display: flex; align-items: center; gap: 10px; font-size: var(--type-body); color: var(--muted); }
 .m-new-launcher-select {
   flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--mono); font-size: var(--type-subtitle);

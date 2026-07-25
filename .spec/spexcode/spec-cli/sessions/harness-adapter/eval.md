@@ -158,44 +158,48 @@ scenarios:
     code: spec-cli/templates/hooks/prepare-commit-msg
     description: >-
       In an initialized ordinary repo with the session-stamp hook installed, whose environment inherits a
-      NONEMPTY foreign session id (CODEX_THREAD_ID / SPEXCODE_SESSION_ID / CLAUDE_CODE_SESSION_ID) while the
-      tree being committed in belongs to no session record (both store shapes: no sessions dir at all, and a
-      store whose records all own OTHER trees), run `git commit` — including `--no-verify`, which does NOT
-      skip prepare-commit-msg. Controls on the same rig: a commit from a tree a record does own, and a
-      message already carrying a Session: trailer.
+      NONEMPTY foreign session id (CODEX_THREAD_ID / SPEXCODE_SESSION_ID / CLAUDE_CODE_SESSION_ID) that
+      resolves to no record in that repo's project store (both store shapes: no sessions dir at all, and a
+      store whose records carry different ids), run `git commit` — including `--no-verify`, which does NOT
+      skip prepare-commit-msg. Controls on the same rig: a claim that DOES resolve and passes its check, and
+      a message already carrying a Session: trailer.
     expected: >-
-      The unowned tree is a clean NO-OP: the commit succeeds and its message carries NO Session trailer —
-      not an empty one, not the inherited foreign id. The owned-tree control stamps that record's id, the
+      The unresolvable claim is a clean NO-OP: the commit succeeds and its message carries NO Session trailer
+      — not an empty one, not the inherited foreign id. The resolving control stamps that record's id, the
       pre-trailered message is left alone, and a genuine hook error still fails loud. The failure this locks:
       the store lookup ran bare under `set -euo pipefail`, so a no-match aborted the hook before its intended
       no-op exit — EVERY `git commit` in ANY repo with the hook installed exited 1 with no message whenever
       the shell inherited a foreign codex thread id (e.g. any command a codex session spawns in an unrelated
       repo), a silent total commit outage.
-  - name: session-stamp-attributes-the-tree-owner
+  - name: session-stamp-attributes-the-acting-session
     tags: [backend-api, cli]
     code: spec-cli/templates/hooks/prepare-commit-msg
     test:
       path: spec-cli/src/session-stamp.test.ts
-      name: a stale session id in the environment never outvotes the tree's owner
+      name: the same id LEAKED into a stranger's process is refused — descent, not possession, is the proof
     description: >-
       Run the installed session-stamp hook the way git runs it (`prepare-commit-msg <msg-file>`), and real
       `git commit`s, under the environment a SHARED harness daemon actually leaks — measured on the live box:
       each per-project `codex app-server` still carries the `SPEXCODE_SESSION_ID` of whichever session
-      happened to start it, days later, several of them naming sessions whose records are already swept. Probe
-      the real store from four trees: a live session's own worktree with ANOTHER session's id in the
-      environment; the same worktree with a swept (recordless) id; the same worktree with no session env at
-      all; the main checkout. Then, in a synthetic project with a real store, commit for real from the
-      session's worktree and from a hand-made `git worktree add` integration tree, with the same stale env.
+      happened to start it, days later, several naming sessions whose records are already swept. Cover all
+      four claims a commit can carry: an inherited id belonging to ANOTHER live session (possession without
+      descent); the SAME shape of id when the committing process really is a descendant of that session's
+      registered agent; an id naming no record at all (a swept session's ghost); and the acting codex thread
+      id, whose shell descends from the shared daemon rather than from its own session. Include a REAL
+      dispatched codex worker committing in its own session, and a real agent committing OUTSIDE its worktree.
     expected: >-
-      The trailer names the session that OWNS the tree being committed in — resolved from that project's
-      store records, never from the environment — so it is IDENTICAL with a stale, foreign, or entirely
-      absent session env, and a commit from a tree no record owns (the main checkout, a hand-made
-      integration worktree, another repo) carries NO trailer at all. No id that names no record can ever
-      reach a commit message. The failure this locks: attribution read the environment, so a codex worker
-      whose commit inherited a shared app-server's baked id silently stamped a STRANGER's session — 48
-      commits in this repo carry one such ghost, filed as github#76 — and once that session closed and its
-      record was swept the trailer pointed at nothing, breaking the version-attribution the dashboard's
-      history is built on.
+      The trailer names the session that actually authored the commit, decided by WHO — never by where the
+      commit happens. An inherited id (`SPEXCODE_SESSION_ID`, claude/pi's exported ids) is stamped only when
+      this process descends from that session's `agent.pid`, so the identical id leaked into an unrelated
+      process is refused; the acting `CODEX_THREAD_ID` is stamped without any descent test, resolved through
+      the record that captured it as `harness_session_id`, and outranks a leaked inherited id in the same
+      shell; an id resolving to no record is never stamped. Attribution is unchanged by location: a real
+      agent committing in the main checkout or another tree is still attributed. Every miss stays a clean
+      no-op (commit exits 0, no empty and no foreign trailer). The failure this locks: attribution took the
+      environment at face value, so a codex worker whose commit inherited a shared app-server's baked id
+      silently stamped a STRANGER's session — 48 commits in this repo carry one such ghost, filed as
+      github#76 — and once that session closed and its record was swept the trailer pointed at nothing,
+      breaking the version attribution the dashboard's history is built on.
   - name: codex-app-server-carries-no-session-identity
     tags: [backend-api, cli]
     code: spec-cli/src/harness.ts

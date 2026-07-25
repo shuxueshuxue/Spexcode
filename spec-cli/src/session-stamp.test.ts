@@ -1,21 +1,34 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, symlinkSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync, spawn } from 'node:child_process'
 
-// The session-stamp hook (templates/hooks/prepare-commit-msg) runs on EVERY commit in EVERY repo it is
-// installed in, under whatever env the shell happens to carry — and that env LIES. Codex's per-project
-// app-server is shared by every worktree's thread but is started by whichever session launched first, so its
-// baked SPEXCODE_SESSION_ID (and any inherited harness var) names a stranger for everyone else, and names
-// nobody at all once that session closes and its record is swept (github#76: 48 commits in the SpexCode repo
-// stamped with one such ghost). So attribution comes from the TREE — the record whose `worktree_path` IS the
-// tree being committed in — which the hook can verify. These tests drive the REAL template through real
-// `git commit`s in real linked worktrees.
+// The session-stamp hook (templates/hooks/prepare-commit-msg) answers WHO is committing, from the environment
+// — but an env var is only worth the reason it is there, and the hook checks that reason:
+//   - CODEX_THREAD_ID is stamped by codex onto every command it spawns, so it names the ACTING thread and
+//     cannot be a leftover: resolving it through the record's `harness_session_id` is the whole check.
+//   - SPEXCODE_SESSION_ID (and claude/pi's exported ids) are INHERITED by every descendant, which is exactly
+//     how they go stale — codex's shared app-server outlived its launching session and handed that id to
+//     every later thread's `git commit` (github#76). So an inherited id is trusted only under DESCENT from
+//     that session's own registered agent process (`agent.pid`).
+// These tests drive the REAL template through real `git commit`s, with agent.pid pointed at this test process
+// (every git child of it genuinely descends) or at an unrelated live process (it does not).
 
 const HOOK_TEMPLATE = fileURLToPath(new URL('../templates/hooks/prepare-commit-msg', import.meta.url))
+
+function bareEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.CLAUDE_CODE_SESSION_ID
+  delete env.CODEX_THREAD_ID
+  delete env.SPEXCODE_SESSION_ID
+  delete env.PI_SESSION_ID
+  delete env.OPENCODE_SESSION_ID
+  delete env.SPEXCODE_HOME
+  return env
+}
 
 function gitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'spex-stamp-'))
@@ -27,57 +40,40 @@ function gitRepo(): string {
   chmodSync(hook, 0o755)
   writeFileSync(join(dir, 'seed'), 'seed')
   execFileSync('git', ['-C', dir, 'add', '-A'])
-  execFileSync('git', ['-C', dir, 'commit', '-qm', 'seed', '--no-verify'], { env: bareEnv() })
+  execFileSync('git', ['-C', dir, 'commit', '-qm', 'seed'], { env: bareEnv() })
   return dir
 }
 
-// a REAL linked worktree of that repo — what the backend creates for a session (and what a human creates by
-// hand for an integration branch; the two are indistinguishable to git, and that is the point).
-function worktree(repo: string, name: string): string {
-  const path = join(repo, '..', `${name}-${Math.random().toString(36).slice(2, 8)}`)
-  execFileSync('git', ['-C', repo, 'worktree', 'add', '-q', '-b', name, path])
-  return execFileSync('git', ['-C', path, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
-}
-
-// the hook's own store derivation: <SPEXCODE_HOME>/projects/<dirname(abs git-common-dir), [/.] → ->. A linked
-// worktree shares its main checkout's git-common-dir, so both resolve to ONE project store.
+// the hook's own store derivation: <SPEXCODE_HOME>/projects/<dirname(abs git-common-dir), [/.] → ->
 function projectStore(home: string, repo: string): string {
   const gcd = execFileSync('git', ['-C', repo, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
   return join(home, 'projects', dirname(gcd).replace(/[/.]/g, '-'))
 }
 
-function writeRecord(store: string, recordId: string, worktreePath: string, harness = 'codex'): void {
-  const dir = join(store, 'sessions', recordId)
+type Rec = { harness?: string; harnessSessionId?: string; agentPid?: number | string }
+function writeRecord(store: string, id: string, rec: Rec = {}): void {
+  const dir = join(store, 'sessions', id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: recordId, governed: true, worktree_path: worktreePath, branch: null,
-    status: 'active', harness, harness_session_id: `${recordId}-thread`,
+    session_id: id, governed: true, worktree_path: '/nowhere/in/particular', branch: null,
+    status: 'active', harness: rec.harness ?? 'claude', harness_session_id: rec.harnessSessionId ?? '',
   }, null, 2))
+  if (rec.agentPid !== undefined) writeFileSync(join(dir, 'agent.pid'), String(rec.agentPid))
 }
 
-// child env: strip the session vars this test process itself may have inherited (a claude- or codex-launched
-// runner), then overlay the case's own.
-function bareEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env }
-  delete env.CLAUDE_CODE_SESSION_ID
-  delete env.CODEX_THREAD_ID
-  delete env.SPEXCODE_SESSION_ID
-  delete env.SPEXCODE_HOME
-  return env
-}
 function commitEnv(home: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return { ...bareEnv(), SPEXCODE_HOME: home, ...extra }
 }
 
 let n = 0
-function commit(tree: string, env: NodeJS.ProcessEnv, args: string[] = [], message = `c${++n}`) {
-  writeFileSync(join(tree, 'f.txt'), `content ${n} ${Math.random()}`)
-  execFileSync('git', ['-C', tree, 'add', 'f.txt'])
-  return spawnSync('git', ['-C', tree, 'commit', ...args, '-m', message], { env, encoding: 'utf8' })
+function commit(repo: string, env: NodeJS.ProcessEnv, args: string[] = [], message = `c${++n}`) {
+  writeFileSync(join(repo, 'f.txt'), `content ${n} ${Math.random()}`)
+  execFileSync('git', ['-C', repo, 'add', 'f.txt'])
+  return spawnSync('git', ['-C', repo, 'commit', ...args, '-m', message], { env, encoding: 'utf8' })
 }
 
-function lastMessage(tree: string): string {
-  return execFileSync('git', ['-C', tree, 'log', '-1', '--format=%B'], { encoding: 'utf8' })
+function lastMessage(repo: string): string {
+  return execFileSync('git', ['-C', repo, 'log', '-1', '--format=%B'], { encoding: 'utf8' })
 }
 
 function rig(): { home: string; repo: string; store: string } {
@@ -86,95 +82,110 @@ function rig(): { home: string; repo: string; store: string } {
   return { home, repo, store: projectStore(home, repo) }
 }
 
-test('the session that OWNS the tree is stamped — with no session env at all', () => {
+// a live process that is NOT one of our ancestors — what a leaking daemon looks like from here
+function stranger(t: { after: (fn: () => void) => void }): number {
+  const child = spawn('sleep', ['30'], { stdio: 'ignore' })
+  t.after(() => child.kill())
+  return child.pid!
+}
+
+test('an inherited id is stamped when this process DESCENDS from that session\'s agent', () => {
   const { home, repo, store } = rig()
-  const tree = worktree(repo, 'node-work')
-  writeRecord(store, 'rec-owner', tree)
-  const r = commit(tree, commitEnv(home))
+  writeRecord(store, 'rec-mine', { agentPid: process.pid })     // every git child of this test descends from it
+  const r = commit(repo, commitEnv(home, { SPEXCODE_SESSION_ID: 'rec-mine' }))
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.match(lastMessage(tree), /^Session: rec-owner$/m)   // attribution needs no environment channel
+  assert.match(lastMessage(repo), /^Session: rec-mine$/m)
 })
 
-test('a stale session id in the environment never outvotes the tree\'s owner', () => {
+test('the same id LEAKED into a stranger\'s process is refused — descent, not possession, is the proof', (t) => {
   const { home, repo, store } = rig()
-  const mine = worktree(repo, 'node-mine')
-  const theirs = worktree(repo, 'node-theirs')
-  writeRecord(store, 'rec-mine', mine)
-  writeRecord(store, 'rec-theirs', theirs, 'claude')
-  // every shape of the lie at once: the shared app-server's baked record id, a foreign thread id, and a
-  // claude id that names no record whatsoever (a closed session's, already swept)
-  const r = commit(mine, commitEnv(home, {
-    SPEXCODE_SESSION_ID: 'rec-theirs',
-    CODEX_THREAD_ID: 'rec-theirs-thread',
-    CLAUDE_CODE_SESSION_ID: '7ed51371-cece-4f27-9891-0e1c330c587c',
-  }))
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  const msg = lastMessage(mine)
-  assert.match(msg, /^Session: rec-mine$/m)
-  assert.ok(!msg.includes('rec-theirs'))                     // never a stranger's session
-  assert.ok(!msg.includes('7ed51371'))                       // never an id that names no record
-})
-
-test('a tree no session owns gets NO trailer — the main checkout, a hand-made worktree, a foreign env', () => {
-  const { home, repo, store } = rig()
-  const manual = worktree(repo, 'integration')                // hand-made: `git worktree add`, no record
-  const env = commitEnv(home, {
-    SPEXCODE_SESSION_ID: 'rec-elsewhere',
-    CODEX_THREAD_ID: 'rec-elsewhere-thread',
-    CLAUDE_CODE_SESSION_ID: 'ghost-with-no-record',
-  })
-
-  // shape 1: the store has no sessions dir at all (the glob never expands)
-  let r = commit(manual, env, ['--no-verify'])                // --no-verify does NOT skip prepare-commit-msg
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.doesNotMatch(lastMessage(manual), /^Session:/im)
-
-  // shape 2: the store HAS a record, owning a DIFFERENT tree — the github#76 shape
-  writeRecord(store, 'rec-elsewhere', worktree(repo, 'node-other'), 'claude')
-  for (const tree of [manual, repo]) {                        // hand-made worktree, then the main checkout
-    r = commit(tree, env)
+  writeRecord(store, 'rec-leaker', { agentPid: stranger(t) })   // alive, real, and not our ancestor
+  const msgEnvs = [
+    { SPEXCODE_SESSION_ID: 'rec-leaker' },                      // the shared app-server's baked id (github#76)
+    { CLAUDE_CODE_SESSION_ID: 'rec-leaker' },                   // a claude id inherited through some daemon
+    { PI_SESSION_ID: 'rec-leaker' },
+  ]
+  for (const extra of msgEnvs) {
+    const r = commit(repo, commitEnv(home, extra))
     assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-    const msg = lastMessage(tree)
-    assert.doesNotMatch(msg, /^Session:/im)                   // no empty trailer,
-    assert.ok(!msg.includes('rec-elsewhere'))                 // no stranger,
-    assert.ok(!msg.includes('ghost-with-no-record'))          // no ghost
+    const msg = lastMessage(repo)
+    assert.doesNotMatch(msg, /^Session:/im, `stamped from ${JSON.stringify(extra)}`)
+    assert.ok(!msg.includes('rec-leaker'))
   }
 })
 
-test('a record whose worktree is gone matches nothing and breaks nothing', () => {
+test('an id that names NO record is never stamped — a swept session leaves no ghost', () => {
   const { home, repo, store } = rig()
-  const tree = worktree(repo, 'node-live')
-  writeRecord(store, 'rec-dead', join(repo, '..', 'removed-worktree'))   // path does not exist
-  writeRecord(store, 'rec-live', tree)
-  const r = commit(tree, commitEnv(home))
+  const env = commitEnv(home, {
+    SPEXCODE_SESSION_ID: '7ed51371-cece-4f27-9891-0e1c330c587c',   // the github#76 ghost: record long swept
+    CLAUDE_CODE_SESSION_ID: '7ed51371-cece-4f27-9891-0e1c330c587c',
+    CODEX_THREAD_ID: 'thread-of-nobody',
+  })
+  // shape 1: no sessions dir at all — the glob never expands (grep exit 2)
+  let r = commit(repo, env, ['--no-verify'])                    // --no-verify does NOT skip prepare-commit-msg
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.match(lastMessage(tree), /^Session: rec-live$/m)
+  assert.doesNotMatch(lastMessage(repo), /^Session:/im)
+  // shape 2: the store has records, none matching (grep no-match, exit 1)
+  writeRecord(store, 'rec-other', { agentPid: process.pid, harnessSessionId: 'thread-other' })
+  r = commit(repo, env)
+  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+  const msg = lastMessage(repo)
+  assert.doesNotMatch(msg, /^Session:/im)
+  assert.ok(!msg.includes('7ed51371') && !msg.includes('rec-other'))
 })
 
-test('one tree spelled two ways is one tree — the owner is matched by identity, not by string', () => {
+test('the acting codex thread id needs no descent — it is stamped per command, and aliases to the record', (t) => {
   const { home, repo, store } = rig()
-  const tree = worktree(repo, 'node-symlinked')
-  const alias = join(mkdtempSync(join(tmpdir(), 'spex-alias-')), 'link')
-  symlinkSync(tree, alias)
-  writeRecord(store, 'rec-owner', alias)                     // the record's spelling goes through a symlink
-  const r = commit(tree, commitEnv(home))                    // git reports the resolved one
+  // a codex tool shell descends from the SHARED app-server, never from the session's own agent — so descent
+  // cannot be its proof; being stamped by the acting thread is.
+  writeRecord(store, 'rec-codex', { harness: 'codex', harnessSessionId: 'thread-live', agentPid: stranger(t) })
+  const r = commit(repo, commitEnv(home, { CODEX_THREAD_ID: 'thread-live' }))
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.match(lastMessage(tree), /^Session: rec-owner$/m)
-  rmSync(dirname(alias), { recursive: true, force: true })
+  const msg = lastMessage(repo)
+  assert.match(msg, /^Session: rec-codex$/m)                    // the RECORD id, never the raw thread id
+  assert.ok(!msg.includes('thread-live'))
+})
+
+test('the acting thread outranks a leaked inherited id in the same shell', (t) => {
+  const { home, repo, store } = rig()
+  writeRecord(store, 'rec-acting', { harness: 'codex', harnessSessionId: 'thread-acting', agentPid: stranger(t) })
+  writeRecord(store, 'rec-stale', { agentPid: stranger(t) })
+  const r = commit(repo, commitEnv(home, { CODEX_THREAD_ID: 'thread-acting', SPEXCODE_SESSION_ID: 'rec-stale' }))
+  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+  const msg = lastMessage(repo)
+  assert.match(msg, /^Session: rec-acting$/m)
+  assert.ok(!msg.includes('rec-stale'))
+})
+
+test('identity does not depend on WHERE: the same agent is attributed outside its own worktree', () => {
+  const { home, repo, store } = rig()
+  // the record's worktree is elsewhere entirely (a dispatched merge runs in the main checkout, an external
+  // lane in another tree) — the author is still the author.
+  writeRecord(store, 'rec-merger', { agentPid: process.pid })
+  const r = commit(repo, commitEnv(home, { SPEXCODE_SESSION_ID: 'rec-merger' }))
+  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+  assert.match(lastMessage(repo), /^Session: rec-merger$/m)
+})
+
+test('a record whose agent is gone claims nothing', () => {
+  const { home, repo, store } = rig()
+  writeRecord(store, 'rec-dead', { agentPid: 2147483646 })      // a pid that cannot be alive
+  const r = commit(repo, commitEnv(home, { SPEXCODE_SESSION_ID: 'rec-dead' }))
+  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+  assert.doesNotMatch(lastMessage(repo), /^Session:/im)
 })
 
 test('an existing Session: trailer is left alone — no restamp, no duplicate', () => {
   const { home, repo, store } = rig()
-  const tree = worktree(repo, 'node-explicit')
-  writeRecord(store, 'rec-owner', tree)
-  const r = commit(tree, commitEnv(home), [], 'explicit\n\nSession: hand-set')
+  writeRecord(store, 'rec-mine', { agentPid: process.pid })
+  const r = commit(repo, commitEnv(home, { SPEXCODE_SESSION_ID: 'rec-mine' }), [], 'explicit\n\nSession: hand-set')
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  const msg = lastMessage(tree)
+  const msg = lastMessage(repo)
   assert.match(msg, /^Session: hand-set$/m)
   assert.equal(msg.match(/^Session:/gim)?.length, 1)
 })
 
-test('a repo with no SpexCode store at all commits cleanly', () => {
+test('no session env at all is the plain no-op', () => {
   const { home, repo } = rig()
   const r = commit(repo, commitEnv(home))
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)

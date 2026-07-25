@@ -584,7 +584,15 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
   if (snap.unproven.has(rec.session)) return 'unknown'
   const at = launchedAt.get(rec.session)
-  return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
+  if (at && Date.now() - at < BOOT_GRACE_MS) return 'starting'
+  // A dead TRANSPORT is not a dead AGENT. The socket path is keyed by session id alone, so a foreign teardown
+  // (or a stray rm) can unlink it out from under its own live listener: the agent keeps working, unreachable,
+  // and every path-connect ENOENTs — which the adapter axis above reports as proven death. The registered
+  // agent.pid is a SECOND, independent witness, and while it still answers, death is UNPROVEN: `unknown`, not
+  // the `offline` that disarms the relaunch guard and invites a human to kill a working agent. Same rule as
+  // the probe-failure branch (issue #40), one layer down: only a corpse both witnesses agree on is actionable.
+  if (agentAlive(rec.session) === true) return 'unknown'
+  return 'offline'
 }
 
 // reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
@@ -1706,7 +1714,7 @@ async function stopAgentProcess(id: string): Promise<void> {
   const rec = readRecord(id)
   await tmuxOk(['kill-session', '-t', id])
   launchedAt.delete(id)
-  harnessById(rec?.harness || defaultHarness.id).cleanupRuntime(rec ?? { session: id })
+  await harnessById(rec?.harness || defaultHarness.id).cleanupRuntime(rec ?? { session: id })
 }
 
 // @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable

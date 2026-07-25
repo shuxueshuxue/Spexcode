@@ -68,7 +68,7 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export type SpecLintOptions = { tip?: string; deferAnchor?: boolean }
+export type SpecLintOptions = { tip?: string }
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
   const tip = options.tip ?? 'HEAD'
   const pending = tip !== 'HEAD'
@@ -285,8 +285,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
         const unparseable = hits.filter((h) => h.unparseable)
         const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
         if (relation === 'code') {
-          if (!options.deferAnchor)
-            out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
+          out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
         } else
           out.push({ level: 'warn', rule: 'related-drift', spec: s.id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${s.id}') was changed by ${hits.length} commit(s) since v${s.version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
       }

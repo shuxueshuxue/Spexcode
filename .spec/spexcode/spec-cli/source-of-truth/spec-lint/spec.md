@@ -156,6 +156,12 @@ articulate why the spec still holds before quieting it, and an ack that quiets a
 ([[code-anchor]]) is a strong claim whose why must be durable. A shared file drifts every governor, so
 `Spec-OK:` accepts several ids — one ack per co-owner.
 
+This split is also a correction to the old reader, not only support for a new writer. Before the split, a
+content trailer was fed through the checkpoint reachability cover and could silently erase older or
+cross-node debt; a tree-identical `ours` merge could do the same for a whole newly reachable side branch.
+Both pending and HEAD lint now retain those debts, and report each affected node separately so the author
+can name exactly the required nodes in repeated `--trailer` flags.
+
 For the implementation commit currently being authored, Git's own
 `git commit --trailer "Spec-OK: <node-id>"` is the in-commit route. The final message is already present on
 the real candidate oid the armed gate judges, and a trailer on a content-bearing commit acknowledges

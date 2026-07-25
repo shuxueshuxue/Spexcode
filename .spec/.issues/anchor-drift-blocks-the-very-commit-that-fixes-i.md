@@ -1227,3 +1227,34 @@ especially after they have seen each other's reasoning. The remaining value of r
 implementations is that independent implementations of the same design cross-check each other —
 so they must not merge into one, and must not cite each other's measurements as their own
 verification.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T12:12:50.055Z -->
+## 对强制验收 #6 的实测扩充 —— 本轮标尺不动
+
+先纠正我自己:我在广播里把 cherry-pick / rebase 的期望值写成 BLOCKED,并称之为"洞"。**这是单方面移动标尺,撤回。**#6 逐字写的是 `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch 从不上膛因此从不付 lint,所以两条候选在这些入口放行是**合规**,与今天持平,HEAD 侧 lint 仍抓得到债。**它不能用来判任何一条 lane 出局。**上面那张 Hook facts 表里也早写了 `cherry-pick / rebase — prepare/post only`,我那次"根因实测"是把已记录的事实重推了一遍。
+
+以下是实测得到的、#6 目前没有覆盖的部分。记录在案,不改本轮验收。
+
+**一、#6 的枚举不全。**同一族里还有两个入口,#6 没点名:
+
+    P20 git revert(被 revert 的是一个只含代码的提交)  ALLOWED  → 落地后 anchor-drift
+    P22 git am 打补丁                                  ALLOWED  → 落地后 anchor-drift
+
+两者与 cherry-pick / rebase 行为一致(前置 lint=0,放行,落地后门自己报 anchor-drift)。若 #6 的本意是"回放/应用类入口一律不上膛",应把 revert 和 am 补进枚举;若本意只是列举当时测过的,那这两个入口目前处于未声明状态。
+
+**二、#6 把两类东西归成了一类。**它列的七项里:
+
+  - reset / fetch / branch —— 只移动 ref,不产生任何新创作的提交内容
+  - cherry-pick / rebase / revert / am —— **创建新的提交对象**,带内容
+  - --no-verify —— 用户显式表达绕过意图
+  - localIssues —— issue 存储写入,不是代码
+
+"从不付 lint"的成本理由(每月 ~328 次 issue 写入、fetch/reset/branch 频繁)对第一类完全成立,对第二类不成立:第二类是创作行为,频率与普通提交同量级。
+
+**三、区分点是现成的、便宜的,而且两条 lane 已经实现过。**"这次 ref 更新有没有引入该分支上前所未有的提交"——reset 移向已可达的提交,fetch 引入的是上游的提交,而 cherry-pick / rebase / revert / am 都产生本仓库前所未有的新提交对象。这正是两条 lane 在 P16(`-s ours`:树等于第一父,但让欠债提交变为可达)上已经做对的可达性语义。
+
+**四、真要改 #6,代价必须先算清。**攻击方 2310966c 指出:无记号即执法会把执法面扩大到 localIssues / reset / fetch / branch,必须重开 blast-radius 验收。这是对的,而且是改动 #6 的前置条件,不是可以顺手带过的细节。
+
+**结论:本轮维持 #6 原样。**两条候选在这四个入口上与今天持平,不构成区分度,也不构成出局理由。是否把"创作类回放入口"从 #6 的豁免里摘出来,是一次独立的范围决定,需要人来拍,并且要先跑 blast-radius 验收 —— 在那之前,我不会用这四格评判任何一条 lane。
+
+我个人的看法仍然记在这里,供那次决定参考:一个只在"用户老实用 git commit"时才成立的门,防不住日常操作,而 rebase 与 cherry-pick 的使用者并没有表达任何绕过意图 —— 这与 --no-verify 的豁免理由不同。但这是看法,不是本轮的标尺。

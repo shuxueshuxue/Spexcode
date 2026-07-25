@@ -141,33 +141,43 @@ test('a launch failure the harness itself called settled is attempted exactly on
   // The classifier reads the tmux PANE, so the stub must run inside one — and the stub prints its settled
   // failure to STDOUT, the stream real reclaude uses. An earlier version of this test printed to stderr and
   // passed against a stderr-only implementation that could not classify a real harness at all.
-  const sock = `spex-launch-class-${process.pid}`
   // `stale` pre-seeds the pane with a settled-failure line from an EARLIER run before the launch line is
   // typed — the scrollback condition that must not condemn the current attempt.
+  // ONE SOCKET PER CASE: sharing one made the last case's kill end the server while the next case's
+  // new-session was still starting ("server exited unexpectedly") — a flake in this test, not the product.
+  // Each case owns its socket and reaps that exact server itself; nothing waits on a guessed interval.
+  // TMUX_TMPDIR puts every socket inside this test's own temp dir, so the servers it starts leave nothing in
+  // the shared /tmp/tmux-<uid> (kill-server reaps the server but leaves the socket FILE) — rmSync(home) below
+  // takes them with it.
+  const tmuxEnv = { ...process.env, TMUX_TMPDIR: home }
+  const tmux = (...args: string[]) => execFileSync('tmux', args, { env: tmuxEnv })
+  const tmuxTry = (...args: string[]) => spawnSync('tmux', args, { env: tmuxEnv, encoding: 'utf8' })
   const run = (name: string, stubBody: string, stale = false): { attempts: number; pane: string } => {
+    const sock = `spex-launch-class-${process.pid}-${name}`
     const counter = join(home, `${name}.attempts`)
     const stub = join(home, `${name}.sh`)
     writeFileSync(stub, `echo x >> ${JSON.stringify(counter)}\n${stubBody}\nexit 1\n`)
     const script = launchScript(name, '', claudeHarness, `bash ${stub}`)
     // exactly how the product starts a worker: an idle shell window, then the launch line typed into it. The
     // shell outlives the script, so the pane keeps everything the run printed — no remain-on-exit race.
-    execFileSync('tmux', ['-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80'])
+    tmux('-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80')
     if (stale) {
-      execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, '-l', '--', 'echo "No conversation found with session ID: an-earlier-run"'])
-      execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, 'Enter'])
+      tmux('-L', sock, 'send-keys', '-t', name, '-l', '--', 'echo "No conversation found with session ID: an-earlier-run"')
+      tmux('-L', sock, 'send-keys', '-t', name, 'Enter')
       spawnSync('sleep', ['0.5'])
     }
-    execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, '-l', '--', `bash ${script}`])
-    execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, 'Enter'])
+    tmux('-L', sock, 'send-keys', '-t', name, '-l', '--', `bash ${script}`)
+    tmux('-L', sock, 'send-keys', '-t', name, 'Enter')
     const deadline = Date.now() + 60_000
     let pane = ''
     for (;;) {
-      pane = spawnSync('tmux', ['-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name], { encoding: 'utf8' }).stdout ?? ''
+      pane = tmuxTry('-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name).stdout ?? ''
       if (/not retrying/.test(pane) || /attempt 3/.test(pane) || Date.now() > deadline) break
       spawnSync('sleep', ['0.5'])
     }
-    execFileSync('tmux', ['-L', sock, 'kill-session', '-t', name])
-    return { attempts: readFileSync(counter, 'utf8').split('\n').filter(Boolean).length, pane }
+    const attempts = readFileSync(counter, 'utf8').split('\n').filter(Boolean).length
+    tmuxTry('-L', sock, 'kill-server')   // this case's server, by its exact socket
+    return { attempts, pane }
   }
   try {
     // stdout on purpose: that is where real reclaude prints this line.
@@ -193,7 +203,6 @@ test('a launch failure the harness itself called settled is attempted exactly on
     assert.equal(staleAndSettled.attempts, 1, `a real settled failure is still spent once\n${staleAndSettled.pane}`)
     assert.match(staleAndSettled.pane, /retrying cannot fix/)
   } finally {
-    spawnSync('tmux', ['-L', sock, 'kill-server'], { stdio: 'ignore' })
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })

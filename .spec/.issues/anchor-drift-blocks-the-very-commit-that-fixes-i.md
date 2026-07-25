@@ -98,3 +98,41 @@ encodes: a commit touching that spec.md is by construction one of the two honest
 What stands unchanged: rewriting the body is the FIRST remedy the error text recommends, and it
 is the only one that cannot be performed through the gate. An escape hatch should not be
 load-bearing for the primary repair path.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:37:57.559Z -->
+EVIDENCE — why this has sat unnoticed, and why it is worse than "an annoying deadlock".
+
+Measured over the 13 days since the rule landed (12cd6e9e, 2026-07-12):
+
+    ack commits:              69
+    SPEXCODE_SKIP_LINT=1:      2   (one is mine; the other is the rule's own author,
+                                    while developing the rule)
+
+So apart from this lane, NOBODY on the fleet has cleared an anchor-drift by rewriting a spec
+body in 13 days. Every single resolution was an ack.
+
+That is the answer to "why has nobody hit this": the deadlock only appears on the
+rewrite-the-body path, and the two remedies have wildly different friction:
+
+    spex spec ack --reason "…"    one command, rides the tree-unchanged escape, frictionless
+    rewrite the body              blocked by the very error it fixes, needs the bypass
+
+Nobody experiences a failure. They experience "I'll just ack it." The problem is ABSORBED by
+the ack path and never accumulates into a visible fault. 69:2 is the shape of that absorption.
+
+The real defect is therefore not the deadlock — it is an INVERTED INCENTIVE. The error text
+lists rewriting the body FIRST and acking second; `--reason` is mandatory; the docs say a blind
+ack is a lie. The design clearly wants the body rewritten when the contract moved. But the
+mechanics reward the opposite: the honest remedy is gated, the cheap one is not.
+
+The predictable end state is contracts drifting quietly out of true while lint stays green —
+which is exactly the state this lane found on main: `spex spec lint: 0 error`, while
+session-console's body still claimed liveness alone decides the console surface, with the
+archive card already merged and contradicting it. A human review caught that, not the hook.
+
+None of this blames anyone for acking. When one path is one command and the other requires
+discovering an environment-variable bypass, the ratio is not a measure of diligence.
+
+Fix is unchanged and now better motivated: let the gate ask whether the drift-reporting node's
+spec.md is in this commit's staged set. That equalizes the two remedies instead of taxing the
+honest one.

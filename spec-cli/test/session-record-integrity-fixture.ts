@@ -255,6 +255,32 @@ async function notesRoundTrip(home: string): Promise<void> {
   }
 }
 
+// ---- phase 4: the ordinary path must not have regressed ---------------------------------------------
+// Everything above is about launches and writers that must be REFUSED. This is the other half of the same
+// claim: a healthy session still stops and resumes through the real routes, comes back online, and rests at
+// `idle` — the new preflight and the launch script's stderr capture change nothing for a launch that works.
+async function ordinaryStopResumeStillWorks(home: string): Promise<void> {
+  const created = await createSession()
+  const id = created.id
+  const rec = await recordPath(home, created.path, id)
+  try {
+    await waitFor(async () => (await readSession(id)).liveness, (v) => v === 'online', 'worker online before stop')
+    const stopped = await jsonRequest(`/api/sessions/${id}/stop`, { method: 'POST' })
+    assert.equal(stopped.status, 200, `stop: ${stopped.text}`)
+    await waitFor(async () => (await readSession(id)).liveness, (v) => v === 'offline', 'worker offline after stop')
+
+    const resumed = await jsonRequest(`/api/sessions/${id}/resume`, { method: 'POST' })
+    assert.equal(resumed.status, 200, `a healthy offline session still resumes: ${resumed.text}`)
+    await waitFor(async () => (await readSession(id)).liveness, (v) => v === 'online', 'worker back online after resume')
+    const row = await readSession(id)
+    assert.equal(row.status, 'idle', 'a resumed session rests at idle, never a phantom working')
+    assert.ok(JSON.parse(readFileSync(rec, 'utf8')).session_id === id, 'the record is still parseable after the whole cycle')
+    console.log(`PASS: an ordinary session still stops, resumes into the same conversation, and rests idle (${id})`)
+  } finally {
+    await jsonRequest(`/api/sessions/${id}/close`, { method: 'POST' }).catch(() => null)
+  }
+}
+
 async function main(): Promise<void> {
   const home = process.env.SPEXCODE_HOME
   assert.ok(home, 'SPEXCODE_HOME must point at the fixture store')
@@ -264,8 +290,9 @@ async function main(): Promise<void> {
   if (runs('notes')) await notesRoundTrip(home!)
   if (runs('corrupt')) await corruptRecordIsDiagnosable(home!, project)
   if (runs('retired')) await retiredSessionNeverRevives(home!, project)
+  if (runs('resume')) await ordinaryStopResumeStillWorks(home!)
   // one summary line whatever ran, so a single-phase measurement is as self-contained as the whole regression.
-  console.log(`PASS: session record integrity — ${PHASE === 'all' ? 'notes round-trip, corrupt is diagnosable, retired never revives' : PHASE}`)
+  console.log(`PASS: session record integrity — ${PHASE === 'all' ? 'notes round-trip, corrupt is diagnosable, retired never revives, ordinary resume intact' : PHASE}`)
 }
 
 main().catch((error) => { console.error('FAIL:', error); process.exit(1) })

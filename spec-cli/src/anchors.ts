@@ -16,9 +16,8 @@ export type Unit = { name: string; kind: string; start: number; end: number; typ
 export type Extractor = {
   id: string
   claims(ext: string): boolean
-  // true = usable here. A string is WHY it cannot run — lint turns that into an ERROR with the repair
-  // entrypoint (never a silent or degraded pass): the designated extractor either runs or the anchor
-  // is unverifiable.
+  // true = usable here. A string is WHY it cannot run — lint turns that into a visible error and
+  // skips the affected anchors as unverified while continuing the other checks (never a crash or fake pass).
   ready(): true | string
   // PURE function of its arguments (importable by an external benchmark/scorer as-is). Throws when the
   // content cannot be parsed — the caller maps that to a conservative verdict, never a silent skip.
@@ -69,9 +68,9 @@ export function parseRelation(raws: string[], relation: 'code' | 'related'): Rel
 }
 
 // ---- extractor: ts-ast (the designated extractor for the JS family) ----
-// Parse-only via the HOST project's own typescript (resolved from the repo root, walking up like any
-// require) — never a bundled copy, so the parse matches what the project itself compiles with. Not
-// resolvable => ready() returns the repair entrypoint and lint ERRORS (no regex fallback for JS).
+// Parse-only via the HOST project's own typescript, so the parse matches what the project itself compiles
+// with. If it cannot resolve, ready() returns a loud unverified verdict and lint skips these anchors
+// without crashing (no bundled compiler, regex fallback, or fake pass for JS).
 const JS_EXTS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'])
 
 export function tsAstExtractor(root: string): Extractor {
@@ -87,10 +86,10 @@ export function tsAstExtractor(root: string): Extractor {
     ready() {
       if (readiness !== undefined) return readiness
       probe()
-      if (!ts) return (readiness = `typescript is not resolvable from ${root} — anchors on JS-family files need the host project's typescript: run 'npm i -D typescript', or remove the #anchor`)
+      if (!ts) return (readiness = `typescript is not resolvable from the governed repository (${root}) — JS-family anchors were skipped and remain unverified; run 'npm i -D typescript@5', or remove the #anchor`)
       // resolvability is not usability: typescript@7 (the Go rewrite) may resolve yet not expose the JS
-      // compiler API this extractor drives. Probe the ACTUAL surface with a tiny parse — an incompatible
-      // host typescript is a loud error, never a silent pass or downgrade.
+      // compiler API this extractor drives. Probe the ACTUAL surface with a tiny parse. Once a candidate
+      // resolves, incompatibility is loud rather than silently changing parser versions.
       try {
         const sf = ts.createSourceFile('probe.ts', 'const x = 1', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
         if (!sf?.statements?.length || sf.parseDiagnostics?.length) throw new Error('probe parse failed')

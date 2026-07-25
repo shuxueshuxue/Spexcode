@@ -61,11 +61,10 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export async function specLint(): Promise<Finding[]> {
-  const root = repoRoot()
+export async function specLint(root = repoRoot(), regs = extractors(root)): Promise<Finding[]> {
   const cfg = loadConfig(root)
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg)
-  const specs = await loadSpecs()
+  const specs = await loadSpecs(root)
   const out: Finding[] = []
 
   // integrity + build the file -> owners map. A relation's STRUCTURAL problems (a duplicate entry,
@@ -205,10 +204,9 @@ export async function specLint(): Promise<Finding[]> {
   // extension's ONE designated extractor — is ONE anchor-drift ERROR naming the hit selectors, unless a
   // Spec-OK ack covers it. On related:, the SAME engine yields only a soft warn on a hit — a scoped
   // related miss is silent (never blocks, no ack, no eval freshness). Resolution failures are never
-  // silent for either relation: a dead or ambiguous selector, a selector on a directory, an unparseable
-  // working-tree file, an extension with no designated extractor, and a designated extractor that can't
-  // run here (no host typescript) all ERROR with the repair spelled out.
-  const regs = extractors(root)
+  // silent for either relation: a dead or ambiguous selector, a selector on a directory, and an
+  // unparseable working-tree file ERROR. An extension with no designated extractor, or a designated
+  // extractor that cannot run here, also ERRORS but skips those anchors so the remaining checks continue.
   const [didx, hidx] = await Promise.all([driftIndex(root), historyIndex(root)])
   const readyWarned = new Set<string>()
   for (const s of specs) {
@@ -216,7 +214,7 @@ export async function specLint(): Promise<Finding[]> {
       for (const { path, selectors } of entries) {
         const x = extractorFor(regs, extOf(path))
         if (!x) {
-          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — this language has no anchor support yet: add a LangSpec row (anchors.ts) or drop the selector(s)` })
+          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` })
           continue
         }
         const ready = x.ready()

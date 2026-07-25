@@ -1146,6 +1146,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-pill.shelf:hover { color: var(--yellow); }
 .si-pill.shelf.on { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, var(--panel2)); border-color: var(--yellow); }
 .si-pill-count { font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-none); }
+.si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
 /* multi-select bar ([[session-multi-select]]) — takes the top row's slot while selecting: a live pick count
    pushes the destructive delete + cancel to the right. Delete reuses the orange `.sess-rename-btn.danger`. */
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
@@ -2046,7 +2047,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-review { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* the timeline scroller — chat-shaped: day separators, status events (glyph + word + time, the full note
-   below), and sent prompts. Notes/prompts keep their line breaks (pre-wrap) — they ARE the agent's reply. */
+   below), and sent prompts. RichText owns authored line breaks and blocks — these ARE the agent's reply. */
 /* .tl-chat is the phone session detail's chat root: a flex column filling its host; the pieces inside keep
    their m-* classes. */
 .tl-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -2066,16 +2067,41 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
 .m-ev-note {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
-  white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
+  overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
 }
 .m-copy-note { display: block; margin-top: 8px; padding: 3px 7px; color: var(--blue); background: transparent; border: 1px solid var(--line); border-radius: 4px; font: inherit; cursor: pointer; }
 .m-ev-sent .m-ev-from { font-weight: var(--weight-bold); color: var(--blue); }
 .m-ev-text {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink);
-  white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--blue) 7%, var(--paper));
+  overflow-wrap: anywhere; background: color-mix(in srgb, var(--blue) 7%, var(--paper));
   border-left: 2px solid color-mix(in srgb, var(--blue) 45%, var(--line)); border-radius: 0 6px 6px 0;
 }
 .m-ev-prompt summary { font-family: var(--mono); font-size: var(--type-control); color: var(--muted); cursor: pointer; }
+
+/* One compact renderer vocabulary for every TimelineChat prose field ([[rich-conversation]]). */
+.rich-text { min-width: 0; max-width: 100%; overflow-x: auto; white-space: normal; overflow-wrap: anywhere; }
+.rich-text > :first-child { margin-top: 0; }
+.rich-text > :last-child { margin-bottom: 0; }
+.rich-text p { margin: .42em 0; }
+.rich-text h1, .rich-text h2, .rich-text h3, .rich-text h4, .rich-text h5, .rich-text h6 {
+  margin: .7em 0 .3em; color: var(--ink2); font-size: var(--type-subtitle); line-height: var(--leading-tight); letter-spacing: var(--tracking-normal);
+}
+.rich-text h1 { font-size: var(--type-title); }
+.rich-text ul, .rich-text ol { margin: .42em 0; padding-left: 1.7em; }
+.rich-text li + li { margin-top: .18em; }
+.rich-text blockquote { margin: .5em 0; padding-left: .8em; color: var(--muted); border-left: 2px solid var(--blue); }
+.rich-text a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.rich-text img { display: block; max-width: 100%; height: auto; margin: .55em 0; border-radius: 4px; }
+.rich-text code { padding: .08em .3em; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; }
+.rich-text pre { max-width: 100%; margin: .55em 0; padding: 8px 10px; overflow-x: auto; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
+.rich-text pre code { padding: 0; white-space: pre; background: transparent; border: 0; }
+.rich-text table { display: block; max-width: 100%; margin: .55em 0; overflow-x: auto; border-collapse: collapse; }
+.rich-text th, .rich-text td { padding: 4px 7px; white-space: nowrap; text-align: left; border: 1px solid var(--line); }
+.rich-text th { color: var(--ink2); background: var(--paper); }
+.rich-text hr { margin: .65em 0; border: 0; border-top: 1px solid var(--line); }
+.rich-text .katex-block { max-width: 100%; margin: .6em 0; padding: 2px 0; overflow-x: auto; overflow-y: hidden; }
+.rich-text .katex-block .katex-display { margin: 0; }
+.rich-text .katex-error { color: var(--red); white-space: pre-wrap; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
 .m-offline, .m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }

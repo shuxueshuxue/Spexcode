@@ -1,57 +1,28 @@
 #!/usr/bin/env bash
 # @@@ session-stamp - auto-attribute a commit to the SESSION that authored it, ACROSS HARNESSES. SpexCode
 # reads the `Session:` trailer as a version's attribution (git is the database), keyed by the SpexCode record
-# id so the dashboard's session window links to it. Resolving that id is a harness-adapter concern, mirroring
-# `envSessionId` / the shell `hp_store_dir` alias:
-#   - Claude exports CLAUDE_CODE_SESSION_ID, which EQUALS the record id → stamp it directly.
-#   - Codex has no such equality: its per-command CODEX_THREAD_ID is the THREAD id, not the record key, and the
-#     SHARED per-project app-server means SPEXCODE_SESSION_ID is contaminated with the FIRST session's id — so
-#     it must NOT be trusted. Resolve the thread id → record via the SAME `harness_session_id` alias the shell
-#     hooks use, AT COMMIT TIME (the record is swept on close, so read-time aliasing would fail), and stamp the
-#     resolved RECORD id.
-#   - Per-session-process harnesses (opencode; pi) export NO harness var to tool subprocesses — their identity
-#     channel IS the launch-injected SPEXCODE_SESSION_ID (each TUI is one process, no shared-server
-#     contamination). Trust it only as the LAST tier, and only when the record it names is verifiably not a
-#     codex record — so a codex shell that somehow lost its CODEX_THREAD_ID can never stamp the first
-#     session's id.
-# No-op outside a governed session, or if a Session: trailer is already present (so the dogfood ritual / a
-# human can still set it explicitly).
+# id so the dashboard's session window links to it.
+#
+# The id is simply READ here, because it was established where it is KNOWN: whoever creates an agent's
+# execution context injects that context's own record id, and nothing else may carry one.
+#   - a session launch bakes `SPEXCODE_SESSION_ID=<record id>` into the agent's process — and STRIPS every
+#     session-identity variable it inherited first, so the pane's ancestry (a tmux server started long ago by
+#     someone else) cannot smuggle one in;
+#   - a codex thread gets the same variable injected into every command it spawns, at `thread/start`, via
+#     codex's own `shell_environment_policy.set` — the tool shell is a child of the SHARED app-server and must
+#     therefore inherit nothing, so the backend hands it its identity per thread instead;
+#   - that shared app-server, and any other process we own that belongs to no single session, is spawned with
+#     those variables stripped. A process that outlived its session handing its id to strangers is exactly how
+#     this trailer once named a session that no longer existed (github#76).
+# So there is nothing to resolve, alias, or verify at commit time: the variable is present only in processes
+# that genuinely belong to that session, and it already IS the record id. No store lookup, no per-harness
+# tiers, and nothing derived from the current directory — where a process stands says nothing about who it is.
+# No id → no trailer. An existing Session: trailer is left alone, so the ritual / a human can set one by hand.
 set -euo pipefail
 msg_file="$1"
 grep -qiE '^Session:[[:space:]]' "$msg_file" && exit 0
+[ -n "${SPEXCODE_SESSION_ID:-}" ] || exit 0
 
-# the per-project store (mirrors layout.ts runtimeRoot / harness.sh hp_runtime_dir): keyed by the project
-# (dirname of the ABSOLUTE git-common-dir), '/' and '.' → '-'.
-gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-  || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null) || gcd=""
-rd=""
-[ -n "$gcd" ] && rd="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
-
-sid="${CLAUDE_CODE_SESSION_ID:-}"                       # claude: the exported id IS the record id
-if [ -z "$sid" ] && [ -n "${CODEX_THREAD_ID:-}" ] && [ -n "$rd" ]; then # codex: alias the thread id → record id
-  if [ -e "$rd/sessions/$CODEX_THREAD_ID/session.json" ]; then
-    sid="$CODEX_THREAD_ID"                               # a governed record keyed by the thread id (rare/direct)
-  else                                                   # else the record that captured it as harness_session_id
-    # @@@ unmatched-is-noop - grep's no-match (exit 1) and an absent sessions glob (exit 2) are the
-    # NOT-GOVERNED case, not an error: any repo inherits a foreign CODEX_THREAD_ID from a codex session's
-    # shell, and under `set -euo pipefail` a bare grep|head assignment would abort the hook — and the
-    # commit — before the intended `[ -z "$sid" ] && exit 0` no-op. Genuine errors past this lookup
-    # (interpret-trailers etc.) still fail loud via set -e.
-    hit=$(grep -lF "\"harness_session_id\": \"$CODEX_THREAD_ID\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1) || hit=""
-    [ -n "$hit" ] && sid=$(basename "$(dirname "$hit")")
-  fi
-fi
-if [ -z "$sid" ] && [ -n "${SPEXCODE_SESSION_ID:-}" ] && [ -n "$rd" ]; then
-  # last tier of the shared envSessionId precedence rule: no harness var claimed the commit, so the
-  # launch-injected record id is the identity — IF its record exists (governance check; swept on close) and
-  # is not codex's (the one harness whose shared server contaminates this env var).
-  rec="$rd/sessions/$SPEXCODE_SESSION_ID/session.json"
-  if [ -e "$rec" ] && ! grep -q '"harness": "codex"' "$rec"; then
-    sid="$SPEXCODE_SESSION_ID"
-  fi
-fi
-
-[ -z "$sid" ] && exit 0
 # Stamp via interpret-trailers (git's own sample-hook mechanism), NOT a raw printf append: appending after a
 # message that already carries a trailer block (e.g. `spex spec ack`'s Spec-OK) opens a new paragraph, and git then
 # parses ONLY the last paragraph as trailers — the earlier trailers silently become body prose. interpret-trailers
@@ -59,5 +30,5 @@ fi
 # on an unterminated message (git merge -m writes MERGE_MSG without one) it folds the trailer into the subject
 # paragraph, where git's trailer parser never looks — the reason merge commits' Session: never parsed.
 [ -n "$(tail -c1 "$msg_file")" ] && echo >> "$msg_file"
-git interpret-trailers --in-place --trailer "Session: $sid" "$msg_file"
+git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$msg_file"
 exit 0

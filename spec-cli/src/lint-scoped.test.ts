@@ -255,14 +255,12 @@ test('a selector on a language with no designated extractor errors and stays exp
   assert.match(out, /integrity: 'ruby' anchors src\/tool\.rb#f.*no extractor is designated.*skipped and remains unverified/)
 })
 
-test('when neither TypeScript base resolves, lint reports the skipped anchor and continues other checks', { skip }, async () => {
+test('when the governed repository has no TypeScript, lint reports the skipped anchor and continues other checks', { skip }, async () => {
   const fx = fixture(false)
   fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
   fx.node('broken', 'related:\n  - src/missing.ts')
   fx.commit('v1')
-  const cliWithoutDependencies = mkdtempSync(join(tmpdir(), 'spex-cli-no-ts-'))
-
-  const findings = await specLint(fx.proj, extractors(fx.proj, cliWithoutDependencies))
+  const findings = await specLint(fx.proj, extractors(fx.proj))
   const unavailable = findings.find((f) => f.msg.includes("anchor extractor 'ts-ast' cannot run"))
   assert.equal(unavailable?.level, 'error')
   assert.match(unavailable?.msg ?? '', /JS-family anchors were skipped and remain unverified/)

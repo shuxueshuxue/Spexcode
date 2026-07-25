@@ -68,7 +68,12 @@ Two principles keep that derivation cheap on a long-running server:
   every reachable one-parent content commit remains a version even when a later TREESAME merge would hide
   that side of a directory-scoped walk. Merge rows are then admitted separately by the all-parent authored-line
   predicate above, so restoring hidden ordinary commits never turns inherited merge content into a duplicate
-  version.
+  version. Single-parent rename aliases are coalesced independent of encounter order: if parallel branches
+  edit the old and new paths, both histories join the current node, and the complete row set is ordered by
+  one full-history date-order walk only after alias resolution. Date order retains walk-newest choice among
+  parallel versions while forbidding an ancestor from displacing its own descendant merely because both
+  commits share a timestamp. Alias continuity is event-scoped: reusing the vacated old path after the rename
+  starts a separate node history. A pure rename remains a zero-content move.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
   in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When

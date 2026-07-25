@@ -15,7 +15,8 @@ related:
 
 Drift asks one question: has the governed code moved **ahead of** the spec's latest version? The
 honest answer is an **ancestry** question, not a timing one — a governed commit is drift exactly when
-it is **not an ancestor** of the node's version commit (it lies in `version..HEAD`). The same basis
+it is **not an ancestor** of the node's version commit (it lies in `version..tip`, normally
+`version..HEAD`). The same basis
 governs the acknowledgement floor: a `Spec-OK` ack quiets exactly the commits reachable from the ack
 commit, never a sibling branch's changes. This holds the promise [[spec-node-states]] makes when it
 says drift is measured "by git ancestry".
@@ -26,7 +27,7 @@ No linear order can keep that promise — date or topological, a total order can
 commits sit on parallel branches", so any position compare silently under-reports whenever history
 isn't chronological: back-dated or long-lived branches merged in, cherry-picks, and hardest of all
 **adoption**, where a spec tree is back-extracted onto an existing history. The [[source-of-truth]]
-walk therefore preserves the DAG question itself: ordinary histories use the cached `git log HEAD`
+walk therefore preserves the DAG question itself: ordinary reports use the cached `git log HEAD`
 parent edges and in-memory reachability, while a large name-stream reads HEAD's reachable commit ids once
 and delegates only governed path windows to Git's commit graph with bounded path caches. Neither mode changes the ancestry
 verdict, and both avoid a per-node history walk, so "scale with history, not node count" still holds. The same one rule feeds
@@ -50,6 +51,11 @@ distinct keys turns the fixed-order rebuild into whole-memo eviction thrash, mem
 forking every pass. Among *parallel* version commits
 of one node (two branches each re-versioning it), the base stays the walk-newest row — an ambiguity
 only a merge resolves.
+
+The local [[code-anchor]] gate asks this same walk about one explicit candidate commit. Both ordinary and
+large-history builds parameterize every range by that tip and exclude merge commits from governed path
+windows. Candidate builds are transient — shared inside one lint call but never inserted into the
+persistent per-root HEAD cache — so a rejected dangling oid cannot evict or contaminate board state.
 
 Correcting the under-report legitimately surfaces previously-hidden drift on existing boards — a
 re-baseline, not a regression.

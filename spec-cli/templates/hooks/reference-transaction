@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# @@@ candidate lint consume ([[code-anchor]]) - inert for every ref transaction except the one exact commit
+# attempt armed by canonical commit-msg. The real new oid supplies final tree/message/parents; prepared is
+# still reversible, so a lint error leaves the branch ref unchanged and the user's staged work intact.
+set -u
+state="${1:-}"
+payload=$(cat)
+[ -z "${SPEXCODE_GATE_TRACE:-}" ] || printf 'spexcode-gate: reference state=%s payload=%s\n' "$state" "$(printf '%s' "$payload" | tr '\n' ';')" >&2
+[ "$state" = prepared ] || exit 0
+marker=$(git rev-parse --git-path SPEXCODE_PENDING_LINT 2>/dev/null || true)
+[ -n "$marker" ] && [ -f "$marker" ] || exit 0
+
+if [ -n "${SPEXCODE_SKIP_LINT:-}" ]; then
+  rm -f "$marker"
+  exit 0
+fi
+expected_head=$(sed -n '1p' "$marker")
+expected_tree=$(sed -n '2p' "$marker")
+expected_message=$(sed -n '3p' "$marker")
+armed_at=$(sed -n '4p' "$marker")
+now=$(date +%s)
+case "$armed_at" in ''|*[!0-9]*) rm -f "$marker"; exit 0 ;; esac
+if [ $((now - armed_at)) -gt 600 ] || [ $((now - armed_at)) -lt 0 ]; then
+  rm -f "$marker"
+  exit 0
+fi
+
+candidate=
+while read -r old new ref; do
+  [ -n "${new:-}" ] || continue
+  [ "$old" = "$expected_head" ] || continue
+  case "$ref" in HEAD|refs/heads/*) ;; *) continue ;; esac
+  case "$new" in *[!0]*) ;; *) continue ;; esac
+  [ "$(git cat-file -t "$new" 2>/dev/null || true)" = commit ] || continue
+  [ "$(git rev-parse "$new^{tree}" 2>/dev/null || true)" = "$expected_tree" ] || continue
+  candidate="$new"
+  break
+done <<< "$payload"
+[ -n "$candidate" ] || exit 0
+[ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: candidate=$candidate expected_head=$expected_head expected_tree=$expected_tree" >&2
+
+# A stale arm must not turn reset/branch plumbing into a commit gate. A real just-created commit is not yet
+# reachable from any ref/reflog at prepared; an existing target is. The message hash is the fourth binding
+# for distinct commits that happen to share HEAD and tree (message-only amend is the common case).
+if [ -n "$(git for-each-ref --contains "$candidate" --format='%(refname)' 2>/dev/null)" ] \
+  || git log -g --all --format=%H 2>/dev/null | grep -Fqx "$candidate"; then
+  rm -f "$marker"
+  exit 0
+fi
+actual_message=$(git cat-file commit "$candidate" | sed '1,/^$/d' | git hash-object --stdin)
+if [ "$actual_message" != "$expected_message" ]; then
+  rm -f "$marker"
+  echo "✗ SpexCode: candidate gate lost message identity; commit stopped before the ref advanced." >&2
+  exit 1
+fi
+rm -f "$marker" # consume before invoking any child Git process
+
+main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+spex_kind=
+if command -v spex >/dev/null 2>&1; then
+  spex_kind=path
+elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+  spex_kind=local
+elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
+  spex_kind=pkg
+fi
+spex_cli() {
+  case "$spex_kind" in
+    path)  spex "$@" ;;
+    local) "$repo_root/node_modules/.bin/spex" "$@" ;;
+    pkg)   "$main_root/spec-cli/bin/spex.mjs" "$@" ;;
+    *)     return 127 ;;
+  esac
+}
+
+if [ -z "$spex_kind" ]; then
+  echo "• SpexCode: candidate spec-lint skipped — no \`spex\` CLI found; CI still enforces." >&2
+  exit 0
+fi
+spex_cli spec lint --pending "$candidate" >&2
+lint_rc=$?
+[ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: lint_rc=$lint_rc candidate=$candidate" >&2
+if [ "$lint_rc" -eq 75 ]; then
+  echo "• SpexCode: candidate spec-lint skipped — spex is paused mid-merge (exit 75); CI still enforces." >&2
+  exit 0
+fi
+if [ "$lint_rc" -ne 0 ]; then
+  echo "✗ SpexCode: candidate spec-lint failed; the ref is unchanged and staged work is intact." >&2
+  echo "  Fix the spec/code or add an honest Spec-OK trailer, then retry/continue; abort the Git operation to discard it." >&2
+  exit 1
+fi
+exit 0

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor } from './git.js'
+import { git, gitA, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -407,16 +407,18 @@ export function windowCommits(idx: DriftIndex, sinceHash: string, path: string):
     if (hit) return hit
     const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
     const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
-    const args = ['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    const args = ['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`), '--', path]
     let commits: string[] = []
     try { commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean) } catch { commits = [] }
+    commits = commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash))
     idx.lazy.windows.set(key, commits)
     return commits
   }
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return []
   const cover = ackCoverFor(idx, sinceHash)
-  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, base, h) && !cover.some((a) => inAncestors(idx, a, h)))
+  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, base, h)
+    && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h))
 }
 
 // which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a

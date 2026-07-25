@@ -456,13 +456,18 @@ if (cmd === 'serve') {
     }
   } else if (sub === 'lint') {
     const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')
-    const findings = await specLint()
+    const pending = flag('pending')
+    const findings = await specLint(undefined, undefined, {
+      tip: pending || 'HEAD',
+      deferAnchor: has('defer-anchor'),
+    })
     const errors = findings.filter((f) => f.level === 'error')
     for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
     console.error(`spex spec lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
     // drift teaches from the ONE `spex spec lint` (no flag). Unanchored drift stays advisory forever; the
-    // blocking tier is anchor-drift ([[code-anchor]]) — an ERROR like any other, so the pre-commit shim
-    // (and CI) gates on it with no separate staged-index machinery.
+    // Blocking tier is anchor-drift ([[code-anchor]]) — CI/default lint judges HEAD; the local armed hook
+    // supplies --pending <real commit oid>. --defer-anchor is the canonical pre-commit compatibility mode:
+    // structural errors still block there while the armed gate owns this one rule.
     if (findings.some((f) => f.rule === 'drift' || f.rule === 'anchor-drift')) console.error(`\n${DRIFT_GUIDANCE}`)
     process.exit(errors.length ? 1 : 0)
   } else if (sub === 'ack') {

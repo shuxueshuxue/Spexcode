@@ -11,7 +11,10 @@ related:
   - spec-cli/src/git.ts
   - spec-cli/src/specs.ts
   - spec-cli/src/lint-scoped.test.ts
+  - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/guide.ts
+  - spec-cli/templates/hooks/commit-msg
+  - spec-cli/templates/hooks/reference-transaction
 ---
 # code-anchor
 
@@ -49,16 +52,52 @@ hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval fres
 **file-level** in this version. A `related:` row may carry selectors too: a hit is a soft warn naming
 the selector, a miss is silent; related stays never-block, never-ack, no eval freshness.
 
-**Judgment.** The window is the spec's last version → HEAD: the same non-merge, ack-filtered commit
-set [[drift-by-ancestry]]'s walk already derives (one ack rule, shared — `Spec-OK` quiets an anchor
-hit too, and the ack's reason is recorded in the ack commit body because quieting a hit is a strong
-claim). Large histories derive this same window through governed path-scoped Git queries with bounded
-memoization; ordinary histories retain the in-memory walk. Per window commit, the file's `--unified=0` hunks are intersected with the unit's line range
-extracted from the file **as it existed at that commit** — never from HEAD, so later renames/moves
-attribute correctly. Any intersection unacked → `anchor-drift` error, and the ordinary errors-block
-gate ([[ci-gate]], the pre-commit shim) carries it; there is no separate staged-index gate, and
-`lint.driftErrorThreshold` is retired. A historical file version the extractor cannot parse counts as
-a **conservative hit**, flagged as such — over-warn beats silently missing a real change.
+**Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
+report/CI run, and a pending commit for a locally-authored candidate. It is the same non-merge,
+ack-filtered set [[drift-by-ancestry]]'s walk already derives. Per window commit, the file's
+`--unified=0` hunks are intersected with the unit's line range extracted from the file **as it existed
+at that commit** — never from the later working tree, so renames/moves and partial staging attribute
+correctly. Both large-history path windows and the ordinary in-memory walk explicitly exclude merge
+commits; a merge commit itself is neutral, while unacknowledged non-merge commits it makes reachable
+remain in the window. A historical file version the extractor cannot parse counts as a
+**conservative hit**, flagged as such — over-warn beats silently missing a real change.
+
+The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
+it proves this is a commit path Git actually sends through the gate and records the candidate's current
+HEAD + index tree in that worktree's private git-dir. Git then creates the real commit object. At
+`reference-transaction` **prepared**, before its ref advances, the hook consumes that one arm only when the
+transaction's old oid and the real commit's tree match it, then runs ordinary lint with the real new oid as
+the explicit pending tip. Thus ordinary commit, amend, squash and merge are judged with their actual final
+message/tree/parents — no synthetic `commit-tree` parent guess. A failed signing or aborted commit leaves at
+most one stale arm: the next `prepare-commit-msg` clears it, and head/tree/age checks prevent an unrelated
+ref update from consuming it. The arm lives in the per-worktree git-dir, so linked worktrees cannot collide.
+
+Information availability is not hook coverage. `commit-msg` is skipped by cherry-pick/rebase on supported
+Git, by `--no-verify`, and in a clone with no installed hook; those paths create no arm, remain at today's
+local coverage, and [[ci-gate]] judges their landed `HEAD`. The reference hook does no Git walk or lint at
+all without a matching arm, so reset/checkout/branch/tag/fetch and programmatic `--no-verify` data commits
+are unchanged. Canonical pre-commit defers anchor errors only when both canonical arm/consume hooks are
+actually installed; if `spex init` preserves either user hook, pre-commit retains the old HEAD gate, so a
+hook collision never reduces local coverage. `SPEXCODE_SKIP_LINT=1` remains the explicit local bypass.
+
+This **reverses** the earlier recorded choice to have no separate candidate-tree gate. That choice was
+sound under the capability available then: `Spec-OK` could only be a later `--allow-empty` stamp, so a
+content-bearing implementation commit had no honest in-commit acknowledgement route and a staged gate
+would create an unconditional rejection. Git's native `git commit --trailer "Spec-OK: <node>"` now makes
+that route real. A trailer on a content-bearing commit acknowledges **that commit only**; it does not
+checkpoint older debt. A reachability checkpoint must have exactly one parent and the same tree as that
+sole parent. This keeps the tree-unchanged `spex spec ack` stamp as the checkpoint that covers ancestors,
+but makes every merge self-only: even an `ours` merge with an unchanged first-parent tree introduces new
+reachable history. Changing the node's `spec.md` in the candidate instead makes that
+candidate the latest version, closing its window by construction. Without either route, an anchored
+intersection is rejected before attribution can slide to a successor commit.
+
+The cost is intentional and stated plainly: local acceptance is **strictly narrower** than CI acceptance.
+For example, code-only `P1` followed by spec-only `P2` is green when CI judges the final branch tip, but
+local authoring rejects `P1`; code and governing spec must land atomically, removing cross-commit iteration.
+This is an honesty property of commit paths that reach the installed, non-bypassed candidate gate, not a
+claim that Git makes lies or bypasses physically impossible: a meaningless spec byte edit can mechanically
+move the version, and an uncovered hook path or explicit bypass can still land first and acknowledge later.
 
 **Extraction is a language seam.** Extractors are pure `(content, filename) → units` functions (no
 git, no cache, no fs — importable by an external scorer as-is), and every extension maps to exactly

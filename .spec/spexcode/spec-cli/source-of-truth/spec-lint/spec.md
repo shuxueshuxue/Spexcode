@@ -9,6 +9,8 @@ code:
   - spec-cli/src/lint.ts#loadConfig
 related:
   - spexcode.json
+  - spec-cli/templates/hooks/commit-msg
+  - spec-cli/templates/hooks/reference-transaction
 ---
 # spec-lint
 
@@ -115,16 +117,33 @@ very coverage or structural warnings they meant to enforce is a config error the
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
-**One gate, no staged-index machinery:** the retired count-based commit-local gate
-(`lint.driftErrorThreshold`) is replaced by the anchor tier ([[code-anchor]]) — an anchor hit is an
-ordinary lint ERROR, so the same errors-block rule (pre-commit shim and CI alike, see [[ci-gate]])
-carries it, while unanchored drift stays advisory everywhere. Bypass with `SPEXCODE_SKIP_LINT=1`.
+**One predicate at two real tips:** the retired count gate (`lint.driftErrorThreshold`) stays gone; an
+anchor hit is an ordinary lint ERROR. `spex spec lint` and CI judge committed `HEAD`. On commit paths that
+invoke it, `commit-msg` arms one candidate and `reference-transaction` invokes the same lint over the real
+new oid before its ref advances,
+so history, raw specs, config and current anchored source all come from the candidate tree — never from an
+unrelated worktree/index state. Pending indices are transient and shared only inside that lint run; they
+never occupy or evict the server's persistent HEAD-keyed cache. Unanchored drift remains advisory.
+
+This candidate gate intentionally supersedes the earlier **"One gate, no staged-index machinery"**
+decision rather than pretending that decision was an oversight. At that time `Spec-OK` existed only as a
+later `spex spec ack` `--allow-empty` stamp; there was no content-bearing ack, so rejecting before the
+implementation commit existed would close the only honest mechanics-only route. Native in-commit trailers
+now supply that route, while the narrowly-armed ref transaction lets the existing ancestry engine judge the
+real exact commit without applying a gate to unrelated ref operations. Local is therefore stricter than CI on paths that
+reach this hook: `P1` changing anchored code and
+`P2` updating the spec is accepted at CI's final tree but local rejects `P1`, deliberately requiring the
+code/spec checkpoint to be one commit. Bypass the local hook explicitly with `SPEXCODE_SKIP_LINT=1`; no
+installed hook means no local enforcement, so [[ci-gate]] remains authoritative.
 
 ### Spec-OK — acknowledging an implementation-only change
 
 A commit ahead of a spec isn't always staleness — a refactor can change a governed file while the spec
-stays true. Such a commit carries a **`Spec-OK: <node-id>`** trailer; drift skips the node it acknowledges
-(`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps the trailer on an **empty commit
+stays true. Its **`Spec-OK: <node-id>`** trailer names the node it acknowledges (`Spec-OK: A` quiets only
+A). An ack covers reachable ancestors only when it has exactly one parent and the same tree as that sole
+parent. Every other ack is self-only, including a merge with an unchanged first-parent tree: the merge
+still introduces newly reachable history. `spex ack <node>… --reason "<why>"`
+stamps the trailer on an **empty commit
 above HEAD** (`--allow-empty --only`, so a dirty index never rides along) — never an amend: drift's read
 side quiets every drift commit *reachable* from an ack, so a child stamp covers exactly what amending
 would, and it works on a trunk merge commit, where an amend re-authors the merge after `MERGE_HEAD` is
@@ -136,3 +155,12 @@ The reason is **required and recorded in the ack commit's message body** — it 
 articulate why the spec still holds before quieting it, and an ack that quiets an anchor hit
 ([[code-anchor]]) is a strong claim whose why must be durable. A shared file drifts every governor, so
 `Spec-OK:` accepts several ids — one ack per co-owner.
+
+For the implementation commit currently being authored, Git's own
+`git commit --trailer "Spec-OK: <node-id>"` is the in-commit route. The final message is already present on
+the real candidate oid the armed gate judges, and a trailer on a content-bearing commit acknowledges
+**only that commit** — older unacknowledged drift remains. The commit body is the durable explanation. A
+prior ack cannot cover a descendant, and a later empty ack cannot be created through a non-bypassed gate
+until the rejected commit lands; this makes the in-commit form necessary for a complete honest workflow.
+Hook absence, the explicit bypass, or a meaningless spec edit remain operational ways around truth that
+Git cannot prevent.

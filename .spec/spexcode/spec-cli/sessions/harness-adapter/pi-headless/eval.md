@@ -31,6 +31,11 @@ scenarios:
       the public record remains online and reports `{ headless: true }`.
     tags: [backend-api, cli]
     code: [spec-cli/src/pi-headless.ts]
+  - name: pi-headless-explicit-stop-resume
+    description: Let a real governed pi-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
+    expected: Stop preserves the record, exact saved session, and timeline but reads offline; resume returns the same pi conversation online with the pre-stop declaration note intact.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
   - name: pi-headless-close-residue
     description: Close the real pi-headless session through the public session API and inspect its process, tmux, worktree, sockets, and record store.
     expected: The controller and pi children stop, both controller and rendezvous sockets are gone, and the session worktree, branch, record, and store leave no residue.

@@ -64,11 +64,13 @@ the existing tmux capture and reaper pipeline. It is not duplicated into a SpexC
 terminal-free user record is [[session-timeline]]. Partial/non-line output is dropped loudly rather than being
 presented as a complete event.
 
-Liveness is deliberately record-backed: while the session record exists, the adapter answers `online` regardless
-of controller, tmux, or child-process probes. This is a statement about the durable addressable session, not a
-claim that a turn process is resident. A broken/missing controller is surfaced by the next deliver or interrupt
-as a loud transport failure; it is never converted into a speculative `offline`. Closing the session remains the
-terminal operation that removes the record, worktree, tmux home, and control socket.
+Liveness is deliberately record-backed: while the session record exists and is not explicitly stopped, the
+adapter answers `online` regardless of controller, tmux, or child-process probes. This is a statement about the
+durable addressable session, not a claim that a turn process is resident. A broken/missing controller is surfaced
+by the next deliver or interrupt as a loud transport failure; it is never converted into a speculative `offline`.
+Human `stop` is different: it tears down the runtime and marks the retained record stopped, so liveness is
+`offline` until `resume` clears the marker and relaunches the same conversation. Closing remains the terminal
+operation that removes the record, worktree, tmux home, and control socket.
 
 The controller reports every non-zero turn-child exit through the shared [[harness-adapter]] turn-outcome seam. If
 the record is still `active`, that exit projects lifecycle `error` with the Claude headless exit code; a zero exit

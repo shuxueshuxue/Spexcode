@@ -2,19 +2,21 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's Issues surface as GitHub-style TWO pages sharing [[review-chrome]] — a ListView query + Open/Closed sections + real issue facets over structured anchor rows, and a standalone detail page whose thread writes route to the issue's own store.
+desc: The dashboard's Issues surface as GitHub-style ROUTED pages sharing [[review-chrome]] — a ListView query + Open/Closed sections + real issue facets over structured anchor rows, a standalone detail page whose thread writes route to the issue's own store, and a standalone compose page at #/issues/new.
 code:
   - spec-dashboard/src/IssuesPage.jsx#IssuesPage
   - spec-dashboard/src/IssuesPage.jsx#IssuesListPage
   - spec-dashboard/src/IssuesPage.jsx#IssueDetailPage
-  - spec-dashboard/src/IssuesPage.jsx#NewThreadForm
+  - spec-dashboard/src/IssuesPage.jsx#NewIssuePage
 related:
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/textarea.js
+  - spec-dashboard/test/new-issue-page.e2e.mjs
 ---
 
 # issues-view
@@ -26,15 +28,22 @@ agent's local taste issue and a GitHub issue on the same node belong on the same
 directive names the navigation model: **GitHub's own issues UI**, verified live — a LIST page whose whole
 state lives in its URL, rows that are plain copyable links, a click that PUSHES history onto a standalone
 full-page DETAIL, and browser Back that restores the exact filtered list. The earlier master-detail split
-pane is gone; so is any in-page selection echo. The dashboard stays a **thin window** over the CLI's
+pane is gone; so is any in-page selection echo. **Writing an issue is a place too**: a cramped pop-out over
+the list said "this is a small aside", when opening an issue is one of the two things a human does here —
+so New is a routed page with the same standing as reading one, and it writes through the app's own
+writing surface instead of a form-shaped copy of it. The dashboard stays a **thin window** over the CLI's
 truth: it renders what `/api/issues` returns, computes nothing, and every write goes through the SAME
 verbs the CLI uses.
 
 ## expanded spec
 
-- **Two pages, one route family — the shared [[review-chrome]].** `#/issues` is the list page (the
-  [[side-nav]] rail entry and ⌥4 land here); `#/issues/<id>` is the detail page. Both are bookmarkable,
-  reloadable, directly openable. Rows are REAL anchors to their detail address; clicking one is a normal
+- **Three pages, one route family — the shared [[review-chrome]].** `#/issues` is the list page (the
+  [[side-nav]] rail entry and ⌥4 land here); `#/issues/<id>` is the detail page; `#/issues/new` is the
+  compose page. All three are bookmarkable,
+  reloadable, directly openable. `new` is the ONE path word the family spends on something that is not an
+  issue id, so the local store RESERVES it at id minting ([[local-issues]]) — an issue can never own an
+  address the compose page answers, and the reservation is a visible numeric-suffix collision, not a silent
+  shadow. Rows are REAL anchors to their detail address; clicking one is a normal
   hash PUSH, and Back returns to the list URL with its query intact. All list state is [[review-chrome]]'s
   ONE token query (`is:issue state:open` by default; the [[review-query]] engine): a human's edit, tab,
   or menu pick PUSHES the canonical address — bare `#/issues` for the default view, exactly
@@ -113,12 +122,29 @@ verbs the CLI uses.
   `▶m:ss · step` first line is a time anchor; attached blobs render through the one shared evidence
   renderer. A `@session`/`@new` in any composer **dispatches** ([[mentions]]) and the one-line outcome
   echoes briefly as a page notice — a summons is never silent.
-- **New opens local-first from the LIST page** — a centered pop-out (concern + optional body + one
-  compact store picker naming each store's canonical label once); a `[[node]]` in the prose IS the node
-  link (no separate ids field); a forge pick creates the real forge issue with the `Spec:` marker. Its
-  optional body reuses [[composer]]'s same auto-growing textarea and IME Enter boundary while retaining the
-  New form's own action row. The modal's autocomplete overlays above the pop-out; Esc/backdrop close only
-  that layer.
+- **New is a PAGE — `#/issues/new`, GitHub's compose grammar.** The list's New is the page-title action and
+  a REAL anchor into that address: a click is the same hash transaction the address bar produces, so
+  middle-click/new-tab/copy-address come free and the page itself survives a reload, a bookmark, and a
+  pasted link. It is not a pop-out, not a dialog, and nothing on the page carries `role="dialog"`. The page IS
+  [[review-chrome]]'s `DetailShell` — the compact back anchor leading a localized title header, ONE main
+  column, ONE metadata rail, the same geometry and phone reflow the detail page gets — so compose and read
+  cannot drift into two skeletons. MAIN column: a labeled one-line **title** field, then the labeled
+  **description** written in the SAME [[composer]] surface every other writing box in this app uses (a quiet
+  bordered container, a borderless auto-growing textarea floored at a page-sized height, the persistent
+  action row carrying the [[mentions]] `@`/`[[` doors through the ONE shared trigger-insert mechanism) —
+  New is never a second dialect of "an input". A **Write/Preview** switch renders the draft through the SAME
+  `SpecBody` the detail page renders the stored body with, so what the writer proofreads is what the issue
+  will look like; an empty draft says so instead of previewing blank. SIDE rail: the compact **store
+  picker** naming each store's canonical label exactly once — the one place the rail takes INPUT rather than
+  showing a value — over the **spec nodes the prose already links**, derived live from the draft's `[[id]]`
+  grammar. That derived list is why no separate node-ids field exists: a `[[node]]` in the prose IS the node
+  link (local infers `nodes:`, a forge post writes the `Spec:` marker from the same prose), and the rail
+  shows the link being made instead of stating a rule the writer cannot see. On a page the autocomplete
+  opens downward under the caret — no pop-out boundary to clear. Enter in the title and ⌘/⌃⏎ in the
+  description both submit; a refused write surfaces its error in the action row. **Create lands on the issue
+  it just made**: the response's id is navigated to with REPLACE ([[side-nav]]: automatic state-naming
+  replaces), so the spent compose address leaves no emptied form in history and Back returns to the list.
+  Cancel is the SAME derived list anchor the back anchor uses, never `history.back`; Esc routes nothing.
 - **Issue cards enter this page, never the forge.** Every compact card in the node Issues tab is the SAME
   `IssueCard` whose canonical href is `#/issues/<issue-id>`; a forge permalink is
   detail-side metadata only. Long content clamps inside the card.

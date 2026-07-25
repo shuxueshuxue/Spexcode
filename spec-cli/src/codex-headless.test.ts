@@ -19,6 +19,7 @@ test('codex-headless composes Codex materialization and app-server delivery with
   assert.equal(codexHeadlessHarness.headless, true)
   assert.equal(codexHeadlessHarness.ownsRendezvous, false)
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)
 })
 

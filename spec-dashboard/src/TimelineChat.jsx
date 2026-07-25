@@ -6,6 +6,7 @@ import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
+import { ComposerTextarea, composingKey } from './Composer.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -368,7 +369,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
       {sendErr && <div className="m-senderr">{sendErr}</div>}
       <div className="m-composer">
         <div className="m-composer-line">
-          <textarea
+          <ComposerTextarea
             ref={inputRef}
             className="m-input"
             data-focus-sink={active ? '' : undefined}
@@ -377,6 +378,11 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             value={draft}
             onMouseDownCapture={prepareComposerPress}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
+                e.preventDefault(); e.stopPropagation(); send()
+              }
+            }}
           />
           <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
         </div>

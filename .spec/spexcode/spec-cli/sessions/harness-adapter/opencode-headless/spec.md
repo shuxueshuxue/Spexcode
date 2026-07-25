@@ -66,9 +66,10 @@ in that same delivery error rather than swallowed. A still-running turn is accep
 window. Probe/spawn failures are likewise returned loudly and no PTY prompt typing or stdin controller is
 introduced. An inconclusive socket probe never starts a possibly duplicate turn.
 
-Liveness is record-backed: while the governed record exists, the adapter reports `online` regardless of tmux,
-process, or socket probes. This describes a durable addressable sleeping conversation, not a resident process;
-the next delivery is where a missing pane, native conversation, or plugin fails loudly. The adapter declares
-`headless: true`; the note conversation is the console trunk, so OpenCode stdout needs no parallel collector.
-Closing remains the terminal operation that removes the record, worktree, tmux
-home, and rendezvous residue.
+Liveness is record-backed: while the governed record exists and is not explicitly stopped, the adapter reports
+`online` regardless of tmux, process, or socket probes. This describes a durable addressable sleeping
+conversation, not a resident process; the next delivery is where a missing pane, native conversation, or plugin
+fails loudly. Human `stop` tears down the runtime and marks the retained record stopped, so it reads `offline`
+until `resume` clears the marker and relaunches the same conversation. The adapter declares `headless: true`;
+the note conversation is the console trunk, so OpenCode stdout needs no parallel collector. Closing remains the
+terminal operation that removes the record, worktree, tmux home, and rendezvous residue.

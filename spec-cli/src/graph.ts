@@ -42,6 +42,14 @@ export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) 
   return summary
 }
 
+// @@@ a shelved row carries no delta ([[archive]]) - the board has TWO producers (a full buildBoard and the
+// sessions-only spliceSessions), and shelving is a session-scoped write, so it takes the SPLICE path — which
+// reuses the previous board's ops by path. Skipping the delta only in layout's row builder would therefore be
+// invisible exactly when it fires: the splice would carry the stale ops forward forever. The rule belongs to
+// the row, not to one producer, so both decorate through this one function.
+const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<string, any[]>): any[] =>
+  (s.archived ? [] : opsByPath[s.path] || [])
+
 export async function buildBoard() {
   // all three sources are warm-cheap and independent, so the board inherits their speed for free: loadSpecs
   // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
@@ -161,7 +169,7 @@ export async function buildBoard() {
   const sess = sessions.map((s) => ({
     ...s,
     source: s.path,
-    ops: opsByPath[s.path] || [],
+    ops: rowOps(s, opsByPath),
     evalSummary: evalProjections.get(s.id),
   }))
 
@@ -189,7 +197,7 @@ export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>
   const sess = sessions.map((s) => ({
     ...s,
     source: s.path,
-    ops: opsByPath[s.path] || [],
+    ops: rowOps(s, opsByPath),
     evalSummary: evalProjections.get(s.id),
   }))
   return { ...prev, sessions: sess }

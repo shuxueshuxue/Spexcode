@@ -10,7 +10,8 @@ import { liveness, launcherCmd, type LiveSnap, type SessRec } from './sessions.j
 const rec = (over: Partial<SessRec> = {}): SessRec => ({
   session: 'sess-live-1', governed: true, worktreePath: '/wt/x', branch: 'node/x-1', node: 'x',
   title: null, name: null, parent: null, status: 'active', proposal: null, merges: 0, note: null,
-  sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, launcher: null, launchCmd: null, launchOwner: null,
+  sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+  launcher: null, launchCmd: null, launchOwner: null,
   ...over,
 })
 const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), titles: new Map(), sockets: new Set(), unproven: new Set(), ...over })
@@ -27,18 +28,28 @@ test('claude-headless liveness is the intact record, independent of process prob
   const headless = rec({ harness: 'claude-headless' })
   assert.equal(liveness(headless, snap()), 'online')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 
 test('opencode-headless liveness is the intact record, independent of sleeping turn processes', () => {
   const headless = rec({ harness: 'opencode-headless' })
   assert.equal(liveness(headless, snap()), 'online')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 
 test('codex-headless liveness is the intact record, independent of the shared app-server process', () => {
   const headless = rec({ harness: 'codex-headless' })
   assert.equal(liveness(headless, snap()), 'online')
   assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
+})
+
+test('pi-headless liveness is the intact record until an explicit stop', () => {
+  const headless = rec({ harness: 'pi-headless' })
+  assert.equal(liveness(headless, snap()), 'online')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 
 test('claude online requires a live listener, not just a tmux window (listener-verify)', () => {

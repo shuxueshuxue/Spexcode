@@ -159,7 +159,8 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
+      harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+      launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
 
@@ -229,7 +230,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   const base: SessRec = {
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
-    createdAt: 1, harness: 'codex', harnessSessionId: null, launcher: 'codex', launchCmd: 'codex',
+    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
   }
   assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)
@@ -242,6 +243,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
     launch_owner: publicAuthority,
   })
   assert.equal(reread.status, 'queued', 'the current public record still reports queued before launch')
+  assert.equal(reread.stopped, false, 'records from before stop tracking default to not stopped')
   assert.equal(canDrainQueued(reread, publicAuthority), true, 'a replacement child at the same public authority takes over')
   assert.equal(canDrainQueued(reread, 'http://127.0.0.1:8956'), false, 'a different backend authority cannot claim it')
   assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')

@@ -12,13 +12,20 @@ const styles = readFileSync(join(here, 'styles.css'), 'utf8')
 
 test('mobile session detail retains the aligned TimelineChat composer', () => {
   assert.match(mobileApp, /<TimelineChat s=\{s\} sessions=\{sessions\} \/>/)
-  assert.match(timelineChat, /className="m-input"/)
+  assert.match(timelineChat, /<ComposerTextarea[\s\S]*className="m-input"/)
+  assert.match(timelineChat, /!e\.shiftKey && !composingKey\(e\)/)
   assert.match(timelineChat, /className="m-send"/)
   assert.match(timelineChat, /sendSessionText\(s\.id, text, \{ replyVia: 'note' \}\)/)
   assert.match(styles, /\.m-composer-line\s*\{[^}]*align-items:\s*stretch;/s)
   assert.match(styles, /\.m-send\s*\{[^}]*height:\s*38px;/s)
   assert.match(styles, /\.m-tabbar\s*\{[^}]*padding-bottom:\s*env\(safe-area-inset-bottom, 0\);/s)
   assert.doesNotMatch(styles, /\.m-composer\s*\{[^}]*safe-area-inset-bottom/s)
+})
+
+test('both mobile-authored composers use the shared auto-growing textarea', () => {
+  assert.match(mobileApp, /<ComposerTextarea[\s\S]*className="m-input m-new-input"/)
+  assert.match(styles, /\.m-input\s*\{[^}]*min-height:\s*38px;[^}]*max-height:\s*min\(28cqh, 240px\);/s)
+  assert.match(styles, /\.m-new-input\s*\{[^}]*flex:\s*none;[^}]*min-height:\s*120px;/s)
 })
 
 test('mobile composer transport requests a declaration-note reply', async () => {

@@ -5,7 +5,7 @@
 //   BASE=http://127.0.0.1:8787 npx tsx test/session-record-integrity-fixture.ts
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -162,23 +162,31 @@ async function retiredSessionNeverRevives(home: string, project: string): Promis
   if (created.branch) await pexec('git', ['-C', project, 'branch', '-D', created.branch])
   assert.equal(existsSync(created.path), false, 'the worktree is gone')
 
+  // the retired record is frozen: a writer may neither move its lifecycle nor rewrite it into a fresh shell,
+  // and it must say WHY rather than silently no-op.
+  const frozen = readFileSync(rec, 'utf8')
   for (const argv of [
     ['internal', 'session-state', 'active', '--session', id],
     ['internal', 'session-idle', '--session', id],
+    ['session', 'ask', '--note', 'back from the dead', '--session', id],
   ]) {
-    await spex(project, ...argv).catch(() => '')
-    const status = JSON.parse(readFileSync(rec, 'utf8')).status
-    assert.ok(status !== 'active' && status !== 'idle',
-      `\`spex ${argv.join(' ')}\` must not revive a retired session (status became ${status})`)
+    const said = await spex(project, ...argv).catch((e) => String(e))
+    assert.equal(readFileSync(rec, 'utf8'), frozen, `\`spex ${argv.join(' ')}\` rewrote a retired session's record; it said: ${said.trim()}`)
+    assert.match(said, /retired/i, `\`spex ${argv.join(' ')}\` must say the session is retired, not no-op silently (said: ${said.trim()})`)
   }
 
   const row = await readSession(id)
   assert.equal(row.status, 'retired', 'the retired session reads as retired on the list')
 
+  // the launch script from the original launch is still on disk; what must not happen is resume REWRITING it
+  // (and then running it) against a worktree that is gone.
+  const script = join(dirname(rec), 'launch.sh')
+  const before = existsSync(script) ? statSync(script).mtimeMs : null
   const resumed = await jsonRequest(`/api/sessions/${id}/resume`, { method: 'POST' })
   assert.ok(resumed.status >= 400, `resume refuses a retired session: ${resumed.status} ${resumed.text}`)
   assert.match(String(resumed.body?.error ?? resumed.text), /retired|worktree/i, 'the refusal names the reason')
-  assert.equal(existsSync(join(dirname(rec), 'launch.sh')), false, 'no launch script was regenerated for it')
+  assert.equal(existsSync(script) ? statSync(script).mtimeMs : null, before, 'resume regenerated no launch script for a retired session')
+  assert.equal(readFileSync(rec, 'utf8'), frozen, 'the refused resume left the record untouched')
 
   const closed = await jsonRequest(`/api/sessions/${id}/close`, { method: 'POST' })
   assert.equal(closed.status, 200, `a retired session is still closable: ${closed.text}`)

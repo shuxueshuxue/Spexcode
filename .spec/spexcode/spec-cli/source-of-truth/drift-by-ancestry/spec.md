@@ -27,8 +27,8 @@ commits sit on parallel branches", so any position compare silently under-report
 isn't chronological: back-dated or long-lived branches merged in, cherry-picks, and hardest of all
 **adoption**, where a spec tree is back-extracted onto an existing history. The [[source-of-truth]]
 walk therefore preserves the DAG question itself: ordinary histories use the cached `git log HEAD`
-parent edges and in-memory reachability, while a large name-stream delegates the same reachability and
-governed path windows to Git's commit graph with bounded path caches. Neither mode changes the ancestry
+parent edges and in-memory reachability, while a large name-stream reads HEAD's reachable commit ids once
+and delegates only governed path windows to Git's commit graph with bounded path caches. Neither mode changes the ancestry
 verdict, and both avoid a per-node history walk, so "scale with history, not node count" still holds. The same one rule feeds
 every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.

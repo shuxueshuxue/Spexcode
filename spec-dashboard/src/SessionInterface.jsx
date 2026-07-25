@@ -218,13 +218,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // are identical on either side. A shelved session keeps its real zone; it is simply filed elsewhere.
   const [showShelf, setShowShelf] = useState(false)
   const { live: liveSessions, archived: shelved } = useMemo(() => splitArchived(sessions), [sessions])
-  // @@@ the archive view cannot outlive its contents ([[archive]]). Anything that can TURN IT ON — the human's
-  // star, or the effect below following a selection — reads a board snapshot, and a snapshot can be stale: the
-  // board serves the pre-write value for a beat after a record flips, and a session can also be restored from
-  // the CLI or another tab while you are looking at it. Without this the view LATCHES: the star stays lit over
-  // an empty list while the session sits in the working set, and nothing in the UI ever corrects it. Deriving
-  // the view instead of trusting the flag makes that state unreachable rather than merely unlikely.
-  const viewingShelf = showShelf && shelved.length > 0
+  // @@@ the human's toggle is authoritative ([[archive]]). An earlier version derived this view away when the
+  // archive was empty, and made the star inert to match — which produced a permanently-visible control that
+  // silently did nothing, the exact "why did clicking do nothing?" the human hit. The trap the derivation was
+  // guarding against was never the EMPTY ROOM; it was a DEAD EXIT: an effect could open the view off a stale
+  // board snapshot, and with the star not responding there was no way back. Keep the star working and an empty
+  // archive is somewhere you can simply leave, so the view can just be what the human asked for.
+  const viewingShelf = showShelf
   const listed = viewingShelf ? shelved : liveSessions
   const forest = useMemo(() => sessionForest(listed, (id) => expanded.has(id), {
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
@@ -749,12 +749,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
-            {/* permanent, so the archive is discoverable before you have put anything in it — but inert while
-                it is empty: an empty room is not a place to walk into, and that is the state the human got
-                stranded in. The absent count already says there is nothing behind it. */}
+            {/* permanent AND always live — a control that is visible but does nothing reads as broken, and a
+                door you cannot open is worse than an empty room you can walk out of. The count is absent at
+                zero; opening it there shows the empty state rather than swallowing the press. */}
             <button type="button" className={viewingShelf ? 'si-pill shelf on' : 'si-pill shelf'}
               aria-pressed={viewingShelf}
-              disabled={!shelved.length}
               data-tip={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
               aria-label={viewingShelf ? t('session.shelfHide') : t('session.shelfShow')}
               onClick={() => setShowShelf((v) => !v)}>
@@ -768,6 +767,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
+          {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
             // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present

@@ -67,12 +67,13 @@ scenarios:
   - name: no-typescript-errors
     tags: [cli]
     description: >
-      Same fixture with an anchored .ts entry, but the host repo has NO resolvable typescript
-      (nothing on the node_modules walk-up). Run `spex spec lint`.
+      Same fixture with an anchored .ts entry, but the governed host repo does not provide a usable
+      typescript. Run the production-installed `spex spec lint`.
     expected: >
-      An `integrity` ERROR states the ts-ast extractor cannot run and spells the repair — run
-      'npm i -D typescript' or remove the #anchor; exit 1. No silent pass and no regex downgrade:
-      the JS family's designated extractor is ts-ast only.
+      Lint completes without throwing and emits an explicit extractor-unavailable `integrity` ERROR
+      naming the ts-ast repair — install typescript in the host repo or remove the #anchor; exit 1.
+      JS-family anchors are reported unverified and skipped (the error is not an anchor pass); there is
+      no regex downgrade, and the remaining lint rules still run.
   - name: python-qualified-anchors
     tags: [cli]
     test:

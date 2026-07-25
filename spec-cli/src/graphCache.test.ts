@@ -9,6 +9,8 @@ const project = mkdtempSync(join(tmpdir(), 'spex-graph-cache-'))
 const home = mkdtempSync(join(tmpdir(), 'spex-graph-cache-home-'))
 const bin = mkdtempSync(join(tmpdir(), 'spex-graph-cache-bin-'))
 const trigger = join(bin, 'hang')
+const permitTrigger = join(bin, 'permit-hang')
+const permitRelease = join(bin, 'permit-release')
 const shim = join(bin, 'git')
 const argvLog = join(bin, 'argv.log')
 const pidLog = join(bin, 'pids.log')
@@ -32,6 +34,9 @@ if [ -e "${trigger}" ]; then
     fi
   done
 fi
+if [ -e "${permitTrigger}" ]; then
+  while [ ! -e "${permitRelease}" ]; do sleep 0.02; done
+fi
 exec "${realGit}" "$@"
 `)
 chmodSync(shim, 0o755)
@@ -48,6 +53,9 @@ const cache = await import('./graphCache.js')
 const graph = await import('./graph.js')
 const git = await import('./git.js')
 
+// Production graph-cache always lives behind a referenced server socket. Keep the fixture at that same
+// lifecycle altitude so its deliberately-unref'ed background-start timer can run before test teardown.
+const backendLifetime = setInterval(() => {}, 60_000)
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 function descendants(root: number): number[] {
   const out: number[] = []
@@ -109,7 +117,39 @@ test('dirty stale readers are immediate while one fresh flight owns completion',
   assert.ok(after.historyRoots <= 1 && after.driftRoots <= 1, `fixture root slots grew: ${JSON.stringify(after)}`)
 })
 
+test('one graph build bounds git spawn fanout and abort removes queued work', { concurrency: false }, async () => {
+  rmSync(trigger, { force: true })
+  rmSync(permitRelease, { force: true })
+  writeFileSync(permitTrigger, 'hang\n')
+  const before = existsSync(argvLog) ? readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean).length : 0
+  const controller = new AbortController()
+  const calls = git.BOARD_GIT_CONCURRENCY + 7
+  const run = git.withGitAbortSignal(controller.signal, () => Promise.all(
+    Array.from({ length: calls }, () => git.gitA(['-C', project, 'rev-parse', 'HEAD'])),
+  ))
+
+  const spawnDeadline = Date.now() + 1000
+  while (shimPids().length < git.BOARD_GIT_CONCURRENCY && Date.now() < spawnDeadline) await delay(10)
+  assert.equal(shimPids().length, git.BOARD_GIT_CONCURRENCY, 'graph build spawned beyond its permit capacity')
+  await delay(100)
+  const spawned = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean).length - before
+  assert.equal(spawned, git.BOARD_GIT_CONCURRENCY, 'queued git work spawned before acquiring a permit')
+
+  controller.abort()
+  await assert.rejects(run, (error: unknown) => (error as Error)?.name === 'AbortError')
+  const reapDeadline = Date.now() + 1000
+  while (shimPids().length && Date.now() < reapDeadline) await delay(10)
+  assert.equal(shimPids().length, 0, 'abort left an active git child')
+  await delay(50)
+  const afterAbort = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean).length - before
+  assert.equal(afterAbort, git.BOARD_GIT_CONCURRENCY, 'an aborted queued waiter spawned after cancellation')
+
+  rmSync(permitTrigger, { force: true })
+  assert.ok((await git.gitA(['-C', project, 'rev-parse', 'HEAD'])).trim(), 'ordinary git remained blocked by the graph pool')
+})
+
 test.after(() => {
+  clearInterval(backendLifetime)
   rmSync(project, { recursive: true, force: true })
   rmSync(home, { recursive: true, force: true })
   rmSync(bin, { recursive: true, force: true })

@@ -104,7 +104,7 @@ export async function clientEvals(id: string): Promise<EvalsResult> {
     }
     if (!changed) return { ok: true, model: { ...first!, id, items } }
   }
-  throw new BackendError(`session eval pages changed while reading ${id}; retry the command`)
+  throw new BackendError(`session eval pages changed while fetching ${id}; retry the command`)
 }
 
 // POST /api/sessions/:id/merge — the cockpit's merge DISPATCH (200 {dispatched:true} / 409 {reason}).

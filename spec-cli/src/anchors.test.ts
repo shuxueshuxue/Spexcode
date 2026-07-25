@@ -13,6 +13,7 @@ import { parseRelation, anchorHitCommits, tsAstExtractor } from './anchors.js'
 // names exactly the selectors whose units its hunks intersected.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
+const ROOT = join(SRC, '..', '..')
 
 // ---- parseRelation: grouping + structural problems (pure, no fs) ----
 
@@ -68,6 +69,28 @@ test('a selector on a glob is a loud problem (a selector scopes ONE real file)',
   assert.match(r.problems[0], /glob/)
 })
 
+// ---- ts-ast readiness: governed repository -> loud unverified skip ----
+
+test('ts-ast resolves the governed repository typescript', () => {
+  const x = tsAstExtractor(ROOT)
+
+  assert.equal(x.ready(), true)
+  assert.deepEqual(x.extract('export function applyRate() {\n  return 1\n}\n', 'src/calc.ts'), [
+    { name: 'applyRate', kind: 'function', start: 1, end: 3 },
+  ])
+})
+
+test('ts-ast reports a loud unverified skip without throwing when the governed repository has no typescript', () => {
+  const adopter = mkdtempSync(join(tmpdir(), 'spex-adopter-no-ts-'))
+  const x = tsAstExtractor(adopter)
+
+  let ready: ReturnType<typeof x.ready>
+  assert.doesNotThrow(() => { ready = x.ready() })
+  assert.notEqual(ready!, true, 'missing extractors must never be reported as ready')
+  assert.match(ready! as string, /JS-family anchors were skipped and remain unverified/)
+  assert.match(ready! as string, /npm i -D typescript@5/)
+})
+
 // ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----
 
 function gitAvailable(): boolean {
@@ -95,7 +118,7 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
   writeFileSync(join(root, 'src/x.ts'), 'export function f( {{{\n')
   g('add', '-A'); g('commit', '-qm', 'c5'); const c5 = g('rev-parse', 'HEAD')
 
-  const x = tsAstExtractor(SRC) // resolves the host typescript from this package, content comes from the fixture's git
+  const x = tsAstExtractor(ROOT) // resolves this governed repo's TypeScript; content comes from the fixture's git
   const hits = await anchorHitCommits(root, [c2, c3, c4, c5], 'src/x.ts', ['f', 'g'], x)
   assert.deepEqual(hits.map((h) => ({ commit: h.commit, selectors: h.selectors, unparseable: !!h.unparseable })), [
     { commit: c2, selectors: ['f'], unparseable: false },

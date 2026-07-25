@@ -71,13 +71,16 @@ scenarios:
   - name: board-command-parity
     tags: [frontend-e2e, desktop]
     description: >-
-      Across working, review, done, offline, and queued sessions compare toolbar tools with Command Box board
-      rows. Trigger Command Box, merge, relaunch, stop, close, and eval through each available surface.
+      Across working, review, done, offline, queued, and ARCHIVED sessions compare toolbar tools with Command
+      Box board rows. Trigger Command Box, merge, relaunch, stop, archive/unarchive, close, and eval through
+      each available surface.
     expected: >-
       One registry decides availability, icon, color, accessible label, and action. Command Box is the stable
-      resident right-edge tool while live; merge/relaunch sit to its left as applicable. Stop and close remain
-      Command Box-only typed verbs; Eval is a permanent anchor plus `/eval`. Offline and queued sessions cannot
-      open Command Box, and no `/type` or type tool exists.
+      resident right-edge tool while live; merge/relaunch sit to its left as applicable. Stop, close, and the
+      archive pair remain Command Box-only typed verbs with no toolbar twin; of `/archive` and `/unarchive`
+      exactly ONE is ever offered, keyed on `archived` alone and never on lifecycle or liveness ([[archive]]).
+      Eval is a permanent anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no
+      `/type` or type tool exists.
   - name: modifier-arrows-switch-sessions
     tags: [frontend-e2e, desktop]
     description: >-
@@ -151,10 +154,12 @@ scenarios:
   - name: row-context-and-external-reveal
     tags: [frontend-e2e, desktop]
     description: >-
-      Right-click a nested session row, exercise lock/rename/select/attach/close availability, then open a session
-      hidden below collapsed ancestors from the graph node menu and an originator chip.
+      Right-click a nested session row, exercise lock/rename/select/attach/archive/close availability, then open
+      a session hidden below collapsed ancestors from the graph node menu and an originator chip.
     expected: >-
-      The shared context menu exposes state-appropriate actions without stealing terminal focus. External opens
+      The shared context menu exposes state-appropriate actions without stealing terminal focus: archive names
+      the move OUT of the row's current state (one item, never a pair) and acts with no confirm, while close
+      keeps its confirm — the prompt is earned by destroying work, not by being a right-click. External opens
       unfold every present ancestor, reveal and select the row, and keep URL/session identity synchronized.
   - name: session-window-remains-bounded
     tags: [frontend-e2e, desktop]

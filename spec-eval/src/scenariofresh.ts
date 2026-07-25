@@ -238,6 +238,7 @@ async function oidAtAsync(root: string, rev: string, path: string): Promise<stri
   return oid
 }
 
+
 export async function primeScenarioBlocksAt(root: string, revs: string[], path: string): Promise<void> {
   for (const rev of revs) {
     const oid = await oidAtAsync(root, rev, path)

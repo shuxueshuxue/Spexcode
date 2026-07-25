@@ -1,20 +1,26 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { mkdtempSync, writeFileSync, copyFileSync, chmodSync } from 'node:fs'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 
-// The session-stamp hook (templates/hooks/prepare-commit-msg) runs on EVERY commit in EVERY repo it is
-// installed in, under whatever env the shell happens to carry. A codex session injects CODEX_THREAD_ID into
-// every command it spawns, so an ordinary repo routinely inherits a thread id that matches NO record in that
-// repo's project store — that lookup must be a clean no-op, not an abort: the alias grep|head runs under the
-// hook's `set -euo pipefail`, and a bare no-match assignment killed the hook (and the commit, exit 1 with no
-// message — `--no-verify` does not skip prepare-commit-msg). These tests drive the REAL template through
-// real `git commit`s.
+// The session-stamp hook (templates/hooks/prepare-commit-msg) writes the `Session:` trailer from
+// SPEXCODE_SESSION_ID and nothing else. That variable is not "whatever the shell happens to carry": a session
+// launch bakes it in after stripping every inherited identity, a codex thread has it injected per thread at
+// thread/start, and processes belonging to no single session (the shared app-server) are spawned without it —
+// so being present already means belonging. github#76 was that invariant missing, not this read being naive:
+// a daemon outlived its session and handed its id to strangers' commits.
+// These tests drive the REAL template through real `git commit`s.
 
 const HOOK_TEMPLATE = fileURLToPath(new URL('../templates/hooks/prepare-commit-msg', import.meta.url))
+
+function bareEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  for (const v of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[v]
+  return env
+}
 
 function gitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'spex-stamp-'))
@@ -24,109 +30,69 @@ function gitRepo(): string {
   const hook = join(dir, '.git', 'hooks', 'prepare-commit-msg')
   copyFileSync(HOOK_TEMPLATE, hook)
   chmodSync(hook, 0o755)
+  writeFileSync(join(dir, 'seed'), 'seed')
+  execFileSync('git', ['-C', dir, 'add', '-A'])
+  execFileSync('git', ['-C', dir, 'commit', '-qm', 'seed'], { env: bareEnv() })
   return dir
 }
 
-// the hook's own store derivation: <SPEXCODE_HOME>/projects/<dirname(abs git-common-dir), [/.] → ->
-function projectStore(home: string, repo: string): string {
-  const gcd = execFileSync('git', ['-C', repo, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
-  return join(home, 'projects', dirname(gcd).replace(/[/.]/g, '-'))
-}
-
-function writeRecord(store: string, recordId: string, harnessSessionId: string): void {
-  const dir = join(store, 'sessions', recordId)
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'session.json'), JSON.stringify({
-    session_id: recordId, governed: true, harness: 'codex', harness_session_id: harnessSessionId,
-  }, null, 2))
-}
-
-// child env: strip the session vars this test process itself may have inherited (a claude- or
-// codex-launched runner), then overlay the case's own.
-function commitEnv(home: string, extra: Record<string, string>): NodeJS.ProcessEnv {
-  const env = { ...process.env }
-  delete env.CLAUDE_CODE_SESSION_ID
-  delete env.CODEX_THREAD_ID
-  delete env.SPEXCODE_SESSION_ID
-  delete env.SPEXCODE_HOME
-  return { ...env, SPEXCODE_HOME: home, ...extra }
-}
-
 let n = 0
-function commit(repo: string, env: NodeJS.ProcessEnv, args: string[] = [], message = `c${++n}`) {
+function commit(repo: string, extra: Record<string, string>, args: string[] = [], message = `c${++n}`) {
   writeFileSync(join(repo, 'f.txt'), `content ${n} ${Math.random()}`)
   execFileSync('git', ['-C', repo, 'add', 'f.txt'])
-  return spawnSync('git', ['-C', repo, 'commit', ...args, '-m', message], { env, encoding: 'utf8' })
+  return spawnSync('git', ['-C', repo, 'commit', ...args, '-m', message], { env: { ...bareEnv(), ...extra }, encoding: 'utf8' })
 }
 
-function lastMessage(repo: string): string {
-  return execFileSync('git', ['-C', repo, 'log', '-1', '--format=%B'], { encoding: 'utf8' })
-}
+const lastMessage = (repo: string) => execFileSync('git', ['-C', repo, 'log', '-1', '--format=%B'], { encoding: 'utf8' })
 
-test('unmatched inherited CODEX_THREAD_ID is a clean no-op — commit succeeds, no Session trailer', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
+test('the session id the launch injected becomes the trailer, verbatim', () => {
   const repo = gitRepo()
-  const env = commitEnv(home, { CODEX_THREAD_ID: 'thread-foreign' })
-
-  // shape 1: no sessions dir at all (the glob never expands — grep exit 2)
-  let r = commit(repo, env, ['--no-verify'])
+  const r = commit(repo, { SPEXCODE_SESSION_ID: 'rec-mine' })
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.doesNotMatch(lastMessage(repo), /^Session:/im)
-
-  // shape 2: the store HAS records, none carrying this thread id (grep no-match — exit 1)
-  writeRecord(projectStore(home, repo), 'rec-other', 'thread-other')
-  r = commit(repo, env, ['--no-verify'])
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  const msg = lastMessage(repo)
-  assert.doesNotMatch(msg, /^Session:/im)          // no empty trailer,
-  assert.ok(!msg.includes('thread-foreign'))       // no foreign thread id,
-  assert.ok(!msg.includes('rec-other'))            // no stranger record either
+  assert.match(lastMessage(repo), /^Session: rec-mine$/m)
 })
 
-test('matched alias stamps the RECORD id, never the raw thread id', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
+test('no session id, no trailer — and the commit still succeeds', () => {
   const repo = gitRepo()
-  writeRecord(projectStore(home, repo), 'rec-B', 'thread-B')
-  const r = commit(repo, commitEnv(home, { CODEX_THREAD_ID: 'thread-B' }))
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  const msg = lastMessage(repo)
-  assert.match(msg, /^Session: rec-B$/m)
-  assert.ok(!msg.includes('thread-B'))
+  // --no-verify does NOT skip prepare-commit-msg, and the hook runs under `set -euo pipefail`: a missing id
+  // must be a clean no-op, never an abort that takes the commit with it.
+  for (const args of [[], ['--no-verify']]) {
+    const r = commit(repo, {}, args)
+    assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+    assert.doesNotMatch(lastMessage(repo), /^Session:/im)
+  }
 })
 
-test('a record keyed directly by the thread id stamps that id', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
+test('a harness\'s own conversation id is not an attribution channel', () => {
   const repo = gitRepo()
-  writeRecord(projectStore(home, repo), 'thread-direct', 'thread-direct')
-  const r = commit(repo, commitEnv(home, { CODEX_THREAD_ID: 'thread-direct' }))
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.match(lastMessage(repo), /^Session: thread-direct$/m)
-})
-
-test('claude stamping is untouched: CLAUDE_CODE_SESSION_ID is the record id, stamped directly', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
-  const repo = gitRepo()
-  // even alongside a foreign CODEX_THREAD_ID — claude's exported id wins the precedence
-  const r = commit(repo, commitEnv(home, { CLAUDE_CODE_SESSION_ID: 'claude-rec', CODEX_THREAD_ID: 'thread-foreign' }))
-  assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.match(lastMessage(repo), /^Session: claude-rec$/m)
+  // CODEX_THREAD_ID / CLAUDE_CODE_SESSION_ID are the harness's bookkeeping for its own conversation, not the
+  // governed record id — a thread id in a commit message links to nothing. Every governed context carries
+  // SPEXCODE_SESSION_ID; a context that does not is not a governed session.
+  for (const extra of [{ CODEX_THREAD_ID: '019f97c0-a5ef-70d2-9c21-df2161e3005c' }, { CLAUDE_CODE_SESSION_ID: 'some-claude-conversation' }] as Record<string, string>[]) {
+    const r = commit(repo, extra)
+    assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
+    const msg = lastMessage(repo)
+    assert.doesNotMatch(msg, /^Session:/im)
+    assert.ok(!msg.includes('019f97c0') && !msg.includes('some-claude-conversation'))
+  }
 })
 
 test('an existing Session: trailer is left alone — no restamp, no duplicate', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
   const repo = gitRepo()
-  const env = commitEnv(home, { CLAUDE_CODE_SESSION_ID: 'claude-rec' })
-  const r = commit(repo, env, [], 'explicit\n\nSession: hand-set')
+  const r = commit(repo, { SPEXCODE_SESSION_ID: 'rec-mine' }, [], 'explicit\n\nSession: hand-set')
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
   const msg = lastMessage(repo)
   assert.match(msg, /^Session: hand-set$/m)
   assert.equal(msg.match(/^Session:/gim)?.length, 1)
 })
 
-test('no session env at all is the plain no-op', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spexhome-'))
+test('the trailer joins an existing trailer block instead of opening a new paragraph', () => {
   const repo = gitRepo()
-  const r = commit(repo, commitEnv(home, {}))
+  // git parses ONLY the last paragraph as trailers, so an appended paragraph would demote `spex ack`'s
+  // Spec-OK to body prose.
+  const r = commit(repo, { SPEXCODE_SESSION_ID: 'rec-mine' }, [], 'ack: Spec-OK sessions\n\nSpec-OK: sessions')
   assert.equal(r.status, 0, `commit failed: ${r.stderr}${r.stdout}`)
-  assert.doesNotMatch(lastMessage(repo), /^Session:/im)
+  const trailers = execFileSync('git', ['-C', repo, 'log', '-1', '--format=%(trailers:only,valueonly)'], { encoding: 'utf8' })
+  assert.match(trailers, /sessions/)
+  assert.match(trailers, /rec-mine/)
 })

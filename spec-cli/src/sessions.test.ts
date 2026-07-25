@@ -147,16 +147,18 @@ test('a launch failure the harness itself called settled is attempted exactly on
     const stub = join(home, `${name}.sh`)
     writeFileSync(stub, `echo x >> ${JSON.stringify(counter)}\n${stubBody}\nexit 1\n`)
     const script = launchScript(name, '', claudeHarness, `bash ${stub}`)
-    // remain-on-exit keeps the dead pane readable so the assertions can see what the window showed.
-    execFileSync('tmux', ['-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80', 'bash', script])
-    execFileSync('tmux', ['-L', sock, 'set-option', '-t', name, 'remain-on-exit', 'on'])
+    // exactly how the product starts a worker: an idle shell window, then the launch line typed into it. The
+    // shell outlives the script, so the pane keeps everything the run printed — no remain-on-exit race.
+    execFileSync('tmux', ['-L', sock, 'new-session', '-d', '-s', name, '-x', '200', '-y', '80'])
+    execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, '-l', '--', `bash ${script}`])
+    execFileSync('tmux', ['-L', sock, 'send-keys', '-t', name, 'Enter'])
     const deadline = Date.now() + 60_000
+    let pane = ''
     for (;;) {
-      const dead = spawnSync('tmux', ['-L', sock, 'list-panes', '-t', name, '-F', '#{pane_dead}'], { encoding: 'utf8' }).stdout?.trim()
-      if (dead === '1' || Date.now() > deadline) break
+      pane = spawnSync('tmux', ['-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name], { encoding: 'utf8' }).stdout ?? ''
+      if (/not retrying/.test(pane) || /attempt 3/.test(pane) || Date.now() > deadline) break
       spawnSync('sleep', ['0.5'])
     }
-    const pane = spawnSync('tmux', ['-L', sock, 'capture-pane', '-p', '-S', '-400', '-t', name], { encoding: 'utf8' }).stdout ?? ''
     execFileSync('tmux', ['-L', sock, 'kill-session', '-t', name])
     return { attempts: readFileSync(counter, 'utf8').split('\n').filter(Boolean).length, pane }
   }

@@ -475,7 +475,14 @@ export async function reportHeadlessTurnExit(id: string, harness: string, code: 
 export function headlessTurnFailureShell(harness: string, swallow = true): string {
   return `${shQuote(SPEX)} internal session-turn-fail "$SPEXCODE_SESSION_ID" ${shQuote(harness)} "$__spex_rc"${swallow ? ' || true' : ''}`
 }
-export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
+// @@@ sessionIdentityEnvVars - every environment variable that names ONE session: the launch-injected record
+// id plus each adapter's own `sessionEnvVar`. Adapter-derived, so a new harness needs no edit here. A
+// per-session process is entitled to carry them; a SHARED, project-scoped daemon must not — see the app-server
+// spawn below.
+export function sessionIdentityEnvVars(): string[] {
+  return [...new Set(['SPEXCODE_SESSION_ID', ...HARNESSES.map((h) => h.sessionEnvVar)])].filter(Boolean)
+}
+export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -528,8 +535,15 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: 
     // removed, the daemon's cwd becomes a DELETED dir, and codex then fails EVERY new thread's config load with
     // `failed to load configuration: No such file or directory` — bricking codex launch for the whole project
     // until the daemon is killed. Running it from "$dir" (which never gets deleted) makes it deletion-proof.
+    // For the SAME reason it must carry no session IDENTITY: it is started by whichever session happened to
+    // launch first and then serves every later thread, whose tool shells inherit its env — so a baked
+    // SPEXCODE_SESSION_ID (or any adapter's `sessionEnvVar`) is a stale lie for every session but one, and
+    // still a lie after that session closes and its record is swept (measured: daemons here running for days
+    // under a long-gone session's id). Everything downstream that resolves identity from the env then
+    // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
+    // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
     // exec so $! is the daemon itself; </dev/null detaches its stdin from the pane so it can't fight the TUI.
-    `  ( cd "$dir" && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
+    `  ( cd "$dir" && unset ${sessionIdentityEnvVars().join(' ')} && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
@@ -559,7 +573,11 @@ export function codexLaunchCommand(_id: string, codexCmd = 'codex', serverCmd?: 
     ]),
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
-    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`] : []),
+    // The visible TUI is the OTHER entry point that creates an execution context for this session (a fresh
+    // launch attaches to the thread codex-launch just made; a reopen resumes an existing one), so it injects
+    // the same per-thread identity through codex's own `-c` override. Same rule, both entry points: whoever
+    // creates a context stamps that context's record id, and nothing downstream re-derives it.
+    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} -c ${shQuote(`shell_environment_policy.set.SPEXCODE_SESSION_ID=${id}`)} --remote unix://"$sock" resume "$tid"`] : []),
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -669,7 +687,20 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 // carries the new thread id (`result.thread.id`). The launcher stores that id on the governed record and
 // fires the first turn; there is no capture hook and no rollout/cwd scan. Same WS framing as codexThreadId.
 // Never throws.
-export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = false): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+// @@@ codexStartThreadParams - what a BACKEND-owned thread is created with. `config` is the per-request
+// override map (the only channel that reaches a thread): `bypass_hook_trust` so our hooks run, and
+// `shell_environment_policy.set` so every command this thread spawns carries the governed record id. The
+// latter is codex's answer to a structural fact — a codex tool shell descends from the SHARED app-server, so
+// it must inherit no identity and be given its own instead (verified live: the shell reports exactly the
+// injected id, and the launcher's env leaks nothing).
+export function codexStartThreadParams(cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>): Record<string, unknown> {
+  const config = {
+    ...(bypassHookTrust ? { bypass_hook_trust: true } : {}),
+    ...(shellEnv && Object.keys(shellEnv).length ? { shell_environment_policy: { set: shellEnv } } : {}),
+  }
+  return { ...(cwd ? { cwd } : {}), ...(Object.keys(config).length ? { config } : {}) }
+}
+export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -699,8 +730,13 @@ export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = f
         // own `--remote resume` TUI client injects it. Without it the worktree's UNtrusted `.codex` config layer
         // stays disabled → no local hooks discovered → no Stop gate. Only on the bypass path (older codex without
         // the flag uses writeCodexTrust's hash and never sees this key).
-        const params = { ...(cwd ? { cwd } : {}), ...(bypassHookTrust ? { config: { bypass_hook_trust: true } } : {}) }
-        return send({ id: 2, method: 'thread/start', params })
+        // The same override map carries the thread's IDENTITY. A codex tool shell is spawned by the SHARED
+        // app-server, so it can inherit no session id — and must not, that leak was github#76. Codex's own
+        // `shell_environment_policy.set` injects vars into every command THIS thread spawns, so the backend
+        // stamps the governed record id there at thread creation, the same moment and the same knowledge with
+        // which a claude launch bakes it into its agent's env. Identity then arrives per-thread, needing no
+        // alias, no store lookup, and no cwd anywhere downstream.
+        return send({ id: 2, method: 'thread/start', params: codexStartThreadParams(cwd, bypassHookTrust, shellEnv) })
       }
       if (m.id === 2 && m.result) {
         const tid = (m.result as { thread?: { id?: string } })?.thread?.id

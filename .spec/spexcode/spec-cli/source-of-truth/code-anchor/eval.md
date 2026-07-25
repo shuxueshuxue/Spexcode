@@ -102,7 +102,7 @@ scenarios:
     tags: [cli]
     test:
       path: spec-cli/src/anchors.test.ts
-      name: historical unit memo keys filename semantics when same bytes share one blob
+      name: historical extractor memo stays stable across order and same-process repetition
     description: >
       In a fixture repository, two anchored files with identical bytes and blob ids use `.ts` and `.tsx`
       script kinds. Run historical anchor queries in both orders and repeat both queries in the same process.

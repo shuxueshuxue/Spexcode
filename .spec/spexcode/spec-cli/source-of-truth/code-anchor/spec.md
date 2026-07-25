@@ -135,8 +135,12 @@ diagnostic naming the extractor and repair), skips JS-family anchor extraction, 
 remaining checks; the non-zero result is a non-verification signal (never a silent or falsely passing
 anchor result), and the process does not throw. Other languages arrive as DATA rows to a generic engine (the heuristic
 declaration/boundary patterns today; a row may carry whatever config its engine needs — e.g. a
-tree-sitter grammar — so adding a language never adds a branch). Everything language-agnostic — blob-oid
-memoization, dead/ambiguous resolution, hunk∩range — lives outside the seam. Git access stays
+tree-sitter grammar — so adding a language never adds a branch). Everything language-agnostic — immutable
+file-revision memoization, dead/ambiguous resolution, hunk∩range — lives outside the seam. A memo key
+includes every input to the pure extractor: object-hash algorithm and blob oid, filename semantics
+(including script kind), extractor/schema identity, host parser identity, and normalized parser configuration;
+same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, and the result is independent
+of call order. Git access stays
 batch/short-lived; no resident process.
 
 Python is one such data row, designated for `.py` and `.pyi`. Its structural vocabulary is ordinary

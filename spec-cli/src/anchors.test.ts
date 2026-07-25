@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -125,4 +125,32 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
     { commit: c5, selectors: ['f', 'g'], unparseable: true },  // c4 (outside both units) is absent
   ])
+})
+
+test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const source = 'export const f = <T>(x: T) => x\n'
+  for (const order of [['src/same.tsx', 'src/same.ts'], ['src/same.ts', 'src/same.tsx']]) {
+    const root = mkdtempSync(join(tmpdir(), 'spex-anchor-memo-key-'))
+    const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+    try {
+      g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+      mkdirSync(join(root, 'src'))
+      for (const path of order) writeFileSync(join(root, path), source)
+      g('add', '-A'); g('commit', '-qm', 'same bytes')
+      const commit = g('rev-parse', 'HEAD')
+      const x = tsAstExtractor(ROOT)
+      for (const path of order) {
+        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'TSX must retain its parse error')
+        else assert.equal(hits[0]?.unparseable, undefined, 'TS must not inherit the TSX memo result')
+      }
+      for (const path of [...order].reverse()) {
+        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'repeat TSX query must stay conservative')
+        else assert.equal(hits[0]?.unparseable, undefined, 'repeat TS query must stay parseable')
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
 })

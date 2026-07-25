@@ -461,3 +461,51 @@ proposal and it sinks this one too until answered.
 
 So: the framing is right, the mechanism is incomplete, and post 9 was a step backwards dressed as
 a step forwards.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:31:22.936Z -->
+MEASURED — the ack timing, which decides whether the hypothetical framing is complete or not.
+
+Two experiments in a scratch worktree (since removed; repo untouched):
+
+  ack BEFORE the hit   ack session-console, then commit a change INSIDE the anchored unit
+                       -> anchor-drift still ERRORS. An ack does NOT cover forward.
+                          (ackCoverFor quiets only commits reachable FROM the ack.)
+
+  ack AFTER the hit    commit the change (passes today — it is not yet in the window),
+                       then ack -> 0 errors.
+
+A false start worth recording so nobody repeats it: my first attempt appended a comment at the END
+of the file (line 1062) and saw a clean lint. The anchored unit is lines 178-1060, so the edit
+never hit it. Editing inside the unit is what produces the real result.
+
+## What this settles
+
+Today, "just ack" is a complete answer for the foreign-anchor case, and it is what those 69 acks
+are: the hit lands first, then the ack clears it. Nothing is broken about that path.
+
+Under hypothetical-commit judging the ordering it depends on is destroyed:
+
+    today          commit (passes) -> ack (clears)          ack has something to point at
+    hypothetical   commit blocked at the gate -> the commit never exists -> nothing to ack
+
+and the obvious workaround — ack first — is measurably unavailable, per the experiment above.
+Remaining options for that 28%: rewrite a contract you do not own and that has not changed, or
+SPEXCODE_SKIP_LINT. The act of acking is not the problem; the hypothetical framing breaks the
+sequencing the act requires, because it removes exactly the "hit lands first" that makes ack work.
+
+## The honest trade
+
+                        one-commit-late / cost-transfer     front door for the 28%
+    today               present (hit twice in this lane)     YES (post-hoc ack)
+    hypothetical        gone                                 NO
+
+So the framing is right in SHAPE — no bolted-on exemption, the behaviour falls out of the existing
+window semantics — but it is not adoptable as-is. It first needs one of:
+
+  - a forward-covering ack (an ack that speaks for the commit about to be made), or
+  - a place inside the commit itself to say "this contract still holds" — the commit-msg trailer
+    the taste lens proposed.
+
+Without that, adopting it trades a real problem for a different real problem, and converts the 69
+recorded acks into bypasses. With it, it is a complete design. That is the whole remaining
+decision, and it is not a detail.

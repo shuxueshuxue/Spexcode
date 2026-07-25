@@ -31,8 +31,11 @@ the backend's `codex-launch` has completed `thread/start` for that worktree. The
 checkout (`dirname` of the shared git **common** dir), which resolves identically from main or any linked
 worktree — so the board (running at main) and a hook (running in a worktree) compute the **same** dir; resolving
 it from `git rev-parse --show-toplevel` would not (in a worktree that is the worktree). The record itself is
-`session.json`, written one-field-per-line with every key always present, so the pure-shell hot-path hook
-(mark-active) value-replaces `status`/`proposal`/`note` with a single sed and never needs jq. Keying by
+`session.json`, written one-field-per-line with every key always present — which is what lets the pure-shell
+hot-path hook (mark-active) READ it with exact-line greps and no jq: "already `active`, with nothing stale to
+clear?" is the common every-tool answer and costs no spawn. Every WRITE, including that hook's own, goes
+through the single structured writer ([[sessions-core]]); no hook ever edits the file's text, because a note is
+arbitrary prose and a substituting writer eventually meets a quote and destroys the record. Keying by
 session_id, not worktree path, is deliberate: it keeps the worktree **completely clean** (zero SpexCode files —
 the launcher products live in the store too, see [[runtime]]) AND gives EACH agent its own record, so a user may
 run several claude/codex in one folder without their states clobbering (a path key could not). The board
@@ -166,10 +169,11 @@ the governed record, then fires the first prompt. The global record path is proj
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
 record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board
-to feed, so the Stop gate must NOT misfire its declare-demand. mark-active edits the record directly in shell (the
-hot path stays jq-free); the non-hot writers (idle/StopFailure, and the Stop gate's auto-declare) shell to `spex
-session … --session <id>` so the TS layer owns the JSON — they pass the id explicitly because there is no worktree
-`.session` to fall back on. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
+to feed, so the Stop gate must NOT misfire its declare-demand. EVERY one of them — mark-active included — shells to
+`spex session … --session <id>` to write, so the TS layer owns the JSON; they pass the id explicitly because there is
+no worktree `.session` to fall back on. mark-active stays cheap by reading, not by writing differently: its
+exact-line greps answer the no-op case without a spawn, and only a real state change costs one. A writer that
+refuses (an unreadable record, a retired session — [[sessions-core]]) says so instead of silently repairing it. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
@@ -207,8 +211,11 @@ the same session repeat none of it (the rule was taught; a verbatim repeat on ev
 field-reported irritation). Trimming stays the author's informed choice — never a silent loss — and like every
 echo addendum the notice is a nudge riding the confirmation, not a gate.
 
-A declaration that cannot find its record **diagnoses itself** instead of answering a bare "no session
-record". The store resolves from the **current directory** (the cwd's git common dir), so the classic failure
+A record that EXISTS but cannot carry state is a different answer from a missing one, and the writer must not
+blur them: an unreadable `session.json` or a retired session (worktree gone) is refused with that reason and
+its repair — never the wrong-cwd diagnosis below, which would send the author hunting a directory that is fine
+([[sessions-core]]). A declaration that genuinely cannot find its record **diagnoses itself** instead of
+answering a bare "no session record". The store resolves from the **current directory** (the cwd's git common dir), so the classic failure
 is declaring from outside the session's project — and the message must say so: it names the cwd, distinguishes
 the actual situations (cwd not a git repository at all — which must never surface as a raw git stack trace —
 cwd in a project with no sessions, a store found here that lacks the id, or no session id resolvable from env

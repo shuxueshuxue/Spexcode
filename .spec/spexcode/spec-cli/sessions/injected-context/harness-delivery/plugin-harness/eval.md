@@ -10,7 +10,7 @@ scenarios:
       (name spexcode + version + hooks/skills/commands/agents pointers), hooks/ (dispatch.sh + harness.sh copied
       verbatim, hooks.json binding every event to `dispatch.sh plugin <Event>` via ${CLAUDE_PLUGIN_ROOT}, the
       inject-contract.sh + its contract-context.json), and skills/commands/agents files. The contract-context.json
-      carries the guide-first surface:system contract as hookSpecificOutput.additionalContext. NO native artifacts
+      carries the surface:system contract bodies as hookSpecificOutput.additionalContext. NO native artifacts
       (CLAUDE.md block, .claude/settings.json) are written — the plugin is exclusive. The bundle dir is hidden via the per-clone exclude block.
   - name: contract-injects-as-sessionstart-additionalContext
     tags: [cli]

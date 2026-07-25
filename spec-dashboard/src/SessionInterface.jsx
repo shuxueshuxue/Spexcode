@@ -250,7 +250,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
-  const showRelaunch = !terminalFree && noLivePane && selSession?.status !== 'queued'
+  const showRelaunch = noLivePane && selSession?.status !== 'queued'
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -890,11 +890,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {[...opened].map((id) => {
                   const session = sessions.find((candidate) => candidate.id === id)
                   const headless = isHeadlessSession(session)
+                  const visible = id === active && !showRelaunch
                   return (
                     <div key={id} className="si-term-layer" style={{
                       position: 'absolute', inset: 0,
-                      visibility: id === active ? 'visible' : 'hidden',
-                      pointerEvents: id === active ? 'auto' : 'none',
+                      visibility: visible ? 'visible' : 'hidden',
+                      pointerEvents: visible ? 'auto' : 'none',
                     }}>
                       {headless
                         ? <TimelineChat s={session} sessions={sessions} active={open && id === active} />

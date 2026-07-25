@@ -34,6 +34,10 @@ Command Box keeps its session control grammar in [[command-box]]; the Issues com
 mounts the same shell with its own action row and submit. Reuse stops at this natural boundary,
 instead of growing a parameter-heavy universal message form.
 
+Textarea measurement follows the rendered box model. For a `border-box` editor the shared growth path adds
+its top and bottom borders to `scrollHeight` before clamping, so below the cap the visible client box contains
+the complete scroll box (`scrollHeight <= clientHeight`) rather than silently borrowing from bottom padding.
+
 The surface uses the dashboard's existing type and color tokens, an at-most 8px radius, and no nested card.
 It has stable width and responsive constraints so menus, long words, progress, and errors cannot resize or
 spill it. A host may dock it in document flow or suspend it over a terminal; that placement is outside the

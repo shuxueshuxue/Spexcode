@@ -40,9 +40,9 @@ scenarios:
       phone Create, type enough lines to grow beyond its floor, and press Enter while observing create requests.
     expected: >-
       Both inputs are shared ComposerTextarea instances on the one fitTextarea path. TimelineChat grows through
-      two and three lines without a scrollbar, scrolls only beyond its cap, sends on plain Enter, inserts a line
+      two and three lines with `scrollHeight <= clientHeight`, scrolls only beyond its cap, sends on plain Enter, inserts a line
       on Shift+Enter, and ignores composition Enter for sending. It remains the sole declared sink but is not
-      auto-focused on phone entry. Create grows beyond its larger floor without a scrollbar and Enter edits the
+      auto-focused on phone entry. Create grows beyond its larger floor with the same client-box invariant and Enter edits the
       long prompt without issuing a session-create request; only its launch button submits.
   - name: node-panes-one-axis
     tags: [frontend-e2e, mobile]

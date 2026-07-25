@@ -1,53 +1,86 @@
 #!/usr/bin/env bash
 # @@@ session-stamp - auto-attribute a commit to the SESSION that authored it, ACROSS HARNESSES. SpexCode
 # reads the `Session:` trailer as a version's attribution (git is the database), keyed by the SpexCode record
-# id so the dashboard's session window links to it. The authoring session is read from the TREE, not from the
-# environment: a session OWNS its worktree, so the record whose `worktree_path` IS the tree being committed in
-# is the author — a fact this hook can verify at commit time, in the same project store the board reads.
-# That makes attribution harness-agnostic (no CLAUDE_CODE_SESSION_ID / CODEX_THREAD_ID / SPEXCODE_SESSION_ID
-# tiers to keep in sync with the adapters) and, more importantly, HONEST. An env-read cannot be verified: a
-# shared harness daemon — codex's per-project app-server — outlives the session that started it and leaks that
-# session's baked SPEXCODE_SESSION_ID into every later thread's tool shell, so an env-trusting hook stamped a
-# STRANGER's id on other sessions' commits (github#76: 48 commits in this repo, and the id was untraceable
-# once that session closed and its record was swept).
-# So: no owning record → NO trailer. A commit from the main checkout, a hand-made integration worktree, or any
-# repo this store knows nothing about is left unstamped rather than attributed to a guess (merge commits are
-# not versions — `git log --numstat` skips them — so nothing downstream loses a row). An existing Session:
-# trailer is likewise left alone, so the dogfood ritual / a human can still set one explicitly.
+# id so the dashboard's session window links to it. So the question this hook answers is WHO is committing —
+# never WHERE the commit happens: a tree is where a process is standing, an accident of `cd`, and answering an
+# identity question with a location is a proxy that is merely usually right.
+#
+# The identity is in the environment, but an environment variable is only worth as much as the reason it is
+# there. Two reasons exist, and each is CHECKABLE — that is what makes the answer deterministic rather than
+# assumed:
+#   1. PER-COMMAND — the harness stamps the ACTING conversation onto every command it spawns (codex's
+#      CODEX_THREAD_ID; measured: the shared app-server itself carries none, each thread's tool shell carries
+#      its own). Such a value cannot be a leftover, so RESOLVING it against the store is the whole check. It is
+#      a thread id, not a record key, so it resolves through the record that captured it as `harness_session_id`
+#      — the mapping the backend wrote when it created the thread.
+#   2. INHERITED — the launch injects `SPEXCODE_SESSION_ID` (and claude/pi export their own id) into the agent's
+#      process, and every descendant inherits it. That is exactly how it goes stale: a process that OUTLIVES the
+#      session — codex's shared per-project app-server is the measured case, but any long-lived child qualifies —
+#      keeps handing that id to strangers (github#76: 48 commits in this repo stamped with one closed session's
+#      id). Inheritance is the disease; DESCENT is the cure: an inherited id is trusted only when this process is
+#      genuinely a descendant of that session's own registered agent process (`agent.pid`, written at launch).
+#      A leaked id fails that test — the leaking daemon is not in our ancestry — while every real worker passes,
+#      including one committing outside its own worktree (a dispatched merge in the main checkout).
+# Unresolvable, or resolvable but not ours to claim → NO trailer. An untraceable or borrowed id must never
+# reach a commit message; an absent one costs nothing (a commit without a trailer is simply unattributed).
+# An existing Session: trailer is left alone, so the dogfood ritual / a human can still set one explicitly.
 set -euo pipefail
 msg_file="$1"
 grep -qiE '^Session:[[:space:]]' "$msg_file" && exit 0
 
-# the tree being committed in, and the per-project store that knows who owns it (the store derivation mirrors
-# layout.ts runtimeRoot / harness.sh hp_runtime_dir: keyed by the project = dirname of the ABSOLUTE
-# git-common-dir, '/' and '.' → '-', so a worktree and its main checkout resolve to the SAME store).
-top=$(git rev-parse --show-toplevel 2>/dev/null) || top=""
+# the per-project store (mirrors layout.ts runtimeRoot / harness.sh hp_runtime_dir): keyed by the project
+# (dirname of the ABSOLUTE git-common-dir), '/' and '.' → '-'. This picks WHICH project's records to read —
+# the repo whose history the trailer lands in — it is not part of deciding WHO the author is.
 gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
   || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null) || gcd=""
-{ [ -n "$top" ] && [ -n "$gcd" ]; } || exit 0
+[ -n "$gcd" ] || exit 0
 rd="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
 
-# @@@ owner-scan - the record whose worktree IS this tree. One session per worktree by construction, so the
-# first match is the answer. Compared with `-ef` (same inode), not string equality: the record stores the path
-# the backend created while git reports the resolved one, and a symlinked project root or macOS `/tmp` →
-# `/private/tmp` would make two spellings of one tree look like two trees. A record whose worktree is gone
-# (closed, moved) simply never matches. Pure bash — no fork per record, and no `grep` whose no-match exit
-# would abort the hook (and the commit) under `set -euo pipefail`; an unowned tree is the ORDINARY case
-# (every repo on the box that isn't a live session's worktree), never an error.
+# an id → the record it names: the record keyed by it, else the one that captured it as `harness_session_id`
+# (the codex thread-id alias). Echoes the RECORD id, or nothing. A miss is the ORDINARY case — every repo on
+# the box inherits foreign ids from some agent's shell — so it must never abort the hook (and the commit)
+# under `set -euo pipefail`: grep's no-match (exit 1) and an absent sessions glob (exit 2) are swallowed here.
+resolve_record() {
+  [ -n "${1:-}" ] || return 0
+  [ -e "$rd/sessions/$1/session.json" ] && { printf '%s' "$1"; return 0; }
+  local hit
+  hit=$(grep -lF "\"harness_session_id\": \"$1\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1) || hit=""
+  [ -n "$hit" ] || return 0
+  hit=${hit%/session.json}
+  printf '%s' "${hit##*/}"
+}
+
+# is $1 an ancestor of this hook process? The platform difference (procfs vs ps) sits HERE, at the one seam
+# that reads a parent pid — never in the trust rule above it. Bounded walk: a pid chain is short, and pid 1
+# ends it.
+parent_of() {
+  if [ -r "/proc/$1/status" ]; then awk '/^PPid:/ { print $2; exit }' "/proc/$1/status"
+  else ps -o ppid= -p "$1" 2>/dev/null | tr -d '[:space:]'; fi
+}
+descends_from() {
+  [ -n "${1:-}" ] && [ "$1" != "0" ] && [ "$1" != "1" ] || return 1
+  local p=$$ n=0
+  while [ -n "$p" ] && [ "$p" != "0" ] && [ "$p" != "1" ] && [ "$n" -lt 64 ]; do
+    [ "$p" = "$1" ] && return 0
+    p=$(parent_of "$p") || p=""
+    n=$((n + 1))
+  done
+  return 1
+}
+
 sid=""
-for rec in "$rd"/sessions/*/session.json; do
-  [ -e "$rec" ] || break                      # the glob didn't expand: no session ever launched in this project
-  wt=""
-  while IFS= read -r line; do
-    case "$line" in
-      *'"worktree_path"'*) wt=${line#*'"worktree_path"'}; wt=${wt#*\"}; wt=${wt%%\"*}; break ;;
-    esac
-  done < "$rec"
-  if [ -n "$wt" ] && [ "$wt" -ef "$top" ]; then
-    sid=${rec%/session.json}; sid=${sid##*/}
-    break
-  fi
-done
+# 1. per-command: the acting codex thread, stamped by codex onto this very command
+[ -n "${CODEX_THREAD_ID:-}" ] && sid=$(resolve_record "$CODEX_THREAD_ID")
+# 2. inherited: a launch-injected / harness-exported id, trusted only under descent from its own agent process
+if [ -z "$sid" ]; then
+  for claimed in "${SPEXCODE_SESSION_ID:-}" "${CLAUDE_CODE_SESSION_ID:-}" "${PI_SESSION_ID:-}" "${OPENCODE_SESSION_ID:-}"; do
+    [ -n "$claimed" ] || continue
+    cand=$(resolve_record "$claimed")
+    [ -n "$cand" ] || continue
+    agent=$(cat "$rd/sessions/$cand/agent.pid" 2>/dev/null) || agent=""
+    if descends_from "$agent"; then sid=$cand; break; fi
+  done
+fi
 [ -n "$sid" ] || exit 0
 
 # Stamp via interpret-trailers (git's own sample-hook mechanism), NOT a raw printf append: appending after a

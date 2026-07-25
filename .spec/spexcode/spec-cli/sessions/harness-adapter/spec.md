@@ -392,25 +392,35 @@ interactive-CLI path share one precedence rule. Claude is
 unaffected on both: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
 the direct hit always wins and the alias step never runs.
 
-**Commit attribution reads the TREE, not the environment.** `prepare-commit-msg` (the `Session:` trailer) is
-NOT a third consumer of that precedence rule, because unlike a hook payload or a live CLI call it can VERIFY
-its answer: a session OWNS its worktree, so the record whose `worktree_path` IS the tree being committed in is
-the author — one harness-agnostic lookup in the same project store the board reads, with no adapter tiers to
-keep in sync. An environment read cannot be verified, and the environment lies: the shared per-project
-app-server (below) outlives the session that started it, so its baked `SPEXCODE_SESSION_ID` reaches every later
-thread's tool shell and an env-trusting hook stamped a STRANGER's session id onto other sessions' commits —
-untraceable once that session closed and its record was swept (measured: 48 such commits in this repo,
-github#76). Verified attribution can only be right or absent: no owning record → NO trailer, so a commit from
-the main checkout, a hand-made integration worktree, or any repo this store knows nothing about is left
-unstamped rather than attributed to a guess (that costs nothing downstream — merge commits are not versions,
-`git log --numstat` skips them). An unowned tree is the ORDINARY case, not an error, so the scan is pure shell
-with no `grep` whose no-match exit would abort the hook (and the commit) under `set -euo pipefail`; the
-fail-loud stance is reserved for genuine errors past the lookup. Ownership is compared by INODE (`-ef`), not by
-string: the record stores the path the backend created while git reports the resolved one, so a symlinked
-project root or macOS `/tmp` → `/private/tmp` must not make two spellings of one tree look like two trees. The
-stamp lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so
-an appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
-ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.
+The **commit-attribution** hook (`prepare-commit-msg`, the `Session:` trailer) is a THIRD consumer of the same
+rule, and it makes explicit what the other two assume: an id in the environment is worth only the REASON it is
+there, and each reason is CHECKABLE. That is the whole content of the rule — identity, never location. A
+commit's tree is where a process happens to be standing, so answering "who authored this" with "who owns this
+directory" is a proxy that is merely usually right; the check below is deterministic instead.
+
+- **PER-COMMAND ids** — codex stamps the ACTING thread onto every command it spawns (`CODEX_THREAD_ID`;
+  measured: the shared app-server carries none of its own, each thread's tool shell carries exactly its own).
+  Such a value cannot be a leftover, so resolving it — through the record that captured it as
+  `harness_session_id`, the mapping the BACKEND wrote at thread creation — is the entire check.
+- **INHERITED ids** — `SPEXCODE_SESSION_ID` is injected at launch, claude/pi export their own; every
+  descendant inherits them, which is exactly how they go stale. A process that OUTLIVES its session keeps
+  handing that id to strangers: codex's shared per-project app-server is the measured case (github#76 — 48
+  commits in this repo carry one closed session's id), but any long-lived child qualifies, so hardening the
+  daemon alone would not close the class. Inheritance is the disease and DESCENT is the cure: an inherited id
+  is trusted only when the claiming process is genuinely a descendant of that session's own registered agent
+  process (`agent.pid`, written at launch — [[launch]]'s birth registration). A leaked id fails, since the
+  leaking daemon is not in our ancestry; every real worker passes, INCLUDING one committing outside its own
+  worktree (a dispatched merge in the main checkout, an external lane), because who you are does not change
+  with where you stand. The platform difference in reading a parent pid (procfs vs `ps`) lives at that one
+  seam, never in the trust rule.
+
+Unresolvable, or resolvable but not ours to claim → NO trailer: an untraceable or borrowed id must never reach
+a commit message, while an absent one costs nothing. A miss is the ORDINARY case — every repo on the box
+inherits foreign ids from some agent's shell — so the lookup never aborts the hook (and the commit) under `set
+-euo pipefail`; the fail-loud stance is reserved for genuine errors past it. The stamp lands via `git
+interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an appended
+`Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex ack`'s
+`Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

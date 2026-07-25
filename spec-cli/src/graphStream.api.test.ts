@@ -443,3 +443,79 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     rmSync(fixture, { recursive: true, force: true })
   }
 })
+
+// A blinded leaf must be blind from EVERY entry point. Reconciliation is reached from the liveness poller
+// and from registry events too, so gating only the ensure pass left the per-worktree observers attaching
+// anyway — the injection reads as applied while the leaf still sees everything, which would quietly make
+// the patrol's accountability untestable.
+test('disabling the worktree leaf blinds it from every entry point', { timeout: 60_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-blind-'))
+  const project = join(fixture, 'project')
+  const spexHome = join(fixture, 'home')
+  const spec = join(project, '.spec', 'project', 'spec.md')
+  mkdirSync(dirname(spec), { recursive: true })
+  writeFileSync(spec, [
+    '---', 'title: project', 'status: active', 'hue: 180', 'desc: blind fixture', '---',
+    '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
+  ].join('\n'))
+  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'fixture@example.test')
+  git(project, 'config', 'user.name', 'fixture')
+  git(project, 'add', '.')
+  git(project, 'commit', '-qm', 'seed')
+
+  const worktree = join(fixture, 'live')
+  git(project, 'worktree', 'add', '-q', '-b', 'node/live', worktree)
+  writeSessionRecord(spexHome, project, '33333333-3333-4333-8333-333333333333', worktree, 'node/live')
+
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_TMUX: `spex-blind-${port}`,
+    SPEXCODE_DISABLE_WATCHERS: 'worktrees',
+    // the liveness probe fails, so every session reads `unknown` and its worktree is one the graph would
+    // otherwise observe — exactly the state that used to slip past the injection through the poller
+    PATH: `${fakeTmuxDir(fixture)}:${process.env.PATH}`,
+  }
+  delete env.SPEXCODE_API_URL
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    // a delta subscriber starts the liveness pollers, which is the entry point that used to slip through
+    const response = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: abort.signal })
+    assert.equal(response.status, 200)
+    void response.body!.getReader().read().catch(() => {})
+    await (await fetch(`${base}/api/graph`)).arrayBuffer()
+    await waitFor(() => /graph watcher 'worktrees' disabled/.test(serverLog),
+      `the injection never announced itself:\n${serverLog}`)
+
+    // give the pollers several ticks to try to reconcile behind the injection's back
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+    for (let read = 0; read < 3; read++) await (await fetch(`${base}/api/graph`)).arrayBuffer()
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+
+    assert.equal(/\(worktree:/.test(serverLog), false,
+      `a blinded leaf must register no worktree observer:\n${serverLog}`)
+    assert.equal(/\(worktree-index:/.test(serverLog), false,
+      `a blinded leaf must register no worktree index observer:\n${serverLog}`)
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nserver log:\n${serverLog}`)
+  } finally {
+    abort.abort()
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})

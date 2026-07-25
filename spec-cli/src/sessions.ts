@@ -741,7 +741,10 @@ export async function listSessions(): Promise<Session[]> {
     // is a thing to act on, not a thing to hide. It carries its own status and names the file, so the human can
     // see the file and close it — the alternative (dropping it) is what made a live session read as gone.
     const entry = readRecordEntry(id)
-    if (entry.kind === 'corrupt') { lastKnownSession.delete(id); return corruptSession(id, entry) }
+    // The corrupt row becomes the LAST-KNOWN row, never a deletion. Dropping it would mean the next poll that
+    // hits a transient read failure has nothing to fall back on and the row vanishes — re-opening the exact
+    // hole this branch closes, one poll later. `corrupt` is a true reading, so it is worth remembering.
+    if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
     const rec = readRecord(id)
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title

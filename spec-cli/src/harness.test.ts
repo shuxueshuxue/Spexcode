@@ -438,6 +438,32 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
   if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), 'dead')
 })
 
+test('cleanupRuntime sweeps a transport it PROVED dead, and never one still answering', async () => {
+  // (a) the ordinary teardown: the agent is killed and does NOT unlink its own path, so the file lingers with
+  // nothing behind it. THAT residue is ours — close must leave zero socket behind (the acceptance matrix's
+  // close row).
+  const dead = `unit-cleanup-dead-${process.pid}-${Date.now()}`
+  writeFileSync(rvSock(dead), '')                  // a path nothing listens on → connect ECONNREFUSED = proven dead
+  await claudeHarness.cleanupRuntime({ session: dead })
+  assert.equal(existsSync(rvSock(dead)), false, 'a proven-dead socket is swept')
+
+  // (b) the FOREIGN teardown: the same id names a LIVE agent (an isolated instance — its own SPEXCODE_HOME and
+  // SPEXCODE_TMUX — closing an id that is running here; its kill-session misses because tmux IS namespaced,
+  // while this unlink would land because the socket path is not). Unlinking strands that agent permanently:
+  // still bound, unreachable by any connect, undeliverable, and reading `offline` to every prober.
+  const live = `unit-cleanup-live-${process.pid}-${Date.now()}`
+  const srv = createServer(() => {})
+  await new Promise<void>((res) => srv.listen(rvSock(live), () => res()))
+  try {
+    await claudeHarness.cleanupRuntime({ session: live })
+    assert.ok(existsSync(rvSock(live)), 'a socket with a live listener is not ours to unlink')
+    assert.equal(await rendezvousListening(live, 500), 'live', 'and the agent behind it stays reachable')
+  } finally {
+    await new Promise<void>((res) => srv.close(() => res()))
+    rmSync(rvSock(live), { force: true })
+  }
+})
+
 test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree does not', () => {
   const base = new Map([[10, { ppid: 1, comm: 'bash' }]])
   // any codex spelling — the plain binary, a vendored name, or the CLI's node runtime — anywhere below the pane

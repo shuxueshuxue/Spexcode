@@ -799,14 +799,11 @@ if (cmd === 'serve') {
       console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
     } else if (sub === 'archive' || sub === 'unarchive') {
-      // SHELVING ([[archive]]) — the attention verb, not a resource verb: it writes one record field and stops
-      // nothing. Say so in the echo, so nobody reads "archived" as "the worker was killed".
+      // ARCHIVING ([[archive]]) — the attention verb: it writes one record field and stops nothing.
       const on = sub === 'archive'
       const full = await resolveSelectorOrExit(id)
       const ok = await c.clientArchive(full, on)
-      console.log(!ok ? `no such session ${full}`
-        : on ? `archived ${full} (still running — \`spex session stop\` to free the process)`
-        : `unarchived ${full}`)
+      console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'unarchived'} ${full}`)
     } else if (sub === 'close') {
       const full = await resolveSelectorOrExit(id)
       console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)

@@ -2,19 +2,18 @@
 scenarios:
   - name: shelve-and-restore-round-trip
     description: >
-      Drive the real dashboard console in a browser against a live backend. Starting from the working
-      session list, shelve the SELECTED session through the product's own Command Box (`/archive`), then
-      read the rendered DOM at each step: the star door appears in the list header carrying the shelf
-      count, the row leaves the working list, the shelf view holds it, and selecting it shows the shelf
-      card. Restore with the card's one button. Read the record over `GET /api/sessions` to confirm what
-      shelving did and did not change.
+      Drive the real dashboard console in a browser against a live backend. Starting from the session
+      list, archive the SELECTED session through the product's own Command Box (`/archive`), then read the
+      rendered DOM at each step: the header's three pills, the star door's count, the row leaving the list,
+      the archive view holding it, and the archive card on selecting it. Restore with the card's one
+      button. Read the record over `GET /api/sessions` to confirm what archiving did and did not change.
     expected: >
-      The round trip returns the board to exactly its starting state. Shelving flips only `archived` —
-      `lifecycle` is untouched, no process is stopped, no worktree removed. The star door is absent while
-      nothing is shelved and appears with the count once something is, the shelved row is in exactly one of
-      the two lists at a time, the shelf card is the ONLY thing visible and clickable for a shelved session
-      (no live terminal layer over it), and restoring from the card returns both the row and the view to the
-      working list — never stranding the human on the shelf they just emptied.
+      The round trip returns the board to exactly its starting state. Archiving flips only `archived` —
+      `lifecycle` is untouched, no process is stopped, no worktree removed. The header always shows three
+      equal pills including the star, whose count appears only when something is archived; the archived row
+      is in exactly one of the two lists at a time; the archive card is the ONLY thing visible and clickable
+      for an archived session (no live terminal layer over it); and restoring from the card returns both the
+      row and the view to the list — never stranding the human on the archive they just emptied.
     tags: [frontend-e2e]
   - name: shelving-costs-no-git-walk
     description: >

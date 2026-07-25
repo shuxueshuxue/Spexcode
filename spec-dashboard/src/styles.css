@@ -1136,9 +1136,16 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }
-/* @@@ top button row - New Session (＋, blue) + Search, compact buttons (not full-width rows) so they don't
-   sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring the session rows' wash. */
+/* @@@ top button row - New Session (＋, blue), the archive star, and Search: three equal compact buttons (not
+   full-width rows) so they don't sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring
+   the session rows' wash. */
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+/* the archive star ([[archive]]): muted at rest, amber while you are in the archive — a different hue from
+   New's blue, so "where am I looking" never reads as "what am I making". */
+.si-pill.shelf { color: var(--ink2); gap: 5px; }
+.si-pill.shelf:hover { color: var(--yellow); }
+.si-pill.shelf.on { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, var(--panel2)); border-color: var(--yellow); }
+.si-pill-count { font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-none); }
 /* multi-select bar ([[session-multi-select]]) — takes the top row's slot while selecting: a live pick count
    pushes the destructive delete + cancel to the right. Delete reuses the orange `.sess-rename-btn.danger`. */
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
@@ -1870,6 +1877,10 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-offline-sub { font-size: var(--type-control); color: var(--muted); max-width: 460px; line-height: var(--leading-body); }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 .si-offline-err { margin-top: 10px; font-size: var(--type-control); color: var(--yellow); max-width: 460px; line-height: var(--leading-relaxed); border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
+/* the shelf card ([[archive]]) reuses the offline panel's geometry — same centred column, same type scale — so
+   the two read as one family of "this session is in a state" cards. Only the mark and the action row differ. */
+.si-shelf-card .si-shelf-mark { color: var(--yellow); display: flex; margin-bottom: 2px; }
+.si-shelf-acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone

@@ -69,6 +69,18 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     onClose()
   }
 
+  // archive ([[archive]]) acts AT ONCE — no confirm. Close needs one because it destroys work; archiving is
+  // reversible from the same menu, and a prompt guarding a reversible act is friction pretending to be care.
+  const toggleArchive = (e) => {
+    e.stopPropagation()
+    const { id, archived } = menu.session
+    onClose()
+    apiFetch(`/api/sessions/${id}/archive`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: !archived }),
+    }).catch(() => { /* the next board poll reconciles */ }).finally(() => onChanged?.())
+  }
+
   // close opens a confirm prompt first (the removal is destructive and a right-click is easy to mis-aim).
   const startClose = (e) => {
     e.stopPropagation()
@@ -114,6 +126,11 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
             )}
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
+            {/* one item, both directions ([[archive]]) — the row already knows which state it is in, so the
+                menu offers the move OUT of it rather than a pair where one is always inert. */}
+            <ContextMenuItem icon={menu.session.archived ? 'star-filled' : 'star'} onClick={toggleArchive}>
+              {t(menu.session.archived ? 'sessionWindow.unarchive' : 'sessionWindow.archive')}
+            </ContextMenuItem>
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>

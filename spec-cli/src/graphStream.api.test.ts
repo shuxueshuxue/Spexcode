@@ -119,7 +119,12 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   git(project, 'commit', '-qm', 'seed')
 
   const port = await freePort()
-  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(port), SPEXCODE_HOME: spexHome }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_TMUX: 'spex-graph-stream-api-test',
+  }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_DISABLE_WATCHERS
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
@@ -133,6 +138,8 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   const base = `http://127.0.0.1:${port}`
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
+  const events: string[] = []
+  const eventTimeline: string[] = []
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -141,7 +148,6 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
     assert.equal(initial.status, 200)
     await initial.arrayBuffer()
 
-    const events: string[] = []
     const response = await fetch(`${base}/api/graph/stream`, { signal: abort.signal })
     assert.equal(response.status, 200)
     assert.ok(response.body)
@@ -158,7 +164,10 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
           const block = buffered.slice(0, boundary)
           buffered = buffered.slice(boundary + 2)
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
-          if (event) events.push(event)
+          if (event) {
+            events.push(event)
+            eventTimeline.push(`${Date.now()}: ${event}`)
+          }
         }
       }
     })().catch((error) => {
@@ -197,7 +206,7 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
       assert.equal(inotifyCount(child.pid!), baselineWatches, `commit ${round} changed the stable watch set`)
     }
   } catch (error) {
-    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nserver log:\n${serverLog}`)
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nevents:\n${eventTimeline.join('\n')}\nserver log:\n${serverLog}`)
   } finally {
     abort.abort()
     await streamRead?.catch(() => {})

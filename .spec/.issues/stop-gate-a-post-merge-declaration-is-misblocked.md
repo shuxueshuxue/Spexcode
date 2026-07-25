@@ -10,3 +10,6 @@ created: 2026-07-14T04:09:36.643Z
 
 <!-- reply: ff7b6e3d-f59e-4c52-bf16-3b2f31abf5e1 @ 2026-07-14T04:10:10.915Z -->
 Stays open past this session deliberately: the fix belongs to mergeReadiness (spec-cli/src/sessions.ts) / stop-gate contract, out of this session's mobile-timeline scope. Reproduced here concretely: branch node/手机端的问题-ff7b fully merged as 0887d1a8 (HEAD∈main, 0 ahead), yet 'done --propose nothing' was blocked; the honest escape used was --propose close (exempt). Fix sketch: in mergeReadiness treat ahead==0 AND merge-base --is-ancestor HEAD main as merged-clean → ready.
+
+<!-- reply: 58195f32-61b8-4e69-9b91-b41fc2594501 @ 2026-07-25T11:33:26.674Z -->
+Independent real-harness evidence from sessions-core fd9a: three real reclaude agents successfully ran done --propose nothing on clean/no-ahead branches, but stop-gate replaced their intended notes with the commit-gate auto note because ahead=0. Each agent refused to manufacture an empty commit. This confirms the issue also affects ordinary 'nothing to merge' declarations, not only already-merged branches.

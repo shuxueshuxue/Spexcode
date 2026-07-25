@@ -13,6 +13,37 @@ scenarios:
       ordinary process probe is unavailable; CLI and graph agree and expose relaunch. Resume clears the stop
       marker, returns the same conversation online, and preserves its pre-stop declaration note. No turn-in-flight
       state or harness-specific product branch participates.
+  - name: foreign-teardown-cannot-strand-a-live-agent
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    description: >-
+      A session's rendezvous socket is keyed by session id ALONE, so it is the one per-session resource not
+      scoped by the store (SPEXCODE_HOME) or the tmux server (SPEXCODE_TMUX). Stand a REAL agent daemon on
+      that path, then drive a second, fully isolated backend — its own home and tmux server, holding a record
+      with the SAME id — through the real close route, and afterwards read the first agent's transport: is its
+      socket path still there, does a connect still reach it? Then ask the isolated board how it reads a
+      session whose socket is unreachable while its registered agent pid is still alive.
+    expected: >-
+      The isolated close completes in its own world and removes nothing of the live agent's: the socket path
+      survives and still answers a connect, because a teardown may only unlink a transport it PROVED dead. An
+      ordinary teardown, whose agent really is gone, still leaves zero socket residue. And a session whose
+      socket is unreachable while its agent process still answers reads `unknown`, never `offline` — death is
+      unproven, so the relaunch guard stays armed instead of inviting a human to kill a working agent.
+  - name: same-id-in-two-worlds-never-shares-a-transport
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Two isolated backends on one box, each with its own SPEXCODE_HOME and SPEXCODE_TMUX. World A launches a
+      REAL governed session through POST /api/sessions; world B holds a PLANTED record carrying the SAME
+      session id — the shape a fixture, a migration, or a record copied for diagnosis produces — and closes it
+      through the real route. Read what world A's agent is actually bound to, what world A recorded, what a
+      world that never launched it would derive, and whether A survives B.
+    expected: >-
+      World A records the transport it handed its agent (a launch-time fact beside the record, like the pid),
+      the agent is bound to exactly that path, and the path is scoped to A's runtime rather than derived from
+      the session id alone — so nothing sits where a foreign world would look. World B's close touches
+      nothing of A's: A keeps answering and its own board still reads it online. World A's own close still
+      sweeps its socket, leaving zero residue.
   - name: headless-turn-exit-error
     tags: [backend-api, cli]
     code: spec-cli/src/harness.ts

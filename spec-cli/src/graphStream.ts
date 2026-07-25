@@ -40,55 +40,85 @@ type EvalTarget = 'all' | { id?: string; path?: string }
 type Notify = () => void
 type Frame = { event: string; data: string }
 type DeltaSend = (frame: Frame) => void
-type WatchFactory = typeof watch
-type ExactWatchCallback = (event: 'rename' | 'change', filename: string | Buffer | null) => void
+type TreeWatchCallback = (event: 'rename' | 'change', filename: string | Buffer | null) => void
+// the one filesystem primitive the registry is allowed to call — `fs.watch`'s overloads narrowed to the
+// exact shape both transports use, so an injected fake is the same three arguments.
+type WatchFactory = (path: string, options: { recursive?: boolean }, callback: TreeWatchCallback) => FSWatcher
+type WatchTransport = 'consolidated-recursive' | 'exact-directory'
 
-type ExactTreeWatcherOptions = {
+type TreeWatcherOptions = {
   root: string
   source: string
   scope: Scope
   recursive?: boolean
   ignore?: (relativePath: string) => boolean
   watchFactory?: WatchFactory
+  transport?: WatchTransport
   onInput: (event: 'rename' | 'change', relativePath: string) => void
   onFailure: (error: Error) => void
 }
 
-// Node's Linux recursive fs.watch expands one JS object into one inotify registration per file AND
-// directory. This registry recurses in userspace once, then watches directories non-recursively: atomic file
-// replacement stays visible through its parent, and a refresh is an idempotent set reconciliation.
-export class ExactTreeWatcherRegistry {
+// @@@ watch transport - the ONE place the platform appears. Observing a tree is a single product-level
+// registration; how many registrations the OS actually holds for it is the transport's business.
+//   consolidated-recursive — the OS itself observes a whole subtree from one registration (Darwin
+//     FSEvents, Windows ReadDirectoryChangesW). It reports by PATH, so an atomic replacement inside the
+//     tree stays visible, and exclusions filter on delivery because nothing is consumed per directory.
+//   exact-directory — no such observer exists (Linux), and Node's `recursive` option is a USERSPACE
+//     fan-out registering one inotify watch per file AND directory (measured: 201 directories -> 801
+//     watches) which, watching files by inode, goes blind the moment a file is atomically replaced. So
+//     we enumerate directories once and install one NON-recursive watch each, all multiplexed onto the
+//     loop's single shared inotify descriptor, excluding .git/node_modules at traversal time.
+export const consolidatedRecursiveWatch = (platform: NodeJS.Platform = process.platform): boolean =>
+  platform === 'darwin' || platform === 'win32'
+
+// The live census across every registry: `sources` is what graph-stream asked the platform for (one per
+// canonical root), `registrations` is what the platform is actually holding for them. Both are read by the
+// watcher-budget tests and logged under SPEXCODE_BOARD_DEBUG, so a plateau is observable on every platform
+// rather than only where /proc exposes inotify descriptors.
+const liveRegistries = new Set<TreeWatcherRegistry>()
+let liveRegistrations = 0
+export function graphWatcherCensus(): { sources: number; registrations: number } {
+  return { sources: liveRegistries.size, registrations: liveRegistrations }
+}
+
+export class TreeWatcherRegistry {
   readonly root: string
   readonly source: string
   readonly scope: Scope
+  readonly transport: WatchTransport
   private readonly recursive: boolean
   private readonly ignore: (relativePath: string) => boolean
   private readonly watchFactory: WatchFactory
-  private readonly onInput: ExactTreeWatcherOptions['onInput']
-  private readonly onFailure: ExactTreeWatcherOptions['onFailure']
+  private readonly onInput: TreeWatcherOptions['onInput']
+  private readonly onFailure: TreeWatcherOptions['onFailure']
   private readonly handles = new Map<string, FSWatcher>()
   private refreshImmediate: ReturnType<typeof setImmediate> | null = null
   private failed = false
 
-  constructor(options: ExactTreeWatcherOptions) {
+  constructor(options: TreeWatcherOptions) {
     this.root = resolve(options.root)
     this.source = options.source
     this.scope = options.scope
     this.recursive = options.recursive !== false
+    this.transport = options.transport
+      ?? (this.recursive && consolidatedRecursiveWatch() ? 'consolidated-recursive' : 'exact-directory')
     this.ignore = options.ignore ?? (() => false)
-    this.watchFactory = options.watchFactory ?? watch
+    this.watchFactory = options.watchFactory ?? (watch as unknown as WatchFactory)
     this.onInput = options.onInput
     this.onFailure = options.onFailure
   }
 
   get size(): number { return this.handles.size }
   paths(): string[] { return [...this.handles.keys()].sort() }
+  // one kernel-side observer covers the subtree: the root is the only path we register, and no rename can
+  // make the desired set drift, so there is nothing to re-walk.
+  private get consolidated(): boolean { return this.recursive && this.transport === 'consolidated-recursive' }
 
   private desiredDirectories(): Set<string> {
     const desired = new Set<string>()
     const visit = (dir: string): void => {
       desired.add(dir)
-      if (!this.recursive) return
+      if (!this.recursive || this.consolidated) return
       let entries: import('node:fs').Dirent[]
       try { entries = readdirSync(dir, { withFileTypes: true }) }
       catch (error) {
@@ -113,12 +143,17 @@ export class ExactTreeWatcherRegistry {
     if (this.refreshImmediate) { clearImmediate(this.refreshImmediate); this.refreshImmediate = null }
     const handles = [...this.handles.values()]
     this.handles.clear()
+    liveRegistrations -= handles.length
+    liveRegistries.delete(this)
     for (const handle of handles) { try { handle.close() } catch { /* already gone */ } }
   }
 
   private sourceError(path: string, error: unknown): Error {
+    const err = error as NodeJS.ErrnoException
     const reason = error instanceof Error ? error.message : String(error)
-    return new Error(`spec-cli: graph watcher '${this.source}' failed at ${path}: ${reason}`)
+    // source + path + errno, always — an exhausted platform must name which syscall budget it refused.
+    const errno = err?.code && !reason.includes(err.code) ? ` (errno ${err.code})` : ''
+    return new Error(`spec-cli: graph watcher '${this.source}' failed at ${path}: ${reason}${errno}`)
   }
 
   private fail(path: string, error: unknown): false {
@@ -145,16 +180,19 @@ export class ExactTreeWatcherRegistry {
     try { desired = this.desiredDirectories() }
     catch (error) { return this.fail(this.root, error) }
 
+    const before = this.handles.size
     for (const [path, handle] of [...this.handles]) {
       if (desired.has(path)) continue
       this.handles.delete(path)
+      liveRegistrations--
       try { handle.close() } catch { /* already gone */ }
     }
+    const options = this.consolidated ? { recursive: true } : {}
     for (const path of desired) {
       if (this.handles.has(path)) continue
       try {
         let handle: FSWatcher
-        const callback: ExactWatchCallback = (event, filename) => {
+        const callback: TreeWatchCallback = (event, filename) => {
           if (this.handles.get(path) !== handle) return
           if (filename == null) { this.fail(path, new Error('pathless filesystem event')); return }
           const inputPath = resolve(path, String(filename))
@@ -165,15 +203,21 @@ export class ExactTreeWatcherRegistry {
           }
           if (this.ignore(rel)) return
           this.onInput(event, rel)
-          if (this.recursive && event === 'rename') this.scheduleRefresh()
+          // only the userspace transport's desired set can drift: a new directory under a consolidated
+          // observer is already covered by the kernel.
+          if (this.recursive && !this.consolidated && event === 'rename') this.scheduleRefresh()
         }
-        handle = (this.watchFactory as unknown as (path: string, callback: ExactWatchCallback) => FSWatcher)(path, callback)
+        handle = this.watchFactory(path, options, callback)
         this.handles.set(path, handle)
+        liveRegistrations++
         handle.on('error', (error) => {
           if (this.handles.get(path) === handle) this.fail(path, error)
         })
       } catch (error) { return this.fail(path, error) }
     }
+    if (this.handles.size) liveRegistries.add(this)
+    if (DEBUG && this.handles.size !== before)
+      console.warn(`spec-cli: graph watchers — sources=${liveRegistries.size} registrations=${liveRegistrations} (${this.source}: ${this.transport} ${this.handles.size})`)
     return true
   }
 
@@ -233,6 +277,12 @@ async function rebuildAndBroadcast(): Promise<void> {
       const boardJson = JSON.stringify(board)
       const { units, ok } = unitize(board as Record<string, unknown>)
       const tag = tagOf(units)
+      // the trigger set describes who caused THIS rebuild, so it is consumed by the rebuild — not by the
+      // broadcast. Clearing it only when content moved let a no-op fire (every poller's first sample is
+      // one) leave its tag behind forever, and the next genuine patrol repair then read as leaf-signalled
+      // and went silent — the alarm suppressing itself on the very machines that need it.
+      const tags = [...triggerTags]
+      triggerTags.clear()
       if (tag === lastTag) continue
       // the changed unit keys — computed against the prior anchor when we have one (a first paint has no
       // anchor, so no repair claim can be made against it).
@@ -257,12 +307,10 @@ async function rebuildAndBroadcast(): Promise<void> {
       // means a leaf watcher was BLIND — the patrol self-healed it. That is a bug report, not routine, so
       // it is ALWAYS loud (repairs are supposed to be zero — [[graph-stream]]). Under DEBUG, every
       // broadcast logs its changed keys + triggers + build ms.
-      const tags = [...triggerTags]
       if (changedKeys.length && tags.length === 1 && tags[0] === 'patrol')
         console.warn(`spec-cli: PATROL-REPAIR — the cold tick caught a change no leaf watcher pushed; changed units: [${changedKeys.join(', ')}] — a blind watcher, investigate`)
       if (DEBUG)
         console.warn(`spec-cli: graph broadcast — changed [${changedKeys.join(', ')}] triggers {${tags.join(', ')}} build ${buildMs}ms`)
-      triggerTags.clear()
     } while (dirty)
   } finally { building = false }
 }
@@ -306,42 +354,77 @@ export const notifyBoardChanged = (scope: Scope = 'full'): void =>
 // Stable summary batches re-enter the SAME session-unit graph path; this is not a second transport.
 setSessionEvalProjectionNotify(() => fireChanged('sessions'))
 
+// ---- ONE repair scheduler for every filesystem source ----
+// A source the platform refuses keeps its observer hold and is retried by THIS timer alone — never by a
+// graph build, an HTTP read, a poller tick or a registry event. That is the whole anti-storm rule: the
+// resource being exhausted (a registration budget, a descriptor table) is PROCESS-wide, so its backoff
+// belongs to the process, not to each source racing its own retry and re-walking the corpus every time.
+// `heldSources` is what an ordinary pass may not re-attempt; only the scheduled pass lifts that.
+const heldSources = new Set<string>()
+let repairTimer: ReturnType<typeof setTimeout> | null = null
+let repairStep = 0
+let repairing = false
+
+const mayAttach = (source: string): boolean => repairing || !heldSources.has(source)
+
+// The failure is loud ONCE per episode and names source + path + errno (the registry built that message);
+// every later source felled by the same exhausted budget is counted, not re-printed, and the repair line
+// reports the total. A half-attached registry is already closed by the registry itself before we get here.
+function noteSourceFailure(source: string, error: unknown): void {
+  const known = heldSources.has(source)
+  heldSources.add(source)
+  if (!known && heldSources.size === 1) console.error(error instanceof Error ? error.message : String(error))
+  scheduleWatcherRepair()
+}
+
+function noteSourceHealthy(source: string): void {
+  if (!heldSources.delete(source)) return
+  if (heldSources.size === 0) repairStep = 0
+}
+
+function scheduleWatcherRepair(): void {
+  if (repairTimer || !heldSources.size) return
+  const delay = Math.min(30_000, 250 * 2 ** Math.min(repairStep, 7))
+  repairStep++
+  const era = watcherEra
+  console.error(`spec-cli: graph watcher repair — ${heldSources.size} source(s) held, retrying in ${delay}ms; the cold-tick patrol covers the gap until they reattach`)
+  repairTimer = setTimeout(() => {
+    repairTimer = null
+    if (era !== watcherEra) return
+    repairing = true
+    void ensureBoardFileWatchers()
+      .catch((error) => console.error(`spec-cli: graph watcher repair failed — ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => {
+        repairing = false
+        if (heldSources.size) scheduleWatcherRepair()
+      })
+  }, delay)
+  repairTimer.unref?.()
+}
+
 // ---- event source 1: the session store (lifecycle status writes) → 'sessions' ----
 let activeStoreRoot: string | null = null
 let activeCommonRoot: string | null = null
 let watcherEra = 0
-let storeWatcher: ExactTreeWatcherRegistry | null = null
-let storeRetryImmediate: ReturnType<typeof setImmediate> | null = null
+let storeWatcher: TreeWatcherRegistry | null = null
 
-function scheduleStoreRetry(): void {
-  if (storeRetryImmediate) return
-  const era = watcherEra
-  storeRetryImmediate = setImmediate(() => {
-    storeRetryImmediate = null
-    if (era === watcherEra && activeStoreRoot) ensureWatcher(activeStoreRoot, false)
-  })
-  storeRetryImmediate.unref?.()
-}
-
-function ensureWatcher(root: string, retry = true): void {
+function ensureWatcher(root: string): void {
   if (storeWatcher?.root === root) return
   if (storeWatcher) { storeWatcher.close(); storeWatcher = null }
-  if (isDisabled('store')) return
+  if (isDisabled('store') || !mayAttach('store')) return
   try { mkdirSync(root, { recursive: true }) }
   catch (error) {
     console.error(`spec-cli: graph watcher 'store' could not create ${root}: ${error instanceof Error ? error.message : String(error)}`)
   }
-  let ready = false
-  const registry = new ExactTreeWatcherRegistry({
+  const registry = new TreeWatcherRegistry({
     root,
     source: 'store',
     scope: 'sessions',
     onInput: () => fireChanged('sessions'),
     onFailure: (error) => {
       if (storeWatcher === registry) storeWatcher = null
-      console.error(error.message)
+      noteSourceFailure('store', error)
       fireChanged('sessions')
-      if (ready || retry) scheduleStoreRetry()
     },
   })
   storeWatcher = registry
@@ -349,7 +432,7 @@ function ensureWatcher(root: string, retry = true): void {
     if (storeWatcher === registry) storeWatcher = null
     return
   }
-  ready = true
+  noteSourceHealthy('store')
 }
 
 // ---- event source 2: git refs (a commit/merge reshapes the tree the moment the ref moves) → 'full' ----
@@ -361,7 +444,6 @@ type RegistryGroup = {
   close(): void
 }
 let refsWatchers: RegistryGroup | null = null
-let refsRetryImmediate: ReturnType<typeof setImmediate> | null = null
 const REFS_OBSERVER = 'graph:refs'
 
 export function watchSessionEvalRefs(
@@ -369,7 +451,7 @@ export function watchSessionEvalRefs(
   onInput: () => void,
   onFailure: (error: Error) => void,
 ): RegistryGroup {
-  let attached: ExactTreeWatcherRegistry[] = []
+  let attached: TreeWatcherRegistry[] = []
   let failed = false
   let ready = false
   let attachError: Error | null = null
@@ -385,7 +467,7 @@ export function watchSessionEvalRefs(
     if (ready) onFailure(error)
     else attachError = error
   }
-  const refs = new ExactTreeWatcherRegistry({
+  const refs = new TreeWatcherRegistry({
     root: join(common, 'refs'),
     source: 'refs',
     scope: 'full',
@@ -395,7 +477,7 @@ export function watchSessionEvalRefs(
   attached.push(refs)
   if (!refs.refresh()) throw attachError ?? new Error(`spec-cli: graph watcher 'refs' failed at ${refs.root}`)
 
-  const commonFiles = new ExactTreeWatcherRegistry({
+  const commonFiles = new TreeWatcherRegistry({
     root: common,
     source: 'refs-common',
     scope: 'full',
@@ -409,24 +491,13 @@ export function watchSessionEvalRefs(
   return { root: resolve(common), close }
 }
 
-function scheduleRefsRetry(): void {
-  if (refsRetryImmediate) return
-  const era = watcherEra
-  refsRetryImmediate = setImmediate(() => {
-    refsRetryImmediate = null
-    if (era === watcherEra && activeCommonRoot) ensureRefsWatcher(false, activeCommonRoot)
-  })
-  refsRetryImmediate.unref?.()
-}
-
 function refsWatcherFailed(error: Error): void {
   refsWatchers = null
-  console.error(error.message)
+  noteSourceFailure('refs', error)
   if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
-  scheduleRefsRetry()
 }
 
-function ensureRefsWatcher(retry = true, common = activeCommonRoot): void {
+function ensureRefsWatcher(common = activeCommonRoot): void {
   if (!common) return
   if (refsWatchers?.root === common) return
   if (refsWatchers) { refsWatchers.close(); refsWatchers = null }
@@ -434,76 +505,33 @@ function ensureRefsWatcher(retry = true, common = activeCommonRoot): void {
     if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
     return
   }
+  if (!mayAttach('refs')) return
   try {
     refsWatchers = watchSessionEvalRefs(common, () => fireChanged('full', 'all'), refsWatcherFailed)
+    noteSourceHealthy('refs')
     if (releaseSessionEvalProjectionObserver(REFS_OBSERVER)) fireChanged('full')
   } catch (error) {
     refsWatchers = null
-    console.error(error instanceof Error ? error.message : String(error))
+    noteSourceFailure('refs', error)
     if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
-    if (retry) scheduleRefsRetry()
   }
 }
 
 // ---- event source 3: worktree registry + working roots + per-worktree indexes → 'full' ----
-// Summary inputs include ordinary dirty source and staged-only changes, not just `.spec`. Each registry row
-// therefore owns an exact-directory tree registry plus one exact watcher on git's worktree metadata dir
-// (`index`). A delivered event advances that worktree's eval generation before the graph rebuild.
-let registryWatcher: ExactTreeWatcherRegistry | null = null
+// Summary inputs include ordinary dirty source and staged-only changes, not just `.spec`. Each live
+// worktree is therefore TWO canonical roots — its working tree and git's metadata dir for it (`index`) —
+// and that pair is the whole per-worktree registration cost, whatever the corpus inside it holds.
+let registryWatcher: TreeWatcherRegistry | null = null
 let registryReady = false
-let registryRetryImmediate: ReturnType<typeof setImmediate> | null = null
 type WorktreeWatch = {
   path: string
-  root: ExactTreeWatcherRegistry
-  index: ExactTreeWatcherRegistry
+  root: TreeWatcherRegistry
+  index: TreeWatcherRegistry
   close(): void
 }
 const worktreeWatchers = new Map<string, WorktreeWatch>()
-const worktreeRetryAttempted = new Set<string>()
-const worktreeRetryCount = new Map<string, number>()
-const worktreeRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const worktreeObserver = (name: string): string => `graph:worktree:${name}`
-
-export function scheduleWorktreeResubscribe(
-  name: string,
-  attempted: Set<string>,
-  retry: () => void,
-  delayMs = 0,
-): boolean {
-  if (attempted.has(name)) return false
-  attempted.add(name)
-  const timer = setTimeout(() => {
-    attempted.delete(name)
-    retry()
-  }, delayMs)
-  timer.unref?.()
-  return true
-}
-
-function scheduleWorktreeRetry(name: string): boolean {
-  if (worktreeRetryAttempted.has(name)) return false
-  const attempt = (worktreeRetryCount.get(name) ?? 0) + 1
-  worktreeRetryCount.set(name, attempt)
-  const delayMs = Math.min(1_000, 25 * (2 ** Math.min(attempt - 1, 5)))
-  const era = watcherEra
-  worktreeRetryAttempted.add(name)
-  const timer = setTimeout(() => {
-    worktreeRetryTimers.delete(name)
-    worktreeRetryAttempted.delete(name)
-    if (era === watcherEra) void reconcileWorktrees()
-  }, delayMs)
-  timer.unref?.()
-  worktreeRetryTimers.set(name, timer)
-  return true
-}
-
-function clearWorktreeRetry(name: string): void {
-  const timer = worktreeRetryTimers.get(name)
-  if (timer) clearTimeout(timer)
-  worktreeRetryTimers.delete(name)
-  worktreeRetryAttempted.delete(name)
-  worktreeRetryCount.delete(name)
-}
+const worktreeSource = (name: string): string => `worktree:${name}`
 
 const ignoredWorktreePath = (file: string): boolean =>
   file.split(/[\\/]/).some((segment) => segment === '.git' || segment === 'node_modules')
@@ -517,8 +545,8 @@ export function watchSessionEvalWorktree(
   let failed = false
   let ready = false
   let attachError: Error | null = null
-  let root: ExactTreeWatcherRegistry | null = null
-  let index: ExactTreeWatcherRegistry | null = null
+  let root: TreeWatcherRegistry | null = null
+  let index: TreeWatcherRegistry | null = null
   const close = () => {
     root?.close()
     index?.close()
@@ -530,7 +558,7 @@ export function watchSessionEvalWorktree(
     if (ready) onFailure(error)
     else attachError = error
   }
-  root = new ExactTreeWatcherRegistry({
+  root = new TreeWatcherRegistry({
     root: wtPath,
     source: `worktree:${resolve(wtPath)}`,
     scope: 'full',
@@ -539,7 +567,7 @@ export function watchSessionEvalWorktree(
     onFailure: fail,
   })
   if (!root.refresh()) throw attachError ?? new Error(`spec-cli: graph watcher 'worktree' failed at ${wtPath}`)
-  index = new ExactTreeWatcherRegistry({
+  index = new TreeWatcherRegistry({
     root: gitDir,
     source: `worktree-index:${resolve(wtPath)}`,
     scope: 'full',
@@ -561,12 +589,12 @@ function dropWorktreeWatcher(name: string): WorktreeWatch | null {
 }
 
 function watcherFailed(name: string, path: string, error: Error): void {
-  // Failure/overflow has no trustworthy path. Keep last-known, mark the target updating, and immediately
-  // resubscribe; the authorized summary build is the one authoritative rescan, never a periodic sweep.
+  // Failure/overflow has no trustworthy path. Keep last-known, mark the target updating, and hand the
+  // reattach to the one repair scheduler; the authorized summary build is the one authoritative rescan,
+  // never a periodic sweep and never a re-walk driven by whatever read noticed the failure.
   dropWorktreeWatcher(name)
-  console.error(error.message)
+  noteSourceFailure(worktreeSource(name), error)
   if (holdSessionEvalProjectionObserver(worktreeObserver(name), { path })) fireChanged('full')
-  scheduleWorktreeRetry(name)
 }
 
 const forcedWorktreeSessions = new Set<string>()
@@ -598,15 +626,17 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
     const normalizedPath = resolve(wtPath)
     if (!wantedPaths.has(normalizedPath)) {
       if (dropWorktreeWatcher(e.name)) released = releaseSessionEvalProjectionObserver(worktreeObserver(e.name)) || released
-      clearWorktreeRetry(e.name)
+      noteSourceHealthy(worktreeSource(e.name))
       continue
     }
     wantedNames.add(e.name)
     const existing = worktreeWatchers.get(e.name)
     if (existing?.path === normalizedPath) continue
     const rootChanged = existing != null
-    if (existing) { dropWorktreeWatcher(e.name); clearWorktreeRetry(e.name) }
-    if (worktreeRetryAttempted.has(e.name)) continue
+    if (existing) dropWorktreeWatcher(e.name)
+    // a held worktree is the repair scheduler's to reattach — an ordinary reconcile pass must not re-walk
+    // it, which is what turned one refused registration into a per-read attach storm.
+    if (!mayAttach(worktreeSource(e.name))) continue
     try {
       // the entry's `gitdir` file points at the worktree's `<tree>/.git` (file or dir); its parent is the tree.
       const row = watchSessionEvalWorktree(
@@ -617,31 +647,38 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
       )
       if (era !== watcherEra) { row.close(); return }
       worktreeWatchers.set(e.name, row)
-      clearWorktreeRetry(e.name)
+      noteSourceHealthy(worktreeSource(e.name))
       if (rootChanged) fireChanged('full', { path: wtPath })
       // The replacement is live before its hold is removed. This delta authorizes one double-read rescan,
       // so edits made anywhere in the unwatched interval are inside the new generation's fingerprint.
       if (releaseSessionEvalProjectionObserver(worktreeObserver(e.name))) fireChanged('full')
     } catch (error) {
-      // An attach failure is observable: mark unknown/full now. The next registry change or explicit graph
-      // source setup retries; no patrol is allowed to call the eval projection current.
-      console.error(error instanceof Error ? error.message : String(error))
+      // An attach failure is observable: mark unknown/full now. The repair scheduler owns the reattach; no
+      // patrol is allowed to call the eval projection current meanwhile.
+      noteSourceFailure(worktreeSource(e.name), error)
       if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), { path: wtPath })) fireChanged('full')
-      scheduleWorktreeRetry(e.name)
     }
   }
   for (const name of worktreeWatchers.keys()) if (!wantedNames.has(name)) {
     dropWorktreeWatcher(name)
     released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
   }
-  for (const name of worktreeRetryCount.keys()) if (!wantedNames.has(name)) {
-    clearWorktreeRetry(name)
-    released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+  for (const source of [...heldSources]) {
+    const name = source.startsWith('worktree:') ? source.slice('worktree:'.length) : null
+    if (name && !wantedNames.has(name)) {
+      noteSourceHealthy(source)
+      released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+    }
   }
   if (released) fireChanged('full')
 }
 
 function reconcileWorktrees(forceSessionId?: string): Promise<void> {
+  // Blinding a leaf must blind it from EVERY entry point. Reconciliation is reached from the liveness
+  // poller and from registry events as well as from the ensure pass, so gating only the ensure pass left
+  // the per-worktree observers attaching anyway — the injection looked applied while the leaf still saw
+  // everything, which makes the patrol's accountability untestable rather than merely untested.
+  if (isDisabled('worktrees')) return Promise.resolve()
   if (forceSessionId) forcedWorktreeSessions.add(forceSessionId)
   if (worktreeReconcileFlight) return worktreeReconcileFlight
   const era = watcherEra
@@ -667,10 +704,10 @@ export function watchSessionEvalRegistry(
   dir: string,
   onInput: () => void,
   onFailure: (error: Error) => void,
-): ExactTreeWatcherRegistry {
+): TreeWatcherRegistry {
   let ready = false
   let attachError: Error | null = null
-  const registry = new ExactTreeWatcherRegistry({
+  const registry = new TreeWatcherRegistry({
     root: dir,
     source: 'worktree-registry',
     scope: 'full',
@@ -686,47 +723,39 @@ export function watchSessionEvalRegistry(
   return registry
 }
 
-function scheduleRegistryRetry(): void {
-  if (registryRetryImmediate) return
-  const era = watcherEra
-  registryRetryImmediate = setImmediate(() => {
-    registryRetryImmediate = null
-    if (era !== watcherEra) return
-    registryReady = false
-    void ensureWorktreeRegistry(false)
-  })
-  registryRetryImmediate.unref?.()
-}
-
 function registryWatcherFailed(error: Error): void {
   registryWatcher = null
-  console.error(error.message)
+  registryReady = false
+  noteSourceFailure('worktree-registry', error)
   if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
-  scheduleRegistryRetry()
 }
 
-async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Promise<void> {
+async function ensureWorktreeRegistry(forceSessionId?: string): Promise<void> {
   const common = activeCommonRoot
   if (!common) return
   const dir = resolve(join(common, 'worktrees'))
   // The registry watcher already reconciles add/remove events. Re-scanning every ordinary graph/evals read
   // turns a large worktree registry into an artificial request latency floor; only a scoped read may demand
   // one target after startup, while the unscoped hot path reuses the attached live watchers.
+  // an attached registry short-circuits the scan for ordinary reads, but a REPAIR pass exists precisely to
+  // reattach held worktrees, so it must reach the reconcile even when the registry itself is healthy.
   if (registryWatcher?.root === dir) {
-    if (forceSessionId) await reconcileWorktrees(forceSessionId)
+    if (forceSessionId || repairing) await reconcileWorktrees(forceSessionId)
     return
   }
   if (registryWatcher) { registryWatcher.close(); registryWatcher = null; registryReady = false }
   // A platform may reject registry watches. Once the initial reconciliation has run, ordinary
-  // reads must not repeat its full worktree scan while the one scheduled retry is pending; scoped reads can
+  // reads must not repeat its full worktree scan while the repair pass is pending; scoped reads can
   // still demand their target explicitly.
-  if (registryReady && !forceSessionId) return
-  if (registryReady && forceSessionId) { await reconcileWorktrees(forceSessionId); return }
-  registryReady = true
+  if (registryReady && !forceSessionId && !repairing) return
+  if (registryReady && (forceSessionId || repairing)) { await reconcileWorktrees(forceSessionId); return }
   if (isDisabled('worktrees')) {
+    registryReady = true
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
     return
   }
+  if (!mayAttach('worktree-registry')) return
+  registryReady = true
   try {
     try { mkdirSync(dir, { recursive: true }) }
     catch (error) { console.error(`spec-cli: graph watcher 'worktree-registry' could not create ${dir}: ${error instanceof Error ? error.message : String(error)}`) }
@@ -736,18 +765,21 @@ async function ensureWorktreeRegistry(retry = true, forceSessionId?: string): Pr
       void reconcileWorktrees()
       fireChanged('full', 'all')
     }, registryWatcherFailed)
+    noteSourceHealthy('worktree-registry')
   } catch (error) {
     registryWatcher = null
-    console.error(error instanceof Error ? error.message : String(error))
+    registryReady = false
+    noteSourceFailure('worktree-registry', error)
     if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
-    if (retry) scheduleRegistryRetry()
   }
   await reconcileWorktrees(forceSessionId)   // attach for the live/demanded worktrees that already exist
   if (registryWatcher && releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)) fireChanged('full')
 }
 
 // Attach the canonical filesystem sources before an HTTP snapshot starts summary work. This closes the
-// request→SSE handoff gap: an edit after the snapshot build has a watcher before it can occur.
+// request→SSE handoff gap: an edit after the snapshot build has a watcher before it can occur. A source
+// the platform refused is NOT retried here — it is held for the repair scheduler, so an HTTP read never
+// becomes a reattach loop.
 export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<void> {
   const storeRoot = resolve(sessionsRoot())
   const commonRoot = resolve(gitCommonDir())
@@ -756,19 +788,16 @@ export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<
   activeStoreRoot = storeRoot
   activeCommonRoot = commonRoot
   ensureWatcher(storeRoot)
-  ensureRefsWatcher(true, commonRoot)
-  await ensureWorktreeRegistry(true, forceSessionId)
+  ensureRefsWatcher(commonRoot)
+  await ensureWorktreeRegistry(forceSessionId)
 }
 
 export function closeBoardFileWatchers(): void {
   watcherEra++
-  if (storeRetryImmediate) { clearImmediate(storeRetryImmediate); storeRetryImmediate = null }
-  if (refsRetryImmediate) { clearImmediate(refsRetryImmediate); refsRetryImmediate = null }
-  if (registryRetryImmediate) { clearImmediate(registryRetryImmediate); registryRetryImmediate = null }
-  for (const timer of worktreeRetryTimers.values()) clearTimeout(timer)
-  worktreeRetryTimers.clear()
-  worktreeRetryAttempted.clear()
-  worktreeRetryCount.clear()
+  if (repairTimer) { clearTimeout(repairTimer); repairTimer = null }
+  heldSources.clear()
+  repairStep = 0
+  repairing = false
   forcedWorktreeSessions.clear()
   worktreeReconcileFlight = null
 

@@ -713,3 +713,548 @@ stops seeing the ack, and nothing complains.
 If piece 1 ships, this must be made explicit — validate that the trailer block is contiguous, or
 write via `git interpret-trailers --if-exists addIfDifferent` rather than a bare append. A silent
 failure mode in the escape valve is worse than no escape valve.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:55:27.426Z -->
+REPLACING MY PATCH WITH THE INVARIANT — the maintainer's correction: solve this formally, not with
+an engineering guard.
+
+In post 15 I proposed "validate that the trailer block is contiguous". That is a sentry posted
+downstream of a broken abstraction. It can be forgotten, and it needs someone to keep remembering
+why it exists.
+
+## The structure
+
+A commit message is a STRING. Trailers are a structure DERIVED from it:
+
+    trailers : String -> Set<Key x Value>
+
+That derivation is context-sensitive — only the final contiguous paragraph qualifies — so it is
+NOT a homomorphism:
+
+    trailers(m1 ++ m2)  !=  trailers(m1) U trailers(m2)
+
+Stamping is a transformation `stamp : String -> String`, and the property we actually need is
+
+    INVARIANT:  for all m,  trailers(stamp(m)) SUPERSET-OF trailers(m)
+
+i.e. stamping may add, but must never make an existing declaration disappear.
+
+## The root cause is a level confusion
+
+Today `stamp` is defined at the STRING level (`m ++ "\n\nSession: X"`), while the property it must
+preserve lives at the TRAILER level. An operation at the lower level owes the higher level
+nothing — so it violates the invariant, silently. My contiguity check did not remove the level
+mismatch; it stationed an observer downstream of it.
+
+## The fix is to move the operation to its own level
+
+    today:  stamp(m) = m ++ "\n\nSession: X"                  string-level
+    should: stamp(m) = interpret-trailers(m, +Session)        trailer-level
+
+Measured, same author message either way:
+
+    string append          trailers = { Session }                   <- Spec-OK swallowed
+    interpret-trailers     trailers = { Spec-OK, Session }          <- preserved, adjacent
+
+`git interpret-trailers --trailer` is DEFINED as "add into the trailer block". It preserves
+trailers not because we were careful but because that is its semantics. The invariant then holds
+BY CONSTRUCTION — no sentry, no pinning test, no comment for posterity.
+
+It is also complexity-negative: the patch adds a check to maintain; the level change deletes the
+string concatenation and gets the property for free.
+
+## How "parse it earlier" actually works — no magic
+
+`ackCoverFor` reads `idx.acks`, a map `commit sha -> node ids that commit declares`, built by
+walking history and parsing each message's trailers. Earlier means the same parser on a different
+input:
+
+    today       acks : Map<Sha, Set<NodeId>>   built from committed messages
+    commit-msg  the same map, plus  PENDING |-> trailers($1),  with the window tip = PENDING
+
+`$1` is the message file git hands `commit-msg`, byte-for-byte what will be committed. So
+
+    parse(pending file)  ==  parse(the message later read from history)
+
+holds by construction, given the same parser on both sides. No approximation — one function, one
+byte sequence, obtained one step sooner.
+
+## The two are one thing
+
+Once `trailers(stamp(m)) SUPERSET-OF trailers(m)` holds by construction, `parse(pending) ==
+parse(committed)` holds by construction too.
+
+Whether the gate can move earlier depends on the declaration surviving transport intact — and the
+declaration gets corrupted precisely because the stamping operation sits at the wrong level. So
+fixing `stamp` is not an incidental cleanup discovered along the way. It is the PRECONDITION for
+moving the gate at all. Treating them as two separate items was itself the engineering reflex the
+maintainer is calling out.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:01:04.759Z -->
+WHAT Spec-OK ACTUALLY IS — asked by the maintainer, and it settles how much of the design already
+exists.
+
+`Spec-OK` is a property of the COMMIT, carried in its message; it is NOT attached to any file. But
+its SCOPE is per-node. Both halves matter and they are easy to conflate.
+
+    spex spec ack A B C
+      -> git commit --allow-empty
+           --trailer "Spec-OK: A" --trailer "Spec-OK: B" --trailer "Spec-OK: C"
+
+    parsed as:  acks : Map<commit hash, Set<node id>>
+
+One trailer per node; the payload is a SET of node ids. git.ts states the scoping rule flatly:
+"`Spec-OK: A` quiets A's drift, never B's". So it is a commit-level CARRIER with node-level EFFECT
+— not "let this whole commit through", but "this commit declares A and B unbroken".
+
+It reads like a whole-commit property today only because the ack commit is EMPTY (`--allow-empty`).
+That commit exists for no reason other than to carry the sentence, so in its current form the
+declaration and the commit really are the same object.
+
+## Why this settles the design's cost
+
+Under the trailer proposal the same trailer stops being a standalone stamp and becomes a
+declaration welded to the change it is about:
+
+    today   commit A: moves the anchored unit, says nothing
+            commit B: empty, exists only to say `Spec-OK: session-console`
+            -> the declaration and the change it speaks for are two separate commits
+
+    design  commit A: moves the anchored unit + trailer `Spec-OK: session-console`
+            -> who moved it and why the contract still holds, in one commit
+
+And the existing "one trailer per node" shape is already sufficient: a commit hitting three nodes'
+anchors writes three `Spec-OK:` lines, and the semantics are a set by construction. No new syntax
+is invented.
+
+So every piece of expressive power the design needs EXISTS TODAY: the payload (a node set), the
+carrier (a git trailer), the parser (`ackCoverFor`). The only missing thing is that it must be
+able to ride a commit that has content, and be read at commit-msg time.
+
+Which is also, again, why `stamp` must move to the trailer level: a real commit's message will
+carry BOTH the author's `Spec-OK:` and the hook's `Session:`, and they must share one contiguous
+trailer block. Today's string append pushes the author's line out of that block — the silent
+failure measured in post 15/16. The precondition is not incidental; it is the thing that makes a
+content-bearing ack possible at all.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:08:01.208Z -->
+CORRECTING POST 16 — the precondition I said was missing is already implemented. I argued from an
+artefact of my own probe.
+
+Post 16 claimed `stamp` is defined at the string level and must be moved to the trailer level.
+SpexCode already does the trailer-level thing:
+
+    spec-cli/templates/hooks/prepare-commit-msg:33
+    git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$msg_file"
+
+So `trailers(stamp(m)) SUPERSET-OF trailers(m)` holds by construction TODAY. The silent failure I
+measured in post 15 came from my probe, where I had written the stamping myself as `printf >>` —
+a string append. I reproduced a defect I had authored, then argued the product had it.
+
+There is therefore no "piece C". It is done. The design reduces to one change: move the gate to
+commit-msg.
+
+## How an author actually declares — measured end to end
+
+    git commit -m "fix: move the anchored unit" --trailer "Spec-OK: session-console"
+
+Resulting committed message:
+
+    fix: move the anchored unit
+
+    Spec-OK: session-console      <- author's
+    Session: abe9f2bd             <- hook's
+
+Both land in ONE contiguous trailer block and both parse. Author-written and hook-written trailers
+compose correctly with no coordination — which is exactly the property interpret-trailers provides
+and the reason the level argument mattered, even though the product already had it right.
+
+Multiple nodes: repeat `--trailer` (which is what `spex spec ack` already does internally).
+
+## Knowing WHICH node to name
+
+The gate says so. Today's anchor-drift error already carries the node id
+("... since spec 'session-console' v169"), so the loop is: commit -> blocked, node named -> retry
+with that name in a `--trailer`. Two commands, the second copied out of the error text.
+
+That is the same operation count as today ("blocked -> run `spex spec ack <node>`"). The only
+difference is where the declaration lands: welded to the change instead of in a separate empty
+commit.
+
+## The cost I am not glossing
+
+An agent writing a long message via heredoc must put the trailer at the end of the heredoc, or
+switch to the `--trailer` flag. Minor, and it is not new for `Session:` (the hook handles that one
+invisibly) — but `Spec-OK:` must be written deliberately by the author. That is correct: it is a
+claim, and a claim should not be automated.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:20:45.760Z -->
+CORRECTION — I said the ack source is the commit SUBJECT and that trailers are merely decorative.
+Wrong. I read one of two code paths and generalised. The maintainer asked whether the subject was
+chosen for a reason; checking that question is what surfaced this.
+
+There are TWO index builders, with DIFFERENT criteria:
+
+    git.ts:536  buildLazyDriftIndex   --grep='^ack: Spec-OK'  +  %s          <- subject
+    git.ts:575  buildDriftIndex       %(trailers:key=Spec-OK,valueonly,…)    <- TRAILER, git-native
+
+So the trailer is already the source on the eager path, using git's own trailer extractor. And the
+subject IS there for a reason: `--grep` prunes the walk inside git, so the lazy path never has to
+fetch a full body per commit. That is a sound optimisation, not an oversight.
+
+## What this changes
+
+    path                          a content commit carrying a `Spec-OK:` trailer
+    eager  buildDriftIndex        RECOGNISED
+    lazy   buildLazyDriftIndex    NOT recognised
+
+One concept, two criteria. Invisible today because `spex spec ack` guarantees the subject format,
+so both paths agree on every ack that exists. But the moment `Spec-OK:` may ride a commit with
+content — which is exactly what this design requires — the two paths DISAGREE: eager honours the
+declaration, lazy does not.
+
+So piece 1 is not "change the source of truth from subject to trailer" (which sounded like
+inventing something). It is: **make the lazy path's criterion agree with the eager one.** The
+payload, the carrier, the parser and one of the two readers are all already correct; a
+performance-motivated prune quietly narrowed the semantics on the other.
+
+That also drops piece 1's cost from "change a mechanism" to "reconcile an inconsistency" — and it
+is worth fixing on its own merits, since two readers of one concept disagreeing is a latent defect
+regardless of whether the gate ever moves.
+
+Retracting the corresponding claim in my previous post and in the summary I gave the maintainer.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:39:53.855Z -->
+CORRECTING MY OWN CASE AGAINST THIS PROPOSAL — the maintainer caught an error that inflated it.
+
+I had listed three costs of overturning the recorded decision (spec-lint: "One gate, no
+staged-index machinery"; code-anchor: "there is no separate staged-index gate"). Two of them do
+not survive scrutiny, and the first was simply wrong.
+
+## Wrong: "one rule would grow two semantics"
+
+I claimed CI has no pending commit, so the rule would need two modes. It does not. It is ONE
+function with a different tip:
+
+    judge(tip):  window = (node's last spec.md commit, tip]
+
+    commit-msg   judge(pending)   history as usual, plus one element at the tip
+    CI           judge(HEAD)      exactly today's behaviour — CI changes not at all
+
+The staged content does not REPLACE history; it appends one element to it. The implementer had
+already said this ("a `tip` parameter threaded through the two index builders, defaulting to
+HEAD") and I restated it as a semantic fork. It is not.
+
+## What the real difference is: granularity, not semantics
+
+    local   judge(this commit)   PER-COMMIT
+    CI      judge(HEAD)          per-tree
+
+One genuine divergence follows:
+
+    commit A moves an anchored unit, says nothing        -> blocked locally
+    commit B would have updated the spec next            -> final tree is clean, CI would pass
+
+So local becomes STRICTLY STRICTER than CI: it forbids iterating across commits and forces code
+and spec into one commit. That is the shape the ritual mandates, so it can be read as enforcing
+stated discipline — but it does remove a real degree of freedom, and it is precisely the
+adversary's objection from post 8. This is the one cost that stands.
+
+## Also weak: my other two
+
+"Gating on the real index would block an ack" — the spec's own words, and the reason the
+tree-unchanged door exists. But in this design the ack is a TRAILER on the commit itself; there is
+no separate ack commit to be blocked by unrelated staged work. The empty stamp survives for backlog
+clearing and still rides the tree-unchanged door. The concern largely dissolves.
+
+"It reintroduces a retired commit-local gate" — `lint.driftErrorThreshold` was retired because its
+CRITERION was wrong (a commit count says nothing about whether the contract was touched), not
+because commit-local gating is wrong. This design keeps the spatial criterion and only changes the
+tip. Weak objection.
+
+## Revised balance
+
+    against    local strictly stricter than CI — no cross-commit iteration
+    for        the 28% gain a front door (a content-bearing ack, impossible when the decision was
+               made — `Spec-OK` could only ride an empty stamp then), and cost stops transferring
+               to the next committer
+
+My earlier recommendation (do the re-anchoring first) still holds, but NOT for the reason I gave.
+Not "B costs too much". Rather: the measured cause of the friction I actually hit is the 83%
+file-sized anchor, which is unrelated to this decision, and fixing it is zero-risk. Whether B is
+still worth overturning a recorded decision should be judged AFTER that, on whether the pain
+remains.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:46:25.819Z -->
+MEASURED THE ANCHOR-SPAN DISTRIBUTION — and it retracts the doctor-check proposal that three
+agents and I had converged on.
+
+Ran the project's own extractor over all 119 anchored `code:` entries:
+
+    span 80-100% :  8
+    span 60-79%  :  7
+    span 40-59%  : 13
+    span 20-39%  : 22
+    span  0-19%  : 69      resolved 119, unresolved 0
+
+Top of the distribution:
+
+     95%  ( 172/ 182)  session-rename #SessionContextMenu
+     93%  (  97/ 104)  reconnect #createResilientSocket
+     87%  ( 110/ 126)  tooltip #TooltipLayer
+     85%  (  40/  47)  resizable-panes #useResizable
+     83%  ( 882/1060)  session-console #SessionInterface
+     81%  (  59/  73)  node-menu #NodeContextMenu
+     80%  ( 563/ 707)  event-detail #EventDetail
+     80%  (  36/  45)  forge-cache #ForgeCache
+
+## The proposed check would be mostly false positives
+
+A "warn when an anchor spans > ~60% of its file" rule flags 15 entries, of which the large majority
+are CORRECT anchors: a file that contains exactly one component or one function SHOULD have an
+anchor covering ~95% of it. `SessionContextMenu` at 172/182 lines is not a smell; it is a
+single-purpose file, anchored precisely.
+
+So the check I proposed (and that the taste and adversary lenses both independently suggested)
+measures the wrong quantity. It would also add a THIRD heuristic to a surface that spec-lint's body
+deliberately keeps minimal — "heuristic spec health is deliberately absent from this registry",
+with doctor owning "the one altitude implementation and the one breadth implementation". Adding a
+noisy third is exactly the complexity this project declines to spend.
+
+## The distinguishing quantity is absolute size, not ratio
+
+    SessionContextMenu   172 lines (95%)   a real unit
+    SessionInterface     882 lines (83%)   a god component
+
+882 lines is what makes `SessionInterface` degenerate — inside a unit that large, any edit anywhere
+hits it. That is not an anchoring defect; the component is too big. The ratio is a coincidence.
+
+## Consequences for the plan
+
+1. WITHDRAW the doctor anchor-span check. It is not a pattern, it is one instance.
+2. "Re-anchor session-console" is weaker than I claimed: there is no sub-symbol inside those 882
+   lines that carries the node's contract on its own. The real remedy is SPLITTING the component,
+   which is an independent refactor with its own payoff and does not belong bundled into this
+   thread.
+
+So the "do the zero-risk anchor work first" option, which I recommended twice, mostly evaporates
+on measurement. What remains is the gate change — against which two and a half of my own three
+objections have already been withdrawn.
+
+I would rather record that this reverses my recommendation than leave a tidy plan standing on a
+number nobody had measured. Three lenses agreed on that check; none of us measured the
+distribution first.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:13:03.178Z -->
+THE ARGUMENT, FORMALLY. Written at the maintainer's request ("problem / solution / proof"), and now
+the basis three codex lanes are implementing and attacking against.
+
+## Setup
+
+History is a DAG. H = current HEAD, P = the commit about to be made, H' = H concat P.
+For a node n with anchored unit u(n) in file f(n):
+
+    v(n,T) = the latest commit reachable from tip T that touched n's spec.md      (the version)
+    W(n,T) = { c in (v(n,T), T] : c non-merge, and c's hunks in f(n) intersect
+               u(n)'s line range AS OF c }                                        (hit window)
+    A(n,T) = { c in W : exists ack a naming n with c in reach(a) }                 (acked)
+    D(n,T) = W(n,T) \ A(n,T)                                                       (open drift)
+
+Today's gate:  G  =  not exists n. D(n, H) != empty
+
+## Problem
+
+PROPOSITION 1 (the gate's verdict is independent of what it judges).
+G's argument is H, and H does not contain P. Hence for any two candidate commits P1, P2, G returns
+the same answer. QED.
+
+One line, but it is the whole defect: a gate deciding whether P may land evaluates a predicate that
+does not mention P. Two corollaries, both measured in this thread:
+
+  (a) a P that INTRODUCES drift is admitted   — P's hit is not in W(n,H), since P is not in H
+  (b) a P that REPAIRS drift is rejected      — P touching spec.md cannot move v(n,H)
+
+PROPOSITION 2 (liability transfers). A hit introduced by P first appears in the window of some
+H'' superset of H'. The first commit judged after P pays for it, and that commit's author need not
+be P's author. Measured: merge 53451009 carried drift onto main and blocked every worker.
+
+## Solution
+
+    G' = not exists n. D(n, H') != empty          same predicate, different tip
+
+and A must be able to contain P, which requires the in-commit declaration:
+
+    A'(n,T) = { c in W : exists ack a naming n with c in reach(a) }
+            union { c in W : c's own message declares Spec-OK: n }
+
+## Proof
+
+THEOREM 1 (the ritual shape passes by construction).
+If P touches both u(n) and n's spec.md: P touches spec.md so v(n,H') = P; hence
+W(n,H') = (P, H'] = empty since H' has tip P; hence D(n,H') = empty. QED.
+Note it passes because the WINDOW IS EMPTY, not by an exemption clause. This is the formal content
+of "derived, not bolted on" — and it is why the staged-set exemption I proposed and retracted twice
+was the wrong shape both times.
+
+THEOREM 2 (the offender is caught at its source).
+If P intersects u(n) and touches neither n's spec.md nor declares Spec-OK: n, then
+v(n,H') = v(n,H), so P is in (v, H']; P intersects, so P is in W(n,H'); no ack reaches P (prior acks
+cannot, P declares nothing), so P is not in A'; hence D(n,H') contains P. QED.
+
+THEOREM 3 (the trailer is NECESSARY, not a convenience).
+Claim: without an in-commit declaration there exists a correct commit that is unconditionally
+rejected. Let P intersect u(n) where n's contract genuinely still holds and P's author does not own
+n. Three moves exist and all are closed:
+  - amend n's spec.md — a false statement about a contract the author did not change;
+  - a PRIOR ack a — A is defined by reach(a), and P is a DESCENDANT of a, so P not in reach(a)
+    (measured: ack-then-hit still errors);
+  - a LATER ack — requires P to land first, and G' rejects P.
+Hence P is rejected under every available move. QED.
+This is the formal version of the measured 76-commit case, and it is why the trailer cannot be
+deferred to a follow-up: without it G' is incomplete.
+
+THEOREM 4 (completeness with the trailer).
+For any P intersecting u(n), at least one move makes G' hold: P touches n's spec.md (Theorem 1), or
+P declares Spec-OK: n (P in A', so P not in D). Every commit has an available path. QED.
+
+COROLLARY (merges are neutral for free).
+W excludes merge commits by definition, and a merge's --unified=0 diff yields no hunks, so a merge P
+contributes W = empty for every n and G' is vacuously true. No special case needed.
+
+## The cost, also formally
+
+    local admits B = P1..Pk  iff  for all i,n. D(n, H concat P1..Pi) = empty     per-commit
+    CI    admits B           iff  for all n.   D(n, H concat B)      = empty     per-tree
+
+STRICT INCLUSION: { B : local admits all Pi } is a proper subset of { B : CI admits B }.
+Witness: P1 moves u(n), P2 updates n's spec.md. CI sees v = P2 so W = empty and passes; local
+already rejected P1.
+
+So local becomes strictly stricter than CI: it forces code and spec to land atomically — which the
+ritual already mandates, so the restriction coincides with a stated discipline — but it does remove
+cross-commit iteration. This is the one real cost and it must not be glossed.
+
+Unity is NOT broken: judge(tip) is one predicate; CI passes H, the gate passes H'. Parameterisation,
+not a second implementation. My earlier claim that this forks the rule into two semantics was wrong
+and is retracted in post 20.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T10:58:53.405Z -->
+CONSOLIDATED ACCEPTANCE LIST — three lanes are implementing/attacking against criteria scattered
+across dozens of messages. This is the single authoritative list, so nobody reconstructs it from
+chat. Everything below was MEASURED in this thread unless marked otherwise.
+
+## The bar
+
+    NOT "perfect coverage". The bar is NO WORSE THAN TODAY on every path, better on some.
+    A cell that is worse AND unrecoverable        -> the candidate is out.
+    A cell that is worse but recoverably so       -> a cost; write it in the spec body.
+    Recovery counts only if it is HONEST and bounded — an action that requires the author to
+    state something untrue is not a recovery path.
+
+## Architecture both lanes converged on (independently, under adversarial pressure)
+
+commit-msg ARMS a marker; `reference-transaction` at `prepared` reads the REAL new oid and lints
+with it. Rationale: amend is undecidable at commit-msg, so any design that PREDICTS the pending
+commit's parents has an unacceptable cell. Reading the real object removes the guess entirely.
+Fallback: no marker / no canonical ref hook -> pre-commit keeps today's old-HEAD gate.
+
+## Discriminator for ack kind (corrected twice)
+
+    stamp ack  <=>  |parents(c)| == 1  AND  tree(c) == tree(parent(c))     covers reach(a)
+    self ack   <=>  everything else                                        covers {a} only
+
+The parent-count clause is NOT decoration. Measured: `git merge -s ours` produces tree ==
+first-parent tree while making commits newly reachable; without the clause such a merge carrying
+`Spec-OK:` would checkpoint the whole side branch's debt. Root cause of the earlier miss: we were
+testing "did content change" while an ack's authority is over REACHABILITY. The criterion must be
+the same dimension as what it authorises.
+
+Backward compatible: every existing ack is `commit --allow-empty --only`, i.e. one parent and an
+unchanged tree, so all of history lands in the stamp branch unchanged.
+
+## Mandatory cases (highest priority first)
+
+ 1. SELF-ACK MUST NOT WASH HISTORY. C1 = old unanswered debt; P = content commit carrying
+    `Spec-OK: n`. Both land (bypassing the gate). HEAD lint MUST still report C1.
+    Mechanism it guards: git.ts:706 `cover.push(ancestorsOf(h))` — an ack covers ALL its
+    ancestors, which is right for a stamp and wrong for a self-declaration.
+ 2. NO CROSS-NODE WASHING. Shared file; C1 self-acks only A, C2 self-acks only B. HEAD must report
+    C2 for A and C1 for B. (Already caught one lane using a global boolean here.)
+ 3. `-s ours` MERGE MUST NOT CHECKPOINT. Side branch holds unanswered C1; trunk merges with
+    `-s ours` and a `Spec-OK: n` trailer. HEAD lint MUST still report C1.
+ 4. AMEND MUST NOT BE FALSELY REJECTED. HEAD = C, a spec-only commit, lint green. Author runs
+    `git commit --amend -m` adding code. MEASURED: today's pre-commit passes it (0 errors), and
+    the real replacement contains spec.md + code together. A fixed `-p HEAD` design rejects it —
+    confirmed a false rejection, not par. Recovery via `Spec-OK` is NOT honest here: the spec body
+    scopes that trailer to implementation-only changes, and this replacement changes both.
+ 5. RECOVERABILITY AFTER A REF REJECTION (five conditions): branch ref unchanged; staged and
+    sequencer state intact; error text names both continue and abort; after adding spec or trailer,
+    continue actually succeeds; abort actually restores. Rationale: auto-abort would destroy the
+    author's completed conflict resolution, which violates this repo's "break then recover is
+    acceptable when the recovery path is explicit and bounded".
+ 6. ARM FILTERING. `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch must
+    never arm, hence never pay for a lint.
+ 7. CONCURRENCY. Two concurrent commits in one repo (routine here: workers commit while the issue
+    store writes ~328 times/month). A marker overwritten by the second must not cause the first to
+    be SILENTLY skipped.
+
+## Hook facts, all measured here
+
+    ordinary       pre-commit Y  prepare Y  commit-msg Y  reference-transaction Y
+    --no-verify    pre-commit N  prepare Y  commit-msg N  reference-transaction Y
+    clean --no-ff merge          runs pre-merge-commit + commit-msg, NOT pre-commit
+    cherry-pick / rebase         prepare/post only
+
+`--no-verify` still running `prepare-commit-msg` is what lets "prepare unconditionally deletes any
+stale marker" work: the marker's meaning tightens to "this commit just passed through commit-msg",
+which is stronger than a TTL.
+
+prepare-commit-msg's `$2` distinguishes only amends that REUSE the message (`--no-edit`, editor,
+`-c`, `-C` -> `source=commit`). `git commit --amend -m` is byte-identical to an ordinary commit
+(`source=message`). So amend is PARTIALLY decidable at prepare, not decidable at commit-msg.
+
+## A rejected reference-transaction leaves nothing that pollutes the gate
+
+MEASURED: HEAD unmoved, staged files intact, the aborted commit does NOT appear in the reflog and
+is NOT visible to `rev-list --all`. It exists only as a dangling object visible to `git fsck`, and
+is gc-collectable. So window computation cannot see it. This removes one worry about the shared
+architecture.
+
+## Standing warning
+
+Two lanes converging on one architecture is NOT evidence that the architecture is correct,
+especially after they have seen each other's reasoning. The remaining value of running two
+implementations is that independent implementations of the same design cross-check each other —
+so they must not merge into one, and must not cite each other's measurements as their own
+verification.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T12:12:50.055Z -->
+## 对强制验收 #6 的实测扩充 —— 本轮标尺不动
+
+先纠正我自己:我在广播里把 cherry-pick / rebase 的期望值写成 BLOCKED,并称之为"洞"。**这是单方面移动标尺,撤回。**#6 逐字写的是 `--no-verify` / localIssues / cherry-pick / rebase / reset / fetch / branch 从不上膛因此从不付 lint,所以两条候选在这些入口放行是**合规**,与今天持平,HEAD 侧 lint 仍抓得到债。**它不能用来判任何一条 lane 出局。**上面那张 Hook facts 表里也早写了 `cherry-pick / rebase — prepare/post only`,我那次"根因实测"是把已记录的事实重推了一遍。
+
+以下是实测得到的、#6 目前没有覆盖的部分。记录在案,不改本轮验收。
+
+**一、#6 的枚举不全。**同一族里还有两个入口,#6 没点名:
+
+    P20 git revert(被 revert 的是一个只含代码的提交)  ALLOWED  → 落地后 anchor-drift
+    P22 git am 打补丁                                  ALLOWED  → 落地后 anchor-drift
+
+两者与 cherry-pick / rebase 行为一致(前置 lint=0,放行,落地后门自己报 anchor-drift)。若 #6 的本意是"回放/应用类入口一律不上膛",应把 revert 和 am 补进枚举;若本意只是列举当时测过的,那这两个入口目前处于未声明状态。
+
+**二、#6 把两类东西归成了一类。**它列的七项里:
+
+  - reset / fetch / branch —— 只移动 ref,不产生任何新创作的提交内容
+  - cherry-pick / rebase / revert / am —— **创建新的提交对象**,带内容
+  - --no-verify —— 用户显式表达绕过意图
+  - localIssues —— issue 存储写入,不是代码
+
+"从不付 lint"的成本理由(每月 ~328 次 issue 写入、fetch/reset/branch 频繁)对第一类完全成立,对第二类不成立:第二类是创作行为,频率与普通提交同量级。
+
+**三、区分点是现成的、便宜的,而且两条 lane 已经实现过。**"这次 ref 更新有没有引入该分支上前所未有的提交"——reset 移向已可达的提交,fetch 引入的是上游的提交,而 cherry-pick / rebase / revert / am 都产生本仓库前所未有的新提交对象。这正是两条 lane 在 P16(`-s ours`:树等于第一父,但让欠债提交变为可达)上已经做对的可达性语义。
+
+**四、真要改 #6,代价必须先算清。**攻击方 2310966c 指出:无记号即执法会把执法面扩大到 localIssues / reset / fetch / branch,必须重开 blast-radius 验收。这是对的,而且是改动 #6 的前置条件,不是可以顺手带过的细节。
+
+**结论:本轮维持 #6 原样。**两条候选在这四个入口上与今天持平,不构成区分度,也不构成出局理由。是否把"创作类回放入口"从 #6 的豁免里摘出来,是一次独立的范围决定,需要人来拍,并且要先跑 blast-radius 验收 —— 在那之前,我不会用这四格评判任何一条 lane。
+
+我个人的看法仍然记在这里,供那次决定参考:一个只在"用户老实用 git commit"时才成立的门,防不住日常操作,而 rebase 与 cherry-pick 的使用者并没有表达任何绕过意图 —— 这与 --no-verify 的豁免理由不同。但这是看法,不是本轮的标尺。

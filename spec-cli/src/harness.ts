@@ -1,5 +1,5 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
@@ -13,7 +13,7 @@ import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadle
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
-import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
+import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
 
@@ -52,6 +52,14 @@ export interface Harness {
   // whether the launch command intentionally exits after its first turn instead of owning a resident process.
   // One-shot adapters must not be mistaken for a failed fast boot and retried with a duplicate prompt.
   readonly launchOneShot?: boolean
+  // @@@ fatalLaunchOutput - extended regexes matching THIS harness's own report of a launch failure that
+  // RUNNING IT AGAIN CANNOT FIX: a conversation that does not exist, a rejected credential, a broken config.
+  // A launcher that exits within the boot window tells us only that it exited fast, which is why the transport
+  // retries — but when the harness itself named a settled cause, retrying spends a certain failure two more
+  // times and buries the one line that explains it. So the transport asks the ADAPTER, and the adapter is the
+  // only place a harness's wording is ever matched: product code consumes the verdict (retry / fatal), never
+  // the text. A harness that declares none keeps the plain bounded retry.
+  readonly fatalLaunchOutput?: readonly string[]
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
   // Codex's canonical hook event set (its `HookEventName` enum, codex 0.142.3) has no failed-stop and no
   // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
@@ -164,7 +172,9 @@ export interface Harness {
   // Remove this harness's ephemeral runtime transport after stop/close. This is the runtime inverse of
   // launch: rendezvous owners unlink rvSock, claude-headless unlinks its control socket, Codex owns no
   // per-session socket. Product teardown calls only this adapter method.
-  cleanupRuntime(rec: HarnessLivenessRecord): void
+  // Async because removal is CONDITIONAL on proof: a transport is only ours to remove once its listener is
+  // proven dead (see unlinkSocks), and that proof is a connect probe.
+  cleanupRuntime(rec: HarnessLivenessRecord): Promise<void>
   // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
   // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
   // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
@@ -215,12 +225,36 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
 // that one spawned command (env prefix, never global). claude opens a unix socket here; writing one line
 // `{"type":"reply","text":"…"}\n` injects + submits the text as a prompt — no PTY typing, so multi-line input
-// and Enters can't be corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id,
-// so we only ever address OUR OWN sockets (HARD ethics rule: never touch a session outside this product). It
-// lives in tmpdir tied to the claude process, so no extra lifecycle. liveness CONNECTS to it (a live LISTENER,
-// not merely the file — see rendezvousListening); deliver writes to it. Exported because sessions.ts builds the
-// launch env var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
-export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+// and Enters can't be corrupted the way `tmux send-keys` was. It lives in tmpdir tied to the claude process, so
+// no extra lifecycle. liveness CONNECTS to it (a live LISTENER, not merely the file — see rendezvousListening);
+// deliver writes to it.
+//
+// The path is a LAUNCH-TIME FACT, recorded — not a formula every consumer re-derives. The id alone was not
+// enough to name it: `SPEXCODE_HOME` scopes the store and `SPEXCODE_TMUX` scopes the tmux server, so two
+// worlds on one box (a fixture, a migration, a copied record) can hold the same session id — and while the
+// path ignored that scoping, they SHARED this socket. That is how an isolated teardown reached out and
+// stranded a live production agent, and delivery would have crossed the same way. So the path a launch hands
+// its agent is derived from the runtime the session belongs to (`runtimeRoot()` — the same identity that
+// scopes its store) and STAMPED beside the record, exactly like `agent.pid`: a launch-time fact, readable by
+// everyone who needs to reach that agent afterwards. Recording it (rather than re-deriving) also means the
+// derivation can change again without stranding anything already running.
+// `legacyRvSock` is the answer for a session launched BEFORE the stamp existed — its agent really did bind
+// the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
+export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
+  join(tmpdir(), `spexcode-rv-${createHash('sha1').update(dir).digest('hex').slice(0, 12)}-${id}.sock`)
+const rvStamp = (id: string) => sessionArtifactPath(id, 'rv.path')
+export const rvSock = (id: string): string => {
+  try { return readFileSync(rvStamp(id), 'utf8').trim() || legacyRvSock(id) } catch { return legacyRvSock(id) }
+}
+// launch's half: derive this session's socket in ITS runtime and record it, so every later reader (launch env,
+// liveness probe, delivery, teardown) reads the one path the agent actually bound.
+export function stampRvSock(id: string, dir = runtimeRoot()): string {
+  const path = scopedRvSock(id, dir)
+  mkdirSync(dirname(rvStamp(id)), { recursive: true })
+  writeFileSync(rvStamp(id), path)
+  return path
+}
 
 // @@@ rendezvousListening - the LISTENER check that IS claude's liveness truth ([[state]], [[harness-adapter]]).
 // A crashed/killed claude can leave its rvSock FILE on disk (a unix-domain socket path is NOT auto-unlinked on
@@ -238,7 +272,7 @@ export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 // wedged/thrashed path. Never throws.
 export type ListenerProbe = 'live' | 'dead' | 'unproven'
 const PROVEN_DEAD = new Set(['ECONNREFUSED', 'ENOENT'])
-export function rendezvousListening(id: string, timeoutMs = 800): Promise<ListenerProbe> {
+export function listenerAt(path: string, timeoutMs = 800): Promise<ListenerProbe> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection> | undefined
@@ -250,11 +284,12 @@ export function rendezvousListening(id: string, timeoutMs = 800): Promise<Listen
       resolve(v)
     }
     const timer = setTimeout(() => done('unproven'), timeoutMs)
-    try { c = createConnection({ path: rvSock(id) }) } catch { return done('unproven') }
+    try { c = createConnection({ path }) } catch { return done('unproven') }
     c.on('connect', () => done('live'))
     c.on('error', (e) => done(PROVEN_DEAD.has((e as NodeJS.ErrnoException).code ?? '') ? 'dead' : 'unproven'))
   })
 }
+export const rendezvousListening = (id: string, timeoutMs = 800): Promise<ListenerProbe> => listenerAt(rvSock(id), timeoutMs)
 // The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime
 // dir. macOS caps `sun_path` at ~104 bytes, and `runtimeRoot()` flattens the ENTIRE project path into one
 // dash-segment (`encodeProject`), so `<runtimeRoot>/codex-app-server.sock` blew past the cap on a deep macOS
@@ -1182,8 +1217,36 @@ const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, 
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
 
-const unlinkSocks = (...paths: string[]): void => {
+// @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
+// socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on
+// faith, which is unsound because a socket path is derived from the session id ALONE: it is the one
+// per-session resource NOT scoped by the store (`SPEXCODE_HOME`) or the tmux server (`SPEXCODE_TMUX`), so an
+// isolated instance closing an id that also names a LIVE session elsewhere had its `kill-session` miss (that
+// IS namespaced) while this unlink landed (it is not) — deleting a working agent's socket out from under it.
+// The damage is invisible and permanent: the listener stays bound to an unlinked path, so nothing can ever
+// connect again (delivery fails its existsSync gate) and every probe ENOENTs, which the liveness axis reads as
+// PROVEN death — a live worker reading `offline`, which in turn disarms the relaunch guard.
+// So: poll until death is proven, then unlink. A listener still answering past the wall is somebody's live
+// agent — mine that failed to die, or one that was never mine — and either way it is not ours to remove: leave
+// it and say so. `unproven` is not proof either, so it is left too. The asymmetry is deliberate: a dead-but-
+// unlinked file is harmless residue the next teardown reaps, while a wrong unlink strands a working agent.
+const SOCK_DEATH_WALL_MS = 2000   // a killed agent releases its listener in well under this; the wall only bounds the wrong case
+const SOCK_DEATH_POLL_MS = 100
+export const unlinkSocks = async (...paths: string[]): Promise<void> => {
   for (const path of paths) {
+    if (!existsSync(path)) continue
+    const deadline = Date.now() + SOCK_DEATH_WALL_MS
+    let probe = await listenerAt(path)
+    while (probe !== 'dead' && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, SOCK_DEATH_POLL_MS))
+      probe = await listenerAt(path)
+    }
+    if (probe !== 'dead') {
+      console.warn(`spex: left ${path} in place — ${probe === 'live'
+        ? 'a listener is still answering it, so it belongs to a running agent (this teardown did not kill it, or it was never ours)'
+        : 'the listener probe could not conclude, and death was never proven'}`)
+      continue
+    }
     try { rmSync(path, { force: true }) } catch { /* already gone */ }
   }
 }
@@ -1231,6 +1294,11 @@ export const claudeHarness: Harness = {
       ? 'the claude TUI is focused on its sessions panel ("← for agents"), which silently swallows injected prompts — press Enter in the session terminal to return to the composer, then resend'
       : null,
   resumeArg: (rec) => `--resume ${rec.session}`,
+  // claude's settled launch failures, in its own words: a `--resume` id it has no conversation for (the id was
+  // never claude's, or its transcript is gone), and a rejected credential. Both are the same command failing
+  // the same way every time — the human must repair the conversation or the login, so the transport stops at
+  // one attempt and shows this line instead of burying it under two more identical failures.
+  fatalLaunchOutput: ['No conversation found with session ID', 'Invalid API key', 'Please run /login'],
 }
 
 // Claude headless is a separate harness, not a claude mode. Its materialize half is exactly Claude's and is
@@ -1318,11 +1386,15 @@ export const codexHarness: Harness = {
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  cleanupRuntime: () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
+  // codex's own settled failure: a thread id whose rollout is not on disk can never be resumed, so the launch
+  // that says so has already decided. (Its transient sibling — the rollout still being written — is handled
+  // BEFORE launch by waitForCodexRollout, so what reaches here is the permanent case.)
+  fatalLaunchOutput: ['no rollout found for thread id'],
 }
 
 // Codex headless is an independent adapter: its materialization and app-server delivery are exactly Codex's,

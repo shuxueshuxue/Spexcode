@@ -653,3 +653,63 @@ The hook symmetry that makes it possible:
 
     prepare-commit-msg   before the message is final   SHIPPED   writes `Session:`
     commit-msg           after it is final             empty     could read/validate, can still block
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:52:07.992Z -->
+CORRECTING MY OWN ARGUMENT, and recording a fragile contract the probe exposed.
+
+## I argued piece 1 with the wrong example
+
+I justified "put structured facts in the commit message" by pointing at the `Session:` trailer.
+The maintainer called that out: `Session:` is attribution for a history view. Display. Low stakes.
+Using it to argue for a gate input is weak, and he is right.
+
+The example I needed was sitting next to it. On a real ack commit (4be2ab67):
+
+    $ git log -1 --format=%B 4be2ab67 | git interpret-trailers --parse
+    Spec-OK: session-console          <- a GATE INPUT
+    Session: abe9f2bd-…               <- the display one
+
+`Spec-OK:` is already parsed out of a commit message today, and it already decides whether drift
+blocks you — that is what `ackCoverFor` reads. So the precedent is not "this project writes
+trailers". It is:
+
+    THE ACK MECHANISM IS ALREADY A COMMIT-MESSAGE TRAILER.
+
+Piece 1 therefore introduces no new message parsing whatsoever. It moves the EXISTING parse one
+step earlier. I should have led with that instead of reaching for the decorative case.
+
+(On "that isn't structured": `git interpret-trailers` is git's own trailer parser and `Key: value`
+is its format, not free text. The two lines above are its output.)
+
+## prepare-commit-msg vs commit-msg, measured
+
+    1) pre-commit           message file holds the PREVIOUS commit's text — this one has none yet
+    2) prepare-commit-msg   receives the DRAFT; may rewrite it (this is where `Session:` is stamped)
+    3) commit-msg           receives the FINAL text; may read it and reject
+
+prepare = the form template you are handed. commit-msg = the review when you hand it back. Only
+the second sees what will actually be committed, which is exactly what a gate needs: `Spec-OK:` is
+an AUTHOR'S declaration, and at prepare time the author has not written it yet (or could still
+delete it afterwards).
+
+## A fragile contract the probe exposed — worth guarding when this ships
+
+In my probe the `Spec-OK:` line I wrote was NOT parsed. Cause: `prepare-commit-msg` appended its
+own line after a BLANK line, splitting the message into two paragraphs:
+
+    probe: my change
+                              <- blank
+    Spec-OK: session-console
+                              <- blank
+    Auto-Stamped: by-the-hook <- git only treats the LAST contiguous block as trailers
+
+git recognises only the final contiguous paragraph as the trailer block.
+
+Real history is fine — SpexCode's `prepare-commit-msg` appends `Session:` directly ADJACENT to
+`Spec-OK:` (visible on 4be2ab67; both parse). But that is an implicit, unguarded contract: the day
+anything inserts a blank line between them, `Spec-OK:` silently stops being a trailer, the gate
+stops seeing the ack, and nothing complains.
+
+If piece 1 ships, this must be made explicit — validate that the trailer block is contiguous, or
+write via `git interpret-trailers --if-exists addIfDifferent` rather than a bare append. A silent
+failure mode in the escape valve is worse than no escape valve.

@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/richText.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/rich-conversation.e2e.mjs
+  - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/package.json
   - spec-dashboard/package-lock.json
 ---

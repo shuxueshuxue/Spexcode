@@ -30,22 +30,23 @@ test('renders compact agent Markdown and both inline and display math', () => {
   assert.match(html, /<pre><code class="language-js">const price = '\$5'/)
 })
 
-test('keeps untrusted HTML, links, images, and invalid math inert and readable', () => {
+test('renders Markdown images while keeping unsafe markup and invalid math readable', () => {
   const html = renderRichText([
     '<img src=x onerror="globalThis.pwned=1">',
     '',
     '[unsafe](javascript:globalThis.pwned=1)',
     '',
-    '![tracker](https://example.test/pixel.png)',
+    '![unsafe image](javascript:globalThis.pwned=1)',
+    '',
+    '![remote](https://example.test/render.svg "preview")',
     '',
     '$\\definitelyNotACommand{$',
   ].join('\n'))
 
-  assert.doesNotMatch(html, /<img\b/i)
   assert.doesNotMatch(html, /href="javascript:/i)
+  assert.doesNotMatch(html, /src="javascript:/i)
   assert.match(html, /&lt;img src=x onerror=&quot;globalThis\.pwned=1&quot;&gt;/)
-  assert.match(html, /tracker/)
-  assert.doesNotMatch(html, /pixel\.png/)
+  assert.match(html, /<img src="https:\/\/example\.test\/render\.svg" alt="remote" title="preview">/)
   assert.match(html, /katex-error/)
   assert.match(html, /definitelyNotACommand/)
 })

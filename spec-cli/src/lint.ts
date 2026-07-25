@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, driftIndex, historyIndex, rowsFor } from './git.js'
+import { repoRoot, git, driftIndex, historyIndex, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
@@ -31,10 +31,17 @@ const DEFAULT_CONFIG: LintConfig = {
   scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
   scopedCodeMiss: 'warn',
 }
-export function loadConfig(root: string): LintConfig {
+export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
   // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
   // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
-  const c = readJsonConfig(join(root, 'spexcode.json'))?.lint ?? {}
+  let parsed: any
+  if (pendingSource === undefined) parsed = readJsonConfig(join(root, 'spexcode.json'))
+  else if (pendingSource === null) parsed = {}
+  else {
+    try { parsed = JSON.parse(pendingSource) }
+    catch (e: any) { throw new Error(`invalid JSON in candidate spexcode.json: ${e?.message ?? e}`) }
+  }
+  const c = parsed?.lint ?? {}
   const merged = { ...DEFAULT_CONFIG, ...c }
   return normalizeConfig(merged)
 }
@@ -61,10 +68,25 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export async function specLint(root = repoRoot(), regs = extractors(root)): Promise<Finding[]> {
-  const cfg = loadConfig(root)
-  const governed = trackedSourceFiles(root, cfg.governedRoots, cfg)
-  const specs = await loadSpecs(root)
+export type SpecLintOptions = { tip?: string; deferAnchor?: boolean }
+export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
+  const tip = options.tip ?? 'HEAD'
+  const pending = tip !== 'HEAD'
+  const files = pending ? treeFilePaths(root, tip) : null
+  const directories = new Set<string>()
+  for (const file of files ?? []) {
+    const parts = file.split('/')
+    for (let i = 1; i < parts.length; i++) directories.add(parts.slice(0, i).join('/'))
+  }
+  const existsAtTip = (path: string) => files ? files.has(path) || directories.has(path.replace(/\/+$/, '')) : existsSync(join(root, path))
+  const isDirectoryAtTip = (path: string) => files
+    ? !files.has(path) && directories.has(path.replace(/\/+$/, ''))
+    : statSync(join(root, path)).isDirectory()
+  const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
+  const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
+  const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
+  const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
+  const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
   const out: Finding[] = []
 
   // integrity + build the file -> owners map. A relation's STRUCTURAL problems (a duplicate entry,
@@ -77,7 +99,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root)): Prom
       out.push({ level: 'error', rule: 'integrity', spec: s.id, msg: `'${s.id}' ${p}` })
     const scopedPaths = new Set(s.codeScoped.map((e) => e.path))
     for (const f of s.code) {
-      if (!existsSync(join(root, f)))
+      if (!existsAtTip(f))
         out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing file: ${f}` })
       claimed.add(f)
       // a selector-SCOPED entry claims named units, not the whole file, so it stays out of the owners
@@ -95,7 +117,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root)): Prom
   // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
   // related, not govern (see [[governed-related]]). It carries coverage but never drift, never eval freshness.
   for (const s of specs) for (const f of s.related) {
-    if (!existsSync(join(root, f)))
+    if (!existsAtTip(f))
       out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing related file: ${f}` })
     claimed.add(f)
   }
@@ -207,7 +229,6 @@ export async function specLint(root = repoRoot(), regs = extractors(root)): Prom
   // silent for either relation: a dead or ambiguous selector, a selector on a directory, and an
   // unparseable working-tree file ERROR. An extension with no designated extractor, or a designated
   // extractor that cannot run here, also ERRORS but skips those anchors so the remaining checks continue.
-  const [didx, hidx] = await Promise.all([driftIndex(root), historyIndex(root)])
   const readyWarned = new Set<string>()
   for (const s of specs) {
     for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
@@ -223,13 +244,17 @@ export async function specLint(root = repoRoot(), regs = extractors(root)): Prom
           if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); out.push({ level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` }) }
           continue
         }
-        if (!existsSync(join(root, path))) continue // the missing FILE already errored above
-        if (statSync(join(root, path)).isDirectory()) {
+        if (!existsAtTip(path)) continue // the missing FILE already errored above
+        if (isDirectoryAtTip(path)) {
           out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` })
           continue
         }
         let units
-        try { units = x.extract(readFileSync(join(root, path), 'utf8'), path) } catch (e: any) {
+        try {
+          const source = textAtTip(path)
+          if (source === null) throw new Error(`candidate tree has no file '${path}'`)
+          units = x.extract(source, path)
+        } catch (e: any) {
           out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` })
           continue
         }
@@ -259,9 +284,10 @@ export async function specLint(root = repoRoot(), regs = extractors(root)): Prom
         const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')
         const unparseable = hits.filter((h) => h.unparseable)
         const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
-        if (relation === 'code')
-          out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
-        else
+        if (relation === 'code') {
+          if (!options.deferAnchor)
+            out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds` })
+        } else
           out.push({ level: 'warn', rule: 'related-drift', spec: s.id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${s.id}') was changed by ${hits.length} commit(s) since v${s.version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
       }
     }

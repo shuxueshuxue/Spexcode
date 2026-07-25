@@ -102,15 +102,20 @@ scenarios:
     tags: [cli]
     description: >
       In a real temporary Git repository with an anchored node, exercise the installed local gate through
-      ordinary commit, commit --only with conflicting unstaged worktree content, cherry-pick, and rebase.
-      First try an anchored implementation-only commit with no declaration; then try the same candidate
-      with either the node's spec.md changed in that commit or a `Spec-OK: <node>` trailer.
+      ordinary commit, merge, squash, commit --only with conflicting unstaged worktree content, cherry-pick,
+      rebase, --no-verify, and a clone with no hooks. First try an anchored implementation-only commit with
+      no declaration; then try the same candidate with either the node's spec.md changed in that commit or
+      a `Spec-OK: <node>` trailer.
     expected: >
-      Every newly-created commit is judged against its own final tree, message, and ancestry before its ref
-      advances. The undeclared anchor hit is rejected and leaves the original branch ref in place; changing
-      code and spec together passes because the candidate spec version closes the window; an in-commit
-      Spec-OK trailer also passes. Unstaged worktree decoys never affect a --only candidate, and replayed
-      commits are subject to the same verdict rather than bypassing it through a hook Git does not invoke.
+      On paths where Git invokes the installed gate (ordinary commit, merge, squash, and a conflict's manual
+      commit), each new commit is judged against its own final tree, message, parents, and ancestry before
+      its ref advances. The undeclared anchor hit is rejected and leaves the original branch ref in place;
+      changing code and spec together passes because the candidate spec version closes the window; an
+      in-commit Spec-OK trailer also passes without pardoning older debt. A --only verdict sees only paths
+      actually present in that candidate; conflicting unstaged worktree content cannot affect it. On paths
+      that do not invoke the gate (cherry-pick, rebase, --no-verify, and a clone without hooks), local
+      coverage remains equal to today's rather than promising an impossible immediate rejection; once such
+      a commit lands, the ordinary HEAD predicate used by CI still reports its unanswered drift.
 ---
 # code-anchor — measurement
 

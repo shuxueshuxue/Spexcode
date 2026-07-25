@@ -121,6 +121,84 @@ export function git(args: string[]): string {
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
+function gitBuffer(args: string[], input?: string): Buffer {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  try {
+    return execFileSync('git', withBuildLimits(args), {
+      input,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: GIT_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: 1 << 27,
+    })
+  } catch (e: any) { warnIfTimedOut(e, args); throw e }
+}
+
+type TreeBlob = { oid: string; path: string }
+function treeBlobs(root: string, tip: string, pathspec = '.'): TreeBlob[] {
+  const out = git(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', tip, '--', pathspec])
+  const blobs: TreeBlob[] = []
+  for (const record of out.split('\0')) {
+    if (!record) continue
+    const m = record.match(/^\d+ blob ([0-9a-f]+)\t([\s\S]+)$/)
+    if (m) blobs.push({ oid: m[1], path: m[2] })
+  }
+  return blobs
+}
+
+// Read a tree slice in two Git calls regardless of file count: ls-tree names immutable blob oids, then
+// cat-file --batch returns their exact bytes. Pending lint uses this for .spec so commit --only/partial
+// staging can never be judged through unrelated working-tree prose.
+export function treeTextFiles(root: string, tip: string, pathspec = '.'): Map<string, string> {
+  const blobs = treeBlobs(root, tip, pathspec)
+  const files = new Map<string, string>()
+  if (!blobs.length) return files
+  const out = gitBuffer(['-C', root, 'cat-file', '--batch'], blobs.map((b) => b.oid).join('\n') + '\n')
+  let offset = 0
+  for (const blob of blobs) {
+    const newline = out.indexOf(10, offset)
+    if (newline < 0) throw new Error(`git cat-file --batch ended before ${blob.path}`)
+    const header = out.subarray(offset, newline).toString('utf8')
+    const size = Number(header.match(/ blob (\d+)$/)?.[1])
+    if (!Number.isFinite(size)) throw new Error(`git cat-file --batch returned '${header}' for ${blob.path}`)
+    const start = newline + 1, end = start + size
+    files.set(blob.path, out.subarray(start, end).toString('utf8'))
+    offset = end + 1 // one LF follows each payload
+  }
+  return files
+}
+
+export function treeFilePaths(root: string, tip: string): Set<string> {
+  return new Set(treeBlobs(root, tip).map((b) => b.path))
+}
+
+export function treeFileText(root: string, tip: string, path: string): string | null {
+  try { return gitBuffer(['-C', root, 'cat-file', 'blob', `${tip}:${path}`]).toString('utf8') } // dead-words-ok: git plumbing
+  catch { return null }
+}
+
+function commitTreeOids(root: string, hashes: string[]): Map<string, string> {
+  const unique = [...new Set(hashes.filter(Boolean))]
+  const trees = new Map<string, string>()
+  if (!unique.length) return trees
+  const out = gitBuffer(['-C', root, 'cat-file', '--batch'], unique.join('\n') + '\n')
+  let offset = 0
+  for (const hash of unique) {
+    const newline = out.indexOf(10, offset)
+    if (newline < 0) break
+    const header = out.subarray(offset, newline).toString('utf8')
+    const size = Number(header.match(/ commit (\d+)$/)?.[1])
+    if (!Number.isFinite(size)) break
+    const start = newline + 1, end = start + size
+    const first = out.subarray(start, end).toString('utf8').match(/^tree ([0-9a-f]+)$/m)
+    if (first) trees.set(hash, first[1])
+    offset = end + 1
+  }
+  return trees
+}
+
 type GitExec = { stdout: string; stderr: string }
 
 // execFile's AbortSignal kills only its direct child. A wedged adapter may have descendants (the
@@ -370,13 +448,14 @@ function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise:
   cache.delete(head)
 }
 
-export function historyIndex(root: string): Promise<HistoryIndex> {
+export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> {
+  if (tip !== 'HEAD') return buildIndex(root, git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim())
   const head = headOrEmpty(root)
-  if (!head) return buildIndex(root)
+  if (!head) return buildIndex(root, 'HEAD')
   touchRoot(indexRoots, indexCache, root, head)
   const hit = indexCache.get(head)
   if (hit) return hit
-  const p = buildIndex(root)
+  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head)
   p.catch(() => { dropFailed(indexCache, head, p) })   // don't pin a failed build
   indexCache.set(head, p)
   return p
@@ -392,11 +471,11 @@ function headOrEmpty(root: string): string {
   }
 }
 
-async function buildIndex(root: string): Promise<HistoryIndex> {
+async function buildIndex(root: string, tip: string): Promise<HistoryIndex> {
   const versions = new Map<string, Version[]>()
   const stats = new Map<string, Map<string, DiffStat>>()
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '-M', '--numstat',
-    `--format=${RS}%H${US}%aI${US}%s${US}%b`, '--', '.spec'])
+    `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec'])
   if (!out) return { versions, stats }
   // Walk newest -> oldest (git log default). `alias` maps a path as it exists at the current walk
   // point to its head (current) path; the first (newest) time we meet a file, that path IS its head.
@@ -478,18 +557,22 @@ export async function fileDiffAt(root: string, relPath: string, hash: string): P
 // carry the Spec-OK convention (see driftFor): acks[hash] = node ids declared still-valid via
 // `Spec-OK:` trailers; specNodes[hash] = node ids whose spec.md it touched.
 export type DriftIndex = {
+  tip?: string
   ord: Map<string, number>            // hash -> dense id from the walk: a bitset slot, NEVER an order to compare
   parents: Map<string, string[]>      // hash -> parent hashes (the DAG edges, from the same walk)
   fileCommits: Map<string, string[]>
-  acks: Map<string, Set<string>>      // commit hash -> node ids acknowledged via `Spec-OK:` trailers
+  acks: Map<string, Set<string>>      // tree-unchanged checkpoint hash -> node ids acknowledged via `Spec-OK:`
+  selfAcks?: Map<string, Set<string>> // content commit hash -> node ids acknowledged for that commit only
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
   lazy?: LazyDriftIndex
 }
 type LazyDriftIndex = {
   root: string
+  tip: string
   specNodes: Map<string, Set<string>>
   ackByNode: Map<string, string[]>
+  selfAcks: Map<string, Set<string>>
   counts: Map<string, number>
   windows: Map<string, string[]>
   rawWindows: Map<string, string[]>
@@ -520,7 +603,7 @@ function parseLazySpecNodes(out: string): Map<string, Set<string>> {
   return specNodes
 }
 
-async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
+async function buildLazyDriftIndex(root: string, tip: string): Promise<DriftIndex> {
   // Version commits are the only source of node ownership; ack stamps are empty commits whose subject is
   // stable (`ack: Spec-OK …`). Both walks are tiny compared with the all-files commit graph and retain only
   // the hashes needed to form rev-list exclusions later.
@@ -528,84 +611,108 @@ async function buildLazyDriftIndex(root: string): Promise<DriftIndex> {
   // part of the HEAD-keyed drift-index flight; per-reading membership is then a Set lookup, not one
   // merge-base child per anchor. Run the three large-history walks sequentially so index construction itself
   // cannot stack several pack-heavy git processes inside the broader board child budget.
-  const reachableResult = await gitTry(['-C', root, 'rev-list', 'HEAD'])
+  const reachableResult = await gitTry(['-C', root, 'rev-list', tip])
   if (!reachableResult.ok)
-    throw new Error(`git rev-list HEAD failed while building lazy reachability: ${reachableResult.stderr.trim() || 'unknown git error'}`)
+    throw new Error(`git rev-list ${tip} failed while building lazy reachability: ${reachableResult.stderr.trim() || 'unknown git error'}`)
   const reachable = new Set(reachableResult.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
-  const specOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, 'HEAD', '--', '.spec'])
-  const ackOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=' + RS + '%H' + US + '%s', '--grep=^ack: Spec-OK', 'HEAD'])
+  const specOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, tip, '--', '.spec'])
+  const ackOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log',
+    `--format=${RS}%H${US}%T${US}%P${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, '--grep=^Spec-OK:', tip])
   const specNodes = parseLazySpecNodes(specOut)
   const ackByNode = new Map<string, string[]>()
+  const selfAcks = new Map<string, Set<string>>()
+  const candidates: { hash: string; tree: string; parents: string[]; nodes: Set<string> }[] = []
   for (const rec of ackOut.split(RS)) {
     const r = rec.replace(/^\n/, '')
     if (!r) continue
-    const [hash, subject = ''] = r.split(US)
-    const m = subject.match(/^ack: Spec-OK\s+(.+)$/)
-    if (!hash || !m) continue
-    for (const node of m[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+    const [hash, tree = '', parentStr = '', ackStr = ''] = r.split('\n')[0].split(US)
+    if (!hash) continue
+    const nodes = new Set(ackStr.split(',').map((s) => s.trim()).filter(Boolean))
+    if (!nodes.size) continue
+    const parentList = parentStr.split(' ').filter(Boolean)
+    candidates.push({ hash, tree, parents: parentList, nodes })
+  }
+  const parentTrees = commitTreeOids(root, candidates.flatMap((candidate) => candidate.parents.slice(0, 1)))
+  for (const { hash, tree, parents: parentList, nodes } of candidates) {
+    const parentTree = parentTrees.get(parentList[0]) ?? ''
+    const checkpoint = parentList.length === 1 && !!parentTree && tree === parentTree
+    if (!checkpoint) selfAcks.set(hash, nodes)
+    else for (const node of nodes) {
       const hashes = ackByNode.get(node) ?? []
       hashes.push(hash)
       ackByNode.set(node, hashes)
     }
   }
   return {
-    ord: new Map(), parents: new Map(), fileCommits: new Map(), acks: new Map(), specNodes, anc: new Map(),
-    lazy: { root, specNodes, ackByNode, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable },
+    tip, ord: new Map(), parents: new Map(), fileCommits: new Map(), acks: new Map(), selfAcks, specNodes, anc: new Map(),
+    lazy: { root, tip, specNodes, ackByNode, selfAcks, counts: new Map(), windows: new Map(), rawWindows: new Map(), reachable },
   }
 }
-async function buildDriftIndex(root: string): Promise<DriftIndex> {
+async function buildDriftIndex(root: string, tip: string): Promise<DriftIndex> {
   // File fan-out, not just commit count, determines the object-graph size: a ten-thousand-commit fixture can
   // still touch millions of paths. The switch asks whether the raw name stream REACHES the byte budget, and
   // that question is settled by the first budget-worth of bytes — so read exactly that prefix and let
   // truncation be the verdict (a stream that overflows the budget is by definition at least that big).
   // Reading the whole stream to measure it made every index build pay a full-history walk, and a stream past
   // the transport's buffer came back EMPTY, flipping the large-history switch off exactly where it matters.
-  const probe = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], DRIFT_LAZY_OUTPUT_BYTES)
-  if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root)
-  const count = Number((await gitA(['-C', root, 'rev-list', '--count', 'HEAD'])).trim())
-  if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root)
+  const probe = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', tip], DRIFT_LAZY_OUTPUT_BYTES)
+  if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root, tip)
+  const count = Number((await gitA(['-C', root, 'rev-list', '--count', tip])).trim())
+  if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root, tip)
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileCommits = new Map<string, string[]>()
-  const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
-  const idx: DriftIndex = { ord, parents, fileCommits, acks, specNodes, anc: new Map() }
+  const acks = new Map<string, Set<string>>(), selfAcks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
+  const ackCandidates = new Map<string, Set<string>>(), trees = new Map<string, string>()
+  const idx: DriftIndex = { tip, ord, parents, fileCommits, acks, selfAcks, specNodes, anc: new Map() }
   // RS-delimited records: `<hash>US<parents>US<comma-joined Spec-OK values>` on line 1, then the
   // --name-only file list. `valueonly,separator` collapses the trailer block to one line so it never
   // collides with the file names below it (a raw `%b` body would interleave and be unparseable).
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
-    `--format=${RS}%H${US}%P${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD'])
+    `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, tip])
   if (!out) return idx
   let i = 0
   for (const rec of out.split(RS)) {
     const r = rec.replace(/^\n/, '')
     if (!r) continue
     const lines = r.split('\n')
-    const [hash, parentStr = '', ackStr = ''] = lines[0].split(US)
+    const [hash, parentStr = '', tree = '', ackStr = ''] = lines[0].split(US)
     if (!hash) continue
+    trees.set(hash, tree)
     if (!ord.has(hash)) {
       ord.set(hash, i++)
       parents.set(hash, parentStr.split(' ').filter(Boolean))
     }
     const ackSet = new Set(ackStr.split(',').map((s) => s.trim()).filter(Boolean))
-    if (ackSet.size) acks.set(hash, ackSet)
+    if (ackSet.size) ackCandidates.set(hash, ackSet)
+    const merge = parentStr.split(' ').filter(Boolean).length > 1
     for (const line of lines.slice(1)) {
       if (!line) continue
-      let arr = fileCommits.get(line); if (!arr) { arr = []; fileCommits.set(line, arr) }
-      arr.push(hash)
+      if (!merge) {
+        let arr = fileCommits.get(line); if (!arr) { arr = []; fileCommits.set(line, arr) }
+        arr.push(hash)
+      }
       if (isSpecMd(line)) {
         let ns = specNodes.get(hash); if (!ns) { ns = new Set(); specNodes.set(hash, ns) }
         ns.add(nodeIdOf(line))
       }
     }
   }
+  for (const [hash, nodes] of ackCandidates) {
+    const parentList = parents.get(hash) ?? []
+    const firstParent = parentList[0]
+    const checkpoint = parentList.length === 1 && !!firstParent && trees.get(hash) === trees.get(firstParent)
+    ;(checkpoint ? acks : selfAcks).set(hash, nodes)
+  }
   return idx
 }
-export function driftIndex(root: string): Promise<DriftIndex> {
+export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
+  if (tip !== 'HEAD') return buildDriftIndex(root, git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim())
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
-  if (!head) return buildDriftIndex(root)
+  if (!head) return buildDriftIndex(root, 'HEAD')
   touchRoot(driftRoots, driftIdxCache, root, head)
   const hit = driftIdxCache.get(head)
   if (hit) return hit
-  const p = buildDriftIndex(root)
+  const p = buildDriftIndex(root, head.startsWith('unborn:') ? 'HEAD' : head)
   p.catch(() => { dropFailed(driftIdxCache, head, p) })
   driftIdxCache.set(head, p)
   return p
@@ -664,7 +771,7 @@ export function pathCommitsSince(idx: DriftIndex, sinceHash: string, path: strin
   if (hit) return hit
   let commits: string[]
   try {
-    commits = git(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path])
+    commits = git(['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, '--', path])
       .split('\n').map((s) => s.trim()).filter(Boolean)
   } catch { commits = [] }
   idx.lazy.rawWindows.set(key, commits)
@@ -682,7 +789,7 @@ async function pathCommitsSinceAsync(idx: DriftIndex, sinceHash: string, path: s
   const key = `${sinceHash}\0${path}`
   const hit = idx.lazy.rawWindows.get(key)
   if (hit) return hit
-  const commits = (await gitA(['-C', idx.lazy.root, 'rev-list', `${sinceHash}..HEAD`, '--', path]))
+  const commits = (await gitA(['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, '--', path]))
     .split('\n').map((s) => s.trim()).filter(Boolean)
   idx.lazy.rawWindows.set(key, commits)
   return commits
@@ -719,6 +826,23 @@ export function ackCoverFor(idx: DriftIndex, sinceHash: string): Uint8Array[] {
   return cover
 }
 
+export function selfAckCovers(idx: DriftIndex, sinceHash: string, hash: string): boolean {
+  const targets = idx.specNodes.get(sinceHash)
+  const declared = idx.selfAcks?.get(hash)
+  return !!targets && !!declared && [...targets].some((node) => declared.has(node))
+}
+
+function lazyDriftArgs(idx: DriftIndex, sinceHash: string, path: string): string[] {
+  const targets = idx.lazy!.specNodes.get(sinceHash) ?? new Set<string>()
+  const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
+  return ['-C', idx.lazy!.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`,
+    ...excludes.map((hash) => `^${hash}`), '--', path]
+}
+
+function filterSelfAcks(idx: DriftIndex, sinceHash: string, commits: string[]): string[] {
+  return commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash))
+}
+
 // pure lookup, no git: a commit to `path` is drift iff it is NOT an ancestor of `sinceHash` — it lies
 // in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
 // An off-history `sinceHash` → 0: no basis on HEAD to measure from.
@@ -728,11 +852,9 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
     const key = `${sinceHash}\0${path}`
     const hit = idx.lazy.counts.get(key)
     if (hit !== undefined) return hit
-    const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
-    const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
-    const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
+    const args = lazyDriftArgs(idx, sinceHash, path)
     let count = 0
-    try { count = Number(git(args).trim()) || 0 } catch { count = 0 }
+    try { count = filterSelfAcks(idx, sinceHash, git(args).split('\n').map((s) => s.trim()).filter(Boolean)).length } catch { count = 0 }
     idx.lazy.counts.set(key, count)
     return count
   }
@@ -744,6 +866,7 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
   for (const h of idx.fileCommits.get(path) ?? []) {
     if (inAncestors(idx, base, h)) continue           // reachable from the version → not drift
     if (ackCover.some((a) => inAncestors(idx, a, h))) continue // covered by an ack → acknowledged
+    if (selfAckCovers(idx, sinceHash, h)) continue    // content trailer acknowledges this commit only
     n++
   }
   return n
@@ -755,10 +878,8 @@ export async function driftForAsync(idx: DriftIndex, sinceHash: string, path: st
   const key = `${sinceHash}\0${path}`
   const hit = idx.lazy.counts.get(key)
   if (hit !== undefined) return hit
-  const targets = idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
-  const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
-  const args = ['-C', idx.lazy.root, 'rev-list', '--count', `${sinceHash}..HEAD`, ...excludes.map((hash) => `^${hash}`), '--', path]
-  const count = Number((await gitA(args)).trim()) || 0
+  const args = lazyDriftArgs(idx, sinceHash, path)
+  const count = filterSelfAcks(idx, sinceHash, (await gitA(args)).split('\n').map((s) => s.trim()).filter(Boolean)).length
   idx.lazy.counts.set(key, count)
   return count
 }

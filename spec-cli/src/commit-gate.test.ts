@@ -495,6 +495,37 @@ test('a mixed combined hunk does not charge an adjacent side-inherited anchor li
   assert.equal(fx.lint().status, 0)
 })
 
+test('a mixed combined hunk still charges its merge-authored anchored line', () => {
+  const fx = fixture()
+  const source = join(fx.root, 'src', 'calc.py')
+  const code = (governed: number, neighbor: number) =>
+    `def apply_rate(): return ${governed}\ndef neighbor(): return ${neighbor}\n`
+  writeFileSync(source, code(1, 1))
+  fx.git('add', source)
+  const seeded = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '--amend', '--no-edit')
+  assert.equal(seeded.status, 0, `${seeded.stdout}${seeded.stderr}`)
+
+  fx.git('switch', '-qc', 'neighbor-side')
+  writeFileSync(source, code(1, 2))
+  fx.git('add', source)
+  const side = fx.commit('-m', 'change side neighbor')
+  assert.equal(side.status, 0, `${side.stdout}${side.stderr}`)
+
+  fx.git('switch', '-q', 'node/calc')
+  const before = fx.git('rev-parse', 'HEAD')
+  const staged = fx.runGit({}, 'merge', '--no-ff', '--no-commit', 'neighbor-side')
+  assert.equal(staged.status, 0, `mixed mirror fixture did not merge:\n${staged.stdout}${staged.stderr}`)
+  writeFileSync(source, code(777, 2))
+  fx.git('add', source)
+
+  const rejected = fx.commit('-m', 'merge authors governed line beside inherited neighbor')
+  const output = `${rejected.stdout}${rejected.stderr}`
+  assert.notEqual(rejected.status, 0, `merge-authored anchor line disappeared inside a mixed hunk:\n${output}`)
+  assert.equal(fx.git('rev-parse', 'HEAD'), before)
+  assert.ok(existsSync(join(fx.root, '.git', 'MERGE_HEAD')))
+  assert.match(output, /anchor-drift.*src\/calc\.py#apply_rate/)
+})
+
 test('an octopus mixed hunk requires every parent column before charging an anchor line', () => {
   const fx = fixture()
   const source = join(fx.root, 'src', 'calc.py')

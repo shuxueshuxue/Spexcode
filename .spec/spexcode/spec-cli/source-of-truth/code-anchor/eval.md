@@ -118,7 +118,9 @@ scenarios:
       a commit lands, the ordinary HEAD predicate used by CI still reports its unanswered drift.
       A combined merge hunk containing both a side-inherited anchored line (`+ `) and an adjacent
       merge-authored ungoverned line (`++`) does not charge the inherited line or reject the merge; combined
-      ownership is decided per result line, never by widening one owned line to its enclosing hunk.
+      ownership is decided per result line, never by widening one owned line to its enclosing hunk. Its
+      mirror, with `++` on the anchored line and the inherited line ungoverned, is rejected and names that
+      selector.
       Likewise, a `spec.md` whose merge result only combines different parent-authored lines has no
       all-parent line and does not become a merge version; it cannot wash out an anchored line genuinely
       authored by that same merge.

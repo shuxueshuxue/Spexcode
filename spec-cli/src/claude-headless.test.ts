@@ -31,6 +31,7 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(claudeHeadlessHarness.headless, true)
   assert.equal(claudeHeadlessHarness.ownsRendezvous, false)
   assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(claudeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)
   const cleanupId = `cleanup-${process.pid}`
   writeFileSync(claudeHeadlessSock(cleanupId), 'stale')

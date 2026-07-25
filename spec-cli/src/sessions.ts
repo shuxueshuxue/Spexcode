@@ -224,6 +224,7 @@ export type SessRec = {
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
+  stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
@@ -280,6 +281,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
+    stopped: !!raw.stopped,             // records written before explicit stop tracking were not stopped
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     launchOwner: launchOwner || null,
@@ -312,6 +314,7 @@ function writeRecord(rec: SessRec): void {
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
     harness_session_id: rec.harnessSessionId ?? '',
+    stopped: rec.stopped,
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
@@ -570,7 +573,7 @@ const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it 
 // sock lingers. A just-launched agent whose online-signal hasn't appeared yet reads the transient 'starting'
 // for the grace window; only past it (still not online) is it genuinely 'offline'.
 export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
-  if (!rec.session) return 'offline'
+  if (!rec.session || rec.stopped) return 'offline'
   // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
   // codex proves its launch-registered pid (with the legacy descendant-tree fallback). The 'starting' grace
   // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
@@ -1356,7 +1359,7 @@ export async function newSession(prompt: string, parent: string | null = null, l
     // mutated after. A self-parent (a resolver quirk) is dropped so a session can't nest under itself.
     node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
     status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-    harness: h.id, harnessSessionId: null, launcher: chosen.name,
+    harness: h.id, harnessSessionId: null, stopped: false, launcher: chosen.name,
     // PIN the resolved launch command NOW ([[launcher-select]] resume-launcher-pin) so every future
     // (re)launch replays THIS exact launcher — the one whose config-dir env holds the conversation — instead of
     // re-resolving against a default that may have flipped (a backend restarted under a different launcher).
@@ -1456,13 +1459,16 @@ export async function resumeSession(id: string, opts: { force?: boolean; guard?:
   if (guard && !force && lv === 'unknown')
     return { ok: false, refused: true, error: `session ${id}: the liveness probe failed (the box is likely overloaded) — refusing to relaunch since a live worker can't be ruled out. Retry in a moment, or use force to override.` }
   // proceeding: settle the RESTING lifecycle (a resumed working agent is now idle), then relaunch iff the agent
-  // is CONFIRMED offline (or force — the wedged-but-alive escape). `starting`/`unknown` fall through to a no-op.
-  writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
+  // is CONFIRMED offline (or force — the wedged-but-alive escape). Clear the explicit-stop marker only after
+  // launch has accepted the relaunch; a thrown launch leaves the record truthfully stopped. `starting`/`unknown`
+  // fall through to a metadata-only no-op.
+  const resumed: SessRec = { ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status, stopped: false }
   if (force || lv === 'offline') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))
+    writeRecord(resumed)
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
-  }
+  } else writeRecord(resumed)
   return { ok: true }
 }
 
@@ -1701,13 +1707,15 @@ async function stopAgentProcess(id: string): Promise<void> {
 }
 
 // @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
-// worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
-// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see resumeSession). This is
+// worktree + branch + transcript intact. The retained record's explicit-stop marker makes liveness `offline`
+// whatever its lifecycle or adapter probe, so the relaunch panel offers to --resume the SAME conversation. This is
 // "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
 // the freed capacity drains a queued session next (drainQueue).
 export async function stopSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
+  const rec = readRecord(id)
+  if (rec) writeRecord({ ...rec, stopped: true })
   void drainQueue()   // a stop frees a slot — start the next queued session if any
   return !!wt
 }

@@ -88,11 +88,31 @@ scenarios:
       observe each commit through SSE plus the `/api/graph` freshness header, close/reopen the watcher era,
       and finally terminate the backend by its exact port.
     expected: >-
-      Watch cardinality is proportional to the unique directory set and plateaus across unchanged refreshes;
-      removed paths and close return their handles, reopen starts one clean registry per root/scope, and process
-      exit returns the count to zero. Each of the three commits causes exactly one
-      `stale, refreshing` -> `fresh` cycle and one non-overlapping build. Registration/runtime failures are
-      visible with their source path and never leave a half-attached or silently-deaf registry.
+      Watch cardinality follows the canonical roots being observed, not the corpus inside them, and plateaus
+      across unchanged refreshes; removed paths and close return their handles, reopen starts one clean
+      registry per root/scope, and process exit returns the count to zero. Each of the three commits causes
+      exactly one `stale, refreshing` -> `fresh` cycle and one non-overlapping build. Registration/runtime
+      failures are visible with their source path and errno and never leave a half-attached or silently-deaf
+      registry.
+  - name: adopter-scale-watch-budget
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    description: >-
+      On a machine whose platform observes a subtree from ONE registration (macOS/FSEvents), build an
+      adopter-shaped isolated fixture — 444 spec nodes, 53 linked worktrees whose sessions are non-offline,
+      30 session records, its own SPEXCODE_HOME and a verified-free port — and start the real backend
+      against it. Read the live watcher census and the process's descriptor count after the initial attach
+      and after every reconciliation, then run three rounds of real change (a commit, a ref move, an
+      uncommitted spec edit) through `/api/graph` and the SSE stream, sampling the whole backend process
+      tree's RSS throughout.
+    expected: >-
+      The backend attaches the whole corpus with ZERO registration errors and holds a registration count on
+      the order of the canonical roots (two per live worktree plus the store/refs/registry roots) — never one
+      per spec-node directory, which at this shape asks for 23,532 and is answered with a process-wide EMFILE
+      that leaves every watcher deaf while resident memory climbs into the gigabytes with no git child alive.
+      Census and descriptor counts plateau across unchanged reads. Each of the three rounds is observed
+      server-side as `stale, refreshing` -> `fresh`, `/health` stays 200 throughout, the backend tree's peak
+      RSS stays under 786432 KB, and no backend child is left behind on exit.
 ---
 
 # measuring board-stream

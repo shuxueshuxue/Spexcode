@@ -131,7 +131,11 @@ no resolvable launcher command — each a fact about this machine that no attemp
 its own structured code, which the record's note, the API, and the CLI all consume as data
 ([[sessions-core]]). The **harness adapter** owns what only its harness can recognize: it declares the patterns
 of its own settled output ([[harness-adapter]]), and an attempt matching one stops immediately with the
-harness's own reason left visible. A missing conversation on a still-valid worktree is a settled failure too —
+harness's own reason left visible. What it matches against is the **pane**, not the agent's streams: a harness
+picks its own stream (measured — real claude reports a missing conversation on stdout, so watching stderr
+classified nothing and spent the certain failure three times), and redirecting stdout to read it would take the
+terminal away from a TUI. The pane already holds both streams exactly as the human sees them, and the launch
+runs inside it. A missing conversation on a still-valid worktree is a settled failure too —
 it routes to the explicit repair/force entry, never to an implicit fresh-conversation fallback. Everything
 genuinely unclassifiable keeps the bounded retry. This adds no fallback and never masks a dead agent.
 

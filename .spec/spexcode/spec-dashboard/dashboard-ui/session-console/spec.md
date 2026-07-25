@@ -20,6 +20,7 @@ related:
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
+  - spec-dashboard/test/timeline-chat-composer.e2e.mjs
 ---
 
 # session-console
@@ -58,7 +59,13 @@ carrying the archived count when there is one), and a **Search** button, the cli
 ([[session-search]] owns that contract).
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
-input. Nothing is prefilled; typing **`[[`** opens the
+input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
+`fitTextarea` measurement path grows through each content line without a scrollbar until the host's
+declared cap. Composer keyboard meaning is deliberately split by product action: a **message** composer
+(TimelineChat conversation or Command Box) sends on plain Enter, inserts a line on Shift+Enter, and never
+sends the Enter that commits an IME composition; a **launch** composer (this New tab or the phone's Create
+screen) is a long-form prompt, so Enter always remains native editing and only the explicit launch button
+submits. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
 caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
 contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.
@@ -164,7 +171,10 @@ continues through [[live-view]]'s explicit tmux-client control path.
 
 The desktop right pane has **one console slot with two truthful transports**. A pane-backed adapter mounts the
 warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
-phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's
+message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
+IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
+mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.

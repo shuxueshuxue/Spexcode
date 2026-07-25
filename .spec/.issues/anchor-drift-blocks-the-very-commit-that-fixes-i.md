@@ -256,3 +256,18 @@ advisory? sweep it with acks once? re-anchor?), but it is bounded and it expires
 Recording this because I would rather shrink my own open question than leave it looking larger
 than it is — an overstated caveat is as unhelpful as an overstated claim, and post 2 of this
 thread was already one of those.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T07:52:48.536Z -->
+SHARPER FRAMING, from the maintainer — and it relaxes an over-specification of mine.
+
+The gate's question, stated generally:
+
+    "assuming this commit lands, would the rule be violated?"
+
+That is better than post 5's "will this commit leave drift", which still framed the fix as
+something done TO anchor-drift. This is the semantics a blocking pre-commit gate should have for
+EVERY rule — one mechanism, not a per-rule patch ([[taste]] #2).
+
+It also loosens something I pinned down too early: post 5 prescribes "evaluate against the staged
+tree". That is one implementation. The criterion is the hypothetical post-commit state; how that
+state is computed is free to be whatever comes out cleanest.

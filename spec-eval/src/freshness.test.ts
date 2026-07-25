@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { changedSince, codeDrift, contentProbeFor, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
+import { changedSince, codeDrift, contentProbeFor, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
 import { scenarioHash } from './scenarios.js'
 import { withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
 
@@ -440,7 +440,7 @@ test('content batch: equal SHA keys in two roots neither coalesce nor serialize 
   }
 })
 
-test('content batch: moving HEAD creates a new scope and query while the old verdicts stay bounded in LRU', async () => {
+test('content batch: moving HEAD creates a new scope and query, and the released head is no longer readable', async () => {
   const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace()
   try {
@@ -452,8 +452,8 @@ test('content batch: moving HEAD creates a new scope and query while the old ver
     const after = contentProbeFor(root)
     await after.prime!(hashes[0], ['after-head-move.txt'], 'absent-eval.md')
     assert.equal(trace.events().filter((event) => event.event === 'start').length, 2)
-    assert.equal(before.changed(hashes[0], 'after-head-move.txt'), false)
-    assert.equal(after.changed(hashes[0], 'after-head-move.txt'), true)
+    assert.equal(before.changed(hashes[0], 'after-head-move.txt'), null, 'the released head cannot answer')
+    assert.equal(after.changed(hashes[0], 'after-head-move.txt'), true, 'the new head sees the content that moved')
   } finally {
     trace.restore()
   }
@@ -483,4 +483,65 @@ test('content batch: an unreadable anchor object is the anchor axis, not a conte
   await probe.prime!('d'.repeat(40), ['tracked.txt'], 'absent-eval.md')
   assert.equal(probe.canTestify('d'.repeat(40)), false, 'content cannot testify for a gone anchor')
   assert.equal(probe.changed('d'.repeat(40), 'tracked.txt'), null)
+})
+
+// ---- per-root current-head scope: a rebuild must not leave the previous head's verdicts resident ----
+
+test('content batch: a head move swaps the scope — one generation resident, and the old head stops answering', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace()
+  try {
+    const before = contentProbeFor(root)
+    await before.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
+    assert.equal(before.changed(hashes[0], 'tracked.txt'), true)
+    assert.equal(freshnessCacheSize(root), 1)
+
+    sh(root, ['commit', '--allow-empty', '-qm', 'move head'])
+    const after = contentProbeFor(root)          // a probe at the NEW head claims the root's scope
+    await after.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
+
+    assert.equal(after.changed(hashes[0], 'tracked.txt'), true)
+    assert.equal(before.changed(hashes[0], 'tracked.txt'), null, 'the superseded head no longer answers')
+    assert.equal(before.canTestify(hashes[0]), false)
+    assert.equal(freshnessCacheSize(root), 1, 'the previous head kept a second generation resident')
+    assert.equal(trace.events().filter((e) => e.event === 'start').length, 2, 'the new head asks its own question')
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content batch: a batch still in flight when the head moves settles for its caller and never backfills the new head', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const trace = diffTrace('0.3')
+  try {
+    const stale = contentProbeFor(root)
+    const inFlight = stale.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')
+    await waitFor(() => trace.events().some((e) => e.event === 'start'))
+    sh(root, ['commit', '--allow-empty', '-qm', 'move head mid-flight'])
+    const fresh = contentProbeFor(root)
+    const freshPrime = fresh.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md')   // swaps mid-flight
+
+    await inFlight                                   // the holder settles rather than hanging or throwing
+    await freshPrime
+    assert.equal(stale.changed(hashes[0], 'tracked.txt'), null, 'a superseded head answers nothing')
+    assert.equal(fresh.changed(hashes[0], 'tracked.txt'), true, 'the new head answers from its own batch')
+    assert.equal(freshnessCacheSize(root), 1, 'the detached in-flight entry stayed out of the current scope')
+  } finally {
+    trace.restore()
+  }
+})
+
+test('content batch: three rebuilds over the same anchors hold one generation, not three', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const anchors = [hashes[0], hashes[1]]
+  const sizes: number[] = []
+  for (let round = 0; round < 3; round++) {
+    if (round > 0) sh(root, ['commit', '--allow-empty', '-qm', `round ${round}`])
+    const probe = contentProbeFor(root)
+    for (const anchor of anchors) await probe.prime!(anchor, ['tracked.txt', 'stable.txt'], 'absent-eval.md')
+    sizes.push(freshnessCacheSize(root))
+  }
+  assert.deepEqual(sizes, [sizes[0], sizes[0], sizes[0]],
+    `cardinality grew with rebuild count instead of staying at the corpus: ${sizes.join(' -> ')}`)
+  assert.equal(sizes[0], anchors.length, 'one entry per anchor at the current head')
 })

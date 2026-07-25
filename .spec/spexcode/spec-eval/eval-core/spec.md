@@ -165,12 +165,22 @@ An unrequested path therefore has no verdict and reads as unprovable rather than
 the retained set proportional to governed breadth instead of repository width. Scheduling composes with
 that: concurrent callers on one anchor union their paths into a single child, a path requested after that
 child starts rides the next batch, a settled path is never asked again, and different anchors under one
-root and HEAD still run one at a time. Verdicts age out through the existing bounded LRU, an entry whose
-batch is still running is never evicted, and an idle scope retains no queue, waiter, or closure. A graph
+root and HEAD still run one at a time. A graph
 abort or timeout rejects both its active and queued work with the existing `AbortError` and caches nothing,
 so a later call retries; an unreadable anchor object is recorded as exactly that — the anchor axis — not as
-a content verdict. A moved HEAD naturally creates a new scope. Synchronous freshness decisions consume only
+a content verdict. Synchronous freshness decisions consume only
 successfully settled verdicts — they never bypass a failed asynchronous prime by starting another diff.
+
+**A root retains ONE head's verdicts — the head it is currently read at.** A settled verdict stays true of
+its two immutable trees, but a checkout only ever answers at its current head, so keeping a head in the
+cache key made every rebuild leave a whole generation resident and the cache grew with rebuild count rather
+than with the corpus ([[source-of-truth]]'s current-root rule, which the history and drift indices already
+follow). A head move therefore swaps the root's scope atomically: the previous head's per-anchor verdicts
+and drift counts are released with it, and a probe pinned to the superseded head reads 'cannot testify'
+rather than a stale answer. A batch still in flight across that swap settles for the caller holding it —
+it never hangs and never throws — but writes into a detached entry that the new head can never read, so an
+old flight cannot backfill a newer scope. Across repeated full invalidations over the same corpus the
+resident entry count is therefore constant, and the number of warm roots is bounded on its own.
 
 The code axis also **reports its drift for display**, not just decides it: `codeDrift` counts, per governed
 file, how many commits in `codeSha..HEAD` touched it (the same ancestry reachability, reused — not a second

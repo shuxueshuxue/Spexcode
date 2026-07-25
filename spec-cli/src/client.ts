@@ -147,6 +147,15 @@ export async function clientClose(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// POST /api/sessions/:id/archive — shelve (or with on=false unshelve) the session ([[archive]]). Record-only:
+// it neither stops the agent nor touches the worktree, so pair it with stop when you also want the process
+// back. {ok:false} = no such session.
+export async function clientArchive(id: string, on = true): Promise<boolean> {
+  await guarded(on ? 'session archive' : 'session unarchive')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/archive`, post({ on }))
+  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
 // POST /api/sessions/:id/rename — set (or clear, with a blank) the session's display-name override
 // ([[session-rename]] as a CLI verb). {ok:false} = no such session (404).
 export async function clientRename(id: string, name: string): Promise<boolean> {

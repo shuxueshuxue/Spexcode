@@ -31,6 +31,15 @@ export const sessionZone = (s) => {
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
 export const ZONE_ORDER = ['need', 'run', 'offline']
+// @@@ archive is a PARTITION, never a fourth zone ([[archive]]). A shelved session still HAS a zone — it can
+// be needing you, running, or offline — the human has merely filed it out of view, so folding it into the zone
+// vocabulary would destroy the very information you want back when you unshelve. Every list surface therefore
+// splits FIRST and zones each side independently, and `archived` rows never leak into the main forest.
+export const isArchived = (s) => !!s?.archived
+export const splitArchived = (sessions = []) => ({
+  live: sessions.filter((s) => !isArchived(s)),
+  archived: sessions.filter(isArchived),
+})
 // the ONE liveness join: resolve an id against the board sessions and return the
 // session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
 // chip renders (Thread.jsx). A non-session id ('human', a github

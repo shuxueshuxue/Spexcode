@@ -10,6 +10,8 @@ const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
 const terminalFont = readFileSync(join(here, 'terminalFont.js'), 'utf8')
 const sessionInterface = readFileSync(join(here, 'SessionInterface.jsx'), 'utf8')
 const composer = readFileSync(join(here, 'Composer.jsx'), 'utf8')
+const timelineChat = readFileSync(join(here, 'TimelineChat.jsx'), 'utf8')
+const mobileApp = readFileSync(join(here, 'MobileApp.jsx'), 'utf8')
 const thread = readFileSync(join(here, 'Thread.jsx'), 'utf8')
 const issues = readFileSync(join(here, 'IssuesPage.jsx'), 'utf8')
 const resizable = readFileSync(join(here, 'useResizable.js'), 'utf8')
@@ -91,7 +93,15 @@ test('browser page visibility reuses the terminal viewer lifecycle', () => {
   assert.match(terminal, /document\.addEventListener\('visibilitychange', onDocumentVisibility\)/)
   assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)
   assert.match(terminal, /lastSizeRef\.current\s*=\s*\{ cols: 0, rows: 0 \}\s*measureAndRequest\(\)/)
-  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && id === active\}/)
+  // the pane's `active` follows whether its layer is actually SHOWN, not merely selected: a selected session
+  // still yields the surface to whichever panel owns it — the relaunch panel, or the archive card
+  // ([[archive]]) — and a pane hidden behind either must stand down exactly like an unselected one rather than
+  // keep driving a viewer nobody can see. BOTH conditions belong here: the relaunch and archive cases were
+  // found independently, each as a live xterm eating its panel's own button, so dropping either re-opens it.
+  assert.match(sessionInterface, /const shown = id === active && !showRelaunch && !shelvedSel/)
+  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && shown\}/)
+  // and it must be hidden AND pointer-inert, or a live xterm silently swallows the card's own button
+  assert.match(sessionInterface, /visibility: shown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: shown \? 'auto' : 'none',/)
 })
 
 test('document pages share one inset page-scroll geometry', () => {
@@ -123,6 +133,8 @@ test('Command Box floats lower-middle and grows above a fixed footer', () => {
   assert.match(thread, /<ComposerTextarea ref=\{taRef\}/)
   assert.match(issues, /<ComposerTextarea ref=\{taRef\}/)
   assert.match(sessionInterface, /<ComposerTextarea ref=\{msgRef\} className="si-command-input"/)
+  assert.match(timelineChat, /<ComposerTextarea[\s\S]*className="m-input"/)
+  assert.match(mobileApp, /<ComposerTextarea[\s\S]*className="m-input m-new-input"/)
   assert.match(composer, /export function composingKey/)
 })
 

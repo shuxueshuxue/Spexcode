@@ -61,23 +61,36 @@ test('session eval glance reuses the graph summary projection and review-state v
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
-  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
-  const names = (status, liveness) => uiCommandsFor(status, runners, liveness).map((command) => command.name)
-  const typed = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.typed !== false).map((command) => command.name)
+  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'archive', 'unarchive', 'close'].map((name) => [name, () => name]))
+  const names = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).map((command) => command.name)
+  const typed = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).filter((command) => command.typed !== false).map((command) => command.name)
   const tools = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.button).map(({ name, icon }) => [name, icon])
 
-  assert.deepEqual(names('working', 'online'), ['command', 'eval', 'stop', 'close'])
-  assert.deepEqual(names('review', 'online'), ['command', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('done', 'online'), ['command', 'eval', 'merge', 'stop', 'close'])
-  assert.deepEqual(names('queued', 'offline'), ['eval', 'close'])
-  assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'close'])
-  assert.deepEqual(names('review', 'offline'), ['eval', 'relaunch', 'close'])
-  assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
+  assert.deepEqual(names('working', 'online'), ['command', 'eval', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('review', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('done', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('queued', 'offline'), ['eval', 'archive', 'close'])
+  assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
+  assert.deepEqual(names('review', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
+  assert.deepEqual(typed('asking', 'offline'), ['eval', 'archive', 'close'])
   assert.deepEqual(tools('review', 'online'), [['command', 'command'], ['merge', 'git-merge']])
   assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw']])
+  // shelving ([[archive]]) is the THIRD orthogonal axis: exactly one of archive/unarchive is ever offered, and
+  // which one depends on `archived` ALONE — never on lifecycle or liveness. A running session can be shelved
+  // and a dead one restored, so neither verb may quietly acquire a liveness precondition.
+  assert.deepEqual(names('working', 'online', true), ['command', 'eval', 'stop', 'unarchive', 'close'])
+  assert.deepEqual(names('asking', 'offline', true), ['eval', 'relaunch', 'unarchive', 'close'])
+  for (const [st, lv] of [['working', 'online'], ['asking', 'offline'], ['queued', 'offline'], ['review', 'online']]) {
+    for (const archived of [false, true]) {
+      const offered = names(st, lv, archived).filter((n) => n === 'archive' || n === 'unarchive')
+      assert.deepEqual(offered, [archived ? 'unarchive' : 'archive'], `${st}/${lv}/archived=${archived}`)
+    }
+  }
+  // neither shelving verb gets a toolbar twin — filing is deliberate, never one pixel from the terminal
+  assert.deepEqual(UI_COMMANDS.filter((c) => c.name === 'archive' || c.name === 'unarchive').map((c) => c.button), [false, false])
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
-  assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness\)/)
+  assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness, selSession\?\.archived\)/)
   assert.match(source, /if \(commandAvailable\) setCommandOpen/)
   assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)[\s\S]*?\.sort\(\(a, b\) => \(a\.anchor === 'right' \? 1 : 0\) - \(b\.anchor === 'right' \? 1 : 0\)\)[\s\S]*?\.map/)
   assert.match(source, /const pressed = c\.pressed \? commandOpen : undefined/)

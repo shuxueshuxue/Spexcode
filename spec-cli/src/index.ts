@@ -13,9 +13,9 @@ import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
-import { boardStream, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
+import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -583,6 +583,12 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
   return c.json(result, result.ok ? 200 : 502)
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
+// shelve / unshelve ([[archive]]) — a record-only write: the agent, its tmux, and the worktree are untouched,
+// so this composes with stop rather than implying it. Body `{on:false}` unshelves. {ok:false} = no such session.
+app.post('/api/sessions/:id/archive', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  return c.json({ ok: await archiveSession(c.req.param('id'), body?.on !== false) })
+})
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
@@ -625,10 +631,19 @@ superviseQueue()     // launch queued sessions as slots free (catches agent-auth
 superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
+let graphWatchersClosed = false
+const closeGraphWatchers = (): void => {
+  if (graphWatchersClosed) return
+  graphWatchersClosed = true
+  closeBoardFileWatchers()
+}
+process.once('exit', closeGraphWatchers)
+
 // graceful drain (the other half of zero-downtime reload, supervise.ts): on SIGTERM stop accepting new
 // connections, let in-flight requests finish, and sweep now-idle keep-alive sockets so close() fires the
 // instant the last request drains. A hard cap still forces exit if a connection won't close.
 process.on('SIGTERM', () => {
+  closeGraphWatchers()
   const srv = server as unknown as { close(cb?: () => void): void; closeIdleConnections?(): void }
   const sweep = setInterval(() => srv.closeIdleConnections?.(), 200)
   srv.close(() => { clearInterval(sweep); process.exit(0) })

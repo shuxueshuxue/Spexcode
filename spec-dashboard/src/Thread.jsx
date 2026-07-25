@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
-import { useMentionAutocomplete, matchSlash, SlashMenu } from './mentions.jsx'
+import { useMentionAutocomplete, matchSlash, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { postRemarkAction } from './data.js'
@@ -260,26 +260,10 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     taRef.current?.focus()
   }
 
-  // the grammar's discoverability doors ([[mentions]] / [[review-commands]]): insert the EXACT trigger
-  // (`@` / `[[` / `/`) at the caret — replacing any selection, preserving the rest of the draft — then refocus with the caret right
-  // after it and re-run the ONE shared autocomplete sync, so the same menu typing the trigger opens opens
-  // here too. No second menu, no dispatch: the button only types what the hand would.
-  const insertTrigger = (trigger) => {
-    const el = taRef.current
-    if (!el || busy) return
-    const start = el.selectionStart ?? body.length
-    const end = el.selectionEnd ?? start
-    setBody(body.slice(0, start) + trigger + body.slice(end))
-    const caret = start + trigger.length
-    requestAnimationFrame(() => {
-      const ta = taRef.current
-      if (!ta) return
-      ta.focus()
-      ta.setSelectionRange(caret, caret)
-      ac.sync(ta)
-      syncSlash(ta)
-    })
-  }
+  // the grammar's discoverability doors ([[mentions]] / [[review-commands]]) — the ONE shared insertion
+  // mechanism (`typeTrigger`), so this composer and the Issues compose page open the same menu the same
+  // way. No second menu, no dispatch: the button only types what the hand would.
+  const insertTrigger = (trigger) => typeTrigger(taRef.current, trigger, setBody, (el) => { ac.sync(el); syncSlash(el) })
 
   const send = async () => {
     const text = body.trim()
@@ -310,12 +294,9 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const footer = (
       /* the buttons swallow mousedown so a click never blurs the textarea; the row itself is persistent. */
       <div className="fv-actions">
-        <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionActor')} aria-label={t('thread.mentionActor')}
-          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('@')}>@</button>
-        <button type="button" className="fv-trigger-btn" data-tip={t('thread.mentionNode')} aria-label={t('thread.mentionNode')}
-          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('[[')}>[[</button>
-        {commands?.length > 0 && <button type="button" className="fv-trigger-btn" data-tip={t('thread.reviewCommands')} aria-label={t('thread.reviewCommands')}
-          onMouseDown={(e) => e.preventDefault()} onClick={() => insertTrigger('/')}>/</button>}
+        <TriggerButton label={t('thread.mentionActor')} disabled={busy} onClick={() => insertTrigger('@')}>@</TriggerButton>
+        <TriggerButton label={t('thread.mentionNode')} disabled={busy} onClick={() => insertTrigger('[[')}>[[</TriggerButton>
+        {commands?.length > 0 && <TriggerButton label={t('thread.reviewCommands')} disabled={busy} onClick={() => insertTrigger('/')}>/</TriggerButton>}
         {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
         {err && <span className="fv-error">{err}</span>}
         <div className="fv-actions-end">

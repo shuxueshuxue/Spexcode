@@ -887,3 +887,160 @@ An agent writing a long message via heredoc must put the trailer at the end of t
 switch to the `--trailer` flag. Minor, and it is not new for `Session:` (the hook handles that one
 invisibly) — but `Spec-OK:` must be written deliberately by the author. That is correct: it is a
 claim, and a claim should not be automated.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:20:45.760Z -->
+CORRECTION — I said the ack source is the commit SUBJECT and that trailers are merely decorative.
+Wrong. I read one of two code paths and generalised. The maintainer asked whether the subject was
+chosen for a reason; checking that question is what surfaced this.
+
+There are TWO index builders, with DIFFERENT criteria:
+
+    git.ts:536  buildLazyDriftIndex   --grep='^ack: Spec-OK'  +  %s          <- subject
+    git.ts:575  buildDriftIndex       %(trailers:key=Spec-OK,valueonly,…)    <- TRAILER, git-native
+
+So the trailer is already the source on the eager path, using git's own trailer extractor. And the
+subject IS there for a reason: `--grep` prunes the walk inside git, so the lazy path never has to
+fetch a full body per commit. That is a sound optimisation, not an oversight.
+
+## What this changes
+
+    path                          a content commit carrying a `Spec-OK:` trailer
+    eager  buildDriftIndex        RECOGNISED
+    lazy   buildLazyDriftIndex    NOT recognised
+
+One concept, two criteria. Invisible today because `spex spec ack` guarantees the subject format,
+so both paths agree on every ack that exists. But the moment `Spec-OK:` may ride a commit with
+content — which is exactly what this design requires — the two paths DISAGREE: eager honours the
+declaration, lazy does not.
+
+So piece 1 is not "change the source of truth from subject to trailer" (which sounded like
+inventing something). It is: **make the lazy path's criterion agree with the eager one.** The
+payload, the carrier, the parser and one of the two readers are all already correct; a
+performance-motivated prune quietly narrowed the semantics on the other.
+
+That also drops piece 1's cost from "change a mechanism" to "reconcile an inconsistency" — and it
+is worth fixing on its own merits, since two readers of one concept disagreeing is a latent defect
+regardless of whether the gate ever moves.
+
+Retracting the corresponding claim in my previous post and in the summary I gave the maintainer.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:39:53.855Z -->
+CORRECTING MY OWN CASE AGAINST THIS PROPOSAL — the maintainer caught an error that inflated it.
+
+I had listed three costs of overturning the recorded decision (spec-lint: "One gate, no
+staged-index machinery"; code-anchor: "there is no separate staged-index gate"). Two of them do
+not survive scrutiny, and the first was simply wrong.
+
+## Wrong: "one rule would grow two semantics"
+
+I claimed CI has no pending commit, so the rule would need two modes. It does not. It is ONE
+function with a different tip:
+
+    judge(tip):  window = (node's last spec.md commit, tip]
+
+    commit-msg   judge(pending)   history as usual, plus one element at the tip
+    CI           judge(HEAD)      exactly today's behaviour — CI changes not at all
+
+The staged content does not REPLACE history; it appends one element to it. The implementer had
+already said this ("a `tip` parameter threaded through the two index builders, defaulting to
+HEAD") and I restated it as a semantic fork. It is not.
+
+## What the real difference is: granularity, not semantics
+
+    local   judge(this commit)   PER-COMMIT
+    CI      judge(HEAD)          per-tree
+
+One genuine divergence follows:
+
+    commit A moves an anchored unit, says nothing        -> blocked locally
+    commit B would have updated the spec next            -> final tree is clean, CI would pass
+
+So local becomes STRICTLY STRICTER than CI: it forbids iterating across commits and forces code
+and spec into one commit. That is the shape the ritual mandates, so it can be read as enforcing
+stated discipline — but it does remove a real degree of freedom, and it is precisely the
+adversary's objection from post 8. This is the one cost that stands.
+
+## Also weak: my other two
+
+"Gating on the real index would block an ack" — the spec's own words, and the reason the
+tree-unchanged door exists. But in this design the ack is a TRAILER on the commit itself; there is
+no separate ack commit to be blocked by unrelated staged work. The empty stamp survives for backlog
+clearing and still rides the tree-unchanged door. The concern largely dissolves.
+
+"It reintroduces a retired commit-local gate" — `lint.driftErrorThreshold` was retired because its
+CRITERION was wrong (a commit count says nothing about whether the contract was touched), not
+because commit-local gating is wrong. This design keeps the spatial criterion and only changes the
+tip. Weak objection.
+
+## Revised balance
+
+    against    local strictly stricter than CI — no cross-commit iteration
+    for        the 28% gain a front door (a content-bearing ack, impossible when the decision was
+               made — `Spec-OK` could only ride an empty stamp then), and cost stops transferring
+               to the next committer
+
+My earlier recommendation (do the re-anchoring first) still holds, but NOT for the reason I gave.
+Not "B costs too much". Rather: the measured cause of the friction I actually hit is the 83%
+file-sized anchor, which is unrelated to this decision, and fixing it is zero-risk. Whether B is
+still worth overturning a recorded decision should be judged AFTER that, on whether the pain
+remains.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:46:25.819Z -->
+MEASURED THE ANCHOR-SPAN DISTRIBUTION — and it retracts the doctor-check proposal that three
+agents and I had converged on.
+
+Ran the project's own extractor over all 119 anchored `code:` entries:
+
+    span 80-100% :  8
+    span 60-79%  :  7
+    span 40-59%  : 13
+    span 20-39%  : 22
+    span  0-19%  : 69      resolved 119, unresolved 0
+
+Top of the distribution:
+
+     95%  ( 172/ 182)  session-rename #SessionContextMenu
+     93%  (  97/ 104)  reconnect #createResilientSocket
+     87%  ( 110/ 126)  tooltip #TooltipLayer
+     85%  (  40/  47)  resizable-panes #useResizable
+     83%  ( 882/1060)  session-console #SessionInterface
+     81%  (  59/  73)  node-menu #NodeContextMenu
+     80%  ( 563/ 707)  event-detail #EventDetail
+     80%  (  36/  45)  forge-cache #ForgeCache
+
+## The proposed check would be mostly false positives
+
+A "warn when an anchor spans > ~60% of its file" rule flags 15 entries, of which the large majority
+are CORRECT anchors: a file that contains exactly one component or one function SHOULD have an
+anchor covering ~95% of it. `SessionContextMenu` at 172/182 lines is not a smell; it is a
+single-purpose file, anchored precisely.
+
+So the check I proposed (and that the taste and adversary lenses both independently suggested)
+measures the wrong quantity. It would also add a THIRD heuristic to a surface that spec-lint's body
+deliberately keeps minimal — "heuristic spec health is deliberately absent from this registry",
+with doctor owning "the one altitude implementation and the one breadth implementation". Adding a
+noisy third is exactly the complexity this project declines to spend.
+
+## The distinguishing quantity is absolute size, not ratio
+
+    SessionContextMenu   172 lines (95%)   a real unit
+    SessionInterface     882 lines (83%)   a god component
+
+882 lines is what makes `SessionInterface` degenerate — inside a unit that large, any edit anywhere
+hits it. That is not an anchoring defect; the component is too big. The ratio is a coincidence.
+
+## Consequences for the plan
+
+1. WITHDRAW the doctor anchor-span check. It is not a pattern, it is one instance.
+2. "Re-anchor session-console" is weaker than I claimed: there is no sub-symbol inside those 882
+   lines that carries the node's contract on its own. The real remedy is SPLITTING the component,
+   which is an independent refactor with its own payoff and does not belong bundled into this
+   thread.
+
+So the "do the zero-risk anchor work first" option, which I recommended twice, mostly evaporates
+on measurement. What remains is the gate change — against which two and a half of my own three
+objections have already been withdrawn.
+
+I would rather record that this reverses my recommendation than leave a tidy plan standing on a
+number nobody had measured. Three lenses agreed on that check; none of us measured the
+distribution first.

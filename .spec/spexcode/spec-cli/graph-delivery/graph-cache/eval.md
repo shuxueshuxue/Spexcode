@@ -109,7 +109,10 @@ scenarios:
       port with isolated runtime state and no inherited `SPEXCODE_API_URL`. From process start until board settle,
       sample `/health`, backend RSS, and every descendant often enough to count concurrently active git children;
       save the graph response, status, timing, ETag, projection phases, and sanitized process metrics. Run B for
-      three cold/full-invalidated rounds and wait for descendants to settle after each. Never call a deployed
+      three cold/full-invalidated rounds and wait for descendants to settle after each; a round counts only once
+      the server itself reports the invalidation, so a poll that lands on the previous still-fresh board can never
+      be scored as a rebuild. Measure on an idle host — a run whose ambient CPU, run-queue, memory or swap
+      conditions break mid-flight is environment-invalid, neither pass nor fail. Never call a deployed
       endpoint, reduce the corpus, force GC, increase a timeout or memory budget, or delete history.
     expected: >-
       B's cold graph is content-equivalent to A and preserves its serialization/ETag and session overlay meaning;
@@ -117,9 +120,13 @@ scenarios:
       of the 53-worktree/30-session corpus, all children and queued work reach zero after every build, and RSS is
       substantially below A's unbounded-fanout peak then naturally plateaus across three rounds. With zero delta
       subscribers the build starts no session-eval projection warmup. Opening a delta era afterward still drains
-      projection work through its own bounded queue, and one selected Evals demand still completes. A graph timeout,
+      projection work through its own bounded queue, and one selected Evals demand still completes. The first cold
+      read, which has no last-good board to serve, may answer an honest route timeout rather than hold the
+      connection open, provided that same single-flight build settles fresh within the build watchdog; that is the
+      truthful cold seam, not a loss. Loss is a build that never settles, an ordinary reader still answering 503 or
+      timing out once a last-good board exists, an overlapping second flight,
       changed graph units/ETag semantics, any per-reading `merge-base --is-ancestor` fanout, a corpus-sized
-      process peak, unreaped descendants, or monotonic RSS is loss.
+      process peak, unreaped descendants, or monotonic RSS.
 ---
 # eval.md — board-cache
 

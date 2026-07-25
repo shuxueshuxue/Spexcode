@@ -33,11 +33,14 @@ export type ContentProbe = {
   prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
 }
 
-// (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory,
-// sized above the largest adopter reading corpus — one entry per (reading, path) worst case — so a
-// repeat board build never thrashes back into forking (a bound below the corpus's distinct key count
-// turns a fixed-order rebuild into sequential thrash: every pass evicts the whole memo before cycling
-// back, re-forking one git child per key forever — scenariofresh's oidMemo sizing rule).
+// (anchor, HEAD) name two immutable trees, so a settled verdict never invalidates — but "never invalidates"
+// is not "keep forever". A checkout answers freshness questions at ONE head at a time, so a root owns
+// exactly one head's verdicts ([[source-of-truth]]'s current-root rule, the same one the history and drift
+// indices follow). Keying the head into a shared memo instead made every rebuild ADD a generation: three
+// full invalidations left three heads' worth of anchors resident, and the cache grew with rebuild count
+// rather than with corpus size. A head move therefore swaps the root's scope atomically. An in-flight batch
+// keeps the entry object its caller already holds, so that caller still settles, but a detached entry can
+// never be read back through the root's current scope — an old flight cannot backfill the new head.
 // An anchor entry holds only PER-REQUESTED-PATH verdicts (plus the gone bit and the batch bookkeeping),
 // never a whole-repo path set.
 type AnchorVerdicts = {
@@ -46,41 +49,49 @@ type AnchorVerdicts = {
   pending: Set<string>             // paths awaiting the next batch child
   flight: Promise<void> | null     // the single in-flight batch for this anchor
 }
-const anchorMemo = new Map<string, AnchorVerdicts>()
-const behindMemo = new Map<string, number>()
-function readMemo<V>(m: Map<string, V>, k: string): V | undefined {
-  if (!m.has(k)) return undefined
-  const value = m.get(k)!
-  m.delete(k)
-  m.set(k, value)
-  return value
+type RootScope = { head: string; anchors: Map<string, AnchorVerdicts>; behind: Map<string, number> }
+const rootScopes = new Map<string, RootScope>()
+// Roots come and go (a closed worktree never asks again), so cap how many stay warm — the same bounded-slot
+// guard the index caches use, and the only bound needed once per-root cardinality is the corpus, not history.
+const ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_FRESHNESS_ROOT_SLOTS || 64))
+
+function scopeFor(rootKey: string, head: string): RootScope {
+  const current = rootScopes.get(rootKey)
+  if (current?.head === head) {
+    rootScopes.delete(rootKey)
+    rootScopes.set(rootKey, current)
+    return current
+  }
+  const scope: RootScope = { head, anchors: new Map(), behind: new Map() }
+  rootScopes.set(rootKey, scope)
+  while (rootScopes.size > ROOT_SLOTS) {
+    const oldest = rootScopes.keys().next().value
+    if (oldest === undefined || oldest === rootKey) break
+    rootScopes.delete(oldest)
+  }
+  return scope
 }
-function putMemo<V>(m: Map<string, V>, k: string, value: V): void {
-  m.delete(k)
-  m.set(k, value)
-  if (m.size > 4096) m.delete(m.keys().next().value!)
+// a read only ever sees the root's CURRENT head — a probe pinned to a superseded head can't testify
+function currentScope(rootKey: string, head: string): RootScope | undefined {
+  const scope = rootScopes.get(rootKey)
+  return scope?.head === head ? scope : undefined
 }
 
-const anchorKey = (rootKey: string, sha: string, head: string): string => `${rootKey}\x1f${sha}\x1f${head}`
-function lookupAnchor(key: string): AnchorVerdicts | undefined {
-  const hit = anchorMemo.get(key)
-  if (!hit) return undefined
-  anchorMemo.delete(key)
-  anchorMemo.set(key, hit)
-  return hit
+// the cardinality invariant, made observable: how many anchor entries are resident at a root's CURRENT head
+// (every root when none is named). It must track the corpus's anchors, never how many times the board has
+// been rebuilt — one retained generation, not one per rebuild.
+export function freshnessCacheSize(root?: string): number {
+  if (root !== undefined) return rootScopes.get(resolve(root))?.anchors.size ?? 0
+  let total = 0
+  for (const scope of rootScopes.values()) total += scope.anchors.size
+  return total
 }
-function touchAnchor(key: string): AnchorVerdicts {
-  const hit = lookupAnchor(key)
+
+function touchAnchor(scope: RootScope, sha: string): AnchorVerdicts {
+  const hit = scope.anchors.get(sha)
   if (hit) return hit
   const entry: AnchorVerdicts = { verdicts: new Map(), gone: false, pending: new Set(), flight: null }
-  anchorMemo.set(key, entry)
-  // an entry whose batch is still running would lose its writes if dropped, so eviction skips it; the
-  // in-flight population is bounded by the build's own concurrency, never by the corpus.
-  while (anchorMemo.size > 4096) {
-    const stale = [...anchorMemo].find(([, value]) => !value.flight)
-    if (!stale) break
-    anchorMemo.delete(stale[0])
-  }
+  scope.anchors.set(sha, entry)
   return entry
 }
 
@@ -188,9 +199,11 @@ export function contentProbeFor(root: string): ContentProbe {
   return {
     async prime(sha, paths, evalPath) {
       const current = headOf()
-      const key = anchorKey(rootKey, sha, current)
       const wanted = [...new Set([...paths, evalPath])].filter(Boolean)
-      let entry = touchAnchor(key)
+      // one scope resolve per prime: the entry stays this call's to settle even if the root's head moves
+      // under it, but the swap means nothing it writes afterwards can be read back at the new head.
+      const scope = scopeFor(rootKey, current)
+      const entry = touchAnchor(scope, sha)
       while (!entry.gone) {
         const missing = wanted.filter((path) => !entry.verdicts.has(path))
         if (!missing.length) break
@@ -198,28 +211,27 @@ export function contentProbeFor(root: string): ContentProbe {
         // record first, then join: whoever starts the next batch drains everything pending by now.
         if (entry.flight) await entry.flight
         else await startAnchorBatch(root, rootKey, sha, current, entry)
-        entry = touchAnchor(key)
       }
       if (entry.gone) return
       for (const path of new Set(paths)) {
         if (entry.verdicts.get(path) !== true) continue
-        const behindKey = `${rootKey}\x1f${sha}\x1f${current}\x1f${path}`
-        if (behindMemo.has(behindKey)) continue
+        const behindKey = `${sha}\x1f${path}`
+        if (scope.behind.has(behindKey)) continue
         const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
-        putMemo(behindMemo, behindKey, Number.isFinite(n) && n > 0 ? n : 1)
+        scope.behind.set(behindKey, Number.isFinite(n) && n > 0 ? n : 1)
       }
       if (entry.verdicts.get(evalPath) === true) await primeScenarioBlocksAt(root, [sha, current], evalPath)
     },
     changed(sha, path) {
       // The async prime owns all I/O. An unprimed path is 'can't testify', never a fresh sync diff: a miss
       // stays conservative and no abort/transient failure can turn into an unbounded synchronous fallback.
-      const entry = lookupAnchor(anchorKey(rootKey, sha, headOf()))
+      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
       if (!entry || entry.gone) return null
       return entry.verdicts.get(path) ?? null
     },
     canTestify(sha) {
       // a settled verdict — of either polarity — is the proof the anchor's tree was readable
-      const entry = lookupAnchor(anchorKey(rootKey, sha, headOf()))
+      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
       return !!entry && !entry.gone && entry.verdicts.size > 0
     },
     scenarioDiffers(sha, evalPath, scenario) {
@@ -228,7 +240,7 @@ export function contentProbeFor(root: string): ContentProbe {
       return a.get(scenario) !== scenarioBlocksAt(root, headOf(), evalPath)?.get(scenario)
     },
     behind(sha, path) {
-      return readMemo(behindMemo, `${rootKey}\x1f${sha}\x1f${headOf()}\x1f${path}`) ?? 1
+      return currentScope(rootKey, headOf())?.behind.get(`${sha}\x1f${path}`) ?? 1
     },
   }
 }

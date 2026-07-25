@@ -20,6 +20,13 @@ export const UI_COMMANDS = [
     labelKey: 'session.relaunch', titleKey: 'session.relaunchTitle' },
   { name: 'stop',  color: 'muted',  button: false, when: (st, lv) => !!st && st !== 'offline' && st !== 'queued' && lv !== 'offline',
     titleKey: 'session.cmd.stopTitle', descKey: 'session.cmd.stopDesc' },
+  // shelving ([[archive]]) — availability keys on `archived`, the third orthogonal axis, so exactly ONE of the
+  // pair is ever offered and neither depends on lifecycle or liveness: you may shelve a running session and
+  // restore a dead one. Typed-only (no toolbar twin): filing is a deliberate act, not a one-pixel-away button.
+  { name: 'archive',   color: 'muted', button: false, when: (st, lv, ar) => !!st && !ar,
+    titleKey: 'session.cmd.archiveTitle', descKey: 'session.cmd.archiveDesc' },
+  { name: 'unarchive', color: 'blue',  button: false, when: (st, lv, ar) => !!st && !!ar,
+    titleKey: 'session.cmd.unarchiveTitle', descKey: 'session.cmd.unarchiveDesc' },
   { name: 'close', color: 'red',    button: false, when: (st) => !!st && st !== 'offline',
     titleKey: 'session.cmd.closeTitle', descKey: 'session.cmd.closeDesc' },
 ]
@@ -27,9 +34,9 @@ export const UI_COMMANDS = [
 // bind the static registry to the live per-render actions, then keep only the commands available in the
 // current session state. `runners` maps name → the closure that DOES the thing (the same closure the toolbar
 // tool and typed command call), so the surfaces cannot drift apart.
-export function uiCommandsFor(status, runners, liveness = 'online') {
+export function uiCommandsFor(status, runners, liveness = 'online', archived = false) {
   return UI_COMMANDS
-    .filter((c) => c.when(status, liveness))
+    .filter((c) => c.when(status, liveness, archived))
     .map((c) => ({ ...c, run: runners[c.name] }))
 }
 

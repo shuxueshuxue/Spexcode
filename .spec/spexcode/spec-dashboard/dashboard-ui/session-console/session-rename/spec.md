@@ -56,7 +56,10 @@ success.
 The menu also carries a **reset order** item — shown only when the row has been dragged out of birth order —
 which belongs to the session list's drag-to-reorder gesture ([[session-console]]; it clears that row's manual
 sort-key), not to this node's rename/close contract; it rides in this pop-over because the same right-click
-is where a human reaches for it.
+is where a human reaches for it. **Archive** ([[archive]]) rides the same way, and is the clearest contrast
+with close beside it: one item naming the move out of the row's current state, acting at once with no confirm,
+because it is reversible from this very menu — the confirm below is earned by destroying work, not by being a
+right-click.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike

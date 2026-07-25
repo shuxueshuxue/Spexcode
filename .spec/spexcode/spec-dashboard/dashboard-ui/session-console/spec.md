@@ -20,6 +20,7 @@ related:
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
+  - spec-dashboard/test/timeline-chat-composer.e2e.mjs
 ---
 
 # session-console
@@ -52,12 +53,19 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
-the `＋` New Session button and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
+**morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
+path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
+carrying the archived count when there is one), and a **Search** button, the click twin of the ⌥+/ palette
+([[session-search]] owns that contract).
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
-input. Nothing is prefilled; typing **`[[`** opens the
+input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
+`fitTextarea` measurement path grows through each content line without a scrollbar until the host's
+declared cap. Composer keyboard meaning is deliberately split by product action: a **message** composer
+(TimelineChat conversation or Command Box) sends on plain Enter, inserts a line on Shift+Enter, and never
+sends the Enter that commits an IME composition; a **launch** composer (this New tab or the phone's Create
+screen) is a long-form prompt, so Enter always remains native editing and only the explicit launch button
+submits. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A **`/query` token at the
 caret**, at the draft's start or after whitespace, opens the config-preset palette even when the draft already
 contains prose; accepting it promotes the chosen `/<preset>` to the draft's start and preserves that prose.
@@ -97,9 +105,10 @@ background fire) and never expands a plugin body itself.
 An existing session's adapter chooses one real console surface. A pane-backed adapter shows its **live
 interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
 its **liveness** ([[state]]) is live (`online`/`starting`). A headless adapter has no pane at any liveness;
-its main console is the shared `TimelineChat` conversation over [[session-timeline]], readable after the process
-goes offline. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
-drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+its main console is the shared `TimelineChat` conversation over [[session-timeline]]. The conversation stays
+mounted while an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved
+history immediately. That conversation is the whole terminal-free console, with no [[message-stream]]
+native-event drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
@@ -162,7 +171,10 @@ continues through [[live-view]]'s explicit tmux-client control path.
 
 The desktop right pane has **one console slot with two truthful transports**. A pane-backed adapter mounts the
 warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
-phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
+phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's
+message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
+IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
+mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed
 terminal-free surface property, and the note data arrives because the agent executes the external
 `spex session <verb> --note` CLI; hooks only prompt the agent at turn boundaries and carry no note data.
 Session rows still carry only their status and activity vocabulary — no redundant mode badge.
@@ -193,7 +205,9 @@ atomically even in tmux copy-mode. Success clears the draft and closes; failure 
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
-worktree; `/close` removes the worktree; `/merge` merges; `/eval` opens the canonical session-scoped Evals page.
+worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
+one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` merges;
+`/eval` opens the canonical session-scoped Evals page.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and

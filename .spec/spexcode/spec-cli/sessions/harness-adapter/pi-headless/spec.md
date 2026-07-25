@@ -23,9 +23,11 @@ controller in the session's tmux window. It uses pi's default text output; `--mo
 used because it can hang on the supported local runtime.
 
 The adapter is literal object composition over `piHarness` for shim, contract, skills, trust, slash commands,
-events, and session identity. Its runtime is record-backed: while the governed session record exists it reports
-`online`; a missing controller, child, or rendezvous listener is surfaced by delivery as a loud transport error.
-Its text output remains a transport detail; the note timeline is the terminal-free conversation.
+events, and session identity. Its runtime is record-backed: while the governed session record exists and is not
+explicitly stopped it reports `online`; a missing controller, child, or rendezvous listener is surfaced by
+delivery as a loud transport error. Human `stop` tears down the runtime and marks the retained record stopped,
+so it reads `offline` until `resume` clears the marker and relaunches the same conversation. Its text output
+remains a transport detail; the note timeline is the terminal-free conversation.
 
 The controller starts a fresh turn with `pi -p --session-id <id> <prompt>`. A delivery first probes pi's
 rendezvous socket. When a listener is present, the existing `deliverViaRendezvous` protocol sends

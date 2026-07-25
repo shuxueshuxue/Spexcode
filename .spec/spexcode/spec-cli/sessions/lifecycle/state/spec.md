@@ -54,7 +54,8 @@ They carry distinct faces, so the board never reads "stuck, needs me" as "fine, 
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
-independent facts, computed independently:
+independent facts, computed independently (a third, the human's `archived` filing decision, is orthogonal to
+BOTH and owned by [[archive]] — it never reads as a status and never rewrites one):
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `status` value above.
@@ -62,9 +63,11 @@ independent facts, computed independently:
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
   still booting — see [[launch]]), `unknown` (the liveness PROBE ITSELF failed — see below), else `online`.
-  Most interactive adapters derive that answer from process/transport probes. [[claude-headless]] deliberately
-  derives it from the intact session record instead: turn children are ephemeral, so no resident process is an
-  idle state rather than death; controller faults fail loudly at delivery. For the process-probed adapters,
+  Most interactive adapters derive that answer from process/transport probes. Headless adapters deliberately
+  derive it from the intact, non-stopped session record instead: turn children are ephemeral, so no resident
+  process is an idle state rather than death; controller faults fail loudly at delivery. A human `stop` is
+  authoritative rather than a probe: it stamps the retained record's `stopped` liveness metadata after tearing
+  down the runtime, so even a failed tmux probe cannot turn that known stop into `unknown`. For the process-probed adapters,
   detection runs in **two tiers, never the pane's foreground command**. The **hot 100ms tier** is a zero-spawn
   death detector: launch registers the agent's real pid (`agent.pid`, stamped pre-`exec` so it IS the agent's
   own pid), and one `kill(pid,0)` syscall reads it — an ESRCH death is **latched per (pid, mtime)** (the
@@ -103,12 +106,14 @@ proposes, then idles awaiting the merge — not just a test artifact.
 
 Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
 of `resume`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
-the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
-conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
-untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`** is the inverse
+the global record**, then writes only that record's `stopped` liveness marker, so the session reads `offline`
+and the relaunch panel offers to `--resume` the same conversation. The lifecycle fields the agent last authored
+survive the stop untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`**
+is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
-conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action)
-and settles the **resting** lifecycle under the SAME active-only guard `idle` uses — a resumed agent that was
+conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
+clears `stopped` as it restores the runtime and settles the **resting** lifecycle under the SAME active-only
+guard `idle` uses — a resumed agent that was
 `active` (working) is now just sitting at its prompt → `idle`, while every deliberate declaration survives the
 resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT
 touch the proposal: resuming a session that is proposing a merge must not silently withdraw it — proposals are
@@ -130,7 +135,9 @@ alive process (the one case where a deliberate kill is the repair). Only a **con
 send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
 confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
-are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. A stopped
+are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
+human-only verb, **`archive`** ([[archive]]), is deliberately neither: it writes one record field and stops
+nothing, so stop remains the RESOURCE verb and archive the ATTENTION verb, freely composed. A stopped
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
 one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the

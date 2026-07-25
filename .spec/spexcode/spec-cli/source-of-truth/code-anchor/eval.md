@@ -119,6 +119,9 @@ scenarios:
       A combined merge hunk containing both a side-inherited anchored line (`+ `) and an adjacent
       merge-authored ungoverned line (`++`) does not charge the inherited line or reject the merge; combined
       ownership is decided per result line, never by widening one owned line to its enclosing hunk.
+      Candidate lint additionally rejects deleting a governor while its former governed subject survives
+      without a new `code:` owner; deleting that implementation or transferring it in the same candidate
+      passes. This transition-only integrity check is not claimed to be a HEAD-reconstructible anchor rule.
 ---
 # code-anchor — measurement
 

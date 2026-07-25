@@ -85,6 +85,14 @@ are unchanged. Canonical pre-commit defers anchor errors only when both canonica
 actually installed; if `spex init` preserves either user hook, pre-commit retains the old HEAD gate, so a
 hook collision never reduces local coverage. `SPEXCODE_SKIP_LINT=1` remains the explicit local bypass.
 
+The candidate lint run also owns one deliberately asymmetric **governor-transition integrity** check,
+separate from anchor drift: when the candidate deletes a spec node, its old `HEAD` blob supplies that
+node's former `code:` claims, and the candidate must either delete each governed subject or transfer it to
+a real node in the same tree. `Spec-OK` cannot waive removal of the governor itself. After such a commit is
+already `HEAD`, the deleted claim is no longer present to reconstruct this transition; ordinary HEAD lint
+therefore has only the current-tree coverage warning. “The same predicate at two tips” below describes the
+anchor-drift predicate, not this transition guard.
+
 This **reverses** the earlier recorded choice to have no separate candidate-tree gate. That choice was
 sound under the capability available then: `Spec-OK` could only be a later `--allow-empty` stamp, so a
 content-bearing implementation commit had no honest in-commit acknowledgement route and a staged gate

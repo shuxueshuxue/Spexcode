@@ -27,6 +27,8 @@ scenarios:
       The tarball builds the bundled dashboard during prepack and installs into the clean consumer project.
       `npx spex --help` starts the CLI without looking for a missing nested `spec-cli/node_modules/.bin/tsx`.
       Inside a fresh git repo, `spex init` exits 0 and plants `.spec/project/spec.md` plus `spexcode.json`.
+      The consumer's production `node_modules` does not contain TypeScript; host projects carry the compiler
+      only when their own development or JS-anchor setup needs it.
     code:
       - package.json
       - spec-cli/bin/spex.mjs

@@ -32,7 +32,15 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   plain command with no automatic-permission flags; the seeded plugin tree is the canonical [[init-preset]]
   projection byte-for-byte and mode-for-mode; no held-back, private-machine, or SpexCode-project text leaks into
   the adopter; and `spex spec lint` finishes with zero errors. It never starts a harness, attempts login, or
-  reaches a harness/network service — session launch is beyond this gate.
+  reaches a harness/network service — session launch is beyond this gate. Every failed child command is
+  reported with its captured stdout and stderr as separate, labelled sections; the production install itself
+  does not opt into npm's silent mode, so an offline-cache miss names the missing package instead of collapsing
+  into an exit code. The offline consumer uses the public root lockfile as its exact dependency plan, after a
+  root `npm ci` has both validated that plan against the published manifest and cached its platform artifacts.
+  A bare tarball install cannot honestly rely on those artifacts alone: dependency ranges make npm request
+  registry packuments even when every selected tarball is cached. The lock-driven `npm ci --offline` proves the
+  packed package and its exact production graph install with no registry access instead of depending on warm,
+  machine-local metadata.
   Full git history is fetched because lint derives the version timeline and drift from git.
 - **Why a backstop and not the only gate** — the [[main-guard]] hook still gives fast *local* feedback and
   blocks direct commits on `main`; CI guarantees the [[spec-lint]] contract holds even when that hook is

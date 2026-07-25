@@ -67,8 +67,8 @@ scenarios:
   - name: no-typescript-errors
     tags: [cli]
     description: >
-      Same fixture with an anchored .ts entry, but neither the host repo nor SpexCode's `spec-cli`
-      package provides a usable typescript. Run `spex spec lint`.
+      Same fixture with an anchored .ts entry, but the governed host repo does not provide a usable
+      typescript. Run the production-installed `spex spec lint`.
     expected: >
       Lint completes without throwing and emits an explicit extractor-unavailable `integrity` ERROR
       naming the ts-ast repair — install typescript in the host repo or remove the #anchor; exit 1.

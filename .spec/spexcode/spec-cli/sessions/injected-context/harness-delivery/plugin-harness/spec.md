@@ -25,8 +25,7 @@ read a `.claude-plugin` directly — so the SAME emit serves AdopterA, Claude, a
 
 The pieces map from the same [[surface]] nodes the native path materializes, but through a plugin host's seams:
 
-- **the contract** (the [[harness-delivery]] assembly — `docs/AGENT_GUIDE.md` followed by the `surface: system`
-  bodies) is NOT an always-on `CLAUDE.md` block here — the bundle never edits the repo's own files. It maps to a
+- **the contract** (the [[harness-delivery]] assembly — the `surface: system` plugin bodies) is NOT an always-on `CLAUDE.md` block here — the bundle never edits the repo's own files. It maps to a
   **SessionStart hook that emits `hookSpecificOutput.additionalContext`** (the harness-neutral injection
   Claude/adopter-a normalize; the superpowers pattern), the stand-in for the `--append-system-prompt` a plugin host
   can't take. The additionalContext JSON is encoded at MATERIALIZE time into `hooks/contract-context.json`, so the

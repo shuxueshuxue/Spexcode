@@ -23,7 +23,7 @@ export type MaterializeResult = { contentHash: string; planted: MaterializedArti
 // a trigger. It turns the spec tree's surface nodes into the flat artifacts each consumer reads
 // cheaply, so a USER-self-launched claude/codex (no SpexCode process in the launch) gets the whole system via
 // harness-auto-discovered files: (1) the hook MANIFEST (our dispatcher reads it), (2) the CONTRACT — the
-// tracked docs guide (docs/AGENT_GUIDE.md) FOLLOWED BY the surface:system bodies — written WHOLE into each
+// surface:system plugin bodies (in name order) — written WHOLE into each
 // harness's contract file(s), (3) the thin SHIMS (every event → dispatch.sh), (4) the per-harness TRUST
 // (Codex's deterministic trusted_hash; Claude none). EVERY harness-specific fact is owned by the
 // [[harness-adapter]] (harness.ts) — this file just loops over HARNESSES.
@@ -192,13 +192,12 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const manifest = join(rt, 'hooks-manifest')
   writeFileSync(manifest, compileManifest())
   record('hook manifest', manifest)
-  // (2) the contract = the tracked docs guide (the hand-written agent/contributor notes — the ONE piece of
-  //     in-tree prose) FOLLOWED BY the surface:system bodies (in name order), written WHOLE into EACH harness's
+  // (2) the contract = the surface:system plugin bodies (in name order), written WHOLE into EACH harness's
   //     contract file(s) + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
-  const guidePath = join(proj, 'docs', 'AGENT_GUIDE.md')
-  const guide = existsSync(guidePath) ? readFileSync(guidePath, 'utf8').trim() : ''
-  const systemBodies = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean)
-  const contract = [guide, ...systemBodies].filter(Boolean).join('\n\n')
+  // ONE source, no per-project escape hatch: the contract IS the surface:system plugin bodies. A project's
+  // own hand-written prose is not folded in — repo-local notes belong in the harness file's own
+  // block-outside region (untracked, per-clone), and anything that must reach EVERY agent is a plugin node.
+  const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
   // WHICH harnesses to deliver into ([[harness-select]]): the spexcode.json `harnesses` set (default = every
   // native harness). resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
   const cfg = readConfig(mainCheckout(proj))

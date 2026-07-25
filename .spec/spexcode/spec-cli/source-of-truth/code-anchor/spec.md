@@ -63,13 +63,12 @@ a **conservative hit**, flagged as such — over-warn beats silently missing a r
 **Extraction is a language seam.** Extractors are pure `(content, filename) → units` functions (no
 git, no cache, no fs — importable by an external scorer as-is), and every extension maps to exactly
 ONE designated extractor — no cross-language or cross-engine fallback. The JS family's designated
-extractor is `ts-ast`. Its TypeScript module is resolved in a deliberate order: first from the governed
-repository root (respecting the target project's own TypeScript version), then from SpexCode's
-`spec-cli` package when the adopter does not provide one. This is dependency resolution fallback, not
-a second extractor. The selected candidate is probed through the actual parse API, not mere
-resolvability; once the governed repository resolves a TypeScript module, an incompatible API is an
-error rather than a silent switch to a different parser version.
-When neither candidate provides a usable TypeScript, lint emits an explicit `integrity` error (with a
+extractor is `ts-ast`, backed by the governed repository's own TypeScript module so its parse matches the
+project's compiler. TypeScript is an OPTIONAL host capability, not SpexCode runtime cargo: repositories
+that use JS anchors normally already carry it, while Python and unanchored-JS adopters do not pay for a
+compiler they never invoke. The host candidate is probed through the actual parse API, not mere
+resolvability; an incompatible API is an error rather than a silent switch to another parser version.
+When the governed repository provides no usable TypeScript, lint emits an explicit `integrity` error (with a
 diagnostic naming the extractor and repair), skips JS-family anchor extraction, and continues the
 remaining checks; the non-zero result is a non-verification signal (never a silent or falsely passing
 anchor result), and the process does not throw. Other languages arrive as DATA rows to a generic engine (the heuristic

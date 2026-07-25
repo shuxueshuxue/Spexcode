@@ -10,6 +10,7 @@ related:
   - spec-cli/src/graph.ts
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/reviewFilters.js
+  - spec-dashboard/test/eval-verdict-freshness.e2e.mjs
 ---
 # evals-feed
 
@@ -36,7 +37,17 @@ reading, not an unscored or unknown reading. It is deliberately a named pressed-
 tablist: the axis is still not exhaustive, so the default `is:eval` list may show unscored or unknown rows
 while no button is pressed.
 Counts are computed under the rest of the query, excluding the active verdict token, and a second click
-clears it back to the honest whole list. A fresh human-ok'd result is `state:reviewed`; everything else is
+clears it back to the honest whole list.
+
+**A measured chip LEADS with fresh and names its stale debt.** Fail and Pass show the fresh half of
+[[paged-review]]'s already-split count, then the stale half as one quieter suffix beside it — the count the
+[[review-filters]] freshness token means, spelled with that same localized `stale` word, so a remeasurement
+campaign reads its backlog off the header instead of a second query. The two numbers are the verdict's whole
+population and clicking the chip still selects all of it; Unmeasured has no reading and shows one number.
+The feed only READS that fold — a 25-row page could never re-derive it — so under `freshness:fresh` the
+stale half is already zero and the suffix simply does not render, no token special-case. At 390px the header
+stays the measured four-control row and the suffix drops; its axis remains reachable through the Freshness
+group in the secondary Filters menu. A fresh human-ok'd result is `state:reviewed`; everything else is
 `state:current`. That lifecycle remains transparent in the query and editable through the secondary
 **Human review** builder (Needs review / Reviewed), but no longer occupies the top visual hierarchy.
 When the worktree scope contributes its terminal/gates strip, the feed hands it to ListPage as leading

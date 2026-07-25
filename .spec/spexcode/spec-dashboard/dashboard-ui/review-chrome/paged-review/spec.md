@@ -33,6 +33,13 @@ bounded domain metadata (issue enablement/write stores; scoped eval gates/unknow
 distinguishes a vacant source from a filtered-zero view. `items.length <= 25`; neither a hidden full
 collection nor a second full-list field rides beside it.
 
+A `counts` entry is one number, or the named buckets of a section the adapter SPLIT — Evals' measured
+verdicts arrive as `counts.pass`/`counts.fail` = `{fresh,stale}` while `counts.unmeasured` stays a number.
+The buckets are that verdict's whole population, folded HERE, once, over the complete filtered set before
+the slice, so a browser holding 25 rows never re-derives them; `section.options[].count` keeps carrying the
+same sections' whole totals for the compact menu faces. Trunk, `scope:`, and node-timeline responses all
+speak this one shape.
+
 A requested positive page beyond `pageCount` is preserved and returns HTTP 200 with empty items. Previous
 and Next continue to requested-1/requested+1 in that overflow state; an in-range last page has no Next.
 Missing/invalid/non-positive input repairs to page 1. Source failures are loud and distinct from an honest

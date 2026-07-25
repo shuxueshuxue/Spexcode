@@ -502,6 +502,9 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
                     tabs[next]?.click()
                   }}>
                   <span>{section.label}</span><span className="rl-section-count">{section.count}</span>
+                  {/* an optional quieter SECOND count the domain supplies when its section splits (Evals'
+                      stale remeasurement debt): part of the button's accessible name, never a control. */}
+                  {section.countSuffix && <span className="rl-section-suffix">{section.countSuffix}</span>}
                 </button>
               ))}
             </div>

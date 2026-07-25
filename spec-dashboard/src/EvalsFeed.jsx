@@ -74,9 +74,15 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
   const surgery = (key, value) => onQueryText(setToken(text, key, value))
 
   const items = Array.isArray(pageData?.items) ? pageData.items : []
-  const failCount = pageData?.counts?.fail || 0
-  const passCount = pageData?.counts?.pass || 0
+  // The measured verdicts arrive already SPLIT by the server's one fold ([[review-filters]] → [[paged-review]]):
+  // the chip leads with the fresh half and trails the stale half that still owes a re-measurement, and the
+  // two re-add to the verdict's whole population. This page only READS that fold — the 25-row slice it
+  // holds could never re-derive it. Under `freshness:fresh` the stale half is already 0, so the suffix
+  // disappears because the count is zero, not because this face special-cases the token.
+  const failCount = pageData?.counts?.fail || {}
+  const passCount = pageData?.counts?.pass || {}
   const unmeasuredCount = pageData?.counts?.unmeasured || 0
+  const staleSuffix = (n) => (n > 0 ? `+${n} ${t('reviewList.freshness.stale')}` : null)
   const verdict = readToken(text, 'verdict')
 
   const rows = items.flatMap((item) => {
@@ -139,8 +145,8 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
       }}
       sections={[
         // The axis remains non-exhaustive: an unscored/unknown reading is not an unmeasured scenario.
-        { key: 'fail', label: <ReviewState kind="eval" state="fail" title={t('reviewList.verdict.fail')} showLabel />, count: failCount, active: verdict === 'fail', onSelect: () => surgery('verdict', verdict === 'fail' ? '' : 'fail') },
-        { key: 'pass', label: <ReviewState kind="eval" state="pass" title={t('reviewList.verdict.pass')} showLabel />, count: passCount, active: verdict === 'pass', onSelect: () => surgery('verdict', verdict === 'pass' ? '' : 'pass') },
+        { key: 'fail', label: <ReviewState kind="eval" state="fail" title={t('reviewList.verdict.fail')} showLabel />, count: failCount.fresh || 0, countSuffix: staleSuffix(failCount.stale || 0), active: verdict === 'fail', onSelect: () => surgery('verdict', verdict === 'fail' ? '' : 'fail') },
+        { key: 'pass', label: <ReviewState kind="eval" state="pass" title={t('reviewList.verdict.pass')} showLabel />, count: passCount.fresh || 0, countSuffix: staleSuffix(passCount.stale || 0), active: verdict === 'pass', onSelect: () => surgery('verdict', verdict === 'pass' ? '' : 'pass') },
         { key: 'unmeasured', label: <ReviewState kind="eval" state="missing" title={t('reviewList.verdict.unmeasured')} showLabel />, count: unmeasuredCount, active: verdict === 'unmeasured', onSelect: () => surgery('verdict', verdict === 'unmeasured' ? '' : 'unmeasured') },
       ]}
       sectionMode="filters"

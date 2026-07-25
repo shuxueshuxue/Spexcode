@@ -35,7 +35,7 @@ const rich = [
   '',
   '<img src=x onerror="window.__richPwned=1">',
   '[unsafe](javascript:window.__richPwned=1)',
-  '![tracker](https://example.test/tracker.png)',
+  '![Rendered Markdown image](https://example.test/render.svg "remote image")',
   '$\\definitelyNotACommand{$',
   '',
   'plain-' + 'z'.repeat(600),
@@ -62,10 +62,15 @@ try {
       }
     })
     const page = await context.newPage()
-    const trackerRequests = []
+    const remoteImageRequests = []
     page.on('request', (request) => {
-      if (request.url().includes('example.test')) trackerRequests.push(request.url())
+      if (request.url() === 'https://example.test/render.svg') remoteImageRequests.push(request.url())
     })
+    await page.route('https://example.test/render.svg', (route) => route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240"><rect width="640" height="240" fill="#262626"/><rect x="12" y="12" width="616" height="216" rx="4" fill="#363636" stroke="#6c99bb"/><text x="320" y="128" fill="#ededed" font-family="monospace" font-size="30" text-anchor="middle">Markdown image</text></svg>',
+    }))
     await page.route('**/api/graph*', async (route) => {
       const graph = structuredClone(board)
       const row = graph.sessions.find((candidate) => candidate.id === session.id)
@@ -121,6 +126,7 @@ try {
       const timelineElement = [...document.querySelectorAll('.m-timeline')]
         .find((element) => element.getClientRects().length)
       const richElements = [...document.querySelectorAll('.rich-text')].filter((element) => element.getClientRects().length)
+      const images = [...document.querySelectorAll('.rich-text img')]
       const bounded = richElements.every((element) => {
         const box = element.getBoundingClientRect()
         const host = element.closest('.m-ev-note, .m-ev-text').getBoundingClientRect()
@@ -139,7 +145,9 @@ try {
         rawHtmlReadable: document.querySelector('.m-timeline').innerText.includes('<img src=x onerror='),
         invalidMathReadable: document.querySelector('.m-timeline').innerText.includes('definitelyNotACommand'),
         unsafeAnchors: document.querySelectorAll('.rich-text a[href^="javascript:"], .rich-text a[href^="data:"], .rich-text a[href^="file:"]').length,
-        images: document.querySelectorAll('.rich-text img').length,
+        images: images.length,
+        imagesLoaded: images.every((element) => element.complete && element.naturalWidth > 0),
+        imagesBounded: images.every((element) => element.getBoundingClientRect().width <= element.closest('.rich-text').getBoundingClientRect().width + 1),
         bounded,
         viewport: { clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
         timeline: { ...rect(timelineElement), clientWidth: timelineElement.clientWidth, scrollWidth: timelineElement.scrollWidth },
@@ -154,8 +162,10 @@ try {
     assert.match(probe.mathFont, /KaTeX_/)
     assert.equal(probe.pwned, 0)
     assert.equal(probe.unsafeAnchors, 0)
-    assert.equal(probe.images, 0)
-    assert.equal(trackerRequests.length, 0)
+    assert.ok(probe.images >= 2, `${name}: Markdown images render`)
+    assert.equal(probe.imagesLoaded, true)
+    assert.equal(probe.imagesBounded, true)
+    assert.ok(remoteImageRequests.length >= 1, `${name}: remote Markdown image loads`)
     assert.equal(probe.rawHtmlReadable, true)
     assert.equal(probe.invalidMathReadable, true)
     assert.equal(probe.bounded, true)
@@ -166,7 +176,7 @@ try {
     assert.ok(probe.fontRequests.every((url) => url.endsWith('.woff2')), `${name}: browser should choose only WOFF2 fonts`)
 
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true })
-    results.push({ name, viewport, trackerRequests, ...probe })
+    results.push({ name, viewport, remoteImageRequests, ...probe })
     await context.close()
   }
 } finally {

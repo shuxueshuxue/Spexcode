@@ -2056,6 +2056,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .rich-text li + li { margin-top: .18em; }
 .rich-text blockquote { margin: .5em 0; padding-left: .8em; color: var(--muted); border-left: 2px solid var(--blue); }
 .rich-text a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.rich-text img { display: block; max-width: 100%; height: auto; margin: .55em 0; border-radius: 4px; }
 .rich-text code { padding: .08em .3em; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; }
 .rich-text pre { max-width: 100%; margin: .55em 0; padding: 8px 10px; overflow-x: auto; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
 .rich-text pre code { padding: 0; white-space: pre; background: transparent; border: 0; }

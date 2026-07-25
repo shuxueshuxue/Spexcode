@@ -3,7 +3,6 @@ import MarkdownIt from 'markdown-it'
 import katex from 'katex'
 
 const MATH_OPTIONS = Object.freeze({
-  trust: false,
   throwOnError: false,
   strict: 'ignore',
 })
@@ -105,14 +104,9 @@ const mathPlugin = (md) => {
 }
 
 const markdown = new MarkdownIt({
-  html: false,
   breaks: true,
   linkify: true,
-  typographer: false,
 }).use(mathPlugin)
-
-// Remote Markdown images are tracking and layout surfaces. Keep their alt text without issuing a request.
-markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tokens[index].content || '')
 
 export function renderRichText(value) {
   const source = value == null ? '' : String(value)

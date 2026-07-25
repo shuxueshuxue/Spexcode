@@ -3,6 +3,9 @@ title: prose-renderer
 status: pending
 hue: 272
 desc: ONE dashboard prose renderer — markdown-it as the only parser, its tokens mapped to React, SpexCode's own marks (node refs, evidence, time anchors) as semantic token plugins, KaTeX the single audited HTML insertion. PENDING.
+related:
+  - .spec/spexcode/spec-dashboard/dashboard-ui/prose-renderer/migration-payload.md
+  - spec-dashboard/test/timeline-chat-interaction.e2e.mjs
 ---
 
 # prose-renderer
@@ -109,7 +112,9 @@ made this node necessary.
   unit suite over these guards and a browser suite that locks real text-node selection, composer focus,
   desktop and phone overflow, and a remote image actually decoding. Those tests move onto the unified
   renderer — a rewritten implementation that cannot satisfy them is wrong by definition, and re-deriving
-  a second set of rules for the same behaviour is how the two dialects were born in the first place.
+  a second set of rules for the same behaviour is how the two dialects were born in the first place. The
+  reusable TimelineChat selection/copy acceptance matrix and its oracle boundary are archived beside this
+  node in `migration-payload.md`; the node's eval scenario points at the executable gate.
 - **Expect OTHER nodes' fixtures to break on depth, and fix them semantically.** Rendering real Markdown
   makes a prose surface's DOM deeper: text that used to be the container's first child now sits inside a
   paragraph, an emphasis, a list item. Any existing test — in any node — that reaches into one of the four

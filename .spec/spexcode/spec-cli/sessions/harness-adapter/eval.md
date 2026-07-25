@@ -29,6 +29,21 @@ scenarios:
       ordinary teardown, whose agent really is gone, still leaves zero socket residue. And a session whose
       socket is unreachable while its agent process still answers reads `unknown`, never `offline` — death is
       unproven, so the relaunch guard stays armed instead of inviting a human to kill a working agent.
+  - name: same-id-in-two-worlds-never-shares-a-transport
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts
+    description: >-
+      Two isolated backends on one box, each with its own SPEXCODE_HOME and SPEXCODE_TMUX. World A launches a
+      REAL governed session through POST /api/sessions; world B holds a PLANTED record carrying the SAME
+      session id — the shape a fixture, a migration, or a record copied for diagnosis produces — and closes it
+      through the real route. Read what world A's agent is actually bound to, what world A recorded, what a
+      world that never launched it would derive, and whether A survives B.
+    expected: >-
+      World A records the transport it handed its agent (a launch-time fact beside the record, like the pid),
+      the agent is bound to exactly that path, and the path is scoped to A's runtime rather than derived from
+      the session id alone — so nothing sits where a foreign world would look. World B's close touches
+      nothing of A's: A keeps answering and its own board still reads it online. World A's own close still
+      sweeps its socket, leaving zero residue.
   - name: headless-turn-exit-error
     tags: [backend-api, cli]
     code: spec-cli/src/harness.ts

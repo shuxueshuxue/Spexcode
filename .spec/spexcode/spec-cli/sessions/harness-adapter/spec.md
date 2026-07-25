@@ -326,14 +326,25 @@ surface:
   claude-headless unlinks its controller socket even when tmux killed the controller before its signal handler
   ran, and Codex leaves its shared project app-server intact. **Their** socket — and the only honest test of
   "theirs" is that the agent this teardown just killed is GONE, so removal waits for a PROVEN-dead listener
-  (the same tri-state probe liveness uses) and a path still answering is left in place, loudly. That proof is
-  not ceremony: a socket path is derived from the session id ALONE, making it the one per-session resource
-  scoped by NEITHER the store (`SPEXCODE_HOME`) nor the tmux server (`SPEXCODE_TMUX`). So an isolated
-  instance closing an id that also names a live session elsewhere has its `kill-session` miss (namespaced)
-  while an unconditional unlink lands (not namespaced) — stranding a working agent forever: still bound to a
-  path nothing can reach, undeliverable, and reading as a corpse to every prober. The asymmetry of the rule is
-  deliberate — a dead-but-unlinked file is harmless residue the next teardown reaps, a wrong unlink is not —
-  and the ordinary teardown still leaves zero socket residue, because its agent really is dead.
+  (the same tri-state probe liveness uses) and a path still answering is left in place, loudly. The asymmetry
+  is deliberate: a dead-but-unlinked file is harmless residue the next teardown reaps, a wrong unlink strands
+  a working agent forever — still bound to a path nothing can reach, undeliverable, and reading as a corpse to
+  every prober. The ordinary teardown still leaves zero socket residue, because its agent really is dead — and
+  that is the product's job to GUARANTEE before it asks an adapter to sweep: the pane is the agent's home, not
+  its leash, so a teardown that finds its own registered pid outliving the pane escalates (SIGTERM, then
+  SIGKILL, identity-guarded against a recycled pid) rather than leaving an orphan whose still-live listener the
+  adapter would then, correctly, refuse to remove.
+
+  That proof is the second of two defences, and the first is the socket's NAME. A session id alone does not
+  identify a session on a box: `SPEXCODE_HOME` scopes the store and `SPEXCODE_TMUX` scopes the tmux server,
+  so two worlds can hold one id (a fixture, a migration, a record copied for diagnosis) — and a path derived
+  from the id alone made them share the one resource neither scoping covered. An isolated instance's
+  `kill-session` then missed while its unlink landed, and delivery would have crossed the same way. So the
+  path is derived from the runtime the session belongs to (`runtimeRoot()`, the identity that already scopes
+  its store) and is a LAUNCH-TIME FACT: launch stamps it beside the record like `agent.pid`, and every later
+  reader — launch env, liveness probe, delivery, teardown — reads the path the agent actually bound instead of
+  re-deriving one. A session launched before the stamp existed keeps the unscoped path it really bound, so
+  nothing running is disturbed and the fallback retires as sessions turn over.
 
 Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
 outcome of the last ephemeral turn. An intact record normally remains `online` between ephemeral turns because

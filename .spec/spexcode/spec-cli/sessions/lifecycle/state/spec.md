@@ -93,9 +93,9 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   `unknown`, never `offline`. This is the honesty rule the mass-restore incident violated (a slow box read as a
   graveyard, live workers relaunched to death) and the false-`offline` wait verdict (issue #40) too. Fail loud
   (`unknown`), never guess (`offline`). The same rule reaches one layer further down, because a settled `dead`
-  answers only about the TRANSPORT: a rendezvous socket is keyed by session id alone, so a foreign teardown or
-  a stray `rm` can unlink the path out from under its own live listener — after which every connect `ENOENT`s
-  (proven dead) while the agent keeps working, merely unreachable. So the transport is not the only witness:
+  answers only about the TRANSPORT: a socket path can be unlinked out from under its own live listener — by a
+  stray `rm`, or by any teardown that believes it owns the path — after which every connect `ENOENT`s (proven
+  dead) while the agent keeps working, merely unreachable. So the transport is not the only witness:
   the launch-registered `agent.pid` is a second, independent one, and while it still answers, death stays
   UNPROVEN → `unknown`. Only a corpse both witnesses agree on is `offline`, because `offline` is the reading
   a supervisor ACTS on — it is what disarms the relaunch guard, and relaunching a working agent kills it.

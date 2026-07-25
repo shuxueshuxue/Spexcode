@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -436,6 +436,29 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
   }
   // after close the socket FILE lingers but nothing listens → 'dead' (the exact stale-file case: ECONNREFUSED)
   if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), 'dead')
+})
+
+test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for whatever launched before it', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-rv-stamp-'))
+  const prev = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  try {
+    const id = `unit-stamp-${process.pid}-${Date.now()}`
+    // nothing stamped → the UNSCOPED path a pre-stamp launch really bound. A running agent must never be
+    // re-addressed by a formula it never heard of; that is what keeps the change from stranding the fleet.
+    assert.equal(rvSock(id), legacyRvSock(id))
+    // launch records the path THIS runtime hands the agent, and every later reader gets exactly that one
+    const stamped = stampRvSock(id)
+    assert.equal(rvSock(id), stamped)
+    assert.notEqual(stamped, legacyRvSock(id))
+    // the same id in ANOTHER runtime is a DIFFERENT socket: two worlds (a fixture, a copied record) hold one
+    // id all the time — they must never share one transport, which is what let a foreign teardown reach in.
+    assert.notEqual(scopedRvSock(id, '/runtime/a'), scopedRvSock(id, '/runtime/b'))
+    assert.ok(stamped.length < 104, `sun_path-safe on macOS too (${stamped.length})`)
+  } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prev
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('cleanupRuntime sweeps a transport it PROVED dead, and never one still answering', async () => {

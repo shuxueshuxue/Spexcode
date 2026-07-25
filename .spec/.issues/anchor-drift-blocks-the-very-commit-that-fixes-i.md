@@ -789,3 +789,50 @@ declaration gets corrupted precisely because the stamping operation sits at the 
 fixing `stamp` is not an incidental cleanup discovered along the way. It is the PRECONDITION for
 moving the gate at all. Treating them as two separate items was itself the engineering reflex the
 maintainer is calling out.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:01:04.759Z -->
+WHAT Spec-OK ACTUALLY IS — asked by the maintainer, and it settles how much of the design already
+exists.
+
+`Spec-OK` is a property of the COMMIT, carried in its message; it is NOT attached to any file. But
+its SCOPE is per-node. Both halves matter and they are easy to conflate.
+
+    spex spec ack A B C
+      -> git commit --allow-empty
+           --trailer "Spec-OK: A" --trailer "Spec-OK: B" --trailer "Spec-OK: C"
+
+    parsed as:  acks : Map<commit hash, Set<node id>>
+
+One trailer per node; the payload is a SET of node ids. git.ts states the scoping rule flatly:
+"`Spec-OK: A` quiets A's drift, never B's". So it is a commit-level CARRIER with node-level EFFECT
+— not "let this whole commit through", but "this commit declares A and B unbroken".
+
+It reads like a whole-commit property today only because the ack commit is EMPTY (`--allow-empty`).
+That commit exists for no reason other than to carry the sentence, so in its current form the
+declaration and the commit really are the same object.
+
+## Why this settles the design's cost
+
+Under the trailer proposal the same trailer stops being a standalone stamp and becomes a
+declaration welded to the change it is about:
+
+    today   commit A: moves the anchored unit, says nothing
+            commit B: empty, exists only to say `Spec-OK: session-console`
+            -> the declaration and the change it speaks for are two separate commits
+
+    design  commit A: moves the anchored unit + trailer `Spec-OK: session-console`
+            -> who moved it and why the contract still holds, in one commit
+
+And the existing "one trailer per node" shape is already sufficient: a commit hitting three nodes'
+anchors writes three `Spec-OK:` lines, and the semantics are a set by construction. No new syntax
+is invented.
+
+So every piece of expressive power the design needs EXISTS TODAY: the payload (a node set), the
+carrier (a git trailer), the parser (`ackCoverFor`). The only missing thing is that it must be
+able to ride a commit that has content, and be read at commit-msg time.
+
+Which is also, again, why `stamp` must move to the trailer level: a real commit's message will
+carry BOTH the author's `Spec-OK:` and the hook's `Session:`, and they must share one contiguous
+trailer block. Today's string append pushes the author's line out of that block — the silent
+failure measured in post 15/16. The precondition is not incidental; it is the thing that makes a
+content-bearing ack possible at all.

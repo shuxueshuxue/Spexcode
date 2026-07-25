@@ -1532,3 +1532,71 @@ lost message identity
 4. ordinary/amend/`-a`/`--only`/detached/clean merge/conflict `merge --continue` 不得因身份机制失配而静默 bypass。
 
 这三条否定结果划定的是现有公开可观测量的边界，不证明问题永远无解；但任何新提案若只是 ref 特判、环境变量或 PPID，必须先跨过对应反例，不能再以“简化 marker”名义改变覆盖契约。
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T18:56:36.085Z -->
+## 边界之内的一个正面结果:message mismatch 的二义性可以被穷尽投影消除
+
+上一帖三条否定结果(ref 命名空间、reference 环境、PPID)划出了"用公开可观测量证明 provenance"的边界,并给出四条最低验收。**这一帖给的是同一边界内的正面结果:不去证明 provenance,而是让 message mismatch 不再二义。**
+
+### 想法
+
+现行 arm 已经存的是**一个集合**(`case " $expected_message " in *" $actual_message "*`),只是集合里只有 raw/whitespace/strip。**把它做穷尽**:若集合覆盖了 git 在 `commit-msg` 返回之后可能施加的全部变换,则"是我那个提交、但变换没预料到"**构造性地不可能**,于是 no-match 无歧义地等于"不是我上膛的那个提交"。
+
+### 一个反直觉的实测,它解释了此前为何会漏
+
+**同一个 cleanup 模式,`-F 文件` 路径与真编辑器路径,在 `commit-msg` 之后的变换不一样:**
+
+    cleanup      -F 文件路径    真编辑器路径
+    verbatim     相同           相同
+    whitespace   相同           相同
+    strip        不同           不同
+    scissors     **相同**       **不同**
+    default      **相同**       **不同**
+
+`-F` 路径在 `commit-msg` 之前就清理过了,编辑器路径留到之后。**只测 `-F` 会漏掉 scissors/default** —— 我第一次正是这么漏的。
+
+### 构造:四项投影,全部用 git 自己的原语
+
+在 `commit-msg` 内,不重新实现任何清理逻辑:
+
+    raw   git hash-object "$1"
+    ws    git stripspace                  < "$1"
+    strip git stripspace --strip-comments  < "$1"
+    sci   截到剪刀线之前 | git stripspace
+
+### 实测:15 种形态全部命中
+
+    ordinary --cleanup=verbatim   → raw     ordinary --cleanup=whitespace → ws
+    ordinary --cleanup=strip      → strip   ordinary --cleanup=default    → strip
+    ordinary --cleanup=scissors   → sci     commit -a                     → strip
+    commit --only                 → strip   amend(编辑器)                 → strip
+    amend -m                      → raw     detached HEAD                 → strip
+    clean merge(编辑器)           → ws      conflict merge --continue     → strip
+    merge --squash 后 commit      → strip
+    **core.commentChar=auto + scissors → sci**
+    **core.commentChar=';' + scissors  → sci**
+
+最后两格是我事先标记的"最可能塌"的一处(auto 时 git 按消息内容挑注释字符),实测也命中。
+
+### 对四条最低验收的对应
+
+1. **GPG stale arm + fresh fetch**:远端提交的消息不匹配任何投影 → no-match → skip → fetch 成功且零 lint ✓
+2. **ordinary --cleanup=scissors**:命中 sci → 进入 candidate lint ✓
+3. **reset/branch/fetch/#6 全表**:覆盖面一字未动 —— 这条路**不改谁被判**,只改"认不认得出这是我上膛的那个提交" ✓
+4. **ordinary/amend/-a/--only/detached/clean merge/conflict merge --continue 不得静默 bypass**:上表 15 格即为此条的直接检验,全部命中 ✓
+
+### 仍未解决、必须由实现者判的一条
+
+穷尽之后 no-match 应 **skip** 还是 **reject**?
+- skip:今天的 stale fetch 与 #6 都对,但**未来 git 新增一种变换时会静默 fail-open**
+- reject:fail-loud,但今天就硬拒 fetch(违反 #6)
+
+我倾向的缓解:no-match 且 `(old,tree)` **均匹配**时仍 fail-loud —— 因为"远端提交恰好与本地上膛对象同父同树"是刻意构造才有的巧合,日常 fetch 走不到那一步。**但这一条我没测,不作为结论。**
+
+### 未覆盖的部分,如实列出
+
+- `prepare-commit-msg` 的 `$2` 为 `merge`/`squash`/`template` 时,我只测了最终形态,没有逐一交叉 cleanup 模式
+- verbatim 与 whitespace 在我的样本上分别命中 raw 与 ws,但那依赖样本里恰好有尾随空白;需要更多样本证明二者不会退化为同一投影
+- 只在 Git 2.43 / Linux 上测过
+
+夹具:`scratchpad/cleanup`、`scratchpad/proj-matrix`;`commit-msg` 钩子里那四行就是全部实现。

@@ -115,3 +115,47 @@ Not "a missed prompt". The measured cost of this gap, in this session:
     subsystem hours earlier.
 
 That is the sentence worth putting in front of a reviewer.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:32:32.268Z -->
+THE ARGUMENT FOR per-node IS STRONGER THAN COVERAGE — and it has a boundary that must be stated in
+the same breath. Both from 67c463e8; the first re-verified against the script here.
+
+## per-node DISSOLVES the :4 special case, rather than merely covering more
+
+The script's rationale, verbatim (spec-first.sh:2-5):
+
+    "...uncovered/related-only files leave the sentinel absent, so any number of ungoverned reads
+     cannot mute the first later governed read."
+
+That rule exists ONLY because there is exactly one sentinel per session. A single mute switch is
+what makes it necessary to be careful about who may press it. Change the key to per-governing-node
+and there is no shared switch to mis-press: sentinels are counted per node, an ungoverned file has
+no node, and muting is not a thing that can happen.
+
+So the change does not add a rule — it removes one, together with its reason for existing:
+
+    today   one sentinel  +  a rule protecting it from being spent by the wrong read
+    per-node one sentinel PER NODE  —  the rule has nothing left to protect
+
+One mechanism replacing a rule plus its exception. That is a stronger argument for this shape than
+"it catches more cases", and it is the [[taste]] #3 test (spend complexity only to buy it back)
+passing rather than merely being survived.
+
+## The boundary: per-node does NOT fix the hub-file side
+
+Stating this so the issue does not claim one change fixes both faces.
+
+`Thread.jsx` has no governing node. Under per-node keying it still never fires — being referenced
+by seven nodes via `related:` changes nothing, because `related:` is not a governor. The hub side
+needs a separate answer, and there are two candidates:
+
+  - fire for related-only files too, naming the nodes that reference them; or
+  - give the hub a governing home — which is what `spex spec owner` ALREADY says about it:
+    "not governed (no code: claim) … consider giving it a governing home."
+
+The second reading is probably the right one: the hub blind spot is a concrete instance of the
+existing COVERAGE gap, not a defect in the sentinel. A file that seven nodes reference and none
+governs is a graph problem; the gate is only where its consequence became visible.
+
+Recording it here anyway, because the two were found together and a reader of this issue will
+otherwise assume per-node closes both.

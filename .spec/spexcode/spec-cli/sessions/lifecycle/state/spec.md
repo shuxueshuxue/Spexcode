@@ -6,6 +6,7 @@ desc: Two orthogonal axes — agent-authored lifecycle and runtime-derived liven
 code:
   - .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
 related:
+  - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
 ---
@@ -181,12 +182,18 @@ session concern; spec-awareness is universal.
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
   a stale `idle`/`asking` back the moment work resumes.
-- **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** rejects a done/merge
-  proposal while the branch has uncommitted changes or is 0 ahead of the base branch — and since SpexCode now
+- **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** judges the proposal the
+  agent actually made. Uncommitted changes reject EITHER kind — both declarations claim the work is
+  committed, and a dirty tree makes that false; and since SpexCode now
   writes NO files into the worktree (the runtime lives in the global store, [[runtime]]), every dirty path is
-  genuine work, with no runtime-file filtering to do; propose-**close** is exempt. A **declare gate** blocks a stop while still `active`,
+  genuine work, with no runtime-file filtering to do. Being 0 ahead of the base branch rejects only
+  **`merge`**, the one claim it contradicts: `merge` asserts there is committed work to land, while
+  `nothing` asserts the opposite — committed, but not proposing a merge, paused for the human — which a lane
+  whose work ALREADY landed states truthfully. Gating `nothing` on ahead-of-main left such a lane exactly one
+  way through, an empty commit, so a check about honesty bought a lie in git history; propose-**close** is
+  exempt entirely. A **declare gate** blocks a stop while still `active`,
   auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
-  self-resuming `parked`), or to `awaiting`/`nothing` only when the work is actually committed and ahead.
+  self-resuming `parked`), or to `awaiting`/`nothing` only when the tree is actually clean.
   The block reason gives each option its **application condition**, not a menu: a state is a claim others
   act on, so the agent picks the TRUE one. **`parked` is policed hardest** — claim it only when a real
   background task will wake you; with nothing running to resume you the stop is `asking`, never a false

@@ -78,8 +78,11 @@ eval_advisory() {
 # block ONCE with the specific reason + commit instructions; on the forced continuation (the agent ignored
 # it) escape the loop by downgrading to `asking` (needs the human) with a clear note, so a FALSE "ready to
 # merge" never stands. (A propose-close declaration is exempt — it discards the worktree, so commits are moot.)
+# The PROPOSAL rides into the check: `merge` claims there is committed work to land (so 0-ahead blocks too),
+# `nothing` claims only that the work is committed (so a clean tree is the whole gate — a lane whose work
+# already merged may pause for the human without minting an empty commit to get through).
 if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$proposal" = nothing ]; }; then
-  if gatemsg=$($S internal commit-gate 2>&1); then
+  if gatemsg=$($S internal commit-gate "$proposal" 2>&1); then
     # nudge ONCE: emit on the natural stop, but STAY SILENT on the forced re-stop the additionalContext
     # itself causes (stop_hook_active=true). Without this guard the advisory re-fired every clean-done stop
     # and looped — the bug a prior change DESCRIBED in a comment but never actually implemented at the call.
@@ -100,9 +103,11 @@ fi
 
 if [ "$cont" = true ]; then
   # the forced continuation also stopped without declaring -> escape the loop, don't block. Keep the commit
-  # gate airtight: default to awaiting/nothing only when the branch is actually committed+ahead; otherwise an
-  # undeclared stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done.
-  if $S internal commit-gate >/dev/null 2>&1; then
+  # gate airtight: default to awaiting/nothing only when the tree is actually clean; otherwise an undeclared
+  # stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done. The default
+  # IS `nothing`, so it is judged as `nothing` — an already-merged lane defaults honestly instead of being
+  # pushed to `asking` for having nothing left ahead of main.
+  if $S internal commit-gate nothing >/dev/null 2>&1; then
     $S internal session-state awaiting --session "$sid" --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
     # NOTE: no eval nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
     # where a guarded advisory could never fire anyway, and an unguarded one was a second loop vector (a

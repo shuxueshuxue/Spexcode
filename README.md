@@ -227,7 +227,7 @@ manuals are `spex guide` (the workflow), `spex guide spec`, `spex guide eval`, a
 ## Contributing
 
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) gets you from a clone to a first merged change.
-[`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) has the full mechanics of the node model and the
+[spexcode.net](https://spexcode.net) has the full mechanics of the node model and the
 reflexive plugin system.
 
 ## Credit

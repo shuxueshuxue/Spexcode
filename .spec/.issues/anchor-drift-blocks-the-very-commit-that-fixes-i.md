@@ -984,3 +984,63 @@ Not "B costs too much". Rather: the measured cause of the friction I actually hi
 file-sized anchor, which is unrelated to this decision, and fixing it is zero-risk. Whether B is
 still worth overturning a recorded decision should be judged AFTER that, on whether the pain
 remains.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:46:25.819Z -->
+MEASURED THE ANCHOR-SPAN DISTRIBUTION — and it retracts the doctor-check proposal that three
+agents and I had converged on.
+
+Ran the project's own extractor over all 119 anchored `code:` entries:
+
+    span 80-100% :  8
+    span 60-79%  :  7
+    span 40-59%  : 13
+    span 20-39%  : 22
+    span  0-19%  : 69      resolved 119, unresolved 0
+
+Top of the distribution:
+
+     95%  ( 172/ 182)  session-rename #SessionContextMenu
+     93%  (  97/ 104)  reconnect #createResilientSocket
+     87%  ( 110/ 126)  tooltip #TooltipLayer
+     85%  (  40/  47)  resizable-panes #useResizable
+     83%  ( 882/1060)  session-console #SessionInterface
+     81%  (  59/  73)  node-menu #NodeContextMenu
+     80%  ( 563/ 707)  event-detail #EventDetail
+     80%  (  36/  45)  forge-cache #ForgeCache
+
+## The proposed check would be mostly false positives
+
+A "warn when an anchor spans > ~60% of its file" rule flags 15 entries, of which the large majority
+are CORRECT anchors: a file that contains exactly one component or one function SHOULD have an
+anchor covering ~95% of it. `SessionContextMenu` at 172/182 lines is not a smell; it is a
+single-purpose file, anchored precisely.
+
+So the check I proposed (and that the taste and adversary lenses both independently suggested)
+measures the wrong quantity. It would also add a THIRD heuristic to a surface that spec-lint's body
+deliberately keeps minimal — "heuristic spec health is deliberately absent from this registry",
+with doctor owning "the one altitude implementation and the one breadth implementation". Adding a
+noisy third is exactly the complexity this project declines to spend.
+
+## The distinguishing quantity is absolute size, not ratio
+
+    SessionContextMenu   172 lines (95%)   a real unit
+    SessionInterface     882 lines (83%)   a god component
+
+882 lines is what makes `SessionInterface` degenerate — inside a unit that large, any edit anywhere
+hits it. That is not an anchoring defect; the component is too big. The ratio is a coincidence.
+
+## Consequences for the plan
+
+1. WITHDRAW the doctor anchor-span check. It is not a pattern, it is one instance.
+2. "Re-anchor session-console" is weaker than I claimed: there is no sub-symbol inside those 882
+   lines that carries the node's contract on its own. The real remedy is SPLITTING the component,
+   which is an independent refactor with its own payoff and does not belong bundled into this
+   thread.
+
+So the "do the zero-risk anchor work first" option, which I recommended twice, mostly evaporates
+on measurement. What remains is the gate change — against which two and a half of my own three
+objections have already been withdrawn.
+
+I would rather record that this reverses my recommendation than leave a tidy plan standing on a
+number nobody had measured. Three lenses agreed on that check; none of us measured the
+distribution first.

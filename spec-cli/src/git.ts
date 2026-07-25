@@ -478,12 +478,51 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
   const mergeVersions = new Set<string>()
   const commitVersions = new Map<string, Version>()
   const commitOrder = new Map<string, number>()
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '-M', '--numstat',
-    `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec'])
+  const [out, tipPathsOut, topologyOut] = await Promise.all([
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
+      `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec']),
+    gitA(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip, '--', '.spec']),
+    gitA(['-C', root, 'rev-list', '--parents', tip]),
+  ])
   if (!out) return { versions, stats, mergeVersions }
-  // Walk newest -> oldest (git log default). `alias` maps a path as it exists at the current walk
-  // point to its head (current) path; the first (newest) time we meet a file, that path IS its head.
-  const alias = new Map<string, string>()
+  const rawVersions = new Map<string, Version[]>()
+  const rawStats = new Map<string, Map<string, DiffStat>>()
+  const currentPaths = new Set(tipPathsOut.split('\0').filter(Boolean))
+  const renamesByFrom = new Map<string, { hash: string; to: string }[]>()
+  const firstSeen = new Map<string, number>()
+  let pathPosition = 0
+  const topologyOrd = new Map<string, number>(), topologyParents = new Map<string, string[]>()
+  let topologyPosition = 0
+  for (const line of topologyOut.trim().split('\n')) {
+    if (!line) continue
+    const [hash, ...parents] = line.split(' ')
+    topologyOrd.set(hash, topologyPosition++)
+    topologyParents.set(hash, parents)
+  }
+  const ancestryCache = new Map<string, Uint8Array>()
+  const ancestryOf = (hash: string): Uint8Array | undefined => {
+    const hit = ancestryCache.get(hash)
+    if (hit) return hit
+    const start = topologyOrd.get(hash)
+    if (start === undefined) return undefined
+    const bits = new Uint8Array((topologyOrd.size + 7) >> 3)
+    bits[start >> 3] |= 1 << (start & 7)
+    const stack = [hash]
+    while (stack.length) for (const parent of topologyParents.get(stack.pop()!) ?? []) {
+      const position = topologyOrd.get(parent)
+      if (position === undefined) continue
+      const mask = 1 << (position & 7)
+      if (bits[position >> 3] & mask) continue
+      bits[position >> 3] |= mask
+      stack.push(parent)
+    }
+    ancestryCache.set(hash, bits)
+    return bits
+  }
+  const renamePrecedes = (rename: string, event: string): boolean => {
+    const position = topologyOrd.get(rename), ancestry = ancestryOf(event)
+    return position !== undefined && ancestry !== undefined && (ancestry[position >> 3] & (1 << (position & 7))) !== 0
+  }
   let commitPosition = 0
   for (const rec of out.split(RS)) {
     const r = rec.replace(/^\n/, '')
@@ -501,34 +540,75 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
       const add = m[1] === '-' ? 0 : +m[1]
       const del = m[2] === '-' ? 0 : +m[2]
       const { from, to } = parseStatPath(m[3])
-      let head = alias.get(to)
-      if (head === undefined) { head = to; alias.set(to, to) }
-      if (!versions.has(head)) versions.set(head, [])
-      versions.get(head)!.push(version)
-      let hs = stats.get(head)
-      if (!hs) { hs = new Map(); stats.set(head, hs) }
+      if (!firstSeen.has(to)) firstSeen.set(to, pathPosition++)
+      if (!firstSeen.has(from)) firstSeen.set(from, pathPosition++)
+      if (!rawVersions.has(to)) rawVersions.set(to, [])
+      rawVersions.get(to)!.push(version)
+      let hs = rawStats.get(to)
+      if (!hs) { hs = new Map(); rawStats.set(to, hs) }
       const s = hs.get(hash) ?? { additions: 0, deletions: 0, files: 0 }
       s.additions += add; s.deletions += del; s.files += 1
       hs.set(hash, s)
-      if (from !== to) { alias.set(from, head); alias.delete(to) } // older history calls it `from`
+      if (from !== to) {
+        const renames = renamesByFrom.get(from) ?? []
+        renames.push({ hash, to })
+        renamesByFrom.set(from, renames)
+      }
+    }
+  }
+
+  const canonical = (path: string, event: string): string[] => {
+    const pending = [path], resolved = new Set<string>(), seen = new Set<string>()
+    while (pending.length) {
+      const candidate = pending.pop()!
+      if (seen.has(candidate)) { resolved.add(candidate); continue }
+      seen.add(candidate)
+      // @@@ event-scoped rename identity - a rename owns old-path history before or parallel to it. Once
+      // the rename is an ancestor, that old path is vacant and a later write there starts a new identity.
+      const applicable = (renamesByFrom.get(candidate) ?? []).filter((rename) => !renamePrecedes(rename.hash, event))
+      if (!applicable.length) resolved.add(candidate)
+      else for (const rename of applicable) pending.push(rename.to)
+    }
+    const current = [...resolved].filter((candidate) => currentPaths.has(candidate))
+    if (current.length) return current
+    const historical = [...resolved].sort((a, b) => (firstSeen.get(a) ?? Number.MAX_SAFE_INTEGER) - (firstSeen.get(b) ?? Number.MAX_SAFE_INTEGER))
+    return [historical[0] ?? path]
+  }
+  for (const [path, pathRows] of rawVersions) {
+    for (const row of pathRows) for (const head of canonical(path, row.hash)) {
+      const rows = versions.get(head) ?? []
+      if (!rows.some((existing) => existing.hash === row.hash)) rows.push(row)
+      versions.set(head, rows)
+      const hs = stats.get(head) ?? new Map<string, DiffStat>()
+      const value = rawStats.get(path)?.get(row.hash)
+      if (value) {
+        const existing = hs.get(row.hash)
+        hs.set(row.hash, existing ? {
+          additions: existing.additions + value.additions,
+          deletions: existing.deletions + value.deletions,
+          files: existing.files + value.files,
+        } : value)
+      }
+      stats.set(head, hs)
     }
   }
   const mergeChanges = await mergeResolutionCommits(root, tip, transient)
   for (const [path, hashes] of mergeChanges) {
     if (!isSpecMd(path)) continue
-    const head = alias.get(path) ?? path
-    const rows = versions.get(head) ?? []
-    const hs = stats.get(head) ?? new Map<string, DiffStat>()
-    for (const hash of hashes) {
+    for (const hash of hashes) for (const head of canonical(path, hash)) {
+      const rows = versions.get(head) ?? []
+      const hs = stats.get(head) ?? new Map<string, DiffStat>()
       const version = commitVersions.get(hash)
       if (!version || rows.some((row) => row.hash === hash)) continue
       rows.push(version)
       hs.set(hash, { additions: 0, deletions: 0, files: 1 })
       mergeVersions.add(`${head}\0${hash}`)
+      versions.set(head, rows)
+      stats.set(head, hs)
     }
+  }
+  for (const rows of versions.values()) {
     rows.sort((a, b) => (commitOrder.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (commitOrder.get(b.hash) ?? Number.MAX_SAFE_INTEGER))
-    versions.set(head, rows)
-    stats.set(head, hs)
   }
   return { versions, stats, mergeVersions }
 }

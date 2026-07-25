@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -211,7 +211,82 @@ test('history keeps reachable one-parent spec versions hidden by a TREESAME merg
     assert.equal(run('log', '--format=%H', '--', '.spec'), base, 'fixture must exercise default path simplification')
     const rows = rowsFor(await historyIndex(root), path)
     assert.equal(rows.length, 3)
-    assert.deepEqual(new Set(rows.map((row) => row.hash)), new Set([base, changed, reverted]))
+    assert.deepEqual(rows.map((row) => row.hash), [reverted, changed, base],
+      'full history must still order every descendant before its ancestor when commit timestamps tie')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('parallel old-path edits survive a later-walked rename and keep walk-newest order', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-branches-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const dated = (date: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim()
+  const oldPath = '.spec/product/old-node/spec.md'
+  const newPath = '.spec/product/new-node/spec.md'
+  const body = (a: number, b: number) => `---\ntitle: node\n---\n# node\n\nA=${a}\n\n${'common\n'.repeat(12)}B=${b}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body(0, 0))
+    run('add', '.'); dated('2000-01-01T00:00:00Z', 'commit', '-qm', 'base')
+    const base = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    mkdirSync(dirname(join(root, newPath)), { recursive: true })
+    renameSync(join(root, oldPath), join(root, newPath))
+    writeFileSync(join(root, newPath), body(0, 1))
+    run('add', '-A'); dated('2001-01-01T00:00:00Z', 'commit', '-qm', 'side renames and edits B')
+    const side = run('rev-parse', 'HEAD')
+
+    run('switch', '-q', 'main')
+    writeFileSync(join(root, oldPath), body(1, 0))
+    dated('2025-01-01T00:00:00Z', 'commit', '-qam', 'main edits A')
+    const main = run('rev-parse', 'HEAD')
+    dated('2026-01-01T00:00:00Z', 'merge', '--no-ff', '-m', 'merge side', 'side')
+
+    const rows = rowsFor(await historyIndex(root), newPath)
+    assert.deepEqual(rows.map((row) => row.hash), [main, side, base])
+    assert.equal(rows[0].reason, 'main edits A')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('reusing an old path after a rename starts a separate history', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-reuse-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const oldPath = '.spec/product/foo/spec.md'
+  const newPath = '.spec/product/bar/spec.md'
+  const body = (identity: string) => `---\ntitle: node\n---\n# node\n\n${'stable\n'.repeat(30)}identity=${identity}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body('old v1'))
+    run('add', '.'); run('commit', '-qm', 'create old foo')
+    const old = run('rev-parse', 'HEAD')
+
+    mkdirSync(dirname(join(root, newPath)), { recursive: true })
+    renameSync(join(root, oldPath), join(root, newPath))
+    writeFileSync(join(root, newPath), body('renamed bar v2'))
+    run('add', '-A'); run('commit', '-qm', 'rename foo to bar')
+    const renamed = run('rev-parse', 'HEAD')
+
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body('unrelated new foo'))
+    run('add', '.'); run('commit', '-qm', 'create unrelated new foo')
+    const reused = run('rev-parse', 'HEAD')
+
+    const idx = await historyIndex(root)
+    assert.deepEqual(rowsFor(idx, newPath).map((row) => row.hash), [renamed, old])
+    assert.deepEqual(rowsFor(idx, oldPath).map((row) => row.hash), [reused])
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

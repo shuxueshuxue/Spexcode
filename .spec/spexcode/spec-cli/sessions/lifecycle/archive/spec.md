@@ -80,17 +80,19 @@ restore. So the list splits first and runs **both** populations through the same
 zones, nesting, folding, and row faces on either side. The door is a star, the third of three equal pills in
 the list header beside New and Search, and it is **permanent**: a control that appears only when it has
 contents cannot be found when you want it, and its absence would be the only thing telling you the archive
-exists at all. The count rides the star when there is one and is simply absent at zero, where the star is also
-**inert** — an empty archive is not a room to walk into. Reaching an archived session from outside the list
+exists at all. The count rides the star when there is one and is simply absent at zero — but the star stays **live**:
+a permanently-visible control that silently does nothing reads as broken, so pressing it at zero opens the
+archive and says `nothing archived` rather than swallowing the press. Reaching an archived session from outside the list
 (URL, search, an originator chip) lands the view on the side that holds it, the same promise the
 ancestor-unfold makes within a list.
 
-**The archive view cannot outlive its contents.** Everything that can turn it on reads a board snapshot, and a
-snapshot can be stale: the board serves the pre-write value for close to a second after a record flips, and a
-session can be restored from the CLI or another tab while you are looking at it. Left as a stored flag the view
-LATCHES — the star lit over an empty list while the session sits back in the working set, with nothing in the
-UI able to correct it. So the view is DERIVED (`showShelf && archived.length > 0`) rather than trusted, which
-makes that state unreachable instead of merely unlikely, and removes the empty-archive message along with it.
+**The trap was never the empty room — it was a dead exit.** Everything that can open this view reads a board
+snapshot, and a snapshot can be stale: the board serves the pre-write value for close to a second after a
+record flips, and a session can be restored from the CLI or another tab while you are looking at it. So you
+CAN end up looking at an archive that just emptied. That is harmless as long as the star still works; it was
+a trap only while the star was inert, because then the one way out did not respond. Guarding the view instead
+of the exit fixed the symptom and produced a worse bug — a visible control that does nothing. The human's
+toggle is therefore authoritative, and an emptied archive is simply somewhere you can leave.
 
 Selecting an archived session shows the **archive card**, which outranks both console surfaces and wears the
 offline panel's face — the two are one family of "this session is in a state" cards, each with one way out.

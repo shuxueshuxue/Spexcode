@@ -597,6 +597,7 @@ export default {
     // the archive ([[archive]]) — same shape as the offline panel above: a status line and one short sub
     shelfShow: 'Archived',
     shelfHide: 'Back to sessions',
+    shelfEmpty: 'nothing archived',
     shelfMsg: '★ archived',
     shelfSubLive: 'still running. restore it whenever you want it back.',
     shelfSubOffline: 'offline. restore it, then relaunch to resume.',

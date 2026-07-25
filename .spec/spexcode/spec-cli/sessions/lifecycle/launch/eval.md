@@ -60,6 +60,22 @@ scenarios:
       unless that cause was actually proven. Bounded fast-exit retry remains intact.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/sessions.test.ts
+  - name: deterministic-launch-failure-fails-once
+    tags: [backend-api]
+    description: >
+      Drive the real launch path with failures of two different kinds and count the attempts each produces:
+      (a) a DETERMINISTIC one — a resume whose harness conversation does not exist, a missing worktree, a
+      missing branch, an unresolvable launcher command — and (b) a genuinely unclassifiable fast launcher
+      exit before readiness. Read the attempt count and what the caller is told.
+    expected: |
+      A deterministic failure is attempted EXACTLY ONCE and fails loud with its own structured reason —
+      nothing retries it, and nothing regenerates a launch script for it. Only the unclassifiable fast exit
+      keeps the bounded readiness retry. The classification is the harness adapter's and the launch
+      transport's; product state consumes the structured class and never re-derives it by matching a
+      harness's English error text. A missing conversation with a live worktree is routed to the explicit
+      repair/force entry, never to an implicit new-conversation fallback.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
   - name: creation-materialize-failure-is-loud
     tags: [backend-api]
     description: >

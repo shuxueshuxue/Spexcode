@@ -4,6 +4,8 @@ import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.
 import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
+import RichText from './RichText.js'
+import 'katex/dist/katex.min.css'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -319,7 +321,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           </div>
           {e.note && (
             <div className="m-ev-note">
-              {e.note}
+              <RichText>{e.note}</RichText>
               {!hasTimelineHighlight() && (
                 <button type="button" className="m-copy-note" onClick={() => copyText(e.note)}>
                   {t('mobile.copy')}
@@ -336,7 +338,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             <span className="m-ev-from">{fromLabel(e.from)}</span>
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
-          <div className="m-ev-text">{e.text}</div>
+          <div className="m-ev-text"><RichText>{e.text}</RichText></div>
         </div>,
       )
     }
@@ -350,7 +352,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
         {detail?.prompt && (
           <details className="m-ev m-ev-prompt">
             <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-            <div className="m-ev-text">{detail.prompt}</div>
+            <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
           </details>
         )}
         {events === null

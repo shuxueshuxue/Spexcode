@@ -103,7 +103,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
   structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the
-  seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
+  seconds-long pre-commit/commit-msg gate would only pass anyway — pure overhead that would hold the lock.
+  Git still runs `prepare-commit-msg`, which clears any stale candidate arm, and its ref transaction still
+  reaches the installed observer; no commit-msg arm exists, so that observer returns before a history walk
+  or lint. This keeps the bypass fast without teaching the gate an issue-path exception. The id is
   minted under the lock too, so two racing posts can't claim it. Minting also steps around the **reserved
   address words** — `new`, the dashboard's compose page ([[issues-view]]) — with the same numeric suffix a
   taken id gets: an id that a reader's own address grammar answers differently would be a thread nobody can

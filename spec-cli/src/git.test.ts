@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -16,6 +16,34 @@ function idx(parents: Record<string, string[]>, parts: Partial<DriftIndex> = {})
   return { ord, parents: p, fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(), ...parts }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
+
+test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {
+  const parsed = combinedDiffOwnedRanges([
+    'diff --cc src/consts.ts',
+    '@@@ -1,2 -1,2 +1,2 @@@',
+    '- export const governed = 1',
+    '- export const neighbor = 3',
+    '+ export const governed = 2',
+    ' -export const neighbor = 1',
+    '++export const neighbor = 777',
+    'diff --cc spec.md',
+    '@@@ -1 -1 +1 @@@',
+    '- old parent one',
+    '+ inherited parent two',
+    'diff --cc deleted.ts',
+    '@@@ -1,2 -1,2 +1 @@@',
+    '  export const kept = 1',
+    '--export const removed = 1',
+    'diff --cc octopus.ts',
+    '@@@@ -1 -1 -1 +1 @@@@',
+    '+++export const authored = 1',
+  ].join('\n'))
+
+  assert.deepEqual(parsed.get('src/consts.ts'), [[2, 2]], 'mixed +space must not inherit an adjacent ++ range')
+  assert.equal(parsed.has('spec.md'), false, 'a mixed-only file has no merge-owned line')
+  assert.deepEqual(parsed.get('deleted.ts'), [[2, 2]], 'all-parent deletion maps to its result point')
+  assert.deepEqual(parsed.get('octopus.ts'), [[1, 1]], 'all parent columns participate in octopus ownership')
+})
 
 test('drift counts code commits not reachable from the spec version', () => {
   const i = idx(LINEAR, {
@@ -158,6 +186,112 @@ test('mergeBaseDiff preserves the old path of a pure rename for merge-base reade
   }])
 })
 
+test('history keeps reachable one-parent spec versions hidden by a TREESAME merge', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-full-history-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const path = '.spec/product/n/spec.md'
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), 'base\n')
+    run('add', '.'); run('commit', '-qm', 'base')
+    const base = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    writeFileSync(join(root, path), 'changed\n')
+    run('commit', '-qam', 'changed')
+    const changed = run('rev-parse', 'HEAD')
+    run('revert', '--no-edit', changed)
+    const reverted = run('rev-parse', 'HEAD')
+    run('switch', '-q', 'main')
+    run('merge', '--no-ff', '-m', 'merge side', 'side')
+
+    assert.equal(run('log', '--format=%H', '--', '.spec'), base, 'fixture must exercise default path simplification')
+    const rows = rowsFor(await historyIndex(root), path)
+    assert.equal(rows.length, 3)
+    assert.deepEqual(rows.map((row) => row.hash), [reverted, changed, base],
+      'full history must still order every descendant before its ancestor when commit timestamps tie')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('parallel old-path edits survive a later-walked rename and keep walk-newest order', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-branches-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const dated = (date: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim()
+  const oldPath = '.spec/product/old-node/spec.md'
+  const newPath = '.spec/product/new-node/spec.md'
+  const body = (a: number, b: number) => `---\ntitle: node\n---\n# node\n\nA=${a}\n\n${'common\n'.repeat(12)}B=${b}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body(0, 0))
+    run('add', '.'); dated('2000-01-01T00:00:00Z', 'commit', '-qm', 'base')
+    const base = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    mkdirSync(dirname(join(root, newPath)), { recursive: true })
+    renameSync(join(root, oldPath), join(root, newPath))
+    writeFileSync(join(root, newPath), body(0, 1))
+    run('add', '-A'); dated('2001-01-01T00:00:00Z', 'commit', '-qm', 'side renames and edits B')
+    const side = run('rev-parse', 'HEAD')
+
+    run('switch', '-q', 'main')
+    writeFileSync(join(root, oldPath), body(1, 0))
+    dated('2025-01-01T00:00:00Z', 'commit', '-qam', 'main edits A')
+    const main = run('rev-parse', 'HEAD')
+    dated('2026-01-01T00:00:00Z', 'merge', '--no-ff', '-m', 'merge side', 'side')
+
+    const rows = rowsFor(await historyIndex(root), newPath)
+    assert.deepEqual(rows.map((row) => row.hash), [main, side, base])
+    assert.equal(rows[0].reason, 'main edits A')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('reusing an old path after a rename starts a separate history', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-reuse-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const oldPath = '.spec/product/foo/spec.md'
+  const newPath = '.spec/product/bar/spec.md'
+  const body = (identity: string) => `---\ntitle: node\n---\n# node\n\n${'stable\n'.repeat(30)}identity=${identity}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body('old v1'))
+    run('add', '.'); run('commit', '-qm', 'create old foo')
+    const old = run('rev-parse', 'HEAD')
+
+    mkdirSync(dirname(join(root, newPath)), { recursive: true })
+    renameSync(join(root, oldPath), join(root, newPath))
+    writeFileSync(join(root, newPath), body('renamed bar v2'))
+    run('add', '-A'); run('commit', '-qm', 'rename foo to bar')
+    const renamed = run('rev-parse', 'HEAD')
+
+    mkdirSync(dirname(join(root, oldPath)), { recursive: true })
+    writeFileSync(join(root, oldPath), body('unrelated new foo'))
+    run('add', '.'); run('commit', '-qm', 'create unrelated new foo')
+    const reused = run('rev-parse', 'HEAD')
+
+    const idx = await historyIndex(root)
+    assert.deepEqual(rowsFor(idx, newPath).map((row) => row.hash), [renamed, old])
+    assert.deepEqual(rowsFor(idx, oldPath).map((row) => row.hash), [reused])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 // ---- worktreeSpecDelta ([[worktree-linker]]): an op = differs-from-main-tip AND branch-touched-since-fork ----
 
 // one fixture, four judgments: main gains .spec after a pre-spec root commit; worktrees exercise each
@@ -234,6 +368,17 @@ test('ops already LANDED on main dissolve from the overlay', async () => {
   assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])       // …gone once main contains it
 })
 
+test('an explicit pending tip never occupies or evicts the root-owned HEAD index caches', async () => {
+  const { root, run } = specRepo()
+  const [headHistory, headDrift] = await Promise.all([historyIndex(root), driftIndex(root)])
+  const before = historyCacheStats()
+  const pending = run('commit-tree', run('write-tree'), '-p', run('rev-parse', 'HEAD'), '-m', 'pending cache probe')
+  await Promise.all([historyIndex(root, pending), driftIndex(root, pending)])
+  assert.deepEqual(historyCacheStats(), before, 'pending tip changed HEAD cache ownership or occupancy')
+  assert.equal(await historyIndex(root), headHistory, 'pending history evicted the warm HEAD object')
+  assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
+})
+
 test('large-history HEAD reachability is one recoverable flight, never per-reading git fanout', { concurrency: false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-'))
   const bin = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-bin-'))
@@ -261,7 +406,7 @@ test('large-history HEAD reachability is one recoverable flight, never per-readi
 printf '%s\n' "$*" >> "${argvLog}"
 if [ -e "${trigger}" ]; then
   case "$*" in
-    *" rev-list HEAD") while :; do sleep 1; done ;;
+    *" -C ${root} rev-list "*) while :; do sleep 1; done ;;
   esac
 fi
 exec "${realGit}" "$@"
@@ -271,7 +416,7 @@ exec "${realGit}" "$@"
   process.env.PATH = `${bin}:${oldPath || ''}`
   // match by the call itself, not the whole argv: a build context legitimately prefixes resource flags
   const reachSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
-    .filter((line) => line.endsWith(`-C ${root} rev-list HEAD`)).length
+    .filter((line) => new RegExp(`-C ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} rev-list [0-9a-f]{40}$`).test(line)).length
   const ancestorSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
     .filter((line) => line.includes('merge-base --is-ancestor')).length
   const waitFor = async (want: number) => {
@@ -391,7 +536,7 @@ test('the large-history switch reads a bounded prefix, and a stream past the old
     assert.equal(index.fileCommits.size, 0, 'the large-history path retains no commit/file edge map')
     // the prefix read is the only whole-repo name-stream child the switch spawns
     const nameStreamSpawns = readFileSync(argvLog, 'utf8').split('\n')
-      .filter((line) => line.includes("log --name-only --format= HEAD")).length
+      .filter((line) => /log --name-only --format= [0-9a-f]{40}$/.test(line)).length
     assert.equal(nameStreamSpawns, 1)
   } finally {
     process.env.PATH = oldPath

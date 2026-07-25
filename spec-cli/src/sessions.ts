@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -1254,6 +1254,10 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   return file
 }
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
+  // record the transport path THIS runtime hands the agent, before anything reads it (launchScript bakes it
+  // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
+  // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
+  if (harness.ownsRendezvous) stampRvSock(id)
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
   await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
@@ -1866,10 +1870,45 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   return { dispatched: true }
 }
 
+// @@@ killAgentProcess - the pane is the agent's HOME, not its LEASH. `kill-session` SIGHUPs the pane's
+// process group, and an idle agent goes with it (measured: ~0.8s) — but one mid-turn can outlive the whole
+// tmux server and keep running, orphaned, still holding its rendezvous socket (measured: pane gone, server
+// gone, agent still answering). Close promises ZERO residue including the process tree, so the teardown
+// escalates on the pid launch registered for exactly this purpose: give the SIGHUP its moment, then SIGTERM,
+// then SIGKILL, each bounded. This is also what lets the socket sweep run at all — a still-answering listener
+// is never ours to unlink, so an un-killed agent would otherwise strand its own socket forever.
+// The escalation is IDENTITY-GUARDED: a recorded pid can have been recycled by an unrelated process, so we
+// signal only a pid whose argv still names THIS session. Unidentifiable → we signal nothing and let the
+// adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
+const AGENT_EXIT_GRACE_MS = 3000
+async function killAgentProcess(id: string): Promise<void> {
+  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+  if (!Number.isFinite(pid) || pid <= 0) return
+  const alive = (): boolean => {
+    try { process.kill(pid, 0); return true } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM' }
+  }
+  const gone = async (ms: number): Promise<boolean> => {
+    for (const end = Date.now() + ms; Date.now() < end;) {
+      if (!alive()) return true
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return !alive()
+  }
+  if (await gone(AGENT_EXIT_GRACE_MS)) return                        // the pane's SIGHUP took it — the normal path
+  const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
+  if (!argv.includes(id)) return                                     // not provably this session's process — leave it
+  for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
+    try { process.kill(pid, sig) } catch { return }                  // vanished between checks
+    if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
+  }
+}
+
 // @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
-// two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
-// window reading `starting` instead of `offline`), and ask the resolved adapter to sweep its ephemeral runtime
-// transport. Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// two: kill the agent's tmux client, make sure the agent itself actually went with it, drop its boot-window
+// stamp (else a just-launched id lingers in the grace window reading `starting` instead of `offline`), and ask
+// the resolved adapter to sweep its ephemeral runtime transport — in that order, because the adapter only
+// removes a transport whose listener is PROVEN dead.
+// Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
 async function stopAgentProcess(id: string): Promise<void> {
   // tearing a process down never needs a readable record — the tmux window is keyed by the id alone. So an
   // unreadable record degrades to "no adapter-specific cleanup", never to a refusal: `close` must stay
@@ -1878,6 +1917,7 @@ async function stopAgentProcess(id: string): Promise<void> {
   try { rec = readRecord(id) }
   catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
   await tmuxOk(['kill-session', '-t', id])
+  await killAgentProcess(id)
   launchedAt.delete(id)
   await harnessById(rec?.harness || defaultHarness.id).cleanupRuntime(rec ?? { session: id })
 }

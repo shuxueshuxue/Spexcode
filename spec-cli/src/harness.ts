@@ -1,5 +1,5 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
@@ -13,7 +13,7 @@ import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadle
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
-import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
+import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
 
@@ -225,12 +225,36 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
 // that one spawned command (env prefix, never global). claude opens a unix socket here; writing one line
 // `{"type":"reply","text":"…"}\n` injects + submits the text as a prompt — no PTY typing, so multi-line input
-// and Enters can't be corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id,
-// so we only ever address OUR OWN sockets (HARD ethics rule: never touch a session outside this product). It
-// lives in tmpdir tied to the claude process, so no extra lifecycle. liveness CONNECTS to it (a live LISTENER,
-// not merely the file — see rendezvousListening); deliver writes to it. Exported because sessions.ts builds the
-// launch env var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
-export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+// and Enters can't be corrupted the way `tmux send-keys` was. It lives in tmpdir tied to the claude process, so
+// no extra lifecycle. liveness CONNECTS to it (a live LISTENER, not merely the file — see rendezvousListening);
+// deliver writes to it.
+//
+// The path is a LAUNCH-TIME FACT, recorded — not a formula every consumer re-derives. The id alone was not
+// enough to name it: `SPEXCODE_HOME` scopes the store and `SPEXCODE_TMUX` scopes the tmux server, so two
+// worlds on one box (a fixture, a migration, a copied record) can hold the same session id — and while the
+// path ignored that scoping, they SHARED this socket. That is how an isolated teardown reached out and
+// stranded a live production agent, and delivery would have crossed the same way. So the path a launch hands
+// its agent is derived from the runtime the session belongs to (`runtimeRoot()` — the same identity that
+// scopes its store) and STAMPED beside the record, exactly like `agent.pid`: a launch-time fact, readable by
+// everyone who needs to reach that agent afterwards. Recording it (rather than re-deriving) also means the
+// derivation can change again without stranding anything already running.
+// `legacyRvSock` is the answer for a session launched BEFORE the stamp existed — its agent really did bind
+// the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
+export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
+  join(tmpdir(), `spexcode-rv-${createHash('sha1').update(dir).digest('hex').slice(0, 12)}-${id}.sock`)
+const rvStamp = (id: string) => sessionArtifactPath(id, 'rv.path')
+export const rvSock = (id: string): string => {
+  try { return readFileSync(rvStamp(id), 'utf8').trim() || legacyRvSock(id) } catch { return legacyRvSock(id) }
+}
+// launch's half: derive this session's socket in ITS runtime and record it, so every later reader (launch env,
+// liveness probe, delivery, teardown) reads the one path the agent actually bound.
+export function stampRvSock(id: string, dir = runtimeRoot()): string {
+  const path = scopedRvSock(id, dir)
+  mkdirSync(dirname(rvStamp(id)), { recursive: true })
+  writeFileSync(rvStamp(id), path)
+  return path
+}
 
 // @@@ rendezvousListening - the LISTENER check that IS claude's liveness truth ([[state]], [[harness-adapter]]).
 // A crashed/killed claude can leave its rvSock FILE on disk (a unix-domain socket path is NOT auto-unlinked on

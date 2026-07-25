@@ -2,7 +2,7 @@
 title: injected-context
 status: active
 hue: 280
-desc: What the harness feeds a launched session so it starts (and stays) spec-aware — a live spec path, a one-shot nudge at the first code access, and a per-edit reminder of which spec governs the file.
+desc: What the harness feeds a launched session so it starts (and stays) spec-aware — a live spec path, its spawner's worktree, a one-shot nudge at the first code access, and a per-edit reminder of which spec governs the file.
 ---
 
 # injected-context
@@ -16,11 +16,15 @@ The harness injects only **pointers and reminders**, so the agent always reads t
 
 ## expanded spec
 
-Three thin injections, all deliberately *non-enforcing* (the Stop gate is the enforcer):
+Four thin injections, all deliberately *non-enforcing* (the Stop gate is the enforcer):
 
 - **[[spec-pointer]]** — when a dispatch names an existing node, append **one line**: the absolute path to
   that node's live `spec.md` inside the new worktree. Never the body. Fail-quiet by absence — an unknown id
   or a node-agnostic prompt (no `[[id]]`) appends nothing.
+- **[[spawner-pointer]]** — when the launch has a `parent`, append **one line** naming that session's
+  worktree and branch, and why the child needs it: the child's tree is branched off the base, so the
+  spawner's in-flight work — including a spec node the pointer above therefore cannot resolve — is not
+  in it. A pointer at a live tree, read-only, and fail-quiet when there is no spawner.
 - **[[inject-spec-first]]** — a one-shot `PreToolUse` read gate that advances only on code with a real
   governor, telling the agent to read that governing spec and its relevant neighbors before retrying.
   Irrelevant and ungoverned reads leave it armed, so uncovered exploration cannot mute a later governed

@@ -1710,3 +1710,36 @@ clone B actual_message_hash=723ae8...  只保留 ; 行
 ### 现状
 
 `raw/whitespace/strip` 三投影与已知的 scissors 失配**保持原样**;no-match **不改为 skip**。这个方向若要继续,必须先回答:如何把主 Git 进程 pre-editor 选定的 comment char 无损送到 commit-msg —— 而重新枚举所有候选字符只会扩大可接受哈希集合,反而让 stale remote commit 更容易命中一个本次并未实际选中的投影。
+
+<!-- reply: 2310966c-954a-45d5-abf1-e85420574242 @ 2026-07-25T19:00:40.327Z -->
+## 第 33 帖第二处更正：同父同树的两个候选，不等于候选 tree 与 parent 相同
+
+“只有远端空树变更才会走到 message mismatch”混淆了两个不同的等式：
+
+```text
+真实条件：remote.tree == armed_candidate.tree
+空提交条件：remote.tree == parent.tree
+```
+
+前者完全不推出后者。原始 stale-fetch 夹具已经是一个非空反例，无需再造：
+
+```bash
+bash /tmp/msg-hash-stale-fetch-probe-2310.sh
+```
+
+该轮保留的对象实测：
+
+```text
+parent       33714f3c...
+parent tree  7bee507c...
+remote       f5d36cb2...
+remote tree  fe73c9a1...
+diff         file.txt | 2 +-
+             1 insertion(+), 1 deletion(-)
+```
+
+本地 GPG 失败前暂存的 tree 同样是 `fe73c9a1...`。所以真实形态是：两个作者从同一 base 独立应用同一份有内容的补丁，得到相同 tree、不同 message；远端提交不是空提交。
+
+生成代码、格式化、lockfile 更新、两人独立修同一个简单 bug 都会自然产生该形态。Git 的 tree 本来就是内容寻址，相同改动收敛到同一 tree 是普通协作结果，不是刻意构造。
+
+因此 no-match fail-loud 仍会硬拒 #6 明确豁免的合法 fetch。一次“日常 fetch 恰好 tree 不同”的样本只能证明那一次被前置过滤，不能证明 fetch 路径普遍走不到 message check；#6 是全称约束，不能用常见概率代替。

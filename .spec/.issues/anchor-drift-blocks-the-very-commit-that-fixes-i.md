@@ -566,3 +566,42 @@ Two things I did NOT verify, and will not pretend around:
      runs commit-msg is untested. If it does not, the merge path stays ungated regardless.
 
 Neither affects whether the maintainer's diagnosis is right. Both affect whether the fix ships.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T08:35:51.499Z -->
+CLARIFICATION — nothing is broken today, and the reason is the sharpest statement of the trade in
+this whole thread.
+
+Post 12 could be misread as "ack doesn't work". It works fine. "Ack cannot act at staging time" is
+a constraint on the PROPOSED change, not a description of current behaviour.
+
+Today's sequence, and why it passes:
+
+    you commit (moving an anchored unit)   the gate reads history; your commit isn't in it -> PASS
+    the drift now exists                   it landed, so it is in the window from here on
+    you ack                                there is something to point at -> cleared
+
+Which means:
+
+    "one commit late" and "ack works" are THE SAME PROPERTY.
+
+The gate never judges the commit being made. That is simultaneously:
+
+  - why the author who moves an anchored unit sails through (the defect this issue opened on), and
+  - why a post-hoc ack has a commit to speak for (the front door that answers the 28%).
+
+Two faces of one coin. Removing the lateness removes the front door — which is exactly why my
+proposal stranded those 76 commits. Ack did not break; I removed the ground it stands on.
+
+    today                      late: yes   ack usable: yes
+    hypothetical               late: no    ack usable: NO
+    hypothetical + trailer     late: no    ack usable: yes
+
+Only the third row is coherent, and the trailer is not a patch bolted on to make it work — it is
+what moves ack from "after the commit" to "inside the commit", which is the only way to have both
+faces of the coin at once.
+
+Also correcting my own sloppiness: in the scratch experiment behind post 9 I passed
+SPEXCODE_SKIP_LINT=1 on the drift-CREATING commit out of habit. It was unnecessary (the tree
+started at 0 errors, so that commit would have passed on its own) and it means that experiment did
+NOT demonstrate "the creator sails through". That claim rests on real history instead: 847ee8c4's
+commit body carries no bypass marker — it passed clean.

@@ -836,3 +836,54 @@ carry BOTH the author's `Spec-OK:` and the hook's `Session:`, and they must shar
 trailer block. Today's string append pushes the author's line out of that block — the silent
 failure measured in post 15/16. The precondition is not incidental; it is the thing that makes a
 content-bearing ack possible at all.
+
+<!-- reply: abe9f2bd-3e85-4083-a152-0d89f267521b @ 2026-07-25T09:08:01.208Z -->
+CORRECTING POST 16 — the precondition I said was missing is already implemented. I argued from an
+artefact of my own probe.
+
+Post 16 claimed `stamp` is defined at the string level and must be moved to the trailer level.
+SpexCode already does the trailer-level thing:
+
+    spec-cli/templates/hooks/prepare-commit-msg:33
+    git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$msg_file"
+
+So `trailers(stamp(m)) SUPERSET-OF trailers(m)` holds by construction TODAY. The silent failure I
+measured in post 15 came from my probe, where I had written the stamping myself as `printf >>` —
+a string append. I reproduced a defect I had authored, then argued the product had it.
+
+There is therefore no "piece C". It is done. The design reduces to one change: move the gate to
+commit-msg.
+
+## How an author actually declares — measured end to end
+
+    git commit -m "fix: move the anchored unit" --trailer "Spec-OK: session-console"
+
+Resulting committed message:
+
+    fix: move the anchored unit
+
+    Spec-OK: session-console      <- author's
+    Session: abe9f2bd             <- hook's
+
+Both land in ONE contiguous trailer block and both parse. Author-written and hook-written trailers
+compose correctly with no coordination — which is exactly the property interpret-trailers provides
+and the reason the level argument mattered, even though the product already had it right.
+
+Multiple nodes: repeat `--trailer` (which is what `spex spec ack` already does internally).
+
+## Knowing WHICH node to name
+
+The gate says so. Today's anchor-drift error already carries the node id
+("... since spec 'session-console' v169"), so the loop is: commit -> blocked, node named -> retry
+with that name in a `--trailer`. Two commands, the second copied out of the error text.
+
+That is the same operation count as today ("blocked -> run `spex spec ack <node>`"). The only
+difference is where the declaration lands: welded to the change instead of in a separate empty
+commit.
+
+## The cost I am not glossing
+
+An agent writing a long message via heredoc must put the trailer at the end of the heredoc, or
+switch to the `--trailer` flag. Minor, and it is not new for `Session:` (the hook handles that one
+invisibly) — but `Spec-OK:` must be written deliberately by the author. That is correct: it is a
+claim, and a claim should not be automated.

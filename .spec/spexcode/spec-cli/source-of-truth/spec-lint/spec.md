@@ -120,13 +120,20 @@ very coverage or structural warnings they meant to enforce is a config error the
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
-**One predicate at two real tips:** the retired count gate (`lint.driftErrorThreshold`) stays gone; an
-anchor hit is an ordinary lint ERROR. `spex spec lint` and CI judge committed `HEAD`. On commit paths that
+**One anchor predicate at two real tips, plus candidate transition integrity:** the retired count gate
+(`lint.driftErrorThreshold`) stays gone; an anchor hit is an ordinary lint ERROR. `spex spec lint` and CI
+judge committed `HEAD`. On commit paths that
 invoke it, `commit-msg` arms one candidate and `reference-transaction` invokes the same lint over the real
 new oid before its ref advances,
 so history, raw specs, config and current anchored source all come from the candidate tree — never from an
 unrelated worktree/index state. Pending indices are transient and shared only inside that lint run; they
-never occupy or evict the server's persistent HEAD-keyed cache. Unanchored drift remains advisory.
+never occupy or evict the server's persistent HEAD-keyed cache. Unanchored drift remains advisory. The
+candidate-only integrity rule above is intentionally not this shared anchor predicate: it compares deleted
+governor blobs from old `HEAD` with ownership in the candidate tree and rejects an orphaned surviving
+subject. Once that transition has landed, current `HEAD` no longer contains the deleted claim, so default
+lint reports only current-tree coverage; this local transition guard preserves the information while both
+sides are available. It is satisfied by deleting the implementation or transferring ownership, never by a
+`Spec-OK` trailer.
 
 This candidate gate intentionally supersedes the earlier **"One gate, no staged-index machinery"**
 decision rather than pretending that decision was an oversight. At that time `Spec-OK` existed only as a

@@ -21,10 +21,15 @@ scenarios:
       for `taste`, and the model answers `Capabilities enter the ecosystem through the pillars we already
       stand on`; no general file or shell tool is available to imitate skill loading, and the plugin loads.
   - name: opencode-headless-record-liveness
-    description: Launch a real governed opencode-headless session, wait for its first turn to exit, inspect the public session state while the turn process and rendezvous listener are absent, then explicitly stop and resume it.
-    expected: The intact non-stopped session record remains online while the native conversation sleeps. Explicit stop preserves the record, native conversation, and timeline but reads offline; resume returns the same conversation online with its earlier declaration note intact.
+    description: Launch a real governed opencode-headless session, wait for its first turn to exit, and inspect the public session state while the turn process and rendezvous listener are absent.
+    expected: The intact session record remains online and its terminal-free conversation stays available while the native conversation sleeps.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
+  - name: opencode-headless-explicit-stop-resume
+    description: Let a real governed opencode-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
+    expected: Stop preserves the record, native conversation, and timeline but reads offline; resume returns the same OpenCode conversation online with the pre-stop declaration note intact.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
   - name: opencode-headless-idle-wake
     description: Send a note-backed prompt to the real governed session after its first turn exits and capture the public send/result plus the model reply.
     expected: Delivery starts exactly one `opencode run --session <captured-id> <prompt>` turn in the session tmux home and the real model answers in the same conversation.

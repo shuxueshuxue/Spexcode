@@ -24,15 +24,18 @@ scenarios:
     description: >-
       Through a running backend and the real `pi-headless` launcher, create a session, observe the initial
       text-mode response, send a prompt after the turn is idle, then start a long tool turn and send a second
-      prompt while the rendezvous listener is live. After the turn settles, explicitly stop and resume the
-      session and read graph, CLI, tmux, and timeline state.
+      prompt while the rendezvous listener is live.
     expected: >-
       The initial turn completes in pi's default text mode, idle delivery resumes the exact same session with
       `pi -p --session <id>`, and the active-turn delivery uses the existing rendezvous steer path exactly once;
-      the public record remains online between turns and reports `{ headless: true }`. Explicit stop preserves
-      the record and history but reads offline, and resume returns the exact saved conversation online.
+      the public record remains online and reports `{ headless: true }`.
     tags: [backend-api, cli]
     code: [spec-cli/src/pi-headless.ts]
+  - name: pi-headless-explicit-stop-resume
+    description: Let a real governed pi-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
+    expected: Stop preserves the record, exact saved session, and timeline but reads offline; resume returns the same pi conversation online with the pre-stop declaration note intact.
+    tags: [backend-api, cli]
+    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
   - name: pi-headless-close-residue
     description: Close the real pi-headless session through the public session API and inspect its process, tmux, worktree, sockets, and record store.
     expected: The controller and pi children stop, both controller and rendezvous sockets are gone, and the session worktree, branch, record, and store leave no residue.

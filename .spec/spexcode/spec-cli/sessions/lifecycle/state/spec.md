@@ -92,7 +92,13 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read
   `unknown`, never `offline`. This is the honesty rule the mass-restore incident violated (a slow box read as a
   graveyard, live workers relaunched to death) and the false-`offline` wait verdict (issue #40) too. Fail loud
-  (`unknown`), never guess (`offline`).
+  (`unknown`), never guess (`offline`). The same rule reaches one layer further down, because a settled `dead`
+  answers only about the TRANSPORT: a rendezvous socket is keyed by session id alone, so a foreign teardown or
+  a stray `rm` can unlink the path out from under its own live listener — after which every connect `ENOENT`s
+  (proven dead) while the agent keeps working, merely unreachable. So the transport is not the only witness:
+  the launch-registered `agent.pid` is a second, independent one, and while it still answers, death stays
+  UNPROVEN → `unknown`. Only a corpse both witnesses agree on is `offline`, because `offline` is the reading
+  a supervisor ACTS on — it is what disarms the relaunch guard, and relaunching a working agent kills it.
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 exposes resume through both the relaunch panel and the console toolbar's compact relaunch tool whatever the

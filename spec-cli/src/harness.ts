@@ -172,7 +172,9 @@ export interface Harness {
   // Remove this harness's ephemeral runtime transport after stop/close. This is the runtime inverse of
   // launch: rendezvous owners unlink rvSock, claude-headless unlinks its control socket, Codex owns no
   // per-session socket. Product teardown calls only this adapter method.
-  cleanupRuntime(rec: HarnessLivenessRecord): void
+  // Async because removal is CONDITIONAL on proof: a transport is only ours to remove once its listener is
+  // proven dead (see unlinkSocks), and that proof is a connect probe.
+  cleanupRuntime(rec: HarnessLivenessRecord): Promise<void>
   // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
   // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
   // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
@@ -246,7 +248,7 @@ export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 // wedged/thrashed path. Never throws.
 export type ListenerProbe = 'live' | 'dead' | 'unproven'
 const PROVEN_DEAD = new Set(['ECONNREFUSED', 'ENOENT'])
-export function rendezvousListening(id: string, timeoutMs = 800): Promise<ListenerProbe> {
+export function listenerAt(path: string, timeoutMs = 800): Promise<ListenerProbe> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection> | undefined
@@ -258,11 +260,12 @@ export function rendezvousListening(id: string, timeoutMs = 800): Promise<Listen
       resolve(v)
     }
     const timer = setTimeout(() => done('unproven'), timeoutMs)
-    try { c = createConnection({ path: rvSock(id) }) } catch { return done('unproven') }
+    try { c = createConnection({ path }) } catch { return done('unproven') }
     c.on('connect', () => done('live'))
     c.on('error', (e) => done(PROVEN_DEAD.has((e as NodeJS.ErrnoException).code ?? '') ? 'dead' : 'unproven'))
   })
 }
+export const rendezvousListening = (id: string, timeoutMs = 800): Promise<ListenerProbe> => listenerAt(rvSock(id), timeoutMs)
 // The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime
 // dir. macOS caps `sun_path` at ~104 bytes, and `runtimeRoot()` flattens the ENTIRE project path into one
 // dash-segment (`encodeProject`), so `<runtimeRoot>/codex-app-server.sock` blew past the cap on a deep macOS
@@ -1190,8 +1193,36 @@ const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, 
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
 
-const unlinkSocks = (...paths: string[]): void => {
+// @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
+// socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on
+// faith, which is unsound because a socket path is derived from the session id ALONE: it is the one
+// per-session resource NOT scoped by the store (`SPEXCODE_HOME`) or the tmux server (`SPEXCODE_TMUX`), so an
+// isolated instance closing an id that also names a LIVE session elsewhere had its `kill-session` miss (that
+// IS namespaced) while this unlink landed (it is not) — deleting a working agent's socket out from under it.
+// The damage is invisible and permanent: the listener stays bound to an unlinked path, so nothing can ever
+// connect again (delivery fails its existsSync gate) and every probe ENOENTs, which the liveness axis reads as
+// PROVEN death — a live worker reading `offline`, which in turn disarms the relaunch guard.
+// So: poll until death is proven, then unlink. A listener still answering past the wall is somebody's live
+// agent — mine that failed to die, or one that was never mine — and either way it is not ours to remove: leave
+// it and say so. `unproven` is not proof either, so it is left too. The asymmetry is deliberate: a dead-but-
+// unlinked file is harmless residue the next teardown reaps, while a wrong unlink strands a working agent.
+const SOCK_DEATH_WALL_MS = 2000   // a killed agent releases its listener in well under this; the wall only bounds the wrong case
+const SOCK_DEATH_POLL_MS = 100
+export const unlinkSocks = async (...paths: string[]): Promise<void> => {
   for (const path of paths) {
+    if (!existsSync(path)) continue
+    const deadline = Date.now() + SOCK_DEATH_WALL_MS
+    let probe = await listenerAt(path)
+    while (probe !== 'dead' && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, SOCK_DEATH_POLL_MS))
+      probe = await listenerAt(path)
+    }
+    if (probe !== 'dead') {
+      console.warn(`spex: left ${path} in place — ${probe === 'live'
+        ? 'a listener is still answering it, so it belongs to a running agent (this teardown did not kill it, or it was never ours)'
+        : 'the listener probe could not conclude, and death was never proven'}`)
+      continue
+    }
     try { rmSync(path, { force: true }) } catch { /* already gone */ }
   }
 }
@@ -1331,7 +1362,7 @@ export const codexHarness: Harness = {
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  cleanupRuntime: () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.

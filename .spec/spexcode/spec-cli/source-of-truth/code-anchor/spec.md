@@ -57,11 +57,13 @@ report/CI run, and a pending commit for a locally-authored candidate. It is the 
 [[drift-by-ancestry]]'s walk already derives. Per ordinary window commit, the file's
 `--unified=0` hunks are intersected with the unit's line range extracted from the file **as it existed
 at that commit** — never from the later working tree, so renames/moves and partial staging attribute
-correctly. A merge contributes only its dense combined (`--cc`) hunks: bytes different from **every**
-parent, hence authored by conflict resolution or an explicit edit in the merge itself. A clean transport
-merge has no such hunk and stays neutral; a first-parent diff is deliberately forbidden because it would
-charge the merge again for already-attributed side-branch work. The same cc path set decides whether a
-merge changed `spec.md` and therefore created a version. A historical file version the extractor cannot
+correctly. A merge contributes only individual result lines in its dense combined (`--cc`) diff that are
+different from **every** parent: an all-`+` prefix is an authored result line and an all-`-` prefix is an
+authored deletion point. A mixed prefix such as `+ ` is inherited from at least one parent and stays out,
+even when an adjacent all-parent line puts both inside the same combined hunk. A clean transport merge has
+no owned line and stays neutral; a first-parent diff is deliberately forbidden because it would charge the
+merge again for already-attributed side-branch work. The same line-level predicate decides whether a merge
+changed `spec.md` and therefore created a version. A historical file version the extractor cannot
 parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
 

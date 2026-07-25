@@ -116,6 +116,9 @@ scenarios:
       that do not invoke the gate (cherry-pick, rebase, --no-verify, and a clone without hooks), local
       coverage remains equal to today's rather than promising an impossible immediate rejection; once such
       a commit lands, the ordinary HEAD predicate used by CI still reports its unanswered drift.
+      A combined merge hunk containing both a side-inherited anchored line (`+ `) and an adjacent
+      merge-authored ungoverned line (`++`) does not charge the inherited line or reject the merge; combined
+      ownership is decided per result line, never by widening one owned line to its enclosing hunk.
 ---
 # code-anchor — measurement
 

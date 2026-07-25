@@ -462,6 +462,39 @@ test('a clean no-ff merge does not charge transported code already answered with
   assert.equal(fx.lint().status, 0)
 })
 
+test('a mixed combined hunk does not charge an adjacent side-inherited anchor line', () => {
+  const fx = fixture()
+  const source = join(fx.root, 'src', 'calc.py')
+  const spec = join(fx.root, '.spec', 'project', 'calc', 'spec.md')
+  const code = (governed: number, neighbor: number) =>
+    `def apply_rate(): return ${governed}\ndef neighbor(): return ${neighbor}\n`
+  writeFileSync(source, code(1, 1))
+  fx.git('add', source)
+  const seeded = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '--amend', '--no-edit')
+  assert.equal(seeded.status, 0, `${seeded.stdout}${seeded.stderr}`)
+
+  fx.git('switch', '-qc', 'answered-side')
+  writeFileSync(source, code(2, 1))
+  writeFileSync(spec, NODE.replace('The calculation contract.', 'The calculation contract now returns two.'))
+  fx.git('add', source, spec)
+  const answered = fx.commit('-m', 'answer side anchor change')
+  assert.equal(answered.status, 0, `${answered.stdout}${answered.stderr}`)
+
+  fx.git('switch', '-q', 'node/calc')
+  writeFileSync(source, code(1, 3))
+  fx.git('add', source)
+  const main = fx.commit('-m', 'change ungoverned neighbor on target')
+  assert.equal(main.status, 0, `${main.stdout}${main.stderr}`)
+  fx.runGit({}, 'merge', '--no-ff', '--no-commit', 'answered-side')
+  assert.ok(existsSync(join(fx.root, '.git', 'MERGE_HEAD')), 'fixture did not stop before the merge commit')
+  writeFileSync(source, code(2, 777))
+  fx.git('add', source)
+
+  const merged = fx.commit('-m', 'author only the ungoverned neighbor in merge')
+  assert.equal(merged.status, 0, `side-inherited anchor line was widened to its mixed combined hunk:\n${merged.stdout}${merged.stderr}`)
+  assert.equal(fx.lint().status, 0)
+})
+
 test('pending lint handles more than 16 MiB of governed tracked text without aggregate buffering', () => {
   const fx = fixture()
   writeFileSync(join(fx.root, 'src', 'large.txt'), 'x'.repeat(17 * 1024 * 1024))

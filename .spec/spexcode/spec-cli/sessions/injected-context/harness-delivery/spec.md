@@ -49,15 +49,14 @@ scoped per project, for each SELECTED harness:
   own slot (`trees/<enc-worktree>/` under [[runtime]]'s `runtimeRoot`), NOT the worktree; per-tree because
   the compile is a function of THAT tree's `.plugins` (one global slot let the last-materialized tree's hook set
   leak into every other tree's dispatch);
-- **the contract** — the tracked **docs guide** (`docs/AGENT_GUIDE.md` — the project's hand-written agent/
-  contributor notes, the ONE piece of in-tree contract prose) FOLLOWED BY the `surface: system` bodies (in name
-  order), assembled and written as a `<!-- spexcode:start -->…<!-- spexcode:end -->` block into `<repo>/AGENTS.md`
+- **the contract** — the `surface: system` plugin bodies (in name order), assembled and written as a
+  `<!-- spexcode:start -->…<!-- spexcode:end -->` block into `<repo>/AGENTS.md`
   (Codex) + `<repo>/CLAUDE.md` (Claude). Those contract files are **generated artifacts** — exactly like the
   shims + skills below: regenerated per clone/launch, never tracked, resident per [[residence]]'s live
-  kind detection (exclude when wholly ours; the content filter when host prose shares the file). The guide
-  SOURCE is the only
-  tracked contract prose; folding it INTO the generated file is what guarantees a self-launched agent still
-  discovers guide + contract together (nothing is lost by un-tracking the file). This replaces the launch-time
+  kind detection (exclude when wholly ours; the content filter when host prose shares the file). Plugin bodies are the ONLY contract source: there is no per-project prose file folded in, so a
+project's repo-local notes cannot silently become part of every agent's contract — they live in the harness
+file's own block-outside region (untracked, per-clone), while anything that must reach EVERY agent is a
+plugin node. This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
 - **the shims** — each adapter's `shim().content` written to its `shimFile()`, whatever ARTIFACT that harness
@@ -126,5 +125,5 @@ identical block. The Codex trust hash is not in-tree at all — it lives in the 
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned
-generated artifacts, so a clone never carries a stale committed copy — any
-hand-written contract prose lives in the tracked `docs/AGENT_GUIDE.md` source, which the materialize folds back in.
+generated artifacts, so a clone never carries a stale committed copy — and the only tracked source they are
+assembled from is the plugin tree, so what an agent carries is always exactly what the graph says.

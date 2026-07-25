@@ -55,7 +55,7 @@ dark terminal, whatever the app theme. Two panes: a left session list (its width
 with a dense 204px default) and a right area that
 **morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
 path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
-carrying the archived count when there is one), and a **Search** button, the click twin of the ⌥+/ palette
+showing no numeric count), and a **Search** button, the click twin of the ⌥+/ palette
 ([[session-search]] owns that contract).
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing

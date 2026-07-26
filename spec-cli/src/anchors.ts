@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+import { git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+
+const RS = '\x1e'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -398,13 +400,13 @@ async function objectFormatFor(root: string): Promise<string> {
   }
   return format
 }
-async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string): Promise<FileRevisionUnits> {
-  const oid = (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
+async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string, knownOid?: string | null, knownText?: string): Promise<FileRevisionUnits> {
+  const oid = knownOid ?? (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
   if (!oid) return { absent: true }
   const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
-  const text = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
+  const text = knownText ?? await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
   let result: FileRevisionUnits
   try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
   if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()
@@ -433,6 +435,34 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)
   return ranges
+}
+
+// Ordinary commits in one anchor window share a single path-limited log. Merge commits deliberately stay
+// on hunksAt's `show --cc` path because their dense combined ownership is a different predicate.
+async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, [number, number][]>> {
+  const result = new Map<string, [number, number][]>()
+  const ordinary = [...new Set(commits)]
+  if (!ordinary.length) return result
+  let out = ''
+  try {
+    out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0',
+      `--format=${RS}%H`, ...ordinary, '--', path])
+  } catch { return result }
+  for (const rec of out.split(RS)) {
+    const normalized = rec.replace(/^\n/, '')
+    if (!normalized) continue
+    const newline = normalized.indexOf('\n')
+    const hash = (newline < 0 ? normalized : normalized.slice(0, newline)).trim()
+    if (!/^[0-9a-f]{7,40}$/.test(hash)) continue
+    const patch = newline < 0 ? '' : normalized.slice(newline + 1)
+    const ranges: [number, number][] = []
+    for (const m of patch.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const start = +m[1], count = m[2] === undefined ? 1 : +m[2]
+      ranges.push(count > 0 ? [start, start + count - 1] : [Math.max(1, start), Math.max(1, start)])
+    }
+    result.set(hash, ranges)
+  }
+  return result
 }
 
 // the drift window of an anchored file: every commit to `path` not reachable from the spec's version
@@ -469,6 +499,27 @@ export function windowCommits(idx: DriftIndex, sinceHash: string, path: string, 
     && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h, nodeId))
 }
 
+// Candidate lint's history window is deliberately path-scoped. The reference hook only needs the commits
+// that can affect the candidate's changed governed files; rebuilding the repository-wide drift index here
+// would put the gate back on the old history-length slope. Git owns rename traversal for this short query.
+export async function pendingWindowCommits(root: string, sinceHash: string, tip: string, path: string, nodeId?: string): Promise<string[]> {
+  if (!sinceHash || !tip || sinceHash === tip) return []
+  const format = `%H\x1f%(trailers:key=Spec-OK,valueonly,separator=%x2c)`
+  const run = async (extra: string[]) => {
+    try {
+      const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--follow', ...extra,
+        `--format=${format}`, `${sinceHash}..${tip}`, '--', path])
+      return out.split('\n').map((line) => {
+        const [hash, trailers = ''] = line.trim().split('\x1f')
+        return hash && (!nodeId || !trailers.split(',').map((v) => v.trim()).includes(nodeId)) ? hash : ''
+      }).filter(Boolean)
+    } catch { return [] }
+  }
+  const ordinary = await run(['--no-merges'])
+  const merges = await run(['--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M'])
+  return [...new Set([...ordinary, ...merges])]
+}
+
 // which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a
 // unit's line range extracted from the file AS IT EXISTED AT THAT COMMIT (never from HEAD — units later
 // renamed or moved still attribute correctly). Several selectors are OR — a commit appears ONCE, with
@@ -479,15 +530,21 @@ export type AnchorHit = { commit: string; selectors: string[]; unparseable?: str
 export async function anchorHitCommits(root: string, win: string[], path: string, symbols: string[], x: Extractor): Promise<AnchorHit[]> {
   const hits: AnchorHit[] = []
   const objectFormat = await objectFormatFor(root)
-  for (const c of win) {
-    const at = await unitsAtFileRevision(root, c, path, x, objectFormat)
+  const revisions = win.map((commit) => `${commit}:${path}`)
+  const oids = batchRevisionOids(root, revisions)
+  const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  const ordinaryHunks = await hunksAtMany(root, win, path)
+  for (let index = 0; index < win.length; index++) {
+    const c = win[index]
+    const oid = oids[index]
+    const at = await unitsAtFileRevision(root, c, path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined)
     if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
     if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
     const bySym = symbols
       .map((sym) => ({ sym, ranges: at.units.filter((u) => u.name === sym) }))
       .filter((s) => s.ranges.length) // a unit absent under this name at that commit can't be touched
     if (!bySym.length) continue
-    const hunks = await hunksAt(root, c, path)
+    const hunks = ordinaryHunks.get(c) ?? await hunksAt(root, c, path)
     const touched = bySym.filter((s) => hunks.some(([a, b]) => s.ranges.some((u) => a <= u.end && u.start <= b))).map((s) => s.sym)
     if (touched.length) hits.push({ commit: c, selectors: touched })
   }

@@ -84,12 +84,29 @@ deliberately **no third track**:
   within one cold tick (and flagged loud) when the leaf is blind. No new watch, no second track.
 
 Invalidation alone is not visibility: [[graph-delta]] broadcasts only when board bytes move, so the board
-carries one top-level freshness stamp over the whole merged issue set (open/thread/reply counts + the
-latest activity instant) that **every** thread write moves — a reply, a remark, a resolve, a retract, a
-close, on a noded or nodeless thread alike; a scenario-hosted remark moves its reading's thread overlay the
-same way. On the client, the resident issues list's throttled refetch *defers* an in-window push to the
-throttle edge, never drops it ([[issues-view]]). Measured end to end: a remark landing through
-POST /api/remarks shows in a viewing browser within one debounce + rebuild, never the fallback lane.
+carries one top-level freshness stamp (open/thread/reply counts + the latest activity instant) that
+**every** thread write moves — a reply, a remark, a resolve, a retract, a close, on a noded or nodeless
+thread alike. That stamp folds the **whole store, both remark hosts**, not the issue population the
+surfaces read: the issue read deliberately splits eval-remark tracks out ([[eval-issue-split]]), which is a
+question about *which page renders a thread*, while the stamp answers *whether anything was written at
+all*. Deriving one from the other is the mistake that reaches furthest — a carrier folded over the issue
+half alone moved no byte for a scenario-hosted remark, the no-change suppression correctly swallowed the
+broadcast, and an open reading went not late but permanently blind. So the board takes ONE store read that
+hands back both: the split population for the surfaces, the stamp over everything for freshness.
+
+And a stamp nobody reads is not visibility either — the client leg is half the loop. **Every open review
+surface derives its refresh from that stamp**: the paged issue list, the open issue thread, and the open
+reading whose remark track rides its detail response. A surface keyed on something that merely *churns*
+when the board moves — a per-frame array identity — is not fresh, it is lucky, and it goes silent the day
+that churn is optimized away; a surface keyed on nothing at all (a single addressed read is told nothing by
+its own address) never surfaces an external write while it stays open. A list additionally keys the one
+other input its answer depends on, the source-session presence join ([[live-session-filter]]), so equal key
+means equal answer and a quiet board costs no request. Refreshing is not re-entering: only a new ADDRESS
+may wipe a surface to its loading face, while a stamp tick re-reads quietly behind painted content. The
+deliberately boardless cold Evals entry ([[light-entry]]) is the honest exception — it has no board, so it
+has no push, and it does not grow a stream to pretend otherwise. Measured end to end through a real
+browser on a prebuilt dashboard: a remark landing through POST /api/remarks on either host shows in an
+already-open viewer within one debounce + rebuild + read, never the fallback lane.
 
 Out of scope here (later milestones): the freshness/staleness computation that reads the resolved bit,
 the server-side overlay join, and any dashboard UI — this node builds only the substrate they stand on.

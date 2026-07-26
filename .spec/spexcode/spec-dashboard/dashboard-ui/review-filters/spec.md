@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/reviewQuery.js
   - spec-dashboard/src/reviewFilters.test.mjs
+  - spec-dashboard/test/review-filters-one-engine.e2e.mjs
   - spec-dashboard/src/icons.jsx
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
@@ -32,6 +33,17 @@ absent-field behavior, option labels, and the one source-session PRESENCE join (
 conjunctively — `q` is one substring or an array of them (the token text's bare words/phrases) — derives
 section counts UNDER the rest of the query and data-backed options, and keeps a vanished active value
 clearable. It invents no field and silently omits a facet with no meaningful choice.
+
+A section count is ONE number unless its adapter declares that section SPLIT. A split is a BINARY predicate
+over that section's own matched rows, so its two named buckets always re-add to the section's whole
+population: splitting reports structure inside a count, it can never shrink one. The Eval adapter splits its
+MEASURED verdicts on the same freshness axis its `freshness:` facet reads — `counts.pass` and `counts.fail`
+are `{fresh,stale}` — so the remeasurement debt travels WITH the population instead of being recomputed per
+surface; `unmeasured` owns no reading, therefore no freshness axis, and stays one number. The split is
+derived exactly once, where every other count is, and a compact/menu face of the same sections reads the
+whole count through the one `sectionTotal` rule, so a chip and the popup radio it filters cannot disagree.
+Because freshness is an ordinary dimension, `freshness:fresh` empties the stale half through the rest of the
+query — no surface special-cases the token.
 
 The consumers own different state homes, not different semantics. [[paged-review]] imports this SAME pure
 module on the server, applies it before slicing, and returns the resulting full-population counts/facets;
@@ -49,7 +61,8 @@ radio groups, keyboard/Escape behavior, and honest filtered-empty result as the 
 Surface defaults may differ where the products already differ: canonical Issues opens on outstanding work,
 while canonical Evals opens on its complete bound record with the evidence default `all` (a plain enum
 default, never data-dependent). Evals derives Fail/Pass/Unmeasured as its non-exhaustive verdict section
-counts (`unmeasured` means a declared scenario with no reading, not an unscored reading) and
+counts (`unmeasured` means a declared scenario with no reading, not an unscored reading; the two measured
+verdicts carry the freshness split above) and
 derives human review (`current` / `reviewed`) as a separate fixed-value facet; the fixed lifecycle choices
 remain editable even when one currently has zero rows. A node popup also initially shows its complete bound
 record. Once a value is active, parsing and matching are identical. A node-local list naturally omits node

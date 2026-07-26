@@ -59,10 +59,13 @@ verbs the CLI uses.
   ([[side-nav]]).
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The source is [[issues]]'s
   `mergedIssues` — which excludes eval-remark threads ([[eval-issue-split]]: a scenario-scoped concern is
-  a remark and lives on the Evals pages). It is app-held state beside the board: the page renders
-  from the backend's resident snapshot; freshness inherits the board's pattern (push-signal throttled
-  refresh that DEFERS, never drops; the 15s cold lane; ETag/revision reuse), and a write forces the
-  refresh. The browser requests only its current 25-row slice. Rows render **in API
+  a remark and lives on the Evals pages). The rows are the backend's resident snapshot, requested one
+  25-row slice at a time; freshness is PUSH-first ([[remark-substrate]] write-visibility): the list
+  re-requests when the board's issue-freshness stamp moves — together with the source-session presence
+  set, the one other board input its answer depends on — with the 15s cold lane as the fallback, equal
+  revision repainting nothing, and the viewer's own write forcing the read. It keys that stamp and never
+  a board value that merely churns per frame: a proxy like that is fresh only by luck, and goes quiet the
+  day the churn is optimized away. Rows render **in API
   order** — stores interleaved newest first, no salience ranking. Bare query words search the
   concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
   lifecycle switch — token surgery on `state:` only, every other token preserved, counts computed under
@@ -109,7 +112,11 @@ verbs the CLI uses.
   labeled with the store's concrete display name ("Open on GitHub"/"Open on GitLab" — canonical
   display-name data, never a URL sniff, never the word "forge"; a local issue renders none). At phone
   width the side metadata reflows ABOVE the body in the one column. A forge issue's comments render as
-  the SAME reply thread a local issue gets — store never changes the thread's shape.
+  the SAME reply thread a local issue gets — store never changes the thread's shape. The page is ONE
+  addressed read, so its own address can tell it nothing about later writes: it re-reads on the same
+  board issue-freshness stamp the list follows ([[remark-substrate]]), which is how a second party's
+  remark reaches a reader already sitting on the thread. Only a new ADDRESS may wipe it to the loading
+  face; a stamp tick re-reads quietly behind the painted thread.
 - **A human writes from here — to the issue's OWN store.** The composer is the ONE shared thread-composer
   ([[event-detail]] docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
   writing surface floored at two lines that auto-grows through [[composer]], the action row always visible —

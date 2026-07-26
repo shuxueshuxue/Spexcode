@@ -79,8 +79,12 @@ test('every control is a token BUILDER over the committed text — no private fi
   assert.match(serverReviews, /tokenFilterState\(text, 'issue'\)/)
   assert.match(serverReviews, /paginateReview\(issues, model\.shown/)
   assert.match(serverReviews, /paginateReview\(items, filtered\.shown/)
-  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| 0/)
-  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| 0/)
+  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| \{\}/)
+  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| \{\}/)
+  // the measured verdicts' freshness split is READ from the server fold, never re-derived from the slice.
+  assert.match(evals, /count: failCount\.fresh \|\| 0, countSuffix: staleSuffix\(failCount\.stale \|\| 0\)/)
+  assert.match(evals, /count: passCount\.fresh \|\| 0, countSuffix: staleSuffix\(passCount\.stale \|\| 0\)/)
+  assert.doesNotMatch(evals, /items\.(?:filter|reduce)\([^)]*fresh/)
   assert.match(issues, /const openCount = data\?\.counts\?\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
@@ -270,9 +274,20 @@ test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive ver
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
   assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.BLIND/)
   assert.doesNotMatch(evals, /reading: (?:true|false)/)
-  assert.match(evals, /count: failCount/)
-  assert.match(evals, /count: passCount/)
+  assert.match(evals, /count: failCount\.fresh/)
+  assert.match(evals, /count: passCount\.fresh/)
   assert.match(evals, /count: unmeasuredCount/)
+  // the split's second number is the shared chip's own quiet suffix, part of the button, not a control —
+  // and it has TWO visible faces over ONE accessible name, so the phone condenses the word, never the count.
+  assert.match(shell, /<span className="rl-section-suffix" data-tip=\{section\.countSuffix\.text\}>/)
+  assert.match(shell, /<span className="sr-only">\{section\.countSuffix\.text\}<\/span>/)
+  assert.match(shell, /className="rl-section-suffix-full" aria-hidden="true">\{section\.countSuffix\.text\}/)
+  assert.match(shell, /className="rl-section-suffix-compact" aria-hidden="true">\{section\.countSuffix\.compact\}/)
+  assert.match(evals, /text: `\+\$\{n\} \$\{t\('reviewList\.freshness\.stale'\)\}`, compact: `\+\$\{n\}`/)
+  // the phone swaps the FACE; nothing ever hides the suffix element or its number.
+  assert.match(css, /\.rl-section-suffix-compact \{ display: none; \}/)
+  assert.match(css, /\.rl-section-suffix-full \{ display: none; \}\n\s*\.rl-section-suffix-compact \{ display: inline; \}/)
+  assert.doesNotMatch(css, /\.rl-section-suffix \{ display: none; \}/)
   // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
   // ONE address projection
   assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
@@ -335,8 +350,12 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(css, /\.rl-query\s*\{[^}]*height:\s*32px;/s)
   assert.match(css, /\.lp-head\s*\{[^}]*height:\s*48px;/s)
   assert.match(css, /\.rl-row-grid\s*\{[^}]*min-height:\s*64px;/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*height:\s*49px;/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}[\s\S]*\.rl-facets\s*\{\s*flex:\s*none;/s)
+  // 49px is now the phone header's FLOOR, not its cap: it grows downward only when its own content needs a
+  // second line (a split count does; Issues does not), and a control is never clipped or dropped for width.
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*min-height:\s*49px;[^}]*flex-wrap:\s*wrap;/s)
+  assert.doesNotMatch(css, /@media \(max-width: 760px\)[\s\S]*\.lp-head\s*\{[^}]*[^-]height:\s*49px;/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-section\s*\{\s*gap:\s*2px;\s*padding:\s*0;[^}]*min-height:\s*44px;\s*\}[\s\S]*\.rl-section \.review-state-label\s*\{\s*font-size:\s*var\(--type-meta\);\s*\}/s)
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.rl-facets\s*\{\s*flex:\s*1 1 auto;\s*justify-content:\s*flex-end;/s)
   assert.match(css, /\.rl-facet-wrap:not\(\.mobile-stay\)\s*\{\s*display:\s*none;/)
   assert.match(shell, /const buttonLabel = selectedLabel \? `\$\{label\}: \$\{selectedLabel\}` : label/)
   assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)
@@ -435,12 +454,35 @@ test('the continue-reviewing queue: two positional groups of shared-state anchor
 test('Issue detail is one addressed object and never reconstructs from graph or a list page', () => {
   // the one non-issue word in the family is the compose address: `#/issues/new` is a PAGE, so the detail
   // loader is never asked for an issue called 'new' ([[issues-view]]).
-  assert.match(issues, /const detail = useIssueDetail\(composing \? null : param\)/)
+  assert.match(issues, /const detail = useIssueDetail\(composing \? null : param, issuesStamp\)/)
   assert.match(issues, /export const NEW_PARAM = 'new'/)
   assert.match(issues, /const value = await loadIssue\(id\)/)
   assert.match(data, /apiFetch\(`\/api\/issues\/\$\{encodeURIComponent\(id\)\}`\)/)
   assert.match(serverIndex, /app\.get\('\/api\/issues\/:id'/)
   assert.doesNotMatch(issues, /specs\.(?:issues|openIssues)|sessions\.(?:issues|openIssues)|\.find\([^\n]*issue\.id/)
+})
+
+test('an open review surface follows the board issue-freshness stamp, never board-frame churn', () => {
+  // [[remark-substrate]] write-visibility, the CLIENT leg. The server moves ONE board stamp on every thread
+  // write; a surface that watches something else is only accidentally fresh. Measured regression: the issue
+  // DETAIL watched nothing at all and an externally-written remark never appeared (>30s, twice the cold
+  // lane), while the list survived on the sessions ARRAY's per-frame identity — a key that reads as
+  // freshness while being blind to the data, and that a memoized board reconstruction would silence.
+  const app = read('App.jsx')
+  // the board's own field reaches both shells — the stamp is the signal, not a derived proxy
+  assert.match(app, /<MobileApp[^\n]*issuesStamp=\{board\.issuesStamp\}/)
+  assert.match(app, /<Dashboard[^\n]*issuesStamp=\{board\.issuesStamp\}/)
+  assert.match(dashboard, /<IssuesPage[^\n]*issuesStamp=\{issuesStamp\}/)
+  // the list keys on what its ANSWER depends on: the issue population + the presence join, nothing else
+  assert.match(issues, /refreshKey: `\$\{issuesStamp \?\? ''\}\|\$\{presenceKey\}`/)
+  assert.doesNotMatch(issues, /refreshKey: sessions\b/)
+  // the open thread re-reads on a stamp tick, and only a NEW ADDRESS may wipe it to the loading face
+  assert.match(issues, /useIssueDetail\(id, freshness\)/)
+  assert.match(issues, /\}, \[id, freshness, reload\]\)/)
+  assert.match(issues, /if \(id !== shownId\.current\) \{ shownId\.current = id; setIssue\(null\); setError\(null\) \}/)
+  // the reading detail hosts the substrate's OTHER remark host and follows the same one stamp
+  assert.match(page, /function useEvalDetail\(param, sessionId, projection, enabled = true, freshness = null\)/)
+  assert.match(page, /\[enabled, node, scenario, sessionId, freshness,/)
 })
 
 test('New is a routed compose PAGE reusing the shared shells, never a pop-out over the list', () => {

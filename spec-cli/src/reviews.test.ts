@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { boundedEvalNeighbors, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+// @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
+// folds counts with, so this test measures the real canonical path rather than a re-implementation.
+import { evalFilterModel, tokenFilterState } from '../../spec-dashboard/src/reviewFilters.js'
 
 const model = {
   sections: { open: 61, closed: 7 },
@@ -117,4 +120,40 @@ test('detail neighbor budget refills at boundaries and missing selections stay h
   assert.equal(missing.neighbors.total, 8)
   assert.deepEqual(missing.evalRevision, { epoch: 'epoch', generation: 3, content: 'content' })
   assert.equal(missing.summary?.total, 8)
+})
+
+test('eval verdict counts split freshness ONCE on the server, over the whole population, before the slice', () => {
+  const reading = (scenario: string, status: string, fresh: boolean) => ({
+    scenario, ts: `2026-01-0${scenario.length}`, fresh, verdict: { status },
+  })
+  const nodes = [{
+    id: 'n', hue: 10,
+    scenarios: [{ name: 'p' }, { name: 'pp' }, { name: 'ppp' }, { name: 'f' }, { name: 'ff' }, { name: 'blind' }],
+    evals: [
+      reading('p', 'pass', true), reading('pp', 'pass', false), reading('ppp', 'pass', false),
+      reading('f', 'fail', true), reading('ff', 'fail', false),
+    ],
+  }]
+  const items = trunkEvalReviewItems(nodes)
+  const page = (query: string) => {
+    const filtered = evalFilterModel(items, tokenFilterState(query, 'eval'), { sessions: [], defaultKind: 'all', defaultSection: '' })
+    return paginateReview(items, filtered.shown, filtered, 1, { items, query })
+  }
+
+  const all = page('is:eval')
+  // the measured verdicts carry their remeasurement debt in the count itself; unmeasured owns no reading
+  // and stays one number. Both halves are folded here, once — no surface re-derives them from `items`.
+  assert.deepEqual(all.counts, { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1 })
+  // population preserved: each split re-adds to what selecting that verdict actually returns.
+  assert.equal(page('is:eval verdict:pass').total, 3)
+  assert.equal(page('is:eval verdict:fail').total, 2)
+  assert.equal(all.total, 6)
+  // the compact/menu face of the same sections keeps the verdict's WHOLE count.
+  assert.deepEqual(all.section?.options.map((option) => [option.value, option.count]), [['', undefined], ['fail', 2], ['pass', 3], ['unmeasured', 1]])
+
+  // freshness is part of the REST of the query, so freshness:fresh zeroes the stale halves structurally.
+  const fresh = page('is:eval freshness:fresh')
+  assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
+  assert.equal(fresh.total, 2)
+  assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
 })

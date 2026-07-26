@@ -4,22 +4,36 @@ scenarios:
     description: Launch a real governed claude-headless session through `spex session new`, then observe its public session state and terminal-free conversation.
     expected: The session becomes online, completes the initial turn through Claude Code headless, and its complete declaration note is readable in the shared session timeline without a second native-event transcript.
     tags: [backend-api, cli]
-    code: [spec-cli/src/claude-headless.ts]
+    code:
+      - spec-cli/src/claude-headless.ts#claudeHeadlessLaunchCommand
+      - spec-cli/src/claude-headless.ts#runClaudeHeadlessController
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.start
   - name: deliver-active
     description: Send a follow-up through `spex session send` while the real headless Claude turn is inside a long-running tool call.
     expected: The send succeeds once, the message reaches the live child at the next tool boundary, and no second Claude process or duplicate user event is created.
     tags: [backend-api, cli]
-    code: [spec-cli/src/claude-headless.ts]
+    code:
+      - spec-cli/src/claude-headless.ts#deliverViaClaudeHeadless
+      - spec-cli/src/claude-headless.ts#userEvent
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.handle
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.writeLine
   - name: deliver-idle-resume
     description: Let a real headless turn finish and its child exit, then send another prompt through the public session command.
     expected: Delivery starts `claude -p --resume` with the same session id, preserves the earlier conversation, and appends the resumed turn's declaration note to the same session timeline.
     tags: [backend-api, cli]
-    code: [spec-cli/src/claude-headless.ts]
+    code:
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.spawnTurn
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.ensureTurnExit
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.terminateTurn
+      - spec-cli/src/claude-headless.ts#deliverViaClaudeHeadless
   - name: interrupt-continue
     description: Interrupt a real long-running headless turn through `spex session interrupt`, then send a new prompt to the same session.
     expected: The interrupt is confirmed by Claude's matching control_response, the running turn ends promptly, and the next prompt continues the same conversation successfully.
     tags: [backend-api, cli]
-    code: [spec-cli/src/claude-headless.ts]
+    code:
+      - spec-cli/src/claude-headless.ts#interruptClaudeHeadless
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.interrupt
+      - spec-cli/src/claude-headless.ts#INTERRUPT_TIMEOUT_MS
   - name: record-liveness
     description: Read the public session state with and without a resident turn child, and after deliberately making the controller transport unreachable while leaving session.json intact.
     expected: The intact record always reads online; the unreachable controller is reported only as a loud deliver failure, and removing the session record removes the session rather than producing an offline row.
@@ -29,12 +43,18 @@ scenarios:
     description: Let a real governed claude-headless session settle with a declaration note, explicitly stop it, then resume it while reading graph, CLI, tmux, and timeline state.
     expected: Stop preserves the record and timeline but reads offline; resume returns the same Claude conversation online with the pre-stop declaration note intact.
     tags: [backend-api, cli]
-    code: [spec-cli/src/harness.ts, spec-cli/src/sessions.ts]
+    code:
+      - spec-cli/src/harness.ts#recordOnline
+      - spec-cli/src/harness.ts#claudeHeadlessHarness
+      - spec-cli/src/sessions.ts
   - name: hooks-and-close
     description: Exercise a real Claude lifecycle hook and then close the governed headless session through the public session API.
     expected: The Claude-identical shim fires against the governed record, and close leaves no tmux window, child/controller process, control socket, worktree, branch, or session record residue.
     tags: [backend-api, cli]
-    code: [spec-cli/src/claude-headless.ts]
+    code:
+      - spec-cli/src/claude-headless.ts#ClaudeHeadlessController.close
+      - spec-cli/src/claude-headless.ts#runClaudeHeadlessController
+      - spec-cli/src/claude-headless.ts#claudeHeadlessSock
   # harness-delivery-campaign:start
   - name: delivery-combo-claude-headless-launch-idle
     tags: [backend-api, cli]

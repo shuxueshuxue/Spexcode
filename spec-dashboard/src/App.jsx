@@ -157,8 +157,8 @@ export default function App() {
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {isMobile
-        ? <MobileApp specs={board.nodes} sessions={board.sessions} reloadBoard={reload} />
-        : <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} identity={identity} catalog={projAccess} boardLive={boardLive} />}
+        ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
+        : <Dashboard specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reload={reload} identity={identity} catalog={projAccess} boardLive={boardLive} />}
     </Suspense>
   )
 }

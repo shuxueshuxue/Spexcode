@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { loadIssue, postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { MENTION_RE, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useLaunchers } from './launch.js'
@@ -263,7 +263,13 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
   )
 }
 
-function useIssueDetail(id) {
+// The OPEN thread follows the board's issue freshness stamp ([[remark-substrate]] write-visibility): every
+// thread write — a reply, a remark, a resolve, a retract, a close — moves that one stamp, so an EXTERNAL
+// write reaches an already-open reader on the push instead of waiting for a reload. A detail is a single
+// addressed read, so the stamp is the ONLY thing that can tell it its thread may have moved.
+// Only a new ADDRESS may wipe to the loading face — a stamp tick re-reads quietly behind the painted
+// thread, the same rule the paged list follows.
+function useIssueDetail(id, freshness) {
   const [issue, setIssue] = useState(null)
   const [error, setError] = useState(null)
   const seq = useRef(0)
@@ -280,11 +286,15 @@ function useIssueDetail(id) {
       return null
     }
   }, [id])
-  useEffect(() => { setIssue(null); setError(null); if (id) reload() }, [id, reload])
+  const shownId = useRef(null)
+  useEffect(() => {
+    if (id !== shownId.current) { shownId.current = id; setIssue(null); setError(null) }
+    if (id) reload()
+  }, [id, freshness, reload])
   return { issue, error, reload }
 }
 
-export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [] }) {
+export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
   const t = useT()
   const { param, query } = useRoute()
   const composing = param === NEW_PARAM
@@ -292,8 +302,15 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   const page = reviewPageNumber(query.page)
   // the compose page reads the SAME one review request the list reads ([[paged-review]]) — the writable
   // stores are that contract's own facts, so a direct open of #/issues/new needs no second endpoint.
-  const list = useReviewPage('issues', text, page, { enabled: !param || composing, refreshKey: sessions })
-  const detail = useIssueDetail(composing ? null : param)
+  // Both surfaces refresh on what their response actually DEPENDS on, never on board-frame identity churn
+  // that merely happens to change on every applied patch (a key like that reads as freshness while being
+  // blind to the data — it would go silent the day the board reconstruction is memoized). A paged list
+  // answer has two board inputs: the merged issue population, carried by the board's issue-freshness stamp,
+  // and the source-session presence join ([[live-session-filter]]), carried by the session id set. Equal
+  // key = equal answer, so a quiet board costs no request and neither input can move unnoticed.
+  const presenceKey = useMemo(() => sessions.map((s) => s.id).join(','), [sessions])
+  const list = useReviewPage('issues', text, page, { enabled: !param || composing, refreshKey: `${issuesStamp ?? ''}|${presenceKey}` })
+  const detail = useIssueDetail(composing ? null : param, issuesStamp)
   const [notice, setNotice] = useState('')
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }

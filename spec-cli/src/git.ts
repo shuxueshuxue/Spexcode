@@ -1226,7 +1226,13 @@ export function cachedEventStreamInfo(root: string, kind: string, tip: string): 
   const state = readEventCache(root).state
   if (!(state.streamTips.get(kind) ?? []).includes(tip)) return null
   let bytes = 0
-  for (const record of state.streams.get(kind)?.values() ?? []) bytes += Buffer.byteLength(record.raw) + 1
+  for (const record of state.streams.get(kind)?.values() ?? []) {
+    // The original lazy switch probes `log --name-only --format=`. Its budget excludes the
+    // cached commit header/trailers; counting the full event record falsely selects the per-path
+    // lazy index and turns one probe into thousands of rev-list children on a hot build.
+    const newline = record.raw.indexOf('\n')
+    bytes += Buffer.byteLength(newline < 0 ? '' : record.raw.slice(newline + 1)) + 1
+  }
   return { bytes, truncated: bytes >= DRIFT_LAZY_OUTPUT_BYTES }
 }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.

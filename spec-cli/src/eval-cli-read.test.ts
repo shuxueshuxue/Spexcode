@@ -8,25 +8,35 @@ import { fileURLToPath } from 'node:url'
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 
+async function runCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  const child = spawn('tsx', [cli, ...args], {
+    cwd: pkgRoot,
+    env: { ...process.env, SPEXCODE_API_URL: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stdout = ''
+  let stderr = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  const [code] = await once(child, 'close') as [number]
+  return { code, stdout, stderr }
+}
+
 test('session eval text preserves result-first order and uses only the own-reading marker', async () => {
   const id = '11111111-2222-4333-8444-555555555555'
   const items = [
     {
-      node: 'proof-cli-fixture', filterKind: 'result', scenario: 'fixture-stale',
+      node: 'a-node', filterKind: 'result', scenario: 'a-result',
       verdict: { status: 'fail' }, fresh: false, staleAxes: ['code'], inSession: false,
       ts: '2026-01-02T00:10:00.000Z',
     },
     {
-      node: 'proof-cli-fixture', filterKind: 'result', scenario: 'fixture-inherited',
-      verdict: { status: 'pass' }, fresh: true, staleAxes: [], inSession: false,
+      node: 'b-node', filterKind: 'result', scenario: 'b-result',
+      verdict: { status: 'pass' }, fresh: true, staleAxes: [], inSession: true,
       ts: '2026-01-02T00:09:00.000Z',
     },
-    {
-      node: 'proof-cli-fixture', filterKind: 'result', scenario: 'fixture-own',
-      verdict: { status: 'pass' }, fresh: true, staleAxes: [], inSession: true,
-      ts: '2026-01-02T00:07:00.000Z',
-    },
-    { node: 'proof-cli-fixture', filterKind: 'blind', scenario: 'fixture-blind' },
+    { node: 'a-node', filterKind: 'blind', scenario: 'a-blind' },
+    { node: 'b-node', filterKind: 'blind', scenario: 'b-blind' },
   ]
   const server = createServer((req, res) => {
     res.setHeader('content-type', 'application/json')
@@ -49,25 +59,24 @@ test('session eval text preserves result-first order and uses only the own-readi
   const address = server.address()
   assert.ok(address && typeof address === 'object')
 
-  const child = spawn('tsx', [cli, 'eval', 'ls', '--session', id, '--api', `http://127.0.0.1:${address.port}`], {
-    cwd: pkgRoot,
-    env: { ...process.env, SPEXCODE_API_URL: '' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  let stdout = ''
-  let stderr = ''
-  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
-  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
-  const [code] = await once(child, 'close') as [number]
+  const { code, stdout, stderr } = await runCli(['eval', 'ls', '--session', id, '--api', `http://127.0.0.1:${address.port}`])
   server.close()
   await once(server, 'close')
 
   assert.equal(code, 0, stderr)
-  const positions = ['fixture-stale', 'fixture-inherited', 'fixture-own', 'fixture-blind']
+  const positions = ['a-result', 'b-result', 'a-blind', 'b-blind']
     .map((scenario) => stdout.indexOf(scenario))
   assert.ok(positions.every((position) => position >= 0), stdout)
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, stdout)
   assert.doesNotMatch(stdout, /inherited baseline/i)
-  assert.match(stdout, /\n\s+✦ ✓ pass\s+fixture-own/)
-  assert.match(stdout, /\n\s+✓ pass\s+fixture-inherited/)
+  assert.match(stdout, /\n\s+✦ ✓ pass\s+b-result/)
+  assert.match(stdout, /\n\s+✗ fail.*\s+a-result/)
+})
+
+test('eval help teaches the same global result-first session order', async () => {
+  const { code, stdout, stderr } = await runCli(['eval', '--help'])
+  assert.equal(code, 0, stderr)
+  assert.match(stdout, /newest-first across nodes and source ownership/i)
+  assert.match(stdout, /blind spots follow measured rows/i)
+  assert.doesNotMatch(stdout, /blind spots first|ahead of the inherited baseline/i)
 })

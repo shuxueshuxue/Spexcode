@@ -81,6 +81,26 @@ The principles, in the maintainer's own framing:
     source bytes (memoisation applies) versus with node count (the walk is wrong). Measure the dimension
     before designing the fix, and never buy a cache before knowing whether the work is repeated at all.
 
+19. **Separate what is PERMANENT from what is CURRENT, and let the invalidation scope be derived, not
+    assigned.** Git history is append-only: what a commit changed, what trailers it carries, what a merge
+    itself authored are *permanent properties of that commit* — they can be accumulated once and never
+    recomputed. What those facts mean *today* — which node owns a path after renames, which window a
+    version opens — is a question about the current tree, and is cheap. The costly half is permanent; the
+    tip-relative half is cheap. A read that recomputes the permanent half from scratch pays O(history)
+    forever, so the project gets slower every day it is worked on — measured here as ~0.33 ms per commit
+    across two full-history walks. The same confusion at the cache layer produces a worse failure: when a
+    rebuild costs more than the interval of the watchdog that guards it, every finished rebuild is
+    invalidated before it can be served, and a safety net becomes a latency amplifier — the fix is to make
+    the rebuild cheap, never to lengthen the interval, which only moves the threshold. The corollary is
+    about *scope*: derived data spread across several projections (board, review snapshot, session eval
+    revision) has no single place declaring what depends on what, so an invalidation scope ends up
+    hand-assigned by whoever traced the call chain last — and the honest default becomes "invalidate
+    everything". Cheap correctness there comes from letting a projection *declare its inputs*, so the scope
+    follows from the declaration; until it does, narrowing a scope by inspection is a correctness change
+    disguised as a performance one, and must be proven field-by-field against a full recompute. Keep the
+    slow, obviously-correct full recompute in the repo as the specification, and hold every faster path to
+    byte-equality against it.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

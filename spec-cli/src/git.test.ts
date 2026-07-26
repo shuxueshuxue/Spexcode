@@ -80,6 +80,46 @@ test('versioned global event cache ignores a legacy .git ledger and stays oracle
   }
 })
 
+test('a damaged event row invalidates the ledger instead of changing history verdicts', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-cache-integrity-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'integrity@example.com'); run('config', 'user.name', 'Integrity')
+    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    appendFileSync(join(root, '.spec', 'project', 'spec.md'), '\nrevised\n')
+    run('add', '.'); run('commit', '-qm', 'revise')
+    const head = run('rev-parse', 'HEAD')
+
+    resetHistoryCachesForTests()
+    await historyIndex(root)
+    cachePath = historyEventCachePathForTests(root)
+    const lines = readFileSync(cachePath, 'utf8').split('\n')
+    const event = lines.findIndex((line) => {
+      try {
+        const row = JSON.parse(line)
+        return row.k === 'numstat' && row.h === head
+      } catch { return false }
+    })
+    assert.notEqual(event, -1, 'fixture did not persist the revised spec event')
+    lines[event] = `!${lines[event].slice(1)}`
+    writeFileSync(cachePath, lines.join('\n'))
+
+    resetHistoryCachesForTests()
+    const fast = await historyIndex(root), full = await historyIndexFull(root)
+    assert.deepEqual(
+      rowsFor(fast, '.spec/project/spec.md'),
+      rowsFor(full, '.spec/project/spec.md'),
+      'a parseable remainder with one damaged event row changed the cached history verdict',
+    )
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('concurrent different-tip builders share an atomic ledger and recover on reopen', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-cache-concurrent-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()

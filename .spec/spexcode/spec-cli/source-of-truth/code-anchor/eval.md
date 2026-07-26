@@ -130,6 +130,20 @@ scenarios:
       The `.tsx` historical parse remains conservative-unparseable and the `.ts` parse remains valid in
       either order and on repeat; normalized results do not depend on directory or query order. A key must
       cover the complete extractor input, not only the Git blob oid and extractor label.
+  - name: event-ledger-test-unicode-worktree
+    tags: [backend-api]
+    test:
+      path: spec-cli/src/git.test.ts
+      name: concurrent different-tip builders share an atomic ledger and recover on reopen
+    code: spec-cli/src/git.test.ts
+    description: >
+      Check out the same committed tree into one ASCII path and one path containing non-ASCII characters,
+      with local dependencies present in both. In each worktree run only the real concurrent different-tip
+      event-ledger test, which starts child TypeScript processes importing the candidate git.ts.
+    expected: >
+      Both paths pass the same test. The child import resolves the exact candidate file in the worktree;
+      a file URL's percent escapes are decoded once at the URL-to-path boundary and never passed back as a
+      literal filesystem path or encoded a second time.
   - name: parallel-version-debt-reappears
     tags: [cli]
     test:

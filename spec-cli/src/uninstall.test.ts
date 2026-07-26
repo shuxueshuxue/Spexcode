@@ -14,6 +14,7 @@ import { join, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 const CLI = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
 const HOOK_TEMPLATES = fileURLToPath(new URL('../templates/hooks', import.meta.url))
@@ -101,12 +102,19 @@ test('init → materialize → uninstall forgets every derived artifact for Clau
     const spexHome = join(userHome, '.spexcode')
     const codexHome = join(userHome, '.codex-global')
     const piHome = join(userHome, '.pi-agent')
+    const toolBin = join(userHome, 'bin')
+    const hookTrace = join(userHome, 'hook-spex.trace')
+    mkdirSync(toolBin, { recursive: true })
+    const hookSpex = join(toolBin, 'spex')
+    writeFileSync(hookSpex, `#!/bin/sh\nprintf 'hook\\n' >> ${JSON.stringify(hookTrace)}\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(CLI)} "$@"\n`)
+    chmodSync(hookSpex, 0o755)
     const env = {
       ...process.env,
       HOME: userHome,
       SPEXCODE_HOME: spexHome,
       CODEX_HOME: codexHome,
       SPEXCODE_PI_AGENT_DIR: piHome,
+      PATH: `${toolBin}:${process.env.PATH}`,
     }
     const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
     const spex = (...args: string[]) => execFileSync(process.execPath, [CLI, ...args], {
@@ -153,6 +161,7 @@ Read the requested change and report concrete findings.
 `)
     g('add', '.spec', 'spexcode.json')
     g('commit', '-qm', 'adopt tracked intent', '--no-verify')
+    assert.ok(existsSync(hookTrace), `${row.id}: reference hook invoked the branch-pinned CLI shim`)
     spex('materialize')
 
     const specBefore = snapshotTree(join(proj, '.spec'))
@@ -166,6 +175,7 @@ Read the requested change and report concrete findings.
     const projectStores = readdirSync(join(spexHome, 'projects'))
     assert.equal(projectStores.length, 1, `${row.id}: one per-project runtime root`)
     const store = join(spexHome, 'projects', projectStores[0])
+    assert.ok(readdirSync(store).some((name) => /^history-events-v3-.*\.ndjson$/.test(name)), `${row.id}: history ledger shares the per-project runtime root`)
     const manifests = filesNamed(store, 'hooks-manifest')
     const hashes = filesNamed(store, 'content-hash')
     const ledgers = filesNamed(store, 'plugin-folders')
@@ -198,6 +208,10 @@ Read the requested change and report concrete findings.
     writeFileSync(join(store, 'sessions', 'legacy-session', 'session.json'), '{"governed":true}\n')
     writeFileSync(join(store, 'hooks-manifest'), 'legacy global manifest\n')
     writeFileSync(join(store, 'plugin-folders'), '.legacy-global\n')
+    const common = g('rev-parse', '--path-format=absolute', '--git-common-dir').trim()
+    const legacyEventStore = join(spexHome, 'projects', createHash('sha256').update(common).digest('hex').slice(0, 24))
+    mkdirSync(legacyEventStore, { recursive: true })
+    writeFileSync(join(legacyEventStore, 'history-events-v3-legacy.ndjson'), '{"legacy":true}\n')
     writeFileSync(ledgers[0], '.former-host\n')
     const ledgerBundles = [
       writePlugin(proj, '.former-host', 'renamed-bundle', 'spexcode'),
@@ -252,6 +266,7 @@ Read the requested change and report concrete findings.
       assert.equal(readFileSync(join(proj, row.home, 'agents', 'user-owned.md'), 'utf8'), 'user agent: keep exactly\n', 'claude: foreign agent preserved')
     }
     assert.ok(!existsSync(store), `${row.id}: whole current/legacy per-project runtime store removed`)
+    assert.ok(!existsSync(legacyEventStore), `${row.id}: retired hashed event-cache root removed`)
     for (const bundle of [...ledgerBundles, standardBundle, folderStampedBundle]) assert.ok(!existsSync(bundle), `${row.id}: owned plugin bundle removed: ${bundle}`)
     assert.ok(existsSync(userPlugin), `${row.id}: foreign plugin preserved`)
     assert.equal(readFileSync(codexConfig, 'utf8'), userCodexConfig, `${row.id}: only project trust removed from global Codex config`)

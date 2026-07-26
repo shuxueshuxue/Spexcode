@@ -661,7 +661,7 @@ async function scenarioLs(args: string[]): Promise<number> {
   const unmeasuredOnly = has(args, 'unmeasured')
   if (has(args, 'json')) {
     if (unmeasuredOnly) {
-      console.error('spex eval scenario ls --json: --unmeasured needs readings; JSON is the complete declaration projection and reads no eval sidecar')
+      console.error('spex eval scenario ls --json: --unmeasured needs evals; JSON is the complete declaration projection and reads no eval sidecar')
       return 2
     }
     try {

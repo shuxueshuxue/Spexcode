@@ -423,7 +423,7 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
   const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
-  if (text === undefined) throw new Error(`git cat-file --batch omitted blob ${oid} for ${commit}:${path}`)
+  if (text === undefined) throw new Error(`git cat-file --batch omitted object ${oid} for ${commit}:${path}`)
   let result: FileRevisionUnits
   try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
   if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()

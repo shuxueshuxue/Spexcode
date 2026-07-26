@@ -85,7 +85,9 @@ governed-hit, acknowledgement and rename events. At the tip, rename identity is 
 node, [[drift-by-ancestry]]'s full-history walk chooses ONE base from the maximal antichain of reachable
 versions, and ancestry plus acknowledgements filters the retained hits against that base. Incomparable
 versions have no join in reachability order; the walk-newest choice is a product rule, not a semilattice
-upper bound.
+upper bound. The frontier operation itself is maximal union of parent frontiers; an authored spec change
+at a commit replaces that node's frontier with the commit, while a clean transport merge contributes no
+version event.
 
 The information lower bound is concrete. Let one branch contain an anchored hit `h` followed by version
 `vB`, let its sibling contain version `vA`, and merge them without authoring a new spec line. Both parent

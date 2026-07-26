@@ -1,6 +1,13 @@
-import { execFileSync } from 'node:child_process'
+import assert from 'node:assert/strict'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 import {
+  driftFor,
   driftIndex,
   historyIndex,
   rowsFor,
@@ -55,17 +62,110 @@ function maximalAntichain(events, isAncestor) {
     candidate !== other && isAncestor(candidate, other)))
 }
 
-function structuralCounterexample() {
-  // R--h--vB and R--vA, followed by M(vA,vB). h is an anchor hit; vA/vB are versions.
-  // Both parent states are identical whether h was a hit or not: (vA, empty) and (vB, empty).
-  // If M selects vA, h must reappear because h is not reachable from vA. No join over only those
-  // parent states can distinguish the two histories, so a single (v,D) is insufficient information.
-  return {
-    dag: 'R--h--vB; R--vA; M(vA,vB)',
-    parentStates: ['(vA, empty)', '(vB, empty)'],
-    selectedAtMerge: 'vA',
-    requiredDebt: ['h'],
+async function structuralCounterexample() {
+  const cli = fileURLToPath(new URL('../spec-cli/bin/spex.mjs', import.meta.url))
+  const hostTypescript = createRequire(import.meta.url).resolve('typescript')
+  const hostNodeModules = dirname(dirname(dirname(hostTypescript)))
+  const roots = []
+  const body = (a, b) => `---\ntitle: n1\nstatus: active\ndesc: counterexample node\ncode:\n  - src/a.ts#f\n---\n# n1\n\nA=${a}\n${'stable\n'.repeat(20)}B=${b}\n`
+  const run = (root, ...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const dated = (root, date, ...args) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim()
+  const lint = (root, home, tip) => {
+    const result = spawnSync(process.execPath, [cli, 'spec', 'lint', '--pending', tip], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 1 << 30,
+      env: { ...process.env, HOME: home },
+    })
+    assert.equal(result.error, undefined, `counterexample lint failed to start: ${result.error?.message}`)
+    return `${result.stdout || ''}${result.stderr || ''}`
   }
+  const anchorErrors = (output) => output.split('\n').filter((line) =>
+    line.replace(/\x1b\[[0-9;]*m/g, '').includes('anchor-drift:')).length
+
+  const build = (withHit) => {
+    const root = mkdtempSync(join(tmpdir(), `spex-fold-counterexample-${withHit ? 'hit' : 'control'}-`))
+    roots.push(root)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    mkdirSync(join(root, '.spec', 'proj', 'n1'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"private":true}\n')
+    writeFileSync(join(root, 'spexcode.json'), '{"lint":{"governedRoots":["src"],"sourceExtensions":["ts"]}}\n')
+    writeFileSync(join(root, 'src', 'a.ts'), 'export function f(): number {\n  return 1\n}\nexport function g(): number {\n  return 2\n}\n')
+    writeFileSync(join(root, '.spec', 'proj', 'n1', 'spec.md'), body(0, 0))
+    run(root, 'init', '-q', '-b', 'main')
+    run(root, 'config', 'user.email', 'test@example.com')
+    run(root, 'config', 'user.name', 'test')
+    run(root, 'add', '.')
+    dated(root, '2000-01-01T00:00:00Z', 'commit', '-qm', 'R')
+    const R = run(root, 'rev-parse', 'HEAD')
+
+    run(root, 'switch', '-qc', 'version-a')
+    writeFileSync(join(root, '.spec', 'proj', 'n1', 'spec.md'), body(1, 0))
+    run(root, 'add', '.spec/proj/n1/spec.md')
+    dated(root, '2025-01-01T00:00:00Z', 'commit', '-qm', 'version A')
+    const versionA = run(root, 'rev-parse', 'HEAD')
+
+    run(root, 'switch', '-qc', 'version-b', 'main')
+    if (withHit) {
+      writeFileSync(join(root, 'src', 'a.ts'), 'export function f(): number {\n  const probe = 0\n  return 1\n}\nexport function g(): number {\n  return 2\n}\n')
+      run(root, 'add', 'src/a.ts')
+      dated(root, '2001-01-01T00:00:00Z', 'commit', '-qm', 'h touch anchored symbol f')
+    }
+    writeFileSync(join(root, '.spec', 'proj', 'n1', 'spec.md'), body(0, 1))
+    run(root, 'add', '.spec/proj/n1/spec.md')
+    dated(root, '2002-01-01T00:00:00Z', 'commit', '-qm', 'version B')
+    const versionB = run(root, 'rev-parse', 'HEAD')
+    const hit = withHit ? run(root, 'rev-list', '--reverse', `${R}..${versionB}`, '--', 'src/a.ts').split('\n').find(Boolean) : ''
+
+    run(root, 'switch', '-q', 'version-a')
+    run(root, 'merge', '--no-ff', '-q', '-m', 'M merge vA vB', 'version-b')
+    const merge = run(root, 'rev-parse', 'HEAD')
+    return { root, R, versionA, versionB, merge, hit }
+  }
+
+  try {
+    const results = {}
+    for (const withHit of [true, false]) {
+      const fixture = build(withHit)
+      const home = mkdtempSync(join(tmpdir(), 'spex-fold-counterexample-home-'))
+      roots.push(home)
+      symlinkSync(hostNodeModules, join(fixture.root, 'node_modules'))
+      assert.doesNotThrow(() => createRequire(join(fixture.root, 'package.json')).resolve('typescript'),
+        'counterexample fixture must expose the host TypeScript extractor')
+      const parentA = lint(fixture.root, home, fixture.versionA)
+      const parentB = lint(fixture.root, home, fixture.versionB)
+      const merged = lint(fixture.root, home, fixture.merge)
+      const hidx = await historyIndex(fixture.root, fixture.merge)
+      const rows = rowsFor(hidx, '.spec/proj/n1/spec.md')
+      assert.equal(rows[0]?.hash, fixture.versionA, 'full-history walk must select vA')
+      assert.ok(rows.some((row) => row.hash === fixture.versionB), 'vB must remain in the version history')
+      assert.ok(!rows.some((row) => row.hash === fixture.merge), 'mixed-only clean merge must not become a version')
+      const didx = await driftIndex(fixture.root, fixture.merge)
+      assert.equal(driftFor(didx, fixture.versionA, 'src/a.ts'), withHit ? 1 : 0)
+      assert.equal(driftFor(didx, fixture.versionB, 'src/a.ts'), 0)
+      assert.equal(anchorErrors(parentA), 0, 'A parent must be anchor-clean')
+      assert.equal(anchorErrors(parentB), 0, 'B parent must be anchor-clean')
+      assert.equal(anchorErrors(merged), withHit ? 1 : 0,
+        `merge verdict must expose exactly the hit; output=${merged}`)
+      results[withHit ? 'withHit' : 'control'] = {
+        parentAnchorErrors: [anchorErrors(parentA), anchorErrors(parentB)],
+        mergeAnchorErrors: anchorErrors(merged),
+        selectedVersion: rows[0].hash.slice(0, 8),
+        hit: fixture.hit ? fixture.hit.slice(0, 8) : null,
+      }
+    }
+    return { dag: 'R--vA; R--h--vB; M(vA,vB)', results }
+  } finally {
+    for (const path of roots) rmSync(path, { recursive: true, force: true })
+  }
+}
+
+if (process.env.SPEX_COUNTEREXAMPLE_ONLY === '1') {
+  console.log(JSON.stringify(await structuralCounterexample(), null, 2))
+  process.exit(0)
 }
 
 const { isAncestor } = commitGraph()
@@ -228,5 +328,5 @@ console.log(JSON.stringify({
     rawDifferingNodes: rawSemanticDifferences,
     differingNodes: semanticDifferences,
   },
-  counterexample: structuralCounterexample(),
+  counterexample: await structuralCounterexample(),
 }, null, 2))

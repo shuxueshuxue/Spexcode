@@ -432,7 +432,8 @@ function fakeIndex(fileCommits: Record<string, string[]>): DriftIndex {
     ord: new Map([['c3', 0], ['c2', 1], ['c1', 2]]),
     parents: new Map([['c3', ['c2']], ['c2', ['c1']], ['c1', []]]),
     anc: new Map(),
-    fileCommits: new Map(Object.entries(fileCommits)),
+    fileEvents: new Map(Object.entries(fileCommits).map(([path, commits]) =>
+      [path, commits.map((commit) => ({ commit, historicalPath: path, parents: [] }))])),
     acks: new Map(),
     specNodes: new Map(),
   }

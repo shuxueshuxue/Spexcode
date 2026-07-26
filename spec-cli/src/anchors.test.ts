@@ -119,7 +119,7 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
   g('add', '-A'); g('commit', '-qm', 'c5'); const c5 = g('rev-parse', 'HEAD')
 
   const x = tsAstExtractor(ROOT) // resolves this governed repo's TypeScript; content comes from the fixture's git
-  const hits = await anchorHitCommits(root, [c2, c3, c4, c5], 'src/x.ts', ['f', 'g'], x)
+  const hits = await anchorHitCommits(root, [c2, c3, c4, c5].map((commit) => ({ commit, historicalPath: 'src/x.ts', parents: [] })), ['f', 'g'], [x])
   assert.deepEqual(hits.map((h) => ({ commit: h.commit, selectors: h.selectors, unparseable: !!h.unparseable })), [
     { commit: c2, selectors: ['f'], unparseable: false },
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
@@ -140,12 +140,12 @@ test('historical extractor memo stays stable across order and same-process repet
       const commit = g('rev-parse', 'HEAD')
       const x = tsAstExtractor(ROOT)
       for (const path of order) {
-        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'TSX must retain its parse error')
         else assert.equal(hits[0]?.unparseable, undefined, 'TS must not inherit the TSX memo result')
       }
       for (const path of [...order].reverse()) {
-        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'repeat TSX query must stay conservative')
         else assert.equal(hits[0]?.unparseable, undefined, 'repeat TS query must stay parseable')
       }

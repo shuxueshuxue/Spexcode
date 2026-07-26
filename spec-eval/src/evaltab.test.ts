@@ -62,7 +62,7 @@ test('readBlobByHash: a malformed hash is rejected as invalid (never a miss)', (
   }
 })
 
-test('evalTimeline primes off-history content fallback on a non-lazy index', async () => {
+test('evalTimeline primes off-history content fallback without probing reachable readings', async () => {
   const root = tmp()
   const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
   const commit = (message: string) => { git('add', '-A'); git('commit', '-qm', message); return git('rev-parse', 'HEAD') }
@@ -88,7 +88,7 @@ test('evalTimeline primes off-history content fallback on a non-lazy index', asy
     writeFileSync(sidecarPath, JSON.stringify({ scenario: 's', codeSha: anchor, blob: null, ts: '2026-07-26T00:00:00Z' }) + '\n')
     const idx = {
       ord: new Map([['current', 0]]), parents: new Map([['current', []]]),
-      fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(),
+      fileEvents: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(),
     }
     const node = {
       id: 'n', dir: join(root, '.spec/n'), evalPath: '.spec/n/eval.md', sidecarPath,

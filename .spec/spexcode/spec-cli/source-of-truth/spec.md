@@ -41,28 +41,22 @@ specs and governed current content from that candidate's immutable tree and deri
 same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an
 unstaged working-tree edit cannot change the verdict for bytes absent from the candidate.
 
-Git's default history presentation suppresses merge diffs, but a merge can author real content while
-resolving conflicts. The loader therefore treats a merge's dense combined (`--cc`) paths — content different
-from every parent — as that merge's own writes. A cc change to `spec.md` is a real version and history row;
-a cc change to governed code enters drift/anchor judgment. A clean merge has no combined path and remains
-only transport. First-parent diff is not a substitute: it would duplicate every side-branch write at the
-project's normal `--no-ff` landing step.
+Git's default history presentation suppresses merge diffs, but a merge can author content or rename a lineage
+while resolving conflicts. Dense combined (`--cc`) lines different from every parent are that merge's own
+writes: a cc change to `spec.md` is a version, and one in governed code enters drift/anchor judgment. Combined
+raw paths separately carry merge-authored rename identity into projection without charging the rename as a
+code hit. A merge with neither stays transport. First-parent diff is not a substitute: it would duplicate
+side-branch writes at the project's normal `--no-ff` landing step.
 
 Two principles keep that derivation cheap on a long-running server:
 
-- **Scale with history, not node count.** Ordinary repositories use two single git walks back the whole board:
-  one over the `.spec` timeline (every node's version + history rows) and one `git log --name-only HEAD` over
-  all files (the drift index), each cached on HEAD. For a large name-stream, the drift/anchor index switches
-  to one batched HEAD commit-id set plus governed path-scoped `rev-list` windows, retaining the same DAG
-  semantics without retaining every commit/file edge in JS or spawning one reachability child per reading.
-  **Deciding which mode to use must not itself cost the walk it avoids.** The switch asks only whether the
-  raw name stream reaches a byte budget, and that question is settled by the first budget-worth of bytes: the
-  probe reads a bounded prefix and treats truncation as the verdict, which is exactly the answer the whole
-  stream would give at every boundary. So the biggest histories — the ones the large-index mode exists for —
-  pay the smallest probe, and a stream too wide to buffer can no longer come back empty and be mistaken for a
-  small one.
-  Resolving any node is a pure lookup in the small-index mode, while the large-index path memoizes bounded
-  path windows. The recent/history tab for a single node is served off
+- **Scale with history, not node count.** Ordinary repositories derive three shared event streams: `.spec`
+  numstat for versions, repository-wide numstat for governed drift/acks, and one merge raw+patch stream for
+  rename identity and all-parent authored lines. The persistent ledger appends immutable commit events and
+  every verdict projects those events through the current tip's rename and ancestry topology. There is no
+  path-scoped alternate representation: Git's path simplification, rename following, path reuse, and parallel
+  rename forks cannot preserve the same identity relation, so a size threshold must not silently change the
+  product meaning. Resolving any node is a pure lookup after that shared projection. The recent/history tab for a single node is served off
   that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
   The `.spec` timeline is the **full reachable history**, not Git's default path-simplified presentation:
   every reachable one-parent content commit remains a version even when a later TREESAME merge would hide
@@ -114,18 +108,16 @@ This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its g
 parent-qualified suffix when that name collides — always a single URL-safe token, never a `/`-path
 ([[id-url-safe]]). The git layer exposes four call shapes by how
 failure should behave: a sync read that throws (`git`, stderr piped so
-a fail-soft probe stays quiet from a non-repo dir); an async read that hides failure as `''` (`gitA`); a
-fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and a bounded-prefix
-read for a caller that needs only the first N bytes (`gitPrefixA`), which stops the child at the caller's
-byte budget and reports the truncation as its own answer — never as an empty result, which would invert the
-size question it exists to answer. The budget is a byte count, so the transport stays blind to what the
-bytes mean. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
+a fail-soft probe stays quiet from a non-repo dir); an async optional read that hides failure as `''` (`gitA`);
+a runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and an unbounded streaming required
+read (`gitRequiredA`) for history facts whose absence would change a verdict. Required derivation never turns a
+spawn, timeout, non-zero exit, or fixed stdout buffer into an empty fact set. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
 one place decides it, every shape obeys it, and the transport never learns which walk it is running. All of them BOUND their
 child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
 generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
 the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
 disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
-[[graph-cache]]'s settle guarantee leans on this. All three strip an inherited `GIT_DIR`/work-tree env so a
+[[graph-cache]]'s settle guarantee leans on this. All four strip an inherited `GIT_DIR`/work-tree env so a
 hook can't misdirect repository discovery; the local commit gate avoids the hook index entirely by judging
 the real pending commit oid. The HTTP
 entrypoint that serves the results belongs to [[spec-cli]].

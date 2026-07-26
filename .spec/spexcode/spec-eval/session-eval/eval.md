@@ -44,7 +44,28 @@ scenarios:
   - name: session-impact-exact-revision
     tags: [backend-api]
     test: spec-eval/src/sessionimpact.api.test.ts
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/reviews.ts, spec-cli/src/index.ts]
+    code:
+      - spec-eval/src/scenarios.ts#scenarioCodeAxis
+      - spec-eval/src/sidecar.ts#readReadings
+      - spec-eval/src/sessioneval.ts#projectSessionImpact
+      - spec-eval/src/sessioneval.ts#sessionImpactOverlay
+      - spec-eval/src/sessioneval.ts#sessionEvalContentRevision
+      - spec-eval/src/sessioneval.ts#sessionMeasurements
+      - spec-eval/src/sessioneval.ts#sessionImpactForContext
+      - spec-eval/src/sessioneval.ts#scopeSessionScenarioRows
+      - spec-eval/src/sessioneval.ts#sessionScopeNodes
+      - spec-eval/src/sessioneval.ts#buildSessionEvals
+      - spec-cli/src/anchors.ts#parseRelation
+      - spec-cli/src/anchors.ts#resolveAnchor
+      - spec-cli/src/anchors.ts#selectorsHitRanges
+      - spec-cli/src/anchors.ts#diffHunkRanges
+      - spec-cli/src/anchors.ts#pendingWindowCommits
+      - spec-cli/src/anchors.ts#anchorHitCommits
+      - spec-cli/src/git.ts#treeTextFiles
+      - spec-cli/src/specs.ts#loadSpecs
+      - spec-cli/src/reviews.ts#scopedEvalReviewItems
+      - spec-cli/src/reviews.ts#evalsReview
+      - spec-cli/src/index.ts
     description: >
       Plant a valid product session record for a linked worktree in a temporary Git repository, then read its
       scoped Evals projection through the public HTTP surface. Bind alpha/beta scenarios to one shared source;

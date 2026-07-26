@@ -884,9 +884,11 @@ function canonicalPathProjector(
     ancestryCache.set(hash, bits)
     return bits
   }
-  const renamePrecedes = (rename: string, event: string): boolean => {
-    const position = topologyOrd.get(rename), ancestry = ancestryOf(event)
-    return position !== undefined && ancestry !== undefined && (ancestry[position >> 3] & (1 << (position & 7))) !== 0
+  const precedes = (older: string, newer: string): boolean => {
+    const position = topologyOrd.get(older), ancestry = ancestryOf(newer)
+    if (position === undefined || ancestry === undefined)
+      throw new Error(`rename projection cannot place ${older} against ${newer} in the current topology`)
+    return (ancestry[position >> 3] & (1 << (position & 7))) !== 0
   }
   return (path, event) => {
     const pending = [path], resolved = new Set<string>(), seen = new Set<string>()
@@ -894,11 +896,12 @@ function canonicalPathProjector(
       const candidate = pending.pop()!
       if (seen.has(candidate)) { resolved.add(candidate); continue }
       seen.add(candidate)
-      // A rename owns old-path history before or parallel to it. Once the rename is an ancestor, a later
-      // write to the vacated path starts a different identity; parallel renames may project to several tips.
-      const applicable = (renamesByFrom.get(candidate) ?? []).filter((rename) => !renamePrecedes(rename.hash, event))
-      if (!applicable.length) resolved.add(candidate)
-      else for (const rename of applicable) pending.push(rename.to)
+      const applicable = (renamesByFrom.get(candidate) ?? []).filter((rename) => !precedes(rename.hash, event))
+      if (!applicable.length) { resolved.add(candidate); continue }
+      // event < rename replaces this historical name with the target. Incomparable event/rename branches
+      // fork identity at their merge: the event-side old path and rename-side target can both survive.
+      if (applicable.some((rename) => !precedes(event, rename.hash))) resolved.add(candidate)
+      for (const rename of applicable) pending.push(rename.to)
     }
     return [...resolved].filter((candidate) => currentPaths.has(candidate))
   }

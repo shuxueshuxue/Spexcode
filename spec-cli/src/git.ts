@@ -412,7 +412,7 @@ function removeEventTemps(path: string): void {
       rmSync(join(dir, name), { force: true })
   } catch { /* the writer creates the directory immediately below */ }
 }
-async function eventStream(root: string, tip: string, kind: string, argsFor: (base: string) => string[], order: Map<string, number>, reachable: Set<string>, persist = true, cache = true): Promise<string> {
+async function eventStream(root: string, tip: string, kind: string, argsFor: (base: string) => string[], order: Map<string, number>, reachable: Set<string>, persist = true, cache = true, repairAttempt = 0): Promise<string> {
   if (!cache) return gitA(argsFor(''))
   const { path, state: initialState } = readEventCache(root)
   let state = initialState
@@ -440,8 +440,14 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
   // then read back so a concurrent linked-worktree writer cannot make this invocation observe a partial set.
   const markerKnown = (state.streamTips.get(kind) ?? []).includes(tip)
   if (discovered.size || (persist && !markerKnown)) {
+    let retryFromEmpty = false
     state = await withEventCacheLock(path, () => {
       removeEventTemps(path)
+      if (existsSync(path) && !verifiedEventPayload(path)) {
+        rmSync(path, { force: true })
+        retryFromEmpty = true
+        return readEventCache(root, true).state
+      }
       const fresh = readEventCache(root, true).state
       const freshStream = fresh.streams.get(kind) ?? new Map<string, EventRecord>()
       const added = [...discovered.values()].filter((record) => !freshStream.has(record.hash))
@@ -458,6 +464,10 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
       }
       return readEventCache(root, true).state
     })
+    if (retryFromEmpty) {
+      if (repairAttempt >= 1) throw new Error(`history event cache stayed corrupt while rebuilding: ${path}`)
+      return eventStream(root, tip, kind, argsFor, order, reachable, persist, cache, repairAttempt + 1)
+    }
   }
   const finalStream = state.streams.get(kind) ?? new Map<string, EventRecord>()
   return [...finalStream.values()].filter((r) => reachable.has(r.hash)).sort((a, b) => {

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { repoRoot, git, driftIndex, historyIndex, driftIndexFull, historyIndexFull, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
-import { extractors, extractorFor, extOf, parseCodeEntry, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
+import { extractors, extractorFor, extOf, parseCodeEntry, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -356,9 +356,9 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
         }
         if (!live.length) continue
         const since = rowsFor(hidx, s.path)[0]?.hash || ''
-        const win = windowCommits(didx, since, path, s.id)
+        const win = windowEvents(didx, since, path, s.id)
         if (!win.length) continue
-        const hits = await anchorHitCommits(root, win, path, live, x)
+        const hits = await anchorHitCommits(root, win, live, regs)
         if (!hits.length) continue
         const hitSyms = [...new Set(hits.flatMap((h) => h.selectors))]
         const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')

@@ -66,12 +66,13 @@ rather than stopping a commit.
 
 **Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
 report/CI run, and a pending commit for a locally-authored candidate. It is the same ack-filtered set
-[[drift-by-ancestry]]'s walk already derives. Per ordinary window commit, the file's
-`--unified=0` hunks are intersected with the unit's line range extracted from the file **as it existed
-at that commit** — never from the later working tree, so renames/moves and partial staging attribute
-correctly. A merge contributes only individual result lines in its dense combined (`--cc`) diff that are
-different from **every** parent: an all-`+` prefix is an authored result line and an all-`-` prefix is an
-authored deletion point. A mixed prefix such as `+ ` is inherited from at least one parent and stays out,
+[[drift-by-ancestry]]'s walk already derives. Per ordinary window commit, `--unified=0` hunks are
+intersected with both immutable images of the unit: added lines against the result revision, deleted lines
+against the parent revision. The event retains both historical paths, so a later current-name projection
+never erases the preimage of a rename or deletion. A merge contributes only individual lines in its dense
+combined (`--cc`) diff that differ from **every** parent: an all-`+` prefix is intersected with the result
+unit; an all-`-` prefix must intersect the same selector's unit in every parent. `--combined-all-paths`
+retains renamed merge parents. A mixed prefix such as `+ ` is inherited from at least one parent and stays out,
 even when an adjacent all-parent line puts both inside the same combined hunk. A clean transport merge has
 no owned line and stays neutral; a first-parent diff is deliberately forbidden because it would charge the
 merge again for already-attributed side-branch work. The same line-level predicate decides whether a merge
@@ -144,9 +145,9 @@ reachable side-branch debt even when its first-parent result tree only adds an i
 rejected, Git leaves the ref, index,
 sequencer state, and merge state untouched; the diagnostic names both the continue and abort commands.
 
-The candidate lint is scoped to the candidate's changed paths and their governing nodes. It uses short,
-path-limited history queries for those paths, so its Git work scales with the number of changed files and the
-new commits in those windows, not with repository age. Full `spex spec lint` keeps the complete graph and
+The candidate lint is scoped to the candidate's changed paths and their governing nodes. It reuses the same
+incremental immutable event index and tip-relative identity projection as the full verdict; changed paths narrow
+which nodes are judged, never which reachable events exist. Full `spex spec lint` keeps the complete graph and
 history verdict for CI and dashboards. The narrow verdict is equivalent to full lint for every governed node
 touched by the candidate; unrelated pre-existing debt is not re-litigated by a plumbing commit. The performance
 target is therefore growth with newly added events rather than a fresh walk of all historical commits. A
@@ -155,24 +156,28 @@ cost-conservation bound moves the required ancestry work between indexing and pr
 perfrepo result (6.3x to 3.7x CPU growth across the reported depths) is recorded as the achieved slope change,
 not as a promise of constant-time reads.
 
-Four immutable event streams are persisted by commit oid in the project's one global runtime root
-(`~/.spexcode/projects/<enc(project-root)>/history-events-v4-<state>.ndjson`) and extended only for previously unseen
-commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK` trailer declarations,
-and `.spec` name events. The schema/state key includes the cache implementation schema, Git object format,
+Three immutable event streams are persisted by commit oid in the project's one global runtime root
+(`~/.spexcode/projects/<enc(project-root)>/history-events-v7-<state>.ndjson`) and extended only for previously unseen
+commits: `.spec` numstat/rename events, repository-wide governed numstat/rename plus `Spec-OK` declarations,
+and merge combined-raw rename identities plus authored combined-diff paths. A merge identity event changes
+projection only; without an all-parent line it is not itself drift or a spec version. The schema/state key includes the cache implementation schema, Git object format,
 shallow/graft state, and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
 instead of silently reading an old format. Each event is a property of its commit object and never changes.
 Every complete ledger ends in an integrity row containing the byte length and SHA-256 digest of all preceding
 event and tip rows. Readers accept only an exact match and the closed row grammar for that schema; a missing footer,
 truncation, unknown row, wrong-length object id, or syntactically usable remainder with one damaged row discards the
 whole cache and rebuilds it from immutable Git objects. A stream scan is fail-loud and its tip marker is minted only
-after Git returned the complete event set. Writers commit one optimistic transaction: load one ledger snapshot, scan
+after Git returned the complete event set; required derivations read chunked child-process output, so a complete event
+stream has no artificial `execFile` byte ceiling (the parser still receives the complete bytes). Writers commit one optimistic transaction: load one ledger snapshot, scan
 from its base, acquire a cross-process lock carrying an owner pid and unique token, and replace the snapshot only if
 its interpretation identity and fingerprint are still current. A concurrent winner or a vanished base marker makes
 the writer retry from the new snapshot. A lock may be reclaimed only when its recorded owner is proven dead, and
 release removes only the caller's own token; elapsed time alone never transfers ownership. The lock-held snapshot
 supplies both parsed state and exact payload bytes, so there is no second read that can silently turn a changed ledger
 into an empty prefix. A complete payload-plus-footer is published in one rename; event rows and a tip marker therefore
-become visible together, and a killed writer leaves only an ignored temporary file. For every
+become visible together. Lock acquisition renames a prepared owner directory into the canonical lock path; release or
+proven-dead recovery renames that whole directory to a tokened quarantine before best-effort deletion. A killed process
+therefore leaves at most an inert payload, claimant, or quarantine path, never a partially deleted canonical owner. For every
 tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed from cached events, so
 current paths and node ownership cannot become stale. A cold checkout pays one full walk to seed the cache;
 later processes append only the commits since cached tips. The projection is in-memory and bounded by the
@@ -193,12 +198,14 @@ The same rule excludes a fake CLI or receiver from standing in for the product s
 a measurement invariant: a harness that does not prove it can observe a known failure may report agreement
 while both the product and the oracle are silently truncated or replaced by a fake dependency.
 
-**Oracle invariant.** `historyIndexFull` and `driftIndexFull` are the deliberately slow, uncached full-history
-implementations kept in the repository as the correctness oracle. The default `historyIndex` and `driftIndex`
-must produce the same downstream verdicts as those oracles at every tip; the suite's oracle comparison is a
-standing regression test for every future index optimization. The known benefit is a changed growth law, not
-a promised wall-clock target: the four history scans become incremental, while process startup, bounded tip
-walks, file reads, parsing, and other object lookups remain part of the measured absolute cost.
+**Oracle layers.** `historyIndexFull` and `driftIndexFull` are deliberately slow, uncached **fetch-layer
+oracles**: the default indexes must produce the same downstream verdicts from persisted events as those eager
+walks at every tip. They intentionally share rename projection, anchor extraction and verdict derivation, so
+their agreement cannot vindicate a bug in that shared logic. Product-level equivalence therefore compares two
+immutable CLI implementations in separate processes and homes, after a known anchor-debt positive control; the
+hand-built rename/deletion/merge fixtures independently pin semantics neither implementation may vote away.
+The known benefit is a changed growth law, not a wall-clock promise: three event sources become incremental,
+while process startup, bounded tip walks, file reads, parsing and object lookups remain in absolute cost.
 
 The board's cold/full build must remain materially below the graph stream's patrol interval. Patrol is a
 last-resort self-healing invalidation; when a build outlives that interval, patrol can invalidate the still

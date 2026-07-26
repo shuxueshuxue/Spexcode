@@ -23,11 +23,15 @@ scenarios:
   - name: anchor-hit-blocks
     tags: [cli]
     description: >
-      In a fixture repo, a node's code: entry anchors src/calc.ts#applyRate; after the spec's version
-      commit, one commit changes lines INSIDE applyRate. Run `spex spec lint` in that repo.
+      In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
+      under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
+      a merge-authored deletion whose two parents call the file by different names. Finally, let a merge
+      author only old.py->new.py after a side-branch hit. Run `spex spec lint` after each shape.
     expected: >
-      An `anchor-drift` ERROR names the anchor, the spec version, and the offending commit sha(s);
-      exit code is 1 (the pre-commit shim blocks). A subsequent `spex spec ack <node> --reason "…"`
+      Each `anchor-drift` ERROR names the anchor, the spec version, and only the offending edit/deletion sha;
+      rename projection, a later self-ack, and combined parent paths never erase that historical hit.
+      The rename-only merge transports identity but is not itself charged as a hit. Exit code is 1 (the
+      pre-commit shim blocks). A subsequent `spex spec ack <node> --reason "…"`
       quiets it (the reason lands in the ack commit's message body) and lint returns to 0 errors.
   - name: outside-change-warns
     tags: [cli]

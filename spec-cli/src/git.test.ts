@@ -6,15 +6,23 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
-function idx(parents: Record<string, string[]>, parts: Partial<DriftIndex> = {}): DriftIndex {
+type TestIndexParts = Partial<DriftIndex> & { fileCommits?: Map<string, string[]> }
+function idx(parents: Record<string, string[]>, parts: TestIndexParts = {}): DriftIndex {
   const ord = new Map<string, number>(), p = new Map<string, string[]>()
   let i = 0
   for (const [h, ps] of Object.entries(parents)) { ord.set(h, i++); p.set(h, ps) }
-  return { ord, parents: p, fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(), ...parts }
+  const { fileCommits = new Map<string, string[]>(), ...rest } = parts
+  const fileEvents = new Map([...fileCommits].map(([path, commits]) =>
+    [path, commits.map((commit) => ({
+      commit,
+      historicalPath: path,
+      parents: (p.get(commit) ?? []).map((parent) => ({ commit: parent, historicalPath: path })),
+    }))]))
+  return { ord, parents: p, fileEvents, acks: new Map(), specNodes: new Map(), anc: new Map(), ...rest }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
 
@@ -73,7 +81,7 @@ test('versioned global event cache ignores a legacy .git ledger and stays oracle
     for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `legacy cache affected ${path}`)
     cachePath = historyEventCachePathForTests(root)
     assert.match(cachePath, /\.spexcode[\\/]projects[\\/]/)
-    assert.match(cachePath, /history-events-v4-/)
+    assert.match(cachePath, /history-events-v7-/)
   } finally {
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
@@ -120,9 +128,12 @@ test('concurrent different-tip builders share an atomic ledger and recover on re
 })
 
 test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {
-  const parsed = combinedDiffOwnedRanges([
+  const parsed = combinedDiffOwnedChanges([
     'diff --cc src/consts.ts',
-    '@@@ -1,2 -1,2 +1,2 @@@',
+    '--- a/src/consts.ts',
+    '--- a/src/consts.ts',
+    '+++ b/src/consts.ts',
+    '@@@ -1,3 -1,4 +1,5 @@@',
     '- export const governed = 1',
     '- export const neighbor = 3',
     '+ export const governed = 2',
@@ -133,18 +144,38 @@ test('combined diff ownership is line-level across mixed, deletion, and octopus 
     '- old parent one',
     '+ inherited parent two',
     'diff --cc deleted.ts',
+    '--- a/deleted.ts',
+    '--- a/deleted.ts',
+    '+++ b/deleted.ts',
     '@@@ -1,2 -1,2 +1 @@@',
     '  export const kept = 1',
     '--export const removed = 1',
     'diff --cc octopus.ts',
+    '--- a/octopus.ts',
+    '--- a/octopus.ts',
+    '--- a/octopus.ts',
+    '+++ b/octopus.ts',
     '@@@@ -1 -1 -1 +1 @@@@',
     '+++export const authored = 1',
+    'diff --cc dash-source.ts',
+    '--- a/left-name.ts',
+    '--- a/right-name.ts',
+    '+++ b/dash-source.ts',
+    '@@@ -1 -1 +1,0 @@@',
+    '--- source text itself starts with a dash',
   ].join('\n'))
 
-  assert.deepEqual(parsed.get('src/consts.ts'), [[2, 2]], 'mixed +space must not inherit an adjacent ++ range')
+  assert.deepEqual(parsed.get('src/consts.ts')?.after, [[5, 5]], 'mixed rows advance the result cursor but do not inherit an adjacent ++ range')
+  assert.deepEqual(parsed.get('src/consts.ts')?.parentPaths, ['src/consts.ts', 'src/consts.ts'])
   assert.equal(parsed.has('spec.md'), false, 'a mixed-only file has no merge-owned line')
-  assert.deepEqual(parsed.get('deleted.ts'), [[2, 2]], 'all-parent deletion maps to its result point')
-  assert.deepEqual(parsed.get('octopus.ts'), [[1, 1]], 'all parent columns participate in octopus ownership')
+  assert.deepEqual(parsed.get('deleted.ts')?.after, [], 'an all-parent deletion owns no result-image line')
+  assert.deepEqual(parsed.get('deleted.ts')?.before, [[[2, 2]], [[2, 2]]], 'an all-parent deletion retains every parent-image line')
+  assert.deepEqual(parsed.get('octopus.ts')?.after, [[1, 1]], 'all parent columns participate in octopus ownership')
+  assert.deepEqual(parsed.get('dash-source.ts'), {
+    after: [],
+    before: [[[1, 1]], [[1, 1]]],
+    parentPaths: ['left-name.ts', 'right-name.ts'],
+  }, 'a deleted source line beginning with dash is not mistaken for a parent-path header')
 })
 
 test('drift counts code commits not reachable from the spec version', () => {
@@ -243,34 +274,6 @@ test('an off-history spec version yields 0 drift (no basis on HEAD to measure fr
     specNodes: new Map([['LOST', new Set(['X'])]]),
   })
   assert.equal(driftFor(i, 'LOST', 'f.ts'), 0)
-})
-
-test('large-history representation delegates reachable path windows to git without materializing a DAG', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-lazy-drift-'))
-  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  run('init', '-q')
-  run('config', 'user.email', 'test@example.com')
-  run('config', 'user.name', 'test')
-  writeFileSync(join(root, 'f.ts'), 'one\n')
-  run('add', '.'); run('commit', '-qm', 'version')
-  const version = run('rev-parse', 'HEAD')
-  appendFileSync(join(root, 'f.ts'), 'two\n')
-  run('commit', '-qam', 'move code')
-  const changed = run('rev-parse', 'HEAD')
-  const lazy = {
-    root,
-    specNodes: new Map([[version, new Set(['X'])]]),
-    ackByNode: new Map<string, string[]>(),
-    counts: new Map<string, number>(), windows: new Map<string, string[]>(),
-    rawWindows: new Map<string, string[]>(), reachable: new Set([version, changed]),
-  }
-  const i = { ...idx({}), lazy } as DriftIndex
-
-  assert.equal(commitReachable(i, version), true)
-  assert.deepEqual(pathCommitsSince(i, version, 'f.ts'), [changed])
-  assert.equal(driftFor(i, version, 'f.ts'), 1)
-  assert.equal(commitReachable(i, '0'.repeat(40)), false)
-  assert.equal(pathCommitsSince(i, '0'.repeat(40), 'f.ts'), null)
 })
 
 test('mergeBaseDiff preserves the old path of a pure rename for merge-base readers', async () => {
@@ -421,7 +424,7 @@ test('parallel spec versions prove that reset drift debt is not a scalar merge f
     assert.equal(driftFor(didx, versionB, 'f.py'), 0, 'the hit remains answered relative to B')
     assert.equal(driftFor(didx, versionA, 'f.py'), 1,
       'the same hit reappears as debt relative to selected A, although both scalar parent debts were empty')
-    assert.equal((didx.fileCommits.get('f.py') ?? []).includes(hit), true)
+    assert.equal((didx.fileEvents.get('f.py') ?? []).some((event) => event.commit === hit), true)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -548,92 +551,6 @@ test('an explicit pending tip never occupies or evicts the root-owned HEAD index
   assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
 })
 
-test('large-history HEAD reachability is one recoverable flight, never per-reading git fanout', { concurrency: false }, async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-'))
-  const bin = mkdtempSync(join(tmpdir(), 'spex-lazy-reachable-bin-'))
-  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
-  const run = (...args: string[]) => execFileSync(realGit, ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  run('init', '-q', '-b', 'main')
-  run('config', 'user.email', 'test@example.com')
-  run('config', 'user.name', 'test')
-
-  let stream = 'blob\nmark :1\ndata 2\nx\n'
-  stream += 'commit refs/heads/main\nmark :2\ncommitter Test <test@example.com> 1700000000 +0000\ndata 4\nbase\n'
-  for (let i = 0; i < 12_000; i++) stream += `M 100644 :1 .fixture/path-${String(i).padStart(5, '0')}-${'x'.repeat(80)}\n`
-  stream += '\n'
-  for (let i = 2; i <= 10_138; i++) {
-    stream += `commit refs/heads/main\nmark :${i + 1}\ncommitter Test <test@example.com> ${1700000000 + i} +0000\ndata 0\nfrom :${i}\n\n`
-  }
-  execFileSync(realGit, ['-C', root, 'fast-import', '--quiet'], { input: stream })
-  run('read-tree', 'HEAD')
-
-  const argvLog = join(bin, 'argv.log')
-  const trigger = join(bin, 'hang-reachable')
-  const shim = join(bin, 'git')
-  writeFileSync(argvLog, '')
-  writeFileSync(shim, `#!/bin/sh
-printf '%s\n' "$*" >> "${argvLog}"
-if [ -e "${trigger}" ]; then
-  case "$*" in
-    *" -C ${root} rev-list "*) while :; do sleep 1; done ;;
-  esac
-fi
-exec "${realGit}" "$@"
-`)
-  chmodSync(shim, 0o755)
-  const oldPath = process.env.PATH
-  process.env.PATH = `${bin}:${oldPath || ''}`
-  // match by the call itself, not the whole argv: a build context legitimately prefixes resource flags
-  const reachSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
-    .filter((line) => new RegExp(`-C ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} rev-list [0-9a-f]{40}$`).test(line)).length
-  const ancestorSpawns = () => readFileSync(argvLog, 'utf8').split('\n')
-    .filter((line) => line.includes('merge-base --is-ancestor')).length
-  const waitFor = async (want: number) => {
-    const deadline = Date.now() + 2000
-    while (reachSpawns() < want && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-
-  try {
-    const first = await Promise.all(Array.from({ length: 100 }, () => driftIndex(root)))
-    assert.ok(first.every((idx) => idx === first[0]), 'same HEAD did not share one drift-index flight')
-    assert.equal(reachSpawns(), 1)
-    assert.equal(ancestorSpawns(), 0)
-    const head1 = run('rev-parse', 'HEAD')
-    assert.equal(commitReachable(first[0], head1), true)
-    assert.equal(commitReachable(first[0], '0'.repeat(40)), false)
-    await Promise.all(Array.from({ length: 100 }, () => primeLazyPathWindows(first[0], head1, [])))
-    assert.equal(reachSpawns(), 1, 'same-SHA readers spawned reachability work')
-
-    run('commit', '--allow-empty', '-qm', 'move head')
-    const second = await Promise.all(Array.from({ length: 100 }, () => driftIndex(root)))
-    assert.notEqual(second[0], first[0])
-    assert.equal(reachSpawns(), 2, 'new HEAD did not build exactly one replacement set')
-    assert.equal(ancestorSpawns(), 0)
-
-    run('commit', '--allow-empty', '-qm', 'abort head')
-    writeFileSync(trigger, 'hang\n')
-    const controller = new AbortController()
-    const aborted = withGitAbortSignal(controller.signal, () => driftIndex(root))
-    await waitFor(3)
-    assert.equal(reachSpawns(), 3, 'abort fixture never started the reachable-set child')
-    controller.abort()
-    await assert.rejects(aborted, (error: unknown) => (error as Error)?.name === 'AbortError')
-    rmSync(trigger, { force: true })
-
-    const recovered = await driftIndex(root)
-    assert.equal(reachSpawns(), 4, 'failed reachable-set promise was cached instead of retried')
-    assert.equal(ancestorSpawns(), 0)
-    assert.equal(commitReachable(recovered, run('rev-parse', 'HEAD')), true)
-    assert.equal(commitReachable(recovered, 'f'.repeat(40)), false)
-  } finally {
-    process.env.PATH = oldPath
-    rmSync(root, { recursive: true, force: true })
-    rmSync(bin, { recursive: true, force: true })
-  }
-})
-
-// ---- the byte-budget read: measure a stream by its prefix, never by walking all of it ----
-
 // A name stream of a chosen size, built from few long paths rather than many short ones — the switch reads
 // BYTES, so width per path is as good as path count and a hundredth of the fast-import cost.
 function prefixRepo(paths: number, pathLength: number): { root: string; streamBytes: number } {
@@ -653,67 +570,6 @@ function prefixRepo(paths: number, pathLength: number): { root: string; streamBy
   return { root, streamBytes: full.length }
 }
 
-test('a byte-budget read stops the stream at the budget and reports the truncation', async () => {
-  const { root, streamBytes } = prefixRepo(1_000, 90)
-  try {
-    const budget = 100_000
-    assert.ok(streamBytes > budget, 'fixture must overflow the budget for this to mean anything')
-    const capped = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], budget)
-    assert.equal(capped.truncated, true)
-    assert.ok(capped.text.length <= budget, 'the transport retained more than the budget')
-    // the verdict a caller forms from the prefix is the verdict the whole stream would have given
-    assert.equal(capped.truncated || capped.text.length >= budget, streamBytes >= budget)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('a byte-budget read under budget returns the whole stream, untruncated, and a failure stays fail-soft', async () => {
-  const { root, streamBytes } = prefixRepo(3, 20)
-  try {
-    const budget = 100_000
-    assert.ok(streamBytes < budget)
-    const whole = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', 'HEAD'], budget)
-    assert.equal(whole.truncated, false)
-    assert.equal(whole.text.length, streamBytes)
-    assert.equal(whole.truncated || whole.text.length >= budget, streamBytes >= budget)
-    // a genuine git failure is neither truncation nor a lie about size
-    const failed = await gitPrefixA(['-C', root, 'log', '--name-only', '--format=', 'no-such-ref'], budget)
-    assert.deepEqual(failed, { text: '', truncated: false })
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('the large-history switch reads a bounded prefix, and a stream past the old buffer still switches', { concurrency: false }, async () => {
-  // a name stream far past the transport's 16MB read buffer, which used to come back empty and read as a
-  // SMALL history — the switch failing exactly on the corpus that needs it most.
-  const { root, streamBytes } = prefixRepo(18_000, 1_000)
-  const bin = mkdtempSync(join(tmpdir(), 'spex-prefix-bin-'))
-  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
-  const argvLog = join(bin, 'argv.log')
-  const shim = join(bin, 'git')
-  writeFileSync(argvLog, '')
-  writeFileSync(shim, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argvLog}"\nexec "${realGit}" "$@"\n`)
-  chmodSync(shim, 0o755)
-  const oldPath = process.env.PATH
-  process.env.PATH = `${bin}:${oldPath || ''}`
-  try {
-    assert.ok(streamBytes > (1 << 24), 'fixture must exceed the old 16MB read buffer')
-    const index = await driftIndex(root)
-    assert.ok(index.lazy, 'an oversized name stream must take the large-history representation')
-    assert.equal(index.fileCommits.size, 0, 'the large-history path retains no commit/file edge map')
-    // the prefix read is the only whole-repo name-stream child the switch spawns
-    const nameStreamSpawns = readFileSync(argvLog, 'utf8').split('\n')
-      .filter((line) => /log --name-only --format= [0-9a-f]{40}$/.test(line)).length
-    assert.equal(nameStreamSpawns, 1)
-  } finally {
-    process.env.PATH = oldPath
-    rmSync(root, { recursive: true, force: true })
-    rmSync(bin, { recursive: true, force: true })
-  }
-})
-
 // ---- the build context's pack-footprint boundary: bounded inside, git's defaults outside ----
 
 test('a graph build bounds its git children\'s pack footprint, and calls outside the build do not', async () => {
@@ -731,7 +587,7 @@ test('a graph build bounds its git children\'s pack footprint, and calls outside
   const LIMITS = ['core.packedGitWindowSize=1m', 'core.packedGitLimit=32m', 'core.deltaBaseCacheLimit=1m']
   try {
     // outside any build: git's own defaults, untouched
-    await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+    await gitA(['-C', root, 'log', '--format=%H', 'HEAD'])
     assert.equal(lines().length, 1)
     assert.ok(LIMITS.every((flag) => !lines()[0].includes(flag)), 'an ordinary call must not be re-tuned')
 
@@ -739,7 +595,7 @@ test('a graph build bounds its git children\'s pack footprint, and calls outside
     writeFileSync(argvLog, '')
     const controller = new AbortController()
     await withGitAbortSignal(controller.signal, async () => {
-      await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+      await gitA(['-C', root, 'log', '--format=%H', 'HEAD'])
       git(['-C', root, 'rev-parse', 'HEAD'])
     })
     const inside = lines()
@@ -751,7 +607,7 @@ test('a graph build bounds its git children\'s pack footprint, and calls outside
 
     // and the boundary does not outlive the build
     writeFileSync(argvLog, '')
-    await gitPrefixA(['-C', root, 'log', '--format=%H', 'HEAD'], 1 << 20)
+    await gitA(['-C', root, 'log', '--format=%H', 'HEAD'])
     assert.ok(LIMITS.every((flag) => !lines()[0].includes(flag)), 'the bound leaked past the build context')
   } finally {
     process.env.PATH = oldPath

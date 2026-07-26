@@ -168,7 +168,7 @@ export function batchBlobTexts(root: string, oids: string[]): Map<string, string
   const unique = [...new Set(oids.filter(Boolean))]
   const files = new Map<string, string>()
   if (!unique.length) return files
-  for (const oid of unique) if (!isGitObjectId(root, oid)) throw new Error(`invalid blob object id '${oid}'`)
+  for (const oid of unique) if (!isGitObjectId(root, oid)) throw new Error(`invalid object id '${oid}'`)
   const out = gitBuffer(['-C', root, 'cat-file', '--batch'], unique.join('\n') + '\n')
   let offset = 0
   for (const oid of unique) {
@@ -176,9 +176,9 @@ export function batchBlobTexts(root: string, oids: string[]): Map<string, string
     if (newline < 0) throw new Error(`git cat-file --batch ended before ${oid}`)
     const header = out.subarray(offset, newline).toString('utf8')
     const size = Number(header.match(/ blob (\d+)$/)?.[1])
-    if (!header.startsWith(`${oid} blob `) || !Number.isFinite(size)) throw new Error(`git cat-file --batch returned '${header}' for ${oid}`)
+    if (!header.startsWith(`${oid} blob `) || !Number.isFinite(size)) throw new Error(`git cat-file --batch returned '${header}' for ${oid}`) // dead-words-ok: Git object protocol type
     const start = newline + 1, end = start + size
-    if (end >= out.length || out[end] !== 0x0a) throw new Error(`git cat-file --batch truncated blob ${oid}`)
+    if (end >= out.length || out[end] !== 0x0a) throw new Error(`git cat-file --batch truncated object ${oid}`)
     files.set(oid, out.subarray(start, end).toString('utf8'))
     offset = end + 1
   }

@@ -47,19 +47,22 @@ scenarios:
     code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/reviews.ts, spec-cli/src/index.ts]
     description: >
       Plant a valid product session record for a linked worktree in a temporary Git repository, then read its
-      scoped Evals projection through the public HTTP surface. Put alpha and beta in one source file and bind separate scenarios to the existing
-      code-anchor selectors; commit beta-only and alpha-only changes, then a dead selector. Compare base/head
-      declarations whose description/expected, test/code/tags, and scenario names move. Race a symbolic
-      base/head selector once so it advances before publication.
+      scoped Evals projection through the public HTTP surface. Bind alpha/beta scenarios to one shared source;
+      add effective and retracted session readings; exercise dirty semantic/metadata declarations, inherited
+      selectors, deletion/rename below line one, related context, and an untracked node. Advance session HEAD
+      during one public read. As an auxiliary exact-projector control against the same copied product, advance
+      a symbolic head before publication.
     expected: >
       The public scoped response and its session rows consume one exact-revision impact result. It outputs the
       resolved base/head object ids and revision, node review causes, scenario code|contract|measurement impact,
       selector hit commits/symbols, base/head scenarioHash, and semantic versus metadata delta. Beta-only does
       not select alpha; alpha-only selects alpha, including a scenario inheriting the node's complete code
-      relation. Related paths appear only in node review context. Description/expected movement is semantic and
-      moves scenarioHash; test/code/tags movement is metadata-only and leaves the hash equal; a scenario rename
-      is remove+add. A dead, ambiguous, unavailable, or unextractable selector is an explicit unavailable error,
-      and a moving revision is updating/retry, never zero impact or fake current data.
+      relation. An effective owned reading enters solely as measurement and its measured row retains that impact;
+      a retracted reading does not. Related paths remain node context. Description/expected movement is semantic
+      and moves scenarioHash; test/code/tags movement is metadata-only and leaves the hash equal; declaration and
+      dirty code renames are remove+add with old/new selector hits. Dead, ambiguous, unavailable, or unextractable
+      selectors are explicit HTTP unavailable errors. A raced session HEAD retries to the new exact response;
+      the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
     test: spec-dashboard/test/session-toolbar.e2e.mjs

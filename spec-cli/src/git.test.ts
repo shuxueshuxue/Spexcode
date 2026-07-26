@@ -269,6 +269,62 @@ test('parallel old-path edits survive a later-walked rename and keep walk-newest
   }
 })
 
+test('parallel spec versions prove that reset drift debt is not a scalar merge fold', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-parallel-version-fold-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const dated = (date: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim()
+  const path = '.spec/product/n/spec.md'
+  const body = (a: number, b: number) => `---\ntitle: n\ncode:\n  - f.py\n---\n# n\n\nA=${a}\n${'stable\n'.repeat(20)}B=${b}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), body(0, 0))
+    writeFileSync(join(root, 'f.py'), 'def governed(): return 0\n')
+    run('add', '.')
+    dated('2000-01-01T00:00:00Z', 'commit', '-qm', 'base')
+
+    run('switch', '-qc', 'version-a')
+    writeFileSync(join(root, path), body(1, 0))
+    run('add', path)
+    dated('2025-01-01T00:00:00Z', 'commit', '-qm', 'version A')
+    const versionA = run('rev-parse', 'HEAD')
+    assert.equal(driftFor(await driftIndex(root), versionA, 'f.py'), 0, 'A parent must be locally clean')
+
+    run('switch', '-qc', 'version-b', 'main')
+    writeFileSync(join(root, 'f.py'), 'def governed(): return 1\n')
+    run('add', 'f.py')
+    dated('2001-01-01T00:00:00Z', 'commit', '-qm', 'hit governed code on B')
+    const hit = run('rev-parse', 'HEAD')
+    writeFileSync(join(root, path), body(0, 1))
+    run('add', path)
+    dated('2002-01-01T00:00:00Z', 'commit', '-qm', 'version B clears its local debt')
+    const versionB = run('rev-parse', 'HEAD')
+    assert.equal(driftFor(await driftIndex(root), versionB, 'f.py'), 0, 'B parent resets the earlier hit locally')
+
+    run('switch', '-q', 'version-a')
+    dated('2026-01-01T00:00:00Z', 'merge', '--no-ff', '-m', 'merge incomparable versions', 'version-b')
+    const merge = run('rev-parse', 'HEAD')
+    const hidx = await historyIndex(root)
+    const rows = rowsFor(hidx, path)
+    assert.equal(rows[0]?.hash, versionA, 'the newer parallel version must be the product window floor')
+    assert.ok(rows.some((row) => row.hash === versionB), 'the incomparable B version remains in history')
+    assert.ok(!rows.some((row) => row.hash === merge), 'a mixed-only clean merge is not a version')
+
+    const didx = await driftIndex(root)
+    assert.equal(driftFor(didx, versionB, 'f.py'), 0, 'the hit remains answered relative to B')
+    assert.equal(driftFor(didx, versionA, 'f.py'), 1,
+      'the same hit reappears as debt relative to selected A, although both scalar parent debts were empty')
+    assert.equal((didx.fileCommits.get('f.py') ?? []).includes(hit), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('reusing an old path after a rename starts a separate history', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-rename-reuse-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()

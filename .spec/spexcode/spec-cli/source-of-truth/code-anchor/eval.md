@@ -128,6 +128,19 @@ scenarios:
       The `.tsx` historical parse remains conservative-unparseable and the `.ts` parse remains valid in
       either order and on repeat; normalized results do not depend on directory or query order. A key must
       cover the complete extractor input, not only the Git blob oid and extractor label.
+  - name: parallel-version-debt-reappears
+    tags: [cli]
+    test:
+      path: spec-cli/src/git.test.ts
+      name: parallel spec versions prove that reset drift debt is not a scalar merge fold
+    description: >
+      In a real Git DAG, branch A versions one spec, while branch B changes its governed file and then
+      versions the same spec. Merge B into A without authoring an all-parent spec line, and make A's
+      version the walk-newest of the two incomparable versions.
+    expected: >
+      Each parent is locally clean, but the merged tip selects A's version and reports B's earlier code
+      commit as drift because it is not reachable from A. The merge itself is not a version. This proves
+      that a parent state which reset B's debt at B's version cannot supply the exact merged judgment.
   - name: candidate-tip-gate
     tags: [cli]
     description: >

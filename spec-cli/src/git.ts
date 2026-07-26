@@ -1196,8 +1196,10 @@ export function combinedDiffOwnedChanges(patch: string): Map<string, CombinedDif
       }
     }
     if (authoredAfter || authoredBefore) byPath.set(path, changes)
-    for (let parent = 0; parent < parents; parent++) if (prefix[parent] !== '+') parentLines[parent]++
-    if (![...prefix].every((c) => c === '-')) resultLine++
+    const resultExists = prefix.includes('+') || [...prefix].every((c) => c === ' ')
+    for (let parent = 0; parent < parents; parent++)
+      if (prefix[parent] === '-' || (prefix[parent] === ' ' && resultExists)) parentLines[parent]++
+    if (resultExists) resultLine++
   }
   return byPath
 }

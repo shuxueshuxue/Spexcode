@@ -299,7 +299,8 @@ for (const spec of specs) {
 
 // The proof derives and retains every hit identity from the complete drift event index. Project that set
 // onto the first-parent points only for the growth measurement; do not re-run a path-limited `git log`
-// at each point, because history simplification is exactly the 749-vs-757 measurement bug this proof guards.
+// at each point, or replace event historical paths with current names: both are measured undercounts this
+// proof guards against.
 const firstParent = git(['rev-list', '--first-parent', '--reverse', tip]).trim().split('\n').filter(Boolean)
 const countMemo = new Map()
 const reachableCount = (hash) => {
@@ -357,6 +358,7 @@ console.log(JSON.stringify({
     growth,
     rawDifferingNodes: rawSemanticDifferences,
     differingNodes: semanticDifferences,
+    ...(process.env.SPEX_HIT_RECORDS === '1' ? { hitRecords } : {}),
   },
   counterexample: await structuralCounterexample(),
 }, null, 2))

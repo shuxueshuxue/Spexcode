@@ -13,13 +13,14 @@ scenarios:
       the 14 fixed tips, capturing both stdout and stderr on every exit status; compare the candidate's
       incremental result with its eager fetch-layer result separately.
     expected: >
-      The walk-newest version base equals the product oracle for all 217 current nodes, and the exact
+      The walk-newest version base equals the product-selected base for all 217 current nodes, and the exact
       walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
       minimal parallel-version DAG has clear parent verdicts but revives the losing branch's hit after the
       merge, proving that (v, D) cannot be joined after forgetting cleared hits. Hit identities derived from
-      the complete drift event index grow with events (202 / 466 / 756 at depths 1,002 / 2,497 / 4,200; 757
-      at the tip); a path-limited history query is rejected as a measuring proxy because it simplifies away
-      eight real indexed events. Rename projection stays empirically short (maximum 4, mean 1.51) without
+      the complete drift event index grow with events (249 / 553 / 843 at depths 1,002 / 2,497 / 4,200; 844
+      at the tip). The proof rejects both known lossy proxies: path-limited history simplifies away eight
+      events, while reading historical blobs/ranges through the current name misses 86 pre-rename hits plus
+      one same-path deletion. Rename projection stays empirically short (maximum 4, mean 1.51) without
       being asymptotically O(1). Before the 14-point comparison, a 13-anchor positive fixture blocks in both
       immutable CLI implementations; deleting one actual normalized anchor row produces exactly that one
       missing key. Per-rule coverage is printed for every historical point, and zero anchor rows there is

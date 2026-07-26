@@ -312,7 +312,8 @@ function eventCachePath(root: string): string {
   if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements) return old.path
   const state = createHash('sha256').update(`${EVENT_CACHE_SCHEMA}\0${shallow}\0${grafts}\0${replacements}`).digest('hex').slice(0, 16)
   const repoId = createHash('sha256').update(common).digest('hex').slice(0, 24)
-  const path = join(homedir(), '.spexcode', 'projects', repoId, `${EVENT_CACHE_SCHEMA}-${state}.ndjson`)
+  const cacheHome = process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')
+  const path = join(cacheHome, 'projects', repoId, `${EVENT_CACHE_SCHEMA}-${state}.ndjson`)
   eventPathMemo.set(rootId, { common, shallowPath, grafts: grafts, shallow, replacements, path })
   return path
 }

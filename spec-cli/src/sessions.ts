@@ -1956,10 +1956,14 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>): 
     return !alive()
   }
   if (await gone(AGENT_EXIT_GRACE_MS)) return                        // the pane's SIGHUP took it — the normal path
-  const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-  if (!argv.includes(id) || processStartToken(pid) !== startToken) return // not provably the same session instance — leave it
+  const sameAgentInstance = async (): Promise<boolean> => {
+    if (processStartToken(pid) !== startToken) return false
+    const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
+    return argv.includes(id) && processStartToken(pid) === startToken
+  }
   for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
     await beforeSignal()
+    if (!await sameAgentInstance()) return                           // the guard's await never grants stale signal authority
     try { process.kill(pid, sig) } catch { return }                  // vanished between checks
     if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
   }

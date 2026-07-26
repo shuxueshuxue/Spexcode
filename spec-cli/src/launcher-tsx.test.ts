@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
 import { fileURLToPath } from 'node:url'
+import { processStartToken } from './process-identity.js'
 
 // @@@ cross-platform tsx resolution ([[platform-support]]) - the launcher must run tsx's JS entry through
 // `node` (process.execPath), NEVER spawn the `.bin/tsx` shim. On Windows that shim is an extensionless sh
@@ -67,6 +68,7 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
     },
   })
   const output: Buffer[] = []
+  let ownedTree: { pid: number; startToken: string }[] = []
   child.stdout?.on('data', (chunk) => output.push(chunk))
   child.stderr?.on('data', (chunk) => output.push(chunk))
   try {
@@ -89,6 +91,10 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
       changed = false
       for (const row of rows) if (!descendants.has(row.pid) && descendants.has(row.ppid)) { descendants.add(row.pid); changed = true }
     }
+    ownedTree = [...descendants].flatMap((pid) => {
+      const startToken = processStartToken(pid)
+      return startToken ? [{ pid, startToken }] : []
+    })
     const tsx = rows.find((row) => descendants.has(row.pid) && row.args.includes('tsx/dist/cli.mjs'))
     assert.ok(tsx, 'canonical package script did not route through bin/spex.mjs into the resolved tsx entry')
     const controlPlane = new Set<number>([tsx.pid])
@@ -101,11 +107,21 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
       assert.ok(!env.some((entry) => entry.startsWith('SPEXCODE_SESSION_ID=') || entry.startsWith('CODEX_THREAD_ID=')), `PID ${pid} inherited session identity after the launcher boundary`)
     }
   } finally {
-    if (child.exitCode === null) {
-      try { process.kill(-child.pid!, 'SIGTERM') } catch { /* already exited */ }
-      await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 3000))])
-      if (child.exitCode === null) { try { process.kill(-child.pid!, 'SIGKILL') } catch { /* already exited */ } }
+    const signalOwned = (signal: NodeJS.Signals) => {
+      for (const identity of [...ownedTree].reverse()) if (processStartToken(identity.pid) === identity.startToken) {
+        try { process.kill(identity.pid, signal) } catch { /* vanished after the exact identity read */ }
+      }
     }
+    signalOwned('SIGTERM')
+    if (child.exitCode === null) await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 3000))])
+    for (let i = 0; i < 30 && ownedTree.some((identity) => processStartToken(identity.pid) === identity.startToken); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    signalOwned('SIGKILL')
+    for (let i = 0; i < 20 && ownedTree.some((identity) => processStartToken(identity.pid) === identity.startToken); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    assert.deepEqual(ownedTree.filter((identity) => processStartToken(identity.pid) === identity.startToken), [], 'canonical npm api fixture leaves no exact descendant alive')
     rmSync(home, { recursive: true, force: true })
   }
 })

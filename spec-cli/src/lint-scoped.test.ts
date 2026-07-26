@@ -287,3 +287,23 @@ test('optimized lint is idempotent and decision-equivalent to the full oracle ac
     previous = cold
   }
 })
+
+test('an issue-only pending commit keeps the parent drift index instead of clearing drift warnings', { skip }, async () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
+  fx.commit('v1')
+  writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('10', '2'))
+  fx.commit('unanswered code drift')
+  mkdirSync(join(fx.proj, '.spec', '.issues'), { recursive: true })
+  writeFileSync(join(fx.proj, '.spec', '.issues', 'remark.md'), 'remark\n')
+  fx.commit('issue remark')
+  const tip = fx.g('rev-parse', 'HEAD')
+  const normalize = (findings: Awaited<ReturnType<typeof specLint>>) => findings
+    .map(({ level, rule, spec, file }) => `${level}|${rule}|${spec ?? ''}|${file ?? ''}`)
+    .sort()
+  resetHistoryCachesForTests()
+  const fast = normalize(await specLint(fx.proj, extractors(fx.proj), { tip }))
+  const full = normalize(await specLint(fx.proj, extractors(fx.proj), { tip, fullOracle: true }))
+  assert.deepEqual(fast, full)
+  assert.ok(fast.some((row) => row.startsWith('warn|drift|calc|src/calc.ts')), `issue commit erased drift: ${fast.join('\n')}`)
+})

@@ -364,6 +364,13 @@ async function withEventCacheLock<T>(path: string, run: () => T): Promise<T> {
   }
   try { return run() } finally { rmSync(lock, { recursive: true, force: true }) }
 }
+function removeEventTemps(path: string): void {
+  const dir = join(path, '..'), base = path.split('/').pop() ?? ''
+  try {
+    for (const name of readdirSync(dir)) if (name.startsWith(`${base}.`) && name.endsWith('.tmp'))
+      rmSync(join(dir, name), { force: true })
+  } catch { /* the writer creates the directory immediately below */ }
+}
 async function eventStream(root: string, tip: string, kind: string, argsFor: (base: string) => string[], order: Map<string, number>, reachable: Set<string>, persist = true, cache = true): Promise<string> {
   if (!cache) return gitA(argsFor(''))
   const { path, state: initialState } = readEventCache(root)
@@ -393,6 +400,7 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
   const markerKnown = (state.streamTips.get(kind) ?? []).includes(tip)
   if (discovered.size || (persist && !markerKnown)) {
     state = await withEventCacheLock(path, () => {
+      removeEventTemps(path)
       const fresh = readEventCache(root, true).state
       const freshStream = fresh.streams.get(kind) ?? new Map<string, EventRecord>()
       const added = [...discovered.values()].filter((record) => !freshStream.has(record.hash))

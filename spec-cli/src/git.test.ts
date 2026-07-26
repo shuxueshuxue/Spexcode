@@ -1,9 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
@@ -73,6 +74,45 @@ test('versioned global event cache ignores a legacy .git ledger and stays oracle
     cachePath = historyEventCachePathForTests(root)
     assert.match(cachePath, /\.spexcode[\\/]projects[\\/]/)
     assert.match(cachePath, /history-events-v3-/)
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('concurrent different-tip builders share an atomic ledger and recover on reopen', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-cache-concurrent-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'concurrent@example.com'); run('config', 'user.name', 'Concurrent')
+    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# one\n')
+    run('add', '.'); run('commit', '-qm', 'one')
+    const tipOne = run('rev-parse', 'HEAD')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# two\n')
+    run('add', '.'); run('commit', '-qm', 'two')
+    const tipTwo = run('rev-parse', 'HEAD')
+    cachePath = historyEventCachePathForTests(root)
+    const tsx = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
+    const module = pathToFileURL(resolve(dirname(new URL(import.meta.url).pathname), 'git.ts')).href
+    const child = `(async()=>{const g=await import(${JSON.stringify(module)}); await Promise.all([g.historyIndex(process.argv[1], process.argv[2]),g.driftIndex(process.argv[1], process.argv[2])])})()`
+    const runChild = (tip: string) => new Promise<void>((resolveChild, reject) => {
+      const p = spawn(process.execPath, [tsx, '-e', child, '--', root, tip], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stderr = ''; p.stderr.on('data', (chunk) => { stderr += chunk })
+      p.on('error', reject); p.on('exit', (code) => code === 0 ? resolveChild() : reject(new Error(`cache child exited ${code}: ${stderr}`)))
+    })
+    await Promise.all([runChild(tipOne), runChild(tipTwo)])
+    resetHistoryCachesForTests()
+    for (const tip of [tipOne, tipTwo]) {
+      const fast = await historyIndex(root, tip), full = await historyIndexFull(root, tip)
+      const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
+      for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `concurrent cache mismatch at ${tip}:${path}`)
+    }
+    const names = readdirSync(dirname(cachePath))
+    assert.equal(names.some((name) => name.includes('.lock') || name.endsWith('.tmp')), false, `cache residue: ${names.join(', ')}`)
   } finally {
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })

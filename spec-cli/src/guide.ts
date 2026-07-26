@@ -249,7 +249,7 @@ code file or the scenario (the eval.md) moves since it was filed.
                                  (governed source, no eval.md — spec lint's coverage, one rule per layer) ·
                                  eval-owners (a file governed by > maxOwners scenarios — split it)
   spex eval ls <node>            the eval timeline (verdict · freshness · evidence), newest first
-  spex eval scenario ls [<node>] the declared contracts; --unmeasured = the blind-spot worklist
+  spex eval scenario ls [<node>] the declared contracts; text --unmeasured = blind-spot worklist; --json = canonical declaration index
   spex eval clean                GC the content-addressed evidence cache`
 
 const SETTINGS = `spex guide settings — SpexCode's runtime settings (spexcode.json / spexcode.local.json)

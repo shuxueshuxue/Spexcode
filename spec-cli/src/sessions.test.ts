@@ -370,6 +370,7 @@ test('a launch establishes identity: inherited session ids are stripped, this se
     // along into every worker — the leak class behind github#76. The launch strips them all, then sets its own.
     for (const v of sessionIdentityEnvVars()) assert.match(script, new RegExp(`env[^\\n]*-u ${v}\\b`), v)
     assert.match(script, /SPEXCODE_SESSION_ID=identity-launch-test/)
+    assert.match(script, /SPEXCODE_SESSION_IDENTITY_VARS=/)
     assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prevHome

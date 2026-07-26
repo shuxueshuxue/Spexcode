@@ -6,6 +6,7 @@ desc: The per-session GLOBAL store dir — every harness-written runtime artifac
 code:
   - spec-cli/src/project-store.ts
 related:
+  - spec-cli/src/runtime-ownership.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/git.ts#eventCachePath
   - spec-cli/src/sessions.ts
@@ -64,11 +65,12 @@ SpexCode, plus [[code-anchor]]'s versioned immutable history-event ledgers. `pro
 home/path encoding shared by `layout.ts` and the Git indexer, while `layout.ts` adds Git common-dir discovery;
 this keeps one project identity without introducing a `git.ts` ↔ `layout.ts` import cycle. The tier also carries
 a `backend-instances/` registry: every supervisor generation atomically records its instance id, PID,
-operating-system start token, project root, and identity-scrub proof before serving; it removes only its own
+operating-system start token, and project root before serving; it removes only its own
 matching record on a clean exit. `backend.json` names the endpoint generation clients currently use, but
 replacing that pointer does not erase an older still-live supervisor's ownership. This lets
 [[host-resource-budget]] charge a superseded or crashed generation to its exact backend owner without pretending
-it belongs to the session that happened to start it. All of it lives under `runtimeRoot()`, NOT the worktree. So
+it belongs to the session that happened to start it. Identity stripping is proven separately from the live
+process environment rather than by a registry claim. All of it lives under `runtimeRoot()`, NOT the worktree. So
 the worktree holds ZERO
 SpexCode-materialized runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
@@ -80,14 +82,15 @@ filtering, and `session.json` is written one-field-per-line with every key prese
 READ it with a grep instead of jq ([[state]]) — it never writes the file itself, since the single structured
 writer ([[sessions-core]]) is the only thing that may compose a record. That writer lands each version by
 atomic replace, so a reader landing between two writes sees one whole record, never a half-written one. A
-record that is nonetheless unreadable is quarantined (its bytes copied to the per-project `corrupt/` shelf)
-when its session is closed, so the sweep of the session dir never takes the only evidence of what broke.
+record that is nonetheless unreadable may be quarantined (its bytes copied to the per-project `corrupt/` shelf)
+when close is attempted, but the unreadable runtime dir remains the live residue: without an exact owner close
+fails before signaling a process or deleting runtime, worktree, or branch state.
 
 `session.json` writes are by canonical governed `session_id`, never by cwd. Claude's harness id equals that
 record id. Codex hook payloads and spawned commands carry the acting thread id, while the shared app-server env
 may carry a stale `SPEXCODE_SESSION_ID`; those Codex ids are resolved through `harness_session_id` before a
 governed record is written. Self-launched agents with no governed record may still get raw-id sentinel dirs for
-spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. `close` removes the worktree,
+spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. For a readable exact owner, `close` removes the worktree,
 sweeps the whole per-session store dir AND that worktree's `trees/` materialize slot (computed before the
 removal — the slot key needs the live tree); `exit` keeps all of them, so an offline session is still on
 the board and `--resume`-able. Codex's project app-server is never swept or signaled by stopping or closing one

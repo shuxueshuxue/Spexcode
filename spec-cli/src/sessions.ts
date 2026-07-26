@@ -12,6 +12,9 @@ import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
+import { shQuote } from './sh.js'
+import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
+import { processStartToken } from './process-identity.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -92,7 +95,11 @@ const rvEnv = (id: string, harness = HARNESS) => {
     const value = process.env[v]
     return value ? [`${v}=${value}`] : []
   })
-  return [...scrub, `SPEXCODE_SESSION_ID=${id}`, ...harness.launchEnv(id), ...homeVars].join(' ')
+  return [...scrub,
+    `SPEXCODE_SESSION_ID=${id}`,
+    `SPEXCODE_SESSION_IDENTITY_VARS=${shQuote(sessionIdentityEnvVars().join(','))}`,
+    `SPEXCODE_PROJECT_ROOT=${shQuote(mainRoot())}`,
+    ...harness.launchEnv(id), ...homeVars].join(' ')
 }
 
 // the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]
@@ -289,7 +296,7 @@ export class SessionRecordUnusable extends Error {
   }
 }
 const corruptReason = (e: { path: string; error: string }): string =>
-  `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. Close the session (\`spex session close <id>\`) to retire it — the original bytes are preserved as evidence.`
+  `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. A close attempt quarantines the bytes and reports the preserved runtime/worktree/branch residue, but cannot signal or delete without an exact owner.`
 // a record whose worktree is gone names work that no longer exists on disk. That is the manual-retirement end
 // state (merged, worktree and branch removed, record left behind), and it is terminal: no lifecycle writer may
 // put such a session back to work, and no launch may be assembled for a directory that isn't there.
@@ -500,7 +507,12 @@ async function liveSnapshot(): Promise<LiveSnap> {
   for (const [id, p] of parseLivePanes(out)) {
     windows.set(id, { panePid: p.panePid, pidAlive: agentAlive(id) })
     if (p.title) titles.set(id, p.title)
-    if (windows.get(id)!.pidAlive === undefined) { const rec = readRecord(id); if (rec) legacy.push({ harness: rec.harness, hasPid: false }) }
+    if (windows.get(id)!.pidAlive === undefined) {
+      // A corrupt row has no trustworthy harness to scan and renders liveness=unknown on its own. Letting this
+      // optional legacy enrichment throw would turn one diagnosable row into a 409 for the entire board.
+      try { const rec = readRecord(id); if (rec) legacy.push({ harness: rec.harness, hasPid: false }) }
+      catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
+    }
   }
   // the whole-box ps table is gathered ONCE, and ONLY for the legacy pid-less-codex fallback (paneTreeRunsCodex).
   if (needsCodexProcScan(legacy)) {
@@ -1931,6 +1943,8 @@ const AGENT_EXIT_GRACE_MS = 3000
 async function killAgentProcess(id: string): Promise<void> {
   const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
   if (!Number.isFinite(pid) || pid <= 0) return
+  const startToken = processStartToken(pid)
+  if (!startToken) return
   const alive = (): boolean => {
     try { process.kill(pid, 0); return true } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM' }
   }
@@ -1943,7 +1957,7 @@ async function killAgentProcess(id: string): Promise<void> {
   }
   if (await gone(AGENT_EXIT_GRACE_MS)) return                        // the pane's SIGHUP took it — the normal path
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-  if (!argv.includes(id)) return                                     // not provably this session's process — leave it
+  if (!argv.includes(id) || processStartToken(pid) !== startToken) return // not provably the same session instance — leave it
   for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
     try { process.kill(pid, sig) } catch { return }                  // vanished between checks
     if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
@@ -1956,17 +1970,15 @@ async function killAgentProcess(id: string): Promise<void> {
 // the resolved adapter to sweep its ephemeral runtime transport — in that order, because the adapter only
 // removes a transport whose listener is PROVEN dead.
 // Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
-async function stopAgentProcess(id: string): Promise<void> {
-  // tearing a process down never needs a readable record — the tmux window is keyed by the id alone. So an
-  // unreadable record degrades to "no adapter-specific cleanup", never to a refusal: `close` must stay
-  // available on exactly the session whose record is broken.
-  let rec: SessRec | null = null
-  try { rec = readRecord(id) }
-  catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
+async function stopAgentProcess(id: string, rec: SessRec | null): Promise<void> {
+  // The caller resolves one readable owner before entering this seam. An absent/corrupt record never reaches
+  // tmux, signals, or adapter cleanup: a bare session id is an address, not ownership authority.
+  await assertSessionStopSafe(id, rec ? { ...rec, harness: rec.harness } : null)
+  if (!rec) throw new ResourceConflict(`refusing to stop ${id}: no readable session owner`)
   await tmuxOk(['kill-session', '-t', id])
   await killAgentProcess(id)
   launchedAt.delete(id)
-  await harnessById(rec?.harness || defaultHarness.id).cleanupRuntime(rec ?? { session: id })
+  await harnessById(rec.harness || defaultHarness.id).cleanupRuntime(rec)
 }
 
 // @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
@@ -1975,8 +1987,15 @@ async function stopAgentProcess(id: string): Promise<void> {
 // "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
 // the freed capacity drains a queued session next (drainQueue).
 export async function stopSession(id: string): Promise<boolean> {
-  const wt = await findWorktree(id)
-  await stopAgentProcess(id)
+  let wt: { path: string; branch: string | null; rec: SessRec } | null
+  try { wt = await findWorktree(id) }
+  catch (e) {
+    if (!(e instanceof SessionRecordUnusable) || e.code !== 'corrupt') throw e
+    await stopAgentProcess(id, null)
+    throw e
+  }
+  if (!wt) return false
+  await stopAgentProcess(id, wt.rec)
   const rec = readRecord(id)
   if (rec) writeRecord({ ...rec, stopped: true })
   void drainQueue()   // a stop frees a slot — start the next queued session if any
@@ -2008,45 +2027,56 @@ export async function archiveSession(id: string, on = true): Promise<boolean> {
 // then the store sweep (stop KEEPS the record so the session stays on the board offline; close discards it).
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
-// close is also the ONE verb that must survive a record it cannot read: an unreadable record is precisely the
-// thing a human needs to be able to retire, and refusing here is what forced the reported manual cleanup. So it
-// quarantines the original bytes first (below), then sweeps as usual — the teardown that needs a readable
-// record is simply skipped when there isn't one.
+// A corrupt record proves no adapter, leaf, worktree, or branch owner. Close may copy those bytes to the
+// control-plane quarantine, but then fails before this teardown seam and names every residue it preserved.
 export async function closeSession(id: string): Promise<boolean> {
   let wt: { path: string; branch: string | null; rec: SessRec } | null = null
-  let unreadable = false
   try { wt = await findWorktree(id) }
-  catch (e) { if (e instanceof SessionRecordUnusable && e.code === 'corrupt') unreadable = true; else throw e }
-  quarantineRecord(id)
-  await stopAgentProcess(id)
-  if (wt) {
-    let slot: string | null = null
-    try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
-    // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
-    if (existsSync(wt.path)) await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
-    if (wt.branch) await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
-    if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
+  catch (e) {
+    if (!(e instanceof SessionRecordUnusable) || e.code !== 'corrupt') throw e
+    const quarantined = quarantineRecord(id)
+    const runtime = sessionStoreDir(id)
+    const evidence = quarantined
+      ? `Original bytes were copied to ${quarantined}`
+      : `Original bytes remain at ${join(runtime, 'session.json')}; no quarantine copy could be made`
+    let guard = 'no readable session record proves the adapter or leaf owner'
+    try { await stopAgentProcess(id, null) }
+    catch (error) { guard = error instanceof Error ? error.message : String(error) }
+    throw new SessionRecordUnusable('corrupt', id,
+      `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
+  if (!wt) return false
+  await stopAgentProcess(id, wt.rec)
+  let slot: string | null = null
+  try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
+  // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
+  if (existsSync(wt.path)) await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
+  if (wt.branch) await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
+  if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* best-effort sweep of the global record */ }
   void drainQueue()   // a close frees a slot — start the next queued session if any
-  return !!wt || unreadable
+  return true
 }
 
 // @@@ quarantine - closing sweeps the session's whole store dir, so an UNREADABLE record would take the only
 // evidence of what corrupted it with it. Copy those bytes to the per-project `corrupt/` shelf first, named by
 // session id and close time. Only unreadable records are shelved (a healthy one's contents are already known
 // and reproducible); the shelf is never read by the product, it is there for the human who asks "what broke?".
-function quarantineRecord(id: string): void {
+function quarantineRecord(id: string): string | null {
   let entry
-  try { entry = readRecordEntry(id) } catch { return }   // unreadable for another reason (permissions) — leave it
-  if (entry.kind !== 'corrupt') return
+  try { entry = readRecordEntry(id) } catch { return null }   // unreadable for another reason (permissions) — leave it
+  if (entry.kind !== 'corrupt') return null
   try {
     const shelf = join(runtimeRoot(), 'corrupt')
     mkdirSync(shelf, { recursive: true })
     const dest = join(shelf, `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
     writeFileSync(dest, readFileSync(entry.path))
     console.error(`spex: session ${id.slice(0, 8)} had an unreadable record; its original bytes are preserved at ${dest}`)
-  } catch (e) { console.error(`spex: could not quarantine the unreadable record for ${id}: ${e instanceof Error ? e.message : e}`) }
+    return dest
+  } catch (e) {
+    console.error(`spex: could not quarantine the unreadable record for ${id}: ${e instanceof Error ? e.message : e}`)
+    return null
+  }
 }
 
 // @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of

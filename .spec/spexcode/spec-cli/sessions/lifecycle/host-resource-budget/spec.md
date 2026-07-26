@@ -3,7 +3,10 @@ title: host resource budget
 status: active
 hue: 34
 desc: Attribute resident session and backend cost, enforce budgets, detect leaks, and guard shared runtime ownership.
+code:
+  - spec-cli/src/host-resources.ts
 related:
+  - spec-cli/src/process-identity.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/client.ts
@@ -116,3 +119,5 @@ signal, including when the PID file itself is absent. The report issues no token
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with
 their teardown owner and references; a session stop never stands in for that owner. There is no `pkill`,
 `pgrep`, command-regex signal, port-based signal, automatic close, or branch/worktree deletion in this mechanism.
+An unreadable session record proves no adapter or leaf owner, so stop and destructive close fail before signal;
+close may quarantine the corrupt control-plane bytes but preserves and reports every runtime/worktree/branch residue.

@@ -31,6 +31,12 @@ export async function clientListSessions(): Promise<Session[]> {
   return await r.json() as Session[]
 }
 
+export async function clientResources(): Promise<import('./host-resources.js').ResourceReport> {
+  const r = await apiFetch('/api/resources')
+  if (!r.ok) throw new BackendError(`backend error ${r.status} reading resources: ${await r.text()}`, r.status)
+  return await r.json() as import('./host-resources.js').ResourceReport
+}
+
 // resolve a selector (full id, id-prefix, node, or branch) against the live board, then call with the full id.
 export async function resolveClientSession(selector: string): Promise<Resolved> {
   return resolveSession(selector, await clientListSessions())
@@ -129,6 +135,7 @@ export async function clientResume(id: string, force = false): Promise<{ ok: boo
 export async function clientStop(id: string): Promise<boolean> {
   await guarded('session stop')
   const r = await apiFetch(`/api/sessions/${seg(id)}/stop`, post({}))
+  if (!r.ok) throw new BackendError(`backend refused to stop ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
@@ -144,6 +151,7 @@ export async function clientInterrupt(id: string): Promise<DispatchResult> {
 export async function clientClose(id: string): Promise<boolean> {
   await guarded('session close')
   const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({}))
+  if (!r.ok) throw new BackendError(`backend refused to close ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 

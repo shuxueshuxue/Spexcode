@@ -43,11 +43,11 @@ scenarios:
       accounting, the real UI wiring, and Back behavior.
   - name: session-impact-exact-revision
     tags: [backend-api]
-    test: spec-eval/src/sessioneval.test.ts
+    test: spec-eval/src/sessionimpact.api.test.ts
     code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/reviews.ts, spec-cli/src/index.ts]
     description: >
-      Register a real session over a temporary Git repository, then read its scoped Evals projection through
-      the public HTTP surface. Put alpha and beta in one source file and bind separate scenarios to the existing
+      Plant a valid product session record for a linked worktree in a temporary Git repository, then read its
+      scoped Evals projection through the public HTTP surface. Put alpha and beta in one source file and bind separate scenarios to the existing
       code-anchor selectors; commit beta-only and alpha-only changes, then a dead selector. Compare base/head
       declarations whose description/expected, test/code/tags, and scenario names move. Race a symbolic
       base/head selector once so it advances before publication.

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+import { git, gitA, batchRevisionOids, batchBlobTexts, cachedMergePatch, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -420,10 +420,11 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
   const key = `${commit}\0${path}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
+  const cached = cachedMergePatch(root, commit)
+  const out = cached ?? await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
   const ranges: [number, number][] = []
   if (/^@@@/m.test(out)) {
-    for (const owned of combinedDiffOwnedRanges(out).values()) ranges.push(...owned)
+    for (const [file, owned] of combinedDiffOwnedRanges(out)) if (file === path) ranges.push(...owned)
   } else {
     for (const m of out.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
       const c = +m[1], d = m[2] === undefined ? 1 : +m[2]

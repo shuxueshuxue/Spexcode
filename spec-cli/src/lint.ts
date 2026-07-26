@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { repoRoot, git, driftIndex, historyIndex, driftIndexFull, historyIndexFull, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
-import { extractors, extractorFor, extOf, parseCodeEntry, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
+import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -90,14 +90,6 @@ function pendingChangedPaths(root: string, tip: string): string[] {
     return [...new Set(changed.filter(Boolean))]
   } catch { return [] }
 }
-function pendingPathTouched(changed: string[], path: string): boolean {
-  if (changed.includes(path)) return true
-  if (changed.some((p) => p.startsWith(path.replace(/\/+$/, '') + '/'))) return true
-  if (!path.includes('*')) return false
-  const re = new RegExp('^' + path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$')
-  return changed.some((p) => re.test(p))
-}
-
 // Cheap pending classification for the reference hook. It reads only the candidate tree and claims; it
 // never constructs either history index. A normal lint call deliberately does not use this
 // shortcut so its full findings/oracle contract remains unchanged.
@@ -113,7 +105,7 @@ export async function pendingTouchesGoverned(root: string, tip: string): Promise
   // scope proof follows the same code:/related: declarations that lint later enforces.
   const specs = await loadSpecs(root, { tip, history: null, drift: null })
   const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
-  return changed.some((path) => claims.some((claim) => pendingPathTouched([path], claim))
+  return changed.some((path) => claims.some((claim) => relationClaimsPath(claim, path))
     || path === 'spexcode.json' || path === 'spexcode.local.json'
     || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
     || path === '.spec')
@@ -312,7 +304,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   for (const s of specs) {
     for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
       for (const { path, selectors } of entries) {
-        if (pending && !pendingPathTouched(changed, path)) continue
+        if (pending && !changed.some((file) => relationClaimsPath(path, file))) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
           out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` })

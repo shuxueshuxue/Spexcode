@@ -41,6 +41,49 @@ scenarios:
       scoped model without a second impact predicate. The toolbar's visible fresh-pass, fresh-fail, needs-review,
       and blind tallies add back to the affected total (unknown stays separate); the browser proves that
       accounting, the real UI wiring, and Back behavior.
+  - name: session-impact-exact-revision
+    tags: [backend-api]
+    test: spec-eval/src/sessionimpact.api.test.ts
+    code:
+      - spec-eval/src/scenarios.ts#scenarioCodeAxis
+      - spec-eval/src/sidecar.ts#readReadings
+      - spec-eval/src/sessioneval.ts#projectSessionImpact
+      - spec-eval/src/sessioneval.ts#sessionImpactOverlay
+      - spec-eval/src/sessioneval.ts#sessionEvalContentRevision
+      - spec-eval/src/sessioneval.ts#sessionMeasurements
+      - spec-eval/src/sessioneval.ts#sessionImpactForContext
+      - spec-eval/src/sessioneval.ts#scopeSessionScenarioRows
+      - spec-eval/src/sessioneval.ts#sessionScopeNodes
+      - spec-eval/src/sessioneval.ts#buildSessionEvals
+      - spec-cli/src/anchors.ts#parseRelation
+      - spec-cli/src/anchors.ts#resolveAnchor
+      - spec-cli/src/anchors.ts#selectorsHitRanges
+      - spec-cli/src/anchors.ts#diffHunkRanges
+      - spec-cli/src/git.ts#pathRangeEvents
+      - spec-cli/src/anchors.ts#anchorHitCommits
+      - spec-cli/src/git.ts#treeTextFiles
+      - spec-cli/src/specs.ts#loadSpecs
+      - spec-cli/src/reviews.ts#scopedEvalReviewItems
+      - spec-cli/src/reviews.ts#evalsReview
+      - spec-cli/src/index.ts
+    description: >
+      Plant a valid product session record for a linked worktree in a temporary Git repository, then read its
+      scoped Evals projection through the public HTTP surface. Bind alpha/beta scenarios to one shared source;
+      add effective and retracted session readings; exercise dirty semantic/metadata declarations, inherited
+      selectors, deletion/rename below line one, related context, and an untracked node. Advance session HEAD
+      during one public read. As an auxiliary exact-projector control against the same copied product, advance
+      a symbolic head before publication.
+    expected: >
+      The public scoped response and its session rows consume one exact-revision impact result. It outputs the
+      resolved base/head object ids and revision, node review causes, scenario code|contract|measurement impact,
+      selector hit commits/symbols, base/head scenarioHash, and semantic versus metadata delta. Beta-only does
+      not select alpha; alpha-only selects alpha, including a scenario inheriting the node's complete code
+      relation. An effective owned reading enters solely as measurement and its measured row retains that impact;
+      a retracted reading does not. Related paths remain node context. Description/expected movement is semantic
+      and moves scenarioHash; test/code/tags movement is metadata-only and leaves the hash equal; declaration and
+      dirty code renames are remove+add with old/new selector hits. Dead, ambiguous, unavailable, or unextractable
+      selectors are explicit HTTP unavailable errors. A raced session HEAD retries to the new exact response;
+      the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
     test: spec-dashboard/test/session-toolbar.e2e.mjs

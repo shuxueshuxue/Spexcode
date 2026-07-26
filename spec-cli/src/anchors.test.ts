@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, tsAstExtractor } from './anchors.js'
+import { parseRelation, anchorHitCommits, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -14,6 +14,17 @@ import { parseRelation, anchorHitCommits, tsAstExtractor } from './anchors.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(SRC, '..', '..')
+
+test('ordinary hunk ranges preserve old-side deletions below line one', () => {
+  const patch = '@@ -4,2 +3,0 @@ removed beta\n'
+  assert.deepEqual(diffHunkRanges(patch, 'old'), [[4, 5]])
+  assert.deepEqual(diffHunkRanges(patch, 'new'), [])
+  assert.deepEqual(selectorsHitRanges(
+    [{ name: 'beta', kind: 'function', start: 4, end: 5 }],
+    ['beta'],
+    diffHunkRanges(patch, 'old'),
+  ), ['beta'])
+})
 
 // ---- parseRelation: grouping + structural problems (pure, no fs) ----
 

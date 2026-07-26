@@ -9,6 +9,7 @@ code:
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
+  - spec-cli/src/anchors.test.ts
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
@@ -63,6 +64,12 @@ drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks abo
 never vindicates, so it takes the plain ancestry window. A selector verdict this side is never a block
 either: eval's whole lint layer is advisory, and a dead or ambiguous selector there stales its reading
 rather than stopping a commit.
+
+Exact impact projection is a third consumer of the same event/project/range seam. Its base→head window does
+not subtract `Spec-OK`: it asks what the session changed, not whether a node acknowledged drift. A declaration
+on either side names an identity at that exact revision; the shared rename DAG projects it and every immutable
+event to the same terminal lineage keys, including deleted lineages and incomparable forks. Git window or hunk
+failure makes the projection unavailable, never an empty miss.
 
 **Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
 report/CI run, and a pending commit for a locally-authored candidate. It is the same ack-filtered set

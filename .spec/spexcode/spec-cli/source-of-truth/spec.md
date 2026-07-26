@@ -41,6 +41,16 @@ specs and governed current content from that candidate's immutable tree and deri
 same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an
 unstaged working-tree edit cannot change the verdict for bytes absent from the candidate.
 
+An exact-revision caller that already batch-read `.spec` may supply that immutable declaration snapshot to
+`loadSpecs` so one projection does not read the same tree twice. The snapshot binds `{ tip, files }`; the
+loader rejects a tip mismatch before deriving anything, and history/drift use that same requested tip. This
+is caller-owned, build-local input, not a resident cache: ordinary filesystem reads and the existing
+HEAD-owned indexes keep their current behavior.
+
+Ownership itself has one relation algebra: exact path, directory prefix, or glob. The loader, candidate claim
+preflight, eval changed-set selection, and session impact all call the same pure matcher; an immutable snapshot
+changes where declarations are read, never what a declaration claims.
+
 Git's default history presentation suppresses merge diffs, but a merge can author content or rename a lineage
 while resolving conflicts. Dense combined (`--cc`) lines different from every parent are that merge's own
 writes: a cc change to `spec.md` is a version, and one in governed code enters drift/anchor judgment. Combined

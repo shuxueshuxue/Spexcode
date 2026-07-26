@@ -46,8 +46,9 @@ either to write time or to read time. This is a cost bound, not permission to ch
 
 The bound is loose in the real corpus. In `perfrepo` (4,266 commits), 160 rename events have chains of at most
 four steps (96 one-step, 47 two-step, 16 three-step, one four-step; mean 1.51). The complete historical hit set
-was 202, 466, and 756 entries at depths 1,002, 2,497, and 4,200 (757 at HEAD); the former
-198 / 458 / 748 / 749 series came from a path-simplified measuring query that hid eight real events. Therefore the chosen
+is 249, 553, and 843 entries at depths 1,002, 2,497, and 4,200 (844 at HEAD). Two earlier instruments
+undercounted: 198 / 458 / 748 / 749 used a path-simplified query, while 202 / 466 / 756 / 757 still read
+historical blobs through their current path and ignored deletion-side ranges. Therefore the chosen
 incremental event index plus read-time projection preserves the existing verdict while keeping the practical
 projection cost near constant; future optimizations should compress these constants, not introduce a lossy
 alternative semantics.

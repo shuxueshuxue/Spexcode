@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt,
   treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
-import { parseCodeEntry, parseRelation } from './anchors.js'
+import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
 const ROOT = repoRoot()
@@ -154,10 +154,13 @@ async function walkAsync(dir: string, parent: string | null, acc: Raw[], root: s
     if (e.isDirectory()) await walkAsync(join(dir, e.name), myId, acc, root)
   }
 }
-async function rawsAsync(root: string, tip = 'HEAD'): Promise<Raw[]> {
-  if (tip !== 'HEAD') {
+export type SpecTreeSnapshot = { tip: string; files: ReadonlyMap<string, string> }
+
+async function rawsAsync(root: string, tip = 'HEAD', snapshot?: SpecTreeSnapshot): Promise<Raw[]> {
+  if (snapshot || tip !== 'HEAD') {
     const acc: Raw[] = []
-    for (const [relPath, source] of [...treeTextFiles(root, tip, '.spec')].sort(([a], [b]) => a.localeCompare(b))) {
+    const files = snapshot?.files ?? treeTextFiles(root, tip, '.spec')
+    for (const [relPath, source] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
       if (!relPath.endsWith('/spec.md')) continue
       const segs = relPath.split('/')
       const { fm, body } = parseFrontmatter(source)
@@ -176,12 +179,7 @@ async function rawsAsync(root: string, tip = 'HEAD'): Promise<Raw[]> {
 // the claim rule shared by both relations (exact path, dir-prefix, or *-glob). See [[governed-related]].
 function claimMatcher(file: string): (cf: string) => boolean {
   const rel = file.startsWith('/') ? relative(ROOT, file) : file
-  return (cf: string): boolean => {
-    if (cf === rel) return true
-    if (rel.startsWith(cf.replace(/\/+$/, '') + '/')) return true
-    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(rel)
-    return false
-  }
+  return (claim) => relationClaimsPath(claim, rel)
 }
 
 // spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift + eval freshness); reads only
@@ -239,15 +237,23 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 // instead ([[source-of-truth]]'s several-checkouts principle at the loader level): its .spec is the
 // branch's pending proposal, so eval surfaces rooted at a session must load the spec tree from the SAME
 // root as their readings/indexes, or a branch-NEW node simply does not exist for them.
-export type LoadSpecsOptions = { tip?: string; history?: HistoryIndex | null; drift?: DriftIndex | null }
+export type LoadSpecsOptions = {
+  tip?: string
+  history?: HistoryIndex | null
+  drift?: DriftIndex | null
+  snapshot?: SpecTreeSnapshot
+}
 export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions = {}) {
   // Both indexes are one cached event projection each and independent — fetch them in parallel (async git,
   // off the event loop). Every node below is then a pure in-memory lookup.
   const tip = options.tip ?? 'HEAD'
+  if (options.snapshot && options.snapshot.tip !== tip) {
+    throw new Error(`loadSpecs snapshot tip '${options.snapshot.tip}' does not match requested tip '${tip}'`)
+  }
   const [idx, didx, allRaws] = await Promise.all([
     options.history === null ? Promise.resolve(null) : options.history ?? historyIndex(root, tip),
     options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
-    rawsAsync(root, tip),
+    rawsAsync(root, tip, options.snapshot),
   ])
   const loaded = []
   for (const r of allRaws) {

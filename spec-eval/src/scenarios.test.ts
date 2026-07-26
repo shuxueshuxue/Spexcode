@@ -428,12 +428,15 @@ test('sidecar: a mixed reading (N images + a video + timeline) round-trips its w
 
 // linear chain c1 <- c2 <- c3 (c3 = tip): "newer than X" = not reachable from X.
 function fakeIndex(fileCommits: Record<string, string[]>): DriftIndex {
+  const fileEvents = new Map(Object.entries(fileCommits).map(([path, commits]) =>
+    [path, commits.map((commit) => ({ commit, historicalPath: path, parents: [] }))]))
   return {
     ord: new Map([['c3', 0], ['c2', 1], ['c1', 2]]),
     parents: new Map([['c3', ['c2']], ['c2', ['c1']], ['c1', []]]),
     anc: new Map(),
-    fileEvents: new Map(Object.entries(fileCommits).map(([path, commits]) =>
-      [path, commits.map((commit) => ({ commit, historicalPath: path, parents: [] }))])),
+    fileEvents,
+    lineageEvents: fileEvents,
+    lineageKeys: (path) => [path],
     acks: new Map(),
     specNodes: new Map(),
   }

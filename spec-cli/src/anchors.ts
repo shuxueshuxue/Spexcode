@@ -46,6 +46,13 @@ export function parseCodeEntry(raw: string): CodeEntry {
 // this parser never touches fs.
 export type RelationEntry = { path: string; selectors: string[] }
 export type RelationParse = { entries: RelationEntry[]; problems: string[] }
+export function relationClaimsPath(claim: string, file: string): boolean {
+  if (claim === file) return true
+  if (file.startsWith(claim.replace(/\/+$/, '') + '/')) return true
+  if (!claim.includes('*')) return false
+  const pattern = claim.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+  return new RegExp(`^${pattern}$`).test(file)
+}
 export function parseRelation(raws: string[], relation: 'code' | 'related'): RelationParse {
   const order: string[] = []
   const byPath = new Map<string, { bare: boolean; selectors: string[] }>()
@@ -382,6 +389,26 @@ export function resolveAnchor(units: Unit[], symbol: string): AnchorResolution {
   return { ok: hits[0] }
 }
 
+// The one selector/range intersection used by historical commits and a pinned worktree overlay.
+export function selectorsHitRanges(units: readonly Unit[], symbols: readonly string[], ranges: readonly [number, number][]): string[] {
+  return symbols.filter((symbol) => {
+    const matching = units.filter((unit) => unit.name === symbol)
+    return matching.length > 0 && ranges.some(([start, end]) => matching.some((unit) => start <= unit.end && unit.start <= end))
+  })
+}
+
+// Ordinary zero-context ranges. The side chooses the immutable image whose units the caller resolved.
+export function diffHunkRanges(patch: string, side: 'old' | 'new' = 'new'): [number, number][] {
+  const ranges: [number, number][] = []
+  for (const match of patch.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+    const offset = side === 'old' ? 1 : 3
+    const start = +match[offset]
+    const count = match[offset + 1] === undefined ? 1 : +match[offset + 1]
+    if (count > 0) ranges.push([start, start + count - 1])
+  }
+  return ranges
+}
+
 // ---- the historical hit engine (language-agnostic; batch short-lived git, no resident process) ----
 
 // units of a file AS OF a commit, memoized by the complete immutable parse identity. File content identified
@@ -409,17 +436,19 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
 // adjacent inherited line merely because Git placed both in one `@@@` hunk.
 type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
 const hunkMemo = new Map<string, HunkRanges>()
-async function hunksAt(root: string, commit: string, path: string, merge = false): Promise<HunkRanges> {
-  const key = `${commit}\0${path}`
+async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges> {
+  const paths = [...new Set([event.historicalPath, ...event.parents.map((parent) => parent.historicalPath)])]
+  const key = `${event.commit}\0${paths.join('\x1e')}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', '-M', '--format=', commit,
-    ...(merge ? [] : ['--', path])],
-    `cannot derive anchor hunks for ${commit}:${path}`)
+  const merge = event.parents.length > 1
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', '-M', '--format=', event.commit,
+    ...(merge ? [] : ['--', ...paths])],
+    `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
   let ranges: HunkRanges = { after: [], before: [[]] }
   if (/^@@@/m.test(out)) {
-    const owned = combinedDiffOwnedChanges(out).get(path)
-    if (!owned) throw new Error(`combined diff for ${commit} did not expose owned ranges for '${path}'`)
+    const owned = combinedDiffOwnedChanges(out).get(event.historicalPath)
+    if (!owned) throw new Error(`combined diff for ${event.commit} did not expose owned ranges for '${event.historicalPath}'`)
     ranges = owned
   } else {
     for (const m of out.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
@@ -434,8 +463,8 @@ async function hunksAt(root: string, commit: string, path: string, merge = false
   return ranges
 }
 
-// Ordinary commits in one anchor window share a single path-limited log. Merge commits deliberately stay
-// on hunksAt's `show --cc` path because their dense combined ownership is a different predicate.
+// Ordinary commits whose two images keep one path share a single query. Renames and merges retain distinct
+// image paths, so they stay on hunksAt's exact event-shaped query.
 async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, HunkRanges>> {
   const result = new Map<string, HunkRanges>()
   const ordinary = [...new Set(commits)]
@@ -502,6 +531,7 @@ export async function anchorHitCommits(root: string, win: DriftPathEvent[], symb
   }
   const byPath = new Map<string, string[]>()
   for (const event of win) {
+    if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
     const commits = byPath.get(event.historicalPath) ?? []
     commits.push(event.commit)
     byPath.set(event.historicalPath, commits)
@@ -514,7 +544,7 @@ export async function anchorHitCommits(root: string, win: DriftPathEvent[], symb
     const after = units.get(revisionKey({ commit: event.commit, path: event.historicalPath }))!
     const before = event.parents.map(({ commit, historicalPath }) => units.get(revisionKey({ commit, path: historicalPath }))!)
     const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-      ?? await hunksAt(root, event.commit, event.historicalPath, event.parents.length > 1)
+      ?? await hunksAt(root, event)
     if (event.parents.length && ranges.before.length !== before.length)
       throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
     const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }

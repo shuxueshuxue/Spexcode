@@ -88,7 +88,8 @@ test('evalTimeline primes off-history content fallback without probing reachable
     writeFileSync(sidecarPath, JSON.stringify({ scenario: 's', codeSha: anchor, blob: null, ts: '2026-07-26T00:00:00Z' }) + '\n')
     const idx = {
       ord: new Map([['current', 0]]), parents: new Map([['current', []]]),
-      fileEvents: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(),
+      fileEvents: new Map(), lineageEvents: new Map(), lineageKeys: (path: string) => [path],
+      acks: new Map(), specNodes: new Map(), anc: new Map(),
     }
     const node = {
       id: 'n', dir: join(root, '.spec/n'), evalPath: '.spec/n/eval.md', sidecarPath,

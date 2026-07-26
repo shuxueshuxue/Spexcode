@@ -608,9 +608,10 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
   throw new Error(`history event cache changed repeatedly while deriving '${kind}' for ${tip}`)
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
-export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
+export async function gitTry(args: string[], options: { indexFile?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  if (options.indexFile) env.GIT_INDEX_FILE = options.indexFile
   const context = inheritedContext()
   try {
     const { stdout, stderr } = await execGitForCaller(args, env)
@@ -859,7 +860,6 @@ function headOrEmpty(root: string): string {
 
 type RenameProjectionEvent = { hash: string; to: string }
 function canonicalPathProjector(
-  currentPaths: Set<string>,
   renamesByFrom: Map<string, RenameProjectionEvent[]>,
   topologyOrd: Map<string, number>,
   topologyParents: Map<string, string[]>,
@@ -903,7 +903,7 @@ function canonicalPathProjector(
       if (applicable.some((rename) => !precedes(event, rename.hash))) resolved.add(candidate)
       for (const rename of applicable) pending.push(rename.to)
     }
-    return [...resolved].filter((candidate) => currentPaths.has(candidate))
+    return [...resolved]
   }
 }
 
@@ -1029,9 +1029,9 @@ async function buildIndex(root: string, tip: string, transient: boolean, useCach
     renames.push({ hash: rename.hash, to: rename.to })
     renamesByFrom.set(rename.from, renames)
   }
-  const canonical = canonicalPathProjector(currentPaths, renamesByFrom, topologyOrd, topologyParents)
+  const canonical = canonicalPathProjector(renamesByFrom, topologyOrd, topologyParents)
   for (const [path, pathRows] of rawVersions) {
-    for (const row of pathRows) for (const head of canonical(path, row.hash)) {
+    for (const row of pathRows) for (const head of canonical(path, row.hash).filter((candidate) => currentPaths.has(candidate))) {
       const rows = versions.get(head) ?? []
       if (!rows.some((existing) => existing.hash === row.hash)) rows.push(row)
       versions.set(head, rows)
@@ -1123,6 +1123,8 @@ export type DriftIndex = {
   ord: Map<string, number>            // hash -> dense id from the walk: a bitset slot, NEVER an order to compare
   parents: Map<string, string[]>      // hash -> parent hashes (the DAG edges, from the same walk)
   fileEvents: Map<string, DriftPathEvent[]>
+  lineageEvents: Map<string, DriftPathEvent[]> // immutable events keyed by terminal rename identity, present or deleted
+  lineageKeys: (path: string, revision: string) => string[]
   resolutionEvents?: Map<string, DriftPathEvent[]> // merge-authored all-parent lines projected to this path
   acks: Map<string, Set<string>>      // tree-unchanged checkpoint hash -> node ids acknowledged via `Spec-OK:`
   selfAcks?: Map<string, Set<string>> // content commit hash -> node ids acknowledged for that commit only
@@ -1275,9 +1277,10 @@ async function mergeHistoryEvents(root: string, tip: string, transient: boolean,
 async function buildDriftIndex(root: string, tip: string, transient: boolean, useCache = true): Promise<DriftIndex> {
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileEvents = new Map<string, DriftPathEvent[]>()
+  const lineageEvents = new Map<string, DriftPathEvent[]>()
   const acks = new Map<string, Set<string>>(), selfAcks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
   const ackCandidates = new Map<string, Set<string>>(), trees = new Map<string, string>()
-  const idx: DriftIndex = { tip, ord, parents, fileEvents, resolutionEvents: new Map(), acks, selfAcks, specNodes, anc: new Map() }
+  const idx: DriftIndex = { tip, ord, parents, fileEvents, lineageEvents, lineageKeys: (path) => [path], resolutionEvents: new Map(), acks, selfAcks, specNodes, anc: new Map() }
   const [tipPathsOut, topology] = await Promise.all([
     strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
     strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
@@ -1323,11 +1326,12 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
       const { from, to } = parseStatPath(stat[3])
       if (!merge) {
         const events = rawFileEvents.get(to) ?? []
-        events.push({
+        const event: DriftPathEvent = {
           commit: hash,
           historicalPath: to,
           parents: (parents.get(hash) ?? []).slice(0, 1).map((commit) => ({ commit, historicalPath: from })),
-        })
+        }
+        events.push(event)
         rawFileEvents.set(to, events)
       }
       if (from !== to) {
@@ -1343,16 +1347,27 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
     renames.push({ hash: rename.hash, to: rename.to })
     renamesByFrom.set(rename.from, renames)
   }
-  const canonical = canonicalPathProjector(currentPaths, renamesByFrom, topologyOrder, topologyParents)
-  for (const [path, rawEvents] of rawFileEvents) for (const event of rawEvents) for (const head of canonical(path, event.commit)) {
-    const events = fileEvents.get(head) ?? []
-    if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath))
-      events.push(event)
-    fileEvents.set(head, events)
-    if (isSpecMd(head)) {
-      const nodes = specNodes.get(event.commit) ?? new Set<string>()
-      nodes.add(nodeIdOf(head))
-      specNodes.set(event.commit, nodes)
+  const canonical = canonicalPathProjector(renamesByFrom, topologyOrder, topologyParents)
+  idx.lineageKeys = canonical
+  const addEvent = (path: string, event: DriftPathEvent, target: Map<string, DriftPathEvent[]>) => {
+    const keys = canonical(path, event.commit)
+    for (const key of keys) {
+      const events = target.get(key) ?? []
+      if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
+      target.set(key, events)
+    }
+  }
+  for (const [path, rawEvents] of rawFileEvents) for (const event of rawEvents) {
+    addEvent(path, event, lineageEvents)
+    for (const head of canonical(path, event.commit).filter((candidate) => currentPaths.has(candidate))) {
+      const events = fileEvents.get(head) ?? []
+      if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
+      fileEvents.set(head, events)
+      if (isSpecMd(head)) {
+        const nodes = specNodes.get(event.commit) ?? new Set<string>()
+        nodes.add(nodeIdOf(head))
+        specNodes.set(event.commit, nodes)
+      }
     }
   }
   for (const [hash, nodes] of ackCandidates) {
@@ -1361,26 +1376,25 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
     const checkpoint = parentList.length === 1 && !!firstParent && trees.get(hash) === trees.get(firstParent)
     ;(checkpoint ? acks : selfAcks).set(hash, nodes)
   }
-  for (const [path, mergeEvents] of mergeIndex.resolutions) for (const mergeEvent of mergeEvents) for (const head of canonical(path, mergeEvent.hash)) {
-    const events = idx.resolutionEvents!.get(head) ?? []
-    if (!events.some((event) => event.commit === mergeEvent.hash && event.historicalPath === path)) {
-      const mergeParents = topologyParents.get(mergeEvent.hash) ?? []
-      if (mergeParents.length !== mergeEvent.parentPaths.length)
-        throw new Error(`merge ${mergeEvent.hash} has ${mergeParents.length} topology parents but ${mergeEvent.parentPaths.length} combined parent paths`)
-      events.push({
-        commit: mergeEvent.hash,
-        historicalPath: path,
-        parents: mergeParents.map((commit, index) => ({
-          commit,
-          historicalPath: mergeEvent.parentPaths[index],
-        })),
-      })
+  for (const [path, mergeEvents] of mergeIndex.resolutions) for (const mergeEvent of mergeEvents) {
+    const mergeParents = topologyParents.get(mergeEvent.hash) ?? []
+    if (mergeParents.length !== mergeEvent.parentPaths.length)
+      throw new Error(`merge ${mergeEvent.hash} has ${mergeParents.length} topology parents but ${mergeEvent.parentPaths.length} combined parent paths`)
+    const event: DriftPathEvent = {
+      commit: mergeEvent.hash,
+      historicalPath: path,
+      parents: mergeParents.map((commit, index) => ({ commit, historicalPath: mergeEvent.parentPaths[index] })),
     }
-    idx.resolutionEvents!.set(head, events)
-    if (isSpecMd(head)) {
-      const nodes = specNodes.get(mergeEvent.hash) ?? new Set<string>()
-      nodes.add(nodeIdOf(head))
-      specNodes.set(mergeEvent.hash, nodes)
+    addEvent(path, event, lineageEvents)
+    for (const head of canonical(path, mergeEvent.hash).filter((candidate) => currentPaths.has(candidate))) {
+      const events = idx.resolutionEvents!.get(head) ?? []
+      if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
+      idx.resolutionEvents!.set(head, events)
+      if (isSpecMd(head)) {
+        const nodes = specNodes.get(mergeEvent.hash) ?? new Set<string>()
+        nodes.add(nodeIdOf(head))
+        specNodes.set(mergeEvent.hash, nodes)
+      }
     }
   }
   return idx
@@ -1496,13 +1510,29 @@ export function selfAckCovers(idx: DriftIndex, sinceHash: string, hash: string, 
 export function pathEvents(idx: DriftIndex, path: string): DriftPathEvent[] {
   return [...(idx.fileEvents.get(path) ?? []), ...(idx.resolutionEvents?.get(path) ?? [])]
 }
+
+// Exact base..tip window for consumers whose subject is not a spec version. The path is an identity at
+// `identityRevision`; projecting it and every immutable event to the same terminal lineage keys preserves
+// rename chains, parallel forks, path reuse, and lineages deleted before the tip.
+export function pathRangeEvents(idx: DriftIndex, sinceHash: string, path: string, identityRevision = idx.tip ?? sinceHash): DriftPathEvent[] | null {
+  const base = ancestorsOf(idx, sinceHash)
+  if (!base) return null
+  const seen = new Set<string>()
+  const events = idx.lineageKeys(path, identityRevision).flatMap((key) => idx.lineageEvents.get(key) ?? [])
+  return events.filter((event) => {
+    const key = `${event.commit}\0${event.historicalPath}\0${event.parents.map((parent) => `${parent.commit}:${parent.historicalPath}`).join('\x1e')}`
+    if (seen.has(key) || inAncestors(idx, base, event.commit)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function driftPathWindow(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): DriftPathEvent[] | null {
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return null
+  const events = pathEvents(idx, path).filter((event) => !inAncestors(idx, base, event.commit))
   const cover = ackCoverFor(idx, sinceHash, nodeId)
-  return pathEvents(idx, path)
-    .filter((event) => !inAncestors(idx, base, event.commit)
-      && !cover.some((a) => inAncestors(idx, a, event.commit))
+  return events.filter((event) => !cover.some((a) => inAncestors(idx, a, event.commit))
       && !selfAckCovers(idx, sinceHash, event.commit, nodeId))
 }
 

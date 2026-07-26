@@ -1940,7 +1940,7 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
 // signal only a pid whose argv still names THIS session. Unidentifiable → we signal nothing and let the
 // adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
 const AGENT_EXIT_GRACE_MS = 3000
-async function killAgentProcess(id: string): Promise<void> {
+async function killAgentProcess(id: string, beforeSignal: () => Promise<void>): Promise<void> {
   const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
   if (!Number.isFinite(pid) || pid <= 0) return
   const startToken = processStartToken(pid)
@@ -1959,6 +1959,7 @@ async function killAgentProcess(id: string): Promise<void> {
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
   if (!argv.includes(id) || processStartToken(pid) !== startToken) return // not provably the same session instance — leave it
   for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
+    await beforeSignal()
     try { process.kill(pid, sig) } catch { return }                  // vanished between checks
     if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
   }
@@ -1973,10 +1974,11 @@ async function killAgentProcess(id: string): Promise<void> {
 async function stopAgentProcess(id: string, rec: SessRec | null): Promise<void> {
   // The caller resolves one readable owner before entering this seam. An absent/corrupt record never reaches
   // tmux, signals, or adapter cleanup: a bare session id is an address, not ownership authority.
-  await assertSessionStopSafe(id, rec ? { ...rec, harness: rec.harness } : null)
+  const assertOwned = () => assertSessionStopSafe(id, rec ? { ...rec, harness: rec.harness } : null)
+  await assertOwned()
   if (!rec) throw new ResourceConflict(`refusing to stop ${id}: no readable session owner`)
   await tmuxOk(['kill-session', '-t', id])
-  await killAgentProcess(id)
+  await killAgentProcess(id, assertOwned)
   launchedAt.delete(id)
   await harnessById(rec.harness || defaultHarness.id).cleanupRuntime(rec)
 }

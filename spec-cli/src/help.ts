@@ -363,6 +363,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
+  shared-runtime-spawn <cwd> <log> <pid> <scope> <cmd> [args…]  detached adapter control plane (launch script)
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
   claude-headless-run <id> <runtime> <cmd> -- <tail…>  resident stream-json controller (launch script)

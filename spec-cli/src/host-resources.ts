@@ -7,7 +7,7 @@ import { defaultHarness, HARNESSES, harnessById, sessionIdentityEnvVars, type Ha
 import { listSessionIds, readConfig, readJsonConfig, readRawRecord, runtimeRoot, type RawRecord } from './layout.js'
 import { repoRoot } from './git.js'
 import { endpointRecordPath } from './host.js'
-import { parseProcStat, processStartToken, type ProcessIdentity } from './process-identity.js'
+import { parseProcStat, processStartToken, processTopology, type ProcessIdentity } from './process-identity.js'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
 
 type Proc = ProcessIdentity & {
@@ -198,12 +198,13 @@ const runtimePid = (file: string): number | null => {
   catch { return null }
 }
 type SharedEntry = { descriptor: SharedRuntimeDescriptor; recs: RawRecord[] }
-const sharedDescriptors = (recs: RawRecord[]): Map<string, SharedEntry> => {
+const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<string, SharedEntry> => {
   const out = new Map<string, { descriptor: SharedRuntimeDescriptor; recs: RawRecord[] }>()
   for (const harness of HARNESSES) for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
     if (!out.has(descriptor.key)) out.set(descriptor.key, { descriptor, recs: [] })
   }
   for (const rec of recs) {
+    if (!rec.governed) continue
     const harness = harnessById(rec.harness || defaultHarness.id)
     for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
       const entry = out.get(descriptor.key) ?? { descriptor, recs: [] }
@@ -211,7 +212,7 @@ const sharedDescriptors = (recs: RawRecord[]): Map<string, SharedEntry> => {
       out.set(descriptor.key, entry)
     }
   }
-  for (const [key, entry] of out) if (!entry.recs.length && !runtimePid(entry.descriptor.pidFile)) out.delete(key)
+  if (!retainRegistry) for (const [key, entry] of out) if (!entry.recs.length && !runtimePid(entry.descriptor.pidFile)) out.delete(key)
   return out
 }
 
@@ -348,9 +349,12 @@ const sessionStopBlocker = async (
   recs = records(),
   knownProbes?: Map<string, SharedRuntimeProbe>,
 ): Promise<string | null> => {
-  const harnesses = harnessId ? [harnessById(harnessId)] : HARNESSES
-  const descriptors = new Map(harnesses.flatMap((harness) => harness.sharedRuntimes?.(runtimeRoot()) ?? []).map((descriptor) => [descriptor.key, descriptor])).values()
-  for (const descriptor of descriptors) {
+  const allowed = harnessId
+    ? new Set((harnessById(harnessId).sharedRuntimes?.(runtimeRoot()) ?? []).map((descriptor) => descriptor.key))
+    : null
+  for (const [key, entry] of sharedDescriptors(recs, true)) {
+    if (allowed && !allowed.has(key)) continue
+    const descriptor = entry.descriptor
     const pid = runtimePid(descriptor.pidFile)
     const startToken = pid ? processStartToken(pid) : null
     const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
@@ -359,21 +363,23 @@ const sessionStopBlocker = async (
       return `${descriptor.label} ${identity} could not prove its live references: ${probe.error || 'unknown probe failure'}`
     }
     const ownerCounts = new Map<string, number>()
-    for (const rec of recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
+    for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
     const unowned = probe.references.filter((reference) => ownerCounts.get(reference.referenceId) !== 1)
     if (unowned.length) return `${descriptor.label} has ${unowned.length} loaded thread(s) without one exact governed session owner: ${unowned.map((reference) => reference.referenceId).join(', ')}`
-    const targetThread = recs.find((rec) => rec.session_id === id)?.harness_session_id
+    const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
     const siblings = probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread)
     const liveReason = siblings.length
       ? `${siblings.length} live sibling thread(s)`
       : `${probe.references.length} live thread reference(s)`
     if (!pid) return `${descriptor.label} has ${liveReason} but no readable owner PID`
     if (!startToken) return `${descriptor.label} PID ${pid} has ${liveReason} but no readable process-start identity`
+    const topology = processTopology(pid)
     let stamp = ''
     try { stamp = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* legacy unsafe runtime */ }
-    if (stamp !== `hup-safe-v2 ${pid} ${startToken}`) {
+    if (!topology || topology.startToken !== startToken || topology.processGroupId !== pid || topology.sessionId !== pid ||
+      stamp !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`) {
       const refs = probe.references.map((reference) => reference.referenceId).join(', ') || 'no loaded threads'
-      return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching HUP-isolation proof`
+      return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching live detached process-boundary proof`
     }
   }
   return null

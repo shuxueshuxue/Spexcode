@@ -17,10 +17,11 @@ scenarios:
       walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
       minimal parallel-version DAG has clear parent verdicts but revives the losing branch's hit after the
       merge, proving that (v, D) cannot be joined after forgetting cleared hits. Hit identities derived from
-      the complete drift event index grow with events (249 / 553 / 843 at depths 1,002 / 2,497 / 4,200; 844
+      the complete drift event index grow with events (249 / 550 / 840 at depths 1,002 / 2,497 / 4,200; 841
       at the tip). The proof rejects both known lossy proxies: path-limited history simplifies away eight
       events, while reading historical blobs/ranges through the current name misses 86 pre-rename hits plus
-      one same-path deletion. Rename projection stays empirically short (maximum 4, mean 1.51) without
+      one same-path deletion. It also rejects a result-only rename query that invents three full-addition
+      hits absent from the real two-image patches. Rename projection stays empirically short (maximum 4, mean 1.51) without
       being asymptotically O(1). Before the 14-point comparison, a 13-anchor positive fixture blocks in both
       immutable CLI implementations; deleting one actual normalized anchor row produces exactly that one
       missing key. Per-rule coverage is printed for every historical point, and zero anchor rows there is

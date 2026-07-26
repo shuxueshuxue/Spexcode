@@ -299,8 +299,8 @@ for (const spec of specs) {
 
 // The proof derives and retains every hit identity from the complete drift event index. Project that set
 // onto the first-parent points only for the growth measurement; do not re-run a path-limited `git log`
-// at each point, or replace event historical paths with current names: both are measured undercounts this
-// proof guards against.
+// at each point, replace event historical paths with current names, or query a rename through only its
+// result path: the first two undercount and the third invents full-addition hits.
 const firstParent = git(['rev-list', '--first-parent', '--reverse', tip]).trim().split('\n').filter(Boolean)
 const countMemo = new Map()
 const reachableCount = (hash) => {

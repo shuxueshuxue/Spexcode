@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { codexHarness, codexHeadlessHarness, HARNESSES } from './harness.js'
 
-test('codex-headless composes Codex materialization and app-server delivery without a TUI attach', () => {
+test('codex-headless composes Codex materialization and shared-runtime ownership without a TUI attach', () => {
   assert.deepEqual(HARNESSES.map((h) => h.id), [
     'claude', 'codex', 'opencode', 'pi',
     'claude-headless', 'opencode-headless', 'pi-headless', 'codex-headless',
@@ -21,11 +21,18 @@ test('codex-headless composes Codex materialization and app-server delivery with
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)
+  const headlessRuntime = codexHeadlessHarness.sharedRuntimes?.('/tmp/runtime') ?? []
+  const interactiveRuntime = codexHarness.sharedRuntimes?.('/tmp/runtime') ?? []
+  assert.deepEqual(
+    headlessRuntime.map(({ probe: _probe, ...descriptor }) => descriptor),
+    interactiveRuntime.map(({ probe: _probe, ...descriptor }) => descriptor),
+  )
+  assert.ok(headlessRuntime.every((descriptor) => typeof descriptor.probe === 'function'))
 })
 
 test('codex-headless launch starts the shared app-server and first turn, then exits without attaching a TUI', () => {
   const cmd = codexHeadlessLaunchCommand('session-1', 'codex --yolo', 'codex', '/tmp/spex-project')
-  assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
+  assert.match(cmd, /internal shared-runtime-spawn [^\n]* codex app-server --listen "unix:\/\/\$sock"/)
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
   assert.match(cmd, /internal session-turn-fail.*codex-headless/, 'non-zero one-shot turns report through the shared outcome seam')
   assert.match(cmd, /elif \[ "\$#" -eq 0 \]; then/)

@@ -148,6 +148,8 @@ agent**, not a server merge — it returns `{dispatched}` and never touches main
 `/api/sessions/edges` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
 heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.
+The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
+It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 
 Issue routes follow the same thin-port rule: `GET /api/issues` returns the merged issue list plus the
 writable stores (`local` and configured forge drivers), `GET /api/issues/:id` is the single-thread detail

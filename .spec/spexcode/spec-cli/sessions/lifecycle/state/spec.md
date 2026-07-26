@@ -115,10 +115,11 @@ review+`offline` (the relaunch panel). A stable review+`online` session genuinel
 proposes, then idles awaiting the merge — not just a test artifact.
 
 Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
-of `resume`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
-the global record**, then writes only that record's `stopped` liveness marker, so the session reads `offline`
+of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
+socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
+worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
 and the relaunch panel offers to `--resume` the same conversation. The lifecycle fields the agent last authored
-survive the stop untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`**
+survive the stop untouched — whereas a proven-owner `close` removes the worktree AND sweeps the global record dir. **`resume`**
 is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
 conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
@@ -144,12 +145,18 @@ alive process (the one case where a deliberate kill is the repair). Only a **con
 `force`) is relaunched. The `merge` dispatch is the sole non-guarded caller: it merely needs a *live* agent to
 send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
 confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
-Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
+Contrast **`close`**, the other human-only terminal verb: with a readable owner it *removes* the worktree,
+discarding the work. An unreadable record proves no adapter, leaf, worktree, or branch owner, so close may copy
+the corrupt bytes to the control-plane quarantine but must then fail loudly before any signal or deletion and
+name the preserved residue. There is no fail-open cleanup path: a later exact recovery still enters through the
+same stop/close owner primitive, never a reclaim verb or second terminator. Both
 are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
 human-only verb, **`archive`** ([[archive]]), is deliberately neither: it writes one record field and stops
 nothing, so stop remains the RESOURCE verb and archive the ATTENTION verb, freely composed. A stopped
-session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
-one. The one
+session never owns the project-shared Codex app-server: that control plane is reference-counted across sibling
+sessions/turns, and a stop that cannot prove its leaf boundary refuses rather than walking ancestors or matching
+process commands. A stopped session occupies no working-set slot ([[launch]]) — offline never does — so the
+freed capacity drains a queued one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label

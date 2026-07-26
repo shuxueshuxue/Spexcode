@@ -8,7 +8,7 @@
     "spex": "bin/spex.mjs"
   },
   "scripts": {
-    "serve": "tsx src/cli.ts serve",
+    "serve": "node bin/spex.mjs serve",
     "lint": "tsx src/cli.ts spec lint",
     "test": "tsx --test src/*.test.ts"
   },

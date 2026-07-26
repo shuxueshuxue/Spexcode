@@ -28,6 +28,7 @@ import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, sup
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
+import { collectResourceReport, ResourceConflict } from './host-resources.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -41,12 +42,13 @@ app.onError((error, c) => {
   // is deliberate and already carries its own diagnosis + repair ([[sessions-core]]). Answering 500 with a
   // stack would hide exactly the sentence the human needs.
   if (error instanceof SessionRecordUnusable) return c.json({ error: error.message, code: error.code }, 409)
+  if (error instanceof ResourceConflict) return c.json({ error: error.message, code: error.code }, 409)
   console.error(error)
   return c.text('Internal Server Error', 500)
 })
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/settings · /api/sessions · /api/slash-commands'))
+app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/settings · /api/sessions · /api/resources · /api/slash-commands'))
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
@@ -400,6 +402,7 @@ app.post('/api/uploads', async (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
+app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
 // edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
 // watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
 app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))

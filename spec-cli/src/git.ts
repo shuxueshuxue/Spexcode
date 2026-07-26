@@ -1115,7 +1115,10 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
   // truncation be the verdict (a stream that overflows the budget is by definition at least that big).
   // Reading the whole stream to measure it made every index build pay a full-history walk, and a stream past
   // the transport's buffer came back EMPTY, flipping the large-history switch off exactly where it matters.
-  const probe = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', tip], DRIFT_LAZY_OUTPUT_BYTES)
+  const cachedProbe = useCache ? cachedEventStreamInfo(root, 'drift-name', tip) : null
+  const probe = cachedProbe
+    ? { text: '', truncated: cachedProbe.truncated }
+    : await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', tip], DRIFT_LAZY_OUTPUT_BYTES)
   if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root, tip, transient, useCache)
   const count = Number((await gitA(['-C', root, 'rev-list', '--count', tip])).trim())
   if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root, tip, transient)
@@ -1219,9 +1222,13 @@ export function resetHistoryCachesForTests(): void {
   indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear(); eventCacheMemo.clear(); eventPathMemo.clear()
 }
 export function historyEventCachePathForTests(root: string): string { return eventCachePath(root) }
-// The merge event stream stores the complete combined patch. Anchor hunk reads can reuse it after the shared
-// drift/history entry point has populated the ledger; a null result means an oracle or a genuinely uncached
-// commit and keeps the caller's original `git show --cc` fallback.
+export function cachedEventStreamInfo(root: string, kind: string, tip: string): { bytes: number; truncated: boolean } | null {
+  const state = readEventCache(root).state
+  if (!(state.streamTips.get(kind) ?? []).includes(tip)) return null
+  let bytes = 0
+  for (const record of state.streams.get(kind)?.values() ?? []) bytes += Buffer.byteLength(record.raw) + 1
+  return { bytes, truncated: bytes >= DRIFT_LAZY_OUTPUT_BYTES }
+}
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
 // a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.

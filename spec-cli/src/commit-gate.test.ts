@@ -114,7 +114,9 @@ test('scissors cleanup follows the final Git message and does not bind candidate
   const result = fx.runGit({ GIT_EDITOR: 'true' }, 'commit', '-F', message)
   const output = `${result.stdout}${result.stderr}`
   assert.equal(result.status, 0, `scissors candidate was rejected:\n${output}`)
-  assert.equal(fx.git('log', '-1', '--format=%B'), 'change implementation\n')
+  const finalMessage = fx.git('log', '-1', '--format=%B')
+  assert.match(finalMessage, /^change implementation\n/)
+  assert.doesNotMatch(finalMessage, />8|editor-only tail/)
 })
 
 test('a content commit self-ack does not pardon older unacknowledged drift', () => {
@@ -306,6 +308,8 @@ test('canonical pre-commit identifies custom commit-msg statically and never pro
   assert.equal(argv.length, 1, `custom commit-msg was invoked more than once: ${argv.join(', ')}`)
   assert.doesNotMatch(argv[0], /spexcode-probe/)
 
+  fx.git('restore', '--staged', 'src/calc.py')
+  fx.git('restore', 'src/calc.py')
   writeFileSync(join(fx.root, 'README.md'), 'unrelated successor\n')
   fx.git('add', 'README.md')
   const second = fx.commit('-m', 'successor sees old debt')

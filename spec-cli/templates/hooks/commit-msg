@@ -2,4 +2,13 @@
 # spexcode-managed-hook-v1
 # Candidate lint is driven solely by reference-transaction. This hook intentionally carries no marker,
 # message hash, tree binding, or TTL; Git's immutable commit object is the only candidate identity.
+# Git does not apply scissors cleanup to every no-editor/-F path, so normalize the final message here,
+# after every editor, using scissors only when the repository explicitly selected that cleanup mode.
+if [ "$(git config --get commit.cleanup 2>/dev/null || true)" = scissors ]; then
+  msg_file="$1"
+  tmp="${msg_file}.spexcode-scissors.$$"
+  awk '/^# ------------------------ >8 ------------------------$/ { exit } { print }' "$msg_file" \
+    | git stripspace --strip-comments > "$tmp"
+  mv "$tmp" "$msg_file"
+fi
 exit 0

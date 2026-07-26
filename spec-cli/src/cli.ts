@@ -527,9 +527,9 @@ if (cmd === 'serve') {
   } else if (sub === 'ls' && flag('session') !== undefined) {
     // the session EVAL read ([[session-eval]]'s interactive face as a CLI verb): the dashboard Eval tab's
     // text twin. Renders the session's changed nodes with each DECLARED scenario at its CURRENT score
-    // (latest reading per scenario, worktree-rooted) — blind spots lead, the session's OWN measurements
-    // ✦-marked ahead of the inherited baseline under its divider. --export writes the self-contained HTML
-    // artifact instead.
+    // (latest reading per scenario, worktree-rooted) — filed results keep the backend's newest-first order
+    // across ownership, the session's OWN measurements are ✦-marked, and blind spots follow. --export writes
+    // the self-contained HTML artifact instead.
     const id = await resolveSelectorOrExit(flag('session')!)
     if (has('export')) await evalExport(id)
     const { clientEvals } = await import('./client.js')
@@ -537,28 +537,24 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
     if (has('json')) { console.log(JSON.stringify(r.model, null, 2)); await flushExit(0) }
     const m = r.model
-    const byNode = new Map<string, any[]>()
-    for (const item of m.items) {
-      const rows = byNode.get(item.node) ?? []
-      rows.push(item)
-      byNode.set(item.node, rows)
-    }
-    const groups = [...byNode].map(([node, rows]) => ({ node, rows }))
     const own = m.items.filter((item) => item.inSession).length
     console.log(`eval session  [${m.id}]`)
     console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
-    if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited baseline)`)
+    if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited readings)`)
     if (!m.items.length) console.log('\n  no affected scenarios to evaluate yet')
-    for (const { node, rows } of groups) {
-      console.log(`\n${node}`)
-      for (const item of rows.filter((row) => row.filterKind === 'blind')) console.log(`      ∅ unmeasured  ${item.scenario}  — declared, never measured (blind spot)`)
-      let divided = false
-      for (const e of rows.filter((row) => row.filterKind === 'result')) {
-        if (!e.inSession && !divided && rows.some((x) => x.filterKind === 'result' && x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest evals) ──`); divided = true }
-        const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
-        const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
-        console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
+    let lastNode: string | null = null
+    for (const e of m.items) {
+      if (e.node !== lastNode) {
+        console.log(`\n${e.node}`)
+        lastNode = e.node
       }
+      if (e.filterKind === 'blind') {
+        console.log(`      ∅ unmeasured  ${e.scenario}  — declared, never measured (blind spot)`)
+        continue
+      }
+      const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
+      const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
+      console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
     }
   } else if (['add', 'ls', 'scenario', 'matrix', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.

@@ -152,7 +152,7 @@ test('scoped HTTP session impact is the selector-aware exact projection, includi
     writeFileSync(backendGit, `#!/bin/sh
 if [ -f "$IMPACT_HTTP_RACE_ENABLE" ] && [ ! -f "$IMPACT_HTTP_RACE_SIGNAL" ]; then
   case " $* " in
-    *" diff --name-only "*)
+    *" diff --name-status "*)
       echo reached > "$IMPACT_HTTP_RACE_SIGNAL"
       count=0
       while [ ! -f "$IMPACT_HTTP_RACE_RELEASE" ] && [ "$count" -lt 1000 ]; do

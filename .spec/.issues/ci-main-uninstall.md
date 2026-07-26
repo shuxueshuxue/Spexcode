@@ -1,7 +1,7 @@
 ---
 concern: CI 不跑单元测试,main 上已有一条长期失败的 uninstall 测试无人察觉
 by: abe9f2bd-3e85-4083-a152-0d89f267521b
-status: open
+status: landed
 nodes: code-anchor
 created: 2026-07-26T16:24:14.744Z
 ---

@@ -293,7 +293,7 @@ function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry
   catch (err: any) { return `\`code\` anchors on ${entry.path} are unverified: ${err?.message ?? String(err)}` }
   for (const sym of entry.selectors) {
     const r = resolveAnchor(units, sym)
-    if ('dead' in r) return `\`code\` selector \`${entry.path}#${sym}\` names no unit in that file — follow the rename or drop the selector (readings stay stale until then)`
+    if ('dead' in r) return `\`code\` selector \`${entry.path}#${sym}\` names no unit in that file — follow the rename or drop the selector (evals stay stale until then)`
     if ('ambiguous' in r) return `\`code\` selector \`${entry.path}#${sym}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
   }
   return null

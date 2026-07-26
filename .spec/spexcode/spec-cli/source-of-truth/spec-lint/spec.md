@@ -122,29 +122,13 @@ drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-f
 find which link of intent→spec→link→structure→code broke and fix THAT — *never patch the symptom*.
 **One anchor predicate at two real tips, plus candidate transition integrity:** the retired count gate
 (`lint.driftErrorThreshold`) stays gone; an anchor hit is an ordinary lint ERROR. `spex spec lint` and CI
-judge committed `HEAD`. On commit paths that
-invoke it, `commit-msg` arms one candidate and `reference-transaction` invokes the same lint over the real
-new oid before its ref advances,
-so history, raw specs, config and current anchored source all come from the candidate tree — never from an
-unrelated worktree/index state. Pending indices are transient and shared only inside that lint run; they
-never occupy or evict the server's persistent HEAD-keyed cache. Unanchored drift remains advisory. The
-candidate-only integrity rule above is intentionally not this shared anchor predicate: it compares deleted
-governor blobs from old `HEAD` with ownership in the candidate tree and rejects an orphaned surviving
-subject. Once that transition has landed, current `HEAD` no longer contains the deleted claim, so default
-lint reports only current-tree coverage; this local transition guard preserves the information while both
-sides are available. It is satisfied by deleting the implementation or transferring ownership, never by a
-`Spec-OK` trailer.
-
-This candidate gate intentionally supersedes the earlier **"One gate, no staged-index machinery"**
-decision rather than pretending that decision was an oversight. At that time `Spec-OK` existed only as a
-later `spex spec ack` `--allow-empty` stamp; there was no content-bearing ack, so rejecting before the
-implementation commit existed would close the only honest mechanics-only route. Native in-commit trailers
-now supply that route, while the narrowly-armed ref transaction lets the existing ancestry engine judge the
-real exact commit without applying a gate to unrelated ref operations. Local is therefore stricter than CI on paths that
-reach this hook: `P1` changing anchored code and
-`P2` updating the spec is accepted at CI's final tree but local rejects `P1`, deliberately requiring the
-code/spec checkpoint to be one commit. Bypass the local hook explicitly with `SPEXCODE_SKIP_LINT=1`; no
-installed hook means no local enforcement, so [[ci-gate]] remains authoritative.
+judge committed `HEAD`. At `reference-transaction` prepared, a refs/heads update whose new commit is not
+already reachable from refs or reflogs runs this same lint over the immutable candidate oid before the ref
+advances; no commit-msg marker or message projection is involved. Structural ref plumbing and remote fetch
+paths stay inert. The candidate-only integrity rule above remains separate: it compares deleted governor
+blobs from old `HEAD` with ownership in the candidate tree and rejects an orphaned surviving subject. The
+explicit local bypass is `SPEXCODE_SKIP_LINT=1`; no installed hook means no local enforcement, so [[ci-gate]]
+remains authoritative.
 
 ### Spec-OK — acknowledging an implementation-only change
 
@@ -174,7 +158,7 @@ can name exactly the required nodes in repeated `--trailer` flags.
 
 For the implementation commit currently being authored, Git's own
 `git commit --trailer "Spec-OK: <node-id>"` is the in-commit route. The final message is already present on
-the real candidate oid the armed gate judges, and a trailer on a content-bearing commit acknowledges
+the real candidate oid the prepared reference gate judges, and a trailer on a content-bearing commit acknowledges
 **only that commit** — older unacknowledged drift remains. The commit body is the durable explanation. A
 prior ack cannot cover a descendant, and a later empty ack cannot be created through a non-bypassed gate
 until the rejected commit lands; this makes the in-commit form necessary for a complete honest workflow.

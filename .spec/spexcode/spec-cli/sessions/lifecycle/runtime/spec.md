@@ -3,9 +3,10 @@ title: runtime
 status: active
 hue: 280
 desc: The per-session GLOBAL store dir — every harness-written runtime artifact under ~/.spexcode, keyed by session_id and grouped per-project, so the worktree stays 100% clean.
+code:
+  - spec-cli/src/project-store.ts
 related:
   - spec-cli/src/layout.ts
-  - spec-cli/src/project-store.ts
   - spec-cli/src/git.ts#eventCachePath
   - spec-cli/src/sessions.ts
 ---

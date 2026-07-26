@@ -151,13 +151,18 @@ scenarios:
       In a temporary hand-built Git repository, seed the persistent history event ledger, corrupt one byte in
       a numstat row while leaving its stream tip marker and the remaining NDJSON parseable, then start a fresh
       product read and compare it with the uncached full-history implementation. Repeat on a governed-code row
-      through the real `spex spec lint` CLI. The measurement fixture is disposable evidence, not a permanent
-      sample piled into the unit suite.
+      through the real `spex spec lint` CLI. Then inject a Git wrapper whose `rev-parse` succeeds but whose event
+      `log` exits non-zero, and repeat in a SHA-256 repository whose commit ids are 64 hexadecimal characters.
+      The measurement fixture is disposable evidence, not a permanent sample piled into the unit suite.
     expected: >
       The complete ledger fails its content-integrity check, is discarded, and is rebuilt from immutable Git
       objects. The cached and uncached version rows remain identical; a syntactically usable remainder is
-      never accepted as a partial truth merely because its tip marker survived. Product lint retains the
-      original drift finding after rebuilding instead of silently returning a cleaner verdict.
+      never accepted as a partial truth merely because its tip marker survived. A failed event scan throws and
+      mints no marker; after real Git returns, the next read discovers the missed commit. SHA-1 and SHA-256 repos
+      both retain their complete reachable commit set, with the object format participating in cache identity.
+      Product lint retains the original drift finding after rebuilding instead of silently returning a cleaner
+      verdict. A live lock owner cannot be displaced by age; after a proven-dead owner is reclaimed, concurrent
+      writers retain the union of their successfully scanned events.
   - name: parallel-version-debt-reappears
     tags: [cli]
     test:

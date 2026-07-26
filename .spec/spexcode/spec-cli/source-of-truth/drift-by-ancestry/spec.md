@@ -29,7 +29,9 @@ isn't chronological: back-dated or long-lived branches merged in, cherry-picks, 
 **adoption**, where a spec tree is back-extracted onto an existing history. The [[source-of-truth]]
 walk therefore preserves the DAG question itself: ordinary reports use the cached `git log HEAD`
 parent edges and in-memory reachability, while a large name-stream reads HEAD's reachable commit ids once
-and delegates only governed path windows to Git's commit graph with bounded path caches. Neither mode changes the ancestry
+and delegates only governed path windows to Git's commit graph with bounded path caches. Those windows request
+`--full-history` explicitly: Git's default path simplification may hide a reachable side-branch change behind a
+TREESAME merge even though that change is not an ancestor of the selected version. Neither mode changes the ancestry
 verdict, and both avoid a per-node history walk, so "scale with history, not node count" still holds. The same one rule feeds
 every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
@@ -44,8 +46,9 @@ bounded state and an O(1) read: the rename-chain and parallel-version counterexa
 either to write time or to read time. This is a cost bound, not permission to change the drift meaning.
 
 The bound is loose in the real corpus. In `perfrepo` (4,266 commits), 160 rename events have chains of at most
-four steps (96 one-step, 47 two-step, 16 three-step, one four-step; mean 1.51). The raw historical hit set
-was 198, 458, and 748 entries at depths 1,002, 2,497, and 4,200 (749 at HEAD). Therefore the chosen
+four steps (96 one-step, 47 two-step, 16 three-step, one four-step; mean 1.51). The complete historical hit set
+was 202, 466, and 756 entries at depths 1,002, 2,497, and 4,200 (757 at HEAD); the former
+198 / 458 / 748 / 749 series came from a path-simplified measuring query that hid eight real events. Therefore the chosen
 incremental event index plus read-time projection preserves the existing verdict while keeping the practical
 projection cost near constant; future optimizations should compress these constants, not introduce a lossy
 alternative semantics.

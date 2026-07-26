@@ -158,14 +158,21 @@ not as a promise of constant-time reads.
 Four immutable event streams are persisted by commit oid in the project's one global runtime root
 (`~/.spexcode/projects/<enc(project-root)>/history-events-v4-<state>.ndjson`) and extended only for previously unseen
 commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK` trailer declarations,
-and `.spec` name events. The schema/state key includes the cache implementation schema, shallow/graft state,
-and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
+and `.spec` name events. The schema/state key includes the cache implementation schema, Git object format,
+shallow/graft state, and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
 instead of silently reading an old format. Each event is a property of its commit object and never changes.
 Every complete ledger ends in an integrity row containing the byte length and SHA-256 digest of all preceding
-event and tip rows. Readers accept only an exact match; a missing footer, truncation, or syntactically usable
-remainder with one damaged row discards the whole cache and rebuilds it from immutable Git objects. Writers take
-a cross-process lock and replace a complete payload-plus-footer temporary file in one rename; event rows and a tip
-marker therefore become visible together, and a killed writer leaves only an ignored temporary file. For every
+event and tip rows. Readers accept only an exact match and the closed row grammar for that schema; a missing footer,
+truncation, unknown row, wrong-length object id, or syntactically usable remainder with one damaged row discards the
+whole cache and rebuilds it from immutable Git objects. A stream scan is fail-loud and its tip marker is minted only
+after Git returned the complete event set. Writers commit one optimistic transaction: load one ledger snapshot, scan
+from its base, acquire a cross-process lock carrying an owner pid and unique token, and replace the snapshot only if
+its interpretation identity and fingerprint are still current. A concurrent winner or a vanished base marker makes
+the writer retry from the new snapshot. A lock may be reclaimed only when its recorded owner is proven dead, and
+release removes only the caller's own token; elapsed time alone never transfers ownership. The lock-held snapshot
+supplies both parsed state and exact payload bytes, so there is no second read that can silently turn a changed ledger
+into an empty prefix. A complete payload-plus-footer is published in one rename; event rows and a tip marker therefore
+become visible together, and a killed writer leaves only an ignored temporary file. For every
 tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed from cached events, so
 current paths and node ownership cannot become stale. A cold checkout pays one full walk to seed the cache;
 later processes append only the commits since cached tips. The projection is in-memory and bounded by the

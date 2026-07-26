@@ -183,6 +183,7 @@ edit the spec instead — same commit as the code.`,
       without shell quoting (exclusive with the inline prompt). Then MONITOR it (wait/watch below).
   spex session ls [SEL…] [--status a,b] [--all] [--json]  one-shot table of living sessions
       Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.
+  spex session resources [--json]       read-only host/process ownership, budgets, shared refs, and findings
   spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]
       Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream. An
       agent must background it or use wait; blocking a turn on watch freezes you.
@@ -213,7 +214,7 @@ Control another session (all take SEL):
       The session record: status · node · branch · launcher · the full originating prompt.
       --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
   spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
-  spex session stop <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
+  spex session stop <SEL>               soft stop: kill the exact agent, KEEP the worktree (resumable)
   spex session archive <SEL>             shelve it: out of the default list, nothing stopped or removed
   spex session unarchive <SEL>           bring a shelved session back into the list
   spex session close <SEL>               retire the session and its worktree
@@ -363,6 +364,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
+  shared-runtime-spawn <cwd> <log> <pid> <scope> <cmd> [args…]  detached adapter control plane (launch script)
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
   claude-headless-run <id> <runtime> <cmd> -- <tail…>  resident stream-json controller (launch script)

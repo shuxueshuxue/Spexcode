@@ -23,7 +23,7 @@ backend is the single broker, and which machine you point at is just a URL.
 ## expanded spec
 
 The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `interrupt`, `rename`, `rawkey`, `review`, `merge`,
-`reopen`, `exit`, `close`, `prompt` — call the backend over HTTP, at the endpoint the routing ladder below
+`reopen`, `exit`, `close`, `prompt`, and `resources` — call the backend over HTTP, at the endpoint the routing ladder below
 resolves. (`session attach` is the ONE deliberate exception — a foreground terminal can't be brokered over
 HTTP, so it stays local and guards that premise loudly against the *resolved* backend; see
 [[session-attach]].) They hold **no** in-process tmux/git path, so the backend is the **single actor** on

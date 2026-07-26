@@ -62,8 +62,15 @@ test('a note carrying quote/backslash/newline/unicode survives every real declar
   execFileSync('git', ['commit', '-qm', 'fixture seed'], { cwd: project })
 
   const tmux = `spex-record-integrity-${process.pid}-${Date.now()}`
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, FAKE_HARNESS_INTERVAL_MS: '80' }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    SPEXCODE_HOME: home,
+    SPEXCODE_TMUX: tmux,
+    SPEXCODE_CODEX_SOCKET_DIR: join(home, 'codex-sockets'),
+    FAKE_HARNESS_INTERVAL_MS: '80',
+  }
   delete env.SPEXCODE_API_URL
+  delete env.PORT
   delete env.SPEXCODE_SESSION_ID
 
   const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {

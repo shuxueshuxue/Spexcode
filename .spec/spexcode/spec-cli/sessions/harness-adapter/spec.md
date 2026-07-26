@@ -196,7 +196,18 @@ surface:
   inherited ones removes a wrong answer without removing a right one. `launchEnv(id)`
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
-  with the governed session id and configured home variables.
+  with the governed session id and configured home variables. A shared runtime also declares its PID/isolation
+  artifacts and a live control-plane probe through the adapter. The probe reports the runtime's loaded-thread
+  set and whether each reference is active; active is a state of one loaded reference, not another reference.
+  Record-only and queued sessions cannot invent a reference, while a loaded thread with no matching record stays
+  in the set as unowned. Ownership joins only governed records belonging to adapters that declare that same
+  shared-runtime descriptor; a coincidentally equal id from another adapter or a non-governed record is not a
+  reference owner. An unhealthy/unknown probe returns an unknown refcount rather than a record-derived fallback;
+  product mutation treats that uncertainty as a separate fail-closed blocker. The Codex app-server is spawned
+  as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
+  (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed
+  process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.
+  Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

@@ -69,8 +69,12 @@ exact-line greps and no jq, and every WRITE goes back through the CLI to this wr
 Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
 session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about
 a session that EXISTS: it keeps its row (naming the file and the parse error, liveness `unknown` since nothing
-was probed), every writer refuses on it rather than repairing it into a plausible empty shell, and `close`
-still works, shelving the original bytes as evidence before the sweep. Any other read failure still throws:
+was probed), and every writer refuses on it rather than repairing it into a plausible empty shell. A corrupt
+record cannot prove the adapter, session leaf, worktree, or branch owner, so `close` may quarantine the original
+bytes as control-plane evidence but then refuses loudly: it sends no signal and preserves the session runtime,
+worktree, and branch, reporting those residues instead of guessing. Retiring only the corrupt row requires a
+future record-only control-plane seam; it must not be approximated by skipping the runtime guard or by adding a
+second process terminator. Any other read failure still throws:
 a transient fault must read as neither. **Retired** is the third integrity reading, derived not stored: the
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
 put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.

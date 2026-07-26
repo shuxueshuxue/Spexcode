@@ -21,11 +21,6 @@
 # No id → no trailer. An existing Session: trailer is left alone, so the ritual / a human can set one by hand.
 set -euo pipefail
 msg_file="$1"
-# A commit-msg arm belongs to exactly one commit attempt. prepare-commit-msg runs even under --no-verify,
-# so this first action clears a signing/editor/kill residue before any later attempt (including a
-# programmatic no-verify data commit) can update a ref.
-pending_marker=$(git rev-parse --git-path SPEXCODE_PENDING_LINT 2>/dev/null || true)
-[ -z "$pending_marker" ] || rm -f "$pending_marker"
 grep -qiE '^Session:[[:space:]]' "$msg_file" && exit 0
 [ -n "${SPEXCODE_SESSION_ID:-}" ] || exit 0
 

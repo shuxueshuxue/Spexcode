@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, driftIndex, historyIndex, rowsFor, treeFilePaths, treeFileText } from './git.js'
+import { repoRoot, git, driftIndex, historyIndex, driftIndexFull, historyIndexFull, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, parseCodeEntry, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
@@ -68,10 +68,61 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export type SpecLintOptions = { tip?: string }
+export type SpecLintOptions = { tip?: string; fullOracle?: boolean }
+
+function pendingChangedPaths(root: string, tip: string): string[] {
+  try {
+    git(['-C', root, 'rev-parse', `${tip}^{commit}`])
+    // `-m` compares a merge with every parent. An `ours` merge can leave the result tree
+    // identical to its first parent while still making an unacknowledged side-branch commit
+    // reachable; first-parent-only paths would filter that debt out of the pending anchor window.
+    const fields = git(['-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-m', '-M', tip])
+      .split('\0').filter(Boolean)
+    const changed: string[] = []
+    for (let i = 0; i < fields.length;) {
+      const status = fields[i++]
+      if (/^[RC]/.test(status)) {
+        changed.push(fields[i++], fields[i++])
+      } else {
+        changed.push(fields[i++])
+      }
+    }
+    return [...new Set(changed.filter(Boolean))]
+  } catch { return [] }
+}
+function pendingPathTouched(changed: string[], path: string): boolean {
+  if (changed.includes(path)) return true
+  if (changed.some((p) => p.startsWith(path.replace(/\/+$/, '') + '/'))) return true
+  if (!path.includes('*')) return false
+  const re = new RegExp('^' + path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$')
+  return changed.some((p) => re.test(p))
+}
+
+// Cheap pending classification for the reference hook. It reads only the candidate tree and claims; it
+// never constructs either history index. A normal lint call deliberately does not use this
+// shortcut so its full findings/oracle contract remains unchanged.
+export async function pendingTouchesGoverned(root: string, tip: string): Promise<boolean> {
+  // A merge can introduce reachable side-branch debt without changing the result tree. The first-parent
+  // diff is insufficient for a scope proof, so all multi-parent candidates stay on the full lint path.
+  const parentCount = git(['-C', root, 'rev-list', '--parents', '-n1', tip]).trim().split(/\s+/).length - 1
+  if (parentCount > 1) return true
+  const changed = pendingChangedPaths(root, tip)
+  if (!changed.length) return true
+  // `governedRoots` is source discovery policy, not the set of actual code claims: a spec may deliberately
+  // govern a path outside those roots. Read only the candidate spec tree (no history/drift indexes) so the
+  // scope proof follows the same code:/related: declarations that lint later enforces.
+  const specs = await loadSpecs(root, { tip, history: null, drift: null })
+  const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
+  return changed.some((path) => claims.some((claim) => pendingPathTouched([path], claim))
+    || path === 'spexcode.json' || path === 'spexcode.local.json'
+    || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
+    || path === '.spec')
+}
+
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
   const tip = options.tip ?? 'HEAD'
   const pending = tip !== 'HEAD'
+  const changed = pending ? pendingChangedPaths(root, tip) : []
   const files = pending ? treeFilePaths(root, tip) : null
   const directories = new Set<string>()
   for (const file of files ?? []) {
@@ -85,7 +136,10 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
   const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
-  const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
+  const [didx, hidx] = await Promise.all([
+    options.fullOracle ? driftIndexFull(root, tip) : driftIndex(root, tip),
+    options.fullOracle ? historyIndexFull(root, tip) : historyIndex(root, tip),
+  ])
   const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
   const out: Finding[] = []
 
@@ -258,6 +312,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   for (const s of specs) {
     for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
       for (const { path, selectors } of entries) {
+        if (pending && !pendingPathTouched(changed, path)) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
           out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` })

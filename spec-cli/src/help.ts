@@ -242,7 +242,7 @@ ${MENTION_NOTE}`,
        spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
        spex eval ls --session <SEL> --export [--open | --out <path>]
-       spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
+       spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; JSON = canonical index
        spex eval matrix <launcher> [--node <id>] [--rows k1,k2]   the harness live-behavior matrix
        spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
        spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest measurement
@@ -259,8 +259,9 @@ ls — node-scoped bare (its per-scenario eval history); session-scoped with an 
 are ✦-marked, evals filed by other sessions are unmarked, and blind spots follow measured rows. --export writes ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
-scenario ls — the DECLARED contracts (name · tags · normalized test reference · latest verdict), no evals: bare lists every
-measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
+scenario ls — the DECLARED contracts, no evals: text may show the latest verdict and --unmeasured is its blind-spot
+worklist; --json emits the complete canonical semantic/measurement index with stable hashes and fixed-tree provenance
+(--unmeasured is text-only because the JSON projection never reads the eval sidecar).
 
 matrix — run the eight-row harness live-behavior matrix against a REAL dispatched session of the named
 launcher (the harness-adapter acceptance rule, defined once in spec-eval/src/matrix.ts): it syncs the

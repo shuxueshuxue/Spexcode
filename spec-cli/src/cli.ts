@@ -540,7 +540,7 @@ if (cmd === 'serve') {
     const own = m.items.filter((item) => item.inSession).length
     console.log(`eval session  [${m.id}]`)
     console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
-    if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited readings)`)
+    if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = evals filed by other sessions)`)
     if (!m.items.length) console.log('\n  no affected scenarios to evaluate yet')
     let lastNode: string | null = null
     for (const e of m.items) {

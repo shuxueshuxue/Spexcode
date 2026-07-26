@@ -102,6 +102,17 @@ test('branchy history: a merged side-branch change counts as drift even when its
   assert.equal(driftFor(i, 'VER', 'f.ts'), 1)             // the old pos-compare returned 0 here
 })
 
+test('a walk-newest parallel version can revive debt cleared in the other parent', () => {
+  // R--H--VB and R--VA, then M(VA,VB). Each parent is clear against its own version. At M the
+  // contract selects one incomparable version by full-history walk order; choosing VA makes H debt.
+  const i = idx({ M: ['VA', 'VB'], VA: ['R'], VB: ['H'], H: ['R'], R: [] }, {
+    fileCommits: new Map([['f.ts', ['H']]]),
+    specNodes: new Map([['VA', new Set(['X'])], ['VB', new Set(['X'])]]),
+  })
+  assert.equal(driftFor(i, 'VA', 'f.ts'), 1)
+  assert.equal(driftFor(i, 'VB', 'f.ts'), 0)
+})
+
 test("an ack on a parallel branch quiets only the commits reachable from it, not a sibling branch's drift", () => {
   // VER forks into A (moves f) and ACK (Spec-OK: X); M merges both. The ack is valid (not an
   // ancestor of VER) but A is not reachable from it — A stays drift. A linear floor would quiet it.

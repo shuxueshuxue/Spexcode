@@ -1,5 +1,23 @@
 ---
 scenarios:
+  - name: fold-project-boundary
+    tags: [cli]
+    test:
+      path: scripts/anchor-drift-fold-proof.mjs
+      name: fold/project lower bound and pinned-history equivalence proof
+    description: >
+      On the pinned 4,266-commit / 217-node reference clone, fold the contract-defined spec-version
+      events into maximal reachability antichains, project them through the product's rename identity,
+      and independently filter retained anchor hits under walk-newest, any-frontier and all-frontier
+      rules. Re-run the 14 pinned drift points with golden.mjs's normalized triples, capturing both stdout
+      and stderr on every exit status.
+    expected: >
+      The walk-newest version base equals the product oracle for all 217 current nodes, and the exact
+      walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
+      minimal parallel-version DAG has clear parent verdicts but revives the losing branch's hit after the
+      merge, proving that (v, D) cannot be joined after forgetting cleared hits. The retained hit set grows
+      with events (198 / 458 / 748 at depths about 1,000 / 2,500 / 4,200; 749 at the tip), while rename
+      projection stays empirically short (maximum 4, mean 1.51) without being asymptotically O(1).
   - name: anchor-hit-blocks
     tags: [cli]
     description: >

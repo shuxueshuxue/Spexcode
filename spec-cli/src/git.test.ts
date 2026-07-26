@@ -133,7 +133,7 @@ test('combined diff ownership is line-level across mixed, deletion, and octopus 
     '--- a/src/consts.ts',
     '--- a/src/consts.ts',
     '+++ b/src/consts.ts',
-    '@@@ -1,3 -1,4 +1,5 @@@',
+    '@@@ -1,2 -1,2 +1,2 @@@',
     '- export const governed = 1',
     '- export const neighbor = 3',
     '+ export const governed = 2',
@@ -165,7 +165,7 @@ test('combined diff ownership is line-level across mixed, deletion, and octopus 
     '--- source text itself starts with a dash',
   ].join('\n'))
 
-  assert.deepEqual(parsed.get('src/consts.ts')?.after, [[5, 5]], 'mixed rows advance the result cursor but do not inherit an adjacent ++ range')
+  assert.deepEqual(parsed.get('src/consts.ts')?.after, [[2, 2]], 'parent-only mixed rows do not advance the result cursor or widen an adjacent ++ range')
   assert.deepEqual(parsed.get('src/consts.ts')?.parentPaths, ['src/consts.ts', 'src/consts.ts'])
   assert.equal(parsed.has('spec.md'), false, 'a mixed-only file has no merge-owned line')
   assert.deepEqual(parsed.get('deleted.ts')?.after, [], 'an all-parent deletion owns no result-image line')

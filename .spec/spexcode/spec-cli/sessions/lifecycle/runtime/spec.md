@@ -5,6 +5,8 @@ hue: 280
 desc: The per-session GLOBAL store dir — every harness-written runtime artifact under ~/.spexcode, keyed by session_id and grouped per-project, so the worktree stays 100% clean.
 related:
   - spec-cli/src/layout.ts
+  - spec-cli/src/project-store.ts
+  - spec-cli/src/git.ts#eventCachePath
   - spec-cli/src/sessions.ts
 ---
 
@@ -49,7 +51,7 @@ a file in that dir:
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:
 `projects/<enc>`), `sessionsRoot()` (its `sessions/` child — the board's enumeration dir), `sessionStoreDir(id)`,
 `sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` / `listSessionIds` for the board.
-The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-TREE
+The store has TWO slotted tiers under one per-project dir: the per-session dirs above, AND the per-TREE
 materialize slots — `trees/<enc(worktree-toplevel)>/` — that [[hook-dispatch]] / [[harness-delivery]]
 materialize into.
 Each slot holds the artifacts that are a pure function of THAT tree's `.plugins` (the hook manifest, the
@@ -57,7 +59,10 @@ content-hash freshness stamp, the plugin-folder ledger), keyed by the same `enco
 applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (shared global root, slotted
 by identity) applied to trees, so two worktrees with divergent `.plugins` never trade hook sets. The
 project tier also carries the Codex app-server socket/pid/log/lock when Codex is launched through
-SpexCode. All of it lives under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
+SpexCode, plus [[code-anchor]]'s versioned immutable history-event ledgers. `project-store.ts` owns the pure
+home/path encoding shared by `layout.ts` and the Git indexer, while `layout.ts` adds Git common-dir discovery;
+this keeps one project identity without introducing a `git.ts` ↔ `layout.ts` import cycle. All of it lives
+under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
 SpexCode-materialized runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language

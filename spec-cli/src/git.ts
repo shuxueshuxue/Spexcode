@@ -297,7 +297,7 @@ type EventRecord = { hash: string; raw: string }
 type EventCache = { tips: string[]; streams: Map<string, Map<string, EventRecord>>; streamTips: Map<string, string[]>; firstSeen: Map<string, number> }
 type EventCacheMemo = { state: EventCache; mtimeMs: number; size: number }
 const eventCacheMemo = new Map<string, EventCacheMemo>()
-const EVENT_CACHE_SCHEMA = 'history-events-v3'
+const EVENT_CACHE_SCHEMA = 'history-events-v4'
 type EventPathMemo = { common: string; shallowPath: string; grafts: string; shallow: string; replacements: string; path: string }
 const eventPathMemo = new Map<string, EventPathMemo>()
 function eventCachePath(root: string): string {
@@ -324,6 +324,28 @@ export function legacyHistoryEventCacheRoot(root: string): string {
   const repoId = createHash('sha256').update(common).digest('hex').slice(0, 24)
   return join(spexcodeHome(), 'projects', repoId)
 }
+type EventCacheIntegrity = { k: 'integrity'; bytes: number; sha256: string }
+function eventPayloadDigest(payload: Buffer): string {
+  return createHash('sha256').update(payload).digest('hex')
+}
+function encodeEventCache(payload: Buffer): Buffer {
+  const integrity: EventCacheIntegrity = { k: 'integrity', bytes: payload.length, sha256: eventPayloadDigest(payload) }
+  return Buffer.concat([payload, Buffer.from(`${JSON.stringify(integrity)}\n`)])
+}
+function verifiedEventPayload(path: string): Buffer | null {
+  let file: Buffer
+  try { file = readFileSync(path) } catch { return null }
+  if (!file.length || file[file.length - 1] !== 0x0a) return null
+  const withoutTrailingNewline = file.subarray(0, file.length - 1)
+  const footerBreak = withoutTrailingNewline.lastIndexOf(0x0a)
+  const footerStart = footerBreak + 1
+  const payload = file.subarray(0, footerStart)
+  try {
+    const row = JSON.parse(withoutTrailingNewline.subarray(footerStart).toString('utf8')) as Partial<EventCacheIntegrity>
+    if (row.k !== 'integrity' || row.bytes !== payload.length || row.sha256 !== eventPayloadDigest(payload)) return null
+    return payload
+  } catch { return null }
+}
 function readEventCache(root: string, force = false): { path: string; state: EventCache } {
   const path = eventCachePath(root)
   let mtimeMs = -1, size = -1
@@ -331,8 +353,9 @@ function readEventCache(root: string, force = false): { path: string; state: Eve
   const hit = eventCacheMemo.get(path)
   if (!force && hit && hit.mtimeMs === mtimeMs && hit.size === size) return { path, state: hit.state }
   const state: EventCache = { tips: [], streams: new Map(), streamTips: new Map(), firstSeen: new Map() }
-  if (existsSync(path)) {
-    for (const line of readFileSync(path, 'utf8').split('\n')) {
+  const payload = existsSync(path) ? verifiedEventPayload(path) : null
+  if (payload) {
+    for (const line of payload.toString('utf8').split('\n')) {
       if (!line) continue
       try {
         const row = JSON.parse(line) as { k: string; h?: string; r?: string; tip?: string }
@@ -356,7 +379,7 @@ function readEventCache(root: string, force = false): { path: string; state: Eve
             }
           }
         }
-      } catch { /* tolerate a torn final append; the next run repairs it by appending */ }
+      } catch { /* the whole payload digest was valid; an unknown row remains forward-compatible */ }
     }
   }
   state.tips = [...new Set(state.tips)].slice(-32)
@@ -429,7 +452,8 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
       if (additions) {
         mkdirSync(join(path, '..'), { recursive: true })
         const tmp = `${path}.${process.pid}.${Date.now()}.tmp`
-        writeFileSync(tmp, (existsSync(path) ? readFileSync(path) : '') + additions)
+        const current = verifiedEventPayload(path) ?? Buffer.alloc(0)
+        writeFileSync(tmp, encodeEventCache(Buffer.concat([current, Buffer.from(additions)])))
         renameSync(tmp, path)
       }
       return readEventCache(root, true).state

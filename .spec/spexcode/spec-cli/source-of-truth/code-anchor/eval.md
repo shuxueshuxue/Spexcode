@@ -156,10 +156,12 @@ scenarios:
       Seed the persistent history event ledger from a real two-commit repository, corrupt one byte in the
       latest numstat event row while leaving its stream tip marker and the remaining NDJSON parseable, clear
       process memos, and compare the cached history projection with the uncached full-history implementation.
+      In the same fixture, corrupt the governed-code event row and invoke the real `spex spec lint` CLI.
     expected: >
       The complete ledger fails its content-integrity check, is discarded, and is rebuilt from immutable Git
       objects. The cached and uncached version rows remain identical; a syntactically usable remainder is
-      never accepted as a partial truth merely because its tip marker survived.
+      never accepted as a partial truth merely because its tip marker survived. Product lint retains the
+      original drift finding after rebuilding instead of silently returning a cleaner verdict.
   - name: parallel-version-debt-reappears
     tags: [cli]
     test:

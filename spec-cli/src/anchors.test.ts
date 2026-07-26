@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, tsAstExtractor } from './anchors.js'
+import { parseRelation, anchorHitCommits, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -14,6 +14,17 @@ import { parseRelation, anchorHitCommits, tsAstExtractor } from './anchors.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(SRC, '..', '..')
+
+test('ordinary hunk ranges preserve old-side deletions below line one', () => {
+  const patch = '@@ -4,2 +3,0 @@ removed beta\n'
+  assert.deepEqual(diffHunkRanges(patch, 'old'), [[4, 5]])
+  assert.deepEqual(diffHunkRanges(patch, 'new'), [[3, 3]])
+  assert.deepEqual(selectorsHitRanges(
+    [{ name: 'beta', kind: 'function', start: 4, end: 5 }],
+    ['beta'],
+    diffHunkRanges(patch, 'old'),
+  ), ['beta'])
+})
 
 // ---- parseRelation: grouping + structural problems (pure, no fs) ----
 
@@ -125,6 +136,47 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
     { commit: c5, selectors: ['f', 'g'], unparseable: true },  // c4 (outside both units) is absent
   ])
+})
+
+test('a loud anchor read never trusts a fail-soft empty hunk memo', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-loud-memo-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const bin = join(root, 'bin')
+  const fake = join(bin, 'git')
+  const priorPath = process.env.PATH
+  const priorFail = process.env.ANCHOR_FAIL_SHOW
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/x.ts'), 'export function f() {\n  return 1\n}\n')
+    g('add', '-A'); g('commit', '-qm', 'base')
+    writeFileSync(join(root, 'src/x.ts'), 'export function f() {\n  return 2\n}\n')
+    g('add', '-A'); g('commit', '-qm', 'change f')
+    const commit = g('rev-parse', 'HEAD')
+    mkdirSync(bin)
+    writeFileSync(fake, `#!/bin/sh
+case " $* " in
+  *--no-walk*) exit 0 ;;
+  *show*--cc*) [ "$ANCHOR_FAIL_SHOW" = 1 ] && echo forced-soft-show-failure >&2 && exit 72 ;;
+esac
+exec ${JSON.stringify(realGit)} "$@"
+`)
+    chmodSync(fake, 0o755)
+    process.env.PATH = `${bin}:${priorPath}`
+    process.env.ANCHOR_FAIL_SHOW = '1'
+    const extractor = tsAstExtractor(ROOT)
+    assert.deepEqual(await anchorHitCommits(root, [commit], 'src/x.ts', ['f'], extractor), [])
+
+    delete process.env.ANCHOR_FAIL_SHOW
+    const verified = await anchorHitCommits(root, [commit], 'src/x.ts', ['f'], extractor, { loud: true })
+    assert.deepEqual(verified.map((hit) => hit.selectors), [['f']], 'verified read must bypass the soft empty memo and re-read Git')
+  } finally {
+    process.env.PATH = priorPath
+    if (priorFail === undefined) delete process.env.ANCHOR_FAIL_SHOW
+    else process.env.ANCHOR_FAIL_SHOW = priorFail
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {

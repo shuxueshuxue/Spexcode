@@ -72,8 +72,9 @@ scenarios:
       renders whole (masthead, gates, evidence inlined, diff drill-down).
     expected: |
       The session-scoped list shows the gates strip (lint · merge · ahead · committed, the spex-review
-      numbers), then blind spots with the empty ring, this session's own readings ✦-marked and newest-first,
-      and the inherited baseline. NO evidence bytes load with the list (rows are tier-1 JSON); blob requests
+      numbers), then measured rows newest-first across source ownership, with this session's own readings
+      ✦-marked and inherited readings legible by the absent ✦, followed by blind spots with the empty ring.
+      NO evidence bytes load with the list (rows are tier-1 JSON); blob requests
       begin only after a real row anchor opens its standalone detail. The `export ↗` link serves the
       self-contained export HTML: derived masthead, gate row, inlined evidence, per-file diff drill-down —
       whole, not garbled.
@@ -86,11 +87,11 @@ scenarios:
       residual reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the
       row order, and whether the retired scenario shows.
     expected: >
-      Every measured row carries its ✓/✗ verdict mark (muted when stale). Blind spots lead as inert
-      unmeasured rows; the session's own readings are ✦-marked and lead the measured rows even when the
-      session has no code commits (a reading is the session's own when IT filed it, not only when its
-      codeSha is a branch commit); the inherited baseline (other sessions' latest readings) follows,
-      legible as NOT the session's own by the absent ✦. A retired scenario (declared in no eval.md)
+      Every measured row carries its ✓/✗ verdict mark (muted when stale). Measured rows are newest-first
+      across source ownership, followed by blind spots as inert unmeasured rows. The session's own readings
+      are ✦-marked even when the session has no code commits (a reading is the session's own when IT filed
+      it, not only when its codeSha is a branch commit); inherited readings are legible as NOT the session's
+      own by the absent ✦, never by a privileged position or separate group. A retired scenario (declared in no eval.md)
       contributes NO row — the list is bounded by declared scenarios, the same latest-per-scenario
       computation every eval face reads.
   - name: eval-cli-read
@@ -104,8 +105,9 @@ scenarios:
       the `spex help` map). Capture stdout/stderr + exit codes as the transcript.
     expected: >
       `spex eval ls --session <SEL>` renders the /evals model as text in the tab's attention order — gates
-      strip, a ✦ legend when the session filed its own readings, per changed node: blind spots lead,
-      ✦-marked own readings, then the inherited baseline under a named divider; an empty diff prints a
+      strip, a ✦ legend when the session filed its own readings, then filed readings newest-first across
+      source ownership (own marked ✦, inherited distinguished by the absent ✦), followed by blind spots;
+      an empty diff prints a
       clean nothing-to-evaluate line; --json dumps the model. --export writes the self-contained HTML
       path (its --json = the model). The removed spellings are tombstones, not aliases: `spex review`
       signposts `spex session review`, and `spex session review proof` signposts the canonical

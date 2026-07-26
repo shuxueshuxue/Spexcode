@@ -9,8 +9,9 @@ scenarios:
       On the pinned 4,266-commit / 217-node reference clone, fold the contract-defined spec-version
       events into maximal reachability antichains, project them through the product's rename identity,
       and independently filter retained anchor hits under walk-newest, any-frontier and all-frontier
-      rules. Re-run the 14 pinned drift points with golden.mjs's normalized triples, capturing both stdout
-      and stderr on every exit status.
+      rules. Then run the pinned baseline and candidate CLIs in separate clean checkouts/processes/homes at
+      the 14 fixed tips, capturing both stdout and stderr on every exit status; compare the candidate's
+      incremental result with its eager fetch-layer result separately.
     expected: >
       The walk-newest version base equals the product oracle for all 217 current nodes, and the exact
       walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
@@ -19,14 +20,18 @@ scenarios:
       the complete drift event index grow with events (202 / 466 / 756 at depths 1,002 / 2,497 / 4,200; 757
       at the tip); a path-limited history query is rejected as a measuring proxy because it simplifies away
       eight real indexed events. Rename projection stays empirically short (maximum 4, mean 1.51) without
-      being asymptotically O(1).
+      being asymptotically O(1). Before the 14-point comparison, a 13-anchor positive fixture blocks in both
+      immutable CLI implementations; deleting one actual normalized anchor row produces exactly that one
+      missing key. Per-rule coverage is printed for every historical point, and zero anchor rows there is
+      reported as zero coverage rather than described as an anchor test.
   - name: anchor-hit-blocks
     tags: [cli]
     description: >
       In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
       under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
       a merge-authored deletion whose two parents call the file by different names. Finally, let a merge
-      author only old.py->new.py after a side-branch hit. Run `spex spec lint` after each shape.
+      author only old.py->new.py after a side-branch hit; and let incomparable hit/rename branches merge with
+      both old.py and new.py surviving. Run `spex spec lint` after each shape.
     expected: >
       Each `anchor-drift` ERROR names the anchor, the spec version, and only the offending edit/deletion sha;
       rename projection, a later self-ack, and combined parent paths never erase that historical hit.

@@ -15,6 +15,9 @@ import { tsxBin } from './tsx-bin.js'
 import { publishEndpoint, dropOwnEndpoint } from './host.js'
 import { repoRoot as servedRepoRoot } from './git.js'
 import { resolveProjectIdentity } from './project-identity.js'
+import { startResourceMonitor } from './host-resources.js'
+import { registerBackendInstance, unregisterBackendInstance } from './runtime-ownership.js'
+import { sessionIdentityEnvVars } from './harness.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -51,6 +54,13 @@ const watchRoots = [
 // different serve generation fails the match and is treated as offline, never proxied to.
 const instanceId = randomUUID()
 const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
+// A backend is a project control plane, never the session that happened to invoke `spex serve`. Strip every
+// adapter identity before any hot child is spawned; otherwise all backend work is falsely charged to that
+// caller long after its session ends.
+for (const key of sessionIdentityEnvVars()) delete process.env[key]
+process.env.SPEXCODE_PROJECT_ROOT = projectRoot
+process.env.SPEXCODE_INSTANCE_ID = instanceId
+registerBackendInstance(instanceId, process.pid, projectRoot)
 
 type Backend = { port: number; child: ChildProcess }
 let current: Backend | null = null   // which internal port new proxy connections forward to
@@ -177,7 +187,7 @@ function dropEndpoint(): void {
   try { dropOwnEndpoint(instanceId, projectRoot) } catch { /* not ours / already gone */ }
 }
 
-const shutdown = () => { dropEndpoint(); try { current?.child.kill('SIGTERM') } catch { /* */ } process.exit(0) }
+const shutdown = () => { dropEndpoint(); unregisterBackendInstance(instanceId); try { current?.child.kill('SIGTERM') } catch { /* */ } process.exit(0) }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
@@ -188,7 +198,7 @@ current = first
 // SIGTERM (not SIGKILL): the child is a `tsx` wrapper around the real node server — SIGKILL kills the wrapper
 // instantly and ORPHANS the server still bound to its port, whereas tsx FORWARDS SIGTERM to it (the same
 // signal the reload drain uses). Sent synchronously here, before the process.exit that follows.
-const reapChild = () => { try { current?.child.kill('SIGTERM') } catch { /* already gone */ } }
+const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.child.kill('SIGTERM') } catch { /* already gone */ } }
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir() // bundled <pkg>/dashboard-dist when installed, else monorepo spec-dashboard/dist
@@ -198,6 +208,7 @@ if (publicCfg) {
 } else {
   listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) } })
 }
+startResourceMonitor()
 
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across
 // packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged

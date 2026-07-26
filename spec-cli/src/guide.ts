@@ -259,14 +259,14 @@ settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. 
 PORTABILITY, and picking the right one is the whole discipline:
 
   spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
-                        identity and launcher visibility, lint policy, doctor health budgets, launcher NAMES. "Git is the database": tracked so the
+                        identity and launcher visibility, lint policy, resource and doctor health budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
                         paths. Layered OVER spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon or launcher-visibility policy, lint policy, doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+icon or launcher-visibility policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
@@ -324,6 +324,16 @@ Example:
                             (required for no-choice creates). A portable NAME → committed.
 A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
 must stay free of machine paths.
+
+── RESOURCE GOVERNANCE (spexcode.json — portable project budgets) ──
+  resources.sessionRssMiB      resident-memory budget per governed session. Default 1024.
+  resources.backendRssMiB      resident-memory budget for a backend/shared runtime owner. Default 2048.
+  resources.idleCpuPercent     CPU budget for a non-progressing owner. Default 2.
+  resources.sampleMs           on-demand CPU measurement window. Default 1000 (minimum 50).
+  resources.reportIntervalMs   supervisor-owned snapshot cadence. Default 60000 (minimum 5000).
+The report is read-only: \`spex session resources [--json]\`. Reclaim eligibility is advisory and the
+projection never issues mutation authority or signals a process. Budgets are project policy and belong in committed spexcode.json;
+host-specific tuning may override this top-level section in spexcode.local.json.
 
 ── LAUNCHERS (the profile block, split across the two files) ──
 A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one

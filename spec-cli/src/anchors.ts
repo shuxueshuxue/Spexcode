@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
+const RS = '\x1e'
+
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
 // Everything below the entry parse splits into two layers:
@@ -435,6 +437,35 @@ async function hunksAt(root: string, commit: string, path: string): Promise<[num
   return ranges
 }
 
+// Ordinary commits in one anchor window share a single path-limited log. Merge commits deliberately stay
+// on hunksAt's `show --cc` path because their dense combined ownership is a different predicate.
+async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, [number, number][]>> {
+  const result = new Map<string, [number, number][]>()
+  const ordinary = [...new Set(commits)]
+  if (!ordinary.length) return result
+  const newest = ordinary[0], oldest = ordinary[ordinary.length - 1]
+  let out = ''
+  try {
+    out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--no-merges', '--patch', '--unified=0',
+      `--format=${RS}%H`, `${oldest}^..${newest}`, '--', path])
+  } catch { return result }
+  for (const rec of out.split(RS)) {
+    const normalized = rec.replace(/^\n/, '')
+    if (!normalized) continue
+    const newline = normalized.indexOf('\n')
+    const hash = (newline < 0 ? normalized : normalized.slice(0, newline)).trim()
+    if (!/^[0-9a-f]{7,40}$/.test(hash)) continue
+    const patch = newline < 0 ? '' : normalized.slice(newline + 1)
+    const ranges: [number, number][] = []
+    for (const m of patch.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const start = +m[1], count = m[2] === undefined ? 1 : +m[2]
+      ranges.push(count > 0 ? [start, start + count - 1] : [Math.max(1, start), Math.max(1, start)])
+    }
+    result.set(hash, ranges)
+  }
+  return result
+}
+
 // the drift window of an anchored file: every commit to `path` not reachable from the spec's version
 // and not covered by a valid Spec-OK ack — the SAME set driftFor counts, exposed as commits so the
 // anchor engine can probe each one. Ordinary file commits and merge-authored dense-combined paths are
@@ -503,6 +534,7 @@ export async function anchorHitCommits(root: string, win: string[], path: string
   const revisions = win.map((commit) => `${commit}:${path}`)
   const oids = batchRevisionOids(root, revisions)
   const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  const ordinaryHunks = await hunksAtMany(root, win, path)
   for (let index = 0; index < win.length; index++) {
     const c = win[index]
     const oid = oids[index]
@@ -513,7 +545,7 @@ export async function anchorHitCommits(root: string, win: string[], path: string
       .map((sym) => ({ sym, ranges: at.units.filter((u) => u.name === sym) }))
       .filter((s) => s.ranges.length) // a unit absent under this name at that commit can't be touched
     if (!bySym.length) continue
-    const hunks = await hunksAt(root, c, path)
+    const hunks = ordinaryHunks.get(c) ?? await hunksAt(root, c, path)
     const touched = bySym.filter((s) => hunks.some(([a, b]) => s.ranges.some((u) => a <= u.end && u.start <= b))).map((s) => s.sym)
     if (touched.length) hits.push({ commit: c, selectors: touched })
   }

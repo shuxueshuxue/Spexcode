@@ -23,6 +23,16 @@ scenarios:
       backend owner, exact PID/start identities, RSS/PSS and sampled CPU against budgets, shared loaded/active
       references, orphan/identity-leak findings, advisory eligibility, and explicit unattributed cost. The read
       creates no plan or mutation token and changes no process, record, worktree, branch, port, or health state.
+  - name: leaf-identity-changes-during-stop-guard
+    tags: [backend-api]
+    description: >-
+      Against an isolated real child registered as one session's exact leaf, enter the ordinary stop transition
+      and hold the adapter-owned shared-runtime guard before an escalation signal. Let that exact child exit
+      while the guard is pending, then release the guard while observing the OS signal boundary.
+    expected: >-
+      After the guard returns, stop re-reads the leaf PID/start identity and its session ownership evidence
+      immediately before signaling. A missing or changed instance blocks that escalation with zero TERM/KILL
+      signal attempts; no PID value remembered before the guard grants later signal authority.
 ---
 
 # eval.md - host resource budget

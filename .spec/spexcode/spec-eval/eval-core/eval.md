@@ -186,6 +186,24 @@ scenarios:
       review-chrome reports exactly paged-review-desktop-yatu and paged-review-mobile-yatu — the two scenarios
       anchored to reviewPage.js — and none of its other seven pre-existing stale scenarios. The node-level
       malformed/missing/coverage classes remain selected by own node files plus node code.
+  - name: canonical-scenario-index
+    tags: [cli]
+    description: >-
+      In two real temporary Git repositories, declare the same eval.md scenario and run the real
+      `spex eval scenario ls --json` twice on each fixed tree. Compare the parsed semantic and measurement
+      row blocks plus the projection/schema envelope and hashes while applying one change at a time:
+      move description/expected, change code/related/tags, replace only the test mapping, change file mode,
+      rename the scenario, and add/remove a scenario.
+    expected: >-
+      The JSON is a declaration-only canonical projection: every row has stable semantic
+      `{node,name,description,expected,scenarioHash,code,related,tags}` and measurement `{test}` blocks,
+      no verdict/reading/evidence/freshness. The same fixed tree prints byte-for-byte identically twice.
+      Description/expected moves change scenarioHash, semanticIndexHash and fullIndexHash; code/related/tags
+      are preserved normalized relation/tag metadata in the semantic block and change both index hashes;
+      a test-only change keeps semantic rows and semanticIndexHash byte-identical while changing only the
+      measurement block and fullIndexHash. A mode/type-only change leaves both scenario index hashes unchanged
+      but changes the outer Git treeSha provenance. Scenario rename and add/remove are visible in sorted row
+      bytes and both hashes. No evals.ndjson, verdict, evidence, freshness, GitLab, CR, or AGS data is read.
 ---
 # eval.md — eval-core
 

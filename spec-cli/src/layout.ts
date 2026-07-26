@@ -1,9 +1,11 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { homedir } from 'node:os'
 import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESSES, type HarnessId } from './harness.js'
+import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
+
+export { encodeProject, spexcodeHome } from './project-store.js'
 
 type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
@@ -132,14 +134,8 @@ export function mainCheckout(proj?: string): string {
 // so the board enumerates ONE directory. This is the single seam that knows where the store sits; sessions.ts
 // and the shell hooks resolve through the SAME scheme (the hooks reimplement it in bash, so any change here
 // must be mirrored in .plugins/core/*/). SPEXCODE_HOME overrides the root for test isolation.
-export function spexcodeHome(): string {
-  return process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')
-}
 // encode a project-root path into ONE safe directory segment (Claude's scheme: path separators → '-'). The
 // SAME transform runs in TS and in the shell hooks, so a board read and a hook write land on the SAME dir.
-export function encodeProject(root: string): string {
-  return root.replace(/[/.]/g, '-')
-}
 // this project's per-PROJECT runtime tier — the sessions/ records AND the per-TREE materialize slots (below) —
 // living under the SAME global per-project dir, so NOTHING SpexCode materializes stays in the worktree (the
 // worktree holds only the harness-discovered CLAUDE.md/AGENTS.md + shims, which must sit in-tree).
@@ -149,7 +145,7 @@ export function runtimeRoot(proj?: string): string {
   const gcd = proj
     ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
     : gitCommonDir()
-  return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
+  return projectRuntimeRoot(gcd)
 }
 // the per-WORKTREE materialize slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
 // products that are a pure function of ONE tree's .plugins (hooks-manifest, content-hash, plugin-folders).

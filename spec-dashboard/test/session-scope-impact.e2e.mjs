@@ -15,7 +15,6 @@ mkdirSync(OUT, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(PW).href)
 const scopedQuery = `is:eval scope:${SESSION}`
-const scopedHash = `#/evals?q=${encodeURIComponent(scopedQuery).replaceAll('%20', '+')}`
 const checks = []
 const check = (name, ok, detail) => {
   checks.push({ name, ok, detail })
@@ -27,20 +26,20 @@ const source = spawnSync(join(ROOT, 'spec-eval/node_modules/.bin/tsx'), ['--test
 })
 check('controlled scope/export fixtures pass', source.status === 0, `exit ${source.status}`)
 
+const evalParams = new URLSearchParams({ q: scopedQuery, page: '1' })
 const [modelResponse, reviewResponse] = await Promise.all([
-  fetch(`${BASE}/api/sessions/${SESSION}/evals`),
+  fetch(`${BASE}/api/evals?${evalParams}`),
   fetch(`${BASE}/api/sessions/${SESSION}/review`),
 ])
 if (!modelResponse.ok) throw new Error(`session model HTTP ${modelResponse.status}`)
 if (!reviewResponse.ok) throw new Error(`session review HTTP ${reviewResponse.status}`)
 const [model, review] = await Promise.all([modelResponse.json(), reviewResponse.json()])
-const states = model.nodes.flatMap((node) => node.scenarios.map((scenario) => {
-  const reading = node.evals.find((entry) => entry.scenario === scenario.name) || null
-  return { node: node.id, scenario: scenario.name, impact: scenario.impact, reading }
+const states = model.items.map((item) => ({
+  node: item.node,
+  scenario: item.scenario,
+  reading: item.filterKind === 'blind' ? null : item,
 }))
-check('every API scenario carries an explicit impact reason', states.every((state) => (
-  Array.isArray(state.impact) && state.impact.length > 0
-)), `${states.length} scenarios`)
+check('bounded API page contains the complete affected set', states.length === model.total, `${states.length}/${model.total}`)
 const expected = {
   total: states.length,
   measured: states.filter((state) => state.reading).length,
@@ -53,7 +52,7 @@ const expected = {
   )).length,
   blind: states.filter((state) => !state.reading).length,
   stale: states.filter((state) => state.reading && !state.reading.fresh).length,
-  unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length || 0), 0),
+  unknown: model.unknown,
   diffFiles: review.diff.length,
   names: states.map((state) => `${state.node}/${state.scenario}`).sort(),
   order: states.slice().sort((a, b) => (
@@ -109,14 +108,16 @@ try {
     scrollOwners: document.querySelectorAll('.page-scroll').length,
   }))
   list.rows = list.orderedRows.slice().sort()
-  check('scoped list lands on the canonical default address', list.hash === scopedHash, list.hash)
+  const [listPath, listSearch = ''] = list.hash.split('?')
+  check('scoped list lands on the canonical default address', listPath === '#/evals'
+    && new URLSearchParams(listSearch).get('q') === scopedQuery, list.hash)
   check('scoped list row set equals the API affected-scenario set', JSON.stringify(list.rows) === JSON.stringify(expected.names), `${list.rows.length}/${expected.names.length}`)
   check('measured rows stay navigable and missing rows stay inert', list.measured === expected.measured && list.blind === expected.blind, `${list.measured} links, ${list.blind} blind`)
   check('default order is newest-first with blind rows last', JSON.stringify(list.orderedRows) === JSON.stringify(expected.order), JSON.stringify(list.orderedRows))
   check('Fail/Pass/Unmeasured remain non-exhaustive by default', list.verdicts.length === 3 && list.verdicts.every((item) => item.pressed === 'false'), JSON.stringify(list.verdicts))
-  check('status counts match the scoped latest rows', list.verdicts[0]?.text.endsWith(String(expected.fail))
-    && list.verdicts[1]?.text.endsWith(String(expected.pass))
-    && list.verdicts[2]?.text.endsWith(String(expected.blind)), JSON.stringify(list.verdicts))
+  check('status counts match the scoped latest rows', list.verdicts[0]?.text.startsWith(`Fail${expected.freshFail}`)
+    && list.verdicts[1]?.text.startsWith(`Pass${expected.freshPass}`)
+    && list.verdicts[2]?.text.startsWith(`Unmeasured${expected.blind}`), JSON.stringify(list.verdicts))
   check('unknown coverage stays in leading, outside scenario rows', expected.unknown === 0 || list.unknownTips.some((tip) => tip?.includes(`${expected.unknown}`) && tip?.toLowerCase().includes('unknown')), JSON.stringify(list.unknownTips))
   check('scoped gates and rows share one PageScroll', list.scrollOwners === 1, String(list.scrollOwners))
   await page.screenshot({ path: join(OUT, 'scoped-list.png'), fullPage: true })

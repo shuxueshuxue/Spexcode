@@ -11,6 +11,7 @@ related:
   - spec-cli/src/eval-cli-read.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
+  - spec-eval/src/sessionimpact.api.test.ts
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/test/session-scope-impact.e2e.mjs
   - spec-dashboard/src/sessionEvalCoherence.test.mjs

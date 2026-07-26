@@ -51,7 +51,11 @@ function fetchEvalDetail(node, scenario, sessionId) {
   return request
 }
 
-function useEvalDetail(param, sessionId, projection, enabled = true) {
+// `freshness` is the board's issue-freshness stamp: a reading's remark TRACK rides the detail response as
+// `entry.thread`, and a scenario-hosted remark is a thread write like any other ([[remark-substrate]]
+// write-visibility) — so an open reading follows the same one stamp an open issue thread follows. The
+// projection fence below stays the SESSION-eval generation axis; the two are separate signals, not a merge.
+function useEvalDetail(param, sessionId, projection, enabled = true, freshness = null) {
   const slash = String(param || '').indexOf('/')
   const node = slash > 0 ? param.slice(0, slash) : param
   const scenario = slash > 0 ? param.slice(slash + 1) : ''
@@ -85,7 +89,7 @@ function useEvalDetail(param, sessionId, projection, enabled = true) {
         setResult((current) => ({ identity, data: current.identity === identity && current.data ? current.data : false, error }))
       })
   }, [enabled, identity, node, scenario, sessionId])
-  useEffect(() => { if (enabled) load() }, [enabled, node, scenario, sessionId, projection?.epoch, projection?.generation, projection?.revision]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (enabled) load() }, [enabled, node, scenario, sessionId, freshness, projection?.epoch, projection?.generation, projection?.revision]) // eslint-disable-line react-hooks/exhaustive-deps
   const visible = result.identity === identity ? result : { data: null, error: null }
   return { data: visible.data, error: visible.error, reload: load }
 }
@@ -183,14 +187,14 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
   )
 }
 
-export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession, onFocusNode = null }) {
+export default function EvalsPage({ specs = [], sessions = [], issuesStamp = null, reloadBoard, onOpenSession, onFocusNode = null }) {
   const t = useT()
   const { param, query } = useRoute()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
   const sessionId = readToken(query.q || '', 'scope') || null
   const sessionProjection = sessions.find((session) => session.id === sessionId)?.evalSummary || null
-  const detail = useEvalDetail(param, sessionId, sessionProjection, !!param)
+  const detail = useEvalDetail(param, sessionId, sessionProjection, !!param, issuesStamp)
   const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
   const list = useReviewPage('evals', queryText, page, { enabled: !param, refreshKey: specs })

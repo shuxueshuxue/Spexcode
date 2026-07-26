@@ -502,6 +502,17 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
                     tabs[next]?.click()
                   }}>
                   <span>{section.label}</span><span className="rl-section-count">{section.count}</span>
+                  {/* an optional quieter SECOND count the domain supplies when its section splits (Evals'
+                      stale remeasurement debt): part of the button's accessible name, never a control.
+                      Two visible faces, one meaning — the phone condenses the WORDING, never the number,
+                      exactly like the compact result summary; the accessible name stays fully qualified. */}
+                  {section.countSuffix && (
+                    <span className="rl-section-suffix" data-tip={section.countSuffix.text}>
+                      <span className="sr-only">{section.countSuffix.text}</span>
+                      <span className="rl-section-suffix-full" aria-hidden="true">{section.countSuffix.text}</span>
+                      <span className="rl-section-suffix-compact" aria-hidden="true">{section.countSuffix.compact}</span>
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

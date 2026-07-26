@@ -462,8 +462,12 @@ if (cmd === 'serve') {
       console.log(`${rel} is governed whole-file by ${whole.length} specs (all claims: ${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
-    const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLint, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
     const pending = flag('pending')
+    if (pending && process.env.SPEXCODE_GATE_SCOPE_ONLY === '1') {
+      const touches = await pendingTouchesGoverned(process.cwd(), pending)
+      if (!touches) process.exit(76)
+    }
     const findings = await specLint(undefined, undefined, {
       tip: pending || 'HEAD',
     })
@@ -748,6 +752,11 @@ if (cmd === 'serve') {
       console.log('  gates:')
       console.log(`    conflicts w/ main : ${g.conflictsWithMain ? 'YES' : 'no'}`)
       console.log(`    lint              : ${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)`)
+      // measured loss is REPORTED, never graded — and a projection that isn't ready says so instead of
+      // printing four zeros that would read as a clean session.
+      console.log(`    evals             : ${g.evals.phase === 'ready'
+        ? `${g.evals.freshPass} fresh pass, ${g.evals.freshFail} fresh fail, ${g.evals.needReview} need review, ${g.evals.blind} blind`
+        : `not measured yet (${g.evals.phase})`}`)
       console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
       for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
     }

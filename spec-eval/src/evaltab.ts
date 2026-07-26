@@ -2,9 +2,9 @@ import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, primeLazyPathWindows, commitReachable, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
-import { evalNodes, type EvalNode, type ScenarioTestReference } from './scenarios.js'
+import { evalNodes, scenarioCodeAxis, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes, codeDrift, contentProbeFor, type StaleAxis } from './freshness.js'
+import { staleAxes, codeDrift, contentProbeFor, anchorProbeFor, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 
@@ -173,6 +173,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
   // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
   const probe = contentProbeFor(root)
+  const anchors = anchorProbeFor(root, idx)
   const readings: EvalEntry[] = []
   for (const r of applyRetractions(rawReadings, retractions)) {
     // Large-history freshness delegates reachability/path windows to synchronous Git. One reading stays a
@@ -184,13 +185,17 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
+    // an entry may be anchored (`path#symbol`); every PATH consumer below reads base paths, the narrowing
+    // reads the folded selectors ([[eval-core]]).
+    const axis = scenarioCodeAxis(sc?.code, codeFiles)
     // Reachability is the content-fallback boundary. primeLazyPathWindows answers a different question:
     // whether an already-reachable lazy index has its path windows primed; on a non-lazy index it is a
     // deliberate no-op and therefore cannot decide whether an off-history anchor needs the content probe.
-    if (commitReachable(idx, r.codeSha)) await primeLazyPathWindows(idx, r.codeSha, [...cf, ynode.evalPath])
-    else await probe.prime?.(r.codeSha, cf, ynode.evalPath)
+    if (commitReachable(idx, r.codeSha)) await primeLazyPathWindows(idx, r.codeSha, [...axis.paths, ynode.evalPath])
+    else await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
+    await anchors.prime?.(r.codeSha, axis.entries)
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
-      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc)
+      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
     const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else

@@ -140,10 +140,43 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
 // board issue badge, the `spex issue ls` drain — is free of them by construction (they reach the EVAL side
 // through loadEvalRemarkTracks / the reading overlay instead).
 export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
+  return allThreads(forge, nodeIds).filter((i) => !isEvalConcern(i.concern))
+}
+
+// the same one merged read BEFORE the read-time split: every thread in the store, both halves, one walk.
+// Deliberately NOT exported — the split above is what every SURFACE read owes ([[eval-issue-split]]), and
+// an unsplit set escaping to a surface would put eval remarks back in the issue drain. The one consumer
+// whose question is about the STORE ITSELF reaches it through boardThreads below.
+function allThreads(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
   const remote = forge ? fromForge(forge, nodeIds) : []
-  return [...loadLocalIssues(), ...remote]
-    .filter((i) => !isEvalConcern(i.concern))
-    .sort((a, b) => b.created.localeCompare(a.created))
+  return [...loadLocalIssues(), ...remote].sort((a, b) => b.created.localeCompare(a.created))
+}
+
+// @@@ boardThreads - the board's ONE store read ([[graph-lean]]'s fold and [[remark-substrate]]'s carrier
+// from one walk). It hands back the SPLIT issue population every issue surface consumes and the freshness
+// stamp folded over the WHOLE store, together, because the two answer different questions and must not be
+// derived from each other: the split is a SURFACE question (which page renders this thread), the stamp is a
+// STORE question (was anything written at all). Folding the stamp from whatever the surface read returned
+// is exactly the confusion that left an open reading blind to every remark on it — a scenario-hosted remark
+// moved no board byte, so no push ever fired. Pairing them here means no caller can pick the wrong set.
+export function boardThreads(forge: ForgeSlice | null, nodeIds: string[]): { issues: Issue[]; stamp: string } {
+  const threads = allThreads(forge, nodeIds)
+  return { issues: threads.filter((i) => !isEvalConcern(i.concern)), stamp: threadStamp(threads) }
+}
+
+// @@@ threadStamp - the board's freshness carrier over a thread set ([[remark-substrate]] write-visibility):
+// open-count : thread-count : reply-count : latest-activity. Every thread write — open, reply, remark,
+// resolve, retract, close — moves at least one component, so a store write ALWAYS moves board bytes and
+// [[graph-delta]]'s no-change suppression can never swallow the push. Pure over the set it is handed, which
+// is what makes "does THIS write move it" a test rather than a claim; the caller owes it the WHOLE store
+// (allThreads), because a set missing a half is a carrier blind to that half.
+export function threadStamp(threads: Issue[]): string {
+  return [
+    threads.filter((i) => i.status === 'open').length,
+    threads.length,
+    threads.reduce((n, i) => n + i.replies.length, 0),
+    threads.flatMap((i) => [i.created, ...i.replies.flatMap((r) => [r.at, r.resolvedAt ?? ''])]).reduce((a, b) => (b > a ? b : a), ''),
+  ].join(':')
 }
 
 // @@@ createIssue - the ONE creation port, store-routed ([[issues]]): the dashboard's New form

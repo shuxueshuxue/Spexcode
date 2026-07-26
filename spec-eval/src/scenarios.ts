@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, relative, basename } from 'node:path'
 import { mintIds } from '../../spec-cli/src/specs.js'
+import { parseRelation, type RelationEntry } from '../../spec-cli/src/anchors.js'
 
 export const EVAL_FILE = 'eval.md'
 export const SIDECAR_FILE = 'evals.ndjson'
@@ -229,6 +230,20 @@ function normalizedTest(it: RawItem): ScenarioTestReference | undefined {
 const normSemantic = (s: string) => s.replace(/\s+/g, ' ').trim()
 export function scenarioHash(s: Pick<Scenario, 'description' | 'expected'>): string {
   return createHash('sha256').update(`${normSemantic(s.description)}\n${normSemantic(s.expected)}`, 'utf8').digest('hex')
+}
+
+// @@@scenario code axis - the ONE resolution of a scenario's code freshness axis, so a declaration can never
+// mean two things to two consumers. A scenario's own `code:` narrows the node's list; absent, it inherits it
+// whole ([[eval-core]]). Each entry may carry [[code-anchor]]'s `path#symbol` selectors, folded per base file
+// by the SAME structural parser spec relations use (several selectors on one file OR together; duplicates,
+// bare+scoped mixing and a selector on a glob come back as `problems` for lint to report).
+// `paths` is what every PATH consumer must read — changed-scan selection, session impact, drift display,
+// the ghost-path check — because a raw `path#symbol` string matches no real file and would silently drop the
+// scenario out of those sets instead of narrowing it. `entries` is what the freshness code axis narrows with.
+export type ScenarioCodeAxis = { entries: RelationEntry[]; paths: string[]; problems: string[] }
+export function scenarioCodeAxis(scenarioCode: readonly string[] | undefined, nodeCode: readonly string[] = []): ScenarioCodeAxis {
+  const { entries, problems } = parseRelation([...(scenarioCode?.length ? scenarioCode : nodeCode)], 'code')
+  return { entries, paths: entries.map((e) => e.path), problems }
 }
 
 // a scenario's optional list field (`code:`/`related:`) is a comma-separated path list (a YAML flow list

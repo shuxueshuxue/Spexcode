@@ -239,7 +239,7 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 // instead ([[source-of-truth]]'s several-checkouts principle at the loader level): its .spec is the
 // branch's pending proposal, so eval surfaces rooted at a session must load the spec tree from the SAME
 // root as their readings/indexes, or a branch-NEW node simply does not exist for them.
-export type LoadSpecsOptions = { tip?: string; history?: HistoryIndex; drift?: DriftIndex }
+export type LoadSpecsOptions = { tip?: string; history?: HistoryIndex | null; drift?: DriftIndex | null }
 export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions = {}) {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
   // the event loop). The ordinary DAG representation makes every node below a pure lookup; the large-history
@@ -247,14 +247,14 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
   // hundreds of short probes into one liveness-blocking event-loop wall.
   const tip = options.tip ?? 'HEAD'
   const [idx, didx, allRaws] = await Promise.all([
-    options.history ?? historyIndex(root, tip),
-    options.drift ?? driftIndex(root, tip),
+    options.history === null ? Promise.resolve(null) : options.history ?? historyIndex(root, tip),
+    options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
     rawsAsync(root, tip),
   ])
   const loaded = []
   for (const r of allRaws) {
-    if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-    const h = rowsFor(idx, r.relPath)
+    if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
+    const h = idx ? rowsFor(idx, r.relPath) : []
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
@@ -273,8 +273,8 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const S = h[0]?.hash || ''
     const driftFiles = []
     for (const f of code) {
-      if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: f, behind: await driftForAsync(didx, S, f, r.id) }
+      if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
+      const d = didx ? { file: f, behind: await driftForAsync(didx, S, f, r.id) } : { file: f, behind: 0 }
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -285,8 +285,8 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const relatedDriftFiles = []
     for (const e of relatedRel.entries) {
       if (e.selectors.length) continue
-      if (didx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = { file: e.path, behind: await driftForAsync(didx, S, e.path, r.id) }
+      if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
+      const d = didx ? { file: e.path, behind: await driftForAsync(didx, S, e.path, r.id) } : { file: e.path, behind: 0 }
       if (d.behind > 0) relatedDriftFiles.push(d)
     }
     const fmStatus = str(r.fm.status, '') || null

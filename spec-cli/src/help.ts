@@ -164,7 +164,7 @@ leaf id reused) · mention (a [[id]] naming no node). Warns: coverage · drift
 (UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
 "ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
 per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·
-confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
+confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the prepared reference hook; bypass SPEXCODE_SKIP_LINT=1);
 contrast \`spex eval lint\`, which is pure advisory and never blocks anyone.
 
 ack — stamp Spec-OK on HEAD (an empty stamp commit): the drift remedy when only MECHANICS changed

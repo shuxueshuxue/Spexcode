@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -16,6 +17,107 @@ function idx(parents: Record<string, string[]>, parts: Partial<DriftIndex> = {})
   return { ord, parents: p, fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(), ...parts }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
+
+test('optimized history and drift indexes match the full-history oracle', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-index-oracle-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'oracle@example.com'); run('config', 'user.name', 'Oracle')
+    mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\n---\n# a\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    appendFileSync(join(root, '.spec/project/a/spec.md'), '\nchanged\n'); run('add', '.'); run('commit', '-qm', 'revise a')
+    const fastH = await historyIndex(root), fullH = await historyIndexFull(root)
+    const paths = new Set([...fastH.versions.keys(), ...fullH.versions.keys()])
+    for (const path of paths) assert.deepEqual(rowsFor(fastH, path), rowsFor(fullH, path), `history mismatch for ${path}`)
+    const fastD = await driftIndex(root), fullD = await driftIndexFull(root)
+    const tip = run('rev-parse', 'HEAD')
+    assert.equal(commitReachable(fastD, tip), commitReachable(fullD, tip))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('batch revision/blob reads preserve exact bytes, including large newline blobs and missing entries', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-batch-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'batch@example.com'); run('config', 'user.name', 'Batch')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const text = `${'line\n'.repeat(20000)}tail-without-newline`
+    writeFileSync(join(root, 'src/blob.txt'), text); run('add', '.'); run('commit', '-qm', 'blob')
+    const head = run('rev-parse', 'HEAD')
+    const [oid, missing] = batchRevisionOids(root, [`${head}:src/blob.txt`, `${head}:src/missing.txt`])
+    assert.ok(oid && !missing)
+    assert.equal(batchBlobTexts(root, [oid!]).get(oid!), text)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('versioned global event cache ignores a legacy .git ledger and stays oracle-equivalent after an upgrade', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-cache-upgrade-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'cache@example.com'); run('config', 'user.name', 'Cache')
+    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# revised\n')
+    run('add', '.'); run('commit', '-qm', 'revise')
+    // This is the pre-schema location/shape. A new implementation must never parse it.
+    const legacy = join(root, '.git', 'spexcode', 'history-events-deprecated.ndjson')
+    mkdirSync(dirname(legacy), { recursive: true })
+    writeFileSync(legacy, JSON.stringify({ k: 'numstat', h: run('rev-parse', 'HEAD'), r: 'corrupt legacy row' }) + '\n')
+    resetHistoryCachesForTests()
+    const fast = await historyIndex(root), full = await historyIndexFull(root)
+    const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
+    for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `legacy cache affected ${path}`)
+    cachePath = historyEventCachePathForTests(root)
+    assert.match(cachePath, /\.spexcode[\\/]projects[\\/]/)
+    assert.match(cachePath, /history-events-v3-/)
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('concurrent different-tip builders share an atomic ledger and recover on reopen', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-cache-concurrent-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'concurrent@example.com'); run('config', 'user.name', 'Concurrent')
+    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# one\n')
+    run('add', '.'); run('commit', '-qm', 'one')
+    const tipOne = run('rev-parse', 'HEAD')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# two\n')
+    run('add', '.'); run('commit', '-qm', 'two')
+    const tipTwo = run('rev-parse', 'HEAD')
+    cachePath = historyEventCachePathForTests(root)
+    const tsx = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
+    const module = pathToFileURL(resolve(dirname(new URL(import.meta.url).pathname), 'git.ts')).href
+    const child = `(async()=>{const g=await import(${JSON.stringify(module)}); await Promise.all([g.historyIndex(process.argv[1], process.argv[2]),g.driftIndex(process.argv[1], process.argv[2])])})()`
+    const runChild = (tip: string) => new Promise<void>((resolveChild, reject) => {
+      const p = spawn(process.execPath, [tsx, '-e', child, '--', root, tip], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stderr = ''; p.stderr.on('data', (chunk) => { stderr += chunk })
+      p.on('error', reject); p.on('exit', (code) => code === 0 ? resolveChild() : reject(new Error(`cache child exited ${code}: ${stderr}`)))
+    })
+    await Promise.all([runChild(tipOne), runChild(tipTwo)])
+    resetHistoryCachesForTests()
+    for (const tip of [tipOne, tipTwo]) {
+      const fast = await historyIndex(root, tip), full = await historyIndexFull(root, tip)
+      const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
+      for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `concurrent cache mismatch at ${tip}:${path}`)
+    }
+    const names = readdirSync(dirname(cachePath))
+    assert.equal(names.some((name) => name.includes('.lock') || name.endsWith('.tmp')), false, `cache residue: ${names.join(', ')}`)
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {
   const parsed = combinedDiffOwnedRanges([
@@ -100,6 +202,17 @@ test('branchy history: a merged side-branch change counts as drift even when its
     specNodes: new Map([['VER', new Set(['X'])]]),
   })
   assert.equal(driftFor(i, 'VER', 'f.ts'), 1)             // the old pos-compare returned 0 here
+})
+
+test('a walk-newest parallel version can revive debt cleared in the other parent', () => {
+  // R--H--VB and R--VA, then M(VA,VB). Each parent is clear against its own version. At M the
+  // contract selects one incomparable version by full-history walk order; choosing VA makes H debt.
+  const i = idx({ M: ['VA', 'VB'], VA: ['R'], VB: ['H'], H: ['R'], R: [] }, {
+    fileCommits: new Map([['f.ts', ['H']]]),
+    specNodes: new Map([['VA', new Set(['X'])], ['VB', new Set(['X'])]]),
+  })
+  assert.equal(driftFor(i, 'VA', 'f.ts'), 1)
+  assert.equal(driftFor(i, 'VB', 'f.ts'), 0)
 })
 
 test("an ack on a parallel branch quiets only the commits reachable from it, not a sibling branch's drift", () => {
@@ -253,6 +366,62 @@ test('parallel old-path edits survive a later-walked rename and keep walk-newest
     const rows = rowsFor(await historyIndex(root), newPath)
     assert.deepEqual(rows.map((row) => row.hash), [main, side, base])
     assert.equal(rows[0].reason, 'main edits A')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('parallel spec versions prove that reset drift debt is not a scalar merge fold', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-parallel-version-fold-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const dated = (date: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim()
+  const path = '.spec/product/n/spec.md'
+  const body = (a: number, b: number) => `---\ntitle: n\ncode:\n  - f.py\n---\n# n\n\nA=${a}\n${'stable\n'.repeat(20)}B=${b}\n`
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'test')
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), body(0, 0))
+    writeFileSync(join(root, 'f.py'), 'def governed(): return 0\n')
+    run('add', '.')
+    dated('2000-01-01T00:00:00Z', 'commit', '-qm', 'base')
+
+    run('switch', '-qc', 'version-a')
+    writeFileSync(join(root, path), body(1, 0))
+    run('add', path)
+    dated('2025-01-01T00:00:00Z', 'commit', '-qm', 'version A')
+    const versionA = run('rev-parse', 'HEAD')
+    assert.equal(driftFor(await driftIndex(root), versionA, 'f.py'), 0, 'A parent must be locally clean')
+
+    run('switch', '-qc', 'version-b', 'main')
+    writeFileSync(join(root, 'f.py'), 'def governed(): return 1\n')
+    run('add', 'f.py')
+    dated('2001-01-01T00:00:00Z', 'commit', '-qm', 'hit governed code on B')
+    const hit = run('rev-parse', 'HEAD')
+    writeFileSync(join(root, path), body(0, 1))
+    run('add', path)
+    dated('2002-01-01T00:00:00Z', 'commit', '-qm', 'version B clears its local debt')
+    const versionB = run('rev-parse', 'HEAD')
+    assert.equal(driftFor(await driftIndex(root), versionB, 'f.py'), 0, 'B parent resets the earlier hit locally')
+
+    run('switch', '-q', 'version-a')
+    dated('2026-01-01T00:00:00Z', 'merge', '--no-ff', '-m', 'merge incomparable versions', 'version-b')
+    const merge = run('rev-parse', 'HEAD')
+    const hidx = await historyIndex(root)
+    const rows = rowsFor(hidx, path)
+    assert.equal(rows[0]?.hash, versionA, 'the newer parallel version must be the product window floor')
+    assert.ok(rows.some((row) => row.hash === versionB), 'the incomparable B version remains in history')
+    assert.ok(!rows.some((row) => row.hash === merge), 'a mixed-only clean merge is not a version')
+
+    const didx = await driftIndex(root)
+    assert.equal(driftFor(didx, versionB, 'f.py'), 0, 'the hit remains answered relative to B')
+    assert.equal(driftFor(didx, versionA, 'f.py'), 1,
+      'the same hit reappears as debt relative to selected A, although both scalar parent debts were empty')
+    assert.equal((didx.fileCommits.get('f.py') ?? []).includes(hit), true)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

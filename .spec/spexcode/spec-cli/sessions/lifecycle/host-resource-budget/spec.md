@@ -69,15 +69,6 @@ that session's registered leaf. It must not signal the shared app-server, its wr
 serves a sibling. The ledger exposes the app-server's reference count and referencing session ids; any live,
 starting, queued, or addressable sibling makes it protected. A stale lifecycle label or an idle tmux shell is
 not proof that a headless turn exists, so control-plane health and turn presence are reported separately.
-Control-plane recovery is incomplete until each resumed thread also regains its own session attribution: its
-worktree cwd, thread-to-record alias, project hook configuration, and per-tool session environment must all be
-ready. A turn that edits successfully but produces commits without the correct `Session:` trailer is degraded,
-not recovered. Readiness requires a chain observed from the shared runtime itself: the exact loaded thread ran a
-completed post-generation turn, that turn executed the commit from the governed worktree, its output named the
-exact commit object, and that object carries the matching trailer. A repository's latest commit, timestamp, or
-trailer cannot be projected backward onto a thread that was never observed producing it. These generic
-thread/turn/commit observations are adapter-owned liveness/resource data beside each shared-runtime reference,
-never inferred from a working label or written as a self-attesting ready stamp.
 
 ### Budgets and continuous report
 
@@ -91,15 +82,12 @@ available through `spex session resources` and its JSON form, with:
 - every owner, exact process identities, RSS, sampled CPU, budget, and over-budget amount;
 - current and superseded backend generations from the exact-instance registry, independent of which endpoint
   record clients currently resolve;
-- each shared control plane's references and protection reason;
-- each reference's thread identity and attribution readiness, including the evidence that hook/tool work maps
-  back to that governed session after a control-plane restart;
+- each shared control plane's loaded/active references and protection reason;
 - orphan/leak findings, evidence for the classification, and whether reclaim is eligible; and
 - unattributed cost kept visible as an explicit blind spot.
 
-The observer must stay cheaper than the work it governs. Shared-runtime ref probes read lightweight loaded
-thread status/cwd for every reference; only threads with a pending attribution observation fetch a bounded page
-of turn timestamps, with turn items omitted. A periodic sample never loads whole conversation histories.
+The sampler must stay cheaper than the work it governs. Shared-runtime probes read lightweight loaded-thread
+status only and never load whole conversation histories during a periodic sample.
 
 One process is counted once in host totals. Owner totals use proportional set size when the host exposes it,
 falling back loudly to RSS rather than pretending RSS sums are unique memory. Unsupported hosts return an

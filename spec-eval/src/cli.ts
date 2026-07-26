@@ -5,10 +5,10 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { evalNodes, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
+import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems } from './freshness.js'
-import { parseRelation } from '../../spec-cli/src/anchors.js'
+import { parseRelation, relationClaimsPath } from '../../spec-cli/src/anchors.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
@@ -82,13 +82,7 @@ export function nodeChanged(dirRel: string, codeFiles: readonly string[], change
     const inDescendant = descendants.some((d) => c === d || c.startsWith(d + '/'))
     if (inNodeDir && !inDescendant) return true
   }
-  return codeFiles.some((cf) => {
-    if (changed.has(cf)) return true
-    const dir = cf.replace(/\/+$/, '') + '/'
-    const re = cf.includes('*') ? new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$') : null
-    for (const c of changed) { if (c.startsWith(dir)) return true; if (re && re.test(c)) return true }
-    return false
-  })
+  return codeFiles.some((claim) => [...changed].some((file) => relationClaimsPath(claim, file)))
 }
 
 async function scan(args: string[] = []): Promise<number> {
@@ -642,6 +636,17 @@ export function scenarioListRows(nodes: EvalNode[], unmeasuredOnly = false): Sce
   return rows
 }
 
+function scenarioProjectionProvenance(root: string): { head: string; treeSha: string } {
+  // These are fixed-tree provenance fields, deliberately outside semanticIndexHash/fullIndexHash. A mode or
+  // type change therefore remains visible to a tree consumer without changing the content-derived scenario
+  // identities. The command runs inside a Git project, so failure is loud instead of manufacturing provenance.
+  const head = git(['-C', root, 'rev-parse', 'HEAD']).trim()
+  if (!head) throw new Error('cannot resolve one fixed HEAD provenance')
+  const treeSha = git(['-C', root, 'rev-parse', `${head}^{tree}`]).trim()
+  if (!treeSha) throw new Error(`cannot resolve tree provenance for fixed HEAD ${head}`)
+  return { head, treeSha }
+}
+
 async function scenarioLs(args: string[]): Promise<number> {
   for (const a of args) {
     if (!a.startsWith('--')) continue
@@ -653,6 +658,32 @@ async function scenarioLs(args: string[]): Promise<number> {
   }
   const root = repoRoot()
   const sel = positional(args)
+  const unmeasuredOnly = has(args, 'unmeasured')
+  if (has(args, 'json')) {
+    if (unmeasuredOnly) {
+      console.error('spex eval scenario ls --json: --unmeasured needs readings; JSON is the complete declaration projection and reads no eval sidecar')
+      return 2
+    }
+    try {
+      const before = scenarioProjectionProvenance(root)
+      // Read declarations from the exact commit named by `before`, never from a dirty/staged working tree.
+      const fixedNodes = evalNodesAt(root, before.head)
+      const selected = sel
+        ? (() => {
+            const ref = sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+            if (!ref) throw new Error('no current node (no session/node-branch here) — name a node')
+            const res = resolveEvalNode(fixedNodes, ref)
+            if (!res.ok) throw new Error(res.error)
+            return [res.node]
+          })()
+        : fixedNodes
+      console.log(JSON.stringify(scenarioProjection(selected, before), null, 2))
+      return 0
+    } catch (e: any) {
+      console.error(`spex eval scenario ls --json: ${e?.message ?? e}`)
+      return 1
+    }
+  }
   let nodes = evalNodes(root)
   if (sel) {
     const ref = sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
@@ -661,9 +692,7 @@ async function scenarioLs(args: string[]): Promise<number> {
     if (!res.ok) { console.error(`spex eval scenario ls: ${res.error}`); return 1 }
     nodes = [res.node]
   }
-  const unmeasuredOnly = has(args, 'unmeasured')
   const rows = scenarioListRows(nodes, unmeasuredOnly)
-  if (has(args, 'json')) { console.log(JSON.stringify(rows, null, 2)); return 0 }
   if (!rows.length) {
     console.log(`spex eval scenario ls: ${unmeasuredOnly ? 'no unmeasured scenarios' : 'no scenarios declared'}${sel ? ` on '${nodes[0]?.id ?? sel}'` : ''}`)
     return 0

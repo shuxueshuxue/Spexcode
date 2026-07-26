@@ -22,7 +22,7 @@ function idx(parents: Record<string, string[]>, parts: TestIndexParts = {}): Dri
       historicalPath: path,
       parents: (p.get(commit) ?? []).map((parent) => ({ commit: parent, historicalPath: path })),
     }))]))
-  return { ord, parents: p, fileEvents, acks: new Map(), specNodes: new Map(), anc: new Map(), ...rest }
+  return { ord, parents: p, fileEvents, lineageEvents: fileEvents, lineageKeys: (path) => [path], acks: new Map(), specNodes: new Map(), anc: new Map(), ...rest }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
 

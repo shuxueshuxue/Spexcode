@@ -65,9 +65,10 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
     id: 's', node: 'n', branch: 'node/n', title: 'n', ahead: 1, dirtyNonRuntime: 0, gates: [],
     summary: { measured: 3, total: 4, pass: 3, fail: 0, review: 0, blind: 1, unknown: 0 },
     evalRevision: { epoch: 'test', generation: 1, content: 'fixture' },
+    impact: { base: 'base', head: 'head', revision: 'revision', nodes: [] },
     nodes: [{
       id: 'n', title: 'n', hue: 10, desc: '', hasEvalFile: true, uncoveredFrontend: false,
-      unknownCoverage: [], scenarios: [{ name: 'blind', expected: '', impact: ['code'] }, { name: 'legacy', expected: '', impact: ['code'] }, { name: 'own', expected: '', impact: ['code'] }, { name: 'inherited', expected: '', impact: ['code'] }],
+      unknownCoverage: [], causes: [], scenarios: [{ name: 'blind', expected: '', impact: ['code'] }, { name: 'legacy', expected: '', impact: ['code'] }, { name: 'own', expected: '', impact: ['code'] }, { name: 'inherited', expected: '', impact: ['code'] }],
       evals: [reading('inherited', '2026-01-03') as any, reading('own', '2026-01-02', true) as any, reading('legacy', '') as any],
     }],
   })
@@ -77,6 +78,12 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
     ['legacy', 'result'],
     ['blind', 'blind'],
   ])
+  assert.deepEqual(scoped.map((item) => [item.scenario, item.impact]), [
+    ['inherited', ['code']],
+    ['own', ['code']],
+    ['legacy', ['code']],
+    ['blind', ['code']],
+  ], 'measured and blind rows carry the same canonical scenario impact')
 })
 
 test('one detail projection returns only selected history and at most five lightweight neighbors', () => {

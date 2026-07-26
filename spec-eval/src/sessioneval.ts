@@ -1,13 +1,44 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
-import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
+import {
+  batchBlobTexts,
+  batchRevisionOids,
+  git,
+  gitA,
+  gitTry,
+  pathRangeEvents,
+  repoRoot,
+  driftIndex,
+  historyIndex,
+  treeTextFiles,
+  type DriftIndex,
+  type DriftPathEvent,
+  type ReviewDiffFile,
+} from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
+import {
+  anchorHitCommits,
+  diffHunkRanges,
+  extOf,
+  extractorFor,
+  extractors,
+  parseRelation,
+  relationClaimsPath,
+  resolveAnchor,
+  selectorsHitRanges,
+  type AnchorHit,
+  type Extractor,
+  type RelationEntry,
+  type Unit,
+} from '../../spec-cli/src/anchors.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
+import { readReadings } from './sidecar.js'
 import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
 
 // ---- the model ----
@@ -17,79 +48,640 @@ type ScoreState = 'pass' | 'fail' | 'stalePass' | 'staleFail' | 'empty' | null
 export type ScenarioImpactReason = 'code' | 'contract' | 'measurement'
 export type SessionScenarioInfo = ScenarioInfo & { impact: ScenarioImpactReason[] }
 
-// The ONE session-scope predicate. Declared scenarios come from the current worktree; impact is orthogonal
-// to freshness and is derived only from the scenario's own code axis, its semantic contract at merge-base,
-// or a reading this session owns. Consumers receive the selected set and never repeat these tests.
-export function selectImpactedScenarios(
-  current: Scenario[],
-  base: Scenario[],
-  nodeCode: string[],
-  changedPaths: ReadonlySet<string>,
-  evalFileChanged: boolean,
-  measuredBySession: ReadonlySet<string>,
-): { scenario: Scenario; impact: ScenarioImpactReason[] }[] {
-  const baseByName = new Map(base.map((scenario) => [scenario.name, scenario]))
-  return current.flatMap((scenario) => {
-    const impact: ScenarioImpactReason[] = []
-    // base paths: a scenario entry may be anchored (`path#symbol` — [[eval-core]]), and a raw selector
-    // string matches no changed path, so reading it unnormalized would silently drop the scenario out of
-    // session scope instead of narrowing its freshness.
-    const codeAxis = scenarioCodeAxis(scenario.code, nodeCode).paths
-    if ([...changedPaths].some((path) => codeClaims(codeAxis, path))) impact.push('code')
-    const prior = baseByName.get(scenario.name)
-    if (evalFileChanged && (!prior || scenarioHash(prior) !== scenarioHash(scenario))) impact.push('contract')
-    if (measuredBySession.has(scenario.name)) impact.push('measurement')
-    return impact.length ? [{ scenario, impact }] : []
+export type SessionImpactSelectorHit = AnchorHit & { path: string }
+export type SessionImpactScenarioDelta = {
+  kind: 'added' | 'removed' | 'modified' | 'unchanged'
+  semantic: boolean
+  metadata: boolean
+  metadataOnly: boolean
+}
+export type SessionImpactScenario = {
+  name: string
+  state: 'added' | 'removed' | 'present'
+  impact: ScenarioImpactReason[]
+  baseEffectiveCode: RelationEntry[]
+  headEffectiveCode: RelationEntry[]
+  selectorHits: SessionImpactSelectorHit[]
+  baseScenarioHash: string | null
+  headScenarioHash: string | null
+  delta: SessionImpactScenarioDelta
+}
+export type SessionImpactNodeCause = {
+  kind: 'spec' | 'eval' | 'code' | 'related' | 'contract' | 'measurement'
+  paths: string[]
+  scenarios: string[]
+  selectorHits: SessionImpactSelectorHit[]
+}
+export type SessionImpactNode = {
+  id: string
+  causes: SessionImpactNodeCause[]
+  scenarios: SessionImpactScenario[]
+}
+export type SessionImpactProjection = {
+  base: string
+  head: string
+  revision: string
+  nodes: SessionImpactNode[]
+}
+export type SessionImpactOptions = {
+  base: string
+  head: string
+  measurements?: Readonly<Record<string, readonly string[]>>
+  overlay?: SessionImpactOverlay
+}
+
+export type SessionImpactOverlay = {
+  revision: string
+  paths: string[]
+  baseRanges: Record<string, [number, number][]>
+  ranges: Record<string, [number, number][]>
+  specs: SessionImpactSpecSnapshot[]
+  evalSources: Record<string, string | null>
+  files: Record<string, string | null>
+}
+
+export type SessionImpactSpecSnapshot = Pick<LoadedSpec,
+  'id' | 'path' | 'code' | 'codeScoped' | 'related' | 'relatedScoped' | 'relationProblems'>
+
+export class SessionEvalUnavailableError extends Error {
+  override name = 'SessionEvalUnavailableError'
+}
+
+export class SessionImpactUnavailableError extends SessionEvalUnavailableError {
+  override name = 'SessionImpactUnavailableError'
+}
+
+export class SessionImpactRevisionMovedError extends SessionImpactUnavailableError {
+  override name = 'SessionImpactRevisionMovedError'
+}
+
+type LoadedSpec = Awaited<ReturnType<typeof loadSpecs>>[number]
+
+async function impactGit(root: string, args: string[], operation: string): Promise<string> {
+  const result = await gitTry(['-C', root, ...args])
+  if (!result.ok) {
+    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
+  }
+  return result.stdout
+}
+
+async function impactIndexGit(root: string, indexFile: string, args: string[], operation: string): Promise<string> {
+  const result = await gitTry(['-C', root, ...args], { indexFile })
+  if (!result.ok) {
+    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
+  }
+  return result.stdout
+}
+
+async function impactCommit(root: string, selector: string): Promise<string> {
+  const out = await impactGit(root, ['rev-parse', '--verify', `${selector}^{commit}`], `resolve revision '${selector}'`)
+  const oid = out.trim()
+  if (!oid) throw new SessionImpactUnavailableError(`session impact revision '${selector}' resolved to no commit`)
+  return oid
+}
+
+type NameStatusChange = { status: string; before: string; after: string }
+function parseNameStatusChanges(out: string): NameStatusChange[] {
+  const records = out.split('\0')
+  const changes: NameStatusChange[] = []
+  for (let index = 0; index < records.length;) {
+    const status = records[index++]
+    if (!status) continue
+    const first = records[index++]
+    if (!first) throw new SessionImpactUnavailableError(`session impact diff emitted '${status}' without a path`)
+    if (/^[RC]/.test(status)) {
+      const second = records[index++]
+      if (!second) throw new SessionImpactUnavailableError(`session impact diff emitted '${status}' without both rename paths`)
+      changes.push({ status, before: first, after: second })
+    } else changes.push({ status, before: first, after: first })
+  }
+  return changes
+}
+
+async function revisionFile(root: string, revision: string, path: string): Promise<string | null> {
+  const listed = await impactGit(root, ['-c', 'core.quotePath=false', 'ls-tree', '-z', '--name-only', revision, '--', path], `read ${revision}:${path}`)
+  if (!listed.split('\0').includes(path)) return null
+  return impactGit(root, ['show', `${revision}:${path}`], `read ${revision}:${path}`)
+}
+
+function loadedRelationRows(spec: SessionImpactSpecSnapshot | undefined, relation: 'code' | 'related'): string[] {
+  if (!spec) return []
+  const paths = relation === 'code' ? spec.code : spec.related
+  const scoped = relation === 'code' ? spec.codeScoped : spec.relatedScoped
+  const selectors = new Map(scoped.map((entry) => [entry.path, entry.selectors]))
+  return paths.flatMap((path) => selectors.get(path)?.map((selector) => `${path}#${selector}`) ?? [path])
+}
+
+function scenarioMetadata(scenario: Scenario, effectiveCode: readonly RelationEntry[]): string {
+  return JSON.stringify({
+    tags: scenario.tags ?? [],
+    test: scenario.test ?? null,
+    effectiveCode,
+    related: scenario.related ?? [],
   })
 }
 
-export function unknownCoveragePaths(
-  nodeCode: string[],
-  changedPaths: ReadonlySet<string>,
-): string[] {
-  return [...changedPaths].filter((path) => (
-    isUiPath(path)
-    && codeClaims(nodeCode, path)
+type ImpactReadContext = {
+  root: string
+  base: string
+  head: string
+  committedPaths: ReadonlySet<string>
+  changedPaths: ReadonlySet<string>
+  overlay?: SessionImpactOverlay
+  regs: ReturnType<typeof extractors>
+  didx: DriftIndex | null
+  entryImpacts: Map<string, Promise<{ paths: string[]; selectorHits: SessionImpactSelectorHit[] }>>
+  windows: Map<string, DriftPathEvent[]>
+  sources: Map<string, Promise<string | null>>
+  units: Map<string, Promise<{ extractor: Extractor; units: Unit[] }>>
+}
+
+async function selectorSource(
+  context: ImpactReadContext,
+  revision: string,
+  path: string,
+  sourceView: 'base' | 'head',
+): Promise<string | null> {
+  if (sourceView === 'head' && context.overlay && Object.hasOwn(context.overlay.files, path)) return context.overlay.files[path]
+  const key = `${revision}\0${path}`
+  let pending = context.sources.get(key)
+  if (!pending) {
+    pending = revisionFile(context.root, revision, path)
+    context.sources.set(key, pending)
+  }
+  return pending
+}
+
+async function validateSelectorEntry(
+  context: ImpactReadContext,
+  revision: string,
+  entry: RelationEntry,
+  sourceView: 'base' | 'head',
+): Promise<{ extractor: Extractor; units: Unit[] }> {
+  const x = extractorFor(context.regs, extOf(entry.path))
+  if (!x) {
+    throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors[0]}' is unavailable: no designated extractor for '.${extOf(entry.path)}'`)
+  }
+  const ready = x.ready()
+  if (ready !== true) {
+    throw new SessionImpactUnavailableError(`session impact selectors on '${entry.path}' are unavailable: ${ready}`)
+  }
+  const sourceIdentity = sourceView === 'head' && context.overlay && Object.hasOwn(context.overlay.files, entry.path)
+    ? `overlay:${context.overlay.revision}`
+    : 'exact'
+  const key = `${revision}\0${sourceIdentity}\0${entry.path}\0${x.id}\0${x.memoKey(entry.path)}`
+  let extracted = context.units.get(key)
+  if (!extracted) {
+    extracted = (async () => {
+      const source = await selectorSource(context, revision, entry.path, sourceView)
+      if (source === null) {
+        throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors[0]}' is dead at ${revision.slice(0, 8)}: the file does not exist`)
+      }
+      try { return { extractor: x, units: x.extract(source, entry.path) } }
+      catch (error: any) {
+        throw new SessionImpactUnavailableError(`session impact selectors on '${entry.path}' are unextractable at ${revision.slice(0, 8)}: ${error?.message ?? String(error)}`)
+      }
+    })()
+    context.units.set(key, extracted)
+  }
+  const { extractor, units } = await extracted
+  for (const selector of entry.selectors) {
+    const resolved = resolveAnchor(units, selector)
+    if ('dead' in resolved) {
+      throw new SessionImpactUnavailableError(`dead session impact selector '${entry.path}#${selector}' at ${revision.slice(0, 8)}: follow the rename or repair the code relation`)
+    }
+    if ('ambiguous' in resolved) {
+      throw new SessionImpactUnavailableError(`ambiguous session impact selector '${entry.path}#${selector}' at ${revision.slice(0, 8)}: ${resolved.ambiguous} units share that name`)
+    }
+  }
+  return { extractor, units }
+}
+
+function selectorEntriesForSnapshot(
+  specs: readonly SessionImpactSpecSnapshot[],
+  scenariosById: ReadonlyMap<string, readonly Scenario[]>,
+): RelationEntry[] {
+  const entries: RelationEntry[] = []
+  for (const spec of specs) {
+    entries.push(...parsedRelation(loadedRelationRows(spec, 'code'), 'code', `node '${spec.id}'`))
+    entries.push(...parsedRelation(loadedRelationRows(spec, 'related'), 'related', `node '${spec.id}'`))
+    for (const scenario of scenariosById.get(spec.id) ?? []) {
+      entries.push(...parsedRelation(scenario.code ?? [], 'code', `scenario '${spec.id} · ${scenario.name}'`))
+      entries.push(...parsedRelation(scenario.related ?? [], 'related', `scenario '${spec.id} · ${scenario.name}'`))
+    }
+  }
+  const unique = new Map<string, RelationEntry>()
+  for (const entry of entries) if (entry.selectors.length) unique.set(`${entry.path}\0${entry.selectors.join('\x1e')}`, entry)
+  return [...unique.values()]
+}
+
+function primeSelectorSources(
+  context: ImpactReadContext,
+  revision: string,
+  paths: readonly string[],
+  sourceView: 'base' | 'head',
+): void {
+  const exactPaths = [...new Set(paths)].filter((path) => (
+    !context.sources.has(`${revision}\0${path}`)
+    && !(sourceView === 'head' && context.overlay && Object.hasOwn(context.overlay.files, path))
+  )).sort()
+  if (!exactPaths.length) return
+  try {
+    const oids = batchRevisionOids(context.root, exactPaths.map((path) => `${revision}:${path}`))
+    const blobs = batchBlobTexts(context.root, oids.filter((oid): oid is string => !!oid))
+    for (let index = 0; index < exactPaths.length; index++) {
+      const path = exactPaths[index]
+      const oid = oids[index]
+      if (oid && !blobs.has(oid)) throw new Error(`cat-file returned no bytes for ${revision.slice(0, 8)}:${path}`)
+      context.sources.set(`${revision}\0${path}`, Promise.resolve(oid ? blobs.get(oid)! : null))
+    }
+  } catch (error: any) {
+    throw new SessionImpactUnavailableError(`session impact cannot batch-read selector sources at ${revision.slice(0, 8)}: ${error?.message ?? String(error)}`)
+  }
+}
+
+async function impactForEntry(
+  context: ImpactReadContext,
+  entry: RelationEntry,
+  options: { validateUnchanged?: boolean; validationRevision?: string; validationSide?: 'base' | 'head' } = {},
+): Promise<{ paths: string[]; selectorHits: SessionImpactSelectorHit[] }> {
+  const revision = options.validationRevision ?? context.head
+  const sourceView = options.validationSide ?? 'head'
+  const key = `${context.base}\0${context.head}\0${context.overlay?.revision ?? ''}\0${sourceView}\0${revision}\0${entry.path}\0${entry.selectors.join('\x1e')}\0${options.validateUnchanged ? 1 : 0}`
+  let pending = context.entryImpacts.get(key)
+  if (pending) return pending
+  pending = (async () => {
+    // Reuse sessioneval's existing relation claim matcher over the ONE exact base..head changed set. The
+    // projector adds no impact-local glob/path grammar; selector entries then narrow that file result.
+    const changed = [...context.changedPaths].filter((path) => codeClaims([entry.path], path))
+    if (!entry.selectors.length) return { paths: changed.sort(), selectorHits: [] }
+    // Resolution is a validity claim about the selected HEAD, independent of whether the file moved.
+    // Validating first prevents a dead selector from becoming a vacuous no-hit/fresh answer.
+    if (!changed.length && !options.validateUnchanged) return { paths: [], selectorHits: [] }
+    const { units } = await validateSelectorEntry(context, revision, entry, sourceView)
+    if (!changed.length) return { paths: [], selectorHits: [] }
+    const selectorHits: SessionImpactSelectorHit[] = []
+    const committed = [...context.committedPaths].some((path) => codeClaims([entry.path], path))
+    if (committed) {
+      if (!context.didx) throw new SessionImpactUnavailableError('session impact has committed paths but no exact event index')
+      const windowKey = `${revision}\0${entry.path}`
+      let window = context.windows.get(windowKey)
+      if (!window) {
+        const projected = pathRangeEvents(context.didx, context.base, entry.path, revision)
+        if (!projected) throw new SessionImpactUnavailableError(`session impact cannot place base ${context.base.slice(0, 8)} in the exact event topology`)
+        window = projected
+        context.windows.set(windowKey, window)
+      }
+      try {
+        const hits = await anchorHitCommits(context.root, window, [...entry.selectors], context.regs)
+        for (const hit of hits) selectorHits.push({ path: entry.path, ...hit })
+      } catch (error: any) {
+        throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors.join(',#')}' is unavailable: ${error?.message ?? String(error)}`)
+      }
+    }
+    if (context.overlay && context.overlay.paths.some((path) => codeClaims([entry.path], path))) {
+      const ranges = sourceView === 'base' ? context.overlay.baseRanges : context.overlay.ranges
+      const touched = selectorsHitRanges(units, entry.selectors, ranges[entry.path] ?? [])
+      if (touched.length) selectorHits.push({
+        path: entry.path,
+        commit: `worktree:${context.overlay.revision.slice(0, 12)}`,
+        selectors: touched,
+      })
+    }
+    return { paths: selectorHits.length ? changed.sort() : [], selectorHits }
+  })()
+  context.entryImpacts.set(key, pending)
+  return pending
+}
+
+async function impactForEntries(
+  context: ImpactReadContext,
+  entries: readonly RelationEntry[],
+  options: { validateUnchanged?: boolean; validationRevision?: string; validationSide?: 'base' | 'head' } = {},
+): Promise<{ paths: string[]; selectorHits: SessionImpactSelectorHit[] }> {
+  const results = await Promise.all(entries.map((entry) => impactForEntry(context, entry, options)))
+  return {
+    paths: [...new Set(results.flatMap((result) => result.paths))].sort(),
+    selectorHits: results.flatMap((result) => result.selectorHits),
+  }
+}
+
+function pushNodeCause(
+  causes: SessionImpactNodeCause[],
+  kind: SessionImpactNodeCause['kind'],
+  paths: readonly string[] = [],
+  scenarios: readonly string[] = [],
+  selectorHits: readonly SessionImpactSelectorHit[] = [],
+): void {
+  let cause = causes.find((candidate) => candidate.kind === kind)
+  if (!cause) {
+    cause = { kind, paths: [], scenarios: [], selectorHits: [] }
+    causes.push(cause)
+  }
+  cause.paths = [...new Set([...cause.paths, ...paths])].sort()
+  cause.scenarios = [...new Set([...cause.scenarios, ...scenarios])].sort()
+  const seen = new Set(cause.selectorHits.map((hit) => JSON.stringify(hit)))
+  for (const hit of selectorHits) {
+    const key = JSON.stringify(hit)
+    if (!seen.has(key)) { seen.add(key); cause.selectorHits.push(hit) }
+  }
+}
+
+function parsedRelation(raw: readonly string[], relation: 'code' | 'related', owner: string): RelationEntry[] {
+  const parsed = parseRelation([...raw], relation)
+  if (parsed.problems.length) {
+    throw new SessionImpactUnavailableError(`session impact ${owner} has invalid ${relation}: ${parsed.problems.join('; ')}`)
+  }
+  return parsed.entries
+}
+
+// Public, exact-revision impact projection. It reads both spec trees and all scenario declarations from
+// immutable Git objects, reuses the canonical relation/anchor engine, then re-resolves the caller's selectors
+// before publication. Callers may pass branch names, but never receive a projection spanning two ref states.
+export async function projectSessionImpact(root: string, options: SessionImpactOptions): Promise<SessionImpactProjection> {
+  const [base, head] = await Promise.all([
+    impactCommit(root, options.base),
+    impactCommit(root, options.head),
+  ])
+  const ancestry = await gitTry(['-C', root, 'merge-base', '--is-ancestor', base, head])
+  if (!ancestry.ok) {
+    if (ancestry.failure === 'exit') {
+      throw new SessionImpactUnavailableError(`session impact base ${base.slice(0, 8)} is not an ancestor of head ${head.slice(0, 8)}; use the session merge-base as base`)
+    }
+    throw new SessionImpactUnavailableError(`session impact cannot verify base/head ancestry: ${ancestry.stderr.trim() || ancestry.failure}`)
+  }
+  // One immutable .spec tree read per distinct revision supplies BOTH spec relations and eval declarations.
+  // This is deliberately build-local: exact projections do not need another resident cache or generation.
+  const treeByRevision = new Map<string, ReadonlyMap<string, string>>()
+  const readTree = (revision: string): ReadonlyMap<string, string> => {
+    const cached = treeByRevision.get(revision)
+    if (cached) return cached
+    try {
+      const tree = treeTextFiles(root, revision, '.spec')
+      treeByRevision.set(revision, tree)
+      return tree
+    } catch (error: any) {
+      throw new SessionImpactUnavailableError(`session impact cannot read ${revision.slice(0, 8)} declarations: ${error?.message ?? String(error)}`)
+    }
+  }
+  const baseTree = readTree(base)
+  const headTree = options.overlay ? null : readTree(head)
+  const [baseSpecs, headSpecs] = await Promise.all([
+    loadSpecs(root, { tip: base, history: null, drift: null, snapshot: { tip: base, files: baseTree } }),
+    options.overlay
+      ? Promise.resolve(options.overlay.specs)
+      : loadSpecs(root, { tip: head, history: null, drift: null, snapshot: { tip: head, files: headTree! } }),
+  ])
+  const committedChanges = parseNameStatusChanges(await impactGit(
+    root,
+    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-z', '-M', base, head],
+    `diff ${base.slice(0, 8)}..${head.slice(0, 8)}`,
   ))
-}
+  const committedPaths = new Set(committedChanges.flatMap((change) => [change.before, change.after]))
+  let didx: DriftIndex | null = null
+  if (committedPaths.size) {
+    try { didx = await driftIndex(root, head) }
+    catch (error: any) {
+      throw new SessionImpactUnavailableError(`session impact cannot derive the exact ${base.slice(0, 8)}..${head.slice(0, 8)} event window: ${error?.message ?? String(error)}`)
+    }
+  }
+  const changedPaths = new Set([...committedPaths, ...(options.overlay?.paths ?? [])])
+  const context: ImpactReadContext = {
+    root,
+    base,
+    head,
+    committedPaths,
+    changedPaths,
+    overlay: options.overlay,
+    regs: extractors(root),
+    didx,
+    entryImpacts: new Map(),
+    windows: new Map(),
+    sources: new Map(),
+    units: new Map(),
+  }
+  const baseById = new Map<string, SessionImpactSpecSnapshot>(baseSpecs.map((spec) => [spec.id, spec]))
+  const headById = new Map<string, SessionImpactSpecSnapshot>(headSpecs.map((spec) => [spec.id, spec]))
+  const nodeIds = [...new Set([...baseById.keys(), ...headById.keys()])].sort()
+  if (options.overlay) {
+    for (const path of options.overlay.paths) {
+      if (!Object.hasOwn(options.overlay.files, path)
+        || !Object.hasOwn(options.overlay.baseRanges, path)
+        || !Object.hasOwn(options.overlay.ranges, path)) {
+        throw new SessionImpactUnavailableError(`session impact overlay '${options.overlay.revision}' is incomplete for '${path}'`)
+      }
+    }
+  }
+  const scenariosAt = (
+    side: 'base' | 'head',
+    spec: SessionImpactSpecSnapshot,
+  ): Scenario[] => {
+    const evalPath = join(dirname(spec.path), 'eval.md')
+    let source: string | null
+    if (side === 'base') source = baseTree.get(evalPath) ?? null
+    else if (options.overlay) {
+      if (!Object.hasOwn(options.overlay.evalSources, evalPath)) {
+        throw new SessionImpactUnavailableError(`session impact overlay '${options.overlay.revision}' has no declaration snapshot for '${evalPath}'`)
+      }
+      source = options.overlay.evalSources[evalPath]
+    } else source = headTree!.get(evalPath) ?? null
+    if (source === null) return []
+    try { return parseScenarios(source) }
+    catch (error: any) {
+      throw new SessionImpactUnavailableError(`session impact cannot parse ${side} declarations '${evalPath}': ${error?.message ?? String(error)}`)
+    }
+  }
+  const baseScenariosById = new Map(baseSpecs.map((spec) => [spec.id, scenariosAt('base', spec)]))
+  const headScenariosById = new Map(headSpecs.map((spec) => [spec.id, scenariosAt('head', spec)]))
+  const baseSelectorEntries = selectorEntriesForSnapshot(baseSpecs, baseScenariosById)
+  const headSelectorEntries = selectorEntriesForSnapshot(headSpecs, headScenariosById)
+  primeSelectorSources(context, base, baseSelectorEntries.map((entry) => entry.path), 'base')
+  primeSelectorSources(context, head, headSelectorEntries.map((entry) => entry.path), 'head')
+  await Promise.all([
+    ...baseSelectorEntries.map((entry) => validateSelectorEntry(context, base, entry, 'base')),
+    ...headSelectorEntries.map((entry) => validateSelectorEntry(context, head, entry, 'head')),
+  ])
+  const nodes: SessionImpactNode[] = []
 
-export function sessionEvalNodeCandidate(
-  current: Scenario[],
-  nodeCode: string[],
-  evalPath: string,
-  sidecarPath: string,
-  changedPaths: ReadonlySet<string>,
-  dirtyPaths: ReadonlySet<string>,
-): boolean {
-  if (changedPaths.has(evalPath) || changedPaths.has(sidecarPath) || dirtyPaths.has(sidecarPath)) return true
-  return current.some((scenario) => {
-    const codeAxis = scenarioCodeAxis(scenario.code, nodeCode).paths
-    return [...changedPaths].some((path) => codeClaims(codeAxis, path))
-  })
+  for (const id of nodeIds) {
+    const baseSpec = baseById.get(id)
+    const headSpec = headById.get(id)
+    const causes: SessionImpactNodeCause[] = []
+    const baseSpecPath = baseSpec?.path ?? ''
+    const headSpecPath = headSpec?.path ?? ''
+    const specPaths = [...new Set([baseSpecPath, headSpecPath].filter(Boolean))]
+    const specChanged = [...changedPaths].filter((path) => specPaths.some((claim) => codeClaims([claim], path)))
+    if (specChanged.length) pushNodeCause(causes, 'spec', specChanged)
+
+    if (baseSpec?.relationProblems.length || headSpec?.relationProblems.length) {
+      throw new SessionImpactUnavailableError(`session impact node '${id}' has invalid relations: ${[
+        ...(baseSpec?.relationProblems ?? []), ...(headSpec?.relationProblems ?? []),
+      ].join('; ')}`)
+    }
+
+    const baseEvalPath = baseSpec ? join(dirname(baseSpec.path), 'eval.md') : ''
+    const headEvalPath = headSpec ? join(dirname(headSpec.path), 'eval.md') : ''
+    const baseScenarios = baseScenariosById.get(id) ?? []
+    const headScenarios = headScenariosById.get(id) ?? []
+    const evalPaths = [...new Set([baseEvalPath, headEvalPath].filter(Boolean))]
+    const evalChanged = [...changedPaths].filter((path) => evalPaths.some((claim) => codeClaims([claim], path)))
+    if (evalChanged.length) pushNodeCause(causes, 'eval', evalChanged)
+
+    const baseNodeCodeRows = loadedRelationRows(baseSpec, 'code')
+    const headNodeCodeRows = loadedRelationRows(headSpec, 'code')
+    const baseNodeCode = scenarioCodeAxis(undefined, baseNodeCodeRows)
+    const headNodeCode = scenarioCodeAxis(undefined, headNodeCodeRows)
+    if (baseNodeCode.problems.length || headNodeCode.problems.length) {
+      throw new SessionImpactUnavailableError(`session impact node '${id}' has invalid code: ${[
+        ...baseNodeCode.problems, ...headNodeCode.problems,
+      ].join('; ')}`)
+    }
+    const nodeCodeMoved = !!baseSpec && !!headSpec
+      && JSON.stringify(baseNodeCode.entries) !== JSON.stringify(headNodeCode.entries)
+    const nodeCodeReads = nodeCodeMoved
+      ? await Promise.all([
+        impactForEntries(context, baseNodeCode.entries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+        impactForEntries(context, headNodeCode.entries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+      ])
+      : [await impactForEntries(context, (headSpec ? headNodeCode : baseNodeCode).entries, {
+        validateUnchanged: !baseSpec || !headSpec,
+        validationRevision: headSpec ? head : base,
+        validationSide: headSpec ? 'head' : 'base',
+      })]
+    const nodeCodeImpact = {
+      paths: [...new Set(nodeCodeReads.flatMap((read) => read.paths))].sort(),
+      selectorHits: nodeCodeReads.flatMap((read) => read.selectorHits),
+    }
+    if (nodeCodeImpact.paths.length) pushNodeCause(causes, 'code', nodeCodeImpact.paths, [], nodeCodeImpact.selectorHits)
+
+    // Related declarations belong to their own owners. Combine their parsed DATA entries after validation;
+    // parsing one synthetic concatenated relation would turn two legitimate owners naming the same path into
+    // a fake duplicate/mixed-form schema error.
+    const relatedFor = (spec: SessionImpactSpecSnapshot | undefined, scenarios: readonly Scenario[]) => [
+      ...parsedRelation(loadedRelationRows(spec, 'related'), 'related', `node '${id}'`),
+      ...scenarios.flatMap((scenario) => (
+        parsedRelation(scenario.related ?? [], 'related', `scenario '${id} · ${scenario.name}'`)
+      )),
+    ]
+    const baseRelatedEntries = relatedFor(baseSpec, baseScenarios)
+    const headRelatedEntries = relatedFor(headSpec, headScenarios)
+    const relatedMoved = !!baseSpec && !!headSpec
+      && JSON.stringify(baseRelatedEntries) !== JSON.stringify(headRelatedEntries)
+    const relatedReads = relatedMoved
+      ? await Promise.all([
+        impactForEntries(context, baseRelatedEntries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+        impactForEntries(context, headRelatedEntries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+      ])
+      : [await impactForEntries(context, headSpec ? headRelatedEntries : baseRelatedEntries, {
+        validateUnchanged: !baseSpec || !headSpec,
+        validationRevision: headSpec ? head : base,
+        validationSide: headSpec ? 'head' : 'base',
+      })]
+    const relatedImpact = {
+      paths: [...new Set(relatedReads.flatMap((read) => read.paths))].sort(),
+      selectorHits: relatedReads.flatMap((read) => read.selectorHits),
+    }
+    if (relatedImpact.paths.length) pushNodeCause(causes, 'related', relatedImpact.paths, [], relatedImpact.selectorHits)
+
+    const baseByName = new Map(baseScenarios.map((scenario) => [scenario.name, scenario]))
+    const headByName = new Map(headScenarios.map((scenario) => [scenario.name, scenario]))
+    const scenarioNames = [...new Set([...baseByName.keys(), ...headByName.keys()])].sort()
+    const measured = new Set(options.measurements?.[id] ?? [])
+    const scenarios: SessionImpactScenario[] = []
+    for (const name of scenarioNames) {
+      const before = baseByName.get(name)
+      const after = headByName.get(name)
+      const state = !before ? 'added' : !after ? 'removed' : 'present'
+      const baseScenarioHash = before ? scenarioHash(before) : null
+      const headScenarioHash = after ? scenarioHash(after) : null
+      const semantic = !before || !after || baseScenarioHash !== headScenarioHash
+      const baseAxis = before ? scenarioCodeAxis(before.code, loadedRelationRows(baseSpec, 'code')) : { entries: [], paths: [], problems: [] }
+      const headAxis = after ? scenarioCodeAxis(after.code, loadedRelationRows(headSpec, 'code')) : { entries: [], paths: [], problems: [] }
+      if (baseAxis.problems.length || headAxis.problems.length) {
+        throw new SessionImpactUnavailableError(`session impact scenario '${id} · ${name}' has invalid code: ${[
+          ...baseAxis.problems, ...headAxis.problems,
+        ].join('; ')}`)
+      }
+      // Metadata is the RESOLVED measurement pointer, not only bytes authored in this scenario block. A
+      // declaration without own code inherits the node relation at each revision, so node #alpha -> #beta is
+      // a metadata move for that scenario even though its eval.md block did not change.
+      const metadata = !!before && !!after
+        && scenarioMetadata(before, baseAxis.entries) !== scenarioMetadata(after, headAxis.entries)
+      const effectiveCodeMoved = JSON.stringify(baseAxis.entries) !== JSON.stringify(headAxis.entries)
+      const kind: SessionImpactScenarioDelta['kind'] = !before ? 'added' : !after ? 'removed'
+        : semantic || metadata ? 'modified' : 'unchanged'
+      const codeReads = before && after && effectiveCodeMoved
+        ? await Promise.all([
+          impactForEntries(context, baseAxis.entries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+          impactForEntries(context, headAxis.entries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+        ])
+        : [await impactForEntries(context, (after ? headAxis : baseAxis).entries, {
+          validateUnchanged: kind === 'added' || kind === 'removed',
+          validationRevision: after ? head : base,
+          validationSide: after ? 'head' : 'base',
+        })]
+      const code = {
+        paths: [...new Set(codeReads.flatMap((read) => read.paths))].sort(),
+        selectorHits: codeReads.flatMap((read) => read.selectorHits),
+      }
+      const impact: ScenarioImpactReason[] = []
+      if (code.paths.length) impact.push('code')
+      if (semantic) impact.push('contract')
+      if (measured.has(name)) impact.push('measurement')
+      if (code.paths.length) pushNodeCause(causes, 'code', code.paths, [name], code.selectorHits)
+      if (semantic) pushNodeCause(causes, 'contract', evalChanged, [name])
+      if (measured.has(name)) pushNodeCause(causes, 'measurement', [], [name])
+      scenarios.push({
+        name,
+        state,
+        impact,
+        baseEffectiveCode: baseAxis.entries,
+        headEffectiveCode: headAxis.entries,
+        selectorHits: code.selectorHits,
+        baseScenarioHash,
+        headScenarioHash,
+        delta: { kind, semantic, metadata, metadataOnly: metadata && !semantic },
+      })
+    }
+
+    if (causes.length || scenarios.some((scenario) => scenario.delta.kind !== 'unchanged' || scenario.impact.length)) {
+      nodes.push({ id, causes, scenarios })
+    }
+  }
+
+  const [baseAfter, headAfter] = await Promise.all([
+    impactCommit(root, options.base),
+    impactCommit(root, options.head),
+  ])
+  if (baseAfter !== base || headAfter !== head) {
+    throw new SessionImpactRevisionMovedError(`session impact revisions moved while projecting: base ${base.slice(0, 8)} -> ${baseAfter.slice(0, 8)}, head ${head.slice(0, 8)} -> ${headAfter.slice(0, 8)}; retry the projection`)
+  }
+  const revision = createHash('sha256').update(JSON.stringify({ base, head, overlay: options.overlay?.revision ?? null, nodes })).digest('hex')
+  return { base, head, revision, nodes }
 }
 
 type SessionEvalReading = EvalEntry & { inSession: boolean }
 
 export function scopeSessionScenarioRows(
   current: Scenario[],
-  base: Scenario[],
   scenarioInfo: ScenarioInfo[],
-  nodeCode: string[],
-  changedPaths: ReadonlySet<string>,
-  evalFileChanged: boolean,
   evals: SessionEvalReading[],
+  projected: readonly SessionImpactScenario[],
 ): { scenarios: SessionScenarioInfo[]; evals: SessionEvalReading[] } {
-  const measured = new Set(evals.filter((reading) => reading.inSession).map((reading) => reading.scenario))
-  const selected = selectImpactedScenarios(current, base, nodeCode, changedPaths, evalFileChanged, measured)
+  const impactByName = new Map(projected
+    .filter((scenario) => scenario.state !== 'removed' && scenario.impact.length)
+    .map((scenario) => [scenario.name, scenario.impact]))
   const infoByName = new Map(scenarioInfo.map((scenario) => [scenario.name, scenario]))
-  const scenarios: SessionScenarioInfo[] = selected.map(({ scenario, impact }) => ({
+  const scenarios: SessionScenarioInfo[] = current.filter((scenario) => impactByName.has(scenario.name)).map((scenario) => ({
     ...(infoByName.get(scenario.name) ?? {
       name: scenario.name, expected: scenario.expected,
       ...(scenario.tags?.length ? { tags: scenario.tags } : {}),
       ...(scenario.test ? { test: scenario.test } : {}),
       ...(scenario.code?.length ? { code: scenario.code } : {}),
     }),
-    impact,
+    impact: impactByName.get(scenario.name)!,
   }))
   const names = new Set(scenarios.map((scenario) => scenario.name))
   return { scenarios, evals: evals.filter((reading) => names.has(reading.scenario)) }
@@ -100,10 +692,6 @@ export function completeExportNodeIds(
   scopedNodeIds: Iterable<string>,
 ): string[] {
   return [...new Set([...changedNodeIds, ...scopedNodeIds])]
-}
-
-export function mergeBasePath(path: string, oldPaths: ReadonlyMap<string, string>): string {
-  return oldPaths.get(path) ?? path
 }
 
 // one eval reading rendered for the export: the latest measurement of one scenario, with its evidence
@@ -173,6 +761,7 @@ export type ExportModel = {
   dirtyNonRuntime: number
   gates: ExportGate[]
   score: { passed: number; total: number; fresh: number }   // the eval summary across all nodes
+  impact: SessionImpactProjection
   nodes: ExportNode[]
   otherFiles: ExportFile[]        // changed files no spec node claims
 }
@@ -192,23 +781,13 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
 
-  const changedPaths = new Set(payload.diff.map((file) => file.path))
-  const oldPaths = new Map(payload.diff.flatMap((file) => file.oldPath ? [[file.path, file.oldPath] as const] : []))
-
   // enrich each changed file with its unified diff + full before/after content (derived from the session
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
   // extra fetch. Capped at MAX_ENRICHED_FILES so a huge changeset can't bloat the page; the rest keep their
   // row but say so (omitted), never silently blank.
-  const [base, shaRows, dirtyState] = wtPath ? await Promise.all([
-    gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
-    gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
-    worktreeDirtyState(wtPath),
-  ]) : ['', '', { paths: new Set<string>(), oldPaths: new Map<string, string>() }] as const
-  const dirtyPaths = dirtyState.paths
-  for (const path of dirtyPaths) changedPaths.add(path)
-  for (const [path, oldPath] of dirtyState.oldPaths) if (!oldPaths.has(path)) oldPaths.set(path, oldPath)
-  const shas = new Set(shaRows.split('\n').filter(Boolean))
-  const scopedNodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas)
+  const { impact, shas } = await sessionImpactForContext(id, ctx, wtPath)
+  const base = impact.base
+  const scopedNodes = await sessionScopeNodes(id, ctx, impact, shas)
   const enriched = new Map<string, ExportFile>()
   let budget = MAX_ENRICHED_FILES
   for (const f of payload.diff) {
@@ -280,6 +859,7 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
     dirtyNonRuntime: payload.dirtyNonRuntime,
     gates: gateRows(payload),
     score: { passed, total, fresh },
+    impact,
     nodes,
     otherFiles,
   }
@@ -423,13 +1003,7 @@ function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>,
 }
 
 function codeClaims(code: string[], file: string): boolean {
-  return code.some((cf) => {
-    if (cf === file) return true
-    const dir = cf.replace(/\/+$/, '') + '/'
-    if (file.startsWith(dir)) return true
-    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(file)
-    return false
-  })
+  return code.some((claim) => relationClaimsPath(claim, file))
 }
 
 // ---- worktree resolution (no sessions.ts edit: read git's own worktree list) ----
@@ -463,22 +1037,94 @@ export function parsePorcelainPaths(out: string): Set<string> {
   return paths
 }
 
-export function parsePorcelainRenames(out: string): Map<string, string> {
-  const renames = new Map<string, string>()
-  const records = out.split('\0')
-  for (let i = 0; i < records.length; i++) {
-    const record = records[i]
-    if (!record) continue
-    const status = record.slice(0, 2)
-    const path = record.slice(3)
-    if ((status.includes('R') || status.includes('C')) && records[i + 1]) renames.set(path, records[++i])
-  }
-  return renames
+async function worktreeDirtyState(wtPath: string): Promise<{ paths: Set<string>; status: string }> {
+  const out = await impactGit(
+    wtPath,
+    ['-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    'snapshot worktree status',
+  )
+  return { paths: parsePorcelainPaths(out), status: out }
 }
 
-async function worktreeDirtyState(wtPath: string): Promise<{ paths: Set<string>; oldPaths: Map<string, string> }> {
-  const out = await gitA(['-C', wtPath, '-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'])
-  return { paths: parsePorcelainPaths(out), oldPaths: parsePorcelainRenames(out) }
+// Capture one immutable description of the live worktree overlay. One rename-aware change set supplies both
+// path images; untracked files are wholly new result ranges. The canonical anchor parser
+// turns those patches into ranges, and projectSessionImpact consumes the snapshot beside base..HEAD. The
+// outer session content double-read fences concurrent edits before this result can publish.
+export async function sessionImpactOverlay(
+  wtPath: string,
+  dirty: { paths: ReadonlySet<string>; status: string },
+): Promise<SessionImpactOverlay | undefined> {
+  if (!dirty.paths.size) return undefined
+  const untracked = new Set(untrackedPaths(dirty.status))
+  const paths = [...dirty.paths].sort()
+  const baseRanges: Record<string, [number, number][]> = {}
+  const ranges: Record<string, [number, number][]> = {}
+  const files: Record<string, string | null> = {}
+  const fingerprints: string[] = []
+  const bytesByPath = new Map<string, Buffer | null>()
+  for (const path of paths) {
+    let bytes: Buffer | null = null
+    try { bytes = await readFile(join(wtPath, path)) }
+    catch (error: any) {
+      if (error?.code !== 'ENOENT') throw new SessionImpactUnavailableError(`session impact cannot snapshot '${path}': ${error?.message ?? String(error)}`)
+    }
+    bytesByPath.set(path, bytes)
+    files[path] = bytes?.toString('utf8') ?? null
+    baseRanges[path] = []
+    ranges[path] = []
+    fingerprints.push(`${path}\0${bytes ? createHash('sha256').update(bytes).digest('hex') : '<gone>'}`)
+  }
+  const indexDir = await mkdtemp(join(tmpdir(), 'spex-impact-index-'))
+  const indexFile = join(indexDir, 'index')
+  try {
+    await impactIndexGit(wtPath, indexFile, ['read-tree', 'HEAD'], 'seed the isolated worktree index')
+    await impactIndexGit(wtPath, indexFile, ['add', '-A', '--', ...paths], 'snapshot dirty paths in the isolated worktree index')
+    const trackedChanges = parseNameStatusChanges(await impactIndexGit(
+      wtPath,
+      indexFile,
+      ['-c', 'core.quotePath=false', 'diff', '--cached', 'HEAD', '--name-status', '-z', '-M'],
+      'snapshot worktree change identities',
+    ))
+    for (const change of trackedChanges) {
+      if (!Object.hasOwn(baseRanges, change.before) || !Object.hasOwn(ranges, change.after))
+        throw new SessionImpactUnavailableError(`session impact dirty snapshot omitted '${change.before}' -> '${change.after}'`)
+      const patch = await impactIndexGit(
+        wtPath,
+        indexFile,
+        ['-c', 'core.quotePath=false', 'diff', '--cached', 'HEAD', '--unified=0', '--no-ext-diff', '-M', '--', ...new Set([change.before, change.after])],
+        `snapshot worktree patch '${change.before}' -> '${change.after}'`,
+      )
+      baseRanges[change.before] = diffHunkRanges(patch, 'old')
+      ranges[change.after] = diffHunkRanges(patch, 'new')
+      fingerprints.push(`${change.status}\0${change.before}\0${change.after}\0${createHash('sha256').update(patch).digest('hex')}`)
+    }
+  } finally {
+    await rm(indexDir, { recursive: true, force: true })
+  }
+  for (const path of untracked) fingerprints.push(`untracked\0${path}\0${bytesByPath.get(path)?.length ?? 0}`)
+  const loaded = await loadSpecs(wtPath, { history: null, drift: null })
+  const specs: SessionImpactSpecSnapshot[] = loaded.map((spec) => ({
+    id: spec.id,
+    path: spec.path,
+    code: spec.code,
+    codeScoped: spec.codeScoped,
+    related: spec.related,
+    relatedScoped: spec.relatedScoped,
+    relationProblems: spec.relationProblems,
+  }))
+  const evalSources: Record<string, string | null> = {}
+  for (const spec of specs) {
+    const evalPath = join(dirname(spec.path), 'eval.md')
+    try { evalSources[evalPath] = await readFile(join(wtPath, evalPath), 'utf8') }
+    catch (error: any) {
+      if (error?.code === 'ENOENT') evalSources[evalPath] = null
+      else throw new SessionImpactUnavailableError(`session impact cannot snapshot '${evalPath}': ${error?.message ?? String(error)}`)
+    }
+  }
+  const revision = createHash('sha256')
+    .update([dirty.status, ...fingerprints, JSON.stringify(specs), JSON.stringify(evalSources)].join('\0'))
+    .digest('hex')
+  return { revision, paths, baseRanges, ranges, specs, evalSources, files }
 }
 
 // ---- the renderer ----
@@ -723,8 +1369,11 @@ export type SessionEvalNode = {
   // Changed frontend code that no declared scenario covers. This is node-level UNKNOWN coverage, never a
   // synthetic scenario: it stays outside scenario totals and filters while remaining visible to consumers.
   unknownCoverage: string[]
-  // Already scoped by selectImpactedScenarios. Consumers must not infer impact from node membership,
-  // freshness, or the full eval.md again.
+  // Node-level review context from the SAME exact impact projection. Related movement lives here and never
+  // becomes a synthetic scenario reason.
+  causes: SessionImpactNodeCause[]
+  // Already scoped by the canonical exact impact projection. Consumers must not infer impact from node
+  // membership, freshness, or the full eval.md again.
   scenarios: SessionScenarioInfo[]
   // each reading carries the trunk eval-concern thread for its (node, scenario) ([[remark-teeth]] / directive
   // 3): the server-side join (attached by evalTimeline as `EvalEntry.thread`), so the session tab's event
@@ -741,6 +1390,7 @@ export type SessionEvals = {
   dirtyNonRuntime: number
   gates: ExportGate[]
   nodes: SessionEvalNode[]
+  impact: SessionImpactProjection
   summary: SessionEvalSummary
   evalRevision: SessionEvalRevision
 }
@@ -768,10 +1418,6 @@ export type SessionEvalProjection = {
   revision?: string
   value?: SessionEvalSummary
   lastKnown?: { generation: number; revision: string; value: SessionEvalSummary }
-}
-
-export class SessionEvalUnavailableError extends Error {
-  override name = 'SessionEvalUnavailableError'
 }
 
 // The one count projection over the already-affected rows. This is the backend source both the graph
@@ -804,37 +1450,37 @@ export function sessionEvalSummary(nodes: SessionEvalNode[]): SessionEvalSummary
 async function sessionScopeNodes(
   id: string,
   ctx: Awaited<ReturnType<typeof evalContext>>,
-  changedPaths: ReadonlySet<string>,
-  dirtyPaths: ReadonlySet<string>,
-  oldPaths: ReadonlyMap<string, string>,
-  base: string,
+  impact: SessionImpactProjection,
   shas: ReadonlySet<string>,
   latestOnly = false,
 ): Promise<SessionEvalNode[]> {
   const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
+  const specById = new Map(ctx.specs.map((spec) => [spec.id, spec]))
   const nodes: SessionEvalNode[] = []
 
-  for (const spec of ctx.specs) {
+  for (const projected of impact.nodes) {
+    const spec = specById.get(projected.id)
+    if (!spec) continue // removed nodes remain fully explained by impact.nodes; they have no live eval rows.
     const evalNode = evalById.get(spec.id)
     const current = evalNode?.scenarios ?? []
     // Unknown means the node has no measurement contract at all. A node that has eval.md is known even
     // when individual scenarios narrow their code axes; partial scenario ownership is not a synthetic gap.
-    const unknownCoverage = evalNode ? [] : unknownCoveragePaths(spec.code, changedPaths)
+    const unknownCoverage = evalNode ? [] : [...new Set(projected.causes
+      .filter((cause) => cause.kind === 'code')
+      .flatMap((cause) => cause.paths)
+      .filter(isUiPath))]
 
     if (!evalNode) {
       if (unknownCoverage.length) {
         nodes.push({
           id: spec.id, title: spec.title, hue: spec.hue, desc: spec.desc,
           hasEvalFile: false, uncoveredFrontend: true, unknownCoverage,
+          causes: projected.causes,
           scenarios: [], evals: [],
         })
       }
       continue
     }
-
-    const evalFileChanged = changedPaths.has(evalNode.evalPath)
-    const sidecarPath = relative(ctx.root, evalNode.sidecarPath)
-    if (!sessionEvalNodeCandidate(current, spec.code, evalNode.evalPath, sidecarPath, changedPaths, dirtyPaths)) continue
 
     const timeline = await evalTimeline(spec.id, ctx)
     // A reading is this session's own when the session filed it OR its anchor is a branch commit. This is
@@ -842,23 +1488,17 @@ async function sessionScopeNodes(
     // another attribution rule.
     const evals = timeline.readings.map((reading) => ({
       ...reading,
-      inSession: reading.by === id || shas.has(reading.codeSha),
+      inSession: readingInSession(reading, id, shas),
     }))
-    const baseEvalPath = mergeBasePath(evalNode.evalPath, oldPaths)
-    const baseHasEval = evalFileChanged && base
-      ? (await gitA(['-C', ctx.root, 'ls-tree', '--name-only', base, '--', baseEvalPath])).trim() !== ''
-      : false
-    const baseScenarios = baseHasEval
-      ? parseScenarios(await gitA(['-C', ctx.root, 'show', `${base}:${baseEvalPath}`]))
-      : []
-    const scoped = scopeSessionScenarioRows(current, baseScenarios, timeline.scenarios, spec.code, changedPaths, evalFileChanged, evals)
-    if (!scoped.scenarios.length && !unknownCoverage.length) continue
+    const scoped = scopeSessionScenarioRows(current, timeline.scenarios, evals, projected.scenarios)
+    if (!scoped.scenarios.length && !unknownCoverage.length && !projected.causes.length) continue
 
     nodes.push({
       id: spec.id, title: spec.title, hue: spec.hue, desc: spec.desc,
       hasEvalFile: timeline.hasEvalFile,
       uncoveredFrontend: !timeline.hasEvalFile && unknownCoverage.length > 0,
       unknownCoverage,
+      causes: projected.causes,
       scenarios: scoped.scenarios,
       // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
       // honest downstream states; impact selection never removes a row because its reading is stale.
@@ -867,6 +1507,57 @@ async function sessionScopeNodes(
   }
 
   return nodes
+}
+
+function readingInSession(reading: { by?: string; codeSha: string }, id: string, shas: ReadonlySet<string>): boolean {
+  return reading.by === id || shas.has(reading.codeSha)
+}
+
+function sessionMeasurements(
+  id: string,
+  ctx: Awaited<ReturnType<typeof evalContext>>,
+  shas: ReadonlySet<string>,
+): Record<string, string[]> {
+  const measurements: Record<string, string[]> = {}
+  for (const node of ctx.ynodes) {
+    const names = [...new Set(readReadings(node.sidecarPath)
+      .filter((reading) => readingInSession(reading, id, shas))
+      .map((reading) => reading.scenario))]
+    if (names.length) measurements[node.id] = names
+  }
+  return measurements
+}
+
+async function sessionImpactForContext(
+  id: string,
+  ctx: Awaited<ReturnType<typeof evalContext>>,
+  wtPath: string | null,
+): Promise<{ impact: SessionImpactProjection; shas: Set<string> }> {
+  const root = wtPath ?? ctx.root
+  if (!wtPath) {
+    const head = await impactCommit(root, 'HEAD')
+    const impact = await projectSessionImpact(root, {
+      base: head,
+      head,
+      measurements: sessionMeasurements(id, ctx, new Set()),
+    })
+    return { impact, shas: new Set() }
+  }
+  const [base, head, shaRows, dirty] = await Promise.all([
+    impactGit(wtPath, ['merge-base', mainBranch(), 'HEAD'], 'resolve session merge-base').then((out) => out.trim()),
+    impactCommit(wtPath, 'HEAD'),
+    impactGit(wtPath, ['rev-list', `${mainBranch()}..HEAD`], 'read session commits'),
+    worktreeDirtyState(wtPath),
+  ])
+  const shas = new Set(shaRows.split('\n').filter(Boolean))
+  const overlay = await sessionImpactOverlay(wtPath, dirty)
+  const impact = await projectSessionImpact(wtPath, {
+    base,
+    head,
+    overlay,
+    measurements: sessionMeasurements(id, ctx, shas),
+  })
+  return { impact, shas }
 }
 
 type ReviewPayloadValue = NonNullable<Awaited<ReturnType<typeof reviewPayload>>>
@@ -885,21 +1576,8 @@ async function buildSessionEvalModel(
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
-  const changedPaths = new Set(payload.diff.map((file) => file.path))
-  const oldPaths = new Map(payload.diff.flatMap((file) => file.oldPath ? [[file.path, file.oldPath] as const] : []))
-  const [base, shaRows, dirtyState] = wtPath ? await Promise.all([
-    gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD']).then((out) => out.trim()),
-    gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`]),
-    worktreeDirtyState(wtPath),
-  ]) : ['', '', { paths: new Set<string>(), oldPaths: new Map<string, string>() }] as const
-  const dirtyPaths = dirtyState.paths
-  // A session evaluation is the proposal as it exists now, not only its committed slice. A dirty source,
-  // staged rename, draft eval.md, or uncommitted sidecar therefore enters the SAME affected selector.
-  for (const path of dirtyPaths) changedPaths.add(path)
-  for (const [path, oldPath] of dirtyState.oldPaths) if (!oldPaths.has(path)) oldPaths.set(path, oldPath)
-  // this session's own commits — the membership test behind `inSession` and measurement impact
-  const shas = new Set(shaRows.split('\n').filter(Boolean))
-  const nodes = await sessionScopeNodes(id, ctx, changedPaths, dirtyPaths, oldPaths, base, shas, latestOnly)
+  const { impact, shas } = await sessionImpactForContext(id, ctx, wtPath)
+  const nodes = await sessionScopeNodes(id, ctx, impact, shas, latestOnly)
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
@@ -914,6 +1592,7 @@ async function buildSessionEvalModel(
     dirtyNonRuntime: payload.dirtyNonRuntime,
     gates: gateRows(payload),
     nodes,
+    impact,
   }
 }
 

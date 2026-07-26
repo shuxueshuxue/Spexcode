@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { join, relative, basename } from 'node:path'
 import { mintIds } from '../../spec-cli/src/specs.js'
 import { parseRelation, type RelationEntry } from '../../spec-cli/src/anchors.js'
+import { treeTextFiles } from '../../spec-cli/src/git.js'
 
 export const EVAL_FILE = 'eval.md'
 export const SIDECAR_FILE = 'evals.ndjson'
@@ -23,12 +24,46 @@ export type Scenario = {
   related?: string[]
 }
 
+// The scenario index is a declaration projection, not a reading view. Keep its three identity layers
+// explicit: scenarioHash is the measurement-contract hash, semanticIndexHash is the canonical declaration
+// index, and fullIndexHash adds only the measuring-hand test mapping. Git provenance is supplied by the CLI
+// outside both hashes, so a mode/type change cannot masquerade as a scenario-content change.
+export const SCENARIO_PROJECTION = 'spex.eval.scenario-index'
+export const SCENARIO_SCHEMA_VERSION = 1
+export type ScenarioSemanticRow = {
+  node: string
+  name: string
+  description: string
+  expected: string
+  scenarioHash: string
+  code: RelationEntry[]
+  related: RelationEntry[]
+  tags: string[]
+}
+export type ScenarioMeasurementRow = { test: ScenarioTestReference | null }
+export type ScenarioProjectionRow = {
+  semantic: ScenarioSemanticRow
+  measurement: ScenarioMeasurementRow
+}
+export type ScenarioProjectionProvenance = { head: string | null; treeSha: string | null }
+export type ScenarioProjection = {
+  projection: typeof SCENARIO_PROJECTION
+  schemaVersion: typeof SCENARIO_SCHEMA_VERSION
+  provenance: ScenarioProjectionProvenance
+  semanticIndexHash: string
+  fullIndexHash: string
+  rows: ScenarioProjectionRow[]
+}
+
 export type EvalNode = {
   id: string            // the node's CANONICAL spec id (leaf name, '_'-disambiguated on a leaf collision)
   dir: string           // absolute node directory
   evalPath: string     // repo-relative path to eval.md — the SCENARIO freshness axis
   sidecarPath: string   // absolute path to evals.ndjson
   scenarios: Scenario[]
+  // The exact declaration bytes used to build this node, present for real filesystem and fixed-tree walks.
+  // Synthetic EvalNode values in narrow unit tests may omit it.
+  evalSource?: string
 }
 
 const SCENARIO_KEYS = ['name', 'description', 'expected', 'tags', 'test', 'code', 'related'] as const
@@ -272,6 +307,61 @@ export function parseScenarios(src: string): Scenario[] {
     .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
 }
 
+const compareStable = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0
+const relationRows = (raw: readonly string[] | undefined, relation: 'code' | 'related'): RelationEntry[] =>
+  parseRelation([...(raw ?? [])], relation).entries.map((entry) => ({ path: entry.path, selectors: [...entry.selectors] }))
+
+const hashProjection = (value: unknown): string =>
+  createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')
+
+const semanticOnly = (row: ScenarioProjectionRow): ScenarioSemanticRow => row.semantic
+
+// Build one canonical declaration index from the already-parsed scenarios. No eval sidecar is touched here;
+// callers can safely use this projection to compare fixed trees without importing the reading/freshness path.
+export function scenarioProjection(
+  nodes: readonly Pick<EvalNode, 'id' | 'scenarios' | 'evalSource'>[],
+  provenance: Partial<ScenarioProjectionProvenance> = {},
+): ScenarioProjection {
+  const rows: ScenarioProjectionRow[] = []
+  for (const node of nodes) {
+    if ('evalSource' in node && node.evalSource !== undefined) {
+      const schemaErrors = validateScenarios(node.evalSource)
+      const relationErrors = node.scenarios.flatMap((scenario) => [
+        ...parseRelation(scenario.code ?? [], 'code').problems,
+        ...parseRelation(scenario.related ?? [], 'related').problems,
+      ])
+      const errors = [...schemaErrors, ...relationErrors]
+      if (errors.length) throw new Error(`node '${node.id}' has malformed eval.md:\n${errors.map((e) => `  - ${e}`).join('\n')}`)
+    }
+    for (const scenario of node.scenarios) rows.push({
+      semantic: {
+        node: node.id,
+        name: scenario.name,
+        description: scenario.description,
+        expected: scenario.expected,
+        scenarioHash: scenarioHash(scenario),
+        code: relationRows(scenario.code, 'code'),
+        related: relationRows(scenario.related, 'related'),
+        tags: [...(scenario.tags ?? [])],
+      },
+      measurement: { test: scenario.test ? { ...scenario.test } : null },
+    })
+  }
+  rows.sort((a, b) => {
+    const node = compareStable(a.semantic.node, b.semantic.node)
+    return node || compareStable(a.semantic.name, b.semantic.name)
+  })
+  const semanticRows = rows.map(semanticOnly)
+  return {
+    projection: SCENARIO_PROJECTION,
+    schemaVersion: SCENARIO_SCHEMA_VERSION,
+    provenance: { head: provenance.head ?? null, treeSha: provenance.treeSha ?? null },
+    semanticIndexHash: hashProjection(semanticRows),
+    fullIndexHash: hashProjection(rows),
+    rows,
+  }
+}
+
 // `tagLibrary` is the closed vocabulary a scenario's `tags:` must draw from (config's `lint.scenarioTags`).
 // Every scenario needs ≥1 tag; each tag must be IN the library — an out-of-library tag is rejected LOUD with
 // the repair the user owns: pick an existing tag, or extend the library. An empty library (none configured)
@@ -333,6 +423,7 @@ function assembleNodes(root: string, specDirs: string[], hits: { dir: string; sr
       evalPath: relative(root, join(dir, EVAL_FILE)),
       sidecarPath: join(dir, SIDECAR_FILE),
       scenarios: parseScenarios(src),
+      evalSource: src,
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -350,6 +441,23 @@ export function evalNodes(root: string): EvalNode[] {
     if (existsSync(join(dir, EVAL_FILE))) hits.push({ dir, src: readFileSync(join(dir, EVAL_FILE), 'utf8') })
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
+  return assembleNodes(root, specDirs, hits)
+}
+
+// Exact fixed-tree twin for the canonical JSON seam. It reads only eval.md/spec.md bytes from `tip`, then
+// reuses assembleNodes/parseScenarios; no working-tree declaration can be paired with that tree's provenance.
+export function evalNodesAt(root: string, tip: string): EvalNode[] {
+  const files = treeTextFiles(root, tip, '.spec')
+  const paths = [...files.keys()]
+  const specDirs = paths
+    .filter((path) => path.endsWith('/spec.md'))
+    .map((path) => join(root, path.slice(0, -'/spec.md'.length)))
+  const hits = paths
+    .filter((path) => path.endsWith(`/${EVAL_FILE}`))
+    .map((path) => ({
+      dir: join(root, path.slice(0, -`/${EVAL_FILE}`.length)),
+      src: files.get(path)!,
+    }))
   return assembleNodes(root, specDirs, hits)
 }
 

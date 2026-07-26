@@ -59,7 +59,7 @@ function didx(parents: Record<string, string[]>, fileCommits: [string, string[]]
       historicalPath: path,
       parents: (p.get(commit) ?? []).map((parent) => ({ commit: parent, historicalPath: path })),
     }))]))
-  return { ord, parents: p, fileEvents, acks: new Map(), specNodes: new Map(), anc: new Map() }
+  return { ord, parents: p, fileEvents, lineageEvents: fileEvents, lineageKeys: (path) => [path], acks: new Map(), specNodes: new Map(), anc: new Map() }
 }
 
 test('changedSince: a merged side-branch change stales a reading even when its date pre-dates the codeSha', () => {

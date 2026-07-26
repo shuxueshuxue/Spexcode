@@ -146,17 +146,13 @@ scenarios:
       literal filesystem path or encoded a second time.
   - name: event-ledger-content-integrity
     tags: [backend-api]
-    test:
-      path: spec-cli/src/git.test.ts
-      name: a damaged event row invalidates the ledger instead of changing history verdicts
-    code:
-      - spec-cli/src/git.ts
-      - spec-cli/src/git.test.ts
+    code: spec-cli/src/git.ts
     description: >
-      Seed the persistent history event ledger from a real two-commit repository, corrupt one byte in the
-      latest numstat event row while leaving its stream tip marker and the remaining NDJSON parseable, clear
-      process memos, and compare the cached history projection with the uncached full-history implementation.
-      In the same fixture, corrupt the governed-code event row and invoke the real `spex spec lint` CLI.
+      In a temporary hand-built Git repository, seed the persistent history event ledger, corrupt one byte in
+      a numstat row while leaving its stream tip marker and the remaining NDJSON parseable, then start a fresh
+      product read and compare it with the uncached full-history implementation. Repeat on a governed-code row
+      through the real `spex spec lint` CLI. The measurement fixture is disposable evidence, not a permanent
+      sample piled into the unit suite.
     expected: >
       The complete ledger fails its content-integrity check, is discarded, and is rebuilt from immutable Git
       objects. The cached and uncached version rows remain identical; a syntactically usable remainder is

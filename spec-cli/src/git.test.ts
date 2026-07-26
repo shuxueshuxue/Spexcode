@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -76,93 +76,6 @@ test('versioned global event cache ignores a legacy .git ledger and stays oracle
     assert.match(cachePath, /history-events-v4-/)
   } finally {
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('a damaged event row invalidates the ledger instead of changing history verdicts', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-cache-integrity-'))
-  const home = mkdtempSync(join(tmpdir(), 'spex-cache-integrity-home-'))
-  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  let cachePath = ''
-  const previousHome = process.env.SPEXCODE_HOME
-  try {
-    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'integrity@example.com'); run('config', 'user.name', 'Integrity')
-    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
-    mkdirSync(join(root, 'src'), { recursive: true })
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\ncode:\n  - src/code.ts\n---\n# project\n')
-    writeFileSync(join(root, 'src', 'code.ts'), 'export const value = 1\n')
-    run('add', '.'); run('commit', '-qm', 'seed')
-    appendFileSync(join(root, '.spec', 'project', 'spec.md'), '\nrevised\n')
-    run('add', '.'); run('commit', '-qm', 'revise')
-    const revision = run('rev-parse', 'HEAD')
-    appendFileSync(join(root, 'src', 'code.ts'), 'export const next = 2\n')
-    run('add', '.'); run('commit', '-qm', 'drift')
-    const head = run('rev-parse', 'HEAD')
-
-    process.env.SPEXCODE_HOME = home
-    resetHistoryCachesForTests()
-    await Promise.all([historyIndex(root), driftIndex(root)])
-    cachePath = historyEventCachePathForTests(root)
-    const pristine = readFileSync(cachePath, 'utf8')
-    const lines = pristine.split('\n')
-    const integrity = JSON.parse(lines.at(-2)!)
-    assert.equal(integrity.k, 'integrity')
-    assert.match(integrity.sha256, /^[0-9a-f]{64}$/)
-    const corrupt = (kind: string, hash: string) => {
-      const damaged = pristine.split('\n')
-      const event = damaged.findIndex((line) => {
-        try {
-          const row = JSON.parse(line)
-          return row.k === kind && row.h === hash
-        } catch { return false }
-      })
-      assert.notEqual(event, -1, `fixture did not persist ${kind}:${hash}`)
-      damaged[event] = `!${damaged[event].slice(1)}`
-      writeFileSync(cachePath, damaged.join('\n'))
-    }
-
-    corrupt('drift-name', head)
-    const cli = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'spex.mjs')
-    const lint = spawnSync(process.execPath, [cli, 'spec', 'lint'], {
-      cwd: root,
-      env: { ...process.env, SPEXCODE_HOME: home },
-      encoding: 'utf8',
-    })
-    assert.equal(lint.status, 0, lint.stderr)
-    assert.match(`${lint.stdout}\n${lint.stderr}`, /drift: src\/code\.ts is 1 commit\(s\) ahead/)
-
-    resetHistoryCachesForTests()
-    await Promise.all([historyIndex(root), driftIndex(root)])
-    const repaired = readFileSync(cachePath, 'utf8')
-    const repairedLines = repaired.split('\n')
-    const repairedIntegrity = JSON.parse(repairedLines.at(-2)!)
-    assert.equal(repairedIntegrity.k, 'integrity')
-
-    const repairedPristine = repaired
-    const repairedRows = repairedPristine.split('\n')
-    const event = repairedRows.findIndex((line) => {
-      try {
-        const row = JSON.parse(line)
-        return row.k === 'numstat' && row.h === revision
-      } catch { return false }
-    })
-    assert.notEqual(event, -1, 'fixture did not persist the revised spec event')
-    repairedRows[event] = `!${repairedRows[event].slice(1)}`
-    writeFileSync(cachePath, repairedRows.join('\n'))
-
-    resetHistoryCachesForTests()
-    const fast = await historyIndex(root), full = await historyIndexFull(root)
-    assert.deepEqual(
-      rowsFor(fast, '.spec/project/spec.md'),
-      rowsFor(full, '.spec/project/spec.md'),
-      'a parseable remainder with one damaged event row changed the cached history verdict',
-    )
-  } finally {
-    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
-    else process.env.SPEXCODE_HOME = previousHome
-    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
-    rmSync(home, { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
   }
 })

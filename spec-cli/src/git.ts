@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { homedir } from 'node:os'
+import { projectRuntimeRoot, spexcodeHome } from './project-store.js'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -311,11 +311,18 @@ function eventCachePath(root: string): string {
   const replacements = git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
   if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements) return old.path
   const state = createHash('sha256').update(`${EVENT_CACHE_SCHEMA}\0${shallow}\0${grafts}\0${replacements}`).digest('hex').slice(0, 16)
-  const repoId = createHash('sha256').update(common).digest('hex').slice(0, 24)
-  const cacheHome = process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')
-  const path = join(cacheHome, 'projects', repoId, `${EVENT_CACHE_SCHEMA}-${state}.ndjson`)
+  const path = join(projectRuntimeRoot(common), `${EVENT_CACHE_SCHEMA}-${state}.ndjson`)
   eventPathMemo.set(rootId, { common, shallowPath, grafts: grafts, shallow, replacements, path })
   return path
+}
+
+// The first global event-cache release used sha256(common-dir) as a second top-level project identity.
+// Current readers never create or consume it; uninstall derives it once so the forgetting law removes the
+// exclusively-SpexCode legacy directory instead of leaving an upgrade orphan behind.
+export function legacyHistoryEventCacheRoot(root: string): string {
+  const common = git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  const repoId = createHash('sha256').update(common).digest('hex').slice(0, 24)
+  return join(spexcodeHome(), 'projects', repoId)
 }
 function readEventCache(root: string, force = false): { path: string; state: EventCache } {
   const path = eventCachePath(root)

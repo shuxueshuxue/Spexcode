@@ -113,6 +113,13 @@ intended version base for all 217 nodes and compares normalized drift sets at 14
 measurements justify keeping the exact event/projection architecture and reducing its constants; they do
 not turn its asymptotic lower bound into a constant.
 
+A benchmark is not an oracle until a positive control proves that it can fail. Before accepting an
+equivalence run, execute one pinned case with known anchor debt and require the normalized set to contain
+that debt; only then compare candidate and baseline. Capture every channel that carries findings on every
+exit status. In particular, warning-only lint exits zero while writing findings to stderr, so a harness
+that reads stderr only on failure turns real debt into an empty set and makes two broken measurements look
+equal. The same rule excludes a fake CLI or receiver from standing in for the product surface being proved.
+
 The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
 it proves this is a commit path Git actually sends through the gate and records the candidate's current
 HEAD + index tree in that worktree's private git-dir. Git then creates the real commit object. At

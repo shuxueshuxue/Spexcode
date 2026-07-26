@@ -156,12 +156,15 @@ perfrepo result (6.3x to 3.7x CPU growth across the reported depths) is recorded
 not as a promise of constant-time reads.
 
 Four immutable event streams are persisted by commit oid in the project's one global runtime root
-(`~/.spexcode/projects/<enc(project-root)>/history-events-v3-<state>.ndjson`) and extended only for previously unseen
+(`~/.spexcode/projects/<enc(project-root)>/history-events-v4-<state>.ndjson`) and extended only for previously unseen
 commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK` trailer declarations,
 and `.spec` name events. The schema/state key includes the cache implementation schema, shallow/graft state,
 and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
 instead of silently reading an old format. Each event is a property of its commit object and never changes.
-Writers take a cross-process lock and replace a complete temporary file in one rename; event rows and a tip
+Every complete ledger ends in an integrity row containing the byte length and SHA-256 digest of all preceding
+event and tip rows. Readers accept only an exact match; a missing footer, truncation, or syntactically usable
+remainder with one damaged row discards the whole cache and rebuilds it from immutable Git objects. Writers take
+a cross-process lock and replace a complete payload-plus-footer temporary file in one rename; event rows and a tip
 marker therefore become visible together, and a killed writer leaves only an ignored temporary file. For every
 tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed from cached events, so
 current paths and node ownership cannot become stale. A cold checkout pays one full walk to seed the cache;

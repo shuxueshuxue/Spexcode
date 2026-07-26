@@ -33,5 +33,8 @@ jobs:
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
+      - name: Unit and integration suite
+        working-directory: spec-cli
+        run: npm test
       - name: Production clean-init smoke matrix (Python/TypeScript x Claude/Codex)
         run: node scripts/clean-init-smoke.mjs

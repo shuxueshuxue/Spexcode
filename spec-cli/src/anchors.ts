@@ -443,11 +443,10 @@ async function hunksAtMany(root: string, commits: string[], path: string): Promi
   const result = new Map<string, [number, number][]>()
   const ordinary = [...new Set(commits)]
   if (!ordinary.length) return result
-  const newest = ordinary[0], oldest = ordinary[ordinary.length - 1]
   let out = ''
   try {
-    out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--no-merges', '--patch', '--unified=0',
-      `--format=${RS}%H`, `${oldest}^..${newest}`, '--', path])
+    out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0',
+      `--format=${RS}%H`, ...ordinary, '--', path])
   } catch { return result }
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')

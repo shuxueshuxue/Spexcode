@@ -15,9 +15,11 @@ scenarios:
       The walk-newest version base equals the product oracle for all 217 current nodes, and the exact
       walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
       minimal parallel-version DAG has clear parent verdicts but revives the losing branch's hit after the
-      merge, proving that (v, D) cannot be joined after forgetting cleared hits. The retained hit set grows
-      with events (198 / 458 / 748 at depths about 1,000 / 2,500 / 4,200; 749 at the tip), while rename
-      projection stays empirically short (maximum 4, mean 1.51) without being asymptotically O(1).
+      merge, proving that (v, D) cannot be joined after forgetting cleared hits. Hit identities derived from
+      the complete drift event index grow with events (202 / 466 / 756 at depths 1,002 / 2,497 / 4,200; 757
+      at the tip); a path-limited history query is rejected as a measuring proxy because it simplifies away
+      eight real indexed events. Rename projection stays empirically short (maximum 4, mean 1.51) without
+      being asymptotically O(1).
   - name: anchor-hit-blocks
     tags: [cli]
     description: >

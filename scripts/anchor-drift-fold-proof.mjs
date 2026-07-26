@@ -257,6 +257,7 @@ let totalLenientDebtAfterAck = 0
 let totalStrictDebtAfterAck = 0
 const semanticDifferences = []
 const rawSemanticDifferences = []
+const hitRecords = []
 for (const spec of specs) {
   const versions = antichainByPath.get(spec.path) ?? []
   const selected = rowsFor(hidx, spec.path)[0]?.hash ?? ''
@@ -266,6 +267,7 @@ for (const spec of specs) {
     const extractor = extractorFor(registry, extOf(entry.path))
     if (!extractor || extractor.ready() !== true) continue
     const hits = await anchorHitCommits(root, commitsFor(entry.path), entry.path, entry.selectors, extractor)
+    for (const hit of hits) hitRecords.push({ node: spec.id, path: entry.path, commit: hit.commit, selectors: hit.selectors })
     const selectedDebt = hits.filter((hit) => !isAncestor(hit.commit, selected))
     const lenientDebt = hits.filter((hit) => versions.every((version) => !isAncestor(hit.commit, version)))
     const strictDebt = hits.filter((hit) => versions.some((version) => !isAncestor(hit.commit, version)))
@@ -300,6 +302,38 @@ for (const spec of specs) {
   }
 }
 
+// The proof derives and retains every hit identity from the complete drift event index. Project that set
+// onto the first-parent points only for the growth measurement; do not re-run a path-limited `git log`
+// at each point, because history simplification is exactly the 749-vs-757 measurement bug this proof guards.
+const firstParent = git(['rev-list', '--first-parent', '--reverse', tip]).trim().split('\n').filter(Boolean)
+const countMemo = new Map()
+const reachableCount = (hash) => {
+  const hit = countMemo.get(hash)
+  if (hit !== undefined) return hit
+  const count = Number(git(['rev-list', '--count', hash]).trim())
+  countMemo.set(hash, count)
+  return count
+}
+const pointNear = (target) => {
+  let lo = 0, hi = firstParent.length - 1
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (reachableCount(firstParent[mid]) < target) lo = mid + 1
+    else hi = mid
+  }
+  const candidates = [firstParent[lo], firstParent[Math.max(0, lo - 1)]]
+  return candidates.sort((a, b) => Math.abs(reachableCount(a) - target) - Math.abs(reachableCount(b) - target))[0]
+}
+const growth = [1000, 2500, 4200].map((target) => {
+  const point = pointNear(target)
+  return {
+    target,
+    commit: point,
+    depth: reachableCount(point),
+    rawHitEntries: hitRecords.filter((hit) => isAncestor(hit.commit, point)).length,
+  }
+})
+
 console.log(JSON.stringify({
   tip,
   commits: git(['rev-list', '--count', tip]).trim(),
@@ -325,6 +359,7 @@ console.log(JSON.stringify({
     selectedWalkDebtAfterAck: totalSelectedDebtAfterAck,
     lenientAntichainDebtAfterAck: totalLenientDebtAfterAck,
     strictAntichainDebtAfterAck: totalStrictDebtAfterAck,
+    growth,
     rawDifferingNodes: rawSemanticDifferences,
     differingNodes: semanticDifferences,
   },

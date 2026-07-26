@@ -109,11 +109,14 @@ projection and reachability/ack filtering; it may reduce repeated reconstruction
 bounded state or history-independent `O(1)` verdict reads.
 
 The worst-case bounds are real but loose on the reference history. Across 4,266 commits and 217 current
-nodes, 160 rename events form chains of at most 4 (mean 1.51), while retained historical anchor hits grow
-from 198 at depth 1,002 to 458 at 2,497, 748 at 4,200 and 749 at the tip. The reference proof projects the
-intended version base for all 217 nodes and compares normalized drift sets at 14 pinned tips. These
-measurements justify keeping the exact event/projection architecture and reducing its constants; they do
-not turn its asymptotic lower bound into a constant.
+nodes, 160 rename events form chains of at most 4 (mean 1.51), while anchor-hit identities derived from the
+complete drift event index grow from 202 at depth 1,002 to 466 at 2,497, 756 at 4,200 and 757 at the tip.
+The smaller 198 / 458 / 748 / 749 series was an instrumentation undercount: a path-limited
+`rev-list --no-merges <tip> -- <current-path>` simplified away eight real single-parent hit events
+(indexed-only 8, simplified-only 0). The reference proof projects the intended version base for all 217
+nodes and compares normalized drift sets at 14 pinned tips. These measurements justify keeping the exact
+event/projection architecture and reducing its constants; they do not turn its asymptotic lower bound into
+a constant.
 
 The local candidate gate is deliberately **unmarked and ref-scoped**. At `reference-transaction`'s
 `prepared` phase it reads every payload row and considers only `refs/heads/*` updates whose `new` object is

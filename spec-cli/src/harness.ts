@@ -598,12 +598,11 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // under a long-gone session's id). Everything downstream that resolves identity from the env then
     // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
     // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
-    // nohup establishes the adapter-owned liveness boundary: killing the tmux pane that happened to launch
-    // this project daemon cannot SIGHUP the shared control plane and strand unrelated sibling threads.
-    // exec keeps $! equal to the daemon itself; </dev/null keeps it detached from the pane's input.
-    `  ( cd "$dir" && unset ${sessionIdentityEnvVars().join(' ')} && exec nohup ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
-    '  echo $! > "$pid"',
-    `  ${SPEX} internal resource-stamp "$!" "$isolation" || { kill "$!" 2>/dev/null; rmdir "$lockd" 2>/dev/null; exit 1; }`,
+    // The adapter launches its shared control plane in a new OS process group + session. `nohup` alone was not
+    // a boundary: the Codex Node launcher reset signal handling and died with the tmux pane despite a matching
+    // stamp. The internal helper uses child_process detached=true, records PID/start plus the observed pgrp/sid,
+    // and refuses unless the live process is its own session leader. The stop guard re-reads that topology.
+    `  ( unset ${sessionIdentityEnvVars().join(' ')}; ${SPEX} internal shared-runtime-spawn "$dir" "$log" "$pid" "$isolation" ${server} app-server --listen "unix://$sock" ) || { rmdir "$lockd" 2>/dev/null; exit 1; }`,
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
     'rmdir "$lockd" 2>/dev/null',

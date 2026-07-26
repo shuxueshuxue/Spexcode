@@ -111,11 +111,14 @@ and queued-without-thread entries remain visible but do not count or protect; lo
 visible, counted, and protective. An unhealthy/unknown probe reports an unknown refcount, never a synthetic zero.
 
 The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. An
-unhealthy/unknown probe blocks independently of refcount, and any loaded thread with no governed record also
-blocks immediately. With only governed loaded references, stop proceeds only when shared PID, process-start token,
-and isolation stamp all prove the daemon is
-detached from the target pane. A missing/unreadable identity, mismatch, or PID reuse also blocks before any
-signal, including when the PID file itself is absent. The report issues no token and has no mutation route;
+unhealthy/unknown probe blocks independently of refcount, and any loaded thread with no governed record in that
+shared runtime's adapter set also blocks immediately; a non-governed or cross-adapter record with a colliding
+thread-shaped id grants no ownership. With only governed loaded references, stop proceeds only when shared PID,
+process-start token, and a live OS process-group/session observation all prove the daemon is detached from the
+target pane; the launch artifact must match that observation but cannot certify itself. A missing/unreadable
+identity, mismatch, PID reuse, or topology change blocks before mutation, including when the PID file itself is
+absent. The same adapter-owned probe and identity check is rerun immediately before the pane signal and before
+each bounded OS escalation, so one earlier snapshot never becomes later signal authority. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with
 their teardown owner and references; a session stop never stands in for that owner. There is no `pkill`,
 `pgrep`, command-regex signal, port-based signal, automatic close, or branch/worktree deletion in this mechanism.

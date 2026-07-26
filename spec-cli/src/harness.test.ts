@@ -71,18 +71,17 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /mkdir "\$lockd"/)
   assert.doesNotMatch(cmd, /flock/)
   assert.doesNotMatch(cmd, /9>&-/)
-  assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
-  assert.match(cmd, /exec nohup codex app-server --listen/)
-  assert.match(cmd, /internal resource-stamp "\$!" "\$isolation"/)
+  assert.match(cmd, /internal shared-runtime-spawn [^\n]* codex app-server --listen "unix:\/\/\$sock"/)
   // the shared per-project daemon runs in the STABLE runtime dir "$dir", NOT the transient worktree — else a
   // later worktree deletion dead-cwds the daemon and every future thread's config load fails with ENOENT.
-  assert.match(cmd, /\(\s*cd "\$dir" && unset [^\n]*&& exec [^\n]*app-server --listen unix:\/\/"\$sock"/)
+  assert.match(cmd, /unset [^\n]*; [^\n]*internal shared-runtime-spawn "\$dir" "\$log" "\$pid" "\$isolation" [^\n]*app-server --listen "unix:\/\/\$sock"/)
   // ...and it carries NO session identity: it is started by whichever session launched first, serves every
   // later thread, and outlives them all — so an inherited SPEXCODE_SESSION_ID / adapter sessionEnvVar in its
   // env is a stale lie every consumer downstream reads as the acting session (github#76).
-  for (const v of sessionIdentityEnvVars()) assert.match(cmd, new RegExp(`unset [^\\n]*\\b${v}\\b[^\\n]*&& exec`))
+  for (const v of sessionIdentityEnvVars()) assert.match(cmd, new RegExp(`unset [^\\n]*\\b${v}\\b[^\\n]*internal shared-runtime-spawn`))
   assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
   assert.ok(sessionIdentityEnvVars().includes('CODEX_THREAD_ID'))
+  assert.doesNotMatch(cmd, /\bnohup\b/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
@@ -168,7 +167,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
   assert.equal(codexBinary('  /abs/codex  '), '/abs/codex')
   // With no explicit serverCmd, the app-server line uses the launcher's OWN binary — never bare `codex`.
   const derived = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
-  assert.match(derived, /\/opt\/foo\/codex app-server --listen unix:\/\/"\$sock"/)
+  assert.match(derived, /internal shared-runtime-spawn [^\n]* \/opt\/foo\/codex app-server --listen "unix:\/\/\$sock"/)
   assert.match(derived, /exec \/opt\/foo\/codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
   // the app-server token and the resume token are the SAME install — no bare `codex app-server`.
   assert.doesNotMatch(derived, /(?:^|\s)codex app-server/m)
@@ -177,7 +176,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
   try {
     process.env.SPEXCODE_CODEX_SERVER_CMD = '/custom/codex-server'
     const overridden = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
-    assert.match(overridden, /\/custom\/codex-server app-server --listen unix:\/\/"\$sock"/)
+    assert.match(overridden, /internal shared-runtime-spawn [^\n]* \/custom\/codex-server app-server --listen "unix:\/\/\$sock"/)
     // resume still tracks the launcher binary — the override targets ONLY the app-server.
     assert.match(overridden, /exec \/opt\/foo\/codex --yolo [^\n]*--remote/)
   } finally {

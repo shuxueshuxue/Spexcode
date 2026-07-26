@@ -937,11 +937,15 @@ if (cmd === 'serve') {
       if (!path) throw new Error(`governor '${owner.id}' has no live spec path`)
       console.log(`${owner.id}\t${path}`)
     }
-  } else if (sub === 'resource-stamp') {
-    const pid = Number(process.argv[4]), file = process.argv[5]
-    if (!Number.isFinite(pid) || pid <= 0 || !file) { console.error('usage: spex internal resource-stamp <pid> <file>'); process.exit(2) }
-    const { writeIsolationStamp } = await import('./runtime-ownership.js')
-    writeIsolationStamp(pid, file)
+  } else if (sub === 'shared-runtime-spawn') {
+    const [cwd, logFile, pidFile, isolationFile, command] = process.argv.slice(4, 9)
+    const args = process.argv.slice(9)
+    if (!cwd || !logFile || !pidFile || !isolationFile || !command) {
+      console.error('usage: spex internal shared-runtime-spawn <cwd> <log> <pid-file> <isolation-file> <command> [args...]')
+      process.exit(2)
+    }
+    const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
+    console.log(spawnDetachedRuntime({ cwd, logFile, pidFile, isolationFile, command, args }).pid)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
     // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by

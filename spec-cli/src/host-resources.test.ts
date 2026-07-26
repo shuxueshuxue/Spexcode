@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codexAppServerIsolation, codexAppServerPid, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
@@ -12,17 +12,46 @@ import {
   assertSessionStopSafe,
   collectResourceReport,
 } from './host-resources.js'
-import { parseProcStat, processStartToken } from './process-identity.js'
-import { registerBackendInstance, unregisterBackendInstance, writeIsolationStamp } from './runtime-ownership.js'
+import { parseProcStat, processStartToken, processTopology } from './process-identity.js'
+import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance, writeIsolationStamp } from './runtime-ownership.js'
 
 test('parseProcStat keeps PID identity separate from process name punctuation', () => {
   const fields = ['S', '7', '8', '9', '0', '0', '0', '0', '0', '0', '0', '11', '13', '0', '0', '0', '0', '0', '0', '4242', '0', '21']
   assert.deepEqual(parseProcStat(`123 (name with ) paren) ${fields.join(' ')}`), {
     ppid: 7,
+    processGroupId: 8,
+    sessionId: 9,
     ticks: 24,
     startToken: '4242',
     rssPages: 21,
   })
+})
+
+test('shared runtime spawn records an observed detached process boundary', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-detached-runtime-'))
+  const pidFile = join(root, 'runtime.pid')
+  const isolationFile = join(root, 'runtime.scope')
+  let identity: { pid: number; startToken: string } | null = null
+  try {
+    identity = spawnDetachedRuntime({
+      cwd: root,
+      logFile: join(root, 'runtime.log'),
+      pidFile,
+      isolationFile,
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    })
+    const topology = processTopology(identity.pid)
+    assert.deepEqual(topology, { ...identity, processGroupId: identity.pid, sessionId: identity.pid })
+    assert.equal(readFileSync(pidFile, 'utf8'), `${identity.pid}\n`)
+    assert.equal(readFileSync(isolationFile, 'utf8'), `detached-v3 ${identity.pid} ${identity.startToken} ${identity.pid} ${identity.pid}\n`)
+  } finally {
+    if (identity && processStartToken(identity.pid) === identity.startToken) {
+      try { process.kill(identity.pid, 'SIGTERM') } catch {}
+      for (let i = 0; i < 50 && processStartToken(identity.pid) === identity.startToken; i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('shared-runtime projection uses live adapter refs and fail-closed process identity', async () => {
@@ -33,6 +62,8 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
   const sibling = 'resource-sibling'
   const queued = 'resource-queued'
   const duplicate = 'resource-duplicate'
+  const foreign = 'resource-foreign'
+  const nonGoverned = 'resource-non-governed'
   const orphan = 'retired-owner'
   let child: ReturnType<typeof spawn> | null = null
   let sharedRoot: ReturnType<typeof spawn> | null = null
@@ -44,7 +75,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
 
   try {
     const root = runtimeRoot()
-    const worktrees = new Map([[target, join(home, 'target-wt')], [sibling, join(home, 'sibling-wt')], [queued, join(home, 'queued-wt')], [duplicate, join(home, 'duplicate-wt')]])
+    const worktrees = new Map([[target, join(home, 'target-wt')], [sibling, join(home, 'sibling-wt')], [queued, join(home, 'queued-wt')], [duplicate, join(home, 'duplicate-wt')], [foreign, join(home, 'foreign-wt')], [nonGoverned, join(home, 'non-governed-wt')]])
     const governedProbe = (includeUnowned: boolean): SharedRuntimeProbe => ({
       healthy: true,
       references: [
@@ -60,7 +91,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       execFileSync('git', ['-C', path, 'config', 'user.email', 'resource@example.test'])
       execFileSync('git', ['-C', path, 'config', 'user.name', 'Resource Test'])
     }
-    const record = (id: string, thread: string | null, terminal = false) => ({
+    const record = (id: string, thread: string | null, terminal = false, overrides: Record<string, unknown> = {}) => ({
       session_id: id,
       governed: true,
       worktree_path: worktrees.get(id)!,
@@ -81,6 +112,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       archived: false,
       launcher: 'codex',
       launch_cmd: 'codex --yolo',
+      ...overrides,
     })
     for (const [id, thread, terminal] of [[target, 'thread-target', true], [sibling, 'thread-sibling', false], [queued, null, false]] as const) {
       const dir = join(root, 'sessions', id)
@@ -93,6 +125,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
 
     sharedRoot = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',
+      detached: true,
       env: { ...process.env, SPEXCODE_PROJECT_ROOT: repoRoot(), SPEXCODE_SESSION_ID: target },
     })
     sessionLeaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
@@ -105,7 +138,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     writeFileSync(codexAppServerPid(root), '99999999\n')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no readable process-start identity/)
     writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
-    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching HUP-isolation proof/)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary proof/)
     writeIsolationStamp(sharedRoot.pid!, codexAppServerIsolation(root))
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     probe = { healthy: true, references: [] }
@@ -113,6 +146,19 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     probe = governedProbe(false)
     probe = governedProbe(true)
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /loaded thread.*without one exact governed session owner/)
+    const foreignDir = join(root, 'sessions', foreign)
+    mkdirSync(foreignDir, { recursive: true })
+    writeFileSync(join(foreignDir, 'session.json'), `${JSON.stringify(record(foreign, 'thread-without-record', false, { harness: 'claude' }), null, 2)}\n`)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /loaded thread.*without one exact governed session owner.*thread-without-record/)
+    rmSync(foreignDir, { recursive: true, force: true })
+    const nonGovernedDir = join(root, 'sessions', nonGoverned)
+    mkdirSync(nonGovernedDir, { recursive: true })
+    writeFileSync(join(nonGovernedDir, 'session.json'), `${JSON.stringify(record(nonGoverned, 'thread-without-record', false, { governed: false }), null, 2)}\n`)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /loaded thread.*without one exact governed session owner.*thread-without-record/)
+    const collisionReport = await collectResourceReport({ persist: false })
+    const collisionShared = collisionReport.owners.find((owner) => owner.kind === 'shared-runtime' && owner.id === 'codex-app-server')
+    assert.equal(collisionShared?.references?.find((reference) => reference.threadId === 'thread-without-record')?.ownerState, 'unowned')
+    rmSync(nonGovernedDir, { recursive: true, force: true })
     probe = governedProbe(false)
     const duplicateDir = join(root, 'sessions', duplicate)
     mkdirSync(duplicateDir, { recursive: true })

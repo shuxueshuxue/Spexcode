@@ -8,6 +8,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/client.ts
+  - spec-cli/src/eval-cli-read.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
   - spec-dashboard/src/EvalsPage.jsx

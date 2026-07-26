@@ -96,7 +96,7 @@ scenarios:
       computation every eval face reads.
   - name: eval-cli-read
     tags: [cli]
-    code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts]
+    code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts, spec-cli/src/eval-cli-read.test.ts]
     description: >
       Drive the real CLI against a live backend: `spex eval ls --session <SEL>` on a session with
       committed changes and readings, on a session with an empty diff, and with --json;

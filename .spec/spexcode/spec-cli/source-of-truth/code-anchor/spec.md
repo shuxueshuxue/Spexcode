@@ -7,8 +7,11 @@ code:
   - spec-cli/src/anchors.ts#anchorHitCommits
   - spec-cli/src/anchors.ts#resolveAnchor
 related:
+  - scripts/anchor-drift-golden-proof.mjs
+  - scripts/anchor-drift-fold-proof.mjs
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts
+  - spec-cli/src/git.test.ts
   - spec-cli/src/specs.ts
   - spec-cli/src/lint-scoped.test.ts
   - spec-cli/src/commit-gate.test.ts
@@ -76,6 +79,45 @@ changed `spec.md` and therefore created a version. A historical file version the
 parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
 
+**Algebraic boundary.** The exact verdict is an event fold followed by a tip-relative projection and
+filter, not a bounded `(version, debt)` collapse. The fold accumulates immutable spec-version,
+governed-hit, acknowledgement and rename events. At the tip, rename identity is projected to the current
+node, [[drift-by-ancestry]]'s full-history walk chooses ONE base from the maximal antichain of reachable
+versions, and ancestry plus acknowledgements filters the retained hits against that base. Incomparable
+versions have no join in reachability order; the walk-newest choice is a product rule, not a semilattice
+upper bound. The frontier operation itself is maximal union of parent frontiers; an authored spec change
+at a commit replaces that node's frontier with the commit, while a clean transport merge contributes no
+version event.
+
+The information lower bound is concrete. Let one branch contain an anchored hit `h` followed by version
+`vB`, let its sibling contain version `vA`, and merge them without authoring a new spec line. Both parent
+tips report zero findings, but if the full-history walk selects `vA`, `h` is not reachable from that version
+and becomes debt at the merge. The hit history and the no-hit control produce the same pair-wise parent
+states `(vA, empty)` and `(vB, empty)`, yet their merge verdicts differ, so no join over only `(v, D)` can
+recover the correct answer. The exact representation must retain `h` (or equivalent growing information) until read-time filtering; a later merge-authored spec
+version does collapse the frontier to that descendant, but the frontier width is unbounded between such
+commits. Replacing the single base with "covered by any frontier version" would form a semilattice, but
+would change this contract by letting one branch's version pardon another branch.
+
+Renames add the same cost-conservation boundary on identity. A historical `(commit, path)` event is stable,
+while its current node is not: ordinary rename preserves lineage, path reuse starts a new lineage, and
+parallel renames may fork one lineage into several current paths. A clean merge can own zero all-parent
+lines yet make arbitrarily many side-branch keys reachable. Materializing those keys charges the write;
+keeping only parent pointers charges the later read. The walk does not disappear, it moves. The exact,
+no-semantic-change route is therefore an incrementally maintainable event index plus read-time rename
+projection and reachability/ack filtering; it may reduce repeated reconstruction, but it cannot promise
+bounded state or history-independent `O(1)` verdict reads.
+
+The worst-case bounds are real but loose on the reference history. Across 4,266 commits and 217 current
+nodes, 160 rename events form chains of at most 4 (mean 1.51), while anchor-hit identities derived from the
+complete drift event index grow from 202 at depth 1,002 to 466 at 2,497, 756 at 4,200 and 757 at the tip.
+The smaller 198 / 458 / 748 / 749 series was an instrumentation undercount: a path-limited
+`rev-list --no-merges <tip> -- <current-path>` simplified away eight real single-parent hit events
+(indexed-only 8, simplified-only 0). The reference proof projects the intended version base for all 217
+nodes and compares normalized drift sets at 14 pinned tips. These measurements justify keeping the exact
+event/projection architecture and reducing its constants; they do not turn its asymptotic lower bound into
+a constant.
+
 The local candidate gate is deliberately **unmarked and ref-scoped**. At `reference-transaction`'s
 `prepared` phase it reads every payload row and considers only `refs/heads/*` updates whose `new` object is
 a commit. A `new` object already reachable from any ref or reflog is structural plumbing (`reset`, branch,
@@ -130,10 +172,14 @@ For a pending merge, changed-path scope is the union of diffs against every pare
 the result tree equal to its first parent while making a side-branch commit reachable; that newly reachable
 debt remains in the candidate anchor window and cannot be washed by a merge trailer.
 
-Every benchmark and fixture is first self-tested with a deliberately failing case whose non-zero result and
-anchor finding are asserted before any comparison is trusted. This is a measurement invariant: a harness that
-does not prove it can observe a known failure may report agreement while both the product and the oracle are
-silently truncated or replaced by a fake dependency.
+A benchmark is not an oracle until a positive control proves that it can fail. Before accepting an
+equivalence run, execute one pinned case with known anchor debt and require the normalized set to contain
+that debt; only then compare candidate and baseline. Capture every channel that carries findings on every
+exit status. In particular, warning-only lint exits zero while writing findings to stderr, so a harness that
+reads stderr only on failure turns real debt into an empty set and makes two broken measurements look equal.
+The same rule excludes a fake CLI or receiver from standing in for the product surface being proved. This is
+a measurement invariant: a harness that does not prove it can observe a known failure may report agreement
+while both the product and the oracle are silently truncated or replaced by a fake dependency.
 
 **Oracle invariant.** `historyIndexFull` and `driftIndexFull` are the deliberately slow, uncached full-history
 implementations kept in the repository as the correctness oracle. The default `historyIndex` and `driftIndex`

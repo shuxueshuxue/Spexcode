@@ -32,6 +32,11 @@ The graph is built **once per change, not once per poll — and only as much of 
 
 - **Single-flight.** One assembly runs at a time; concurrent callers share the in-flight promise. This IS
   the max-concurrent-builds cap — a poll storm can never fan out into N builds, it joins the one.
+- **Patrol stability.** A cold/full board build must remain materially below graph-stream's ~15s patrol
+  interval ([[graph-stream]]). Patrol is a last-resort self-healing invalidation; if a build outlives that
+  interval, the next patrol can invalidate the in-flight build and amplify latency through repeated full
+  rebuilds. The shared `historyIndex`/`driftIndex` cost therefore has to keep full builds below the patrol
+  cadence; moving the cadence alone only moves the livelock threshold.
 - **Scoped invalidation (the dirty bit carries a domain).** `invalidateBoard(scope)` marks the cache
   'sessions'-dirty or 'full'-dirty, escalating (sessions∪full=full) and never downgrading. A
   'sessions'-dirty read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh

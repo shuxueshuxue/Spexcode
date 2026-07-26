@@ -25,6 +25,7 @@ scenarios:
       creates no plan or mutation token and changes no process, record, worktree, branch, port, or health state.
   - name: leaf-identity-changes-during-stop-guard
     tags: [backend-api]
+    code: spec-cli/src/sessions.ts#killAgentProcess
     description: >-
       Against an isolated real child registered as one session's exact leaf, enter the ordinary stop transition
       and hold the adapter-owned shared-runtime guard before an escalation signal. Let that exact child exit

@@ -196,7 +196,16 @@ surface:
   inherited ones removes a wrong answer without removing a right one. `launchEnv(id)`
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
-  with the governed session id and configured home variables.
+  with the governed session id and configured home variables. A shared runtime also declares its PID/isolation
+  artifacts and a live control-plane probe through the adapter. The probe reports loaded threads, active turns,
+  and sanitized exact-turn commit observations from the runtime itself; session records are joined afterward
+  and cannot invent a live reference or claim a repository commit the thread was not observed producing. Its
+  broad ref scan is metadata-only; bounded turn windows are fetched only for aliases whose resource observation
+  needs correlation, never by loading every thread's item history. The
+  Codex app-server starts behind a `nohup` boundary and records PID plus process-start identity; a session
+  teardown with live siblings refuses unless that exact boundary still validates, so killing the pane that
+  happened to launch the daemon cannot HUP unrelated turns. The shell mirror exposes those adapter-owned
+  identity artifact paths to hot hooks without moving Codex policy into the resource product layer.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

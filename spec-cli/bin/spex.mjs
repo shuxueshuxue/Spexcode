@@ -53,5 +53,17 @@ function resolveTsxCli() {
   }
 }
 const tsxCli = resolveTsxCli()
-spawn(process.execPath, [tsxCli, cli, ...process.argv.slice(2)], { stdio: 'inherit' })
+const args = process.argv.slice(2)
+const env = { ...process.env }
+// A backend/dashboard is a project or host control plane, never the managed session that happened to start
+// it. Scrub before tsx starts: doing this inside cli.ts is too late because tsx's resident esbuild helper has
+// already inherited the caller. New session launches provide the adapter-registry-derived key manifest; the
+// fallback covers sessions created before that manifest existed.
+if (args[0] === 'serve' || args[0] === 'dashboard') {
+  const identityKeys = (env.SPEXCODE_SESSION_IDENTITY_VARS
+    || 'SPEXCODE_SESSION_ID,CLAUDE_CODE_SESSION_ID,CODEX_THREAD_ID,OPENCODE_SESSION_ID,PI_SESSION_ID')
+    .split(',').map((key) => key.trim()).filter(Boolean)
+  for (const key of identityKeys) delete env[key]
+}
+spawn(process.execPath, [tsxCli, cli, ...args], { stdio: 'inherit', env })
   .on('exit', (code) => process.exit(code ?? 0))

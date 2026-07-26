@@ -673,6 +673,12 @@ if (cmd === 'serve') {
     const visible = has('all') || selectors.length ? all : all.filter((s) => !s.archived)
     const picked = selectSessions(visible, selectors, flag('status')?.split(','))
     console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
+  } else if (sub === 'resources') {
+    rejectUnknownFlags('spex session resources', 4, ['json', 'api', 'port'])
+    const { clientResources } = await import('./client.js')
+    const report = await clientResources()
+    if (has('json')) console.log(JSON.stringify(report, null, 2))
+    else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'watch') {
     const { watchSessions } = await import('./sessions.js')
     const { clientListSessions } = await import('./client.js')
@@ -931,6 +937,15 @@ if (cmd === 'serve') {
       if (!path) throw new Error(`governor '${owner.id}' has no live spec path`)
       console.log(`${owner.id}\t${path}`)
     }
+  } else if (sub === 'shared-runtime-spawn') {
+    const [cwd, logFile, pidFile, isolationFile, command] = process.argv.slice(4, 9)
+    const args = process.argv.slice(9)
+    if (!cwd || !logFile || !pidFile || !isolationFile || !command) {
+      console.error('usage: spex internal shared-runtime-spawn <cwd> <log> <pid-file> <isolation-file> <command> [args...]')
+      process.exit(2)
+    }
+    const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
+    console.log(spawnDetachedRuntime({ cwd, logFile, pidFile, isolationFile, command, args }).pid)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
     // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by

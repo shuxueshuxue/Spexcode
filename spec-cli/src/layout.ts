@@ -7,7 +7,7 @@ import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store
 
 export { encodeProject, spexcodeHome } from './project-store.js'
 
-type Config = {
+export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
@@ -40,6 +40,13 @@ type Config = {
     launchers?: { [name: string]: { harness?: HarnessId; cmd: string } }
     defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
   }
+  resources?: {
+    sessionRssMiB?: number         // resident-memory budget for one session owner (default 1024)
+    backendRssMiB?: number         // resident-memory budget for this project's backend instance (default 2048)
+    idleCpuPercent?: number        // CPU budget for a non-progressing owner (default 2)
+    sampleMs?: number              // CPU measurement window for an on-demand report (default 1000)
+    reportIntervalMs?: number      // supervisor-owned snapshot cadence (default 60000)
+  }
   serve?: {
     // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).
     // The password is NEVER read from here — flag/env only — so this file stays committable.
@@ -60,7 +67,7 @@ type Config = {
 // `serve`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

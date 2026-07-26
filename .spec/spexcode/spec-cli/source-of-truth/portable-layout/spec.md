@@ -44,6 +44,9 @@ The same `spexcode.json` (read through `readConfig`) is also where adjacent proj
 than baked in — including the `harnesses` delivery-target set [[harness-select]] owns (which harnesses `spex
 materialize` delivers into; default = every native harness). Layout resolution doesn't consume it, but it rides
 the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
+The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
+budgets. Machine-local overrides tune one host without committing its capacity profile, while malformed values
+fail loud rather than silently disabling governance.
 
 The config read is the ONE fail-loud seam here (`readJsonConfig`): an **absent** file is the legitimate
 default (yields `{}`), but a **present-but-malformed** one is a user error we never swallow — a JSON typo

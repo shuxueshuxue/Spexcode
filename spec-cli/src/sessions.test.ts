@@ -1,11 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars } from './harness.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, spawnerClause, type Session, type SessRec } from './sessions.js'
+import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
+import { processStartToken } from './process-identity.js'
+import { spawnDetachedRuntime } from './runtime-ownership.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -106,6 +109,95 @@ test('launchScript registers the agent pid before exec and preserves tricky quot
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('stop revalidates the exact leaf after every shared guard before TERM and KILL', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalShared = claudeHarness.sharedRuntimes
+  const originalCleanup = claudeHarness.cleanupRuntime
+  const originalKill = process.kill
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+
+  const runCase = async (signal: 'SIGTERM' | 'SIGKILL') => {
+    const home = mkdtempSync(join(tmpdir(), `spex-leaf-${signal.toLowerCase()}-`))
+    process.env.SPEXCODE_HOME = home
+    const id = `leaf-${signal.toLowerCase()}-${process.pid}`
+    let shared: { pid: number; startToken: string } | null = null
+    let leaf: ReturnType<typeof spawn> | null = null
+    let probeCalls = 0
+    const attempted: string[] = []
+    try {
+      const dir = sessionStoreDir(id)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+        session_id: id, governed: true, worktree_path: worktree, branch,
+        node: 'host-resource-budget', title: '', name: '', parent: '', status: 'active', proposal: '',
+        merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: id,
+        stopped: false, archived: false, launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
+      }, null, 2)}\n`)
+
+      const pidFile = join(home, 'shared.pid')
+      const isolationFile = join(home, 'shared.scope')
+      shared = spawnDetachedRuntime({
+        cwd: home, logFile: join(home, 'shared.log'), pidFile, isolationFile,
+        command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'],
+      })
+      const leafProgram = signal === 'SIGKILL'
+        ? 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'
+        : 'setInterval(() => {}, 1000)'
+      leaf = spawn(process.execPath, ['-e', leafProgram, id], { stdio: 'ignore' })
+      let leafStart: string | null = null
+      for (let i = 0; i < 50 && !(leafStart = processStartToken(leaf.pid!)); i++) await sleep(20)
+      assert.ok(leafStart, `${signal} fixture acquired an exact leaf identity`)
+      writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${leaf.pid}\n`)
+
+      const identityLossCall = signal === 'SIGTERM' ? 2 : 3
+      const probe = async (): Promise<SharedRuntimeProbe> => {
+        probeCalls++
+        if (probeCalls === identityLossCall) {
+          const exited = once(leaf!, 'exit')
+          originalKill(leaf!.pid!, signal === 'SIGTERM' ? 'SIGTERM' : 'SIGKILL')
+          await exited
+          assert.equal(processStartToken(leaf!.pid!), null, `${signal} identity is absent before its guard returns`)
+        }
+        return { healthy: true, references: [] }
+      }
+      claudeHarness.sharedRuntimes = () => [{ key: `leaf-${signal}`, label: `${signal} leaf fixture`, pidFile, isolationFile, probe }]
+      claudeHarness.cleanupRuntime = async () => {}
+      process.kill = ((pid: number, next?: number | NodeJS.Signals) => {
+        if (pid === leaf!.pid && next && next !== 0) attempted.push(String(next))
+        return originalKill(pid, next)
+      }) as typeof process.kill
+
+      assert.equal(await stopSession(id), true)
+      assert.equal(probeCalls, identityLossCall, `${signal} reached the intended pre-signal guard`)
+      assert.deepEqual(attempted, signal === 'SIGTERM' ? [] : ['SIGTERM'], `no ${signal} is attempted after identity loss`)
+    } finally {
+      process.kill = originalKill
+      claudeHarness.sharedRuntimes = originalShared
+      claudeHarness.cleanupRuntime = originalCleanup
+      if (leaf?.pid && processStartToken(leaf.pid)) {
+        try { originalKill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
+      }
+      if (shared && processStartToken(shared.pid) === shared.startToken) {
+        try { originalKill(shared.pid, 'SIGTERM') } catch { /* already exited */ }
+        for (let i = 0; i < 50 && processStartToken(shared.pid) === shared.startToken; i++) await sleep(20)
+      }
+      rmSync(home, { recursive: true, force: true })
+    }
+  }
+
+  try {
+    await runCase('SIGTERM')
+    await runCase('SIGKILL')
+  } finally {
+    process.kill = originalKill
+    claudeHarness.sharedRuntimes = originalShared
+    claudeHarness.cleanupRuntime = originalCleanup
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
   }
 })
 
@@ -370,6 +462,7 @@ test('a launch establishes identity: inherited session ids are stripped, this se
     // along into every worker — the leak class behind github#76. The launch strips them all, then sets its own.
     for (const v of sessionIdentityEnvVars()) assert.match(script, new RegExp(`env[^\\n]*-u ${v}\\b`), v)
     assert.match(script, /SPEXCODE_SESSION_ID=identity-launch-test/)
+    assert.match(script, /SPEXCODE_SESSION_IDENTITY_VARS=/)
     assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prevHome

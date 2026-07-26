@@ -9,6 +9,7 @@ code:
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
+  - spec-cli/src/specs.test.ts
 ---
 # source-of-truth
 
@@ -40,6 +41,12 @@ An explicit local commit candidate is the one exception to the filesystem conten
 specs and governed current content from that candidate's immutable tree and derives both indices at the
 same candidate tip. This keeps `commit --only`, partial staging and linked-worktree commits honest; an
 unstaged working-tree edit cannot change the verdict for bytes absent from the candidate.
+
+An exact-revision caller that already batch-read `.spec` may supply that immutable declaration snapshot to
+`loadSpecs` so one projection does not read the same tree twice. The snapshot binds `{ tip, files }`; the
+loader rejects a tip mismatch before deriving anything, and history/drift use that same requested tip. This
+is caller-owned, build-local input, not a resident cache: ordinary filesystem reads and the existing
+HEAD-owned indexes keep their current behavior.
 
 Git's default history presentation suppresses merge diffs, but a merge can author real content while
 resolving conflicts. The loader therefore treats a merge's dense combined (`--cc`) paths — content different

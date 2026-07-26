@@ -106,13 +106,14 @@ scenarios:
     expected: >
       `spex eval ls --session <SEL>` renders the /evals model as text in the tab's attention order — gates
       strip, a ✦ legend when the session filed its own readings, then filed readings newest-first across
-      source ownership (own marked ✦, inherited distinguished by the absent ✦), followed by blind spots;
-      an empty diff prints a
+      nodes and source ownership (own marked ✦, inherited distinguished by the absent ✦), followed by blind
+      spots. Each item retains its node label without node regrouping; an empty diff prints a
       clean nothing-to-evaluate line; --json dumps the model. --export writes the self-contained HTML
       path (its --json = the model). The removed spellings are tombstones, not aliases: `spex review`
       signposts `spex session review`, and `spex session review proof` signposts the canonical
       `spex eval ls --session <SEL> --export` — one stderr line, exit non-zero, the old verb never
-      executes. Help: the map lists eval as its own noun and an --help probe never fires the verb.
+      executes. Help: the map lists eval as its own noun, eval help teaches this same global result-first
+      order, and an --help probe never fires the verb.
   - name: eval-door-one-chrome
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/evals-entry.e2e.mjs

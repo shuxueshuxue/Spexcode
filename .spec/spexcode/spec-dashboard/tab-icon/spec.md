@@ -21,6 +21,8 @@ host config described by [[identity-config]]. The backend and catalog expose res
 
 Favicon SVG/data-URI generation comes from [[icon-presets]], the same registry and serializer the visible
 marks use. `index.html` contains only the link mount and plain title fallback, never a second hand-written
-icon. Missing settings resolve to stable SpexCode/gateway defaults, so every loaded face gets a favicon;
-switching scope or changing an icon updates the existing link live and survives reload/restart through its
-canonical source.
+icon. The mount starts at the neutral `data:,` URL while scope is unresolved, so the browser never falls
+back to a route-relative `/favicon.ico`; the resolved identity helper is the only writer of an actual icon.
+Missing settings resolve to stable SpexCode/gateway defaults, so every loaded face gets a favicon; switching
+scope or changing an icon updates the existing link live and survives reload/restart through its canonical
+source.

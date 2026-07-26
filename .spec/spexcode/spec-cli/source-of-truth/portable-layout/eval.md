@@ -15,7 +15,9 @@ scenarios:
       DEGRADES to auto-detect by design (the pre-commit hook rides it and must never die on a config
       typo; its own pure-git fallback assumes exactly this resilience).
     tags: [cli]
-    code: spec-cli/src/layout.ts
+    code:
+      - spec-cli/src/layout.ts#mainBranch
+      - spec-cli/src/layout.ts#readConfig
 ---
 
 Measured through the CLI seam that resolves layout for every other verb (`spex internal trunk` =

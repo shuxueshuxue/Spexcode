@@ -155,8 +155,8 @@ cost-conservation bound moves the required ancestry work between indexing and pr
 perfrepo result (6.3x to 3.7x CPU growth across the reported depths) is recorded as the achieved slope change,
 not as a promise of constant-time reads.
 
-Four immutable event streams are persisted by commit oid in the global project cache
-(`~/.spexcode/projects/<repo-id>/history-events-v3-<state>.ndjson`) and extended only for previously unseen
+Four immutable event streams are persisted by commit oid in the project's one global runtime root
+(`~/.spexcode/projects/<enc(project-root)>/history-events-v3-<state>.ndjson`) and extended only for previously unseen
 commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK` trailer declarations,
 and `.spec` name events. The schema/state key includes the cache implementation schema, shallow/graft state,
 and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
@@ -166,7 +166,9 @@ marker therefore become visible together, and a killed writer leaves only an ign
 tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed from cached events, so
 current paths and node ownership cannot become stale. A cold checkout pays one full walk to seed the cache;
 later processes append only the commits since cached tips. The projection is in-memory and bounded by the
-current tip, while the event ledger grows only with new commits.
+current tip, while the event ledger grows only with new commits. The root identity is the same `runtimeRoot`
+used by sessions, materialize slots, backends, and uninstall; one repository never acquires a second opaque
+top-level cache identity, and the public uninstall removes the ledger with the rest of that project's runtime.
 
 For a pending merge, changed-path scope is the union of diffs against every parent. An `ours` merge may leave
 the result tree equal to its first parent while making a side-branch commit reachable; that newly reachable

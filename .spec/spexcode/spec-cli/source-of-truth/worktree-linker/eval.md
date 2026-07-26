@@ -14,7 +14,7 @@ scenarios:
       A worktree merely BEHIND an advanced main likewise stays at zero — both phantom classes dead, real
       proposals intact.
     tags: [backend-api]
-    code: spec-cli/src/git.ts
+    code: spec-cli/src/git.ts#worktreeSpecDelta
     related: [spec-cli/src/layout.ts, spec-cli/src/git.test.ts]
 ---
 

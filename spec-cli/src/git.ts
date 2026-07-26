@@ -1219,6 +1219,15 @@ export function resetHistoryCachesForTests(): void {
   indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear(); eventCacheMemo.clear(); eventPathMemo.clear()
 }
 export function historyEventCachePathForTests(root: string): string { return eventCachePath(root) }
+// The merge event stream stores the complete combined patch. Anchor hunk reads can reuse it after the shared
+// drift/history entry point has populated the ledger; a null result means an oracle or a genuinely uncached
+// commit and keeps the caller's original `git show --cc` fallback.
+export function cachedMergePatch(root: string, commit: string): string | null {
+  const raw = readEventCache(root).state.streams.get('merge')?.get(commit)?.raw
+  if (!raw) return null
+  const newline = raw.indexOf('\n')
+  return newline < 0 ? '' : raw.slice(newline + 1)
+}
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
 // a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.

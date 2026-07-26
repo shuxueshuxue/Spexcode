@@ -101,8 +101,10 @@ commits. Replacing the single base with "covered by any frontier version" would 
 would change this contract by letting one branch's version pardon another branch.
 
 Renames add the same cost-conservation boundary on identity. A historical `(commit, path)` event is stable,
-while its current node is not: ordinary rename preserves lineage, path reuse starts a new lineage, and
-parallel renames may fork one lineage into several current paths. A clean merge can own zero all-parent
+while its current node is not. The DAG relation is a complete three-way judgment: a rename before the event
+means the old path was reused; the event before the rename moves its lineage to the target; incomparable
+branches retain the event-side path and follow the rename-side target, so one lineage can fork across current
+paths. A clean merge can own zero all-parent
 lines yet make arbitrarily many side-branch keys reachable. Materializing those keys charges the write;
 keeping only parent pointers charges the later read. The walk does not disappear, it moves. The exact,
 no-semantic-change route is therefore an incrementally maintainable event index plus read-time rename

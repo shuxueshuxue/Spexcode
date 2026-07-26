@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -16,6 +16,40 @@ function idx(parents: Record<string, string[]>, parts: Partial<DriftIndex> = {})
   return { ord, parents: p, fileCommits: new Map(), acks: new Map(), specNodes: new Map(), anc: new Map(), ...parts }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
+
+test('optimized history and drift indexes match the full-history oracle', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-index-oracle-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'oracle@example.com'); run('config', 'user.name', 'Oracle')
+    mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\n---\n# a\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    appendFileSync(join(root, '.spec/project/a/spec.md'), '\nchanged\n'); run('add', '.'); run('commit', '-qm', 'revise a')
+    const fastH = await historyIndex(root), fullH = await historyIndexFull(root)
+    const paths = new Set([...fastH.versions.keys(), ...fullH.versions.keys()])
+    for (const path of paths) assert.deepEqual(rowsFor(fastH, path), rowsFor(fullH, path), `history mismatch for ${path}`)
+    const fastD = await driftIndex(root), fullD = await driftIndexFull(root)
+    const tip = run('rev-parse', 'HEAD')
+    assert.equal(commitReachable(fastD, tip), commitReachable(fullD, tip))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('batch revision/blob reads preserve exact bytes, including large newline blobs and missing entries', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-batch-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'batch@example.com'); run('config', 'user.name', 'Batch')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const text = `${'line\n'.repeat(20000)}tail-without-newline`
+    writeFileSync(join(root, 'src/blob.txt'), text); run('add', '.'); run('commit', '-qm', 'blob')
+    const head = run('rev-parse', 'HEAD')
+    const [oid, missing] = batchRevisionOids(root, [`${head}:src/blob.txt`, `${head}:src/missing.txt`])
+    assert.ok(oid && !missing)
+    assert.equal(batchBlobTexts(root, [oid!]).get(oid!), text)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
 
 test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {
   const parsed = combinedDiffOwnedRanges([

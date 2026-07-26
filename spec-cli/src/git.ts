@@ -1,7 +1,8 @@
 import { execFileSync, execFile } from 'node:child_process'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync, appendFileSync, mkdirSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
+import { createHash } from 'node:crypto'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -136,6 +137,33 @@ function gitBuffer(args: string[], input?: string): Buffer {
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
+// Batch immutable object lookups used by the shared anchor/index path. Git accepts revision:path queries on
+// batch-check, so dozens of rev-parse + cat-file children collapse into two bounded processes without
+// changing the returned bytes or object ids.
+export function batchRevisionOids(root: string, revisions: string[]): (string | null)[] {
+  if (!revisions.length) return []
+  const out = gitBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n').toString('utf8')
+  return out.split('\n').slice(0, revisions.length).map((line) => /^[0-9a-f]{40}$/.test(line.trim()) ? line.trim() : null)
+}
+export function batchBlobTexts(root: string, oids: string[]): Map<string, string> {
+  const unique = [...new Set(oids.filter(Boolean))]
+  const files = new Map<string, string>()
+  if (!unique.length) return files
+  const out = gitBuffer(['-C', root, 'cat-file', '--batch'], unique.join('\n') + '\n')
+  let offset = 0
+  for (const oid of unique) {
+    const newline = out.indexOf(10, offset)
+    if (newline < 0) break
+    const header = out.subarray(offset, newline).toString('utf8')
+    const size = Number(header.match(/ blob (\d+)$/)?.[1])
+    if (!Number.isFinite(size)) { offset = newline + 1; continue }
+    const start = newline + 1, end = start + size
+    files.set(oid, out.subarray(start, end).toString('utf8'))
+    offset = end + 1
+  }
+  return files
+}
+
 type TreeBlob = { oid: string; path: string }
 function treeBlobs(root: string, tip: string, pathspec = '.'): TreeBlob[] {
   const out = git(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', tip, '--', pathspec])
@@ -261,6 +289,95 @@ export async function gitA(args: string[]): Promise<string> {
   }
 }
 
+// Immutable history-event ledger ([[code-anchor]]): the expensive log streams below describe commit
+// objects, not a tip. Store each record by oid in the common git directory and append only records not seen
+// before. The current tip still supplies reachability/order, so rename projection and ancestry remain fresh.
+type EventRecord = { hash: string; raw: string }
+type EventCache = { tips: string[]; streams: Map<string, Map<string, EventRecord>>; streamTips: Map<string, string[]> }
+const eventCacheMemo = new Map<string, EventCache>()
+function eventCachePath(root: string): string {
+  const common = git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  const shallowPath = git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-path', 'shallow']).trim()
+  const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
+  const replacePath = join(common, 'info', 'grafts')
+  const grafts = existsSync(replacePath) ? readFileSync(replacePath, 'utf8') : ''
+  const replacements = git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
+  const state = createHash('sha256').update(`${shallow}\0${grafts}\0${replacements}`).digest('hex').slice(0, 16)
+  return join(common, 'spexcode', `history-events-${state}.ndjson`)
+}
+function readEventCache(root: string): { path: string; state: EventCache } {
+  const path = eventCachePath(root)
+  const hit = eventCacheMemo.get(path)
+  if (hit) return { path, state: hit }
+  const state: EventCache = { tips: [], streams: new Map(), streamTips: new Map() }
+  if (existsSync(path)) {
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      if (!line) continue
+      try {
+        const row = JSON.parse(line) as { k: string; h?: string; r?: string; tip?: string }
+        if (row.k === 'tip' && row.tip) state.tips.push(row.tip)
+        else if (row.k.startsWith('tip:') && row.tip) {
+          const streamTips = state.streamTips.get(row.k.slice(4)) ?? []
+          streamTips.push(row.tip); state.streamTips.set(row.k.slice(4), streamTips)
+        }
+        else if (row.k && row.h && row.r) {
+          let stream = state.streams.get(row.k)
+          if (!stream) { stream = new Map(); state.streams.set(row.k, stream) }
+          stream.set(row.h, { hash: row.h, raw: row.r })
+        }
+      } catch { /* tolerate a torn final append; the next run repairs it by appending */ }
+    }
+  }
+  state.tips = [...new Set(state.tips)].slice(-32)
+  eventCacheMemo.set(path, state)
+  return { path, state }
+}
+async function eventStream(root: string, tip: string, kind: string, argsFor: (base: string) => string[], order: Map<string, number>, reachable: Set<string>, persist = true, cache = true): Promise<string> {
+  if (!cache) return gitA(argsFor(''))
+  const { path, state } = readEventCache(root)
+  const stream = state.streams.get(kind) ?? new Map<string, EventRecord>()
+  let base = ''
+  if (stream.size) {
+    const tips = state.streamTips.get(kind) ?? state.tips
+    for (const candidate of [...tips].reverse()) {
+      const check = await gitTry(['-C', root, 'merge-base', '--is-ancestor', candidate, tip])
+      if (check.ok) { base = candidate; break }
+    }
+  }
+  const out = await gitA(argsFor(base))
+  const added: string[] = []
+  for (const rec of out.split(RS)) {
+    const raw = rec.replace(/^\n/, '')
+    if (!raw) continue
+    const hash = raw.split(US, 1)[0].split('\n', 1)[0].trim()
+    if (!/^[0-9a-f]{7,40}$/.test(hash) || stream.has(hash)) continue
+    stream.set(hash, { hash, raw }); added.push(hash)
+  }
+  // Candidate tips are immutable objects too. Persist their event rows even when the tip itself is
+  // transient; the next real HEAD filters them by reachability, while later candidates avoid re-scanning
+  // the already-seen prefix. Only the tip marker is withheld for transient calls.
+  if (added.length) {
+    mkdirSync(join(path, '..'), { recursive: true })
+    appendFileSync(path, added.map((hash) => JSON.stringify({ k: kind, h: hash, r: stream.get(hash)!.raw }) + '\n').join(''))
+  }
+  state.streams.set(kind, stream)
+  if (persist) {
+    const streamTips = state.streamTips.get(kind) ?? []
+    if (!streamTips.includes(tip)) {
+      streamTips.push(tip); state.streamTips.set(kind, streamTips)
+      mkdirSync(join(path, '..'), { recursive: true })
+      appendFileSync(path, JSON.stringify({ k: `tip:${kind}`, tip }) + '\n')
+    }
+  }
+  const rows = [...stream.values()].filter((r) => reachable.has(r.hash)).sort((a, b) => {
+    if (kind === 'numstat') {
+      const ad = Date.parse(a.raw.split(US)[1] ?? ''), bd = Date.parse(b.raw.split(US)[1] ?? '')
+      if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
+    }
+    return (order.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.hash) ?? Number.MAX_SAFE_INTEGER)
+  })
+  return rows.map((r) => RS + r.raw).join('')
+}
 // @@@ a read with a byte budget - the fourth call shape, for a caller that needs only a bounded PREFIX of
 // a stream. The transport stops the child the moment the budget is exceeded and SAYS SO, so measuring "is
 // this stream at least N bytes" costs N bytes instead of the whole walk. Truncation must be its own answer:
@@ -405,6 +522,23 @@ function parseStatPath(token: string): { from: string; to: string } {
   return { from: token, to: token }
 }
 
+function persistedFirstSeen(root: string): Map<string, number> {
+  const { state } = readEventCache(root)
+  const rows = state.streams.get('numstat')
+  const first = new Map<string, number>()
+  let position = 0
+  for (const record of rows?.values() ?? []) {
+    for (const line of record.raw.split('\n')) {
+      const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
+      if (!m) continue
+      const { from, to } = parseStatPath(m[3])
+      if (!first.has(to)) first.set(to, position++)
+      if (!first.has(from)) first.set(from, position++)
+    }
+  }
+  return first
+}
+
 // Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
 // once — the backend checkout (board, loadSpecs) plus every session worktree ([[session-eval]]'s eval
 // tab roots its readings at the session's branch). A single-slot cache thrashes between those roots:
@@ -449,17 +583,41 @@ function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise:
   cache.delete(head)
 }
 
+function pendingOnlyIssues(root: string, tip: string): boolean {
+  try {
+    const parent = git(['-C', root, 'rev-parse', `${tip}^`]).trim()
+    const paths = git(['-C', root, 'diff-tree', '--no-commit-id', '--name-only', '-r', parent, tip])
+      .split('\n').map((p) => p.trim()).filter(Boolean)
+    return paths.length > 0 && paths.every((p) => p.startsWith('.spec/.issues/'))
+  } catch { return false }
+}
+const emptyHistoryIndex = (): HistoryIndex => ({ versions: new Map(), stats: new Map(), mergeVersions: new Set() })
+const emptyDriftIndex = (tip: string): DriftIndex => ({ tip, ord: new Map(), parents: new Map(), fileCommits: new Map(), resolutionCommits: new Map(), acks: new Map(), selfAcks: new Map(), specNodes: new Map(), anc: new Map() })
+
 export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> {
-  if (tip !== 'HEAD') return buildIndex(root, git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim(), true)
+  if (tip !== 'HEAD') {
+    const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+    if (pendingOnlyIssues(root, resolved)) return Promise.resolve(emptyHistoryIndex())
+    return buildIndex(root, resolved, true, true)
+  }
   const head = headOrEmpty(root)
-  if (!head) return buildIndex(root, 'HEAD', false)
+  if (!head) return buildIndex(root, 'HEAD', false, true)
   touchRoot(indexRoots, indexCache, root, head)
   const hit = indexCache.get(head)
   if (hit) return hit
-  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false)
+  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
   p.catch(() => { dropFailed(indexCache, head, p) })   // don't pin a failed build
   indexCache.set(head, p)
   return p
+}
+
+// Full-history oracle: deliberately bypasses the immutable event ledger and rebuilds every source stream
+// from Git. It is kept beside the optimized entry point as the standing correctness reference for tests and
+// future optimizations; production consumers use historyIndex above.
+export function historyIndexFull(root: string, tip = 'HEAD'): Promise<HistoryIndex> {
+  const head = tip === 'HEAD' ? headOrEmpty(root) : ''
+  const resolved = tip === 'HEAD' ? (!head || head.startsWith('unborn:') ? 'HEAD' : head) : git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+  return buildIndex(root, resolved, true, false)
 }
 
 // resolve HEAD for cache-keying, '' if unreadable (fails the cache test → recompute); warns once.
@@ -472,25 +630,20 @@ function headOrEmpty(root: string): string {
   }
 }
 
-async function buildIndex(root: string, tip: string, transient: boolean): Promise<HistoryIndex> {
+async function buildIndex(root: string, tip: string, transient: boolean, useCache = true): Promise<HistoryIndex> {
   const versions = new Map<string, Version[]>()
   const stats = new Map<string, Map<string, DiffStat>>()
   const mergeVersions = new Set<string>()
   const commitVersions = new Map<string, Version>()
   const commitOrder = new Map<string, number>()
-  const [out, tipPathsOut, topologyOut] = await Promise.all([
-    gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
-      `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec']),
+  const [tipPathsOut, topologyOut] = await Promise.all([
     gitA(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip, '--', '.spec']),
     gitA(['-C', root, 'rev-list', '--parents', tip]),
   ])
-  if (!out) return { versions, stats, mergeVersions }
   const rawVersions = new Map<string, Version[]>()
   const rawStats = new Map<string, Map<string, DiffStat>>()
   const currentPaths = new Set(tipPathsOut.split('\0').filter(Boolean))
   const renamesByFrom = new Map<string, { hash: string; to: string }[]>()
-  const firstSeen = new Map<string, number>()
-  let pathPosition = 0
   const topologyOrd = new Map<string, number>(), topologyParents = new Map<string, string[]>()
   let topologyPosition = 0
   for (const line of topologyOut.trim().split('\n')) {
@@ -499,6 +652,13 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
     topologyOrd.set(hash, topologyPosition++)
     topologyParents.set(hash, parents)
   }
+  const topologyReachable = new Set(topologyOrd.keys())
+  const out = await eventStream(root, tip, 'numstat', (base) => ['-C', root, '-c', 'core.quotePath=false',
+    'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
+    `--format=${RS}%H${US}%aI${US}%s${US}%b`, ...(base ? [`^${base}`] : []), tip, '--', '.spec'], topologyOrd, topologyReachable, !transient, useCache)
+  if (!out) return { versions, stats, mergeVersions }
+  const firstSeen = useCache ? persistedFirstSeen(root) : new Map<string, number>()
+  let pathPosition = firstSeen.size
   const ancestryCache = new Map<string, Uint8Array>()
   const ancestryOf = (hash: string): Uint8Array | undefined => {
     const hit = ancestryCache.get(hash)
@@ -557,6 +717,30 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
     }
   }
 
+  // Re-establish Git's date-order contract after records come from an incrementally cached stream. The
+  // cache may discover a later range before an older timestamped side commit; ancestry still outranks time,
+  // so descendants must sort before their ancestors. Independent commits use author date, then the cached
+  // stream order as a deterministic tie-break.
+  const ancestryMemo = new Map<string, Set<string>>()
+  const ancestorsOfCommit = (hash: string): Set<string> => {
+    const hit = ancestryMemo.get(hash); if (hit) return hit
+    const seen = new Set<string>(), stack = [hash]
+    while (stack.length) for (const parent of topologyParents.get(stack.pop()!) ?? []) {
+      if (seen.has(parent)) continue
+      seen.add(parent); stack.push(parent)
+    }
+    ancestryMemo.set(hash, seen); return seen
+  }
+  const originalOrder = new Map(commitOrder)
+  const ordered = [...commitVersions.keys()].sort((a, b) => {
+    if (ancestorsOfCommit(a).has(b)) return -1
+    if (ancestorsOfCommit(b).has(a)) return 1
+    const ad = Date.parse(commitVersions.get(a)!.date), bd = Date.parse(commitVersions.get(b)!.date)
+    if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
+    return (originalOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (originalOrder.get(b) ?? Number.MAX_SAFE_INTEGER)
+  })
+  commitOrder.clear(); ordered.forEach((hash, i) => commitOrder.set(hash, i))
+
   const canonical = (path: string, event: string): string[] => {
     const pending = [path], resolved = new Set<string>(), seen = new Set<string>()
     while (pending.length) {
@@ -592,7 +776,7 @@ async function buildIndex(root: string, tip: string, transient: boolean): Promis
       stats.set(head, hs)
     }
   }
-  const mergeChanges = await mergeResolutionCommits(root, tip, transient)
+  const mergeChanges = await mergeResolutionCommits(root, tip, transient, topologyOrd, topologyReachable, useCache)
   for (const [path, hashes] of mergeChanges) {
     if (!isSpecMd(path)) continue
     for (const hash of hashes) for (const head of canonical(path, hash)) {
@@ -754,13 +938,28 @@ const resolutionHeadCache = new Map<string, Promise<Map<string, string[]>>>()
 const resolutionPendingCache = new Map<string, Promise<Map<string, string[]>>>()
 const RESOLUTION_CACHE_SLOTS = 32
 const PENDING_RESOLUTION_CACHE_SLOTS = 8
-async function mergeResolutionCommits(root: string, tip: string, transient: boolean): Promise<Map<string, string[]>> {
+async function mergeResolutionCommits(root: string, tip: string, transient: boolean, order?: Map<string, number>, reachable?: Set<string>, useCache = true): Promise<Map<string, string[]>> {
   const cache = transient ? resolutionPendingCache : resolutionHeadCache
   const key = `${rootKey(root)}\0${tip}`
   const hit = cache.get(key)
   if (hit) return hit
-  const promise = (async () => parseResolutionCommits(await gitA(['-C', root, '-c', 'core.quotePath=false',
-    'log', '--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip])))()
+  const promise = (async () => {
+    if (!useCache) return parseResolutionCommits(await gitA(['-C', root, '-c', 'core.quotePath=false',
+      'log', '--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip]))
+    let currentOrder = order, currentReachable = reachable
+    if (!currentOrder || !currentReachable) {
+      const topology = await gitA(['-C', root, 'rev-list', '--parents', tip])
+      currentOrder = new Map(); currentReachable = new Set()
+      let n = 0
+      for (const line of topology.trim().split('\n')) {
+        const hash = line.split(' ', 1)[0]
+        if (hash) { currentOrder.set(hash, n++); currentReachable.add(hash) }
+      }
+    }
+    return parseResolutionCommits(await eventStream(root, tip, 'merge', (base) => ['-C', root, '-c', 'core.quotePath=false',
+      'log', '--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`,
+      ...(base ? [`^${base}`] : []), tip], currentOrder!, currentReachable!, !transient, useCache))
+  })()
   cache.set(key, promise)
   const limit = transient ? PENDING_RESOLUTION_CACHE_SLOTS : RESOLUTION_CACHE_SLOTS
   while (cache.size > limit) cache.delete(cache.keys().next().value!)
@@ -792,7 +991,7 @@ function parseLazySpecNodes(out: string): Map<string, Set<string>> {
   return specNodes
 }
 
-async function buildLazyDriftIndex(root: string, tip: string, transient: boolean): Promise<DriftIndex> {
+async function buildLazyDriftIndex(root: string, tip: string, transient: boolean, useCache = true): Promise<DriftIndex> {
   // Version commits are the only source of node ownership; ack stamps are empty commits whose subject is
   // stable (`ack: Spec-OK …`). Both walks are tiny compared with the all-files commit graph and retain only
   // the hashes needed to form rev-list exclusions later.
@@ -804,11 +1003,15 @@ async function buildLazyDriftIndex(root: string, tip: string, transient: boolean
   if (!reachableResult.ok)
     throw new Error(`git rev-list ${tip} failed while building lazy reachability: ${reachableResult.stderr.trim() || 'unknown git error'}`)
   const reachable = new Set(reachableResult.stdout.split('\n').map((s) => s.trim()).filter(Boolean))
-  const specOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', `--format=${RS}%H`, tip, '--', '.spec'])
-  const ackOut = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log',
-    `--format=${RS}%H${US}%T${US}%P${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, '--grep=^Spec-OK:', tip])
+  const order = new Map<string, number>()
+  reachableResult.stdout.split('\n').forEach((hash, i) => { if (hash.trim()) order.set(hash.trim(), i) })
+  const specOut = await eventStream(root, tip, 'lazy-spec', (base) => ['-C', root, '-c', 'core.quotePath=false',
+    'log', '--name-only', `--format=${RS}%H`, ...(base ? [`^${base}`] : []), tip, '--', '.spec'], order, reachable, !transient, useCache)
+  const ackOut = await eventStream(root, tip, 'ack', (base) => ['-C', root, '-c', 'core.quotePath=false', 'log',
+    `--format=${RS}%H${US}%T${US}%P${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, '--grep=^Spec-OK:',
+    ...(base ? [`^${base}`] : []), tip], order, reachable, !transient, useCache)
   const specNodes = parseLazySpecNodes(specOut)
-  const resolutionCommits = await mergeResolutionCommits(root, tip, transient)
+  const resolutionCommits = await mergeResolutionCommits(root, tip, transient, order, reachable, useCache)
   for (const [path, hashes] of resolutionCommits) if (isSpecMd(path)) for (const hash of hashes) {
     const nodes = specNodes.get(hash) ?? new Set<string>()
     nodes.add(nodeIdOf(path))
@@ -843,7 +1046,7 @@ async function buildLazyDriftIndex(root: string, tip: string, transient: boolean
     lazy: { root, tip, specNodes, ackByNode, selfAcks, counts: new Map(), windows: new Map(), rawWindows: new Map(), resolutionCommits, reachable },
   }
 }
-async function buildDriftIndex(root: string, tip: string, transient: boolean): Promise<DriftIndex> {
+async function buildDriftIndex(root: string, tip: string, transient: boolean, useCache = true): Promise<DriftIndex> {
   // File fan-out, not just commit count, determines the object-graph size: a ten-thousand-commit fixture can
   // still touch millions of paths. The switch asks whether the raw name stream REACHES the byte budget, and
   // that question is settled by the first budget-worth of bytes — so read exactly that prefix and let
@@ -851,7 +1054,7 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean): P
   // Reading the whole stream to measure it made every index build pay a full-history walk, and a stream past
   // the transport's buffer came back EMPTY, flipping the large-history switch off exactly where it matters.
   const probe = await gitPrefixA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=', tip], DRIFT_LAZY_OUTPUT_BYTES)
-  if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root, tip, transient)
+  if (probe.truncated || probe.text.length >= DRIFT_LAZY_OUTPUT_BYTES) return buildLazyDriftIndex(root, tip, transient, useCache)
   const count = Number((await gitA(['-C', root, 'rev-list', '--count', tip])).trim())
   if (count >= DRIFT_LAZY_COMMIT_THRESHOLD) return buildLazyDriftIndex(root, tip, transient)
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
@@ -862,8 +1065,16 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean): P
   // RS-delimited records: `<hash>US<parents>US<comma-joined Spec-OK values>` on line 1, then the
   // --name-only file list. `valueonly,separator` collapses the trailer block to one line so it never
   // collides with the file names below it (a raw `%b` body would interleave and be unparseable).
-  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
-    `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, tip])
+  const topology = await gitA(['-C', root, 'rev-list', '--parents', tip])
+  const topologyOrder = new Map<string, number>(), topologyReachable = new Set<string>()
+  let topologyPosition = 0
+  for (const line of topology.trim().split('\n')) {
+    const hash = line.split(' ', 1)[0]
+    if (hash) { topologyOrder.set(hash, topologyPosition++); topologyReachable.add(hash) }
+  }
+  const out = await eventStream(root, tip, 'drift-name', (base) => ['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
+    `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
+    ...(base ? [`^${base}`] : []), tip], topologyOrder, topologyReachable, !transient, useCache)
   if (!out) return idx
   let i = 0
   for (const rec of out.split(RS)) {
@@ -898,7 +1109,7 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean): P
     const checkpoint = parentList.length === 1 && !!firstParent && trees.get(hash) === trees.get(firstParent)
     ;(checkpoint ? acks : selfAcks).set(hash, nodes)
   }
-  idx.resolutionCommits = await mergeResolutionCommits(root, tip, transient)
+  idx.resolutionCommits = await mergeResolutionCommits(root, tip, transient, topologyOrder, topologyReachable, useCache)
   for (const [path, hashes] of idx.resolutionCommits) if (isSpecMd(path)) for (const hash of hashes) {
     const nodes = specNodes.get(hash) ?? new Set<string>()
     nodes.add(nodeIdOf(path))
@@ -907,7 +1118,11 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean): P
   return idx
 }
 export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
-  if (tip !== 'HEAD') return buildDriftIndex(root, git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim(), true)
+  if (tip !== 'HEAD') {
+    const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+    if (pendingOnlyIssues(root, resolved)) return Promise.resolve(emptyDriftIndex(resolved))
+    return buildDriftIndex(root, resolved, true, true)
+  }
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
   if (!head) return buildDriftIndex(root, 'HEAD', false)
   touchRoot(driftRoots, driftIdxCache, root, head)
@@ -917,6 +1132,13 @@ export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
   p.catch(() => { dropFailed(driftIdxCache, head, p) })
   driftIdxCache.set(head, p)
   return p
+}
+
+// Full-history drift oracle paired with historyIndexFull. This is intentionally slow and never cached.
+export function driftIndexFull(root: string, tip = 'HEAD'): Promise<DriftIndex> {
+  const head = tip === 'HEAD' ? headOrEmpty(root) : ''
+  const resolved = tip === 'HEAD' ? (!head || head.startsWith('unborn:') ? 'HEAD' : head) : git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+  return buildDriftIndex(root, resolved, true, false)
 }
 
 export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {

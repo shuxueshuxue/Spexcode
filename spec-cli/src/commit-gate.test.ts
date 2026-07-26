@@ -90,6 +90,33 @@ test('new anchored drift is rejected before the branch ref advances', () => {
   assert.match(output, /git merge --abort.*git cherry-pick --abort.*git rebase --abort/)
 })
 
+test('--no-verify cannot bypass the prepared reference candidate gate', () => {
+  const fx = fixture()
+  const before = fx.git('rev-parse', 'HEAD')
+  writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2)); fx.git('add', 'src/calc.py')
+  const result = fx.runGit({ SPEXCODE_GATE_TRACE: '1' }, 'commit', '--no-verify', '-m', 'no verify drift')
+  const output = `${result.stdout}${result.stderr}`
+  assert.notEqual(result.status, 0)
+  assert.equal(fx.git('rev-parse', 'HEAD'), before)
+  assert.match(output, /anchor-drift/)
+  assert.match(output, /SPEXCODE_SKIP_LINT=1/)
+  const marker = fx.git('rev-parse', '--git-path', 'SPEXCODE_PENDING_LINT')
+  assert.equal(existsSync(isAbsolute(marker) ? marker : join(fx.root, marker)), false)
+})
+
+test('scissors cleanup follows the final Git message and does not bind candidate identity', () => {
+  const fx = fixture()
+  fx.git('config', 'commit.cleanup', 'scissors')
+  writeFileSync(join(fx.root, 'README.md'), 'scissors path\n')
+  fx.git('add', 'README.md')
+  const message = join(fx.root, 'scissors-message.txt')
+  writeFileSync(message, 'change implementation\n\n# ------------------------ >8 ------------------------\n# editor-only tail\n')
+  const result = fx.runGit({ GIT_EDITOR: 'true' }, 'commit', '-F', message)
+  const output = `${result.stdout}${result.stderr}`
+  assert.equal(result.status, 0, `scissors candidate was rejected:\n${output}`)
+  assert.equal(fx.git('log', '-1', '--format=%B'), 'change implementation\n')
+})
+
 test('a content commit self-ack does not pardon older unacknowledged drift', () => {
   const fx = fixture()
   writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
@@ -241,7 +268,7 @@ test('a detached HEAD commit is still judged before HEAD advances', () => {
   assert.match(output, /anchor-drift/)
 })
 
-test('a failed GPG signing arm is cleared before a same-tree no-verify commit', () => {
+test('a failed GPG signing leaves no arm, and --no-verify still reaches the reference gate', () => {
   const fx = fixture()
   const gpg = join(fx.root, 'reject-signing')
   writeFileSync(gpg, '#!/bin/sh\nexit 1\n')
@@ -251,21 +278,16 @@ test('a failed GPG signing arm is cleared before a same-tree no-verify commit', 
   writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
   fx.git('add', 'src/calc.py')
   const before = fx.git('rev-parse', 'HEAD')
-  const markerName = fx.git('rev-parse', '--git-path', 'SPEXCODE_PENDING_LINT')
-  const marker = isAbsolute(markerName) ? markerName : join(fx.root, markerName)
-
   const failed = fx.commit('-m', 'signing will fail')
   assert.notEqual(failed.status, 0, 'the signing probe unexpectedly committed')
   assert.equal(fx.git('rev-parse', 'HEAD'), before)
-  assert.ok(existsSync(marker), 'commit-msg did not leave the arm that this regression needs')
 
   const bypass = fx.runGit({}, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'explicit bypass')
   const output = `${bypass.stdout}${bypass.stderr}`
-  assert.equal(bypass.status, 0, `stale arm incorrectly gated --no-verify:\n${output}`)
-  assert.notEqual(fx.git('rev-parse', 'HEAD'), before)
-  assert.ok(!existsSync(marker), 'prepare-commit-msg did not clear the stale arm')
-  assert.doesNotMatch(output, /spex spec lint|anchor-drift/)
-  assert.notEqual(fx.lint().status, 0, 'HEAD lint missed the explicit no-verify debt')
+  assert.notEqual(bypass.status, 0, `--no-verify escaped the reference gate:\n${output}`)
+  assert.equal(fx.git('rev-parse', 'HEAD'), before)
+  assert.match(output, /anchor-drift/)
+  assert.match(output, /SPEXCODE_SKIP_LINT=1/)
 })
 
 test('canonical pre-commit identifies custom commit-msg statically and never probes it', () => {
@@ -278,7 +300,8 @@ test('canonical pre-commit identifies custom commit-msg statically and never pro
   fx.git('add', 'src/calc.py')
 
   const first = fx.commit('-m', 'baseline custom hook path')
-  assert.equal(first.status, 0, `${first.stdout}${first.stderr}`)
+  assert.notEqual(first.status, 0, `${first.stdout}${first.stderr}`)
+  assert.match(`${first.stdout}${first.stderr}`, /anchor-drift/)
   const argv = readFileSync(calls, 'utf8').trim().split('\n')
   assert.equal(argv.length, 1, `custom commit-msg was invoked more than once: ${argv.join(', ')}`)
   assert.doesNotMatch(argv[0], /spexcode-probe/)
@@ -286,21 +309,16 @@ test('canonical pre-commit identifies custom commit-msg statically and never pro
   writeFileSync(join(fx.root, 'README.md'), 'unrelated successor\n')
   fx.git('add', 'README.md')
   const second = fx.commit('-m', 'successor sees old debt')
-  assert.notEqual(second.status, 0, 'fallback HEAD gate disappeared behind a custom commit-msg hook')
-  assert.match(`${second.stdout}${second.stderr}`, /anchor-drift/)
-  assert.equal(readFileSync(calls, 'utf8').trim().split('\n').length, 1, 'rejected successor reached custom commit-msg')
+  assert.equal(second.status, 0, `${second.stdout}${second.stderr}`)
+  assert.equal(readFileSync(calls, 'utf8').trim().split('\n').length, 2, 'custom commit-msg should run once per real commit')
 })
 
-test('concurrent linked-worktree commits keep independent arms and both reach the gate', async () => {
+test('concurrent linked-worktree commits both reach the unmarked gate', async () => {
   const fx = fixture()
   const linkedParent = mkdtempSync(join(tmpdir(), 'spex-commit-gate-linked-'))
   const linked = join(linkedParent, 'worktree')
   fx.git('branch', 'node/linked')
   fx.git('worktree', 'add', '-q', linked, 'node/linked')
-  const rootMarker = fx.git('rev-parse', '--path-format=absolute', '--git-path', 'SPEXCODE_PENDING_LINT')
-  const linkedMarker = execFileSync('git', ['-C', linked, 'rev-parse', '--path-format=absolute', '--git-path', 'SPEXCODE_PENDING_LINT'], { encoding: 'utf8' }).trim()
-  assert.notEqual(rootMarker, linkedMarker, 'linked worktrees unexpectedly share one candidate marker')
-
   writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
   fx.git('add', 'src/calc.py')
   writeFileSync(join(linked, 'src', 'calc.py'), SOURCE(3))
@@ -319,7 +337,6 @@ test('concurrent linked-worktree commits keep independent arms and both reach th
   assert.notEqual(b.code, 0, `linked commit silently escaped during concurrency:\n${b.output}`)
   assert.match(a.output, /anchor-drift/)
   assert.match(b.output, /anchor-drift/)
-  assert.ok(!existsSync(rootMarker) && !existsSync(linkedMarker), 'a rejected candidate left a live arm')
 })
 
 test('a candidate cannot delete a governor while leaving its governed subject behind', () => {
@@ -656,7 +673,7 @@ test('a squash final commit is judged as its own candidate', () => {
   assert.equal(declared.status, 0, `${declared.stdout}${declared.stderr}`)
 })
 
-test('cherry-pick and rebase keep baseline local coverage while landed HEAD lint catches the debt', () => {
+test('cherry-pick and rebase candidates are judged by the reference gate', () => {
   const cherry = fixture()
   cherry.git('switch', '-qc', 'picked-side')
   writeFileSync(join(cherry.root, 'src', 'calc.py'), SOURCE(2))
@@ -665,9 +682,8 @@ test('cherry-pick and rebase keep baseline local coverage while landed HEAD lint
   const picked = cherry.git('rev-parse', 'HEAD')
   cherry.git('switch', '-q', 'node/calc')
   const pick = cherry.runGit({ SPEXCODE_GATE_TRACE: '1' }, 'cherry-pick', picked)
-  assert.equal(pick.status, 0, `${pick.stdout}${pick.stderr}`)
-  assert.doesNotMatch(`${pick.stdout}${pick.stderr}`, /spex spec lint/)
-  assert.notEqual(cherry.lint().status, 0, 'CI/HEAD fallback missed cherry-picked debt')
+  assert.notEqual(pick.status, 0, `${pick.stdout}${pick.stderr}`)
+  assert.match(`${pick.stdout}${pick.stderr}`, /anchor-drift/)
 
   const rebased = fixture()
   const base = rebased.git('rev-parse', 'HEAD')
@@ -680,9 +696,9 @@ test('cherry-pick and rebase keep baseline local coverage while landed HEAD lint
   rebased.git('add', 'src/calc.py')
   assert.equal(rebased.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '-m', 'rebased code').status, 0)
   const rebase = rebased.runGit({ SPEXCODE_GATE_TRACE: '1' }, 'rebase', 'upstream')
-  assert.equal(rebase.status, 0, `${rebase.stdout}${rebase.stderr}`)
-  assert.doesNotMatch(`${rebase.stdout}${rebase.stderr}`, /spex spec lint/)
-  assert.notEqual(rebased.lint().status, 0, 'CI/HEAD fallback missed rebased debt')
+  assert.notEqual(rebase.status, 0, `${rebase.stdout}${rebase.stderr}`)
+  assert.match(`${rebase.stdout}${rebase.stderr}`, /anchor-drift/)
+  rebased.runGit({}, 'rebase', '--abort')
 })
 
 test('a clone without hooks keeps baseline local coverage and HEAD lint catches its commit', () => {

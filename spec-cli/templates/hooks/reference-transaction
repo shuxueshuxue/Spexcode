@@ -1,60 +1,63 @@
 #!/usr/bin/env bash
 # spexcode-managed-hook-v1
-# @@@ candidate lint consume ([[code-anchor]]) - inert for every ref transaction except the one exact commit
-# attempt armed by canonical commit-msg. The real new oid supplies final tree/message/parents; prepared is
-# still reversible, so a lint error leaves the branch ref unchanged and the user's staged work intact.
+# @@@ candidate lint ([[code-anchor]]) - one unmarked predicate at Git's prepared ref boundary:
+# a refs/heads update that introduces a commit object which is not already reachable from refs/reflogs.
+# Structural ref plumbing is inert; no commit-msg arm, marker, TTL, tree, parent, or message identity exists.
 set -u
 state="${1:-}"
 payload=$(cat)
-[ -z "${SPEXCODE_GATE_TRACE:-}" ] || printf 'spexcode-gate: reference state=%s payload=%s\n' "$state" "$(printf '%s' "$payload" | tr '\n' ';')" >&2
+[ -z "${SPEXCODE_GATE_TRACE:-}" ] || printf 'spexcode-gate: reference state=%s action=%s payload=%s\n' "$state" "${GIT_REFLOG_ACTION:-}" "$(printf '%s' "$payload" | tr '\n' ';')" >&2
 [ "$state" = prepared ] || exit 0
-marker=$(git rev-parse --git-path SPEXCODE_PENDING_LINT 2>/dev/null || true)
-[ -n "$marker" ] && [ -f "$marker" ] || exit 0
-
-if [ -n "${SPEXCODE_SKIP_LINT:-}" ]; then
-  rm -f "$marker"
-  exit 0
-fi
-expected_head=$(sed -n '1p' "$marker")
-expected_tree=$(sed -n '2p' "$marker")
-expected_message=$(sed -n '3p' "$marker")
-armed_at=$(sed -n '4p' "$marker")
-now=$(date +%s)
-case "$armed_at" in ''|*[!0-9]*) rm -f "$marker"; exit 0 ;; esac
-if [ $((now - armed_at)) -gt 600 ] || [ $((now - armed_at)) -lt 0 ]; then
-  rm -f "$marker"
-  exit 0
-fi
+[ -z "${SPEXCODE_SKIP_LINT:-}" ] || exit 0
 
 candidate=
+operation_git_dir=$(git rev-parse --git-dir 2>/dev/null || printf .git)
+plumbing_creation=0
 while read -r old new ref; do
   [ -n "${new:-}" ] || continue
-  [ "$old" = "$expected_head" ] || continue
   case "$ref" in HEAD|refs/heads/*) ;; *) continue ;; esac
-  case "$new" in *[!0]*) ;; *) continue ;; esac
+  case "$new" in *[!0-9a-f]*) continue ;; esac
   [ "$(git cat-file -t "$new" 2>/dev/null || true)" = commit ] || continue
-  [ "$(git rev-parse "$new^{tree}" 2>/dev/null || true)" = "$expected_tree" ] || continue
+  # Creation of a new ref is plumbing (fetch refspecs, branch, checkout -b, worktree -b, and a bare push
+  # all arrive with an all-zero old oid). A normal commit updates an existing branch ref; operation state
+  # below keeps authored rewrites visible without relying on GIT_REFLOG_ACTION, which Git leaves empty here.
+  case "$old" in '' ) continue ;; esac
+  case "$old" in 0000000000000000000000000000000000000000)
+    # Git gives reference-transaction no operation name. Inspect the short-lived
+    # plumbing ancestry only for ref creation, keeping ordinary updates cheap.
+    if [ "$plumbing_creation" -eq 0 ]; then
+      pid="${PPID:-}"
+      for _ in 1 2 3 4 5 6 7 8; do
+        [ -n "$pid" ] || break
+        command_line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+        case "$command_line" in *fetch*|*branch*|*worktree*|*receive-pack*) plumbing_creation=1; break ;; esac
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+      done
+    fi
+    [ "$plumbing_creation" -eq 1 ] && continue
+    ;;
+  esac
   candidate="$new"
   break
 done <<< "$payload"
 [ -n "$candidate" ] || exit 0
-[ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: candidate=$candidate expected_head=$expected_head expected_tree=$expected_tree" >&2
 
-# A stale arm must not turn reset/branch plumbing into a commit gate. A real just-created commit is not yet
-# reachable from any ref/reflog at prepared; an existing target is. The message hash is the fourth binding
-# for distinct commits that happen to share HEAD and tree (message-only amend is the common case).
-if [ -n "$(git for-each-ref --contains "$candidate" --format='%(refname)' 2>/dev/null)" ] \
-  || git log -g --all --format=%H 2>/dev/null | grep -Fqx "$candidate"; then
-  rm -f "$marker"
-  exit 0
+# Rebase/cherry-pick/revert/am author new content even when a detached rewrite left the object in a reflog.
+# Ordinary reset/branch/checkout targets are already reachable and therefore remain inert.
+force_operation=0
+if [ -d "$operation_git_dir/rebase-merge" ] || [ -d "$operation_git_dir/rebase-apply" ] \
+  || [ -d "$operation_git_dir/sequencer" ] || [ -f "$operation_git_dir/CHERRY_PICK_HEAD" ] \
+  || [ -f "$operation_git_dir/REVERT_HEAD" ]; then
+  force_operation=1
 fi
-actual_message=$(git cat-file commit "$candidate" | sed '1,/^$/d' | git hash-object --stdin)
-case " $expected_message " in *" $actual_message "*) ;; *)
-  rm -f "$marker"
-  echo "✗ SpexCode: candidate gate lost message identity; commit stopped before the ref advanced." >&2
-  exit 1
-esac
-rm -f "$marker" # consume before invoking any child Git process
+if [ "$force_operation" -eq 0 ]; then
+  if [ -n "$(git for-each-ref --contains "$candidate" --format='%(refname)' 2>/dev/null)" ] \
+    || git reflog --all --format=%H 2>/dev/null | grep -Fqx "$candidate"; then
+    [ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: reachable candidate=$candidate skipped" >&2
+    exit 0
+  fi
+fi
+[ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: candidate=$candidate force=$force_operation" >&2
 
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -68,13 +71,12 @@ elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
 fi
 spex_cli() {
   case "$spex_kind" in
-    path)  spex "$@" ;;
+    path) spex "$@" ;;
     local) "$repo_root/node_modules/.bin/spex" "$@" ;;
-    pkg)   "$main_root/spec-cli/bin/spex.mjs" "$@" ;;
-    *)     return 127 ;;
+    pkg) "$main_root/spec-cli/bin/spex.mjs" "$@" ;;
+    *) return 127 ;;
   esac
 }
-
 if [ -z "$spex_kind" ]; then
   echo "• SpexCode: candidate spec-lint skipped — no \`spex\` CLI found; CI still enforces." >&2
   exit 0
@@ -87,8 +89,8 @@ if [ "$lint_rc" -eq 75 ]; then
   exit 0
 fi
 if [ "$lint_rc" -ne 0 ]; then
-  echo "✗ SpexCode: candidate spec-lint failed; the ref is unchanged and staged work is intact." >&2
-  echo "  Retry an ordinary/amend commit with: git commit [--amend] --trailer \"Spec-OK: <node>\" …" >&2
+  echo "✗ SpexCode: candidate spec-lint failed; the ref is unchanged and staged/sequencer state is intact." >&2
+  echo "  Explicit bypass: SPEXCODE_SKIP_LINT=1 git commit …" >&2
   echo "  Continue after staging a repair: git merge --continue | git cherry-pick --continue | git rebase --continue" >&2
   echo "  Abort the active operation:       git merge --abort    | git cherry-pick --abort    | git rebase --abort" >&2
   exit 1

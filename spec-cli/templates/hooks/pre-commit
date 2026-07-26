@@ -75,20 +75,15 @@ if [ -n "$spex_kind" ]; then
   spex_cli internal commit-surgery || echo "• SpexCode: footprint surgery skipped (error above) — a generated artifact may be staged; CI still enforces." >&2
 fi
 
-# @@@ spec-lint - the real-commit gate runs the full lint once when BOTH canonical executable hooks have
-# their exact static identity. A custom/missing/non-executable hook keeps the old full HEAD lint, so
-# `spex init` preserving user hooks can never silently reduce local coverage. Static identity matters:
-# never execute a user-owned hook with made-up probe arguments merely to ask whether it belongs to us.
+# @@@ spec-lint - reference-transaction owns the candidate gate. When the installed consumer is the
+# SpexCode unmarked predicate, running full HEAD lint here would restore the history-scaled cost this gate
+# removes. A missing/custom consumer keeps the old full lint fallback, so a hook collision never reduces
+# local coverage. Static identity matters: never execute a user-owned hook with made-up probe arguments.
 # Bypass with SPEXCODE_SKIP_LINT=1. It shims through shared spex_cli() resolved above.
 if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
   if [ -n "$spex_kind" ]; then
-    arm_hook=$(git rev-parse --git-path hooks/commit-msg 2>/dev/null)
     consume_hook=$(git rev-parse --git-path hooks/reference-transaction 2>/dev/null)
-    arm_identity=$(cksum < "$arm_hook" 2>/dev/null || true)
-    consume_identity=$(cksum < "$consume_hook" 2>/dev/null || true)
-    if [ -x "$arm_hook" ] && [ -x "$consume_hook" ] \
-      && [ "$arm_identity" = "3244319701 1816" ] \
-      && [ "$consume_identity" = "858258218 4120" ]; then
+    if [ -x "$consume_hook" ] && grep -q 'one unmarked predicate at Git' "$consume_hook" 2>/dev/null; then
       lint_rc=0
     else
       spex_cli spec lint >&2

@@ -61,6 +61,45 @@ The principles, in the maintainer's own framing:
     is where eval evidence producers will plug in. Every seam shares one shape: an interface + an ordered
     registry + per-instance DATA rows (a new harness/language/runner is a row, not a branch), loud degradation
     when a tier is unavailable — and product semantics never learn which adapter sits on the other side.
+16. **Don't invent what the pillar isn't prepared for.** The maintainer's framing: "不要擅自发明 git 没有准备
+    好的东西". Stated when rejecting an explicit node-identity field to make rename tracking provable: git
+    *detects* renames by content similarity rather than *recording* them, so an id field would erect a second
+    identity model beside git's object model — two truths to keep in sync, and no way to know which to believe
+    the first time they disagree. The consequence is accepted deliberately: we live inside git's rename
+    semantics, and therefore the acceptance bar is "agrees with git's rename events across the whole tree",
+    not "provably correct in some model git does not have". This is [[taste]] 14 applied to the seam itself —
+    a pillar's *limits* enter the ecosystem along with its capabilities.
+17. **Where the application-level call is genuinely unclear, let implementation simplicity decide.** The
+    maintainer's framing: "对于这种应用层拿不准的地方，我们就从自己的实现角度考虑，哪种实现最简单就怎么来".
+    Not a tie-breaker to reach for early — it applies precisely when the product argument has been made in
+    good faith and stays balanced. Then the honest question is which option costs less mechanism, and the
+    answer is often that one of them is already the behaviour and costs zero lines.
+18. **Stabilise first, then measure the shape of the cost — not just its size.** The maintainer's framing:
+    "先保证稳定，然后计算一下复杂度，是线性还是平方级，和 git 历史长度是否有关，还是说只和文件数目有关".
+    A wall-clock number tells you a run was slow; the scaling dimension tells you which lever exists. The
+    same 4-second lint means opposite things if it grows with history (nothing local can fix it) versus with
+    source bytes (memoisation applies) versus with node count (the walk is wrong). Measure the dimension
+    before designing the fix, and never buy a cache before knowing whether the work is repeated at all.
+
+19. **Separate what is PERMANENT from what is CURRENT, and let the invalidation scope be derived, not
+    assigned.** Git history is append-only: what a commit changed, what trailers it carries, what a merge
+    itself authored are *permanent properties of that commit* — they can be accumulated once and never
+    recomputed. What those facts mean *today* — which node owns a path after renames, which window a
+    version opens — is a question about the current tree, and is cheap. The costly half is permanent; the
+    tip-relative half is cheap. A read that recomputes the permanent half from scratch pays O(history)
+    forever, so the project gets slower every day it is worked on — measured here as ~0.33 ms per commit
+    across two full-history walks. The same confusion at the cache layer produces a worse failure: when a
+    rebuild costs more than the interval of the watchdog that guards it, every finished rebuild is
+    invalidated before it can be served, and a safety net becomes a latency amplifier — the fix is to make
+    the rebuild cheap, never to lengthen the interval, which only moves the threshold. The corollary is
+    about *scope*: derived data spread across several projections (board, review snapshot, session eval
+    revision) has no single place declaring what depends on what, so an invalidation scope ends up
+    hand-assigned by whoever traced the call chain last — and the honest default becomes "invalidate
+    everything". Cheap correctness there comes from letting a projection *declare its inputs*, so the scope
+    follows from the declaration; until it does, narrowing a scope by inspection is a correctness change
+    disguised as a performance one, and must be proven field-by-field against a full recompute. Keep the
+    slow, obviously-correct full recompute in the repo as the specification, and hold every faster path to
+    byte-equality against it.
 
 ## expanded spec
 

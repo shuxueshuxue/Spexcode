@@ -5,6 +5,7 @@ hue: 140
 desc: The scoreboard slice of spec-eval — eval.md scenarios (how to measure loss), the readings sidecar with verdicts, freshness (ancestry code axis + stored scenario-contract hash), add/ls/scenario ls/lint/retract/clean, and a content-addressed evidence cache. eval runs nothing; the agent measures.
 code:
   - spec-eval/src/scenarios.ts#scenarioHash
+  - spec-eval/src/scenarios.ts#scenarioProjection
   - spec-eval/src/scenarios.ts#validateScenarios
   - spec-eval/src/scenarios.ts#resolveEvalNode
 related:
@@ -17,6 +18,7 @@ related:
   - spec-eval/src/scan-source.test.ts
   - spec-eval/src/cache.ts
   - spec-eval/src/filing.ts
+  - spec-eval/src/cli.test.ts
 ---
 # eval-core
 
@@ -248,10 +250,29 @@ The surface mirrors the code-drift report:
   own files or that scenario's effective code axis (`scenario.code`, else the inherited node `code:`).
   Thus a child node cannot make its parent disgorge unrelated old gaps, while an explicit scenario code
   override cannot fall outside changed-scan selection. Plain lint still covers the repo.
-- **scenario ls [<node>|.] [--unmeasured] [--json]** — the DECLARED half of the scoreboard: the measurement
-  contracts (name · tags · normalized test reference · latest verdict), no readings. Bare lists every measurable node's scenarios;
-  `--unmeasured` keeps only those with no effective reading — never measured, or every filing retracted —
-  the blind-spot worklist a measuring hand picks from.
+- **scenario ls [<node>|.] [--unmeasured] [--json]** — the DECLARED half of the scoreboard. The default text
+  face keeps its worklist behaviour: it may join the latest effective reading to print verdict/timestamp, and
+  `--unmeasured` keeps only scenarios with no effective reading (never measured, or every filing retracted).
+  `--json` is a different, complete declaration projection for external measurement hands: it never reads or
+  folds `evals.ndjson`, verdicts, evidence, remarks, or freshness, and therefore cannot accept the
+  reading-dependent `--unmeasured` filter (that combination fails loud). The JSON envelope carries a
+  projection id and schema version, fixed-tree Git provenance (`head` and `treeSha`), and rows sorted by
+  canonical node id then scenario name. Each row has two stable blocks:
+
+  - `semantic`: `{node, name, description, expected, scenarioHash, code, related, tags}` — the living
+    declaration contract. `scenarioHash` remains exactly the description+expected contract hash defined
+    above; `code` and `related` are the normalized relation entries from the ONE `parseRelation` grammar,
+    retaining selector information, and `tags` preserves the parsed order.
+  - `measurement`: `{test}` — the normalized test mapping or `null`; it is metadata for the measuring hand,
+    not part of `scenarioHash`.
+
+  The envelope exposes `semanticIndexHash` over the canonical semantic row bytes and `fullIndexHash` over
+  the canonical full (semantic + measurement) row bytes. A test-link-only edit therefore changes only the
+  full index hash; a description/expected/code/related/tags edit changes both; add/remove/rename changes
+  the sorted row bytes. A Git mode/type-only change never changes either scenario index hash because rows are
+  content projections; the outer `treeSha` is the provenance signal that catches it. All fields, including
+  empty relation/tag arrays and a missing test, have one stable JSON shape. The projection is the only
+  canonical `--json` output; no second parser or cache exists.
 - **add [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —
   FILE the measurement the agent already took. eval runs nothing: it stores the evidence under one verdict,
   for one scenario. `--image` REPEATS (N stills) and combines freely with `--result`/`--video` in one filing —

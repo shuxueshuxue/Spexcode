@@ -83,9 +83,12 @@ a commit. If that commit is already reachable from any ref or reflog, the update
 new local branch object and the hook runs `spex spec lint --pending <new>` before the ref advances. There is
 no commit-msg arm, marker file, TTL, message/tree/parent binding, or message projection. Consequently
 `--no-verify` cannot bypass the reference hook; the explicit local bypass is `SPEXCODE_SKIP_LINT=1`, named
-verbatim in every rejection. Fetches update `refs/remotes/*` and never enter this gate. If a ref update is
-rejected, Git leaves the ref, index, sequencer state, and merge state untouched; the diagnostic names both
-the continue and abort commands.
+verbatim in every rejection. The default fetch namespace (`refs/remotes/*`) is outside this ref-scoped gate,
+but an explicit fetch refspec can target `refs/heads/*`; namespace and reachability alone cannot identify that
+operation. The installed hook therefore uses the short-lived Git plumbing ancestry for creation-style updates,
+with a residual risk on non-Linux hosts or wrappers that hide the parent command. If a ref update is rejected,
+Git leaves the ref, index, sequencer state, and merge state untouched; the diagnostic names both the continue
+and abort commands.
 
 The candidate lint is scoped to the candidate's changed paths and their governing nodes. It uses short,
 path-limited history queries for those paths, so its Git work scales with the number of changed files and the
@@ -93,13 +96,22 @@ new commits in those windows, not with repository age. Full `spex spec lint` kee
 history verdict for CI and dashboards. The narrow verdict is equivalent to full lint for every governed node
 touched by the candidate; unrelated pre-existing debt is not re-litigated by a plumbing commit.
 
-Four immutable event streams are persisted by commit oid in the common git directory and appended only for
-previously unseen commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK`
-trailer declarations, and `.spec` name events. Each event is a property of its commit object and never
-changes. For every tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed
-from the cached events, so current paths and node ownership cannot become stale. A cold checkout pays one
-full walk to seed the cache; later processes append only the commits since cached tips. The projection is
-in-memory and bounded by the current tip, while the event ledger grows only with new commits.
+Four immutable event streams are persisted by commit oid in the global project cache
+(`~/.spexcode/projects/<repo-id>/history-events-v3-<state>.ndjson`) and extended only for previously unseen
+commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK` trailer declarations,
+and `.spec` name events. The schema/state key includes the cache implementation schema, shallow/graft state,
+and every `refs/replace/*` target, so an upgrade or Git-object interpretation change selects a new ledger
+instead of silently reading an old format. Each event is a property of its commit object and never changes.
+Writers take a cross-process lock and replace a complete temporary file in one rename; event rows and a tip
+marker therefore become visible together, and a killed writer leaves only an ignored temporary file. For every
+tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed from cached events, so
+current paths and node ownership cannot become stale. A cold checkout pays one full walk to seed the cache;
+later processes append only the commits since cached tips. The projection is in-memory and bounded by the
+current tip, while the event ledger grows only with new commits.
+
+For a pending merge, changed-path scope is the union of diffs against every parent. An `ours` merge may leave
+the result tree equal to its first parent while making a side-branch commit reachable; that newly reachable
+debt remains in the candidate anchor window and cannot be washed by a merge trailer.
 
 **Oracle invariant.** `historyIndexFull` and `driftIndexFull` are the deliberately slow, uncached full-history
 implementations kept in the repository as the correctness oracle. The default `historyIndex` and `driftIndex`

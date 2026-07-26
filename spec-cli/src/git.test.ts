@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -49,6 +49,34 @@ test('batch revision/blob reads preserve exact bytes, including large newline bl
     assert.ok(oid && !missing)
     assert.equal(batchBlobTexts(root, [oid!]).get(oid!), text)
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('versioned global event cache ignores a legacy .git ledger and stays oracle-equivalent after an upgrade', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-cache-upgrade-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'cache@example.com'); run('config', 'user.name', 'Cache')
+    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
+    run('add', '.'); run('commit', '-qm', 'seed')
+    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# revised\n')
+    run('add', '.'); run('commit', '-qm', 'revise')
+    // This is the pre-schema location/shape. A new implementation must never parse it.
+    const legacy = join(root, '.git', 'spexcode', 'history-events-deprecated.ndjson')
+    mkdirSync(dirname(legacy), { recursive: true })
+    writeFileSync(legacy, JSON.stringify({ k: 'numstat', h: run('rev-parse', 'HEAD'), r: 'corrupt legacy row' }) + '\n')
+    resetHistoryCachesForTests()
+    const fast = await historyIndex(root), full = await historyIndexFull(root)
+    const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
+    for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `legacy cache affected ${path}`)
+    cachePath = historyEventCachePathForTests(root)
+    assert.match(cachePath, /\.spexcode[\\/]projects[\\/]/)
+    assert.match(cachePath, /history-events-v3-/)
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {

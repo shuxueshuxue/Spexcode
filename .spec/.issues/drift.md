@@ -1,7 +1,7 @@
 ---
 concern: 持久事件账本缺少内容摘要，中段损坏可能静默改变 drift 判决
 by: c9add95b-02f6-466c-a665-24cea11c8f93
-status: open
+status: landed
 nodes: code-anchor
 created: 2026-07-26T19:43:52.152Z
 ---

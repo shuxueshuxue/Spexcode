@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { driftFor, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, primeLazyPathWindows, withGitAbortSignal, gitPrefixA, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex } from './git.js'
 
@@ -97,7 +97,7 @@ test('concurrent different-tip builders share an atomic ledger and recover on re
     const tipTwo = run('rev-parse', 'HEAD')
     cachePath = historyEventCachePathForTests(root)
     const tsx = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
-    const module = pathToFileURL(resolve(dirname(new URL(import.meta.url).pathname), 'git.ts')).href
+    const module = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), 'git.ts')).href
     const child = `(async()=>{const g=await import(${JSON.stringify(module)}); await Promise.all([g.historyIndex(process.argv[1], process.argv[2]),g.driftIndex(process.argv[1], process.argv[2])])})()`
     const runChild = (tip: string) => new Promise<void>((resolveChild, reject) => {
       const p = spawn(process.execPath, [tsx, '-e', child, '--', root, tip], { stdio: ['ignore', 'pipe', 'pipe'] })

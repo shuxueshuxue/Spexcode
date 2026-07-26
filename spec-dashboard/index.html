@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpexCode</title>
-    <!-- The runtime writes the route-selected shared identity preset here; no second HTML-local drawing. -->
-    <link rel="icon" href="" />
+    <!-- The runtime writes the route-selected shared identity preset here; data:, is a neutral mount that
+         keeps the unresolved document from falling back to a route-relative /favicon.ico request. -->
+    <link rel="icon" href="data:," />
     <!-- theme: apply the saved theme choice to <html data-theme> BEFORE first paint, so there's no
          wrong-palette flash before the module boots. Anything unsaved, invalid, or legacy (the retired
          light/dark codes) resolves to the Minimal default. Mirrors theme.js's getTheme() — keep this

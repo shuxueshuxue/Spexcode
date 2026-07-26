@@ -31,13 +31,11 @@ waived with it — which also lets an ack land while the real index holds unrela
 check is a one-line tree compare, deliberately NOT an "is this an amend?" heuristic (undecidable at
 pre-commit time). Escape hatch for seeding / eager topology: `SPEXCODE_ALLOW_MAIN=1`.
 
-(The [[local-issues]] store also lands its data commits on the trunk, but it does NOT need a guard exception:
-its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.issues/` data
-path, so the seconds-long pre-commit and commit-msg gates are pure overhead and Git skips them.
-`prepare-commit-msg` still runs and clears any stale candidate arm; `reference-transaction` still observes
-the ref update, but with no arm it returns before any history walk or lint. Thus the hot data path remains
-fast without a path exception. An earlier `.spec/.forum/**` exception here was removed as redundant once
-the writer moved to `--no-verify`.)
+(The [[local-issues]] store also lands its data commits on the trunk. Its programmatic writer uses
+`--no-verify` to skip the pre-commit work; the prepared reference transaction still observes the new commit,
+but the `.spec/.issues/` path is unanchored and therefore passes the candidate lint without a special path
+exception. An earlier `.spec/.forum/**` exception here was removed as redundant once the writer moved to
+`--no-verify`.)
 
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode

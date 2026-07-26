@@ -138,10 +138,10 @@ jump into, no extra fetch.
 address of a session's evaluation is `#/evals?q=is:eval scope:<id>` (the list — the same
 [[evals-feed]] row grammar with the session's gates strip above — its toolbar leading with the
 icon-only terminal door as its first focusable control, labelled by the short localized
-`Back to session terminal` / `返回会话终端` command ([[evals-view]]) — blind spots leading
-as inert unmeasured rows, then the
-session's own measurements ✦-marked, then the inherited baseline — other sessions' latest readings — all
-bounded by the backend's affected-scenario set; unknown coverage is reported separately from those scenario
+`Back to session terminal` / `返回会话终端` command ([[evals-view]]) — filed readings ordered newest-first
+across source ownership, with this session's measurements ✦-marked and inherited measurements legible by
+the absent ✦ rather than a privileged position, then blind spots as inert unmeasured rows — all bounded by
+the backend's affected-scenario set; unknown coverage is reported separately from those scenario
 rows and counts. A
 reading is the session's own iff THIS session filed it or its `codeSha` is one of the branch's commits,
 derived, never hand-tagged) and `#/evals/<node>/<scenario>?q=scope:<id>` (the [[event-detail]] page whose
@@ -184,8 +184,9 @@ for an interactive page — that is the whole split.
 
 **The CLI mirrors the vocabulary, not just the artifact.** `spex eval ls --session <SEL>` is the
 session-scoped list's CLI twin: it walks the same `/api/evals` pages and renders the same attention
-order as text — blind spots lead, the session's own readings ✦-marked, the inherited baseline under its
-named divider, an uncovered frontend node flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
+order as text — filed readings newest-first across source ownership, the session's own readings ✦-marked
+and inherited readings distinguished by the absent ✦, then blind spots, with an uncovered frontend node
+flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
 without the dashboard. `proof` is no longer a user-facing word at all: the export rides the eval read as
 its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval

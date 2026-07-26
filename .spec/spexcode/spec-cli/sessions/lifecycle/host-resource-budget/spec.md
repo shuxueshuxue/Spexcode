@@ -66,9 +66,13 @@ backend teardown, not made reclaimable through a session lifecycle verb.
 The decisive invariant is that ownership does not follow a convenient process-tree edge. In particular, the
 Codex app-server is a project-shared control plane: stopping or closing one Codex session may terminate only
 that session's registered leaf. It must not signal the shared app-server, its wrapper, or any ancestor that also
-serves a sibling. The ledger exposes the app-server's reference count and referencing session ids; any live,
-starting, queued, or addressable sibling makes it protected. A stale lifecycle label or an idle tmux shell is
-not proof that a headless turn exists, so control-plane health and turn presence are reported separately.
+serves a sibling. The adapter-observed loaded-thread set is the only runtime refcount: every loaded thread is one
+protective reference, and `active` is a state of that same reference rather than an additional count. A queued or
+record-only session with no loaded thread remains visible but contributes no reference and no protection; a
+loaded thread with no governed record remains a real, protective unowned reference. When the live probe is
+unhealthy or unknown, the refcount is unknown rather than reconstructed from records, and the independent
+fail-closed stop guard blocks mutation. A stale lifecycle label or an idle tmux shell is not proof that a
+headless turn exists, so control-plane health and turn presence are reported separately.
 
 ### Budgets and continuous report
 
@@ -99,12 +103,14 @@ Reporting is always read-only. Reclaim eligibility is an advisory projection, no
 becomes reclaim-eligible only when live evidence proves its owner is
 terminal/retired or absent and no worktree/branch removal is required. A session being old, archived, asking,
 idle, over budget, or merely offline is never enough. Shared control planes are never orphan candidates while
-they have a live loaded-thread or active-turn reference. Record-only and queued-without-thread entries remain
-visible but do not masquerade as runtime refcounts; loaded threads with no record remain visible and protective.
+the adapter reports at least one loaded thread, whether that reference is active or idle/addressable. Record-only
+and queued-without-thread entries remain visible but do not count or protect; loaded threads with no record remain
+visible, counted, and protective. An unhealthy/unknown probe reports an unknown refcount, never a synthetic zero.
 
-The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. Any
-unhealthy/unknown probe or loaded thread with no governed record blocks immediately. With only governed live
-references, stop proceeds only when shared PID, process-start token, and isolation stamp all prove the daemon is
+The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. An
+unhealthy/unknown probe blocks independently of refcount, and any loaded thread with no governed record also
+blocks immediately. With only governed loaded references, stop proceeds only when shared PID, process-start token,
+and isolation stamp all prove the daemon is
 detached from the target pane. A missing/unreadable identity, mismatch, or PID reuse also blocks before any
 signal, including when the PID file itself is absent. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with

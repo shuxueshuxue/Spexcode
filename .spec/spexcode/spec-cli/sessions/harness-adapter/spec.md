@@ -197,8 +197,11 @@ surface:
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
   with the governed session id and configured home variables. A shared runtime also declares its PID/isolation
-  artifacts and a live control-plane probe through the adapter. The probe reports loaded threads and active
-  turns from the runtime itself; session records are joined afterward and cannot invent a live reference. The
+  artifacts and a live control-plane probe through the adapter. The probe reports the runtime's loaded-thread
+  set and whether each reference is active; active is a state of one loaded reference, not another reference.
+  Record-only and queued sessions cannot invent a reference, while a loaded thread with no matching record stays
+  in the set as unowned. An unhealthy/unknown probe returns an unknown refcount rather than a record-derived
+  fallback; product mutation treats that uncertainty as a separate fail-closed blocker. The
   Codex app-server starts behind a `nohup` boundary and records PID plus process-start identity; a session
   teardown with live siblings refuses unless that exact boundary still validates, so killing the pane that
   happened to launch the daemon cannot HUP unrelated turns.

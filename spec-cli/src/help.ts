@@ -254,8 +254,8 @@ the behaviour: MOVING/timed behaviour records a --video; a STATIC end state scre
 backend/CLI files a --result transcript. A fix's evidence is a fail→pass pair on the SAME scenario.
 
 ls — node-scoped bare (its per-scenario eval history); session-scoped with an EXPLICIT --session
-(never type-sniffed): filed readings are newest-first across nodes and source ownership; own measurements
-are ✦-marked, inherited readings are unmarked, and blind spots follow measured rows. --export writes ONE self-contained
+(never type-sniffed): every node the session's diff touches, blind spots first, its OWN measurements
+✦-marked ahead of the inherited baseline. --export writes that evaluation as ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
 scenario ls — the DECLARED contracts (name · tags · normalized test reference · latest verdict), no evals: bare lists every

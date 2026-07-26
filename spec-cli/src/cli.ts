@@ -537,24 +537,29 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
     if (has('json')) { console.log(JSON.stringify(r.model, null, 2)); await flushExit(0) }
     const m = r.model
+    const byNode = new Map<string, any[]>()
+    for (const item of m.items) {
+      const rows = byNode.get(item.node) ?? []
+      rows.push(item)
+      byNode.set(item.node, rows)
+    }
+    const groups = [...byNode].map(([node, rows]) => ({ node, rows }))
     const own = m.items.filter((item) => item.inSession).length
     console.log(`eval session  [${m.id}]`)
     console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
     if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited readings)`)
     if (!m.items.length) console.log('\n  no affected scenarios to evaluate yet')
-    let lastNode: string | null = null
-    for (const e of m.items) {
-      if (e.node !== lastNode) {
-        console.log(`\n${e.node}`)
-        lastNode = e.node
+    for (const { node, rows } of groups) {
+      console.log(`\n${node}`)
+      for (const e of rows) {
+        if (e.filterKind === 'blind') {
+          console.log(`      ∅ unmeasured  ${e.scenario}  — declared, never measured (blind spot)`)
+          continue
+        }
+        const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
+        const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
+        console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
       }
-      if (e.filterKind === 'blind') {
-        console.log(`      ∅ unmeasured  ${e.scenario}  — declared, never measured (blind spot)`)
-        continue
-      }
-      const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
-      const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
-      console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
     }
   } else if (['add', 'ls', 'scenario', 'matrix', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.

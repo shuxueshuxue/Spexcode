@@ -78,23 +78,40 @@ parse counts as a
 
 The local candidate gate is deliberately **unmarked and ref-scoped**. At `reference-transaction`'s
 `prepared` phase it reads every payload row and considers only `refs/heads/*` updates whose `new` object is
-a commit. If that commit is already reachable from any ref or reflog, the update is structural plumbing
-(`reset`, `branch`, `checkout`, or an already-landed rewrite) and the hook exits. Otherwise the commit is a
-new local branch object and the hook runs `spex spec lint --pending <new>` before the ref advances. There is
+a commit. A `new` object already reachable from any ref or reflog is structural plumbing (`reset`, branch,
+checkout, an already-landed rewrite) and the hook exits. Otherwise the object is a new local branch commit,
+including an all-zero-old ref creation, and the hook runs `spex spec lint --pending <new>` before the ref
+advances. Git exposes no operation name here, so the predicate never guesses from parent process command lines.
+There is
 no commit-msg arm, marker file, TTL, message/tree/parent binding, or message projection. Consequently
 `--no-verify` cannot bypass the reference hook; the explicit local bypass is `SPEXCODE_SKIP_LINT=1`, named
-verbatim in every rejection. The default fetch namespace (`refs/remotes/*`) is outside this ref-scoped gate,
-but an explicit fetch refspec can target `refs/heads/*`; namespace and reachability alone cannot identify that
-operation. The installed hook therefore uses the short-lived Git plumbing ancestry for creation-style updates,
-with a residual risk on non-Linux hosts or wrappers that hide the parent command. If a ref update is rejected,
-Git leaves the ref, index, sequencer state, and merge state untouched; the diagnostic names both the continue
-and abort commands.
+verbatim in every rejection. The default fetch namespace (`refs/remotes/*`) is outside this ref-scoped gate;
+an explicit fetch to `refs/heads/*` is intentionally judged like any other unreachable local ref update. Git
+does not provide enough information at this boundary to preserve a fetch exemption while also judging every
+replay operation, so this implementation chooses the ref-only, predictable option.
+That same predicate applies in a bare receiver: the absence of a `.git` subdirectory is a storage layout, not
+a structural-operation exemption.
+One proven fast classification remains: a single-parent candidate diff containing only paths absent from every
+candidate `code:` or `related:` declaration changes no governed subject or node metadata, so the hook's claim
+scope check allows it before full lint; `.spec/.issues/*` is the zero-process common case for dashboard writes,
+and the pre-commit hook performs the same Git-only classification before materialize/eval checks. The claim
+set comes from the candidate specs, not `lint.governedRoots` (that setting controls source discovery and a
+spec may explicitly govern a path outside it). Governance metadata (`.spec` nodes and config), any declared
+source path, and every multi-parent candidate stay on the full candidate lint path; a merge may introduce
+reachable side-branch debt even when its first-parent result tree only adds an issue file. If a ref update is
+rejected, Git leaves the ref, index,
+sequencer state, and merge state untouched; the diagnostic names both the continue and abort commands.
 
 The candidate lint is scoped to the candidate's changed paths and their governing nodes. It uses short,
 path-limited history queries for those paths, so its Git work scales with the number of changed files and the
 new commits in those windows, not with repository age. Full `spex spec lint` keeps the complete graph and
 history verdict for CI and dashboards. The narrow verdict is equivalent to full lint for every governed node
-touched by the candidate; unrelated pre-existing debt is not re-litigated by a plumbing commit.
+touched by the candidate; unrelated pre-existing debt is not re-litigated by a plumbing commit. The performance
+target is therefore growth with newly added events rather than a fresh walk of all historical commits. A
+strictly depth-independent read is not an attainable requirement here: the event set itself grows, and the
+cost-conservation bound moves the required ancestry work between indexing and projection. The measured
+perfrepo result (6.3x to 3.7x CPU growth across the reported depths) is recorded as the achieved slope change,
+not as a promise of constant-time reads.
 
 Four immutable event streams are persisted by commit oid in the global project cache
 (`~/.spexcode/projects/<repo-id>/history-events-v3-<state>.ndjson`) and extended only for previously unseen
@@ -112,6 +129,11 @@ current tip, while the event ledger grows only with new commits.
 For a pending merge, changed-path scope is the union of diffs against every parent. An `ours` merge may leave
 the result tree equal to its first parent while making a side-branch commit reachable; that newly reachable
 debt remains in the candidate anchor window and cannot be washed by a merge trailer.
+
+Every benchmark and fixture is first self-tested with a deliberately failing case whose non-zero result and
+anchor finding are asserted before any comparison is trusted. This is a measurement invariant: a harness that
+does not prove it can observe a known failure may report agreement while both the product and the oracle are
+silently truncated or replaced by a fake dependency.
 
 **Oracle invariant.** `historyIndexFull` and `driftIndexFull` are the deliberately slow, uncached full-history
 implementations kept in the repository as the correctness oracle. The default `historyIndex` and `driftIndex`

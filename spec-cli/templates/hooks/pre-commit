@@ -28,6 +28,19 @@ spex_cli() {
   esac
 }
 
+# A commit containing only issue storage cannot change governed code or an anchor range. Keep this as a
+# path-property check at the hook boundary so the common dashboard write does not pay materialize/eval
+# backstops; any mixed commit continues through the full hook chain and the reference transaction gate.
+staged_issue_only=1
+staged_any=0
+while IFS= read -r -d '' staged_path; do
+  staged_any=1
+  case "$staged_path" in .spec/.issues/*) ;; *) staged_issue_only=0 ;; esac
+done < <(git diff --cached --name-only -z 2>/dev/null)
+if [ "$staged_any" -eq 1 ] && [ "$staged_issue_only" -eq 1 ]; then
+  exit 0
+fi
+
 # @@@ tree-unchanged stamp - a commit whose tree EQUALS HEAD's tree (`git write-tree` over the commit's own
 # index — the hook's GIT_INDEX_FILE, a temp HEAD-tree index for `commit --only --allow-empty`) adds NO
 # content: it cannot smuggle code past the main-guard below and cannot introduce spec↔code drift, so the

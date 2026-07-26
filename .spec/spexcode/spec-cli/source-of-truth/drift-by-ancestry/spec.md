@@ -34,6 +34,22 @@ verdict, and both avoid a per-node history walk, so "scale with history, not nod
 every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
 
+The persistent implementation is an **event fold followed by a read-time project/filter**. The fold stores
+immutable commit events (including renames and merge-owned lines) by object id and may grow with the number of
+events; the project step maps historical paths through the current tip's rename topology before applying the
+walk-newest version and ancestry filters. This split is part of the contract: a path-only fold cannot preserve
+the identity of a renamed node, and a fold that permanently erases a hit cannot reconstruct it when incomparable
+version branches are joined. More generally, preserving this walk-newest semantics admits no design with both
+bounded state and an O(1) read: the rename-chain and parallel-version counterexamples move the required walk
+either to write time or to read time. This is a cost bound, not permission to change the drift meaning.
+
+The bound is loose in the real corpus. In `perfrepo` (4,266 commits), 160 rename events have chains of at most
+four steps (96 one-step, 47 two-step, 16 three-step, one four-step; mean 1.51). The raw historical hit set
+was 198, 458, and 748 entries at depths 1,002, 2,497, and 4,200 (749 at HEAD). Therefore the chosen
+incremental event index plus read-time projection preserves the existing verdict while keeping the practical
+projection cost near constant; future optimizations should compress these constants, not introduce a lossy
+alternative semantics.
+
 A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side:
 drift measured *from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
 longer folds into a blanket stale: where ancestry can't testify, eval freshness falls back to comparing

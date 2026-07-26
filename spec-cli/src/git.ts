@@ -294,7 +294,7 @@ export async function gitA(args: string[]): Promise<string> {
 // objects, not a tip. Store each record by oid in the common git directory and append only records not seen
 // before. The current tip still supplies reachability/order, so rename projection and ancestry remain fresh.
 type EventRecord = { hash: string; raw: string }
-type EventCache = { tips: string[]; streams: Map<string, Map<string, EventRecord>>; streamTips: Map<string, string[]> }
+type EventCache = { tips: string[]; streams: Map<string, Map<string, EventRecord>>; streamTips: Map<string, string[]>; firstSeen: Map<string, number> }
 type EventCacheMemo = { state: EventCache; mtimeMs: number; size: number }
 const eventCacheMemo = new Map<string, EventCacheMemo>()
 const EVENT_CACHE_SCHEMA = 'history-events-v3'
@@ -323,7 +323,7 @@ function readEventCache(root: string, force = false): { path: string; state: Eve
   try { const st = statSync(path); mtimeMs = st.mtimeMs; size = st.size } catch { /* first writer creates it */ }
   const hit = eventCacheMemo.get(path)
   if (!force && hit && hit.mtimeMs === mtimeMs && hit.size === size) return { path, state: hit.state }
-  const state: EventCache = { tips: [], streams: new Map(), streamTips: new Map() }
+  const state: EventCache = { tips: [], streams: new Map(), streamTips: new Map(), firstSeen: new Map() }
   if (existsSync(path)) {
     for (const line of readFileSync(path, 'utf8').split('\n')) {
       if (!line) continue
@@ -338,6 +338,16 @@ function readEventCache(root: string, force = false): { path: string; state: Eve
           let stream = state.streams.get(row.k)
           if (!stream) { stream = new Map(); state.streams.set(row.k, stream) }
           stream.set(row.h, { hash: row.h, raw: row.r })
+          if (row.k === 'numstat') {
+            let position = state.firstSeen.size
+            for (const stat of row.r.split('\n')) {
+              const match = stat.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
+              if (!match) continue
+              const { from, to } = parseStatPath(match[3])
+              if (!state.firstSeen.has(to)) state.firstSeen.set(to, position++)
+              if (!state.firstSeen.has(from)) state.firstSeen.set(from, position++)
+            }
+          }
         }
       } catch { /* tolerate a torn final append; the next run repairs it by appending */ }
     }
@@ -479,6 +489,12 @@ export function repoRoot(): string {
 function gitDirOf(root: string): string {
   // a normal checkout has a `.git` DIRECTORY; a linked worktree has a `.git` FILE: `gitdir: <path>`.
   const dotgit = join(root, '.git')
+  if (!existsSync(dotgit)) {
+    try {
+      if (git(['-C', root, 'rev-parse', '--is-bare-repository']).trim() === 'true') return root
+    } catch { /* the caller will receive the same loud path error as a malformed checkout */ }
+    throw new Error(`headSha: no .git directory at ${dotgit}`)
+  }
   if (statSync(dotgit).isDirectory()) return dotgit
   const m = readFileSync(dotgit, 'utf8').match(/^gitdir:\s*(.+)$/m)
   if (!m) throw new Error(`headSha: unparseable .git file at ${dotgit}`)
@@ -572,20 +588,7 @@ function parseStatPath(token: string): { from: string; to: string } {
 }
 
 function persistedFirstSeen(root: string): Map<string, number> {
-  const { state } = readEventCache(root)
-  const rows = state.streams.get('numstat')
-  const first = new Map<string, number>()
-  let position = 0
-  for (const record of rows?.values() ?? []) {
-    for (const line of record.raw.split('\n')) {
-      const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
-      if (!m) continue
-      const { from, to } = parseStatPath(m[3])
-      if (!first.has(to)) first.set(to, position++)
-      if (!first.has(from)) first.set(from, position++)
-    }
-  }
-  return first
+  return readEventCache(root).state.firstSeen
 }
 
 // Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
@@ -634,6 +637,10 @@ function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise:
 
 function pendingOnlyIssues(root: string, tip: string): boolean {
   try {
+    const parents = git(['-C', root, 'rev-list', '--parents', '-n1', tip]).trim().split(/\s+/).filter(Boolean)
+    // A first-parent issue diff can hide side-branch code debt in an ours merge. Only a single-parent
+    // candidate may reuse its parent's indexes; every merge must build the candidate's full reachable view.
+    if (parents.length !== 2) return false
     const parent = git(['-C', root, 'rev-parse', `${tip}^`]).trim()
     const paths = git(['-C', root, 'diff-tree', '--no-commit-id', '--name-only', '-r', parent, tip])
       .split('\n').map((p) => p.trim()).filter(Boolean)
@@ -784,24 +791,57 @@ async function buildIndex(root: string, tip: string, transient: boolean, useCach
   // cache may discover a later range before an older timestamped side commit; ancestry still outranks time,
   // so descendants must sort before their ancestors. Independent commits use author date, then the cached
   // stream order as a deterministic tie-break.
-  const ancestryMemo = new Map<string, Set<string>>()
-  const ancestorsOfCommit = (hash: string): Set<string> => {
-    const hit = ancestryMemo.get(hash); if (hit) return hit
-    const seen = new Set<string>(), stack = [hash]
-    while (stack.length) for (const parent of topologyParents.get(stack.pop()!) ?? []) {
-      if (seen.has(parent)) continue
-      seen.add(parent); stack.push(parent)
-    }
-    ancestryMemo.set(hash, seen); return seen
-  }
+  // The cached stream is date-ordered, but independently discovered ranges can put an ancestor before
+  // its child. Repair that one partial-order constraint with a stable topological pass. A comparator that
+  // materializes an ancestor Set/bitset for every sort comparison turns a 4k-commit history into an
+  // accidental quadratic walk; this queue visits each commit and parent edge once.
   const originalOrder = new Map(commitOrder)
-  const ordered = [...commitVersions.keys()].sort((a, b) => {
-    if (ancestorsOfCommit(a).has(b)) return -1
-    if (ancestorsOfCommit(b).has(a)) return 1
-    const ad = Date.parse(commitVersions.get(a)!.date), bd = Date.parse(commitVersions.get(b)!.date)
-    if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
-    return (originalOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (originalOrder.get(b) ?? Number.MAX_SAFE_INTEGER)
-  })
+  const childrenLeft = new Map<string, number>()
+  for (const hash of commitVersions.keys()) childrenLeft.set(hash, 0)
+  for (const hash of commitVersions.keys()) for (const parent of topologyParents.get(hash) ?? [])
+    if (childrenLeft.has(parent)) childrenLeft.set(parent, childrenLeft.get(parent)! + 1)
+  const heap: string[] = []
+  const before = (a: string, b: string) => (originalOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (originalOrder.get(b) ?? Number.MAX_SAFE_INTEGER)
+  const push = (hash: string) => {
+    let i = heap.push(hash) - 1
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (before(heap[parent], hash) <= 0) break
+      heap[i] = heap[parent]; i = parent
+    }
+    heap[i] = hash
+  }
+  const pop = (): string => {
+    const first = heap[0], last = heap.pop()!
+    if (heap.length) {
+      let i = 0
+      while (true) {
+        const left = i * 2 + 1
+        if (left >= heap.length) break
+        let child = left
+        const right = left + 1
+        if (right < heap.length && before(heap[right], heap[left]) < 0) child = right
+        if (before(heap[child], last) >= 0) break
+        heap[i] = heap[child]; i = child
+      }
+      heap[i] = last
+    }
+    return first
+  }
+  for (const [hash, left] of childrenLeft) if (left === 0) push(hash)
+  const ordered: string[] = []
+  while (heap.length) {
+    const hash = pop(); ordered.push(hash)
+    for (const parent of topologyParents.get(hash) ?? []) {
+      if (!childrenLeft.has(parent)) continue
+      const left = childrenLeft.get(parent)! - 1
+      childrenLeft.set(parent, left)
+      if (left === 0) push(parent)
+    }
+  }
+  // A shallow or malformed topology should fail closed rather than silently dropping a version row.
+  if (ordered.length !== commitVersions.size)
+    for (const hash of commitVersions.keys()) if (!ordered.includes(hash)) ordered.push(hash)
   commitOrder.clear(); ordered.forEach((hash, i) => commitOrder.set(hash, i))
 
   const canonical = (path: string, event: string): string[] => {

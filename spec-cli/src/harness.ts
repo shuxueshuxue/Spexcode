@@ -43,6 +43,21 @@ export type HarnessLivenessRecord = { session: string; harnessSessionId?: string
 //     tree-walk, so a box with no codex — or all pid-registered launches — never pays for it.
 export type ProcTable = Map<number, { ppid: number; comm: string }>
 export type PaneProbe = { panePid?: number; procs?: ProcTable; pidAlive?: boolean }
+export type SharedRuntimeDescriptor = {
+  key: string
+  label: string
+  pidFile: string
+  isolationFile: string
+  probe(): Promise<SharedRuntimeProbe>
+}
+export type SharedRuntimeProbe = {
+  healthy: boolean
+  references: Array<{
+    referenceId: string
+    turnPresence: 'idle' | 'active' | 'unknown'
+  }>
+  error?: string
+}
 
 export interface Harness {
   readonly id: HarnessId
@@ -175,6 +190,9 @@ export interface Harness {
   // Async because removal is CONDITIONAL on proof: a transport is only ours to remove once its listener is
   // proven dead (see unlinkSocks), and that proof is a connect probe.
   cleanupRuntime(rec: HarnessLivenessRecord): Promise<void>
+  // Project-scoped runtimes are adapter facts. Resource governance consumes these descriptors to report
+  // references and protect a sibling-owned control plane without learning harness command names.
+  sharedRuntimes?(runtimeDir: string): readonly SharedRuntimeDescriptor[]
   // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
   // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
   // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
@@ -313,6 +331,7 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
   return join(base, `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
+export const codexAppServerIsolation = (dir = runtimeRoot()) => join(dir, 'codex-app-server.scope')
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
 // the launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
@@ -529,12 +548,14 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
   const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
   const sock = codexAppServerSock(dir)         // short sun_path-safe path in the owned tmp subdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
+  const isolation = codexAppServerIsolation(dir)
   const log = join(dir, 'codex-app-server.log')
   const lock = join(dir, 'codex-app-server.lock')
   const script = [
     `dir=${shQuote(dir)}`,
     `sock=${shQuote(sock)}`,
     `pid=${shQuote(pid)}`,
+    `isolation=${shQuote(isolation)}`,
     `log=${shQuote(log)}`,
     `lock=${shQuote(lock)}`,
     // codex-launch's bypass-trust gate (and writeTrust's) resolves the codex binary from SPEXCODE_CODEX_CMD;
@@ -577,9 +598,12 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // under a long-gone session's id). Everything downstream that resolves identity from the env then
     // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
     // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
-    // exec so $! is the daemon itself; </dev/null detaches its stdin from the pane so it can't fight the TUI.
-    `  ( cd "$dir" && unset ${sessionIdentityEnvVars().join(' ')} && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
+    // nohup establishes the adapter-owned liveness boundary: killing the tmux pane that happened to launch
+    // this project daemon cannot SIGHUP the shared control plane and strand unrelated sibling threads.
+    // exec keeps $! equal to the daemon itself; </dev/null keeps it detached from the pane's input.
+    `  ( cd "$dir" && unset ${sessionIdentityEnvVars().join(' ')} && exec nohup ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
     '  echo $! > "$pid"',
+    `  ${SPEX} internal resource-stamp "$!" "$isolation" || { kill "$!" 2>/dev/null; rmdir "$lockd" 2>/dev/null; exit 1; }`,
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
     'rmdir "$lockd" 2>/dev/null',
@@ -712,6 +736,92 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
         send(wsInitialize)
       }
       if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server sent a WebSocket close before thread/loaded/list was confirmed' })
+    })
+  })
+}
+
+// Resource ownership asks the adapter for what the shared server actually owns now. Records are joined later;
+// they are never treated as references by themselves. A loaded thread is a control-plane reference and a
+// thread/read result distinguishes an active turn from an addressable idle one.
+export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRuntimeProbe> {
+  const sock = codexAppServerSock(dir)
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    const references = new Map<string, SharedRuntimeProbe['references'][number]>()
+    const requests = new Map<number, string>()
+    let upgraded = false
+    let settled = false
+    let timer: NodeJS.Timeout
+    const done = (result: SharedRuntimeProbe) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch { /* */ }
+      resolve(result)
+    }
+    const fail = (error: string) => done({ healthy: false, references: [...references.values()], error })
+    timer = setTimeout(() => fail('codex app-server ownership probe timed out after 5000ms'), 5000)
+    conn.on('error', (e) => fail(`codex app-server ownership probe failed: ${rpcError(e)}`))
+    conn.on('close', () => fail('codex app-server closed during ownership probe'))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) {
+        const request = typeof m.id === 'number' ? requests.get(m.id) : undefined
+        if (request) {
+          requests.delete(m.id!)
+          if (!requests.size) done({ healthy: true, references: [...references.values()] })
+          return
+        }
+        return fail(`codex app-server ownership request ${m.id ?? 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}`)
+      }
+      if (m.id === 1 && m.result) {
+        send({ method: 'initialized', params: {} })
+        return send({ id: 2, method: 'thread/loaded/list', params: {} })
+      }
+      if (m.id === 2 && m.result) {
+        const data = (m.result as { data?: unknown }).data
+        const ids = [...new Set(Array.isArray(data) ? data.flatMap((item) => {
+          if (typeof item === 'string') return [item]
+          const id = (item as { id?: unknown; threadId?: unknown })?.id ?? (item as { threadId?: unknown })?.threadId
+          return typeof id === 'string' ? [id] : []
+        }) : [])]
+        if (!ids.length) return done({ healthy: true, references: [] })
+        // loaded/list is the ownership proof. thread/read only enriches it with active-turn state; one stale
+        // loaded thread must not make the healthy control plane unknown forever.
+        clearTimeout(timer)
+        timer = setTimeout(() => done({ healthy: true, references: [...references.values()] }), 5000)
+        ids.forEach((threadId, index) => {
+          const id = 100 + index
+          references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' })
+          requests.set(id, threadId)
+          send({ id, method: 'thread/read', params: { threadId, includeTurns: false } })
+        })
+        return
+      }
+      if (typeof m.id === 'number' && requests.has(m.id) && m.result) {
+        const threadId = requests.get(m.id)!
+        requests.delete(m.id)
+        const thread = (m.result as { thread?: { status?: { type?: unknown } } }).thread
+        references.set(threadId, { referenceId: threadId, turnPresence: thread?.status?.type === 'active' ? 'active' : 'idle' })
+        if (!requests.size) done({ healthy: true, references: [...references.values()] })
+      }
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return fail(`codex app-server refused ownership probe: ${head.split('\r\n')[0]}`)
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) fail('codex app-server closed during ownership probe')
     })
   })
 }
@@ -1387,6 +1497,13 @@ export const codexHarness: Harness = {
   },
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  sharedRuntimes: (runtimeDir) => [{
+    key: 'codex-app-server',
+    label: 'Codex app-server',
+    pidFile: codexAppServerPid(runtimeDir),
+    isolationFile: codexAppServerIsolation(runtimeDir),
+    probe: () => codexSharedRuntimeProbe(runtimeDir),
+  }],
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.

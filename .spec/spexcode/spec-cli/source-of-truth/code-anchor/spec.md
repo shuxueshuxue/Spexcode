@@ -120,13 +120,16 @@ bounded state or history-independent `O(1)` verdict reads.
 
 The worst-case bounds are real but loose on the reference history. Across 4,266 commits and 217 current
 nodes, 160 rename events form chains of at most 4 (mean 1.51), while anchor-hit identities derived from the
-complete drift event index grow from 249 at depth 1,002 to 553 at 2,497, 843 at 4,200 and 844 at the tip.
-Two older series were instrumentation undercounts. The 198 / 458 / 748 / 749 path-limited
+complete drift event index grow from 249 at depth 1,002 to 550 at 2,497, 840 at 4,200 and 841 at the tip.
+Three older series were instrumentation errors. The 198 / 458 / 748 / 749 path-limited
 `rev-list --no-merges <tip> -- <current-path>` simplified away eight real single-parent hit events
 (indexed-only 8, simplified-only 0). The later 202 / 466 / 756 / 757 event-indexed series still read every
 historical blob through its current path and only intersected result-image ranges: it missed 86 real hits
 under six pre-rename paths and one same-path deletion hit. A record-level diff found 87 additions, zero
-removals, and re-proved every addition by immutable hunk-unit intersection. The reference proof projects the
+removals, and re-proved every addition by immutable hunk-unit intersection. The 249 / 553 / 843 / 844 series
+then queried an ordinary rename through only its result path, which made Git render the result as a full-file
+addition. Reading both event image paths removes three false entries: two governors of one 100% rename and one
+R081 rename whose actual hunks miss `blobPut` on both sides. The reference proof projects the
 intended version base for all 217 nodes and compares normalized drift sets at 14 pinned tips. These measurements justify keeping the exact
 event/projection architecture and reducing its constants; they do not turn its asymptotic lower bound into
 a constant.

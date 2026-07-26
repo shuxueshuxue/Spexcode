@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, driftIndex, historyIndex, rowsFor, treeFilePaths, treeFileText } from './git.js'
+import { repoRoot, git, driftIndex, historyIndex, driftIndexFull, historyIndexFull, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, parseCodeEntry, resolveAnchor, windowCommits, anchorHitCommits } from './anchors.js'
@@ -68,12 +68,15 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export type SpecLintOptions = { tip?: string }
+export type SpecLintOptions = { tip?: string; fullOracle?: boolean }
 
 function pendingChangedPaths(root: string, tip: string): string[] {
   try {
     const parent = git(['-C', root, 'rev-parse', `${tip}^`]).trim()
-    return git(['-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', '-M', parent, tip])
+    // `-m` compares a merge with every parent. An `ours` merge can leave the result tree
+    // identical to its first parent while still making an unacknowledged side-branch commit
+    // reachable; first-parent-only paths would filter that debt out of the pending anchor window.
+    return git(['-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', '-m', '-M', tip])
       .split('\n').map((path) => path.trim()).filter(Boolean)
   } catch { return [] }
 }
@@ -102,7 +105,10 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
   const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
-  const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
+  const [didx, hidx] = await Promise.all([
+    options.fullOracle ? driftIndexFull(root, tip) : driftIndex(root, tip),
+    options.fullOracle ? historyIndexFull(root, tip) : historyIndex(root, tip),
+  ])
   const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
   const out: Finding[] = []
 

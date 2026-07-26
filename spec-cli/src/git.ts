@@ -1,8 +1,9 @@
 import { execFileSync, execFile } from 'node:child_process'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { readFileSync, readdirSync, statSync, existsSync, appendFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { homedir } from 'node:os'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -294,21 +295,33 @@ export async function gitA(args: string[]): Promise<string> {
 // before. The current tip still supplies reachability/order, so rename projection and ancestry remain fresh.
 type EventRecord = { hash: string; raw: string }
 type EventCache = { tips: string[]; streams: Map<string, Map<string, EventRecord>>; streamTips: Map<string, string[]> }
-const eventCacheMemo = new Map<string, EventCache>()
+type EventCacheMemo = { state: EventCache; mtimeMs: number; size: number }
+const eventCacheMemo = new Map<string, EventCacheMemo>()
+const EVENT_CACHE_SCHEMA = 'history-events-v3'
+type EventPathMemo = { common: string; shallowPath: string; grafts: string; shallow: string; replacements: string; path: string }
+const eventPathMemo = new Map<string, EventPathMemo>()
 function eventCachePath(root: string): string {
-  const common = git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
-  const shallowPath = git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-path', 'shallow']).trim()
+  const rootId = rootKey(root)
+  const old = eventPathMemo.get(rootId)
+  const common = old?.common ?? git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  const shallowPath = old?.shallowPath ?? git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-path', 'shallow']).trim()
   const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
-  const replacePath = join(common, 'info', 'grafts')
-  const grafts = existsSync(replacePath) ? readFileSync(replacePath, 'utf8') : ''
+  const graftsPath = join(common, 'info', 'grafts')
+  const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, 'utf8') : ''
   const replacements = git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
-  const state = createHash('sha256').update(`${shallow}\0${grafts}\0${replacements}`).digest('hex').slice(0, 16)
-  return join(common, 'spexcode', `history-events-${state}.ndjson`)
+  if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements) return old.path
+  const state = createHash('sha256').update(`${EVENT_CACHE_SCHEMA}\0${shallow}\0${grafts}\0${replacements}`).digest('hex').slice(0, 16)
+  const repoId = createHash('sha256').update(common).digest('hex').slice(0, 24)
+  const path = join(homedir(), '.spexcode', 'projects', repoId, `${EVENT_CACHE_SCHEMA}-${state}.ndjson`)
+  eventPathMemo.set(rootId, { common, shallowPath, grafts: grafts, shallow, replacements, path })
+  return path
 }
-function readEventCache(root: string): { path: string; state: EventCache } {
+function readEventCache(root: string, force = false): { path: string; state: EventCache } {
   const path = eventCachePath(root)
+  let mtimeMs = -1, size = -1
+  try { const st = statSync(path); mtimeMs = st.mtimeMs; size = st.size } catch { /* first writer creates it */ }
   const hit = eventCacheMemo.get(path)
-  if (hit) return { path, state: hit }
+  if (!force && hit && hit.mtimeMs === mtimeMs && hit.size === size) return { path, state: hit.state }
   const state: EventCache = { tips: [], streams: new Map(), streamTips: new Map() }
   if (existsSync(path)) {
     for (const line of readFileSync(path, 'utf8').split('\n')) {
@@ -329,12 +342,32 @@ function readEventCache(root: string): { path: string; state: EventCache } {
     }
   }
   state.tips = [...new Set(state.tips)].slice(-32)
-  eventCacheMemo.set(path, state)
+  eventCacheMemo.set(path, { state, mtimeMs, size })
   return { path, state }
+}
+async function withEventCacheLock<T>(path: string, run: () => T): Promise<T> {
+  const lock = `${path}.lock`
+  mkdirSync(join(path, '..'), { recursive: true })
+  for (let attempt = 0; ; attempt++) {
+    try {
+      mkdirSync(lock)
+      break
+    } catch (e: any) {
+      if (e?.code !== 'EEXIST') throw e
+      try {
+        const age = Date.now() - statSync(lock).mtimeMs
+        if (age > 30_000) { rmSync(lock, { recursive: true, force: true }); continue }
+      } catch { /* the owner released it between stat and retry */ }
+      if (attempt >= 1200) throw new Error(`timed out waiting for history event cache lock: ${path}`)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+  }
+  try { return run() } finally { rmSync(lock, { recursive: true, force: true }) }
 }
 async function eventStream(root: string, tip: string, kind: string, argsFor: (base: string) => string[], order: Map<string, number>, reachable: Set<string>, persist = true, cache = true): Promise<string> {
   if (!cache) return gitA(argsFor(''))
-  const { path, state } = readEventCache(root)
+  const { path, state: initialState } = readEventCache(root)
+  let state = initialState
   const stream = state.streams.get(kind) ?? new Map<string, EventRecord>()
   let base = ''
   if (stream.size) {
@@ -345,38 +378,45 @@ async function eventStream(root: string, tip: string, kind: string, argsFor: (ba
     }
   }
   const out = await gitA(argsFor(base))
-  const added: string[] = []
+  const discovered = new Map<string, EventRecord>()
   for (const rec of out.split(RS)) {
     const raw = rec.replace(/^\n/, '')
     if (!raw) continue
     const hash = raw.split(US, 1)[0].split('\n', 1)[0].trim()
     if (!/^[0-9a-f]{7,40}$/.test(hash) || stream.has(hash)) continue
-    stream.set(hash, { hash, raw }); added.push(hash)
+    discovered.set(hash, { hash, raw })
   }
   // Candidate tips are immutable objects too. Persist their event rows even when the tip itself is
   // transient; the next real HEAD filters them by reachability, while later candidates avoid re-scanning
-  // the already-seen prefix. Only the tip marker is withheld for transient calls.
-  if (added.length) {
-    mkdirSync(join(path, '..'), { recursive: true })
-    appendFileSync(path, added.map((hash) => JSON.stringify({ k: kind, h: hash, r: stream.get(hash)!.raw }) + '\n').join(''))
+  // the already-seen prefix. Rows and the optional tip marker are committed under one cross-process lock,
+  // then read back so a concurrent linked-worktree writer cannot make this invocation observe a partial set.
+  const markerKnown = (state.streamTips.get(kind) ?? []).includes(tip)
+  if (discovered.size || (persist && !markerKnown)) {
+    state = await withEventCacheLock(path, () => {
+      const fresh = readEventCache(root, true).state
+      const freshStream = fresh.streams.get(kind) ?? new Map<string, EventRecord>()
+      const added = [...discovered.values()].filter((record) => !freshStream.has(record.hash))
+      let additions = ''
+      if (added.length) additions += added.map((record) => JSON.stringify({ k: kind, h: record.hash, r: record.raw }) + '\n').join('')
+      const streamTips = fresh.streamTips.get(kind) ?? []
+      if (persist && !streamTips.includes(tip)) additions += JSON.stringify({ k: `tip:${kind}`, tip }) + '\n'
+      if (additions) {
+        mkdirSync(join(path, '..'), { recursive: true })
+        const tmp = `${path}.${process.pid}.${Date.now()}.tmp`
+        writeFileSync(tmp, (existsSync(path) ? readFileSync(path) : '') + additions)
+        renameSync(tmp, path)
+      }
+      return readEventCache(root, true).state
+    })
   }
-  state.streams.set(kind, stream)
-  if (persist) {
-    const streamTips = state.streamTips.get(kind) ?? []
-    if (!streamTips.includes(tip)) {
-      streamTips.push(tip); state.streamTips.set(kind, streamTips)
-      mkdirSync(join(path, '..'), { recursive: true })
-      appendFileSync(path, JSON.stringify({ k: `tip:${kind}`, tip }) + '\n')
-    }
-  }
-  const rows = [...stream.values()].filter((r) => reachable.has(r.hash)).sort((a, b) => {
+  const finalStream = state.streams.get(kind) ?? new Map<string, EventRecord>()
+  return [...finalStream.values()].filter((r) => reachable.has(r.hash)).sort((a, b) => {
     if (kind === 'numstat') {
       const ad = Date.parse(a.raw.split(US)[1] ?? ''), bd = Date.parse(b.raw.split(US)[1] ?? '')
       if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
     }
     return (order.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.hash) ?? Number.MAX_SAFE_INTEGER)
-  })
-  return rows.map((r) => RS + r.raw).join('')
+  }).map((r) => RS + r.raw).join('')
 }
 // @@@ a read with a byte budget - the fourth call shape, for a caller that needs only a bounded PREFIX of
 // a stream. The transport stops the child the moment the budget is exceeded and SAYS SO, so measuring "is
@@ -591,13 +631,27 @@ function pendingOnlyIssues(root: string, tip: string): boolean {
     return paths.length > 0 && paths.every((p) => p.startsWith('.spec/.issues/'))
   } catch { return false }
 }
-const emptyHistoryIndex = (): HistoryIndex => ({ versions: new Map(), stats: new Map(), mergeVersions: new Set() })
-const emptyDriftIndex = (tip: string): DriftIndex => ({ tip, ord: new Map(), parents: new Map(), fileCommits: new Map(), resolutionCommits: new Map(), acks: new Map(), selfAcks: new Map(), specNodes: new Map(), anc: new Map() })
+function pendingParent(root: string, tip: string): string | null {
+  try {
+    const parent = git(['-C', root, 'rev-parse', `${tip}^`]).trim()
+    return /^[0-9a-f]{7,40}$/.test(parent) ? parent : null
+  } catch { return null }
+}
 
 export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> {
   if (tip !== 'HEAD') {
     const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
-    if (pendingOnlyIssues(root, resolved)) return Promise.resolve(emptyHistoryIndex())
+    // An issue-only candidate changes no governed content, but its lint result still includes the
+    // parent's existing drift/related-drift warnings. Reuse that immutable parent index instead of
+    // manufacturing an empty one (which silently dropped warnings at golden depths).
+    if (pendingOnlyIssues(root, resolved)) {
+      const parent = pendingParent(root, resolved)
+      if (parent) {
+        const head = headOrEmpty(root)
+        if (head === parent) return historyIndex(root)
+        return buildIndex(root, parent, true, true)
+      }
+    }
     return buildIndex(root, resolved, true, true)
   }
   const head = headOrEmpty(root)
@@ -1120,7 +1174,14 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
 export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
   if (tip !== 'HEAD') {
     const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
-    if (pendingOnlyIssues(root, resolved)) return Promise.resolve(emptyDriftIndex(resolved))
+    if (pendingOnlyIssues(root, resolved)) {
+      const parent = pendingParent(root, resolved)
+      if (parent) {
+        const head = headOrEmpty(root)
+        if (head === parent) return driftIndex(root)
+        return buildDriftIndex(root, parent, true, true)
+      }
+    }
     return buildDriftIndex(root, resolved, true, true)
   }
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
@@ -1144,6 +1205,12 @@ export function driftIndexFull(root: string, tip = 'HEAD'): Promise<DriftIndex> 
 export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {
   return { historyHeads: indexCache.size, driftHeads: driftIdxCache.size, historyRoots: indexRoots.size, driftRoots: driftRoots.size }
 }
+// Tests deliberately clear process-local promises and the event-file memo to exercise both cold and
+// read-back paths. Production callers retain the bounded caches; this is not a correctness escape hatch.
+export function resetHistoryCachesForTests(): void {
+  indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear(); eventCacheMemo.clear(); eventPathMemo.clear()
+}
+export function historyEventCachePathForTests(root: string): string { return eventCachePath(root) }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
 // a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.

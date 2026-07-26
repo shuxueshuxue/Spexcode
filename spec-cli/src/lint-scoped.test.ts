@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { extractors } from './anchors.js'
 import { specLint } from './lint.js'
+import { resetHistoryCachesForTests } from './git.js'
 
 // [[code-anchor]] YATU CLI cases — the runtime semantics of measured multi-selectors and scoped
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
@@ -265,4 +266,24 @@ test('when the governed repository has no TypeScript, lint reports the skipped a
   assert.equal(unavailable?.level, 'error')
   assert.match(unavailable?.msg ?? '', /JS-family anchors were skipped and remain unverified/)
   assert.ok(findings.some((f) => f.msg.includes("spec 'broken' lists a missing related file")), 'lint must continue after skipping unavailable anchors')
+})
+
+test('optimized lint is idempotent and decision-equivalent to the full oracle across cold and hot cache reads', { skip }, async () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
+  fx.commit('v1')
+  writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('10', '2'))
+  fx.commit('move anchored unit')
+  const normalize = (findings: Awaited<ReturnType<typeof specLint>>) => findings
+    .map(({ level, rule, spec, file }) => `${level}|${rule}|${spec ?? ''}|${file ?? ''}`)
+    .sort()
+  let previous: string[] | undefined
+  for (let i = 0; i < 3; i++) {
+    resetHistoryCachesForTests()
+    const cold = normalize(await specLint(fx.proj, extractors(fx.proj)))
+    assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj))), `optimized lint changed on warm read ${i}`)
+    assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj), { fullOracle: true })), `optimized/full mismatch ${i}`)
+    if (previous) assert.deepEqual(cold, previous, `optimized lint changed after cache reset ${i}`)
+    previous = cold
+  }
 })

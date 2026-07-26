@@ -7,8 +7,11 @@ code:
   - spec-cli/src/anchors.ts#anchorHitCommits
   - spec-cli/src/anchors.ts#resolveAnchor
 related:
+  - scripts/anchor-drift-golden-proof.mjs
+  - scripts/anchor-drift-fold-proof.mjs
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts
+  - spec-cli/src/git.test.ts
   - spec-cli/src/specs.ts
   - spec-cli/src/lint-scoped.test.ts
   - spec-cli/src/commit-gate.test.ts
@@ -75,6 +78,40 @@ merge again for already-attributed side-branch work. The same line-level predica
 changed `spec.md` and therefore created a version. A historical file version the extractor cannot
 parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
+
+**Algebraic boundary.** The exact verdict is an event fold followed by a tip-relative projection and
+filter, not a bounded `(version, debt)` collapse. The fold accumulates immutable spec-version,
+governed-hit, acknowledgement and rename events. At the tip, rename identity is projected to the current
+node, [[drift-by-ancestry]]'s full-history walk chooses ONE base from the maximal antichain of reachable
+versions, and ancestry plus acknowledgements filters the retained hits against that base. Incomparable
+versions have no join in reachability order; the walk-newest choice is a product rule, not a semilattice
+upper bound.
+
+The information lower bound is concrete. Let one branch contain an anchored hit `h` followed by version
+`vB`, let its sibling contain version `vA`, and merge them without authoring a new spec line. Both parent
+verdicts are clear, but if the full-history walk selects `vA`, `h` is not reachable from that version and
+becomes debt at the merge. Parent states `(vA, empty)` and `(vB, empty)` are identical to a history where
+`h` never hit, so no join over only `(v, D)` can recover the correct answer. The exact representation must
+retain `h` (or equivalent growing information) until read-time filtering; a later merge-authored spec
+version does collapse the frontier to that descendant, but the frontier width is unbounded between such
+commits. Replacing the single base with "covered by any frontier version" would form a semilattice, but
+would change this contract by letting one branch's version pardon another branch.
+
+Renames add the same cost-conservation boundary on identity. A historical `(commit, path)` event is stable,
+while its current node is not: ordinary rename preserves lineage, path reuse starts a new lineage, and
+parallel renames may fork one lineage into several current paths. A clean merge can own zero all-parent
+lines yet make arbitrarily many side-branch keys reachable. Materializing those keys charges the write;
+keeping only parent pointers charges the later read. The walk does not disappear, it moves. The exact,
+no-semantic-change route is therefore an incrementally maintainable event index plus read-time rename
+projection and reachability/ack filtering; it may reduce repeated reconstruction, but it cannot promise
+bounded state or history-independent `O(1)` verdict reads.
+
+The worst-case bounds are real but loose on the reference history. Across 4,266 commits and 217 current
+nodes, 160 rename events form chains of at most 4 (mean 1.51), while retained historical anchor hits grow
+from 198 at depth 1,002 to 458 at 2,497, 748 at 4,200 and 749 at the tip. The reference proof projects the
+intended version base for all 217 nodes and compares normalized drift sets at 14 pinned tips. These
+measurements justify keeping the exact event/projection architecture and reducing its constants; they do
+not turn its asymptotic lower bound into a constant.
 
 The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
 it proves this is a commit path Git actually sends through the gate and records the candidate's current

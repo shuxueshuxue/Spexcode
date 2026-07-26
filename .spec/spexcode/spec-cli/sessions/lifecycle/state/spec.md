@@ -115,8 +115,9 @@ review+`offline` (the relaunch panel). A stable review+`online` session genuinel
 proposes, then idles awaiting the merge — not just a test artifact.
 
 Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
-of `resume`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
-the global record**, then writes only that record's `stopped` liveness marker, so the session reads `offline`
+of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
+socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
+worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
 and the relaunch panel offers to `--resume` the same conversation. The lifecycle fields the agent last authored
 survive the stop untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`**
 is the inverse
@@ -148,8 +149,10 @@ Contrast **`close`**, the other human-only terminal verb: it *removes* the workt
 are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
 human-only verb, **`archive`** ([[archive]]), is deliberately neither: it writes one record field and stops
 nothing, so stop remains the RESOURCE verb and archive the ATTENTION verb, freely composed. A stopped
-session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
-one. The one
+session never owns the project-shared Codex app-server: that control plane is reference-counted across sibling
+sessions/turns, and a stop that cannot prove its leaf boundary refuses rather than walking ancestors or matching
+process commands. A stopped session occupies no working-set slot ([[launch]]) — offline never does — so the
+freed capacity drains a queued one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label

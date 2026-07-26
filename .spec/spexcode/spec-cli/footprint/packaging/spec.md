@@ -50,6 +50,13 @@ cross-platform ([[platform-support]]): it never spawns the `.bin/tsx` shim (an e
 `README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
 private — the one public name belongs to the tool a user installs.
 
+The launcher also owns the earliest process-identity boundary for project/host control planes. Before loading
+tsx for `serve` or `dashboard`, it removes the invoking session's adapter-declared identity variables from the
+child environment; doing so later in `cli.ts` would leave tsx's already-spawned compiler helper falsely owned
+by that session. Both the installed `spex serve` and the source tree's canonical `npm run api` / private
+`npm run serve` route through this same launcher; no supported package script invokes `tsx src/cli.ts serve`
+directly. Ordinary session/read/write verbs keep their identity unchanged.
+
 Release identity advances in lockstep across the public root manifest and the private `spec-cli` manifest,
 with each lockfile's root package metadata matching its manifest. Only the root package is publishable; the
 private manifest carries the same version so source-tree and installed CLI diagnostics name one release.

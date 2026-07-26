@@ -35,6 +35,10 @@ routing (`--api`/`--port`) is a flag — which is why `doctor --contract`/`--con
 `eval ls --session <SEL>`, and `issue links --pending` are flags, while `eval lint` (a report with
 its own finding classes) and `serve ui` (a different process) are verbs.
 
+The resource surface keeps one lifecycle: `spex session resources [--json]` is the self-categorized, read-only
+host report. It may explain reclaim eligibility but never issues mutation authority; stop and close remain the
+only lifecycle verbs that release session resources.
+
 **One verb, one spelling.** The old verb mirror (promoted session verbs + bare session subs) is
 gone, as is every deprecated alias: there are no two spellings that reach one handler, and nothing
 that "still runs but warns". The raw-key escape hatch is not a verb but the last-resort face of one:

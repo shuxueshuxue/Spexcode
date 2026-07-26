@@ -57,7 +57,12 @@ content-hash freshness stamp, the plugin-folder ledger), keyed by the same `enco
 applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (shared global root, slotted
 by identity) applied to trees, so two worktrees with divergent `.plugins` never trade hook sets. The
 project tier also carries the Codex app-server socket/pid/log/lock when Codex is launched through
-SpexCode. All of it lives under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
+SpexCode. It also carries a `backend-instances/` registry: every supervisor generation atomically records its
+instance id, PID, operating-system start token, project root, and identity-scrub proof before serving; it removes
+only its own matching record on a clean exit. `backend.json` names the endpoint generation clients currently use,
+but replacing that pointer does not erase an older still-live supervisor's ownership. This lets
+[[host-resource-budget]] charge a superseded or crashed generation to its exact backend owner without pretending
+it belongs to the session that happened to start it. All of it lives under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
 SpexCode-materialized runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language
@@ -78,9 +83,11 @@ governed record is written. Self-launched agents with no governed record may sti
 spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. `close` removes the worktree,
 sweeps the whole per-session store dir AND that worktree's `trees/` materialize slot (computed before the
 removal — the slot key needs the live tree); `exit` keeps all of them, so an offline session is still on
-the board and `--resume`-able. Codex's project app-server is not swept by closing one session because several Codex sessions
-and several `spexcode serve` processes in the same project may be using the same control plane; routing is by
-`harness_session_id`, not by socket ownership.
+the board and `--resume`-able. Codex's project app-server is never swept or signaled by stopping or closing one
+session because several Codex sessions and several `spexcode serve` processes in the same
+project may be using the same control plane. It is a project resource with explicit sibling references
+([[host-resource-budget]]), not a process-tree child owned by whichever session is being stopped; routing is
+by `harness_session_id`, not by socket ownership.
 
 This is a CLEAN cut from the old per-worktree `.session/` layout — there is no compat shim. An in-flight session
 launched under the old backend keeps its worktree `.session/` until it drains; the new backend simply doesn't

@@ -119,6 +119,121 @@ test('scissors cleanup follows the final Git message and does not bind candidate
   assert.doesNotMatch(finalMessage, />8|editor-only tail/)
 })
 
+test('issue-only ref updates are classified from the diff before launching lint', () => {
+  const fx = fixture()
+  mkdirSync(join(fx.root, '.spec', '.issues'), { recursive: true })
+  writeFileSync(join(fx.root, '.spec', '.issues', 'thread.md'), '---\nstatus: open\n---\nremark\n')
+  fx.git('add', '.spec/.issues/thread.md')
+  const result = fx.commitEnv({ SPEXCODE_GATE_TRACE: '1' }, '-m', 'issue-only update')
+  const output = `${result.stdout}${result.stderr}`
+  assert.equal(result.status, 0, output)
+  assert.match(output, /issue-only candidate=.*skipped before lint/)
+  assert.doesNotMatch(output, /lint_rc=/)
+
+  writeFileSync(join(fx.root, 'README.md'), 'documentation-only update\n')
+  fx.git('add', 'README.md')
+  const docs = fx.commitEnv({ SPEXCODE_GATE_TRACE: '1' }, '-m', 'docs-only update')
+  const docsOutput = `${docs.stdout}${docs.stderr}`
+  assert.equal(docs.status, 0, docsOutput)
+  assert.doesNotMatch(docsOutput, /lint_rc=/)
+
+  writeFileSync(join(fx.root, '.spec', '.issues', 'thread-2.md'), '---\nstatus: open\n---\nremark\n')
+  writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
+  fx.git('add', '.spec/.issues/thread-2.md', 'src/calc.py')
+  const mixed = fx.commit('-m', 'issue and code update')
+  const mixedOutput = `${mixed.stdout}${mixed.stderr}`
+  assert.notEqual(mixed.status, 0, `issue+code candidate bypassed the gate:\n${mixedOutput}`)
+  assert.match(mixedOutput, /anchor-drift/)
+})
+
+test('scope fast path follows code declarations outside governedRoots', () => {
+  const fx = fixture()
+  mkdirSync(join(fx.root, 'tools'))
+  writeFileSync(join(fx.root, 'tools', 'calc.py'), SOURCE(1))
+  writeFileSync(join(fx.root, '.spec', 'project', 'calc', 'spec.md'), NODE.replace('src/calc.py', 'tools/calc.py'))
+  fx.git('add', 'tools/calc.py', '.spec/project/calc/spec.md')
+  const setup = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '-m', 'claim source outside governed root')
+  assert.equal(setup.status, 0, `${setup.stdout}${setup.stderr}`)
+
+  const before = fx.git('rev-parse', 'HEAD')
+  writeFileSync(join(fx.root, 'tools', 'calc.py'), SOURCE(2))
+  fx.git('add', 'tools/calc.py')
+  const result = fx.commitEnv({ SPEXCODE_GATE_TRACE: '1' }, '-m', 'change declared outside-root code')
+  const output = `${result.stdout}${result.stderr}`
+  assert.notEqual(result.status, 0, `declared code outside governedRoots bypassed the gate:\n${output}`)
+  assert.equal(fx.git('rev-parse', 'HEAD'), before)
+  assert.match(output, /anchor-drift.*tools\/calc\.py#apply_rate/)
+  assert.doesNotMatch(output, /non-governed candidate=.*skipped before full lint/)
+})
+
+test('scope fast path keeps roots-outside declared renames on the lint path', () => {
+  const fx = fixture()
+  mkdirSync(join(fx.root, 'tools'))
+  writeFileSync(join(fx.root, 'tools', 'calc.py'), SOURCE(1))
+  writeFileSync(join(fx.root, '.spec', 'project', 'calc', 'spec.md'), NODE.replace('src/calc.py', 'tools/calc.py'))
+  fx.git('add', 'tools/calc.py', '.spec/project/calc/spec.md')
+  const setup = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '-m', 'claim source before rename')
+  assert.equal(setup.status, 0, `${setup.stdout}${setup.stderr}`)
+
+  const before = fx.git('rev-parse', 'HEAD')
+  fx.git('mv', 'tools/calc.py', 'tools/moved.py')
+  const result = fx.commitEnv({ SPEXCODE_GATE_TRACE: '1' }, '-m', 'rename declared source')
+  const output = `${result.stdout}${result.stderr}`
+  assert.notEqual(result.status, 0, `declared rename outside governedRoots bypassed the gate:\n${output}`)
+  assert.equal(fx.git('rev-parse', 'HEAD'), before)
+  assert.match(output, /(?:integrity|anchor-drift)/)
+  assert.doesNotMatch(output, /non-governed candidate=.*skipped before full lint/)
+})
+
+test('a bare receiver reports anchor debt instead of crashing its reference hook', () => {
+  const fx = fixture()
+  const bare = mkdtempSync(join(tmpdir(), 'spex-commit-gate-bare-'))
+  execFileSync('git', ['clone', '--bare', '-q', fx.root, bare])
+
+  writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
+  fx.git('add', 'src/calc.py')
+  const debt = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '-m', 'bare receiver debt')
+  assert.equal(debt.status, 0, `${debt.stdout}${debt.stderr}`)
+
+  const receiverHook = join(bare, 'hooks', 'reference-transaction')
+  copyFileSync(join(HOOK_TEMPLATES, 'reference-transaction'), receiverHook)
+  chmodSync(receiverHook, 0o755)
+  const shimDir = mkdtempSync(join(tmpdir(), 'spex-commit-gate-bare-bin-'))
+  const shim = join(shimDir, 'spex')
+  writeFileSync(shim, `#!/usr/bin/env bash\nexec ${JSON.stringify(join(PACKAGE, 'node_modules', '.bin', 'tsx'))} ${JSON.stringify(CLI)} "$@"\n`)
+  chmodSync(shim, 0o755)
+  fx.git('remote', 'add', 'bare-receiver', bare)
+  const push = fx.runGit({
+    PATH: `${shimDir}:${join(fx.root, 'node_modules', '.bin')}:${process.env.PATH}`,
+    SPEXCODE_GATE_TRACE: '1',
+  }, 'push', 'bare-receiver', 'node/calc:refs/heads/main')
+  const output = `${push.stdout}${push.stderr}`
+  assert.notEqual(push.status, 0, `bare receiver accepted anchor debt:\n${output}`)
+  assert.match(output, /anchor-drift.*src\/calc\.py#apply_rate/)
+  assert.equal(execFileSync('git', ['-C', bare, 'rev-parse', 'refs/heads/main'], { encoding: 'utf8' }).trim(), fx.git('rev-parse', 'main'))
+})
+
+test('an issue-only ours merge cannot wash side-branch anchor debt', () => {
+  const fx = fixture()
+  fx.git('switch', '-qc', 'side')
+  writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))
+  fx.git('add', 'src/calc.py')
+  const debt = fx.commitEnv({ SPEXCODE_SKIP_LINT: '1' }, '-m', 'side branch debt')
+  assert.equal(debt.status, 0, `${debt.stdout}${debt.stderr}`)
+  fx.git('switch', 'node/calc')
+  const merge = fx.runGit({}, 'merge', '--no-ff', '--no-commit', '-s', 'ours', 'side')
+  assert.equal(merge.status, 0, `${merge.stdout}${merge.stderr}`)
+  mkdirSync(join(fx.root, '.spec', '.issues'), { recursive: true })
+  writeFileSync(join(fx.root, '.spec', '.issues', 'merge-note.md'), '---\nstatus: open\n---\nmerge note\n')
+  fx.git('add', '.spec/.issues/merge-note.md')
+  const result = fx.commitEnv({ SPEXCODE_GATE_TRACE: '1' }, '-m', 'ours merge issue note')
+  const output = `${result.stdout}${result.stderr}`
+  assert.notEqual(result.status, 0, `ours merge issue-only candidate washed side debt:\n${output}`)
+  assert.match(output, /anchor-drift/)
+  assert.doesNotMatch(output, /issue-only candidate=.*skipped before lint/)
+  fx.runGit({}, 'merge', '--abort')
+})
+
 test('a content commit self-ack does not pardon older unacknowledged drift', () => {
   const fx = fixture()
   writeFileSync(join(fx.root, 'src', 'calc.py'), SOURCE(2))

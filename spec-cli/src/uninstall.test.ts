@@ -175,7 +175,7 @@ Read the requested change and report concrete findings.
     const projectStores = readdirSync(join(spexHome, 'projects'))
     assert.equal(projectStores.length, 1, `${row.id}: one per-project runtime root`)
     const store = join(spexHome, 'projects', projectStores[0])
-    assert.ok(readdirSync(store).some((name) => /^history-events-v3-.*\.ndjson$/.test(name)), `${row.id}: history ledger shares the per-project runtime root`)
+    assert.ok(readdirSync(store).some((name) => /^history-events-v4-.*\.ndjson$/.test(name)), `${row.id}: history ledger shares the per-project runtime root`)
     const manifests = filesNamed(store, 'hooks-manifest')
     const hashes = filesNamed(store, 'content-hash')
     const ledgers = filesNamed(store, 'plugin-folders')

@@ -115,9 +115,25 @@ test('scoped HTTP session impact is the selector-aware exact projection, includi
   assert.match(process.version, /^v22\./, `impact API rig must run on repository-pinned Node 22, got ${process.version}`)
   const runnerSha = git(SOURCE, 'rev-parse', 'HEAD')
   const productSha = git(PRODUCT_SOURCE, 'rev-parse', 'HEAD')
+  const runnerTree = git(SOURCE, 'rev-parse', 'HEAD^{tree}')
+  const productTree = git(PRODUCT_SOURCE, 'rev-parse', 'HEAD^{tree}')
   const readingSha = process.env.SPEX_IMPACT_READING_SHA || runnerSha
+  const runnerDirty = git(SOURCE, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+  const productDirty = git(PRODUCT_SOURCE, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+  assert.equal(runnerDirty, '', 'impact API rig runner checkout must be clean')
+  assert.equal(productDirty, '', 'impact API rig product checkout must be clean')
   assert.equal(productSha, readingSha, 'the product tree under test must equal the reading codeSha')
-  console.log(JSON.stringify({ phase: 'provenance', runtime: process.version, runnerSha, productSha, readingSha }))
+  console.log(JSON.stringify({
+    phase: 'provenance',
+    runtime: process.version,
+    runnerSha,
+    runnerTree,
+    productSha,
+    productTree,
+    readingSha,
+    runnerClean: true,
+    productClean: true,
+  }))
   const fixture = mkdtempSync(join(tmpdir(), 'spex-impact-api-'))
   const project = join(fixture, 'project')
   const session = join(fixture, 'session')

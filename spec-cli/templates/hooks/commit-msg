@@ -1,34 +1,5 @@
 #!/usr/bin/env bash
 # spexcode-managed-hook-v1
-# @@@ candidate lint arm ([[code-anchor]]) - commit-msg proves this commit path reached the local gate and
-# owns the final message + exact commit index. It does not guess parents or run lint: it atomically arms the
-# per-worktree git-dir for reference-transaction, which will judge Git's real commit oid before refs advance.
-set -euo pipefail
-msg_file="$1"
-marker=$(git rev-parse --git-path SPEXCODE_PENDING_LINT)
-rm -f "$marker"
-[ -z "${SPEXCODE_SKIP_LINT:-}" ] || exit 0
-
-# Never arm into a missing/custom consumer. Identity is a static CRC + byte count over SpexCode's exact
-# installed template: a user hook is never executed with a made-up probe argument.
-consumer=$(git rev-parse --git-path hooks/reference-transaction)
-consumer_identity=$(cksum < "$consumer" 2>/dev/null || true)
-if [ ! -x "$consumer" ] || [ "$consumer_identity" != "858258218 4120" ]; then
-  exit 0
-fi
-
-head=$(git rev-parse HEAD 2>/dev/null || printf '%s' unborn)
-tree=$(git write-tree)
-# Git performs the configured message cleanup after commit-msg. Bind the arm to every standard cleanup
-# projection so merge/rebase templates with comment help still match their final commit object, while a
-# different authored message cannot consume the arm.
-message_raw=$(git hash-object --stdin < "$msg_file")
-message_whitespace=$(git stripspace < "$msg_file" | git hash-object --stdin)
-message_strip=$(git stripspace --strip-comments < "$msg_file" | git hash-object --stdin)
-message="$message_raw $message_whitespace $message_strip"
-armed_at=$(date +%s)
-tmp="${marker}.lock.$$"
-printf '%s\n%s\n%s\n%s\n' "$head" "$tree" "$message" "$armed_at" > "$tmp"
-mv "$tmp" "$marker"
-[ -z "${SPEXCODE_GATE_TRACE:-}" ] || echo "spexcode-gate: armed head=$head tree=$tree message=$message marker=$marker" >&2
+# Candidate lint is driven solely by reference-transaction. This hook intentionally carries no marker,
+# message hash, tree binding, or TTL; Git's immutable commit object is the only candidate identity.
 exit 0

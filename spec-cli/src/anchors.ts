@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+import { git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
 
 // ---- the anchor vocabulary ([[code-anchor]]) ----
 // A spec's `code:` entry may pin ONE named unit: `path#symbol` (`#Class.method` for a class method).
@@ -398,13 +398,13 @@ async function objectFormatFor(root: string): Promise<string> {
   }
   return format
 }
-async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string): Promise<FileRevisionUnits> {
-  const oid = (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
+async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string, knownOid?: string | null, knownText?: string): Promise<FileRevisionUnits> {
+  const oid = knownOid ?? (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
   if (!oid) return { absent: true }
   const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
-  const text = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
+  const text = knownText ?? await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
   let result: FileRevisionUnits
   try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
   if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()
@@ -469,6 +469,27 @@ export function windowCommits(idx: DriftIndex, sinceHash: string, path: string, 
     && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h, nodeId))
 }
 
+// Candidate lint's history window is deliberately path-scoped. The reference hook only needs the commits
+// that can affect the candidate's changed governed files; rebuilding the repository-wide drift index here
+// would put the gate back on the old history-length slope. Git owns rename traversal for this short query.
+export async function pendingWindowCommits(root: string, sinceHash: string, tip: string, path: string, nodeId?: string): Promise<string[]> {
+  if (!sinceHash || !tip || sinceHash === tip) return []
+  const format = `%H\x1f%(trailers:key=Spec-OK,valueonly,separator=%x2c)`
+  const run = async (extra: string[]) => {
+    try {
+      const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--follow', ...extra,
+        `--format=${format}`, `${sinceHash}..${tip}`, '--', path])
+      return out.split('\n').map((line) => {
+        const [hash, trailers = ''] = line.trim().split('\x1f')
+        return hash && (!nodeId || !trailers.split(',').map((v) => v.trim()).includes(nodeId)) ? hash : ''
+      }).filter(Boolean)
+    } catch { return [] }
+  }
+  const ordinary = await run(['--no-merges'])
+  const merges = await run(['--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M'])
+  return [...new Set([...ordinary, ...merges])]
+}
+
 // which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a
 // unit's line range extracted from the file AS IT EXISTED AT THAT COMMIT (never from HEAD — units later
 // renamed or moved still attribute correctly). Several selectors are OR — a commit appears ONCE, with
@@ -479,8 +500,13 @@ export type AnchorHit = { commit: string; selectors: string[]; unparseable?: str
 export async function anchorHitCommits(root: string, win: string[], path: string, symbols: string[], x: Extractor): Promise<AnchorHit[]> {
   const hits: AnchorHit[] = []
   const objectFormat = await objectFormatFor(root)
-  for (const c of win) {
-    const at = await unitsAtFileRevision(root, c, path, x, objectFormat)
+  const revisions = win.map((commit) => `${commit}:${path}`)
+  const oids = batchRevisionOids(root, revisions)
+  const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  for (let index = 0; index < win.length; index++) {
+    const c = win[index]
+    const oid = oids[index]
+    const at = await unitsAtFileRevision(root, c, path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined)
     if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
     if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
     const bySym = symbols

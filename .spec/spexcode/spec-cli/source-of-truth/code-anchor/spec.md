@@ -76,23 +76,42 @@ changed `spec.md` and therefore created a version. A historical file version the
 parse counts as a
 **conservative hit**, flagged as such — over-warn beats silently missing a real change.
 
-The local errors-block gate is one narrowly-armed two-hook transaction. `commit-msg` is the arming point:
-it proves this is a commit path Git actually sends through the gate and records the candidate's current
-HEAD + index tree in that worktree's private git-dir. Git then creates the real commit object. At
-`reference-transaction` **prepared**, before its ref advances, the hook consumes that one arm only when the
-transaction's old oid and the real commit's tree match it, then runs ordinary lint with the real new oid as
-the explicit pending tip. Thus ordinary commit, amend, squash and merge are judged with their actual final
-message/tree/parents — no synthetic `commit-tree` parent guess. A failed signing or aborted commit leaves at
-most one stale arm: the next `prepare-commit-msg` clears it, and head/tree/age checks prevent an unrelated
-ref update from consuming it. The arm lives in the per-worktree git-dir, so linked worktrees cannot collide.
+The local candidate gate is deliberately **unmarked and ref-scoped**. At `reference-transaction`'s
+`prepared` phase it reads every payload row and considers only `refs/heads/*` updates whose `new` object is
+a commit. If that commit is already reachable from any ref or reflog, the update is structural plumbing
+(`reset`, `branch`, `checkout`, or an already-landed rewrite) and the hook exits. Otherwise the commit is a
+new local branch object and the hook runs `spex spec lint --pending <new>` before the ref advances. There is
+no commit-msg arm, marker file, TTL, message/tree/parent binding, or message projection. Consequently
+`--no-verify` cannot bypass the reference hook; the explicit local bypass is `SPEXCODE_SKIP_LINT=1`, named
+verbatim in every rejection. Fetches update `refs/remotes/*` and never enter this gate. If a ref update is
+rejected, Git leaves the ref, index, sequencer state, and merge state untouched; the diagnostic names both
+the continue and abort commands.
 
-Information availability is not hook coverage. `commit-msg` is skipped by cherry-pick/rebase on supported
-Git, by `--no-verify`, and in a clone with no installed hook; those paths create no arm, remain at today's
-local coverage, and [[ci-gate]] judges their landed `HEAD`. The reference hook does no Git walk or lint at
-all without a matching arm, so reset/checkout/branch/tag/fetch and programmatic `--no-verify` data commits
-are unchanged. Canonical pre-commit defers anchor errors only when both canonical arm/consume hooks are
-actually installed; if `spex init` preserves either user hook, pre-commit retains the old HEAD gate, so a
-hook collision never reduces local coverage. `SPEXCODE_SKIP_LINT=1` remains the explicit local bypass.
+The candidate lint is scoped to the candidate's changed paths and their governing nodes. It uses short,
+path-limited history queries for those paths, so its Git work scales with the number of changed files and the
+new commits in those windows, not with repository age. Full `spex spec lint` keeps the complete graph and
+history verdict for CI and dashboards. The narrow verdict is equivalent to full lint for every governed node
+touched by the candidate; unrelated pre-existing debt is not re-litigated by a plumbing commit.
+
+Four immutable event streams are persisted by commit oid in the common git directory and appended only for
+previously unseen commits: `.spec` numstat/rename events, merge-authored combined-diff paths, `Spec-OK`
+trailer declarations, and `.spec` name events. Each event is a property of its commit object and never
+changes. For every tip, `ls-tree`, parent reachability, and the canonical rename projection are recomputed
+from the cached events, so current paths and node ownership cannot become stale. A cold checkout pays one
+full walk to seed the cache; later processes append only the commits since cached tips. The projection is
+in-memory and bounded by the current tip, while the event ledger grows only with new commits.
+
+**Oracle invariant.** `historyIndexFull` and `driftIndexFull` are the deliberately slow, uncached full-history
+implementations kept in the repository as the correctness oracle. The default `historyIndex` and `driftIndex`
+must produce the same downstream verdicts as those oracles at every tip; the suite's oracle comparison is a
+standing regression test for every future index optimization. The known benefit is a changed growth law, not
+a promised wall-clock target: the four history scans become incremental, while process startup, bounded tip
+walks, file reads, parsing, and other object lookups remain part of the measured absolute cost.
+
+The board's cold/full build must remain materially below the graph stream's patrol interval. Patrol is a
+last-resort self-healing invalidation; when a build outlives that interval, patrol can invalidate the still
+running build and amplify latency indefinitely. The index cost therefore protects both commit acceptance and
+dashboard liveness; changing the patrol period alone only moves the threshold.
 
 The candidate lint run also owns one deliberately asymmetric **governor-transition integrity** check,
 separate from anchor drift: when the candidate deletes a spec node, its old `HEAD` blob supplies that
@@ -102,27 +121,16 @@ already `HEAD`, the deleted claim is no longer present to reconstruct this trans
 therefore has only the current-tree coverage warning. “The same predicate at two tips” below describes the
 anchor-drift predicate, not this transition guard.
 
-This **reverses** the earlier recorded choice to have no separate candidate-tree gate. That choice was
-sound under the capability available then: `Spec-OK` could only be a later `--allow-empty` stamp, so a
-content-bearing implementation commit had no honest in-commit acknowledgement route and a staged gate
-would create an unconditional rejection. Git's native `git commit --trailer "Spec-OK: <node>"` now makes
-that route real. A trailer on a content-bearing commit acknowledges **that commit only**; it does not
-checkpoint older debt. A reachability checkpoint must have exactly one parent and the same tree as that
-sole parent. This keeps the tree-unchanged `spex spec ack` stamp as the checkpoint that covers ancestors,
-but makes every merge self-only: even an `ours` merge with an unchanged first-parent tree introduces new
-reachable history. Changing the node's `spec.md` in the candidate instead makes that
-candidate the latest version, closing its window by construction. Without either route, an anchored
-intersection is rejected before attribution can slide to a successor commit.
+`Spec-OK` remains node-scoped acknowledgement metadata for full lint. A trailer on a content-bearing commit
+acknowledges that commit only; a tree-identical one-parent `spex spec ack` checkpoints reachable ancestors.
+The candidate gate does not use trailers as identity or as an arming signal, so scissors cleanup and every
+other Git message path are judged from the immutable commit object itself.
 
-The partition also repairs two silent losses in the earlier read side. Treating every trailer commit as a
-reachability checkpoint let a content self-declaration for one node pardon older debt, including debt of
-another node; treating tree equality alone as emptiness let an `ours` merge checkpoint unanswered commits
-from its newly reachable side branch. Neither is an acceptable acknowledgement. Candidate and later HEAD
-lint now classify the immutable commit object the same way and retain each node's independent debt. When a
-candidate owes several nodes, lint emits one node-scoped error per debt, naming every node the author must
-answer without combining their acknowledgement sets. Git's default merge diff had additionally hidden
-both merge-authored anchor movement and merge-authored spec versions; cc makes those writes visible without
-re-billing ordinary branch content transported by the project's normal `--no-ff` merges.
+Git's default merge diff had additionally hidden both merge-authored anchor movement and merge-authored spec
+versions; cc makes these writes visible without re-billing ordinary branch content transported by the
+project's normal `--no-ff` merges. A candidate that owes several touched nodes emits one node-scoped error
+per debt, naming every node the author must answer. This is an honesty property of ref updates that reach the
+installed hook, not a claim that an uncovered hook or explicit `SPEXCODE_SKIP_LINT=1` can be made impossible.
 
 The cost is intentional and stated plainly: local acceptance is **strictly narrower** than CI acceptance.
 For example, code-only `P1` followed by spec-only `P2` is green when CI judges the final branch tip, but

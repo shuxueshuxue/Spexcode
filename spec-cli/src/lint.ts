@@ -69,9 +69,26 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 }
 
 export type SpecLintOptions = { tip?: string }
+
+function pendingChangedPaths(root: string, tip: string): string[] {
+  try {
+    const parent = git(['-C', root, 'rev-parse', `${tip}^`]).trim()
+    return git(['-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', '-M', parent, tip])
+      .split('\n').map((path) => path.trim()).filter(Boolean)
+  } catch { return [] }
+}
+function pendingPathTouched(changed: string[], path: string): boolean {
+  if (changed.includes(path)) return true
+  if (changed.some((p) => p.startsWith(path.replace(/\/+$/, '') + '/'))) return true
+  if (!path.includes('*')) return false
+  const re = new RegExp('^' + path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$')
+  return changed.some((p) => re.test(p))
+}
+
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
   const tip = options.tip ?? 'HEAD'
   const pending = tip !== 'HEAD'
+  const changed = pending ? pendingChangedPaths(root, tip) : []
   const files = pending ? treeFilePaths(root, tip) : null
   const directories = new Set<string>()
   for (const file of files ?? []) {
@@ -258,6 +275,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   for (const s of specs) {
     for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
       for (const { path, selectors } of entries) {
+        if (pending && !pendingPathTouched(changed, path)) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
           out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` })

@@ -462,8 +462,12 @@ if (cmd === 'serve') {
       console.log(`${rel} is governed whole-file by ${whole.length} specs (all claims: ${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
-    const { specLint, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLint, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
     const pending = flag('pending')
+    if (pending && process.env.SPEXCODE_GATE_SCOPE_ONLY === '1') {
+      const touches = await pendingTouchesGoverned(process.cwd(), pending)
+      if (!touches) process.exit(76)
+    }
     const findings = await specLint(undefined, undefined, {
       tip: pending || 'HEAD',
     })

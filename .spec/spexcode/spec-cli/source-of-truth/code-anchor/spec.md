@@ -9,6 +9,7 @@ code:
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
+  - spec-cli/src/anchors.test.ts
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
@@ -63,6 +64,11 @@ drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks abo
 never vindicates, so it takes the plain ancestry window. A selector verdict this side is never a block
 either: eval's whole lint layer is advisory, and a dead or ambiguous selector there stales its reading
 rather than stopping a commit.
+
+Exact impact projection is a third consumer of that same parser/resolver/hunk-range seam, with a deliberately
+loud transport contract: Git window or hunk failure is unavailable, never an empty miss. A fail-soft caller's
+memoized empty result has no verified provenance and cannot satisfy a later loud read; the loud read performs
+its own verified lookup or fails. This changes error handling, not selector grammar or spatial semantics.
 
 **Judgment.** The window is the spec's last version → the tip being judged: `HEAD` for an ordinary
 report/CI run, and a pending commit for a locally-authored candidate. It is the same ack-filtered set

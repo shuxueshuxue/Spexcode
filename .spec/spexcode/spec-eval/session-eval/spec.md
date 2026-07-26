@@ -11,6 +11,7 @@ related:
   - spec-cli/src/eval-cli-read.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
+  - spec-eval/src/sessionimpact.api.test.ts
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/test/session-scope-impact.e2e.mjs
   - spec-dashboard/src/sessionEvalCoherence.test.mjs
@@ -65,6 +66,41 @@ filter counts. The session toolbar renders that accounting once, as its mutually
 pass, fresh fail, measured-but-stale/unscored work needing review, and blind declarations add back to the
 affected total; unknown remains outside it. It does not repeat a measured/declared fraction beside that complete
 decomposition.
+
+That predicate is also a **public exact-revision impact projection**, not a session-UI heuristic. Given a
+repository plus base/head selectors, it resolves both selectors once, pins every declaration and diff read to
+those object ids, then verifies that the selectors still resolve to the same ids before publishing. Its output
+carries the resolved `base`, `head`, a content `revision`, each node's review causes, and every scenario delta:
+`code|contract|measurement` impact reasons, selector-hit commits/symbols, base/head `scenarioHash`, and separate
+semantic versus metadata movement. A scenario rename is one removed declaration plus one added declaration;
+description/expected movement is semantic and moves the hash, while test/code/related/tags are metadata and do
+not. A scenario's effective code is its own `code` relation when present, otherwise the node's complete
+`code` relation including selectors. Node/scenario `related` movement remains node review context only and
+never spreads impact to every scenario.
+
+The range contract is ancestry, not an arbitrary two-tree comparison: `base` must be an ancestor of `head`,
+normally the session merge-base and its exact HEAD. A divergent pair is explicitly unavailable; the engine
+never substitutes another merge-base behind the caller's back. A live session adds one immutable worktree
+overlay captured under the existing content-revision double read. That overlay includes staged, unstaged,
+renamed, deleted, and untracked paths, exact old/new hunk ranges and bytes, plus the complete worktree spec/eval
+declarations, so dirty semantic/metadata edits and branch-new nodes are first-class impact input rather than a
+reason to disable the face. Snapshot or Git transport failure is unavailable; ordinary dirty work is not.
+
+Selector-aware code impact reuses [[eval-core]]'s `scenarioCodeAxis` and [[code-anchor]]'s ONE
+parse -> extractor -> resolve -> revision-hunk/range intersection engine. A changed shared file therefore
+selects only the scenario whose named unit was hit; no impact-local parser, extractor registry, or path matcher
+exists. Removed declarations resolve and intersect on base; added declarations do so on head. A structurally
+invalid, dead, ambiguous, unavailable, or unextractable selector makes the projection explicitly unavailable
+with the selector and repair named, even when the changed-path set is empty. A caller's symbolic base/head
+moving during direct projection is an explicit retry error; session routes pass immutable OIDs and use their
+existing outer content-revision fence to retry live HEAD movement. Neither condition may publish zero impact
+or certify a falsely current result.
+
+This is the **one product predicate**. Scoped `/api/evals`, its list/detail model, summaries, and export consume
+the same projection; none retain a path-only scenario candidate fallback. Each projection reads the base/head
+changed-path set once, batch-reads each distinct exact `.spec` tree once for both spec and eval declarations,
+and shares selector source/window/hunk results inside that build. It adds no second resident cache, generation,
+or gate: the result enters the existing content-revision/projection cache like every other session model.
 
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
 affected selector in this engine and reduces the already-scoped model to seven useful counts: measured,

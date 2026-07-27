@@ -6,6 +6,7 @@ desc: A project-scoped admission barrier that drains in-flight session writes, b
 code:
   - spec-cli/src/session-maintenance.ts
 related:
+  - spec-cli/src/maintenance-wrapper.ts
   - spec-cli/test/session-maintenance-cas-fixture.ts
   - spec-cli/test/session-maintenance-http-fixture.mjs
   - spec-cli/src/session-maintenance.test.ts

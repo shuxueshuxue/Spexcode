@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
+const spexBin = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
 const apiEntry = fileURLToPath(new URL('./index.ts', import.meta.url))
 const dispatch = fileURLToPath(new URL('../hooks/dispatch.sh', import.meta.url))
 const httpFixture = fileURLToPath(new URL('../test/session-maintenance-http-fixture.mjs', import.meta.url))
@@ -126,6 +127,7 @@ test('actual create/send/raw-key/xterm/hook-state/queue/sort seams refuse active
   pty.attachViewer(ID, viewer)
   pty.resizeBridge(ID, viewer, 80, 24)
   await waitFor(() => existsSync(terminalAttached), 'real terminal subscription')
+  await waitFor(() => lines(tmuxCalls).some((line) => line.includes('list-clients')), 'terminal subscription setup transport')
   writeFileSync(tmuxCalls, '')
   writeFileSync(terminalInput, '')
 
@@ -228,6 +230,7 @@ test('real dispatcher holds one open ticket for the whole handler run and active
   writeFileSync(release, '')
   const openResult = await openDone()
   const openTicketAfter = json(join(runtime, 'session-maintenance.json')).tickets.some((ticket: any) => ticket.operation === 'hook-state')
+  const openCompleted = existsSync(completed)
 
   rmSync(entered, { force: true }); rmSync(completed, { force: true })
   const startToken = processStartToken(process.pid); assert.ok(startToken)
@@ -235,7 +238,7 @@ test('real dispatcher holds one open ticket for the whole handler run and active
   const activeBefore = readFileSync(join(runtime, 'session-maintenance.json'), 'utf8')
   const active = spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], { cwd: dir, env, input: payload, encoding: 'utf8' })
   const actual = {
-    openStatus: openResult.code, openCompleted: existsSync(completed), openTicketDuring, openTicketAfter,
+    openStatus: openResult.code, openCompleted, openTicketDuring, openTicketAfter,
     activeStatus: active.status, activeStructured: /maintenance_active/.test(active.stdout + active.stderr),
     activeHandlerRan: existsSync(entered), activeDurableUnchanged: readFileSync(join(runtime, 'session-maintenance.json'), 'utf8') === activeBefore,
   }
@@ -252,7 +255,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   const startToken = processStartToken(process.pid); assert.ok(startToken)
   const activeResume = () => leaseRow('active', process.pid, startToken, {
     capabilities: [{ capability: { op: 'resume', sessionId: ID, force: true }, state: 'running' }],
-    tickets: [{ id: 'resume-ticket', epoch: 41, operation: 'resume', sessionId: ID, force: true, owner: { pid: process.pid, startToken }, deadline: Date.now() + 60_000 }],
+    tickets: [{ id: 'resume-ticket', epoch: 41, operation: 'resume', sessionId: ID, force: true, owner: { pid: process.pid, startToken }, deadline: Date.now() + 60_000, mode: 'maintenance' }],
     delegates: [{ tokenHash: createHash('sha256').update(DELEGATE).digest('hex'), parentTicketId: 'resume-ticket', epoch: 41, operation: 'shared-spawn', sessionId: ID, state: 'unused' }],
   })
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-spawn-a-'))
@@ -260,7 +263,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   const run = async (name: string, delegate: string | null) => {
     const runDir = join(dir, name); mkdirSync(runDir)
     const log = join(runDir, 'runtime.log'); const pidFile = join(runDir, 'runtime.pid'); const scope = join(runDir, 'runtime.scope')
-    const child = spawn(tsx, [cli, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, scope, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
+    const child = spawn(process.execPath, [spexBin, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, scope, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
       cwd: pkgRoot,
       env: { ...process.env, SPEXCODE_SESSION_ID: ID, SPEXCODE_MAINTENANCE_DELEGATE_FD: '3' },
       stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
@@ -337,10 +340,10 @@ test('202 wrapper waits without command/broker, then brokers only exact allowlis
 touch ${JSON.stringify(marker)}
 env > ${JSON.stringify(childEnv)}
 set +e
-${JSON.stringify(tsx)} ${JSON.stringify(cli)} session stop ${ID} --api ${JSON.stringify(fixture.base)}; echo "allowed=$?" >> ${JSON.stringify(codes)}
-${JSON.stringify(tsx)} ${JSON.stringify(cli)} session stop ${OTHER} --api ${JSON.stringify(fixture.base)}; echo "wrong_session=$?" >> ${JSON.stringify(codes)}
-${JSON.stringify(tsx)} ${JSON.stringify(cli)} session send ${ID} nope --api ${JSON.stringify(fixture.base)}; echo "wrong_op=$?" >> ${JSON.stringify(codes)}
-${JSON.stringify(tsx)} ${JSON.stringify(cli)} session resume ${RESUME_FORCE} --api ${JSON.stringify(fixture.base)}; echo "wrong_force=$?" >> ${JSON.stringify(codes)}
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${ID} --api ${JSON.stringify(fixture.base)}; echo "allowed=$?" >> ${JSON.stringify(codes)}
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${OTHER} --api ${JSON.stringify(fixture.base)}; echo "wrong_session=$?" >> ${JSON.stringify(codes)}
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session send ${ID} nope --api ${JSON.stringify(fixture.base)}; echo "wrong_op=$?" >> ${JSON.stringify(codes)}
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_FORCE} --api ${JSON.stringify(fixture.base)}; echo "wrong_force=$?" >> ${JSON.stringify(codes)}
 exit 0
 `)
   chmodSync(script, 0o755)
@@ -407,7 +410,8 @@ exit 0
 test('actual session attach is refused before tmux while active and holds an open ticket for its foreground lifetime', async () => {
   const { processStartToken } = await import('./process-identity.js')
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-attach-a-'))
-  const attachHome = join(dir, 'home'); const runtime = join(attachHome, 'projects', repoRoot.replace(/[/.]/g, '-')); const leasePath = join(runtime, 'session-maintenance.json')
+  const commonDir = execFileSync('git', ['-C', repoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
+  const attachHome = join(dir, 'home'); const runtime = join(attachHome, 'projects', dirname(commonDir).replace(/[/.]/g, '-')); const leasePath = join(runtime, 'session-maintenance.json')
   const bin = join(dir, 'bin'); const attached = join(dir, 'attached'); const release = join(dir, 'release'); const tty = join(dir, 'tty.cjs'); const calls = join(dir, 'tmux.calls')
   mkdirSync(runtime, { recursive: true }); mkdirSync(bin)
   writeFileSync(tty, "Object.defineProperty(process.stdin,'isTTY',{value:true});Object.defineProperty(process.stdout,'isTTY',{value:true});\n")

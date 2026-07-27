@@ -19,6 +19,7 @@ related:
   - spec-dashboard/test/session-toolbar.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
+  - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
 ---
@@ -56,7 +57,9 @@ with a dense 204px default) and a right area that
 **morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
 path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
 showing no numeric count), and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract).
+([[session-search]] owns that contract). The list is bounded by the routed page's viewport: when its visible
+zones and rows exceed that height, the list owns the vertical scrollbar instead of growing behind the page
+pane's clipped edge.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one

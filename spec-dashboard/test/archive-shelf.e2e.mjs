@@ -202,9 +202,9 @@ try {
     if (ref) siblingStates.push(ref.turnPresence)
     return ref
   }, (ref) => siblingStates.includes('active') && ref?.turnPresence === 'idle', 'sibling active -> terminal while target is cold')
-  await post(`/api/sessions/${siblingId}/input`, { kind: 'text', text: `Compute the SHA-256 of this nonce and reply with only the lowercase digest: ${nonce}` })
+  await post(`/api/sessions/${siblingId}/input`, { kind: 'text', text: `Compute the SHA-256 of this nonce: ${nonce}. Then make your final tool call: spex session ask --note <digest>, replacing <digest> with only the exact lowercase digest. Stop after that declaration.` })
   await siblingTrace
-  await waitFor(async () => await (await fetch(`${base}/api/sessions/${siblingId}/capture`)).text(), (body) => body.split('\n').some((line) => line.trim() === derived), 'sibling final derived token while target is cold')
+  await waitFor(() => get(`/api/sessions/${siblingId}/timeline?limit=20`), (body) => body?.events?.some((entry) => entry.kind === 'status' && entry.note === derived), 'sibling exact agent-authored digest note while target is cold')
 
   narrate('resume same conversation through starting to online')
   await page.locator(`.si-item[data-sid="${sessionId}"]`).click()

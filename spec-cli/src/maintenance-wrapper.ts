@@ -53,7 +53,18 @@ const reapCommandGroup = async (child: ReturnType<typeof spawn>, closed: Promise
       try { process.kill(-child.pid, 'SIGKILL') } catch { /* already exited */ }
     }
   }
-  const closedAfterReap = await Promise.race([closed.then(() => true), wait(2_000).then(() => false)])
+  const closedAfterReap = await new Promise<boolean>((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => finish(false), 2_000)
+    timer.unref()
+    void closed.then(() => finish(true))
+  })
   if (!closedAfterReap) throw new Error('maintenance operator pipes did not close after exact process-group reap')
 }
 

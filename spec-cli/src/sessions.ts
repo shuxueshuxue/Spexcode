@@ -15,7 +15,7 @@ import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
-import { runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
+import { maintenanceBrokerDescriptors, runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -1651,6 +1651,9 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
 export async function createSession(prompt: string, launcher?: string): Promise<Session> {
+  if (maintenanceBrokerDescriptors()) {
+    throw new SessionMaintenanceError('maintenance_capability_missing', 'maintenance operator broker admits only its exact stop/resume plan', { operation: 'create' })
+  }
   await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the

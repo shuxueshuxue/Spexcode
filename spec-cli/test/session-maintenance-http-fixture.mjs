@@ -6,7 +6,9 @@ const mode = process.env.MODE || 'draining-active'
 if (!resultPath) throw new Error('RESULT_PATH is required')
 const token = '71'.repeat(32)
 const epoch = 7
+const owner = { instanceId: 'fixture-supervisor-generation', pid: process.pid, startToken: 'fixture-supervisor-start' }
 let statusReads = 0
+let acquiredCapabilities = []
 const record = (event) => appendFileSync(resultPath, `${JSON.stringify({ at: Date.now(), ...event })}\n`)
 const body = async (req) => {
   const chunks = []
@@ -27,25 +29,22 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/api/sessions?all=1') return res.end(JSON.stringify(rows))
   if (req.method === 'POST' && req.url === '/api/session-maintenance/acquire') {
     const input = await body(req)
+    acquiredCapabilities = input.capabilities
     record({ step: 'acquire', input })
-    const active = mode === 'heartbeat-loss' || mode === 'broker-concurrent'
+    const active = mode === 'heartbeat-loss' || mode === 'broker-concurrent' || mode === 'broker-transport-loss'
     res.statusCode = active ? 201 : 202
-    return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, capabilities: input.capabilities }))
+    return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, owner, capabilities: input.capabilities }))
   }
   if (req.method === 'GET' && req.url === '/api/session-maintenance') {
     statusReads++
     if (mode === 'expiry' && statusReads >= 2) {
       record({ step: 'status', state: 'open', epoch: epoch + 1 })
-      return res.end(JSON.stringify({ state: 'open', epoch: epoch + 1, capabilities: [] }))
+      return res.end(JSON.stringify({ state: 'open', epoch: epoch + 1, owner: null, capabilities: [] }))
     }
     const state = mode === 'draining-active' && statusReads >= 6 ? 'active' : 'draining'
     record({ step: 'status', state, epoch })
     if (state === 'draining') await new Promise((resolve) => setTimeout(resolve, mode === 'draining-active' ? 500 : 100))
-    return res.end(JSON.stringify({ state, epoch, capabilities: [
-      { op: 'stop', sessionId: rows[0].id },
-      { op: 'resume', sessionId: rows[1].id, force: false },
-      { op: 'resume', sessionId: rows[2].id, force: true },
-    ] }))
+    return res.end(JSON.stringify({ state, epoch, owner, capabilities: acquiredCapabilities }))
   }
   if (req.method === 'POST' && req.url === '/api/session-maintenance/heartbeat') {
     record({ step: 'heartbeat', header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
@@ -53,7 +52,7 @@ const server = createServer(async (req, res) => {
       res.statusCode = 409
       return res.end(JSON.stringify({ code: 'maintenance_conflict', error: 'fixture epoch lost' }))
     }
-    return res.end(JSON.stringify({ ok: true }))
+    return res.end(JSON.stringify({ ok: true, state: 'active', epoch, owner, capabilities: acquiredCapabilities }))
   }
   if (req.method === 'POST' && req.url === '/api/session-maintenance/release') {
     record({ step: 'release', header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })

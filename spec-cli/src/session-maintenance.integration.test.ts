@@ -53,7 +53,7 @@ function leaseRow(state: 'open' | 'active', pid: number, startToken: string, ext
     state,
     epoch: 41,
     tokenHash: state === 'active' ? createHash('sha256').update(TOKEN).digest('hex') : null,
-    owner: state === 'active' ? { pid, startToken } : null,
+    owner: state === 'active' ? { instanceId: 'maintenance-fixture-generation', pid, startToken } : null,
     heartbeatDeadline: state === 'active' ? Date.now() + 60_000 : null,
     capabilities: state === 'active' ? [{ capability: { op: 'stop', sessionId: ID }, state: 'unused' }] : [],
     tickets: [],
@@ -254,7 +254,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   const root = runtimeRoot(); const leasePath = join(root, 'session-maintenance.json')
   const startToken = processStartToken(process.pid); assert.ok(startToken)
   const activeResume = () => leaseRow('active', process.pid, startToken, {
-    capabilities: [{ capability: { op: 'resume', sessionId: ID, force: true }, state: 'running' }],
+    capabilities: [{ capability: { op: 'resume', sessionId: ID, force: true }, state: 'inflight', requestId: 'resume-ticket' }],
     tickets: [{ id: 'resume-ticket', epoch: 41, operation: 'resume', sessionId: ID, force: true, owner: { pid: process.pid, startToken }, deadline: Date.now() + 60_000, mode: 'maintenance' }],
     delegates: [{ tokenHash: createHash('sha256').update(DELEGATE).digest('hex'), parentTicketId: 'resume-ticket', epoch: 41, operation: 'shared-spawn', sessionId: ID, state: 'unused' }],
   })
@@ -307,7 +307,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   }
 })
 
-async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent', resultPath: string, extraEnv: Record<string, string> = {}) {
+async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss', resultPath: string, extraEnv: Record<string, string> = {}) {
   const child = spawn(process.execPath, [httpFixture], { env: { ...process.env, MODE: mode, RESULT_PATH: resultPath, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] })
   const closed = once(child, 'close') as Promise<[number]>
   let stdout = ''; let stderr = ''; let port = 0
@@ -439,6 +439,38 @@ touch ${JSON.stringify(completed)}
   assert.deepEqual(actual, { status: 1, entered: true, heartbeatFailed: true, terminated: true, completed: false, bounded: true })
 })
 
+test('live broker transport loss closes admission and terminates the operator command', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-loss-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const entered = join(dir, 'entered'); const terminated = join(dir, 'terminated'); const completed = join(dir, 'completed')
+  const fixture = await startHttpFixture('broker-transport-loss', resultPath)
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+trap 'touch ${JSON.stringify(terminated)}; exit 74' TERM
+touch ${JSON.stringify(entered)}
+exec 5>&-
+sleep 3
+touch ${JSON.stringify(completed)}
+`)
+  chmodSync(script, 0o755)
+  const started = Date.now()
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  const elapsed = Date.now() - started
+  await fixture.stop()
+  const actual = {
+    status: result.code,
+    entered: existsSync(entered),
+    terminated: existsSync(terminated),
+    completed: existsSync(completed),
+    bounded: elapsed < 2_500,
+    released: events(resultPath).some((event) => event.step === 'release'),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { status: 1, entered: true, terminated: true, completed: false, bounded: true, released: false })
+})
+
 test('concurrent nested stop and resume receive only their own broker responses', { timeout: 15_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-concurrent-a-'))
   const resultPath = join(dir, 'events.ndjson'); const release = join(dir, 'release'); const codes = join(dir, 'codes')
@@ -525,7 +557,9 @@ test('active lease authority survives backend child replacement without reopenin
   const { processStartToken } = await import('./process-identity.js')
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-hot-reload-a-'))
   const projectPath = join(dir, 'project'); mkdirSync(projectPath); const project = realpathSync(projectPath)
-  const apiHome = join(dir, 'home'); const portA = await freePort(); const portB = await freePort()
+  const apiHome = join(dir, 'home'); const runtime = join(apiHome, 'projects', project.replace(/[/.]/g, '-'))
+  const instanceId = 'maintenance-hot-reload-generation'
+  const portA = await freePort(); const portB = await freePort()
   const authorityStart = processStartToken(process.pid); assert.ok(authorityStart)
   mkdirSync(join(project, '.spec'), { recursive: true })
   cpSync(join(pkgRoot, 'templates', 'spec', 'project'), join(project, '.spec', 'project'), { recursive: true })
@@ -534,13 +568,16 @@ test('active lease authority survives backend child replacement without reopenin
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'add', '.'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  mkdirSync(join(runtime, 'backend-instances'), { recursive: true })
+  writeFileSync(join(runtime, 'backend-instances', `${instanceId}.json`), JSON.stringify({
+    version: 1, instanceId, pid: process.pid, startToken: authorityStart, projectRoot: project, startedAt: new Date().toISOString(),
+  }))
   const env = {
     ...process.env,
     PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':'),
     SPEXCODE_HOME: apiHome,
     SPEXCODE_TMUX: `spex-maintenance-reload-${process.pid}`,
-    SPEXCODE_MAINTENANCE_AUTHORITY_PID: String(process.pid),
-    SPEXCODE_MAINTENANCE_AUTHORITY_START: authorityStart,
+    SPEXCODE_INSTANCE_ID: instanceId,
   }
   const boot = async (port: number) => {
     const child = spawn(tsx, [apiEntry], { cwd: project, env: { ...env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -589,6 +626,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
   const projectPath = join(dir, 'project'); mkdirSync(projectPath); const project = realpathSync(projectPath)
   const apiHome = join(dir, 'home'); const tmux = `spex-maintenance-backend-${process.pid}-${Date.now()}`; const port = await freePort()
   const runtime = join(apiHome, 'projects', project.replace(/[/.]/g, '-'))
+  const instanceId = 'maintenance-backend-generation'
   mkdirSync(join(project, '.spec'), { recursive: true })
   cpSync(join(pkgRoot, 'templates', 'spec', 'project'), join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
@@ -598,7 +636,12 @@ test('real isolated backend admits exact stop plus two resumes under one active 
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'add', '.'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
-  const child = spawn(tsx, [apiEntry], { cwd: project, env: { ...process.env, PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':'), PORT: String(port), SPEXCODE_HOME: apiHome, SPEXCODE_TMUX: tmux, FAKE_HARNESS_INTERVAL_MS: '50' }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const authorityStart = (await import('./process-identity.js')).processStartToken(process.pid); assert.ok(authorityStart)
+  mkdirSync(join(runtime, 'backend-instances'), { recursive: true })
+  writeFileSync(join(runtime, 'backend-instances', `${instanceId}.json`), JSON.stringify({
+    version: 1, instanceId, pid: process.pid, startToken: authorityStart, projectRoot: project, startedAt: new Date().toISOString(),
+  }))
+  const child = spawn(tsx, [apiEntry], { cwd: project, env: { ...process.env, PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':'), PORT: String(port), SPEXCODE_HOME: apiHome, SPEXCODE_TMUX: tmux, SPEXCODE_INSTANCE_ID: instanceId, FAKE_HARNESS_INTERVAL_MS: '50' }, stdio: ['ignore', 'pipe', 'pipe'] })
   const backendDone = collect(child); const base = `http://127.0.0.1:${port}`
   await waitFor(async () => {
     try { return (await fetch(`${base}/health`)).ok } catch { return false }
@@ -649,6 +692,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
     let heartbeat = { status: 0, ok: false }
     const negatives: Array<{ name: string; refused: boolean; code: string | null; targetsUnchanged: boolean }> = []
     let operationCodes: number[] = []; let operationBodies: any[] = []; let releaseCode = 0
+    let staleBearer = { status: 0, code: null as string | null, targetsUnchanged: false }
     let finalLiveness: Record<string, string | null> = {}
     if (acquire.status === 201) {
       const headers = { 'content-type': 'application/json', 'x-spexcode-session-maintenance': token }
@@ -710,10 +754,18 @@ test('real isolated backend admits exact stop plus two resumes under one active 
         rows.find((row) => row.id === createdRow.id)?.liveness ?? null,
       ]))
       releaseCode = (await fetch(`${base}/api/session-maintenance/release`, { method: 'POST', headers, body: JSON.stringify({ epoch: lease.epoch }) })).status
+      const staleBefore = await exactTargets()
+      const staleResponse = await fetch(`${base}/api/sessions/${created[3].id}/stop`, { method: 'POST', headers })
+      const staleBody = await staleResponse.json().catch(() => ({})) as any
+      staleBearer = {
+        status: staleResponse.status,
+        code: staleBody.code ?? null,
+        targetsUnchanged: JSON.stringify(await exactTargets()) === JSON.stringify(staleBefore),
+      }
     }
     actual = {
       created: created.length, preStop, acquire: acquire.status, tokenBytes: token.length / 2,
-      heartbeat, negatives, operationCodes, operationOk: operationBodies.map((result) => result.ok), finalLiveness, releaseCode,
+      heartbeat, negatives, operationCodes, operationOk: operationBodies.map((result) => result.ok), finalLiveness, releaseCode, staleBearer,
     }
   } finally {
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore', env: { ...process.env, PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':') } }) } catch {}
@@ -733,6 +785,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
       { name: 'replay', refused: true, code: 'maintenance_capability_used', targetsUnchanged: true },
     ],
     operationCodes: [200, 200, 200], operationOk: [true, true, true], releaseCode: 200,
+    staleBearer: { status: 409, code: 'maintenance_conflict', targetsUnchanged: true },
     finalLiveness: { stop: 'offline', resumeOne: 'online', resumeTwo: 'online', control: 'online' },
   })
 })

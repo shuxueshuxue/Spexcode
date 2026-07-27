@@ -1,6 +1,7 @@
 import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { readSync, writeSync } from 'node:fs'
-import type { Capability, MaintenanceState } from './session-maintenance.js'
+import { maintenanceBrokerDescriptors, type Capability, type LeaseOwner, type MaintenanceState } from './session-maintenance.js'
+import { processStartToken } from './process-identity.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -12,7 +13,7 @@ export class BackendError extends Error {
 // the ONE seam where "no backend" becomes loud. A network failure (nothing listening at the resolved base)
 // is the only thing thrown; an HTTP Response of any status is returned for the caller to interpret.
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  if (brokerFds() && init?.method && !['GET', 'HEAD'].includes(init.method.toUpperCase()))
+  if (maintenanceBrokerDescriptors() && init?.method && !['GET', 'HEAD'].includes(init.method.toUpperCase()))
     throw new BackendError('maintenance_capability_missing: the operator broker admits only its exact stop/resume plan')
   const base = await apiBase()
   try {
@@ -29,32 +30,41 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'cont
 const seg = (id: string) => encodeURIComponent(id)
 type BrokerRequest = { op: string; sessionId?: string; force?: boolean }
 type BrokerResponse = { ok: boolean; status?: number; body?: any; code?: string; error?: string }
-function brokerFds(): { request: number; response: number } | null {
-  const [request, response, extra] = (process.env.SPEXCODE_MAINTENANCE_BROKER_FDS || '').split(',').map(Number)
-  return !extra && Number.isInteger(request) && request >= 3 && Number.isInteger(response) && response >= 3
-    ? { request, response }
-    : null
-}
 function brokerRequest(request: BrokerRequest): BrokerResponse | null {
-  const fds = brokerFds()
+  const fds = maintenanceBrokerDescriptors()
   if (!fds) return null
+  const startToken = processStartToken(process.pid)
+  if (!startToken) throw new BackendError(`maintenance broker cannot identify client PID ${process.pid}`)
   const id = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  writeSync(fds.request, `${JSON.stringify({ v: 1, id, ...request })}\n`)
-  let line = ''
-  const byte = Buffer.alloc(1)
-  while (!line.endsWith('\n')) {
-    const count = readSync(fds.response, byte, 0, 1, null)
-    if (count === 0) throw new BackendError('maintenance broker closed before replying')
-    line += byte.toString('utf8', 0, count)
-    if (line.length > 64 * 1024) throw new BackendError('maintenance broker response exceeded its bound')
+  const frame = `${JSON.stringify({ v: 1, id, ...request, client: { pid: process.pid, startToken } })}\n`
+  if (Buffer.byteLength(frame) > 4_096) throw new BackendError('maintenance broker request exceeded PIPE_BUF')
+  const token = Buffer.alloc(1)
+  let ownsTurn = false
+  try {
+    if (readSync(fds.turn, token, 0, 1, null) !== 1 || token[0] !== 1)
+      throw new BackendError('maintenance broker turn token was unavailable or invalid')
+    ownsTurn = true
+    if (writeSync(fds.request, frame) !== Buffer.byteLength(frame)) throw new BackendError('maintenance broker request write was incomplete')
+    let line = ''
+    const byte = Buffer.alloc(1)
+    while (!line.endsWith('\n')) {
+      const count = readSync(fds.response, byte, 0, 1, null)
+      if (count === 0) throw new BackendError('maintenance broker closed before replying')
+      line += byte.toString('utf8', 0, count)
+      if (line.length > 64 * 1024) throw new BackendError('maintenance broker response exceeded its bound')
+    }
+    const response = JSON.parse(line) as BrokerResponse & { id?: string }
+    if (response.id !== id) throw new BackendError('maintenance broker response identity mismatch')
+    return response
+  } finally {
+    if (ownsTurn) {
+      try { writeSync(fds.turn, token) } catch { /* broker shutdown owns the failure */ }
+    }
   }
-  const response = JSON.parse(line) as BrokerResponse & { id?: string }
-  if (response.id !== id) throw new BackendError('maintenance broker response identity mismatch')
-  return response
 }
 const brokerMutation = (request: BrokerRequest): BrokerResponse | null => brokerRequest(request)
 
-export type MaintenanceLeaseResponse = { token: string; epoch: number; state: 'draining' | 'active'; capabilities?: Capability[] }
+export type MaintenanceLeaseResponse = { token: string; epoch: number; state: 'draining' | 'active'; owner: LeaseOwner; capabilities?: Capability[] }
 export async function clientMaintenanceAcquire(capabilities: Capability[], ttlMs: number, waitMs: number): Promise<{ status: number; lease: MaintenanceLeaseResponse }> {
   await guarded('session maintain')
   const r = await apiFetch('/api/session-maintenance/acquire', post({ capabilities, ttlMs, waitMs }))
@@ -71,9 +81,10 @@ const maintenanceHeaders = (token: string): Record<string, string> => ({
   'content-type': 'application/json',
   'x-spexcode-session-maintenance': token,
 })
-export async function clientMaintenanceHeartbeat(token: string, epoch: number, ttlMs: number): Promise<void> {
+export async function clientMaintenanceHeartbeat(token: string, epoch: number, ttlMs: number): Promise<MaintenanceState> {
   const r = await apiFetch('/api/session-maintenance/heartbeat', { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify({ epoch, ttlMs }) })
   if (!r.ok) throw new BackendError(`backend refused maintenance heartbeat (${r.status}): ${await r.text()}`, r.status)
+  return await r.json() as MaintenanceState
 }
 export async function clientMaintenanceRelease(token: string, epoch: number): Promise<void> {
   const r = await apiFetch('/api/session-maintenance/release', { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify({ epoch }) })

@@ -30,6 +30,7 @@ import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
 import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { exactProcessIdentity, maintenanceErrorPayload, sessionMaintenance, SessionMaintenanceError, type Authorization } from './session-maintenance.js'
+import { readBackendInstanceRecords } from './runtime-ownership.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -407,18 +408,29 @@ app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
 const maintenance = sessionMaintenance()
 const maintenanceToken = (header: (name: string) => string | undefined) => header('x-spexcode-session-maintenance')?.trim() || ''
-const operationAuthorization = (header: (name: string) => string | undefined): Authorization | undefined => {
-  const token = maintenanceToken(header)
-  return token ? { token, epoch: maintenance.readState().epoch } : undefined
+const maintenanceLeaseOwner = () => {
+  const instanceId = process.env.SPEXCODE_INSTANCE_ID?.trim()
+  const record = instanceId ? readBackendInstanceRecords(repoRoot()).find((candidate) => candidate.instanceId === instanceId) : null
+  const exact = record ? exactProcessIdentity(record.pid) : null
+  if (!instanceId || !record || !exact || exact.startToken !== record.startToken)
+    throw new SessionMaintenanceError('maintenance_identity_unknown', 'cannot prove the exact live backend supervisor generation')
+  return { instanceId, pid: record.pid, startToken: record.startToken }
 }
+const operationAuthorization = async (
+  header: (name: string) => string | undefined,
+  operation: { op: 'stop'; sessionId: string } | { op: 'resume'; sessionId: string; force: boolean },
+): Promise<Authorization | undefined> => maintenance.authorizeHttpOperation({
+  authenticated: true,
+  projectMatches: true,
+  headers: { [maintenance.headerName]: maintenanceToken(header) },
+  operation,
+})
 app.get('/api/session-maintenance', (c) => c.json(maintenance.readState()))
 app.post('/api/session-maintenance/acquire', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const owner = exactProcessIdentity(process.pid)
-  if (!owner) throw new SessionMaintenanceError('maintenance_identity_unknown', `cannot identify backend PID ${process.pid}`)
   const lease = await maintenance.acquireLease({
     capabilities: Array.isArray(body?.capabilities) ? body.capabilities : body?.capabilities,
-    owner,
+    owner: maintenanceLeaseOwner(),
     ttlMs: Number(body?.ttlMs),
     waitMs: Number(body?.waitMs),
   })
@@ -427,7 +439,7 @@ app.post('/api/session-maintenance/acquire', async (c) => {
 app.post('/api/session-maintenance/heartbeat', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   await maintenance.heartbeatLease({ token: maintenanceToken(c.req.header.bind(c.req)), epoch: Number(body?.epoch), ttlMs: Number(body?.ttlMs) })
-  return c.json({ ok: true })
+  return c.json({ ok: true, ...maintenance.readState() })
 })
 app.post('/api/session-maintenance/release', async (c) => {
   const body = await c.req.json().catch(() => ({}))
@@ -501,7 +513,9 @@ app.get('/api/sessions/:id', async (c) => {
 app.post('/api/sessions/:id/resume', async (c) => {
   const body = await c.req.json().catch(() => ({} as { force?: boolean }))
   const force = body?.force === true || c.req.query('force') === '1'
-  const r = await resumeSession(c.req.param('id'), { force, authorization: operationAuthorization(c.req.header.bind(c.req)) })
+  const sessionId = c.req.param('id')
+  const authorization = await operationAuthorization(c.req.header.bind(c.req), { op: 'resume', sessionId, force })
+  const r = await resumeSession(sessionId, { force, authorization })
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
@@ -615,7 +629,11 @@ app.post('/api/sessions/:id/input', async (c) => {
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
-app.post('/api/sessions/:id/stop', async (c) => c.json({ ok: await stopSession(c.req.param('id'), { authorization: operationAuthorization(c.req.header.bind(c.req)) }) }))
+app.post('/api/sessions/:id/stop', async (c) => {
+  const sessionId = c.req.param('id')
+  const authorization = await operationAuthorization(c.req.header.bind(c.req), { op: 'stop', sessionId })
+  return c.json({ ok: await stopSession(sessionId, { authorization }) })
+})
 app.post('/api/sessions/:id/interrupt', async (c) => {
   const result = await interruptSession(c.req.param('id'))
   return c.json(result, result.ok ? 200 : 502)

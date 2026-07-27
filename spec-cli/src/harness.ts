@@ -809,6 +809,13 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
 }
 
 type CodexPagedIdsResult = { ok: true; ids: string[] } | { ok: false; error: string }
+// Codex treats an omitted or empty sourceKinds filter as "interactive" defaults. Cold proof must census the
+// entire native thread graph, including subAgent/thread-spawn rows that have no Spex record, so the adapter
+// supplies every protocol source kind explicitly for its thread/list calls.
+export const CODEX_THREAD_SOURCE_KINDS = [
+  'cli', 'vscode', 'exec', 'appServer', 'subAgent', 'subAgentReview', 'subAgentCompact',
+  'subAgentThreadSpawn', 'subAgentOther', 'unknown',
+] as const
 function codexPagedIds(sock: string, method: 'thread/list' | 'thread/loaded/list', params: Record<string, unknown>, extractId: (item: unknown) => string | null, label: string): Promise<CodexPagedIdsResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -869,8 +876,11 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
 
 // The app-server's loaded/list is cursor-paginated. Archive proof must scan every page; a first page that omits
 // a sibling/descendant is not a cold proof. This helper is also used by the descendant guard below.
-function codexThreadList(sock: string, params: Record<string, unknown>): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
-  return codexPagedIds(sock, 'thread/list', params, (item) => {
+export function codexThreadList(sock: string, params: Record<string, unknown>): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
+  const sourceKinds = Array.isArray(params.sourceKinds) && params.sourceKinds.length
+    ? params.sourceKinds
+    : [...CODEX_THREAD_SOURCE_KINDS]
+  return codexPagedIds(sock, 'thread/list', { ...params, sourceKinds }, (item) => {
     if (typeof item === 'string') return item
     const id = (item as { id?: unknown } | null)?.id
     return typeof id === 'string' ? id : null

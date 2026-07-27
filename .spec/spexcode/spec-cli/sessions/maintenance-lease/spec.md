@@ -82,11 +82,12 @@ structured fail-loud block and invokes zero handlers.
 An active lease admits only the finite capability set fixed at acquisition. Each immutable copied entry is
 exactly `{op:"stop", sessionId}` or `{op:"resume", sessionId, force}`; duplicate entries are rejected, and the
 caller cannot widen them by mutating its input after acquisition. Session id, operation, and resume force all
-match exactly. A capability is one-shot: its atomic claim creates at most one live ticket. A successful callback
-marks it completed; a repeated or concurrent request returns `maintenance_capability_used` without running the
-callback. A refusal before callback leaves it unused and may be retried. A callback throw marks it
-`indeterminate`; retry is refused because a side effect may already have happened. Release is still explicit,
-but never implies that unused/indeterminate work succeeded.
+match exactly. A capability is one-shot: its atomic claim records `inflight(requestId)` and creates at most one
+live ticket. A successful callback commits it; a repeated or concurrent request returns
+`maintenance_capability_used` without running the callback. A structured pre-admission or product refusal
+returns it to unused and may be retried. Network failure, timeout, 5xx, malformed response, or callback throw
+marks it `indeterminate`; retry is refused because a side effect may already have happened. Release is still
+explicit, but never implies that unused/indeterminate work succeeded.
 
 Canonical shared spawn is not grantable directly. An admitted resume mints a separate opaque, one-use delegated
 capability bound to that live resume ticket, epoch, operation, and session id. The nested internal
@@ -105,12 +106,29 @@ URLs/query, argv, session records, timelines, comms, or ordinary logs. HTTP carr
 mandatory: maintenance admission is not authentication.
 
 The durable row atomically stores version, state, monotonically increasing epoch, token hash, an immutable
-canonical capability copy plus each capability's claim state, exact owner PID/start, heartbeat deadline, and
+canonical capability copy plus each capability's claim state, exact owner generation, heartbeat deadline, and
 tickets containing only id, epoch, closed operation, optional target/force, exact owner PID/start, and reporting
 deadline. Release clears the lease material but preserves the epoch; every later acquire increments it. Backend
 restart reads and honors `draining`/`active` before serving any write. Heartbeat and release require the exact
 current epoch and token; missing token, wrong token, stale token/epoch, malformed TTL, and wrong project all
-fail without changing durable state or events.
+fail without changing durable state or events. An explicit maintenance header is never ignored merely because
+the row is `open`: it must name the one active epoch and exact capability, or it fails before ordinary
+stop/resume admission. The production HTTP path and coordinator use this same authorization function.
+
+The lease owner is the exact backend supervisor generation `{instanceId,pid,startToken}`, resolved from the
+supervisor-injected instance id and trusted backend-instance registry; acquire input cannot nominate an owner.
+Replacing only the backend child preserves a live, unexpired supervisor generation and leaves its draining or
+active barrier authoritative. A dead/reused supervisor generation or TTL expiry keeps the existing recovery
+rule: revoke bearer and capabilities, enter recovery-draining, and reopen after live tickets drain. This lease
+does not add a durable lifetime ticket for the arbitrary operator command, so it does not claim that command
+survives supervisor death or expiry; the wrapper instead stops its local command immediately when authority is
+lost.
+
+Every coordinator transaction uses one crash-safe lock generation. A complete owner record is written and
+fsynced beside the lock, then hard-linked to the fixed lock path as the atomic CAS, so a crash before publication
+cannot leave an ownerless canonical lock. Reaping a proven-dead/reused owner first claims a nonce-specific marker;
+while it exists no acquirer may publish, and the reaper re-reads the same nonce and exact dead identity before
+unlinking. Release removes only its own nonce, so concurrent stale reapers cannot delete a replacement owner.
 
 The public porcelain stays under the existing session noun: `spex session maintain --allow-stop <SEL> ...
 --allow-resume <SEL>[:force] ... -- <command...>` is one scoped wrapper, and `spex session maintain --status`
@@ -120,9 +138,12 @@ sequence that would make shell history the bearer store. The wrapper's authentic
 Acquire accepts the finite capabilities, `ttlMs` in `[5000,300000]`, and `waitMs` in `[0,120000]` with
 `waitMs <= ttlMs`; it returns `201 active` or, when the bounded wait ends while tickets remain, `202 draining`,
 with epoch and the token exactly once to the wrapper's in-memory HTTP client. Status exposes
-state/epoch/deadlines/capability states and sanitized ticket owners, never bearer material. Heartbeat accepts
-the same finite TTL range. The wrapper keeps the bearer in memory, heartbeats while its command runs, and
-releases in `finally`; it never prints or exports the bearer.
+state/epoch/deadlines/capability states and sanitized lease/ticket owners, never bearer material. Heartbeat
+accepts the same finite TTL range. The wrapper keeps the bearer in memory and heartbeats while its command runs.
+On normal exit it closes and drains broker admission, reaps the command, then releases its still-current epoch.
+Heartbeat/status epoch, state, plan, or owner mismatch closes admission immediately, terminates and boundedly
+reaps the local operator command process group, exits nonzero, and never releases or adopts the stale epoch. It
+never prints or exports the bearer.
 
 A `202 draining` response is ownership of the closed admission epoch, NOT permission to execute. The wrapper
 creates no command process and no broker FD while draining; it may only heartbeat that exact epoch and poll
@@ -132,8 +153,10 @@ back to `open` fails the wrapper without executing the command. Its best-effort 
 a stale epoch. The acquire request body is the canonical immutable capability list resolved from the wrapper's
 flags; duplicates, wrong selectors, and any server response whose capabilities differ fail before execution.
 
-Nested `spex` clients receive only two inherited anonymous broker file descriptors (request/response) plus
-their non-secret FD numbers. The parent wrapper serializes exact capability requests on that bounded channel,
+Nested `spex` clients receive only three inherited anonymous broker file descriptors (request/response/turn)
+plus their non-secret FD numbers. The turn FD carries one non-secret byte token: a client takes it, writes one
+`<= PIPE_BUF` request frame containing its request id and exact PID/start identity, reads only its matching
+response, then returns the token. The parent relays the token and serializes exact capability requests on that bounded channel,
 checks operation, session id, and resume force against its copied plan, and is the only process that adds the
 dedicated HTTP header. A wrong session, wrong operation, wrong force, duplicate/replayed capability, or request
 after EOF/epoch completion is rejected locally and never reaches HTTP. No child or

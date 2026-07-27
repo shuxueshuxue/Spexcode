@@ -1,13 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes as cryptoRandomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { platform } from 'node:os'
 import { join } from 'node:path'
 import { runtimeRoot as projectRuntimeRoot } from './layout.js'
 import { parseProcStat, processStartToken } from './process-identity.js'
 
 export type ProcessIdentity = { pid: number; startToken: string }
+export type LeaseOwner = ProcessIdentity & { instanceId: string }
 export type ProcessReading = ProcessIdentity | null | 'ambiguous'
 export type Capability =
   | { op: 'stop'; sessionId: string }
@@ -33,7 +34,8 @@ export type Operation =
   | { op: 'attach'; sessionId: string }
   | { op: 'shared-spawn'; sessionId: string; delegate: string }
 
-type CapabilityState = 'unused' | 'running' | 'completed' | 'indeterminate'
+type CapabilityState = 'unused' | 'inflight' | 'committed' | 'indeterminate'
+type CapabilityEntry = { capability: Capability; state: CapabilityState; requestId?: string }
 type Ticket = {
   id: string
   epoch: number
@@ -58,9 +60,9 @@ type DurableState = {
   state: 'open' | 'draining' | 'active'
   epoch: number
   tokenHash: string | null
-  owner: ProcessIdentity | null
+  owner: LeaseOwner | null
   heartbeatDeadline: number | null
-  capabilities: Array<{ capability: Capability; state: CapabilityState }>
+  capabilities: CapabilityEntry[]
   tickets: Ticket[]
   delegates: Delegate[]
 }
@@ -73,11 +75,13 @@ export type MaintenanceLease = {
   token: string
   epoch: number
   state: 'draining' | 'active'
+  owner: LeaseOwner
   capabilities: readonly Capability[]
 }
 export type MaintenanceState = {
   state: DurableState['state']
   epoch: number
+  owner: LeaseOwner | null
   heartbeatDeadline: number | null
   tickets: readonly {
     operation: Operation['op']
@@ -86,7 +90,7 @@ export type MaintenanceState = {
     owner: ProcessIdentity
     deadline: number
   }[]
-  capabilities: readonly { capability: Capability; state: CapabilityState }[]
+  capabilities: readonly CapabilityEntry[]
 }
 
 type CoordinatorInput = {
@@ -169,7 +173,10 @@ function normalizeState(raw: unknown): DurableState {
     state: value.state as DurableState['state'],
     epoch: Number(value.epoch),
     tokenHash: typeof value.tokenHash === 'string' ? value.tokenHash : null,
-    owner: value.owner && Number.isInteger(value.owner.pid) && typeof value.owner.startToken === 'string' ? copy(value.owner) : null,
+    owner: value.owner && typeof value.owner.instanceId === 'string' && value.owner.instanceId
+      && Number.isInteger(value.owner.pid) && typeof value.owner.startToken === 'string'
+      ? copy(value.owner as LeaseOwner)
+      : null,
     heartbeatDeadline: typeof value.heartbeatDeadline === 'number' ? value.heartbeatDeadline : null,
     capabilities: Array.isArray(value.capabilities) ? copy(value.capabilities) : [],
     tickets: Array.isArray(value.tickets) ? copy(value.tickets) : [],
@@ -210,7 +217,7 @@ function isDescendantOf(pid: number, owner: ProcessIdentity, readIdentity: (pid:
 export function createSessionMaintenance(input: CoordinatorInput) {
   const statePath = join(input.runtimeRoot, 'session-maintenance.json')
   const lockPath = join(input.runtimeRoot, '.session-maintenance.lock')
-  const lockOwnerPath = join(lockPath, 'owner.json')
+  const lockPrefix = '.session-maintenance.lock.reap-'
   mkdirSync(input.runtimeRoot, { recursive: true })
 
   const identityState = (owner: ProcessIdentity): 'live' | 'dead' | 'reused' | 'ambiguous' => {
@@ -220,25 +227,76 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     return sameIdentity(reading, owner) ? 'live' : 'reused'
   }
 
+  type LockRecord = { version: 1; nonce: string; owner: ProcessIdentity }
+  const readLock = (path = lockPath): LockRecord | null => {
+    try {
+      const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<LockRecord>
+      return raw.version === 1 && typeof raw.nonce === 'string' && raw.nonce
+        && raw.owner && Number.isInteger(raw.owner.pid) && typeof raw.owner.startToken === 'string'
+        ? raw as LockRecord
+        : null
+    } catch { return null }
+  }
+  const writeLinkedRecord = (path: string, record: LockRecord): boolean => {
+    const temp = join(input.runtimeRoot, `.session-maintenance.owner-${process.pid}-${record.nonce}.tmp`)
+    let fd: number | null = null
+    try {
+      fd = openSync(temp, 'wx', 0o600)
+      writeFileSync(fd, JSON.stringify(record))
+      fsyncSync(fd)
+      closeSync(fd); fd = null
+      linkSync(temp, path)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      return false
+    } finally {
+      if (fd !== null) closeSync(fd)
+      try { unlinkSync(temp) } catch { /* linked or already absent */ }
+    }
+  }
+  const reapMarkers = (): string[] => {
+    try { return readdirSync(input.runtimeRoot).filter((name) => name.startsWith(lockPrefix)) }
+    catch { return [] }
+  }
+
   const acquireLock = (): (() => void) => {
     const deadline = Date.now() + LOCK_WAIT_MS
     const self = input.selfIdentity()
+    const nonce = input.randomBytes(16).toString('hex')
+    const own: LockRecord = { version: 1, nonce, owner: self }
     for (;;) {
-      try {
-        mkdirSync(lockPath)
-        writeFileSync(lockOwnerPath, JSON.stringify(self), { mode: 0o600 })
-        return () => rmSync(lockPath, { recursive: true, force: true })
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-        let owner: ProcessIdentity | null = null
-        try { owner = JSON.parse(readFileSync(lockOwnerPath, 'utf8')) as ProcessIdentity } catch { /* creator has not published yet */ }
-        if (owner && ['dead', 'reused'].includes(identityState(owner))) {
-          rmSync(lockPath, { recursive: true, force: true })
+      if (reapMarkers().length === 0 && writeLinkedRecord(lockPath, own)) {
+        return () => {
+          const current = readLock()
+          if (!current || current.nonce !== nonce || !sameIdentity(current.owner, self))
+            fail('maintenance_conflict', 'session maintenance lock ownership changed before release')
+          unlinkSync(lockPath)
+        }
+      }
+
+      const current = readLock()
+      if (!current) {
+        // Legacy mkdir-before-owner residue is the old crash window this protocol removes. It has no
+        // complete identity that can authorize a state mutation, so remove only an empty directory.
+        try { if (readdirSync(lockPath).length === 0) rmSync(lockPath, { recursive: true }) } catch { /* file or live legacy owner */ }
+      } else if (['dead', 'reused'].includes(identityState(current.owner))) {
+        const markerPath = join(input.runtimeRoot, `${lockPrefix}${current.nonce}`)
+        const marker: LockRecord = { version: 1, nonce: input.randomBytes(16).toString('hex'), owner: self }
+        if (writeLinkedRecord(markerPath, marker)) {
+          try {
+            const confirmed = readLock()
+            if (confirmed?.nonce === current.nonce && sameIdentity(confirmed.owner, current.owner)
+              && ['dead', 'reused'].includes(identityState(confirmed.owner))) unlinkSync(lockPath)
+          } finally {
+            const claim = readLock(markerPath)
+            if (claim?.nonce === marker.nonce && sameIdentity(claim.owner, self)) unlinkSync(markerPath)
+          }
           continue
         }
-        if (Date.now() >= deadline) fail('maintenance_conflict', 'session maintenance state lock is held by a live or ambiguous owner')
-        syncPause(5)
       }
+      if (Date.now() >= deadline) fail('maintenance_conflict', 'session maintenance state lock is held by a live or ambiguous owner')
+      syncPause(5)
     }
   }
 
@@ -270,7 +328,10 @@ export function createSessionMaintenance(input: CoordinatorInput) {
         const entry = state.capabilities.find(({ capability }) => capability.op === ticket.operation
           && capability.sessionId === ticket.sessionId
           && (capability.op !== 'resume' || capability.force === ticket.force))
-        if (entry?.state === 'running') entry.state = 'indeterminate'
+        if (entry?.state === 'inflight' && entry.requestId === ticket.id) {
+          entry.state = 'indeterminate'
+          delete entry.requestId
+        }
       }
       for (const delegate of state.delegates) if (delegate.parentTicketId === ticket.id && delegate.state !== 'completed') delegate.state = 'completed'
     }
@@ -283,7 +344,10 @@ export function createSessionMaintenance(input: CoordinatorInput) {
         state.tokenHash = null
         state.owner = null
         state.heartbeatDeadline = null
-        for (const entry of state.capabilities) if (entry.state === 'running') entry.state = 'indeterminate'
+        for (const entry of state.capabilities) if (entry.state === 'inflight') {
+          entry.state = 'indeterminate'
+          delete entry.requestId
+        }
         dirty = true
       }
     }
@@ -340,11 +404,15 @@ export function createSessionMaintenance(input: CoordinatorInput) {
   const beginTicket = (state: DurableState, operation: Operation, owner: ProcessIdentity, markDirty: () => void): Ticket => {
     if (!OPERATIONS.has(operation.op)) fail('maintenance_invalid', `unknown maintenance operation ${(operation as { op?: string }).op ?? ''}`)
     const parent = inheritedOrdinaryParent(state)
+    const ticketId = input.randomBytes(16).toString('hex')
     let mode: Ticket['mode'] = 'ordinary'
     let parentTicketId: string | undefined
 
-    if (state.state !== 'open' && parent) parentTicketId = parent.id
-    else if (state.state === 'active' && operation.op === 'shared-spawn') {
+    if (operation.op === 'shared-spawn') {
+      if (state.state !== 'active') {
+        if (state.state === 'open') fail('maintenance_delegate_invalid', 'shared-runtime delegate is not valid outside active maintenance', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+        fail('maintenance_active', `session maintenance is ${state.state}; shared-spawn was not admitted`, { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      }
       const raw = operation.delegate
       const delegate = state.delegates.find((candidate) => candidate.epoch === state.epoch
         && candidate.operation === 'shared-spawn' && candidate.sessionId === operation.sessionId
@@ -357,26 +425,29 @@ export function createSessionMaintenance(input: CoordinatorInput) {
       delegate.state = 'running'
       mode = 'maintenance'
       parentTicketId = parentTicket.id
-    } else if (state.state === 'active' && (operation.op === 'stop' || operation.op === 'resume')) {
-      const authorization = operation.authorization
-      if (!authorization)
-        return fail('maintenance_token_invalid', 'maintenance bearer is missing, wrong, or stale', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
-      verifyLease(state, authorization)
+    } else if ((operation.op === 'stop' || operation.op === 'resume') && operation.authorization) {
+      verifyLease(state, operation.authorization)
       const entry = capabilityFor(state, operation)
       if (!entry) return fail('maintenance_capability_missing', 'operation is not in the exact maintenance capability plan', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
-      if (entry.state !== 'unused') fail('maintenance_capability_used', 'maintenance capability is already running, completed, or indeterminate', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
-      entry.state = 'running'
+      if (entry.state !== 'unused') fail('maintenance_capability_used', 'maintenance capability is already inflight, committed, or indeterminate', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      entry.state = 'inflight'
+      entry.requestId = ticketId
       mode = 'maintenance'
+    } else if (state.state !== 'open' && (operation.op === 'stop' || operation.op === 'resume')) {
+      if (state.state === 'active')
+        return fail('maintenance_token_invalid', 'maintenance bearer is missing, wrong, or stale', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      fail('maintenance_active', `session maintenance is ${state.state}; ${operation.op} was not admitted`, { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
     } else if (state.state === 'active' && 'authorization' in operation && operation.authorization) {
       verifyLease(state, operation.authorization)
       fail('maintenance_capability_missing', 'operation is not in the exact maintenance capability plan', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
-    } else if (state.state !== 'open' && !parent) {
+    } else if (state.state !== 'open' && parent) parentTicketId = parent.id
+    else if (state.state !== 'open') {
       if ('delegate' in operation) fail('maintenance_delegate_invalid', 'shared-runtime delegate is not valid for this operation', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
       fail('maintenance_active', `session maintenance is ${state.state}; ${operation.op} was not admitted`, { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
     }
 
     const ticket: Ticket = {
-      id: input.randomBytes(16).toString('hex'), epoch: state.epoch, operation: operation.op,
+      id: ticketId, epoch: state.epoch, operation: operation.op,
       ...(operationSession(operation) ? { sessionId: operationSession(operation) } : {}),
       ...(operationForce(operation) !== undefined ? { force: operationForce(operation) } : {}),
       owner, deadline: input.now() + input.ticketReportMs, mode,
@@ -387,14 +458,17 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     return ticket
   }
 
-  const finishTicket = (ticketId: string, succeeded: boolean): void => locked((state, dirty) => {
+  const finishTicket = (ticketId: string, outcome: 'committed' | 'retryable' | 'indeterminate'): void => locked((state, dirty) => {
     const index = state.tickets.findIndex((ticket) => ticket.id === ticketId)
     if (index < 0) return
     const [ticket] = state.tickets.splice(index, 1)
     if (ticket.mode === 'maintenance' && (ticket.operation === 'stop' || ticket.operation === 'resume')) {
       const entry = state.capabilities.find(({ capability }) => capability.op === ticket.operation
         && capability.sessionId === ticket.sessionId && (capability.op !== 'resume' || capability.force === ticket.force))
-      if (entry?.state === 'running') entry.state = succeeded ? 'completed' : 'indeterminate'
+      if (entry?.state === 'inflight' && entry.requestId === ticket.id) {
+        entry.state = outcome === 'retryable' ? 'unused' : outcome
+        delete entry.requestId
+      }
     }
     if (ticket.operation === 'shared-spawn' && ticket.parentTicketId) {
       const delegate = state.delegates.find((candidate) => candidate.parentTicketId === ticket.parentTicketId
@@ -419,6 +493,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
   const readState = (): MaintenanceState => locked((state) => ({
     state: state.state,
     epoch: state.epoch,
+    owner: copy(state.owner),
     heartbeatDeadline: state.heartbeatDeadline,
     tickets: copy(state.tickets.map((ticket) => ({
       operation: ticket.operation,
@@ -430,7 +505,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     capabilities: copy(state.capabilities),
   }))
 
-  const acquireLease = async ({ capabilities: rawCapabilities, owner, ttlMs, waitMs }: { capabilities: readonly Capability[]; owner: ProcessIdentity; ttlMs: number; waitMs: number }): Promise<MaintenanceLease> => {
+  const acquireLease = async ({ capabilities: rawCapabilities, owner, ttlMs, waitMs }: { capabilities: readonly Capability[]; owner: LeaseOwner; ttlMs: number; waitMs: number }): Promise<MaintenanceLease> => {
     if (!Number.isFinite(ttlMs) || ttlMs < MIN_TTL_MS || ttlMs > MAX_TTL_MS || !Number.isFinite(waitMs) || waitMs < 0 || waitMs > MAX_WAIT_MS || waitMs > ttlMs)
       fail('maintenance_invalid', 'maintenance ttl/wait is outside the finite bounds')
     if (identityState(owner) !== 'live') fail('maintenance_invalid', 'maintenance lease owner identity is not exact and live')
@@ -451,6 +526,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
         token,
         epoch: state.epoch,
         state: state.state as MaintenanceLease['state'],
+        owner: copy(owner),
         capabilities: copy(capabilities),
       }
     })
@@ -479,8 +555,6 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
   const releaseLease = async ({ token, epoch }: { token: string; epoch: number }): Promise<void> => {
     locked((state, dirty) => {
-      if (state.epoch === epoch && state.state === 'draining' && state.tickets.length)
-        fail('maintenance_tickets_live', 'maintenance cannot release while exact live or ambiguous tickets remain', { state: state.state, epoch: state.epoch })
       if (state.epoch !== epoch || state.state === 'open') fail('maintenance_conflict', 'maintenance release names a stale epoch', { state: state.state, epoch: state.epoch })
       if (!presentedTokenMatches(token, state.tokenHash)) fail('maintenance_token_invalid', 'maintenance bearer is missing, wrong, or stale', { state: state.state, epoch: state.epoch })
       if (state.tickets.length) fail('maintenance_tickets_live', 'maintenance cannot release while exact live or ambiguous tickets remain', { state: state.state, epoch: state.epoch })
@@ -498,47 +572,58 @@ export function createSessionMaintenance(input: CoordinatorInput) {
   const runOperation = async <T>(operation: Operation, body: (ticket: MaintenanceTicket) => Promise<T> | T): Promise<T> => {
     const owner = input.selfIdentity()
     const ticket = locked((state, dirty) => beginTicket(state, operation, owner, dirty))
-    let succeeded = false
+    let outcome: 'committed' | 'retryable' | 'indeterminate' = 'indeterminate'
     try {
       const result = await context.run({ ticketId: ticket.id }, () => body({
         id: ticket.id,
         epoch: ticket.epoch,
         delegateSharedSpawn: (sessionId: string) => delegateForTicket(ticket.id, sessionId),
       }))
-      succeeded = true
+      outcome = (operation.op === 'stop' || operation.op === 'resume')
+        && (result === false || (!!result && typeof result === 'object' && 'ok' in result && (result as { ok?: unknown }).ok === false))
+        ? 'retryable'
+        : 'committed'
       return result
     } finally {
-      finishTicket(ticket.id, succeeded)
+      finishTicket(ticket.id, outcome)
     }
   }
 
   const runOperationSync = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => T): T => {
     const owner = input.selfIdentity()
     const ticket = locked((state, dirty) => beginTicket(state, operation, owner, dirty))
-    let succeeded = false
+    let outcome: 'committed' | 'retryable' | 'indeterminate' = 'indeterminate'
     try {
       const result = context.run({ ticketId: ticket.id }, () => body({
         id: ticket.id,
         epoch: ticket.epoch,
         delegateSharedSpawn: (sessionId: string) => delegateForTicket(ticket.id, sessionId),
       }))
-      succeeded = true
+      outcome = (operation.op === 'stop' || operation.op === 'resume')
+        && (result === false || (!!result && typeof result === 'object' && 'ok' in result && (result as { ok?: unknown }).ok === false))
+        ? 'retryable'
+        : 'committed'
       return result
     } finally {
-      finishTicket(ticket.id, succeeded)
+      finishTicket(ticket.id, outcome)
     }
   }
 
-  const authorizeHttpOperation = async ({ authenticated, projectMatches, headers, operation }: { authenticated: boolean; projectMatches: boolean; headers: Record<string, string>; operation: Operation }): Promise<void> => {
+  const authorizeHttpOperation = async ({ authenticated, projectMatches, headers, operation }: { authenticated: boolean; projectMatches: boolean; headers: Record<string, string>; operation: Operation }): Promise<Authorization | undefined> => {
     if (!authenticated) fail('unauthorized', 'authentication is required before maintenance admission')
     if (!projectMatches) fail('project_mismatch', 'request project does not match the maintenance project')
     const token = Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-spexcode-session-maintenance')?.[1] ?? ''
-    locked((state) => {
+    return locked((state) => {
+      if (!token) {
+        if (state.state === 'active') fail('maintenance_token_invalid', 'maintenance bearer is missing, wrong, or stale', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
+        return undefined
+      }
       if (state.state !== 'active') fail('maintenance_conflict', 'maintenance lease is not active', { state: state.state, epoch: state.epoch })
       if (!presentedTokenMatches(token, state.tokenHash)) fail('maintenance_token_invalid', 'maintenance bearer is missing, wrong, or stale', { state: state.state, epoch: state.epoch })
       const entry = capabilityFor(state, operation)
       if (!entry) return fail('maintenance_capability_missing', 'operation is not in the exact maintenance capability plan', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
-      if (entry.state !== 'unused') fail('maintenance_capability_used', 'maintenance capability is already running, completed, or indeterminate', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
+      if (entry.state !== 'unused') fail('maintenance_capability_used', 'maintenance capability is already inflight, committed, or indeterminate', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operationSession(operation) })
+      return { token, epoch: state.epoch }
     })
   }
 
@@ -597,6 +682,12 @@ export const runSessionOperation = <T>(operation: Operation, body: (ticket: Main
   sessionMaintenance().runOperation(operation, body)
 export const runSessionOperationSync = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => T): T =>
   sessionMaintenance().runOperationSync(operation, body)
+
+export function maintenanceBrokerDescriptors(): { request: number; response: number; turn: number } | null {
+  const values = (process.env.SPEXCODE_MAINTENANCE_BROKER_FDS || '').split(',').map(Number)
+  if (values.length !== 3 || values.some((fd) => !Number.isInteger(fd) || fd < 3) || new Set(values).size !== 3) return null
+  return { request: values[0], response: values[1], turn: values[2] }
+}
 
 export function maintenanceErrorPayload(error: unknown): Record<string, unknown> | null {
   if (!(error instanceof SessionMaintenanceError)) return null

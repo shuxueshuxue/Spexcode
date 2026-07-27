@@ -26,7 +26,7 @@ while (!existsSync(startBarrier)) await new Promise((resolve) => setTimeout(reso
 let result: { pid: number; ok: boolean; epoch?: number; code?: string }
 let lease: { token: string; epoch: number } | null = null
 try {
-  lease = await gate.acquireLease({ capabilities: [], owner: { pid: process.pid, startToken }, ttlMs: 30_000, waitMs: 0 })
+  lease = await gate.acquireLease({ capabilities: [], owner: { instanceId: `cas-${process.pid}`, pid: process.pid, startToken }, ttlMs: 30_000, waitMs: 0 })
   result = { pid: process.pid, ok: true, epoch: lease.epoch }
 } catch (error: any) {
   result = { pid: process.pid, ok: false, code: error?.code ?? 'unknown' }

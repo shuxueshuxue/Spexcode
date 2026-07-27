@@ -596,7 +596,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
         : { method: 'POST' })
       if (!res.ok) { ok = false; const j = await res.json().catch(() => null); if (j?.error) setActErr(j.error) }
-    } catch { ok = false /* network hiccup — the reload below re-reads truth */ }
+    } catch (error) {
+      ok = false
+      setActErr(error instanceof Error ? error.message : String(error))
+    }
     await reload?.()
     return ok
   }
@@ -786,6 +789,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
+          {actErr && <div className="si-offline-err si-action-error" role="alert">{actErr}</div>}
           {actErr && !shelvedSel && <div className="si-offline-err" role="alert">{actErr}</div>}
           {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {

@@ -106,6 +106,7 @@ page.on('console', (message) => { if (message.type() === 'error') consoleErrors.
 let failure
 try {
   const guardBefore = await get(true)
+  const guardConsoleStart = consoleErrors.length
   await page.goto(`${base}/#/sessions/${guardId}`, { waitUntil: 'domcontentloaded' })
   const guardRow = page.locator(`.si-item[data-sid="${guardId}"]`)
   await guardRow.waitFor({ state: 'visible', timeout: 30_000 })
@@ -115,6 +116,8 @@ try {
   const guardError = page.locator('[role="alert"].si-offline-err').first()
   await guardError.waitFor({ state: 'visible', timeout: 10_000 })
   assert.match((await guardError.textContent()) || '', /refus|ownership|unowned|turn|probe/i)
+  const guardConsoleErrors = consoleErrors.splice(guardConsoleStart)
+  assert.ok(guardConsoleErrors.every((message) => /409|Conflict/i.test(message)), `unexpected guard console errors: ${guardConsoleErrors.join('; ')}`)
   const guardAfter = (await get(true)).find((s) => s.id === guardId)
   const guardRowBefore = guardBefore.find((s) => s.id === guardId)
   assert.deepEqual({ archived: guardAfter?.archived, status: guardAfter?.status, liveness: guardAfter?.liveness }, { archived: guardRowBefore?.archived, status: guardRowBefore?.status, liveness: guardRowBefore?.liveness }, 'guard refusal must not mutate the guarded record projection')
@@ -199,13 +202,16 @@ try {
 finally {
   if (watch.child.exitCode == null) watch.child.kill('SIGTERM')
   if (wait.child.exitCode == null) wait.child.kill('SIGTERM')
+  await Promise.all([waitClosed(watch.child), waitClosed(wait.child)]).catch(() => {})
+  writeFileSync(join(out, 'watch.log'), `${watch.text().stdout}${watch.text().stderr}`)
+  writeFileSync(join(out, 'wait.log'), `${wait.text().stdout}${wait.text().stderr}`)
   const current = await getTarget(true).catch(() => null)
   if (current?.archived) await post(`/api/sessions/${sessionId}/resume`).catch(() => {})
 }
 const video = page.video(); await context.close(); const videoPath = await video.path(); await browser.close()
-assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join('\n')}`)
-assert.deepEqual(consoleErrors, [], `browser console errors: ${consoleErrors.join('\n')}`)
-writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events }, null, 2)}\n`)
-writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, video: videoPath }, null, 2)}\n`)
+const browserErrors = [...pageErrors, ...consoleErrors]
+if (browserErrors.length && !failure) failure = new Error(`browser errors: ${browserErrors.join('\\n')}`)
+writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events, pageErrors, consoleErrors }, null, 2)}\n`)
+writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, video: videoPath, browserErrors }, null, 2)}\n`)
 if (failure) throw failure
 console.log(JSON.stringify({ ok: true, video: videoPath, timeline: join(out, 'archive-shelf.timeline.json') }))

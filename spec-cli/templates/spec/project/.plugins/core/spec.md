@@ -16,6 +16,7 @@ Four disciplines, non-negotiable:
 <path>` or `spex spec search <topic>` to find it; read neighboring bodies when the contract needs their context.
 The body is the contract; update it with code when intent changes.
 2. COMMIT BEFORE YOU DECLARE. Commit the spec and the code it justifies before declaring done or proposing merge.
+Independent intent gets its own sibling node; do not ride it on an assigned node.
 3. THE BODY IS A LIVING CURRENT-STATE DOCUMENT. Rewrite present intent in place; never add a `## vN` changelog.
 4. KEEP THE LOSS SIGNAL HONEST. `spex spec lint` is the blocking correctness gate; `spex eval lint --changed`
 reports measurement gaps. Re-run changed eval scenarios through the real product, commit the verified tree, then

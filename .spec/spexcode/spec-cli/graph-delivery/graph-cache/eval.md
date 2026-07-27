@@ -1,5 +1,27 @@
 ---
 scenarios:
+  - name: unchanged-patrol-does-not-rebuild
+    tags: [backend-api]
+    code: [spec-cli/src/graphCache.ts, spec-cli/src/graphStream.ts]
+    description: >-
+      A/B the real HTTP and delta-SSE surfaces on one frozen production-shaped corpus and one frozen copy of
+      its session store (roughly 180 spec nodes, thousands of historical readings, tens of governed sessions,
+      and scores of linked worktrees). Pin the source SHA and start an isolated backend with
+      `SPEXCODE_BOARD_DEBUG=1`, warm `/api/graph`, then hold one `/api/graph/stream?mode=delta` subscriber for
+      at least three 15-second patrol windows while issuing cached `/api/graph` and `/health` reads and sampling
+      backend CPU. Record every graph-build warning, trigger tag, ETag and response status. In separate isolated
+      rounds, make one real session-record change, one governed spec change, and one eval-reading sidecar change,
+      and observe the same stream plus a final full graph read. A and B must use independent copies of the exact
+      same frozen data root so one run cannot preheat or mutate the other.
+    expected: >-
+      After the initial delta anchor settles, three unchanged patrol windows start zero full board assemblies:
+      the ETag stays fixed, cached graph and health reads remain 200 near idle latency, and backend CPU returns to
+      its idle platform instead of spending each patrol interval rebuilding an identical graph. The patrol still
+      verifies its authority through one cache-owned single-flight operation; it adds no second timer or
+      overlapping producer. A real session-record change advances the session unit through the sessions splice,
+      and real governed spec and eval-reading changes each advance the affected graph semantics through a full
+      rebuild. Concurrent patrol, HTTP and stream callers share the same operation, and no real graph/session/eval
+      change is hidden or delayed beyond the existing patrol/watch cadence.
   - name: poll-storm-doesnt-wedge-health
     tags: [backend-api]
     description: >-

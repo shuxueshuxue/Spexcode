@@ -13,6 +13,7 @@ const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url))
 const casFixture = fileURLToPath(new URL('../test/session-maintenance-cas-fixture.ts', import.meta.url))
 
 type Identity = { pid: number; startToken: string }
+type LeaseOwner = Identity & { instanceId: string }
 type ProcessReading = Identity | null | 'ambiguous'
 type Capability =
   | { op: 'stop'; sessionId: string }
@@ -44,19 +45,20 @@ type Ticket = {
   epoch: number
   delegateSharedSpawn(sessionId: string): string
 }
-type Lease = { token: string; epoch: number; state: 'draining' | 'active'; capabilities: readonly Capability[] }
+type Lease = { token: string; epoch: number; state: 'draining' | 'active'; owner: LeaseOwner; capabilities: readonly Capability[] }
 type Maintenance = {
   headerName: string
   runOperation<T>(operation: Operation, body: (ticket: Ticket) => Promise<T> | T): Promise<T>
-  acquireLease(input: { capabilities: readonly Capability[]; owner: Identity; ttlMs: number; waitMs: number }): Promise<Lease>
+  acquireLease(input: { capabilities: readonly Capability[]; owner: LeaseOwner; ttlMs: number; waitMs: number }): Promise<Lease>
   heartbeatLease(input: { token: string; epoch: number; ttlMs: number }): Promise<void>
   releaseLease(input: { token: string; epoch: number }): Promise<void>
   readState(): {
     state: 'open' | 'draining' | 'active'
     epoch: number
+    owner: LeaseOwner | null
     heartbeatDeadline: number | null
     tickets: readonly { operation: Operation['op']; sessionId?: string; force?: boolean; owner: Identity; deadline: number }[]
-    capabilities: readonly { capability: Capability; state: 'unused' | 'running' | 'completed' | 'indeterminate' }[]
+    capabilities: readonly { capability: Capability; state: 'unused' | 'inflight' | 'committed' | 'indeterminate'; requestId?: string }[]
   }
   authorizeHttpOperation(input: {
     authenticated: boolean
@@ -151,7 +153,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       })
       await entered.promise
       const caps: Capability[] = [{ op: 'stop', sessionId: 's-1' }]
-      const pending = b.acquireLease({ capabilities: caps, owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 10_000 })
+      const pending = b.acquireLease({ capabilities: caps, owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 10_000 })
       await turn()
       caps[0] = { op: 'stop', sessionId: 'forged-after-acquire' }
       await expectCode(a.runOperation({ op: 'create' }, async () => assert.fail('create callback ran')), 'maintenance_active')
@@ -217,10 +219,12 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       })
       await entered.promise
       f.advance(60_000)
-      const draining = await f.create().acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
+      const draining = await f.create().acquireLease({ capabilities: [], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
       assert.equal(draining.state, 'draining', 'deadline cannot prove a live callback stopped')
       assert.deepEqual(f.create().readState(), {
-        state: 'draining', epoch: draining.epoch, heartbeatDeadline: 100_000,
+        state: 'draining', epoch: draining.epoch,
+        owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' },
+        heartbeatDeadline: 100_000,
         tickets: [{ operation: 'send', sessionId: 's-live', owner: { pid: 8001, startToken: 'ticket-owner-a' }, deadline: 11_000 }],
         capabilities: [],
       }, 'status exposes deadlines and exact owners without secret ticket or bearer material')
@@ -242,7 +246,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       })
       await deadEntered.promise
       f.readings.delete(8002)
-      const afterDeath = await f.create().acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
+      const afterDeath = await f.create().acquireLease({ capabilities: [], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
       assert.equal(afterDeath.state, 'active', 'only positive owner death reclaims this unresolved ticket')
       await f.create().releaseLease({ token: afterDeath.token, epoch: afterDeath.epoch })
     } finally { f.cleanup() }
@@ -252,10 +256,10 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     const f = makeFixture()
     try {
       const gate = f.create()
-      await expectCode(gate.acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 4_999, waitMs: 0 }), 'maintenance_invalid')
-      await expectCode(gate.acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 300_001, waitMs: 0 }), 'maintenance_invalid')
+      await expectCode(gate.acquireLease({ capabilities: [], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 4_999, waitMs: 0 }), 'maintenance_invalid')
+      await expectCode(gate.acquireLease({ capabilities: [], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 300_001, waitMs: 0 }), 'maintenance_invalid')
       const lease = await gate.acquireLease({
-        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 5_000, waitMs: 0,
+        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 5_000, waitMs: 0,
       })
       const entered = deferred(); const finish = deferred()
       const stopping = gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: { token: lease.token, epoch: lease.epoch } }, async () => {
@@ -266,7 +270,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       f.advance(5_001)
       const recovered = f.create()
       assert.equal(recovered.readState().state, 'draining')
-      await expectCode(recovered.releaseLease({ token: lease.token, epoch: lease.epoch }), 'maintenance_tickets_live')
+      await expectCode(recovered.releaseLease({ token: lease.token, epoch: lease.epoch }), 'maintenance_token_invalid')
       await expectCode(recovered.runOperation({ op: 'send', sessionId: 's-1' }, async () => {}), 'maintenance_active')
       finish.resolve(); await stopping
       assert.equal(f.create().readState().state, 'open')
@@ -280,7 +284,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       const initial = JSON.stringify({ state: gate.readState(), events: f.events })
       await expectCode(gate.acquireLease({
         capabilities: [{ op: 'stop', sessionId: 's-1' }, { op: 'stop', sessionId: 's-1' }],
-        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       }), 'maintenance_invalid')
       assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), initial, 'duplicate capability refusal changes nothing')
 
@@ -290,7 +294,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
           { op: 'resume', sessionId: 's-1', force: false },
           { op: 'resume', sessionId: 's-2', force: true },
         ],
-        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       const auth = { token: lease.token, epoch: lease.epoch }
       const beforeAuthorize = JSON.stringify({ state: gate.readState(), events: f.events })
@@ -323,7 +327,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     try {
       const gate = f.create()
       const lease = await gate.acquireLease({
-        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       f.advance(1_000)
       await gate.heartbeatLease({ token: lease.token, epoch: lease.epoch, ttlMs: 60_000 })
@@ -338,7 +342,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     try {
       const gate = f.create()
       const lease = await gate.acquireLease({
-        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       assert.equal(gate.headerName.toLowerCase(), 'x-spexcode-session-maintenance')
       assert.match(lease.token, /^[0-9a-f]{64}$/)
@@ -367,7 +371,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: { token: lease.token, epoch: lease.epoch } }, async () => {})
       await expectCode(gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: { token: lease.token, epoch: lease.epoch } }, async () => {}), 'maintenance_capability_used')
       await gate.releaseLease({ token: lease.token, epoch: lease.epoch })
-      const next = await gate.acquireLease({ capabilities: [{ op: 'stop', sessionId: 'throws' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
+      const next = await gate.acquireLease({ capabilities: [{ op: 'stop', sessionId: 'throws' }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
       assert.ok(next.epoch > lease.epoch)
       await expectCode(gate.heartbeatLease({ token: lease.token, epoch: lease.epoch, ttlMs: 30_000 }), 'maintenance_conflict')
       const beforeStale = JSON.stringify({ state: gate.readState(), events: f.events })
@@ -392,7 +396,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     try {
       const gate = f.create()
       const lease = await gate.acquireLease({
-        capabilities: [{ op: 'resume', sessionId: 's-1', force: true }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        capabilities: [{ op: 'resume', sessionId: 's-1', force: true }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       let delegate = ''
       await gate.runOperation({ op: 'resume', sessionId: 's-1', force: true, authorization: { token: lease.token, epoch: lease.epoch } }, async (ticket) => {
@@ -442,12 +446,71 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       await entered.promise
       const lease = await gate.acquireLease({
         capabilities: [{ op: 'stop', sessionId: 's-1' }, { op: 'resume', sessionId: 's-1', force: false }],
-        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       assert.equal(lease.state, 'draining')
       inspect.resolve(); await parent
       assert.deepEqual(callbacks, [])
     } finally { f.cleanup() }
+  })
+
+  await t.test('active durable row never lets an inherited ordinary parent bypass exact authority', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'spex-maintenance-parent-active-a-'))
+    const result = join(root, 'result.json')
+    const runner = join(root, 'runner.mts')
+    const parentStart = processStartToken(process.pid); assert.ok(parentStart)
+    const token = '8a'.repeat(32)
+    const durable = {
+      version: 1,
+      state: 'active',
+      epoch: 12,
+      tokenHash: createHash('sha256').update(token).digest('hex'),
+      owner: { instanceId: 'active-parent-generation', pid: process.pid, startToken: parentStart },
+      heartbeatDeadline: Date.now() + 60_000,
+      capabilities: [
+        { capability: { op: 'stop', sessionId: 's-1' }, state: 'unused' },
+        { capability: { op: 'resume', sessionId: 's-1', force: false }, state: 'unused' },
+      ],
+      tickets: [{
+        id: 'ordinary-parent-ticket', epoch: 11, operation: 'send', sessionId: 's-parent',
+        owner: { pid: process.pid, startToken: parentStart }, deadline: Date.now() + 60_000, mode: 'ordinary',
+      }],
+      delegates: [],
+    }
+    writeFileSync(join(root, 'session-maintenance.json'), JSON.stringify(durable, null, 2))
+    writeFileSync(runner, `
+import { writeFileSync } from 'node:fs'
+import { processStartToken } from ${JSON.stringify(new URL('./process-identity.js', import.meta.url).href)}
+import { createSessionMaintenance } from ${JSON.stringify(new URL('./session-maintenance.js', import.meta.url).href)}
+const [root, result] = process.argv.slice(2)
+const startToken = processStartToken(process.pid)
+const gate = createSessionMaintenance({ runtimeRoot: root, now: () => Date.now(), randomBytes: (size) => Buffer.alloc(size, 0x8b),
+  processIdentity: (pid) => { const token = processStartToken(pid); return token ? { pid, startToken: token } : null },
+  selfIdentity: () => ({ pid: process.pid, startToken }), ticketReportMs: 1000 })
+const callbacks = []
+const codes = []
+for (const operation of [
+  { op: 'stop', sessionId: 's-1' },
+  { op: 'resume', sessionId: 's-1', force: false },
+  { op: 'shared-spawn', sessionId: 's-1', delegate: 'ff'.repeat(32) },
+]) {
+  try { await gate.runOperation(operation, async () => callbacks.push(operation.op)); codes.push(null) }
+  catch (error) { codes.push(error?.code ?? 'unknown') }
+}
+writeFileSync(result, JSON.stringify({ callbacks, codes }))
+`)
+    try {
+      const child = spawn(tsx, [runner, root, result], {
+        env: { ...process.env, SPEXCODE_MAINTENANCE_PARENT_TICKET: 'ordinary-parent-ticket' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let stderr = ''; child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+      const [code] = await bounded(once(child, 'close') as Promise<[number | null]>, 'active parent fixture exit')
+      assert.equal(code, 0, stderr)
+      assert.deepEqual(JSON.parse(readFileSync(result, 'utf8')), {
+        callbacks: [], codes: ['maintenance_token_invalid', 'maintenance_token_invalid', 'maintenance_delegate_invalid'],
+      })
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   await t.test('refused maintenance result leaves exact capability retryable', async () => {
@@ -456,7 +519,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       const gate = f.create()
       const lease = await gate.acquireLease({
         capabilities: [{ op: 'stop', sessionId: 's-1' }],
-        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       const authorization = { token: lease.token, epoch: lease.epoch }
       const refused = await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization }, async () => ({ ok: false, refused: true }))
@@ -478,7 +541,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       })
       await entered.promise
       const lease = await gate.acquireLease({
-        capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+        capabilities: [], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
       })
       assert.equal(lease.state, 'draining')
       await expectCode(gate.releaseLease({ token: '00'.repeat(32), epoch: lease.epoch }), 'maintenance_token_invalid')
@@ -507,35 +570,19 @@ test('aggregate future maintenance coordinator contract', async (t) => {
   await t.test('a stale reaper cannot remove a replacement lock owner after its proof', async () => {
     const root = mkdtempSync(join(tmpdir(), 'spex-maintenance-lock-aba-a-'))
     const lock = join(root, '.session-maintenance.lock')
-    const observed = join(root, 'stale-observed')
-    const release = join(root, 'release-stale-reaper')
-    const result = join(root, 'result.json')
-    const preload = join(root, 'preload.cjs')
+    const barrier = join(root, 'start')
+    const results = [join(root, 'result-a.json'), join(root, 'result-b.json')]
     const runner = join(root, 'runner.mts')
     try {
-      mkdirSync(lock)
-      writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: 999_999_991, startToken: 'dead-owner' }))
-      writeFileSync(preload, `
-const fs = require('node:fs')
-const { syncBuiltinESMExports } = require('node:module')
-const original = fs.rmSync
-let intercepted = false
-fs.rmSync = function(path, options) {
-  if (!intercepted && path === process.env.SPEX_LOCK_RACE_PATH) {
-    intercepted = true
-    fs.writeFileSync(process.env.SPEX_LOCK_OBSERVED, '')
-    while (!fs.existsSync(process.env.SPEX_LOCK_RELEASE)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5)
-  }
-  return original.call(this, path, options)
-}
-syncBuiltinESMExports()
-`)
+      writeFileSync(lock, JSON.stringify({ version: 1, nonce: 'stale-lock-generation', owner: { pid: 999_999_991, startToken: 'dead-owner' } }))
       writeFileSync(runner, `
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { processStartToken } from ${JSON.stringify(new URL('./process-identity.js', import.meta.url).href)}
 import { createSessionMaintenance } from ${JSON.stringify(new URL('./session-maintenance.js', import.meta.url).href)}
-const [runtimeRoot, resultPath] = process.argv.slice(2)
+const [runtimeRoot, resultPath, barrier] = process.argv.slice(2)
 const startToken = processStartToken(process.pid)
+writeFileSync(resultPath + '.ready', '')
+while (!existsSync(barrier)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5)
 try {
   createSessionMaintenance({ runtimeRoot, now: () => Date.now(), randomBytes: (size) => Buffer.alloc(size, 0x6c),
     processIdentity: (pid) => { const token = processStartToken(pid); return token ? { pid, startToken: token } : null },
@@ -543,32 +590,18 @@ try {
   writeFileSync(resultPath, JSON.stringify({ ok: true }))
 } catch (error) { writeFileSync(resultPath, JSON.stringify({ ok: false, code: error?.code ?? 'unknown' })) }
 `)
-      const child = spawn(tsx, [runner, root, result], {
-        env: {
-          ...process.env,
-          NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`,
-          SPEX_LOCK_RACE_PATH: lock,
-          SPEX_LOCK_OBSERVED: observed,
-          SPEX_LOCK_RELEASE: release,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
+      const children = results.map((resultPath) => {
+        const child = spawn(tsx, [runner, root, resultPath, barrier], { stdio: ['ignore', 'pipe', 'pipe'] })
+        let stderr = ''; child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+        return { child, stderr: () => stderr, closed: once(child, 'close') as Promise<[number | null]> }
       })
-      let stderr = ''; child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
-      const closed = once(child, 'close') as Promise<[number | null]>
-      await waitUntil(() => {
-        if (existsSync(observed)) return true
-        if (child.exitCode !== null) throw new Error(`stale reaper exited before barrier (${child.exitCode}): ${stderr}`)
-        return false
-      }, 'stale reaper read barrier')
-      rmSync(lock, { recursive: true, force: true })
-      mkdirSync(lock)
-      const parentStart = processStartToken(process.pid); assert.ok(parentStart)
-      writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, startToken: parentStart }))
-      writeFileSync(release, '')
-      const [code] = await bounded(closed, 'stale reaper exit')
-      assert.equal(code, 0, stderr)
-      assert.deepEqual(JSON.parse(readFileSync(result, 'utf8')), { ok: false, code: 'maintenance_conflict' })
-      assert.deepEqual(JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')), { pid: process.pid, startToken: parentStart })
+      await waitUntil(() => results.every((path) => existsSync(`${path}.ready`)), 'both stale reapers ready')
+      writeFileSync(barrier, '')
+      const exits = await Promise.all(children.map(({ closed }, index) => bounded(closed, `stale reaper ${index} exit`, 10_000)))
+      exits.forEach(([code], index) => assert.equal(code, 0, children[index].stderr()))
+      assert.deepEqual(results.map((path) => JSON.parse(readFileSync(path, 'utf8'))), [{ ok: true }, { ok: true }])
+      assert.equal(existsSync(lock), false)
+      assert.equal(JSON.parse(readFileSync(join(root, 'session-maintenance.json'), 'utf8')).state, 'open')
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 })

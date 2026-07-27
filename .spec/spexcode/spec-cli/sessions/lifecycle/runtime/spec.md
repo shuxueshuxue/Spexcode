@@ -71,7 +71,8 @@ replacing that pointer does not erase an older still-live supervisor's ownership
 it belongs to the session that happened to start it. Identity stripping is proven separately from the live
 process environment rather than by a registry claim. The project tier also holds [[maintenance-lease]]'s one
 atomically replaced admission row: its monotonic epoch, hashed bearer, immutable capability states, exact
-PID/start owners, and operation tickets are project runtime facts, never session-record or worktree content.
+supervisor-generation lease owner, exact PID/start ticket owners, and operation tickets are project runtime
+facts, never session-record or worktree content.
 Backend generations share this row, so restart and cross-instance acquisition cannot reopen writes by losing
 process memory. All of it lives under `runtimeRoot()`, NOT the worktree. So
 the worktree holds ZERO

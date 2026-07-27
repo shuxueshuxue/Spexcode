@@ -3,7 +3,6 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { tmpdir } from 'node:os'
-import { pathToFileURL } from 'node:url'
 
 const [repoArg, goldenArg, baselineArg, baselineSha, candidateArg, candidateSha] = process.argv.slice(2)
 if (!candidateSha) {
@@ -106,20 +105,6 @@ function buildPositiveControl() {
   return { root, hit: git(root, ['rev-parse', 'HEAD']).slice(0, 8) }
 }
 
-async function fetchLayer(repo, tips) {
-  const lintUrl = pathToFileURL(join(candidate.root, 'spec-cli', 'src', 'lint.ts')).href
-  const anchorsUrl = pathToFileURL(join(candidate.root, 'spec-cli', 'src', 'anchors.ts')).href
-  const [{ specLint }, { extractors }] = await Promise.all([import(lintUrl), import(anchorsUrl)])
-  const failures = []
-  for (const tip of tips) {
-    const fast = await specLint(repo, extractors(repo), { tip })
-    const full = await specLint(repo, extractors(repo), { tip, fullOracle: true })
-    const encode = (rows) => rows.map((row) => JSON.stringify(row)).sort()
-    if (JSON.stringify(encode(fast)) !== JSON.stringify(encode(full))) failures.push(tip)
-  }
-  return { points: tips.length, passed: tips.length - failures.length, failures }
-}
-
 try {
   const positive = buildPositiveControl()
   const positiveBaseline = cliRun(baseline, baselineHome, positive.root)
@@ -151,16 +136,14 @@ try {
       failures.push({ commit: point.commit, onlyBaseline, onlyCandidate, storedMissing, storedExtra })
     console.error(`${point.commit.slice(0, 8)} depth=${point.depth} ${failures.at(-1)?.commit === point.commit ? 'FAIL' : 'pass'} ${JSON.stringify(distribution(b.rows))}`)
   }
-  const fetch = await fetchLayer(repo, golden.map((point) => point.commit))
   const result = {
     baseline: { sha: baseline.sha, cli: baseline.path },
     candidate: { sha: candidate.sha, cli: candidate.path },
     positiveControl: { anchors: 13, hit: positive.hit, mutationMissing: removed, pass: true },
     independentCli: { points: golden.length, passed: golden.length - failures.length, failures, coverage },
-    fetchLayer: fetch,
   }
   console.log(JSON.stringify(result, null, 2))
-  if (failures.length || fetch.failures.length) process.exitCode = 1
+  if (failures.length) process.exitCode = 1
 } finally {
   for (const root of roots) rmSync(root, { recursive: true, force: true })
 }

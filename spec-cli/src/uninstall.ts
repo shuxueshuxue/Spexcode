@@ -7,7 +7,6 @@ import { runtimeRoot, readConfig, mainCheckout } from './layout.js'
 import { resolveHarnessTargets } from './harness-select.js'
 import { loadSkillConfig, loadAgentConfig } from './specs.js'
 import { dematerialize } from './materialize.js'
-import { legacyHistoryEventCacheRoot } from './git.js'
 
 // @@@ spex-uninstall - materialize(∅) plus the store: the in-tree/global-config backout IS dematerialize (the
 // same identity-stamped erase phase every materialize runs first — the forgetting law's empty policy), and this
@@ -132,14 +131,11 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   // 3. Locate the global per-project store and recover every current/legacy plugin landing folder from its
   //    ledgers BEFORE deleting it. The store is the runtime tier, not the user's tracked intent asset.
   let store: string | null = null
-  let legacyEventStore: string | null = null
   let ledgerHosts: string[] = []
   try {
     store = runtimeRoot(proj)
-    legacyEventStore = legacyHistoryEventCacheRoot(proj)
   } catch {
     store = null
-    legacyEventStore = null
   }
   if (store) ledgerHosts = pluginLedgerHosts(store)
 
@@ -154,9 +150,9 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   }
   const bundles = sweepPluginBundles(proj, pluginHosts)
 
-  // 5. The whole store: per-tree manifests/hashes/ledgers, legacy project-global products, and sessions.
+  // 5. The whole store: per-tree manifests/hashes/ledgers and sessions.
   const removedStores: string[] = []
-  for (const candidate of new Set([store, legacyEventStore].filter((path): path is string => !!path))) {
+  for (const candidate of new Set([store].filter((path): path is string => !!path))) {
     if (!existsSync(candidate)) continue
     rmSync(candidate, { recursive: true, force: true })
     removedStores.push(candidate)

@@ -1,12 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -26,7 +25,7 @@ function idx(parents: Record<string, string[]>, parts: TestIndexParts = {}): Dri
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
 
-test('optimized history and drift indexes match the full-history oracle', async () => {
+test('history and drift indexes derive Git facts for a small real repository', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-index-oracle-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
   try {
@@ -36,12 +35,11 @@ test('optimized history and drift indexes match the full-history oracle', async 
     writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\n---\n# a\n')
     run('add', '.'); run('commit', '-qm', 'seed')
     appendFileSync(join(root, '.spec/project/a/spec.md'), '\nchanged\n'); run('add', '.'); run('commit', '-qm', 'revise a')
-    const fastH = await historyIndex(root), fullH = await historyIndexFull(root)
-    const paths = new Set([...fastH.versions.keys(), ...fullH.versions.keys()])
-    for (const path of paths) assert.deepEqual(rowsFor(fastH, path), rowsFor(fullH, path), `history mismatch for ${path}`)
-    const fastD = await driftIndex(root), fullD = await driftIndexFull(root)
     const tip = run('rev-parse', 'HEAD')
-    assert.equal(commitReachable(fastD, tip), commitReachable(fullD, tip))
+    const h = await historyIndex(root)
+    assert.ok(rowsFor(h, '.spec/project/a/spec.md').some((row) => row.hash === tip), 'history includes the current revision')
+    const d = await driftIndex(root)
+    assert.equal(commitReachable(d, tip), true)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -58,73 +56,6 @@ test('batch revision/blob reads preserve exact bytes, including large newline bl
     assert.ok(oid && !missing)
     assert.equal(batchBlobTexts(root, [oid!]).get(oid!), text)
   } finally { rmSync(root, { recursive: true, force: true }) }
-})
-
-test('versioned global event cache ignores a legacy .git ledger and stays oracle-equivalent after an upgrade', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-cache-upgrade-'))
-  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  let cachePath = ''
-  try {
-    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'cache@example.com'); run('config', 'user.name', 'Cache')
-    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
-    run('add', '.'); run('commit', '-qm', 'seed')
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# revised\n')
-    run('add', '.'); run('commit', '-qm', 'revise')
-    // This is the pre-schema location/shape. A new implementation must never parse it.
-    const legacy = join(root, '.git', 'spexcode', 'history-events-deprecated.ndjson')
-    mkdirSync(dirname(legacy), { recursive: true })
-    writeFileSync(legacy, JSON.stringify({ k: 'numstat', h: run('rev-parse', 'HEAD'), r: 'corrupt legacy row' }) + '\n')
-    resetHistoryCachesForTests()
-    const fast = await historyIndex(root), full = await historyIndexFull(root)
-    const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
-    for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `legacy cache affected ${path}`)
-    cachePath = historyEventCachePathForTests(root)
-    assert.match(cachePath, /\.spexcode[\\/]projects[\\/]/)
-    assert.match(cachePath, /history-events-v7-/)
-  } finally {
-    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('concurrent different-tip builders share an atomic ledger and recover on reopen', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-cache-concurrent-'))
-  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  let cachePath = ''
-  try {
-    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'concurrent@example.com'); run('config', 'user.name', 'Concurrent')
-    mkdirSync(join(root, '.spec', 'project'), { recursive: true })
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
-    run('add', '.'); run('commit', '-qm', 'seed')
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# one\n')
-    run('add', '.'); run('commit', '-qm', 'one')
-    const tipOne = run('rev-parse', 'HEAD')
-    writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# two\n')
-    run('add', '.'); run('commit', '-qm', 'two')
-    const tipTwo = run('rev-parse', 'HEAD')
-    cachePath = historyEventCachePathForTests(root)
-    const tsx = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
-    const module = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), 'git.ts')).href
-    const child = `(async()=>{const g=await import(${JSON.stringify(module)}); await Promise.all([g.historyIndex(process.argv[1], process.argv[2]),g.driftIndex(process.argv[1], process.argv[2])])})()`
-    const runChild = (tip: string) => new Promise<void>((resolveChild, reject) => {
-      const p = spawn(process.execPath, [tsx, '-e', child, '--', root, tip], { stdio: ['ignore', 'pipe', 'pipe'] })
-      let stderr = ''; p.stderr.on('data', (chunk) => { stderr += chunk })
-      p.on('error', reject); p.on('exit', (code) => code === 0 ? resolveChild() : reject(new Error(`cache child exited ${code}: ${stderr}`)))
-    })
-    await Promise.all([runChild(tipOne), runChild(tipTwo)])
-    resetHistoryCachesForTests()
-    for (const tip of [tipOne, tipTwo]) {
-      const fast = await historyIndex(root, tip), full = await historyIndexFull(root, tip)
-      const paths = new Set([...fast.versions.keys(), ...full.versions.keys()])
-      for (const path of paths) assert.deepEqual(rowsFor(fast, path), rowsFor(full, path), `concurrent cache mismatch at ${tip}:${path}`)
-    }
-    const names = readdirSync(dirname(cachePath))
-    assert.equal(names.some((name) => name.includes('.lock') || name.endsWith('.tmp')), false, `cache residue: ${names.join(', ')}`)
-  } finally {
-    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
-    rmSync(root, { recursive: true, force: true })
-  }
 })
 
 test('combined diff ownership is line-level across mixed, deletion, and octopus prefixes', () => {

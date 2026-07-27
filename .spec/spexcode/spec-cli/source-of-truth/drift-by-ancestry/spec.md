@@ -22,41 +22,30 @@ commit, never a sibling branch's changes. This holds the promise [[spec-node-sta
 says drift is measured "by git ancestry".
 
 ## expanded spec
-
-No linear order can keep that promise — date or topological, a total order cannot express "these two
-commits sit on parallel branches", so any position compare silently under-reports whenever history
-isn't chronological: back-dated or long-lived branches merged in, cherry-picks, and hardest of all
-**adoption**, where a spec tree is back-extracted onto an existing history. The [[source-of-truth]]
-walk therefore preserves the DAG question itself: ordinary reports read the cached immutable event index,
+No linear order can keep that promise — date or topological, a total order cannot express "these two commits sit
+on parallel branches", so any position compare silently under-reports whenever history is not chronological:
+back-dated or long-lived branches merged in, cherry-picks, and hardest of all adoption. The walk therefore
+preserves the DAG question itself: ordinary reports read one Git-derived event fold,
 project historical path identities through the current tip, and apply in-memory reachability. A path-scoped
 `rev-list` is not an alternate representation: even `--full-history` can miss pre-rename events, while `--follow`
-cannot model path reuse or parallel rename forks. The one event/project/filter mode avoids a per-node history walk,
-so "scale with history, not node count" still holds. The same one rule feeds
-every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
+cannot model path reuse or parallel rename forks. The one event/project/filter mode avoids a per-node history
+walk, so "scale with history, not node count" remains a correctness shape, not a performance promise. The same
+rule feeds every consumer of the signal — the [[spec-lint]] drift warning, board drift counts, and eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
 
-The persistent implementation is an **event fold followed by a read-time project/filter**. The fold stores
-immutable commit events (including renames and merge-owned lines) by object id and may grow with the number of
-events; the project step maps historical paths through the current tip's rename topology before applying the
-walk-newest version and ancestry filters. This split is part of the contract: a path-only fold cannot preserve
-the identity of a renamed node, and a fold that permanently erases a hit cannot reconstruct it when incomparable
-version branches are joined. More generally, preserving this walk-newest semantics admits no design with both
-bounded state and an O(1) read: the rename-chain and parallel-version counterexamples move the required walk
-either to write time or to read time. This is a cost bound, not permission to change the drift meaning.
+The exact implementation is an event fold followed by a read-time project/filter. The fold reads immutable Git
+commit events, including renames and merge-owned lines; the project step maps historical paths through the current
+tip's rename topology before applying the walk-newest version and ancestry filters. This split is part of the
+contract: a path-only fold cannot preserve renamed-node identity, and a fold that permanently erases a hit cannot
+reconstruct it when incomparable version branches are joined. Preserving this semantics admits no design with both
+bounded state and an O(1) read: the rename-chain and parallel-version counterexamples move the required work either
+to write time or to read time. This is a cost bound, not permission to change drift meaning.
 
-The bound is loose in the real corpus. In `perfrepo` (4,266 commits), 160 rename events have chains of at most
-four steps (96 one-step, 47 two-step, 16 three-step, one four-step; mean 1.51). The complete historical hit set
-is 249, 550, and 840 entries at depths 1,002, 2,497, and 4,200 (841 at HEAD). Earlier instruments
-undercounted: 198 / 458 / 748 / 749 used a path-simplified query, while 202 / 466 / 756 / 757 still read
-historical blobs through their current path and ignored deletion-side ranges. A later 249 / 553 / 843 / 844
-series overcounted three rename events because a result-only path query rendered them as full additions;
-the two-image query removes those false hits. Therefore the chosen
-incremental event index plus read-time projection preserves the existing verdict while keeping the practical
-projection cost near constant; future optimizations should compress these constants, not introduce a lossy
-alternative semantics.
-
-A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side:
-drift measured *from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
+The reference corpus measurements and the independent baseline CLI remain proof evidence for semantic behavior,
+not a claim that the current one-shot CLI has a lower wall-clock slope. Any future optimization must first prove a
+positive control, then compare a separate implementation against this Git-derived path at pinned tips.
+A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side: drift measured
+*from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
 longer folds into a blanket stale: where ancestry can't testify, eval freshness falls back to comparing
 CONTENT between the anchor's tree and HEAD ([[eval-core]]'s content fallback) — a fold, rebase,
 squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
@@ -79,8 +68,8 @@ merges enter a governed path window only through dense combined (`--cc`) **lines
 from every parent column. Mixed-prefix lines inherited from any parent stay outside even when adjacent to
 an all-parent line in one hunk; all-parent deletions retain one preimage range per parent. This line-level map also
 decides whether a merge created a spec version. Thus clean transport stays neutral while content authored
-during conflict resolution retains the merge's identity and responsibility. Candidate builds are transient — shared inside one lint call but never inserted into the
-persistent per-root HEAD cache — so a rejected dangling oid cannot evict or contaminate board state.
+during conflict resolution retains the merge's identity and responsibility. Candidate builds are transient and
+shared only inside one lint call, so a rejected dangling oid cannot evict or contaminate a HEAD result.
 
 Correcting the under-report legitimately surfaces previously-hidden drift on existing boards — a
 re-baseline, not a regression.

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathCommitsSince, type DriftIndex } from '../../spec-cli/src/git.js'
+import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent } from '../../spec-cli/src/git.js'
 import { anchorHitCommits, extOf, extractorFor, extractors, resolveAnchor, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
@@ -271,11 +271,10 @@ const anchorKey = (sinceSha: string, path: string, selectors: readonly string[])
 // the eval code window: commits touching `path` in sinceSha..HEAD by the same true ancestry `changedSince`
 // uses, from the same index source — so the anchor check can only narrow the very set the file question just
 // answered `true` for. null = ancestry cannot testify (off-history anchor) → the caller stays conservative.
-function evalWindowCommits(idx: DriftIndex, sinceSha: string, path: string): string[] | null {
-  if (idx.lazy) return pathCommitsSince(idx, sinceSha, path)
+function evalWindowCommits(idx: DriftIndex, sinceSha: string, path: string): DriftPathEvent[] | null {
   const anc = ancestorsOf(idx, sinceSha)
   if (!anc) return null
-  return (idx.fileCommits.get(path) ?? []).filter((h) => !inAncestors(idx, anc, h))
+  return pathEvents(idx, path).filter((event) => !inAncestors(idx, anc, event.commit))
 }
 
 // every selector of one entry resolves to exactly one unit in the CURRENT tree, or the entry cannot testify.
@@ -312,7 +311,7 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
         const win = evalWindowCommits(idx, sinceSha, e.path)
         if (win === null) continue
         if (!win.length) { verdicts.set(key, false); continue }
-        const hits = await anchorHitCommits(root, win, e.path, [...e.selectors], extractorFor(regs, extOf(e.path))!)
+        const hits = await anchorHitCommits(root, win, [...e.selectors], regs)
         verdicts.set(key, hits.length > 0)
       }
     },
@@ -356,13 +355,8 @@ export function remarkStale(reading: { ts: string }, remarks: RemarkSignal[]): b
 // ContentProbe above); without a probe — or when the anchor object is gone — freshness can't be proven
 // from HEAD's history, so it reads stale rather than silently pass.
 export function changedSince(idx: DriftIndex, sinceSha: string, path: string, probe?: ContentProbe): boolean {
-  if (idx.lazy) {
-    const commits = pathCommitsSince(idx, sinceSha, path)
-    if (commits) return commits.length > 0
-    return probe?.changed(sinceSha, path) ?? true
-  }
   const anc = ancestorsOf(idx, sinceSha)
-  if (anc) return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
+  if (anc) return pathEvents(idx, path).some((event) => !inAncestors(idx, anc, event.commit))
   return probe?.changed(sinceSha, path) ?? true
 }
 
@@ -376,29 +370,15 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: string[],
   // an entry may be anchored (`path#symbol`); drift is reported per BASE FILE — a raw selector string names
   // no real path, so counting commits against it would silently report nothing.
   const codeFiles = scenarioCodeAxis(codeAxis).paths
-  if (idx.lazy) {
-    const reachable = commitReachable(idx, sinceSha)
-    const out: { file: string; behind: number }[] = []
-    for (const file of codeFiles) {
-      const commits = reachable ? pathCommitsSince(idx, sinceSha, file) ?? [] : []
-      const differs = reachable ? undefined : probe?.changed(sinceSha, file)
-      const behind = reachable ? commits.length
-        : differs === true ? probe!.behind(sinceSha, file)
-        : differs === false ? 0
-        : 1
-      if (behind > 0) out.push({ file, behind })
-    }
-    return out
-  }
   const anc = ancestorsOf(idx, sinceSha)
   const out: { file: string; behind: number }[] = []
   for (const f of codeFiles) {
-    const commits = idx.fileCommits.get(f) ?? []
+    const events = pathEvents(idx, f)
     const differs = anc ? undefined : probe?.changed(sinceSha, f)
-    const behind = anc ? commits.filter((h) => !inAncestors(idx, anc, h)).length
+    const behind = anc ? new Set(events.filter((event) => !inAncestors(idx, anc, event.commit)).map((event) => event.commit)).size
       : differs === true ? probe!.behind(sinceSha, f)
       : differs === false ? 0
-      : commits.length
+      : new Set(events.map((event) => event.commit)).size
     if (behind > 0) out.push({ file: f, behind })
   }
   return out
@@ -429,17 +409,6 @@ function scenarioStaleByHash(reading: Reading, current: Scenario | undefined): b
 // readings): the change-commit chain is built off a LINEARIZED log walk, so parallel branches editing one
 // eval.md cross-attribute each other's edits and can false-stale a sibling's reading across a merge.
 function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, evalPath: string, scenario: string, probe?: ContentProbe): boolean {
-  if (didx.lazy) {
-    const commits = pathCommitsSince(didx, sinceSha, evalPath)
-    if (commits) {
-      const after = new Set(commits)
-      return scenarioChangeCommits(scIdx, evalPath, scenario).some((hash) => after.has(hash))
-    }
-    const differs = probe?.changed(sinceSha, evalPath)
-    if (differs == null) return true
-    if (!differs) return false
-    return probe!.scenarioDiffers(sinceSha, evalPath, scenario)
-  }
   const anc = ancestorsOf(didx, sinceSha)
   if (anc) return scenarioChangeCommits(scIdx, evalPath, scenario).some((h) => !inAncestors(didx, anc, h))
   const differs = probe?.changed(sinceSha, evalPath)

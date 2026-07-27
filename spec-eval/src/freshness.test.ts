@@ -53,7 +53,13 @@ function didx(parents: Record<string, string[]>, fileCommits: [string, string[]]
   const ord = new Map<string, number>(), p = new Map<string, string[]>()
   let i = 0
   for (const [h, ps] of Object.entries(parents)) { ord.set(h, i++); p.set(h, ps) }
-  return { ord, parents: p, fileCommits: new Map(fileCommits), acks: new Map(), specNodes: new Map(), anc: new Map() }
+  const fileEvents = new Map(fileCommits.map(([path, commits]) =>
+    [path, commits.map((commit) => ({
+      commit,
+      historicalPath: path,
+      parents: (p.get(commit) ?? []).map((parent) => ({ commit: parent, historicalPath: path })),
+    }))]))
+  return { ord, parents: p, fileEvents, lineageEvents: fileEvents, lineageKeys: (path) => [path], acks: new Map(), specNodes: new Map(), anc: new Map() }
 }
 
 test('changedSince: a merged side-branch change stales a reading even when its date pre-dates the codeSha', () => {

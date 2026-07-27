@@ -1,5 +1,5 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex, historyIndex, primeLazyPathWindows, commitReachable, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
+import { repoRoot, driftIndex, historyIndex, commitReachable, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { evalNodes, scenarioCodeAxis, type EvalNode, type ScenarioTestReference } from './scenarios.js'
@@ -171,14 +171,11 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // along as the undo trace (newest-first, like the readings), the human-ok events as the sign-off overlay.
   const { readings: rawReadings, retractions, oks } = readSidecar(ynode.sidecarPath)
   // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
-  // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
+  // anchor with byte-identical governed content reads fresh. An in-history reading never probes.
   const probe = contentProbeFor(root)
   const anchors = anchorProbeFor(root, idx)
   const readings: EvalEntry[] = []
   for (const r of applyRetractions(rawReadings, retractions)) {
-    // Large-history freshness delegates reachability/path windows to synchronous Git. One reading stays a
-    // coherent verdict, but yield between readings so a production-scale fold cannot starve HTTP/SSE I/O.
-    if (idx.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
@@ -188,11 +185,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // an entry may be anchored (`path#symbol`); every PATH consumer below reads base paths, the narrowing
     // reads the folded selectors ([[eval-core]]).
     const axis = scenarioCodeAxis(sc?.code, codeFiles)
-    // Reachability is the content-fallback boundary. primeLazyPathWindows answers a different question:
-    // whether an already-reachable lazy index has its path windows primed; on a non-lazy index it is a
-    // deliberate no-op and therefore cannot decide whether an off-history anchor needs the content probe.
-    if (commitReachable(idx, r.codeSha)) await primeLazyPathWindows(idx, r.codeSha, [...axis.paths, ynode.evalPath])
-    else await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
+    if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
     await anchors.prime?.(r.codeSha, axis.entries)
     const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)

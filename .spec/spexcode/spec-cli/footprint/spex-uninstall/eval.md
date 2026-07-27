@@ -24,7 +24,6 @@ scenarios:
       name: init → materialize → uninstall forgets every derived artifact for Claude-only and Codex-only repos
     code:
       - spec-cli/src/uninstall.ts#uninstall
-      - spec-cli/src/git.ts#eventCachePath
       - spec-cli/src/project-store.ts#projectRuntimeRoot
 ---
 

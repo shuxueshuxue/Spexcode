@@ -8,7 +8,6 @@ code:
 related:
   - spec-cli/src/runtime-ownership.ts
   - spec-cli/src/layout.ts
-  - spec-cli/src/git.ts#eventCachePath
   - spec-cli/src/sessions.ts
 ---
 

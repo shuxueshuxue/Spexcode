@@ -2,7 +2,7 @@
 title: archive
 status: active
 hue: 280
-desc: Shelving — a third orthogonal axis that files a session out of the working set without stopping, moving, or discarding anything.
+desc: Cold storage — archive proves and stops the exact session-owned runtime, preserves worktree/branch/conversation identity, and exposes only offline history.
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/layout.ts
@@ -12,6 +12,10 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/sessionCommands.js
+  - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-cli/src/help.ts
+  - spec-dashboard/src/i18n/en.js
+  - spec-dashboard/src/i18n/zh.js
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/archive-shelf.e2e.mjs
@@ -30,39 +34,49 @@ The instinct is to make shelving mean "delete the worktree, keep the branch" —
 branch rebuilds them in about a second. That instinct is wrong, and measuring says why: a branch ref carries
 **committed** work only. What a retained worktree buys is the **uncommitted** state — the half-finished edit
 the human will want exactly as they left it. `stop` already understood this ("step away, come back later" —
-it keeps worktree, branch, transcript, and record). Shelving is that same promise made *visible*, not a new
-kind of teardown.
+it keeps worktree, branch, transcript, and record). Archive is the cold-storage form of that promise: it first
+reuses the exact stop/cleanup seam, then files the retained identity.
 
 ## expanded spec
 
-**Archive is a THIRD axis, orthogonal to both [[state]] axes.** A session carries an agent-authored lifecycle
-and a runtime-derived liveness; `archived` is neither. It is the **human's filing decision** — one boolean on
-the record, meaning *I am not spending attention here right now*. A shelved session may be working, asking,
-parked, or dead; it keeps whatever it was. That orthogonality is the whole design, and every surface honors it:
-nothing reads `archived` as a status, and shelving never rewrites one.
+**Archive is cold-storage filing with one hard invariant: `archived => offline`.** A session keeps its
+agent-authored lifecycle, worktree, branch, transcript, and conversation identity, but an archive may be written
+only after the existing exact-instance stop guard has safely stopped that session-owned leaf, tmux, and adapter
+transport. The shared project app-server/control plane is never touched; sibling references remain loaded. If
+ownership or the stop proof is unprovable, archive fails loudly and leaves the record unarchived and visible.
 
-**It is the attention verb, and it stops nothing.** This is the line that must not blur:
+**It is the attention verb backed by the resource stop.** This is the line that must not blur:
 
 - `stop` is the **resource** verb — give the process back. Reversible by `resume`.
-- `archive` is the **attention** verb — give the screen back. Reversible by `unarchive`.
+- `archive` is the **cold-storage attention** verb — first perform the same exact stop, then file the record.
+  Reversible only through `resume`, which unarchives before recreating the runtime.
 - `close` is the **terminal** verb — give the disk back, destroying the work. Not reversible.
 
-So archiving does not kill tmux, does not touch the worktree or branch, and writes no timeline row. The human
-composes the two freely: archive a session that is still running, or stop one and leave it in the ordinary
-list. Folding a kill into archive would make a cheap reversible act destructive.
+Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
+stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore
+always offline and consumes no active slot or loaded-thread reference of its own.
 
-The copy does NOT argue this. "Archive" already means *set aside, not destroyed* in every product a human has
-used, so a card that insists nothing was stopped or removed is defending a design choice nobody questioned —
-it reads as strange precisely because the reassurance implies a danger that isn't there. Surfaces state the
-state and the way out, in the house voice the offline panel already set: one status line, one short sub. What
-keeps the meaning honest is that the verb genuinely does nothing else, not that every screen says so.
+For adapters with a shared resident control plane, the read projection consumes one project-wide exact loaded-ID
+census, not one RPC per row. A cold proof is current only when that census is healthy and the exact thread is absent;
+an externally reloaded or ambiguous thread projects visible with `archiveHazard` even if its historical proof still
+matches. A deliberately absent shared root is a healthy empty census only when its registered PID is dead and its
+socket has no live listener; stale files alone never prove absence. Explicit close resolves the all-record store,
+including cold rows, and succeeds/nonzero only according to whether the record is actually removed.
+
+The copy states the cold result plainly: the retained worktree/branch/conversation can be resumed, while the
+session-owned runtime is gone. A failed ownership proof is a visible hazard, never a successful archive.
 
 **The record stays a projection, never a log.** `archived` is a declared field in `session.json`'s closed key
 set, written like every other. That key set is rebuilt from the typed record on each write and never merged
 over what was read, so the file self-cleans: a field retired from the code leaves disk the next time anything
-touches that record, and no migration verb or GC pass is needed. This is the discipline a new field buys into,
-not an exception it carves out — which is why shelving adds one boolean rather than a shelf store, a
-tombstone list, or an append-only archive log.
+touches that record, and no migration verb or GC pass is needed. Cold filing carries three deliberate projection
+fields: `archived` is the visible filing bit, `cold_proof` is the versioned witness bound to the resolved adapter
+and exact session/thread identity and is written only after the full leaf/adapter cold proof, and
+`adapter_recovery` records a partial/unknown adapter mutation that resume must reconcile before relaunch. Resume
+clears the recovery token only after the active collection is confirmed and clears the cold proof before launch;
+a failed reconciliation leaves both visible and retryable. These fields are not redundant metadata or a second
+archive store: they are the durable visibility and recovery contract that prevents a live runtime being hidden
+by a boolean.
 
 **Enumeration is existence; filtering is a view.** The board keeps enumerating shelved records — the store is
 the existence truth ([[state]]) and a view preference must never decide what exists. Consumers filter:
@@ -72,13 +86,13 @@ the existence truth ([[state]]) and a view preference must never decide what exi
   costs one enumerated record and no git walk. Its cached delta is evicted on the next board read, so the
   cache stays bounded by the working set rather than by everything ever shelved.
 - `spex session ls` hides shelved rows; `--all` includes them, and naming one explicitly always shows it —
-  an explicit selector is the human already saying which row they mean.
+  an explicit selector is the human already saying which row they mean. The default API/graph/session
+  projections likewise exclude archived rows; an explicit archive/history read is the only way to request them.
 - the console's list shows one population at a time.
 
-**The console gives the archive a door, not a zone.** An archived session still *has* a triage zone (needs-you,
-running, offline); folding it into the zone vocabulary would destroy the very information you want back on
-restore. So the list splits first and runs **both** populations through the same forest machinery — identical
-zones, nesting, folding, and row faces on either side. The door is a star, the third of three equal pills in
+**The console gives the archive a door, not a zone.** Archived history is a flat cold-storage list: it has no
+needs-you/running/offline status partitions, no lifecycle triage, and no active subtree counts. The door is a star,
+the third of three equal pills in
 the list header beside New and Search, and it is **permanent**: a control that appears only when it has
 contents cannot be found when you want it, and its absence would be the only thing telling you the archive
 exists at all. The star carries **no numeric count** — the archive is a destination, not a backlog meter — and stays **live**:
@@ -95,16 +109,14 @@ a trap only while the star was inert, because then the one way out did not respo
 of the exit fixed the symptom and produced a worse bug — a visible control that does nothing. The human's
 toggle is therefore authoritative, and an emptied archive is simply somewhere you can leave.
 
-Selecting an archived session shows the **archive card**, which outranks both console surfaces and wears the
-offline panel's face — the two are one family of "this session is in a state" cards, each with one way out.
-Restore is always the primary action; an archived session whose process also died gets relaunch as the
-secondary, so one card answers both questions instead of stacking two panels.
+Selecting an archived session shows the **archive card**, which is an offline cold-storage card with restore as
+its only lifecycle exit. There is no relaunch action while archived; `resume` first clears `archived`, then
+follows the normal `starting -> online` state machine and preserves the conversation.
 
-**One vocabulary everywhere.** `/archive` and `/unarchive` are board commands in the shared registry
-([[session-console]]), so the typed command, the menu row, and its availability come from one definition;
-exactly one of the pair is ever offered, keyed on `archived` alone and never on lifecycle or liveness. The CLI
-verbs `spex session archive|unarchive <SEL>` and the `POST /api/sessions/:id/archive` route are the same act
-through the other two doors.
+**One vocabulary everywhere.** `/archive` is the filing command and `/resume` is the sole restore action. The
+CLI `spex session archive <SEL>` and `POST /api/sessions/:id/archive` perform cold filing; the legacy
+`unarchive` spelling is only a loud signpost to `resume` and never a record-only mutation. The dashboard card
+uses the same resume endpoint, so every restore observes `starting -> online` and preserves the conversation.
 
 Filing is a **row** decision as much as a console one, so it is also on the session row's right-click menu —
 one item that names the move OUT of the row's current state rather than a pair where one is always inert. It

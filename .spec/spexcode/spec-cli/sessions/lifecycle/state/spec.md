@@ -151,12 +151,15 @@ the corrupt bytes to the control-plane quarantine but must then fail loudly befo
 name the preserved residue. There is no fail-open cleanup path: a later exact recovery still enters through the
 same stop/close owner primitive, never a reclaim verb or second terminator. Both
 are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
-human-only verb, **`archive`** ([[archive]]), is deliberately neither: it writes one record field and stops
-nothing, so stop remains the RESOURCE verb and archive the ATTENTION verb, freely composed. A stopped
-session never owns the project-shared Codex app-server: that control plane is reference-counted across sibling
-sessions/turns, and a stop that cannot prove its leaf boundary refuses rather than walking ancestors or matching
-process commands. A stopped session occupies no working-set slot ([[launch]]) — offline never does — so the
-freed capacity drains a queued one. The one
+human-only verb, **`archive`** ([[archive]]), is the reversible cold-storage attention action: it reuses the
+exact existing stop guard, stops only the adapter-registered session-owned leaf plus that session's tmux and
+rendezvous transport, then writes `archived:true`. Success therefore implies `archived => offline`; if ownership
+cannot be proved, the command fails loudly and leaves the record unarchived and visible. It never touches the
+project-shared Codex app-server, whose control plane is reference-counted across sibling sessions/turns, and it
+preserves worktree, branch, transcript, and conversation identity. `resume` is the only way back: it clears
+`archived` first, then recreates the runtime through the normal `starting -> online` path; an archived record is
+never relaunched in place and never contributes to active slots or resource references. A stopped session
+occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label

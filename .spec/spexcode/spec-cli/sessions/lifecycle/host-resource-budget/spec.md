@@ -110,15 +110,14 @@ the adapter reports at least one loaded thread, whether that reference is active
 and queued-without-thread entries remain visible but do not count or protect; loaded threads with no record remain
 visible, counted, and protective. An unhealthy/unknown probe reports an unknown refcount, never a synthetic zero.
 
-The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. An
-unhealthy/unknown probe blocks independently of refcount, and any loaded thread with no governed record in that
-shared runtime's adapter set also blocks immediately; a non-governed or cross-adapter record with a colliding
-thread-shaped id grants no ownership. With only governed loaded references, stop proceeds only when shared PID,
-process-start token, and a live OS process-group/session observation all prove the daemon is detached from the
-target pane; the launch artifact must match that observation but cannot certify itself. A missing/unreadable
-identity, mismatch, PID reuse, or topology change blocks before mutation, including when the PID file itself is
-absent. The same adapter-owned probe and identity check is rerun immediately before the pane signal and before
-each bounded OS escalation, so one earlier snapshot never becomes later signal authority. The report issues no token and has no mutation route;
+The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. The
+mutation scope is exact: a target leaf with a registered PID/start token and matching argv/identity may be stopped
+even when unrelated sibling or unowned loaded references exist; those references remain protective against any
+shared app-server/control-plane teardown, which this path never performs. An unhealthy/unknown probe fails closed
+before any leaf signal because the shared-root boundary itself is unproven. A target thread that is itself
+ambiguous or unowned, or a missing/mismatched leaf PID/start/argv proof, blocks before mutation. The launch
+artifact and detached process-boundary evidence are rechecked immediately before the leaf signal and before each
+bounded OS escalation; a PID reuse or topology change fails loudly. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with
 their teardown owner and references; a session stop never stands in for that owner. There is no `pkill`,
 `pgrep`, command-regex signal, port-based signal, automatic close, or branch/worktree deletion in this mechanism.

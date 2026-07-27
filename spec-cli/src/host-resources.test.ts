@@ -258,7 +258,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
     }
-    const fixtureSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, probe: async () => probe }))
+    const fixtureSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationProof: undefined, probe: async () => probe }))
     codexHarness.sharedRuntimes = fixtureSharedRuntimes
     codexHeadlessHarness.sharedRuntimes = fixtureSharedRuntimes
 

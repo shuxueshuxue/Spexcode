@@ -367,12 +367,40 @@ const sessionStopBlocker = async (
     const descriptor = entry.descriptor
     const pid = runtimePid(descriptor.pidFile)
     const startToken = pid ? processStartToken(pid) : null
-    const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
     const ownerCounts = new Map<string, number>()
     for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
     const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
     if (targetThread && ownerCounts.get(targetThread) !== 1)
       return `${descriptor.label} target thread ${targetThread} has no one exact governed session owner`
+    if (!knownProbes && descriptor.mutationProof) {
+      if (!targetThread) return `${descriptor.label} target has no exact governed thread identity`
+      if (!pid) return `${descriptor.label} target-scoped mutation proof has no readable owner PID`
+      if (!startToken) return `${descriptor.label} PID ${pid} target-scoped mutation proof has no readable process-start identity`
+      const topologyBefore = processTopology(pid)
+      let stampBefore = ''
+      try { stampBefore = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* legacy unsafe runtime */ }
+      if (!topologyBefore || topologyBefore.startToken !== startToken || topologyBefore.processGroupId !== pid || topologyBefore.sessionId !== pid ||
+        stampBefore !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`)
+        return `${descriptor.label} PID ${pid}@${startToken} has no matching live detached process-boundary record`
+      let proof
+      try { proof = await descriptor.mutationProof(targetThread) }
+      catch (error) { return `${descriptor.label} target-scoped mutation proof failed: ${(error as Error).message}` }
+      const startAfter = processStartToken(pid)
+      const topologyAfter = processTopology(pid)
+      let stampAfter = ''
+      try { stampAfter = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* changed/missing identity */ }
+      if (startAfter !== startToken || !topologyAfter || topologyAfter.startToken !== startToken ||
+        topologyAfter.processGroupId !== pid || topologyAfter.sessionId !== pid || stampAfter !== stampBefore)
+        return `${descriptor.label} PID/start/isolation identity changed during target-scoped mutation proof`
+      if (proof.descendantIds.length)
+        return `${descriptor.label} target thread ${targetThread} has owned descendants (${proof.descendantIds.join(', ')})`
+      if (!proof.healthy)
+        return `${descriptor.label} target thread ${targetThread} is unknown: ${proof.error || 'target-scoped mutation proof failed'}`
+      if (proof.targetTurnPresence === 'active') return `${descriptor.label} target thread ${targetThread} has an active turn`
+      if (proof.targetTurnPresence === 'unknown') return `${descriptor.label} target thread ${targetThread} turn state is unknown`
+      continue
+    }
+    const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
     const targetRef = probe.healthy && targetThread ? probe.references.find((reference) => reference.referenceId === targetThread) : undefined
     const siblings = probe.healthy ? probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread) : []
     const liveReason = siblings.length

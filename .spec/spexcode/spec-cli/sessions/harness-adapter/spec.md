@@ -203,7 +203,12 @@ surface:
   in the set as unowned. Ownership joins only governed records belonging to adapters that declare that same
   shared-runtime descriptor; a coincidentally equal id from another adapter or a non-governed record is not a
   reference owner. An unhealthy/unknown probe returns an unknown refcount rather than a record-derived fallback;
-  product mutation treats that uncertainty as a separate fail-closed blocker. The Codex app-server is spawned
+  product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
+  and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
+  presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
+  and an exact target read only when that target is loaded. The mutation proof fences the shared PID/start/isolation/
+  socket generation across those reads; an unrelated slow sibling remains a protective loaded ID but cannot block
+  an isolated target leaf. Unknown/active target state, descendants, or a generation change fail closed. The Codex app-server is spawned
   as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
   (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed
   process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.
